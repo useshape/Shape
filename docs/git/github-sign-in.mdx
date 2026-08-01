@@ -1,0 +1,64 @@
+---
+title: GitHub Sign In
+description: Authenticate Git operations against GitHub remotes from the avatar menu.
+order: 4
+icon: ri-github-line
+---
+
+**GitHub sign-in** lets Shape push and pull to GitHub without repeated password prompts. It is separate from your [Shape account](/docs/introduction/accounts) used for AI features.
+
+## When you need it
+
+Sign in when you:
+
+- Push commits to a GitHub HTTPS remote
+- Pull from a private GitHub repository
+- Want your GitHub username shown in the avatar menu
+
+Local Git operations (commit, branch, log) work without signing in.
+
+## Sign in
+
+1. Click the **avatar** in the titlebar.
+2. Under **GitHub**, choose **Sign in with GitHub**.
+3. Complete authorization in your browser.
+4. Return to Shape. The menu shows `@your-username (GitHub)` when connected.
+
+Shape stores credentials through Git's credential helper on Windows.
+
+## Sign out
+
+Open the avatar menu → **GitHub** → **Sign out**. Your local repository data is unchanged. Only remote authentication is cleared.
+
+## Prerequisites
+
+GitHub sign-in requires Git tooling on your system:
+
+- **Git for Windows**, or
+- **GitHub CLI**
+
+If neither is installed, the avatar menu shows a note to install one. See [Install](/docs/introduction/install) for setup links.
+
+## Troubleshooting
+
+### Sign-in fails in the browser
+
+- Confirm you approved the Shape OAuth application.
+- Check your network and try again from the avatar menu.
+
+### Push still asks for credentials
+
+- Verify the remote URL points to GitHub (`github.com`).
+- Sign out and sign in again from the avatar menu.
+- For SSH remotes, configure SSH keys outside Shape. GitHub sign-in applies to HTTPS.
+
+### Wrong account
+
+Sign out, then sign in with the correct GitHub account. Credential helpers may cache the previous user until you clear them.
+
+## Related
+
+- [Accounts](/docs/introduction/accounts)
+- [Source Control](/docs/git/source-control)
+- [Branches and Remotes](/docs/git/branches-and-remotes)
+- [Clone and Commit Tutorial](/docs/tutorials/clone-and-commit)

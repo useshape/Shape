@@ -1,0 +1,42 @@
+---
+title: Git Settings
+description: Configure auto-fetch, commit confirmation, and inline blame.
+order: 3
+icon: ri-git-branch-line
+---
+
+**Settings → Git** controls how Shape's [Source Control](/docs/git/source-control) sidebar interacts with your repository.
+
+## Auto fetch
+
+| Setting | Description |
+| --- | --- |
+| **Auto fetch** | Periodically run `git fetch` in the background |
+| **Auto fetch interval** | Minutes between fetch cycles |
+
+Auto fetch updates remote tracking branches so ahead/behind counts in the status bar stay current. It does not merge changes into your working branch.
+
+## Commit behavior
+
+**Confirm before commit** shows a confirmation dialog when you click Commit. Enable it if you want an extra check before creating commits.
+
+Disable it for faster commits when you are confident in your staged changes.
+
+## Blame
+
+**Git blame** annotates lines in the editor with the last commit author and date. Enable blame in settings, then use the command palette or editor context to toggle blame decorations for the active file.
+
+Blame helps during code review and when tracing when a line changed. It requires an open Git repository.
+
+## What is not in Git settings
+
+Branch creation, remote URLs, and push/pull actions live in the [Source Control](/docs/git/source-control) sidebar and [Branches and Remotes](/docs/git/branches-and-remotes) docs, not in settings.
+
+GitHub authentication is managed from the [avatar menu](/docs/git/github-sign-in).
+
+## Related
+
+- [Source Control](/docs/git/source-control)
+- [Branches and Remotes](/docs/git/branches-and-remotes)
+- [Settings Overview](/docs/settings/settings-overview)
+- [Diff and Merge](/docs/editor/diff-and-merge)

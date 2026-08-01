@@ -1,0 +1,31 @@
+---
+title: Overview
+description: How the Shape repository is laid out and where to look first.
+order: 1
+icon: ri-folder-line
+---
+
+Shape is a Tauri 2 desktop IDE. The UI is a Next.js app exported as static assets. The Rust backend owns commands, files, Git, the agent, terminals, and language-server adapters.
+
+## Bird's-eye view
+
+| Path | Role |
+| --- | --- |
+| `app/` | Routes for the workbench, settings, agent, and popout windows |
+| `features/` | Product surfaces — editor, chat, explorer, Git, terminal, settings |
+| `lib/` | Shared TypeScript: backend wrappers, settings, auth |
+| `components/ui/` | Shared UI primitives |
+| `src-tauri/` | Rust crate, Tauri config, agent, Git, PTY, LSP |
+| `docs/` | User and contributor MDX |
+| `scripts/` | Preview runtime, Monaco workers, docs index, version sync, release notes |
+| `tests/` | Vitest suites |
+
+## Where to go next
+
+- [Local development](/docs/developing/local-development) — run and build locally
+- [Architecture](/docs/developing/architecture) — frontend, shell, and Rust layers
+- [Tauri IPC](/docs/developing/tauri-ipc) — commands and events
+- [Agent tools](/docs/developing/agent-tools) — how chat tools are defined and dispatched
+- [Language servers](/docs/developing/language-servers) — LSP lifecycle
+- [Indexing and search](/docs/developing/indexing-and-search) — codebase search
+- [Client trust](/docs/developing/client-trust) — Cloud AI and server-side usage

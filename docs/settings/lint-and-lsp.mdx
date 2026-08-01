@@ -1,0 +1,65 @@
+---
+title: Lint and LSP
+description: Enable ESLint, Prettier, and language servers for diagnostics and formatting.
+order: 5
+icon: ri-shield-check-line
+---
+
+Shape bundles language tooling for web projects. **Settings → Lint & Format** and **Settings → Languages & LSP** control diagnostics and formatters.
+
+## ESLint
+
+| Setting | Description |
+| --- | --- |
+| **Enable ESLint** | Run ESLint on supported files |
+| **Fix on save** | Apply auto-fixable rules when saving |
+
+ESLint reads your project's config (`.eslintrc`, `eslint.config.js`, etc.). Errors appear in the editor and **Problems** panel.
+
+## Prettier
+
+| Setting | Description |
+| --- | --- |
+| **Enable Prettier** | Use Prettier as the document formatter |
+
+When enabled, **Format Document** (**Alt+Shift+F**) and format-on-save use Prettier with project config (`.prettierrc`, `prettier.config.js`).
+
+## Language servers
+
+Toggle built-in language services under **Languages & LSP**:
+
+| Server | Languages |
+| --- | --- |
+| **TypeScript** | `.ts`, `.tsx`, `.js`, `.jsx` |
+| **CSS** | `.css`, modules |
+| **HTML** | `.html` |
+| **JSON** | `.json`, `.jsonc` |
+| **Tailwind CSS** | Class completions in markup |
+| **Emmet** | HTML/CSS abbreviations |
+
+Disabling a server stops its diagnostics and completions for that language.
+
+## Node.js assistance
+
+**Settings → Node.js & NPM** includes **Coding assistance** for JavaScript tooling integration. Keep it enabled for npm package IntelliSense in import paths.
+
+## Design tooling
+
+Design autocomplete and diagnostics live under **Settings → Design Tools**, not LSP. See [Design Tools](/docs/editor/design-tools).
+
+## Troubleshooting
+
+If diagnostics never appear:
+
+1. Confirm the language server toggle is on.
+2. Open **Problems** (**Ctrl+Shift+M**) for silent errors.
+3. Check **Output** via the command palette for server startup logs.
+4. Ensure the project has the expected config files (`tsconfig.json`, ESLint config).
+
+## Related
+
+- [Languages and tooling](/docs/editor/languages-and-tooling)
+- [IntelliSense](/docs/editor/intellisense)
+- [Problems, Output, and Tests](/docs/terminal/problems-output-tests)
+- [Editor Settings](/docs/settings/editor-settings)
+- [Settings Overview](/docs/settings/settings-overview)

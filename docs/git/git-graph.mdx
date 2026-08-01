@@ -1,0 +1,50 @@
+---
+title: Git Graph
+description: Explore commit history visually and inspect changes from the graph view.
+order: 3
+icon: ri-git-commit-line
+---
+
+The **Git Graph** sidebar shows your repository's commit history as a lane diagram. Inspect past work, compare commits, and open file diffs from one view.
+## Open Git Graph
+
+- Click the **commit** icon on the [activity bar](/docs/workspace/activity-bar)
+- **View → Git Graph** from the menu bar
+
+The graph loads commits for the open Git repository. Large histories virtualize for performance as you scroll.
+
+## Read the graph
+
+Each row is a commit. Columns show:
+
+- **Lane lines**: branch and merge topology
+- **Message**: commit subject (click `@mentions` to open GitHub profiles)
+- **Author** and **relative time**
+
+Expand a commit row to see files changed in that commit.
+
+## Actions on commits
+
+Right-click a commit for context actions:
+
+- **Checkout** (detached HEAD or branch tip)
+- **Compare with Working Tree**
+- **View file changes** (opens diff tabs)
+- **Copy commit hash**
+
+Use compare actions to understand what changed between a past commit and your current working tree.
+
+## Search and filter
+
+Use the search field at the top to filter commits by message or author. Clear the filter to show the full history again.
+
+## Refresh
+
+Click the refresh button after external Git operations (terminal commands, pulls from another tool) to reload the graph.
+
+## Related
+
+- [Source Control](/docs/git/source-control)
+- [Diff and Merge](/docs/editor/diff-and-merge)
+- [Branches and Remotes](/docs/git/branches-and-remotes)
+- [Activity Bar](/docs/workspace/activity-bar)

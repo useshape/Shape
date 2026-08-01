@@ -1,0 +1,82 @@
+---
+title: Command Palette
+description: Run workbench and editor commands, search files, jump to symbols, and browse chat history.
+order: 4
+icon: ri-command-line
+---
+
+The **command palette** is Shape's universal action search. Open it with **Ctrl+Shift+P** or from **View → Command Palette…**.
+
+Type to filter commands. Press **Enter** to run the selected action, or **Escape** to close.
+## Default mode
+
+In default mode, the palette lists:
+
+- **Workbench commands**: panels, settings, chat history, zen mode
+- **Editor commands** from the active file: format, rename, fold, comment
+
+Commands show keyboard shortcuts on the right when assigned. Fuzzy matching works on both label and shortcut fragments.
+
+You can also open the palette from the **activity bar** bottom button (terminal icon).
+
+## Files mode (**Ctrl+P**)
+
+**Go to File** opens a dedicated files mode, not the full command list.
+
+1. Press **Ctrl+P** (or **Go → Go to File…**).
+2. Type part of a filename.
+3. Press **Enter** to open the match.
+
+This mode is optimized for speed. In Shape, **Ctrl+Shift+P** and **Ctrl+P** are separate shortcuts.
+
+## Go to line (**Ctrl+G**)
+
+Jump to a specific line (and optionally column):
+
+1. Press **Ctrl+G** (**Go → Go to Line/Column…**).
+2. Type a line number, or `line:column` (for example `42:8`).
+3. Press **Enter**.
+
+The editor scrolls and places the cursor at that position.
+
+## Workspace symbols (**Ctrl+T**)
+
+Find functions, classes, and variables across the project:
+
+1. Press **Ctrl+T** or run **Go to Symbol in Workspace…** from the palette.
+2. Type a symbol name.
+3. Select a result to open the defining file at that location.
+
+Indexing quality depends on language support and LSP configuration. See [IntelliSense](/docs/editor/intellisense).
+
+## Chat history mode
+
+Browse past AI conversations:
+
+1. Open the command palette (**Ctrl+Shift+P**).
+2. Run **Chat: Show History**.
+3. Select a conversation to reopen it in the AI sidebar.
+
+Useful when you need to continue an earlier thread without scrolling the chat panel.
+
+## Language mode
+
+Change syntax highlighting for the active file:
+
+1. Open the palette and run **Change Language Mode…**.
+2. Pick a language from the filtered list (TypeScript, Markdown, CSS, etc.).
+
+Shape remembers the association for that file path. Language mode affects highlighting, snippets, and LSP behavior.
+
+## Tips
+
+- **Quick Fix** (**Ctrl+.**) is an editor action, not the palette, but you can find it by typing `quick fix` in the palette.
+- Palette-only commands (no default shortcut) include **View: Show Problems**, **View: Show Output**, **Editor: Toggle Minimap**, and **Chat: Show History**.
+- When the palette is open, arrow keys navigate. Typing immediately filters.
+
+## Related
+
+- [Keyboard Shortcuts](/docs/reference/keyboard-shortcuts)
+- [Quick Start](/docs/introduction/quick-start)
+- [Workspace Search](/docs/files/workspace-search)
+- [Chat Overview](/docs/ai/chat-overview)

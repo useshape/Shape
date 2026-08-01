@@ -1,0 +1,1020 @@
+"use client";
+
+import React, { useState, useCallback, useEffect } from "react";
+import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { FileIcon } from "@/components/ui/file-icon";
+import { SonarLogo } from "@/components/ui/logo";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger
+} from "@/components/ui/context";
+import { Checkmark } from "@/components/ui/checkmark";
+import {
+    commands,
+    useProjectState,
+    GitFileParams,
+    GitLogEntry,
+} from "@/lib/backend";
+import { notify } from "@/features/notifications";
+import { statusProgress } from "@/lib/status-progress";
+import { getSettings, useSettings } from "@/lib/settings";
+import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import { Tooltip } from "@/components/ui/tooltip";
+import { FadeTruncate } from "@/components/ui/fade-truncate";
+import {
+    AlertDialog,
+    AlertDialogBody,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { LoadingBar } from "@/components/ui/loading";
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+} from "@/components/ui/dropdown";
+import { useLoading } from "@/features/loading/context";
+import { GitManagerTrigger } from "@/features/git/ui/manager/git-manager-trigger";
+import { useGitRepos } from "@/lib/git/repos";
+
+function isBenignGitError(err: unknown): boolean {
+    const s = String(err).toLowerCase();
+    return (
+        s.includes("not a git repository")
+        || s.includes("could not find repository")
+        || s.includes(".invalid")
+        || s.includes("unborn")
+        || (s.includes("reference") && s.includes("not valid"))
+    );
+}
+import { confirm } from "@tauri-apps/plugin-dialog";
+
+function ChangeRow({
+    file,
+    projectPath,
+    onRefresh,
+    onShowDiff
+}: {
+    file: GitFileParams;
+    projectPath: string;
+    onRefresh: () => void;
+    onShowDiff: (path: string, staged: boolean) => void;
+}) {
+    const handleToggleState = async () => {
+        try {
+            if (file.staged) {
+                await commands.gitUnstage(projectPath, file.path);
+            } else {
+                await commands.gitStage(projectPath, file.path);
+            }
+            onRefresh();
+        } catch (err) {
+            notify.gitError(err);
+        }
+    };
+
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger>
+                <div
+                    onClick={() => onShowDiff(file.path, file.staged)}
+                    className="flex items-center px-0.5 py-0.5 hover:bg-panel-hover cursor-pointer rounded-lg group relative h-7 transition-colors"
+                >
+                    <div
+                        className="w-5 h-5 flex items-center justify-center shrink-0 cursor-pointer text-text-muted hover:text-text-primary mr-1"
+                        onClick={handleToggleState}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        <Checkmark
+                            checked={file.staged}
+                            onCheckedChange={() => void handleToggleState()}
+                        />
+                    </div>
+                    <div className="w-4 mr-1.5 flex justify-center shrink-0 pointer-events-none">
+                        <FileIcon name={file.path.split(/[\\/]/).pop() || ""} />
+                    </div>
+                    <span className="text-sm font-medium text-text-primary group-hover:text-text-primary transition-colors flex-1 truncate mr-2 pointer-events-none">
+                        {file.path.split(/[\\\/]/).pop()}
+                        {file.path.includes('/') || file.path.includes('\\') ? (
+                            <span className="text-text-secondary ml-1 font-normal">
+                                {file.path.split(/[\\\/]/).slice(0, -1).join('/')}
+                            </span>
+                        ) : null}
+                    </span>
+
+                    <span
+                        className="text-xs font-bold w-4 text-center shrink-0 pointer-events-none"
+                        style={{
+                            color: file.status === "C" ? "var(--git-conflict)" :
+                                file.status === "M" ? "var(--git-modified)" :
+                                file.status === "A" || file.status === "U" ? "var(--git-added)" :
+                                    file.status === "D" ? "var(--git-deleted)" : "var(--git-added)"
+                        }}
+                    >
+                        {file.status}
+                    </span>
+                </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+                <ContextMenuItem onClick={() => void handleToggleState()}>
+                    {file.staged ? "Unstage Changes" : "Stage Changes"}
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => onShowDiff(file.path, file.staged)}>
+                    Open Changes
+                </ContextMenuItem>
+                {!file.staged && (
+                    <ContextMenuItem
+                        onClick={() => {
+                            void (async () => {
+                                const ok = await confirm(
+                                    `Discard all unstaged changes in "${file.path.split(/[\\/]/).pop()}"? This cannot be undone.`,
+                                    {
+                                        title: "Discard Changes",
+                                        kind: "warning",
+                                        okLabel: "Discard",
+                                        cancelLabel: "Cancel",
+                                    },
+                                );
+                                if (!ok) return;
+                                try {
+                                    await commands.gitDiscardChanges(projectPath, file.path);
+                                    onRefresh();
+                                    window.dispatchEvent(new Event("shape-git-refresh"));
+                                } catch (err) {
+                                    notify.gitError(err);
+                                }
+                            })();
+                        }}
+                    >
+                        Discard Changes
+                    </ContextMenuItem>
+                )}
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => {
+                    navigator.clipboard.writeText(file.path);
+                    notify.success("Copied", "File path copied to clipboard.");
+                }}>
+                    Copy Path
+                </ContextMenuItem>
+            </ContextMenuContent>
+        </ContextMenu>
+    );
+}
+
+function ChangeSection({
+    title,
+    files,
+    isOpen,
+    onToggleOpen,
+    isAllStaged,
+    isSomeStaged,
+    onToggleStage,
+    onRefresh,
+    onShowDiff,
+    projectPath
+}: {
+    title: string;
+    files: GitFileParams[];
+    isOpen: boolean;
+    onToggleOpen: () => void;
+    isAllStaged: boolean;
+    isSomeStaged: boolean;
+    onToggleStage: () => void;
+    onRefresh: () => void;
+    onShowDiff: (path: string, staged: boolean) => void;
+    projectPath: string;
+}) {
+    if (files.length === 0) return null;
+
+    return (
+        <div className="flex flex-col">
+            <div
+                className="flex items-center group py-1 rounded-lg shrink-0 cursor-pointer hover:bg-panel-hover transition-colors"
+                onClick={onToggleOpen}
+            >
+                <div className="w-4 h-4 -mr-2.5 flex items-center justify-center shrink-0 text-text-primary hover:text-text-primary">
+                </div>
+                <div
+                    className="flex shrink-0 items-center justify-center h-full mr-2"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                    }}
+                >
+                    <Checkmark
+                        checked={isAllStaged ? true : isSomeStaged ? "indeterminate" : false}
+                        onCheckedChange={onToggleStage}
+                    />
+                </div>
+                <span className="text-sm font-normal text-text-secondary group-hover:text-text-primary transition-colors">
+                    {title} <span className="text-text-muted font-normal ml-1">{files.length} files</span>
+                </span>
+            </div>
+            {isOpen && (
+                <div className="space-y-0.5 mt-1">
+                    {files.slice(0, 400).map((file, i) => (
+                        <ChangeRow
+                            key={`${title}-${file.path}-${file.staged ? "s" : "u"}-${i}`}
+                            file={file}
+                            projectPath={projectPath}
+                            onRefresh={onRefresh}
+                            onShowDiff={onShowDiff}
+                        />
+                    ))}
+                    {files.length > 400 ? (
+                        <p className="px-2 py-1.5 text-xs text-text-muted">
+                            Showing 400 of {files.length} files. Stage, commit, or discard to shrink the list.
+                        </p>
+                    ) : null}
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function Source({
+    className,
+    /** When true (e.g. inside the Git manager window), hide the Git-manager opener. */
+    embedded = false,
+}: {
+    className?: string;
+    embedded?: boolean;
+}) {
+    const [commitTitle, setCommitTitle] = useState("");
+    const [commitDescription, setCommitDescription] = useState("");
+    const [commitSuggestionStatus, setCommitSuggestionStatus] = useState<"idle" | "loading">("idle");
+    const { project_path } = useProjectState();
+    const { repos, scmRepoPath, hasMultipleRepos, setActiveRepo, activeRepoPath } = useGitRepos(project_path);
+    const gitRepo = scmRepoPath;
+    const [changes, setChanges] = useState<GitFileParams[]>([]);
+    const [currentBranch, setCurrentBranch] = useState("...");
+    const [hasRemote, setHasRemote] = useState(false);
+    const [lastCommit, setLastCommit] = useState<GitLogEntry | null>(null);
+    const [needsSync, setNeedsSync] = useState(false);
+    const [isGitRepo, setIsGitRepo] = useState(true);
+
+    const [isChangesOpen, setIsChangesOpen] = useState(true);
+    const [remoteDialogOpen, setRemoteDialogOpen] = useState(false);
+    const [remotes, setRemotes] = useState<{ name: string; url: string }[]>([]);
+    const [remoteLoading, setRemoteLoading] = useState(false);
+    const [newRemoteName, setNewRemoteName] = useState("origin");
+    const [newRemoteUrl, setNewRemoteUrl] = useState("");
+    const [editingRemote, setEditingRemote] = useState<{ name: string; url: string } | null>(null);
+
+    const { startLoading, stopLoading } = useLoading();
+    const settings = useSettings();
+
+    const refresh = useCallback(async () => {
+        const repoPath = scmRepoPath;
+        if (project_path && repoPath) {
+            statusProgress.push("git-refresh", "Refreshing git status...");
+            startLoading();
+            try {
+                await Promise.all([
+                    commands.gitStatus(repoPath).then((c) => {
+                        setIsGitRepo(true);
+                        setChanges(c);
+                    }).catch((err) => {
+                        if (isBenignGitError(err)) {
+                            setIsGitRepo(repos.length > 0);
+                            setChanges([]);
+                        } else {
+                            notify.error("Source Control Error", `Failed to load git status: ${err instanceof Error ? err.message : String(err)}`);
+                        }
+                    }),
+                    commands.gitCurrentBranch(repoPath).then(setCurrentBranch).catch(() => {
+                        setCurrentBranch("master");
+                    }),
+                    commands.gitHasRemote(repoPath).then(setHasRemote).catch(() => {
+                        setHasRemote(false);
+                    }),
+                    commands.gitLogStreamStart(repoPath, "source")
+                        .then(() => commands.gitLogStreamNext("source", 1))
+                        .then(logs => {
+                            if (logs.length > 0) setLastCommit(logs[0]);
+                            else setLastCommit(null);
+                        }).catch(() => setLastCommit(null)),
+                    commands.gitSyncStatus(repoPath).then(status => {
+                        setNeedsSync(status.ahead > 0);
+                    }).catch(() => setNeedsSync(false)),
+                ]);
+            } finally {
+                stopLoading();
+                statusProgress.remove("git-refresh");
+            }
+        } else if (project_path) {
+            setIsGitRepo(false);
+            setChanges([]);
+            setLastCommit(null);
+        }
+    }, [project_path, scmRepoPath, repos.length, startLoading, stopLoading]);
+
+    useEffect(() => {
+        refresh();
+    }, [refresh]);
+
+    useEffect(() => {
+        const handleGitRefresh = () => { void refresh(); };
+        window.addEventListener("shape-git-refresh", handleGitRefresh);
+        return () => window.removeEventListener("shape-git-refresh", handleGitRefresh);
+    }, [refresh]);
+
+    useEffect(() => {
+        if (!project_path || !hasRemote || !settings.git.autoFetch || !gitRepo) return;
+        const intervalMs = settings.git.autoFetchInterval * 1000;
+        const id = setInterval(() => {
+            commands.gitFetch(gitRepo).catch(() => { });
+        }, intervalMs);
+        return () => clearInterval(id);
+    }, [project_path, gitRepo, hasRemote, settings.git.autoFetch, settings.git.autoFetchInterval]);
+
+    const openRemoteDialog = async () => {
+        if (!gitRepo) return;
+        setRemoteDialogOpen(true);
+        setRemoteLoading(true);
+        setEditingRemote(null);
+        setNewRemoteName("origin");
+        setNewRemoteUrl("");
+        try {
+            const list = await commands.gitListRemotes(gitRepo);
+            setRemotes(list);
+        } catch {
+            setRemotes([]);
+        } finally {
+            setRemoteLoading(false);
+        }
+    };
+
+    const reloadRemotes = async () => {
+        if (!gitRepo) return;
+        setRemoteLoading(true);
+        try {
+            const list = await commands.gitListRemotes(gitRepo);
+            setRemotes(list);
+            setHasRemote(list.length > 0);
+        } catch (e) {
+            notify.gitError(e);
+        } finally {
+            setRemoteLoading(false);
+        }
+    };
+
+    const handleAddRemote = async () => {
+        if (!gitRepo || !newRemoteName.trim() || !newRemoteUrl.trim()) return;
+        try {
+            await commands.gitAddRemote(gitRepo, newRemoteName.trim(), newRemoteUrl.trim());
+            notify.success("Git", `Added remote ${newRemoteName.trim()}`);
+            setNewRemoteName("origin");
+            setNewRemoteUrl("");
+            await reloadRemotes();
+        } catch (e) {
+            notify.gitError(e);
+        }
+    };
+
+    const handleRemoveRemote = async (name: string) => {
+        if (!gitRepo) return;
+        const ok = await confirm(`Remove remote "${name}"?`, {
+            title: "Remove Remote",
+            kind: "warning",
+            okLabel: "Remove",
+            cancelLabel: "Cancel",
+        });
+        if (!ok) return;
+        try {
+            await commands.gitRemoveRemote(gitRepo, name);
+            notify.success("Git", `Removed remote ${name}`);
+            await reloadRemotes();
+        } catch (e) {
+            notify.gitError(e);
+        }
+    };
+
+    const handleSaveRemoteUrl = async () => {
+        if (!gitRepo || !editingRemote) return;
+        const url = editingRemote.url.trim();
+        if (!url) return;
+        try {
+            await commands.gitSetRemoteUrl(gitRepo, editingRemote.name, url);
+            notify.success("Git", `Updated remote ${editingRemote.name}`);
+            setEditingRemote(null);
+            await reloadRemotes();
+        } catch (e) {
+            notify.gitError(e);
+        }
+    };
+
+    const handleCommit = async (all: boolean = false) => {
+        if (!gitRepo || !commitTitle) {
+            notify.error("Git", "Please enter a commit title");
+            return false;
+        }
+        try {
+            if (all) {
+                const unstaged = changes.filter((c: GitFileParams) => !c.staged);
+                for (const file of unstaged) {
+                    await commands.gitStage(gitRepo, file.path);
+                }
+            } else {
+                const staged = changes.filter((c: GitFileParams) => c.staged);
+                if (staged.length === 0) {
+                    const stageAll = await confirm(
+                        "There are no staged changes to commit. Stage all changes and commit?",
+                        {
+                            title: "Stage and commit",
+                            kind: "info",
+                            okLabel: "Stage & Commit",
+                            cancelLabel: "Cancel",
+                        },
+                    );
+                    if (stageAll) {
+                        const unstaged = changes.filter((c: GitFileParams) => !c.staged);
+                        for (const file of unstaged) {
+                            await commands.gitStage(gitRepo, file.path);
+                        }
+                    } else {
+                        return false;
+                    }
+                }
+            }
+
+            const fullMessage = commitDescription ? `${commitTitle}\n\n${commitDescription}` : commitTitle;
+
+            if (getSettings().git.confirmBeforeCommit) {
+                const ok = await confirm(`Create commit?\n\n${fullMessage}`, {
+                    title: "Create commit",
+                    kind: "info",
+                    okLabel: "Commit",
+                    cancelLabel: "Cancel",
+                });
+                if (!ok) return false;
+            }
+
+            await commands.gitCommit(gitRepo, fullMessage);
+            setCommitTitle("");
+            setCommitDescription("");
+            setCommitSuggestionStatus("idle");
+            if (hasRemote) {
+                const status = await commands.gitSyncStatus(gitRepo).catch(() => ({ ahead: 0, behind: 0 }));
+                setNeedsSync(status.ahead > 0);
+            }
+            refresh();
+            notify.success("Git", "Commit successful");
+            return true;
+        } catch (e) {
+            console.error("Commit failed:", e);
+            notify.gitError(e, "Commit failed");
+            return false;
+        }
+    };
+
+    const handleSync = async () => {
+        if (!gitRepo) return;
+        startLoading();
+        try {
+            await commands.gitSync(gitRepo);
+            notify.info("Git Sync", "Successfully synced with remote.");
+            setNeedsSync(false);
+            refresh();
+        } catch (err) {
+            notify.gitError(err, "Sync failed");
+        } finally {
+            stopLoading();
+        }
+    };
+
+    const handlePull = async () => {
+        if (!gitRepo) return;
+        startLoading();
+        try {
+            await commands.gitPull(gitRepo);
+            notify.info("Git", "Pulled successfully.");
+            refresh();
+        } catch (err) {
+            notify.gitError(err, "Pull failed");
+        } finally {
+            stopLoading();
+        }
+    };
+
+    const handlePush = async () => {
+        if (!gitRepo) return;
+        startLoading();
+        try {
+            await commands.gitPush(gitRepo);
+            notify.info("Git", "Pushed successfully.");
+            setNeedsSync(false);
+            refresh();
+        } catch (err) {
+            notify.gitError(err, "Push failed");
+        } finally {
+            stopLoading();
+        }
+    };
+
+    const handleFetch = async () => {
+        if (!gitRepo) return;
+        startLoading();
+        try {
+            await commands.gitFetch(gitRepo);
+            notify.info("Git", "Fetched from all remotes.");
+            refresh();
+        } catch (err) {
+            notify.gitError(err, "Fetch failed");
+        } finally {
+            stopLoading();
+        }
+    };
+
+    const handleGenerateCommitMessage = async () => {
+        if (!project_path) {
+            notify.error("AI Error", "Open a project to generate a commit message.");
+            return;
+        }
+        const stagedChanges = changes.filter(c => c.staged);
+        if (stagedChanges.length === 0) {
+            notify.error("AI Error", "You must check at least one change to generate a commit message.");
+            return;
+        }
+        setCommitSuggestionStatus("loading");
+        try {
+            const token = getShapeAccessToken();
+            if (!token) {
+                notify.error("AI Error", "Sign in to Shape to use AI chat.");
+                setCommitSuggestionStatus("idle");
+                return;
+            }
+            const message = await commands.generateCommitMessage(token);
+            const lines = message.trim().split('\n');
+            const title = lines[0];
+            const description = lines.slice(1).join('\n').trim();
+            setCommitTitle(title);
+            setCommitDescription(description);
+            setCommitSuggestionStatus("idle");
+            // Commit AI bills Shape credits — refresh account balance.
+            void import("@/lib/shape-auth/store").then(({ refreshShapeAuth }) => {
+                void refreshShapeAuth();
+            }).catch(() => undefined);
+        } catch (e) {
+            const errorMsg = e instanceof Error ? e.message : (typeof e === 'string' ? e : "Failed to generate message.");
+            setCommitSuggestionStatus("idle");
+            notify.error("AI Error", errorMsg);
+        }
+    };
+
+    const handleShowDiff = async (path: string, staged: boolean) => {
+        if (!gitRepo) return;
+        const name = path.split(/[\\/]/).pop() || path;
+
+        const absPath = gitRepo + (gitRepo.endsWith('/') || gitRepo.endsWith('\\') ? '' : '/') + path;
+
+        try {
+            await commands.gitOpenDiff(absPath, name, staged);
+        } catch (e) {
+            notify.error("Git Error", `Failed to open diff: ${e}`);
+        }
+    };
+
+
+
+
+
+    const stagedChanges = changes.filter(c => c.staged);
+    const unstagedChanges = changes.filter(c => !c.staged);
+    const isAllStaged = changes.length > 0 && changes.every(c => c.staged);
+
+    const handleToggleAllChanges = async () => {
+        if (!gitRepo) return;
+        if (isAllStaged) {
+            await commands.gitUnstageAll(gitRepo);
+        } else {
+            await commands.gitStageAll(gitRepo);
+        }
+        refresh();
+    };
+
+    return (
+        <div className={cn("w-full h-full flex flex-col select-none overflow-hidden font-sans", className)}>
+            <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-3">
+                <FadeTruncate className="min-w-0 flex-1 text-sm font-regular" title="Source Control">
+                    Source Control
+                </FadeTruncate>
+
+                {isGitRepo && (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                        <Tooltip content="Refresh Repository">
+                            <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={refresh}>
+                                <Icon name="refresh" size={16} />
+                            </Button>
+                        </Tooltip>
+                        <Tooltip content="Pull">
+                            <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePull}>
+                                <Icon name="download" size={16} />
+                            </Button>
+                        </Tooltip>
+                        <Tooltip content="Push">
+                            <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePush}>
+                                <Icon name="arrow_upward" size={16} />
+                            </Button>
+                        </Tooltip>
+                        <Tooltip content="Sync Changes">
+                            <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handleSync}>
+                                <Icon name="cloud_upload" size={16} />
+                            </Button>
+                        </Tooltip>
+                        {!embedded && project_path ? <GitManagerTrigger /> : null}
+                        {/* Tooltip must wrap the whole menu - nesting Tooltip around DropdownMenuTrigger breaks both. */}
+                        <Tooltip content="More actions">
+                            <span className="inline-flex">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="w-6 h-6" aria-label="More actions">
+                                            <Icon name="more_horiz" size={16} />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                        <DropdownMenuItem onClick={handleSync}>Sync (Pull / Push)</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={handleFetch}>Fetch All</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={handlePull}>Pull</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={handlePush}>Push</DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={async () => {
+                                            if (!gitRepo) return;
+                                            await commands.gitStageAll(gitRepo);
+                                            refresh();
+                                        }}>Stage All Changes</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={async () => {
+                                            if (!gitRepo) return;
+                                            await commands.gitUnstageAll(gitRepo);
+                                            refresh();
+                                        }}>Unstage All Changes</DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={async () => {
+                                            if (!gitRepo) return;
+                                            try {
+                                                await commands.gitStashSave(gitRepo, "", true);
+                                                notify.success("Git", "Changes stashed.");
+                                                refresh();
+                                            } catch (e) {
+                                                notify.gitError(e, "Stash failed");
+                                            }
+                                        }}>Stash Changes</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={async () => {
+                                            if (!gitRepo) return;
+                                            try {
+                                                await commands.gitStashPop(gitRepo, 0);
+                                                notify.success("Git", "Stash applied and dropped.");
+                                                refresh();
+                                            } catch (e) {
+                                                notify.gitError(e, "Stash pop failed");
+                                            }
+                                        }}>Pop Latest Stash</DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={async () => {
+                                            if (!gitRepo) return;
+                                            try {
+                                                await commands.gitMergeAbort(gitRepo);
+                                                notify.info("Git", "Merge aborted.");
+                                                refresh();
+                                            } catch (e) {
+                                                notify.gitError(e, "Merge abort failed");
+                                            }
+                                        }}>Abort Merge</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={async () => {
+                                            if (!gitRepo) return;
+                                            try {
+                                                await commands.gitRebaseAbort(gitRepo);
+                                                notify.info("Git", "Rebase aborted.");
+                                                refresh();
+                                            } catch (e) {
+                                                notify.gitError(e, "Rebase abort failed");
+                                            }
+                                        }}>Abort Rebase</DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => void openRemoteDialog()}>Manage Remotes...</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setIsGitRepo(false)}>Disconnect Repository</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </span>
+                        </Tooltip>
+                    </div>
+                )}
+            </div>
+            <LoadingBar />
+
+            {changes.some((c) => c.status === "C") && gitRepo ? (
+                <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--git-conflict)]/40 bg-[color:var(--git-conflict)]/10 px-2 py-1.5 text-xs text-text-primary">
+                    <span className="flex-1">Merge conflicts detected. Resolve conflicted files, then continue or abort.</span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2"
+                        onClick={async () => {
+                            try {
+                                await commands.gitMergeAbort(gitRepo);
+                                notify.info("Git", "Merge aborted.");
+                                refresh();
+                            } catch {
+                                try {
+                                    await commands.gitRebaseAbort(gitRepo);
+                                    notify.info("Git", "Rebase aborted.");
+                                    refresh();
+                                } catch (e) {
+                                    notify.gitError(e, "Could not abort merge/rebase");
+                                }
+                            }
+                        }}
+                    >
+                        Abort
+                    </Button>
+                </div>
+            ) : null}
+
+            {hasMultipleRepos && isGitRepo && (
+                <div className="px-3 pb-2 shrink-0">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-full justify-between gap-2 px-2 hover:bg-panel-hover text-text-secondary hover:text-text-primary"
+                            >
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                    <Icon name="folder" size={14} className="shrink-0" />
+                                    <span className="truncate text-sm">
+                                        {repos.find((r) => r.path === activeRepoPath)?.name ?? "Repository"}
+                                    </span>
+                                </span>
+                                <Icon name="expand_more" size={16} className="shrink-0" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                            {repos.map((repo) => (
+                                <DropdownMenuItem
+                                    key={repo.path}
+                                    onClick={() => {
+                                        setActiveRepo(repo.path);
+                                        window.dispatchEvent(new Event("shape-git-refresh"));
+                                    }}
+                                >
+                                    <span className="truncate">{repo.name}</span>
+                                    {activeRepoPath === repo.path && (
+                                        <Icon name="check" size={14} className="ml-auto shrink-0" />
+                                    )}
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            )}
+
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {!isGitRepo ? (
+                    <div className="flex flex-col items-center p-4 text-center h-full gap-4">
+                        <p className="text-sm text-text-primary text-left font-normal leading-normal">
+                            The folder currently open doesn&apos;t have a Git repository. You can initialize a repository which will enable source control features powered by Git. To learn more about how to use Git and source control in Shape <a href="#" className="text-accent hover:underline">Read our docs</a>.
+                        </p>
+                        <Button
+                            variant="default"
+                            className="w-full mb-4"
+                            onClick={async () => {
+                                if (!project_path) return;
+                                try {
+                                    await commands.gitInit(project_path);
+                                    setIsGitRepo(true);
+                                    window.dispatchEvent(new Event("shape-git-refresh"));
+                                    notify.success("Git", "Repository initialized.");
+                                } catch (e) {
+                                    notify.gitError(e, "Failed to initialize repository");
+                                }
+                            }}
+                        >
+                            Initialize Repository
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col overflow-hidden min-h-0 relative">
+                        <div className="overflow-y-auto custom-scrollbar flex-1 space-y-4 py-2 px-2">
+                            <ChangeSection
+                                title="Staged Changes"
+                                files={stagedChanges}
+                                isOpen={isChangesOpen}
+                                onToggleOpen={() => setIsChangesOpen(!isChangesOpen)}
+                                isAllStaged={stagedChanges.length > 0}
+                                isSomeStaged={stagedChanges.length > 0}
+                                onToggleStage={handleToggleAllChanges}
+                                onRefresh={refresh}
+                                onShowDiff={handleShowDiff}
+                                projectPath={gitRepo || ""}
+                            />
+                            <ChangeSection
+                                title="Changes"
+                                files={unstagedChanges}
+                                isOpen={isChangesOpen}
+                                onToggleOpen={() => setIsChangesOpen(!isChangesOpen)}
+                                isAllStaged={false}
+                                isSomeStaged={unstagedChanges.some(c => c.staged)}
+                                onToggleStage={handleToggleAllChanges}
+                                onRefresh={refresh}
+                                onShowDiff={handleShowDiff}
+                                projectPath={gitRepo || ""}
+                            />
+                        </div>
+
+                        <div className={cn("py-2 flex flex-col shrink-0 z-10 relative", embedded ? "bg-editor" : "bg-panel")}>
+                            <div
+                                className={cn(
+                                    "absolute left-0 right-0 top-0 -translate-y-full pb-10 h-8 bg-linear-to-t to-transparent pointer-events-none z-10",
+                                    embedded ? "from-editor" : "from-panel",
+                                )}
+                            />
+                            {lastCommit && (
+                                <div className="flex items-center text-sm text-text-muted gap-0.5 px-2 min-w-0">
+                                    <Icon name="account_tree" size={16} className="shrink-0" />
+                                    <span className="font-medium shrink-0 truncate max-w-[30%]">{currentBranch}</span>
+                                    <Icon name="chevron_right" size={16} className="shrink-0" />
+                                    <span className="truncate flex-1 min-w-0" title={lastCommit.message.split('\n')[0]}>
+                                        {lastCommit.message.split('\n')[0]}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className={cn(
+                                "flex flex-col gap-0.5 relative overflow-hidden m-2 border border-border rounded-xl",
+                                embedded ? "bg-transparent" : "bg-transparent",
+                            )}>
+                                <Input
+                                    placeholder="Commit title"
+                                    value={commitTitle}
+                                    onChange={(e) => setCommitTitle(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                            e.preventDefault();
+                                            handleCommit();
+                                        }
+                                    }}
+                                    className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-2 bg-transparent"
+                                />
+                                <Textarea
+                                    placeholder="Add description..."
+                                    value={commitDescription}
+                                    onChange={(e) => setCommitDescription(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                            e.preventDefault();
+                                            handleCommit();
+                                        }
+                                    }}
+                                    className="border-none shadow-none resize-none text-sm min-h-[60px] focus-visible:ring-0 focus-visible:ring-offset-0 px-2 pb-2 mt-0 rounded-none bg-transparent"
+                                    rows={2}
+                                />
+                            </div>
+
+                            <div className="flex w-full px-2 gap-1 items-center justify-between">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="gap-1.5"
+                                    onClick={handleGenerateCommitMessage}
+                                    disabled={commitSuggestionStatus === "loading" || changes.length === 0}
+                                >
+                                    <SonarLogo className="w-4 h-4" />
+                                    Generate
+                                </Button>
+
+                                <div className="flex gap-1.5">
+                                    {needsSync ? (
+                                        <Button variant="default" size="sm" className="gap-1 px-3 h-7 text-xs font-medium" onClick={handleSync}>
+                                            <Icon name="cloud_upload" size={14} />
+                                            <span>Push</span>
+                                        </Button>
+                                    ) : (
+                                        <>
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => handleCommit(false)}
+                                                disabled={changes.length === 0 || !commitTitle.trim()}
+                                            >
+                                                Commit
+                                            </Button>
+                                            <Button
+                                                variant="default"
+                                                size="sm"
+                                                onClick={async () => { if (await handleCommit(false)) await handleSync(); }}
+                                                disabled={changes.length === 0 || !commitTitle.trim()}
+                                            >
+                                                Commit & Sync
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                )}
+            </div>
+
+            <AlertDialog open={remoteDialogOpen} onOpenChange={setRemoteDialogOpen}>
+                <AlertDialogContent sizeClassName="max-w-[520px]">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Manage Remotes</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Add, edit, or remove remotes for this repository.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogBody>
+                        <div className="space-y-2 mb-4 max-h-[220px] overflow-y-auto custom-scrollbar">
+                            {remoteLoading && remotes.length === 0 ? (
+                                <div className="text-xs text-text-muted px-1 py-2">Loading remotes...</div>
+                            ) : remotes.length === 0 ? (
+                                <div className="text-xs text-text-muted px-1 py-2">No remotes configured.</div>
+                            ) : (
+                                remotes.map((remote) => (
+                                    <div key={remote.name} className="rounded-lg border border-border-subtle bg-panel-secondary p-2">
+                                        {editingRemote?.name === remote.name ? (
+                                            <div className="space-y-2">
+                                                <div className="text-xs font-medium text-text-primary">{remote.name}</div>
+                                                <Input
+                                                    value={editingRemote.url}
+                                                    onChange={(e) => setEditingRemote({ ...editingRemote, url: e.target.value })}
+                                                    className="h-7 text-xs"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" className="h-7 text-xs" onClick={() => void handleSaveRemoteUrl()}>Save</Button>
+                                                    <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={() => setEditingRemote(null)}>Cancel</Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-start gap-2">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="text-xs font-medium text-text-primary">{remote.name}</div>
+                                                    <div className="text-xs text-text-muted break-all">{remote.url || "No URL"}</div>
+                                                </div>
+                                                <div className="flex gap-1 shrink-0">
+                                                    <Tooltip content="Edit URL">
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingRemote(remote)} aria-label="Edit URL">
+                                                            <Icon name="edit" size={14} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                    <Tooltip content="Copy URL">
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => void navigator.clipboard.writeText(remote.url)} aria-label="Copy URL">
+                                                            <Icon name="content_copy" size={14} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                    <Tooltip content="Remove">
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-error" onClick={() => void handleRemoveRemote(remote.name)} aria-label="Remove remote">
+                                                            <Icon name="delete" size={14} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="border-t border-border-subtle pt-3 space-y-2">
+                            <div className="text-xs font-medium text-text-secondary">Add Remote</div>
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Name"
+                                    value={newRemoteName}
+                                    onChange={(e) => setNewRemoteName(e.target.value)}
+                                    className="h-7 text-xs w-28 shrink-0"
+                                />
+                                <Input
+                                    placeholder="https://github.com/user/repo.git"
+                                    value={newRemoteUrl}
+                                    onChange={(e) => setNewRemoteUrl(e.target.value)}
+                                    className="h-7 text-xs flex-1"
+                                />
+                                <Button size="sm" className="h-7 text-xs shrink-0" onClick={() => void handleAddRemote()}>
+                                    Add
+                                </Button>
+                            </div>
+                        </div>
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                        <Button variant="default" size="sm" onClick={() => setRemoteDialogOpen(false)}>
+                            Done
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div >
+    );
+}

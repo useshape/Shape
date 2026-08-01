@@ -1,0 +1,144 @@
+{
+    "keybindings": [
+        {
+            "label": "New Text File",
+            "key": "Ctrl+N"
+        },
+        {
+            "label": "New Window",
+            "key": "Ctrl+Shift+N"
+        },
+        {
+            "label": "Open File",
+            "key": "Ctrl+O"
+        },
+        {
+            "label": "Open Folder",
+            "key": "Ctrl+K Ctrl+O"
+        },
+        {
+            "label": "Save",
+            "key": "Ctrl+S"
+        },
+        {
+            "label": "Save As",
+            "key": "Ctrl+Shift+S"
+        },
+        {
+            "label": "Save All",
+            "key": "Ctrl+K S"
+        },
+        {
+            "label": "Close Tab",
+            "key": "Ctrl+W"
+        },
+        {
+            "label": "Close All Tabs",
+            "key": "Ctrl+K E"
+        },
+        {
+            "label": "Recent Files",
+            "key": "Ctrl+E"
+        },
+        {
+            "label": "Close Window",
+            "key": "Alt+F4"
+        },
+        {
+            "label": "Go to File",
+            "key": "Ctrl+P"
+        },
+        {
+            "label": "Find",
+            "key": "Ctrl+F"
+        },
+        {
+            "label": "Command Palette",
+            "key": "Ctrl+Shift+P"
+        },
+        {
+            "label": "Find in Files",
+            "key": "Ctrl+Shift+F"
+        },
+        {
+            "label": "Replace in Files",
+            "key": "Ctrl+H"
+        },
+        {
+            "label": "Close Folder",
+            "key": "Ctrl+K Ctrl+W"
+        },
+        {
+            "label": "Undo",
+            "key": "Ctrl+Z"
+        },
+        {
+            "label": "Redo",
+            "key": "Ctrl+Y"
+        },
+        {
+            "label": "Cut",
+            "key": "Ctrl+X"
+        },
+        {
+            "label": "Copy",
+            "key": "Ctrl+C"
+        },
+        {
+            "label": "Paste",
+            "key": "Ctrl+V"
+        },
+        {
+            "label": "Select All",
+            "key": "Ctrl+A"
+        },
+        {
+            "label": "Format Document",
+            "key": "Alt+Shift+F"
+        },
+        {
+            "label": "Go to Definition",
+            "key": "F12"
+        },
+        {
+            "label": "Go to Line/Column...",
+            "key": "Ctrl+G"
+        },
+        {
+            "label": "Explorer",
+            "key": "Ctrl+Shift+E"
+        },
+        {
+            "label": "Source Control",
+            "key": "Ctrl+Shift+G"
+        },
+        {
+            "label": "Problems",
+            "key": "Ctrl+Shift+M"
+        },
+        {
+            "label": "Terminal",
+            "key": "Ctrl+`"
+        },
+        {
+            "label": "New Terminal",
+            "key": "Ctrl+Shift+`"
+        },
+        {
+            "label": "Settings",
+            "key": "Ctrl+,"
+        },
+        {
+            "label": "AI Chat",
+            "key": "Ctrl+L"
+        },
+        {
+            "label": "Inline Edit",
+            "key": "Ctrl+K"
+        },
+        {
+            "label": "Zen Mode",
+            "key": "Ctrl+K Z"
+        }
+    ]
+}

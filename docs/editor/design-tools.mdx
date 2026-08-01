@@ -1,0 +1,70 @@
+---
+title: Design Tools
+description: Tailwind controls, color picker, and design diagnostics in the editor.
+order: 5
+icon: ri-palette-line
+---
+
+Shape includes design-aware tooling for web UI work. Completions, inline controls, and diagnostics help you edit Tailwind classes and CSS variables without leaving the editor.
+
+## Tailwind inline controls
+
+When your cursor is inside a `className` string, Shape can show inline controls for common utilities:
+
+- **Flex / Grid**: direction, wrap, justify-content, align-items. Click the swatch next to a `flex` or `grid` token
+- **Gap**: column and row gap. Click a `gap-*` token
+- **Padding**: per-side padding. Click a `p-*` / `px-*` / `pl-*` token
+- **Radius**: corner radius stops. Click a `rounded-*` token
+- **Color picker**: Tailwind palette and project CSS variables
+
+Controls appear as a floating panel anchored to the token and follow editor scroll. Click a value to apply it directly to the source.
+
+Placing the cursor on a flex, gap, padding, or radius token also opens the matching panel after a short pause.
+
+### Number scrubbing
+
+Hold **Alt** and drag left/right over a scrubbable number (`gap-4`, `p-[24px]`, or CSS `padding: 16px`), or scroll the mouse wheel while hovering the underlined value. Scale values snap to Tailwind’s spacing scale. Panel inputs also accept wheel nudges (Shift for 1px steps).
+
+Toggle scrubbing, underlines, cursor-bind, and wheel-on-inputs in **Settings → Design**.
+
+## Design blame
+
+Hover a UI token to see a plain-language “last changed” blurb from git blame. Disable via **Settings → Design → Design Blame Hover**.
+
+## Spacing scale refactor
+
+Right-click a Tailwind spacing scale number (e.g. the `4` in `gap-4`) and choose **Refactor spacing scale** to surgically replace every matching scale value in the file.
+
+## Design autocomplete
+
+Shape suggests Tailwind utilities with project frequency, sibling context (e.g. after `flex` prefer `items-*` / `gap-*`), fuzzy matching, and spacing scales — not prefix-only regex.
+
+Enable or disable this in **Settings → Design → Design Autocomplete**.
+
+## Monorepo git and aliases
+
+Opening a parent folder (for example a repo that contains `shape/` and `website/` as separate git roots) discovers each nested repository for Source Control and explorer decorations.
+
+Accessibility checks run on color contrast and related design issues in supported files (JSX, TSX, CSS). Violations appear as squiggles in the editor and in the **Problems** panel.
+
+Configure severity in **Settings → Design → Design Diagnostics**. Choose **AA** or **AAA** contrast level.
+
+## Color and CSS variables
+
+The color picker reads from:
+
+- Tailwind's default palette
+- CSS variables defined in project files like `design-tokens.css`
+
+Picking a color inserts the matching class or variable reference at the cursor.
+
+## AI Visual mode
+
+The chat panel includes a **Visual** mode for UI work. Ask it to preview a component in chat before adding it, or tell it to build without stopping. See [Chat Modes](/docs/ai/chat-modes).
+
+## Related
+
+- [IntelliSense](/docs/editor/intellisense)
+- [Lint and LSP](/docs/settings/lint-and-lsp)
+- [AI Settings](/docs/ai/ai-settings)
+- [Chat Modes](/docs/ai/chat-modes)

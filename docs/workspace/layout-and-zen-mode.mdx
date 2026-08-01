@@ -1,0 +1,73 @@
+---
+title: Layout and Zen Mode
+description: Resize sidebars, reset the layout, and hide all chrome with Zen Mode.
+order: 5
+icon: ri-focus-3-line
+---
+
+Shape's layout is flexible. Collapse sidebars, resize the bottom panel, and enter **Zen Mode** for distraction-free editing.
+
+## Primary and secondary sidebars
+
+### Primary sidebar (left)
+
+- **Open**: click any activity bar icon, or use **View → Explorer** (etc.)
+- **Close**: click the active activity bar icon again, or use the titlebar sidebar toggle
+- **Resize**: drag the divider between sidebar and editor
+
+The sidebar remembers which view was active (Explorer, Search, Git, etc.).
+
+### Secondary sidebar (right)
+
+- **Open**: titlebar AI Chat button or **View → AI Chat**
+- **Close**: click the toggle again
+- **Resize**: drag the divider between editor and chat
+
+## Bottom panel
+
+- **Toggle**: titlebar panel button, **View → Terminal**, or **Ctrl+`**
+- **Resize**: drag the top edge of the panel upward or downward
+
+The terminal keeps running when the panel is hidden.
+
+## Reset Layout
+
+Click **Reset Layout** in the titlebar (desktop windows icon) to restore defaults:
+
+| Region | Default state |
+| --- | --- |
+| Primary sidebar | Open |
+| Bottom panel | Open |
+| Secondary sidebar (AI) | Closed |
+
+Reset does not affect open files, Zen Mode preference, or sidebar view selection.
+
+## Zen Mode
+
+**Zen Mode** hides the activity bar, both sidebars, and the bottom panel, leaving only the editor and titlebar menus.
+### Enter or exit
+
+- **View → Zen Mode**
+- Command palette: **View: Toggle Zen Mode**
+- **Ctrl+K Z** (chord: press **Ctrl+K**, release, then **Z**)
+
+Press the same shortcut again to exit. Your panel open/closed state is restored.
+
+### When to use Zen Mode
+
+- Writing or reviewing a long file without sidebar noise
+- Presenting code in a meeting
+- Pairing where chat and Git panels are not needed temporarily
+
+Zen Mode does not change font size or word wrap. Adjust those in [Editor Settings](/docs/settings/editor-settings).
+
+## Split editor
+
+For side-by-side editing, use the tab bar split actions (see [Tabs and Splits](/docs/editor/tabs-and-splits)). Splits work inside Zen Mode. Only chrome is hidden, not multi-group editing.
+
+## Related
+
+- [Workbench Tour](/docs/workspace/workbench-tour)
+- [Titlebar and Panels](/docs/workspace/titlebar-and-panels)
+- [Tabs and Splits](/docs/editor/tabs-and-splits)
+- [Keyboard Shortcuts](/docs/reference/keyboard-shortcuts)

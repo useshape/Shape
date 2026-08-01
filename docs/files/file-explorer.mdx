@@ -1,0 +1,54 @@
+---
+title: File Explorer
+description: Browse, create, rename, and manage files in the project tree.
+order: 1
+icon: ri-folder-line
+---
+
+The **Explorer** is the default primary sidebar view. It shows the folder you opened with **File → Open Folder** as a collapsible tree.
+## Open the Explorer
+
+- Click the **file** icon on the [activity bar](/docs/workspace/activity-bar)
+- **View → Explorer** or **Ctrl+Shift+E**
+- After opening a project, the Explorer loads automatically
+
+## Navigate files
+
+Click a file to open it in a new editor tab. Click folders to expand or collapse them.
+
+Use **Ctrl+P** for faster navigation when you know the filename.
+
+## Git status colors
+
+Modified, added, and deleted files show color cues in the tree. These match the status reported in [Source Control](/docs/git/source-control). Refresh happens when you save, stage, or run Git commands.
+
+## Create and rename
+
+Right-click a folder or empty area for context actions:
+
+- **New File**
+- **New Folder**
+- **Rename**
+- **Delete**
+- **Copy** / **Cut** / **Paste**
+
+You can also use **File → New Text File** (**Ctrl+N**) to create a file at the project root.
+
+## Reveal in Explorer
+
+With a file open in the editor, run **Reveal in Explorer** from the command palette to scroll the tree to that file's location.
+
+## Collapse and refresh
+
+The Explorer header includes buttons to collapse all folders and refresh the tree. Refresh is useful after external tools add or remove files outside Shape.
+
+## Dirty file badge
+
+Unsaved open files show a badge on the Explorer activity bar icon with the count of dirty tabs. Save all with **Ctrl+K S**.
+
+## Related
+
+- [Workspace Search](/docs/files/workspace-search)
+- [Tabs and Splits](/docs/editor/tabs-and-splits)
+- [Source Control](/docs/git/source-control)
+- [Activity Bar](/docs/workspace/activity-bar)

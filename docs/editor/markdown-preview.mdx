@@ -1,0 +1,50 @@
+---
+title: Markdown Preview
+description: Render Markdown files with live preview and split view in the editor.
+order: 3
+icon: ri-markdown-line
+---
+
+Shape renders Markdown files with a built-in preview powered by the same tab you use for source editing. Switch between source, split, and preview without leaving the workbench.
+
+## Open a Markdown file
+
+Open any `.md` or `.mdx` file from the Explorer or with **Ctrl+P**. Syntax highlighting applies in source mode.
+
+## Preview modes
+
+Use the mode toggle on the tab bar to cycle views:
+
+| Mode | What you see |
+| --- | --- |
+| **Source** | Raw Markdown in the Monaco editor |
+| **Split** | Editor on one side, rendered preview on the other |
+| **Preview** | Full-width rendered output |
+
+Split view is useful when editing documentation and checking headings, links, and code blocks at the same time.
+## What the preview supports
+
+The preview renders standard Markdown elements:
+
+- Headings, paragraphs, and lists
+- Links and images (relative paths resolve from the file location)
+- Fenced code blocks with syntax highlighting
+- Blockquotes and inline formatting
+
+Complex MDX components used in Shape's own docs site may not render identically in the IDE preview. The preview targets common Markdown, not full MDX execution.
+
+## Scroll and edit workflow
+
+In split mode, edit on the left and confirm layout on the right. Save with **Ctrl+S** to persist changes. The preview updates when the file content changes.
+
+## Tips
+
+- Use **Ctrl+Shift+P** and run **Change Language Mode…** if a file is not detected as Markdown.
+- For long docs, [Zen Mode](/docs/workspace/layout-and-zen-mode) plus split preview gives a focused writing surface.
+- Pair preview with [Bookmarks](/docs/files/bookmarks) to jump between sections you are revising.
+
+## Related
+
+- [Tabs and Splits](/docs/editor/tabs-and-splits)
+- [Editing Files](/docs/editor/editing-files)
+- [Design Tools](/docs/editor/design-tools)

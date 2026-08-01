@@ -1,0 +1,58 @@
+---
+title: Workspace Search
+description: Find and replace text across all files in the open project.
+order: 2
+icon: ri-search-line
+---
+
+The **Search** sidebar finds text across your entire workspace. Use it for refactors, auditing string usage, and locating config keys.
+## Open search
+
+- Click the **search** icon on the [activity bar](/docs/workspace/activity-bar)
+- **View → Search** or **Ctrl+Shift+F**
+- **Edit → Find in Files** from the menu
+
+## Find in files
+
+1. Type your search query in the search box.
+2. Results appear grouped by file with line previews.
+3. Click a result to open the file at that line.
+
+Search respects file exclude patterns from **Settings → Files**. Hidden folders like `node_modules` are skipped by default.
+
+## Replace in files
+
+Switch to replace mode with **Ctrl+H** or the toggle in the search sidebar.
+
+1. Enter find and replace strings.
+2. Review matches in the results list.
+3. Replace one match at a time, or replace all in a file or across the workspace.
+
+Confirm bulk replacements carefully. Shape modifies files on disk when you apply a replace.
+
+## Search options
+
+Use the buttons below the search field to toggle:
+
+- **Match case**
+- **Match whole word**
+- **Use regular expression**
+
+Regex mode supports capture groups in replace strings.
+
+## Search vs Go to File
+
+| Feature | Shortcut | Scope |
+| --- | --- | --- |
+| **Go to File** | **Ctrl+P** | Filenames only |
+| **Find in Files** | **Ctrl+Shift+F** | File contents |
+| **Workspace Symbols** | **Ctrl+T** | Functions, classes, variables |
+
+Use **Ctrl+P** when you know the file name. Use search when you need to find text inside files.
+
+## Related
+
+- [Command Palette](/docs/workspace/command-palette)
+- [File Explorer](/docs/files/file-explorer)
+- [IntelliSense](/docs/editor/intellisense)
+- [Keyboard Shortcuts](/docs/reference/keyboard-shortcuts)

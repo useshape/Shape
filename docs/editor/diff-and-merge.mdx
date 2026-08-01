@@ -1,0 +1,59 @@
+---
+title: Diff and Merge
+description: Review Git changes, inline diffs, and AI-proposed edits in comparison views.
+order: 4
+icon: ri-git-merge-line
+---
+
+Shape shows file differences in dedicated diff tabs so you can review changes before committing or accepting AI edits.
+## Git diff tabs
+
+From **Source Control**, click a changed file to open a diff tab. Tabs are labeled with the filename and context:
+
+| Label | Meaning |
+| --- | --- |
+| **Working Tree** | Unstaged changes vs the index |
+| **Index** | Staged changes vs the last commit |
+
+The diff view uses Monaco's inline comparison with added and removed highlighting. Read the changes, then stage or discard from the Source Control sidebar.
+
+### Open diffs from Git Graph
+
+In the [Git Graph](/docs/git/git-graph), right-click a commit and choose **Compare with Working Tree** or **View Changes** to inspect historical diffs.
+
+## AI edit previews
+
+When AI chat edits files in **Code** mode, each change appears as a review card after it is written to disk.
+
+1. Click the file (or **Preview**) to open a diff in the editor.
+2. Compare the latest step against the previous version.
+3. **Keep** leaves the file as written. **Undo** restores the baseline from before the unresolved edit chain.
+
+See [Reviewing Edits](/docs/ai/reviewing-edits) for the full Keep/Undo workflow.
+
+## Merge conflicts
+
+If a `git pull` or merge produces conflicts, Shape surfaces conflict markers in the affected files. Open the file in the editor and look for standard conflict sections:
+
+```
+<<<<<<< HEAD
+your changes
+=======
+incoming changes
+>>>>>>> branch
+```
+
+Resolve conflicts manually in the editor, then stage the file and commit. Shape does not yet provide a dedicated three-way merge UI. Use the diff tabs and editor for manual resolution.
+
+## Tips
+
+- Close diff tabs with **Ctrl+W** when review is done.
+- Unstaged and staged diffs open as separate tabs so you can compare both states.
+- Enable **Git: Blame** in settings to see line attribution while reviewing changes.
+
+## Related
+
+- [Source Control](/docs/git/source-control)
+- [Reviewing Edits](/docs/ai/reviewing-edits)
+- [Tabs and Splits](/docs/editor/tabs-and-splits)
+- [Git Graph](/docs/git/git-graph)

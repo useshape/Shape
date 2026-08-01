@@ -1,0 +1,80 @@
+---
+title: Titlebar and Panels
+description: Use titlebar toggles, the scripts menu, and the bottom panel for terminal and diagnostics.
+order: 3
+icon: ri-window-line
+---
+
+The **titlebar** controls window-level actions and layout. The **bottom panel** hosts the terminal and diagnostic output.
+## Titlebar sections
+
+### Left: menus and sidebar toggle
+
+- **App icon**: branding (Windows)
+- **Sidebar toggle**: show or hide the primary sidebar
+- **Menu bar**: File, Edit, View, Go, Terminal, Window, Help
+
+On narrow windows, overflow menus collapse into a **⋯** menu so critical items stay reachable.
+
+### Center: breadcrumbs (when editing)
+
+When a file is open, the center shows the project path and filename. This region is draggable for window movement.
+
+### Right: action toolbar
+
+| Control | Function |
+| --- | --- |
+| **Scripts** | Run npm scripts from `package.json` |
+| **Panel** | Toggle the bottom panel (terminal, problems) |
+| **AI Chat** | Toggle the right sidebar |
+| **Settings** | Open Settings tab |
+| **Reset Layout** | Restore default panel sizes |
+| **Avatar** | Shape account and GitHub sign-in |
+
+## Bottom panel
+
+The bottom panel stacks tabbed views:
+
+| Tab | Opens from | Purpose |
+| --- | --- | --- |
+| **Terminal** | **View → Terminal**, **Ctrl+`**, panel toggle | Shell in project directory |
+| **Problems** | **View → Problems**, **Ctrl+Shift+M**, command palette | ESLint, TypeScript, and LSP diagnostics |
+| **Output** | Command palette **View: Show Output** | Tool and extension logs |
+| **Tests** | Test runner integration | Test results when available |
+
+Click a tab to switch views. Drag the top edge of the panel to resize it.
+
+## Scripts dropdown
+
+When a `package.json` with a `scripts` section is in the open project, the **Scripts** button appears in the titlebar.
+
+1. Click **Scripts**.
+2. Choose a script (for example `dev`, `build`, `test`).
+3. Shape runs it in the integrated terminal and opens the panel if needed.
+
+See [NPM Scripts](/docs/terminal/npm-scripts) for details.
+
+## Panel vs sidebar
+
+- **Primary sidebar** (left): persistent project tools like files, Git, and search
+- **Secondary sidebar** (right): AI chat
+- **Bottom panel**: transient command output like terminal, problems, and tests
+
+Toggling the panel does not close your terminal session. It hides the panel until you show it again.
+
+## Reset Layout
+
+If panels feel misplaced or too small, click **Reset Layout** (desktop windows icon) in the titlebar. This restores:
+
+- Primary sidebar open
+- Bottom panel open
+- AI chat closed
+
+It does not close open files or change your project.
+
+## Related
+
+- [Integrated Terminal](/docs/terminal/integrated-terminal)
+- [Problems, Output, and Tests](/docs/terminal/problems-output-tests)
+- [NPM Scripts](/docs/terminal/npm-scripts)
+- [Workbench Tour](/docs/workspace/workbench-tour)

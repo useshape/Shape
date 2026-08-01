@@ -1,0 +1,44 @@
+---
+title: Outline
+description: Jump to functions, classes, and symbols in the active editor file.
+order: 3
+icon: ri-list-unordered
+---
+
+The **Outline** sidebar lists symbols defined in the file you are editing. Use it to navigate long files without scrolling.
+## Open the Outline
+
+- Click the **list** icon on the [activity bar](/docs/workspace/activity-bar)
+- **View → Outline** from the menu bar
+
+The outline updates when you switch tabs. It reflects the active editor file only, not the whole workspace.
+
+## What appears in the outline
+
+Symbols depend on the file language and LSP support:
+
+| Language | Typical symbols |
+| --- | --- |
+| **TypeScript / JavaScript** | Functions, classes, interfaces, variables |
+| **CSS** | Rules and selectors |
+| **HTML** | Elements and sections |
+| **Markdown** | Headings |
+
+If symbols are missing, check that the correct language mode is set and the relevant LSP is enabled in [Lint and LSP](/docs/settings/lint-and-lsp).
+
+## Navigate symbols
+
+Click any entry to move the cursor to that symbol in the editor. The editor scrolls and focuses the definition.
+
+For project-wide symbol search, use **Ctrl+T** (**Go to Symbol in Workspace**).
+
+## Outline vs breadcrumbs
+
+The titlebar breadcrumbs show the file path. The outline shows structure **inside** the file. Use both together when working in large modules.
+
+## Related
+
+- [IntelliSense](/docs/editor/intellisense)
+- [Command Palette](/docs/workspace/command-palette)
+- [Activity Bar](/docs/workspace/activity-bar)
+- [Editing Files](/docs/editor/editing-files)

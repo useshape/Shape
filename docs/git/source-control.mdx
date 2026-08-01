@@ -1,0 +1,65 @@
+---
+title: Source Control
+description: Stage changes, write commits, and sync with remotes from the Git sidebar.
+order: 1
+icon: ri-git-branch-line
+---
+
+The **Source Control** sidebar is Shape's built-in Git panel. Stage files, write commits, and push or pull without leaving the IDE.
+## Open Source Control
+
+- Click the **branch** icon on the [activity bar](/docs/workspace/activity-bar)
+- **View → Source Control** or **Ctrl+Shift+G**
+- Click the branch indicator in the status bar
+
+## Changed files
+
+The **Changes** section lists modified, added, and deleted files. Click a file to open a [diff tab](/docs/editor/diff-and-merge).
+
+| Action | How |
+| --- | --- |
+| Stage one file | Click the **+** icon next to the file |
+| Unstage | Click the **−** icon on a staged file |
+| Stage all | Click **+** on the Changes header |
+| Discard | Right-click and choose discard (confirm when prompted) |
+
+## Write a commit
+
+1. Stage the files you want included.
+2. Enter a **commit message** in the text box at the top.
+3. Optionally add a longer description in the second field.
+4. Click **Commit** or press **Ctrl+Enter**.
+
+If **Confirm Before Commit** is enabled in Git settings, Shape asks you to confirm first.
+
+### AI commit suggestions
+
+Click the sparkle icon next to the commit message field to generate a suggested title and description from your staged diff.
+
+## Sync with remote
+
+The toolbar includes:
+
+| Button | Action |
+| --- | --- |
+| **Pull** | Fetch and merge from the tracked remote branch |
+| **Push** | Upload local commits |
+| **Sync** | Pull then push in one step |
+| **Refresh** | Reload Git status |
+
+Sign in with [GitHub](/docs/git/github-sign-in) to avoid credential prompts on push.
+
+## Non-repository folders
+
+If the open folder is not a Git repository, Source Control shows an **Initialize Repository** action. Click it to run `git init` in the project root.
+
+## Status bar
+
+The bottom status bar shows the current branch and ahead/behind counts. Click it to open Source Control.
+
+## Related
+
+- [Branches and Remotes](/docs/git/branches-and-remotes)
+- [Diff and Merge](/docs/editor/diff-and-merge)
+- [Git Graph](/docs/git/git-graph)
+- [Git Settings](/docs/settings/git-settings)

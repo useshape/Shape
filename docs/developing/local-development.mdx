@@ -1,0 +1,50 @@
+---
+title: Local development
+description: Run the desktop app locally and point it at Cloud.
+order: 2
+icon: ri-terminal-box-line
+---
+
+## Prerequisites
+
+- Node.js 18+
+- Rust (stable), with targets required by [Tauri 2](https://v2.tauri.app/start/prerequisites/)
+
+## Install and run
+
+```bash
+npm install
+npm run tauri:dev
+```
+
+## Which Cloud URL does the IDE use?
+
+| Mode | Cloud URL |
+| --- | --- |
+| `npm run tauri:dev` | `NEXT_PUBLIC_SHAPE_WEBSITE_URL` from `.env`, else `http://localhost:3000` |
+| `npm run tauri:build` / GitHub release | Always `https://www.useshape.org` (`.env` ignored) |
+
+Copy `.env.example` → `.env` to change the dev target.
+
+The website that hosts Shape Cloud is a separate product. You only need its public URL — not the website source — to develop the desktop app.
+
+## Useful scripts
+
+| Script | Purpose |
+| --- | --- |
+| `npm run tauri:dev` | Desktop development |
+| `npm run tauri:build` | Production Tauri build |
+| `npm run test` | Vitest |
+| `npm run test:rust` | Cargo tests |
+| `npm run test:all` | Frontend and Rust tests |
+| `npm run docs:index` | Rebuild the docs search index |
+
+## Cloud AI while developing
+
+Official release builds can use Shape Cloud AI. Local and fork builds can still run the IDE; Cloud AI may return [error 3000](/docs/help/errors/3000) until you use an official installer from [download](/download).
+
+## Related
+
+- [Overview](/docs/developing/overview)
+- [Client trust](/docs/developing/client-trust)
+- [Contributing](https://github.com/useshape/Shape/blob/main/CONTRIBUTING.md)

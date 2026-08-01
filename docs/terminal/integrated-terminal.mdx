@@ -1,0 +1,56 @@
+---
+title: Integrated Terminal
+description: Run shell commands in the project directory from the bottom panel.
+order: 1
+icon: ri-terminal-box-line
+---
+
+Shape embeds a full terminal in the bottom panel. It opens in your project root so install commands, dev servers, and Git CLI usage stay in context.
+## Open the terminal
+
+| Action | Shortcut |
+| --- | --- |
+| Toggle panel | **Ctrl+`** |
+| New terminal tab | **Ctrl+Shift+`** |
+| Menu | **View → Terminal** or **Terminal → New Terminal** |
+| Titlebar | Click the **panel** toggle |
+
+The panel remembers open tabs when you hide it.
+
+## Shell selection
+
+The default shell follows **Settings → Terminal → Default Shell**:
+
+- **Auto** (system default on Windows)
+- **PowerShell**
+- **Command Prompt**
+- **Git Bash**
+
+Change the setting and open a new terminal tab for it to take effect.
+
+## Multiple tabs
+
+Each tab is an independent session. Use the **+** button on the terminal tab bar to spawn another.
+
+Close the active tab from the tab context menu or **Terminal → Kill Current Terminal**. Closing the panel does not kill sessions.
+
+## Working directory
+
+New terminals start in the open project folder. If no folder is open, Shape prompts you to open one first.
+
+## Copy and scrollback
+
+Select text to copy. Enable **Copy on Select** in terminal settings if you prefer automatic copy on highlight.
+
+Scrollback buffer size is configurable in [Terminal Settings](/docs/settings/terminal-settings).
+
+## Run tasks from chat
+
+When AI proposes a terminal command, approving it runs in the integrated terminal. Output appears in the same panel.
+
+## Related
+
+- [NPM Scripts](/docs/terminal/npm-scripts)
+- [Terminal Settings](/docs/settings/terminal-settings)
+- [Titlebar and Panels](/docs/workspace/titlebar-and-panels)
+- [Problems, Output, and Tests](/docs/terminal/problems-output-tests)

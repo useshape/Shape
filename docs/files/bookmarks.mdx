@@ -1,0 +1,51 @@
+---
+title: Bookmarks
+description: Mark lines in files and jump between bookmarks across the workspace.
+order: 4
+icon: ri-bookmark-line
+---
+
+**Bookmarks** let you save positions in code and return to them later. Bookmarks persist in local storage across sessions.
+
+## Toggle a bookmark
+
+1. Place the cursor on the line you want to mark.
+2. Press **Ctrl+Alt+B**.
+
+A bookmark icon appears in the editor gutter. Press **Ctrl+Alt+B** again on the same line to remove it.
+
+## Navigate bookmarks
+
+| Action | Shortcut |
+| --- | --- |
+| Next bookmark | **Ctrl+F2** |
+| Previous bookmark | **Shift+F2** |
+
+Navigation wraps around. If the next bookmark is in another file, Shape opens that file and moves the cursor.
+
+## View all bookmarks
+
+Open the command palette (**Ctrl+Shift+P**) and search for **Bookmarks** to see the bookmark list panel. Each entry shows the file path, line number, and a short label.
+
+Click an entry to jump to that location. Remove bookmarks from the list when you no longer need them.
+
+## Labels
+
+By default, bookmarks use the label `Line N`. When you toggle a bookmark on a word, Shape may use that word as the label.
+
+## Scope
+
+Bookmarks are per workspace path and stored locally. They are not synced to Git or your Shape account. Clearing browser or app storage removes them.
+
+## Tips
+
+- Bookmark failing tests, TODO comments, or sections you revisit during a refactor.
+- Bookmarks have no activity bar icon. Use keyboard shortcuts or the command palette.
+- Combine with [Outline](/docs/files/outline) for within-file structure and bookmarks for cross-file anchors.
+
+## Related
+
+- [Editing Files](/docs/editor/editing-files)
+- [Activity Bar](/docs/workspace/activity-bar)
+- [Keyboard Shortcuts](/docs/reference/keyboard-shortcuts)
+- [Command Palette](/docs/workspace/command-palette)

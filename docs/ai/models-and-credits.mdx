@@ -1,0 +1,67 @@
+---
+title: Models and Pricing
+description: Every model in Shape, credit usage, and per-token rates.
+order: 4
+icon: ri-coin-line
+---
+
+Shape routes chat through cloud models. Sign in is required. **Auto** is included on every plan. Paid plans unlock premium models billed in **credits**.
+
+## Plans
+
+| Plan | Price | Credits / mo | Models |
+| --- | --- | --- | --- |
+| **Free** | $0 | Auto allowance only | Auto |
+| **Plus** | $15 | 450 | Auto + all premium models |
+| **Pro** | $50 | 1,500 | Auto + all premium models |
+| **Max** | $150 | 4,500 | Auto + all premium models |
+
+Higher-tier models use more credits per turn, so the same pool lasts longer on balanced models than on flagship ones. Check usage from the avatar menu or the [usage dashboard](/dashboard/settings/usage).
+
+## Auto
+
+**Auto** uses Shape's included allowance (not premium credits). It routes to a fast backend model for everyday work. Free accounts can use Auto only; Plus and above keep Auto plus the full premium catalog.
+
+## Premium models
+
+When you pick a specific model, usage is charged from your monthly credit pool. Rates below are **credits per million tokens**. Flagship models drain the pool faster.
+
+### Model pricing
+
+| | Model | Provider | Input | Cache read | Output | Context | Plan |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| <ModelIcon provider="anthropic" /> | **Claude Opus 5** | Anthropic | 350 | 35 | 1,750 | 1M | Plus+ |
+| <ModelIcon provider="anthropic" /> | **Claude Sonnet 5** | Anthropic | 210 | 21 | 1,050 | 1M | Plus+ |
+| <ModelIcon provider="anthropic" /> | **Claude Sonnet 4.6** | Anthropic | 210 | 21 | 1,050 | 200K | Plus+ |
+| <ModelIcon provider="openai" /> | **GPT-5.6 Sol** | OpenAI | 350 | 35 | 2,100 | 1M | Plus+ |
+| <ModelIcon provider="openai" /> | **GPT-5.5** | OpenAI | 350 | 35 | 2,100 | 1M | Plus+ |
+| <ModelIcon provider="openai" /> | **GPT-5.4** | OpenAI | 175 | 18 | 1,050 | 200K | Plus+ |
+| <ModelIcon provider="google" /> | **Gemini 3.1 Pro** | Google | 140 | 14 | 840 | 2M | Plus+ |
+| <ModelIcon provider="xai" /> | **Grok 4.3** | xAI | 140 | 70 | 700 | 128K | Plus+ |
+| <ModelIcon provider="deepseek" /> | **DeepSeek V3.2** | DeepSeek | 35 | 18 | 140 | 128K | Plus+ |
+
+Flagship Claude and GPT models (Opus 5, Sonnet 5, GPT-5.5, GPT-5.6 Sol) are the highest quality options and use the most credits per turn.
+
+## Choosing a model
+
+| Goal | Start with |
+| --- | --- |
+| Everyday edits and questions | **Auto** |
+| Hard multi-file refactors | **Claude Opus 5** or **GPT-5.6 Sol** |
+| Strong coding, lower cost than Opus | **Claude Sonnet 5** or **Sonnet 4.6** |
+| Huge context / many files | **Gemini 3.1 Pro** |
+| Stretch credits | **DeepSeek V3.2** or **Auto** |
+
+## Tips
+
+- Prefer **Ask** mode when you do not need edits.
+- Start with **Auto** before spending credits on flagship models.
+- Turn models on or off in **Settings → AI**, and set a default for new chats.
+- When you hit the credit limit, upgrade or wait for the next monthly reset.
+
+## Related
+
+- [Accounts](/docs/introduction/accounts)
+- [AI Settings](/docs/ai/ai-settings)
+- [Chat Overview](/docs/ai/chat-overview)
+- [Pricing](/pricing)

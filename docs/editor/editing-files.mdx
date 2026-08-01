@@ -1,0 +1,82 @@
+---
+title: Editing Files
+description: Open, edit, save, and format files in the Shape editor.
+order: 1
+icon: ri-file-edit-line
+---
+
+The Shape **editor** is built on Monaco, the same engine that powers VS Code. It provides syntax highlighting, multi-cursor editing, and language-aware features for web projects.
+
+## Open and create files
+
+| Action | Menu | Shortcut |
+| --- | --- | --- |
+| Open file | **File → Open File** | **Ctrl+O** |
+| Open folder | **File → Open Folder** | **Ctrl+K Ctrl+O** |
+| New file | **File → New Text File** | **Ctrl+N** |
+| Quick open | **Go → Go to File…** | **Ctrl+P** |
+
+New files from **File → New Text File** appear in the Explorer when saved. **New Scratch File** creates a temporary buffer without a path until you save.
+
+## Save and close
+
+| Action | Shortcut |
+| --- | --- |
+| Save | **Ctrl+S** |
+| Save As | **Ctrl+Shift+S** |
+| Save All | **Ctrl+K S** |
+| Close tab | **Ctrl+W** |
+| Close all tabs | **Ctrl+K E** |
+
+Dirty tabs show a dot indicator. The Explorer activity bar badge counts unsaved files.
+
+## Basic editing
+
+Standard text operations work as expected:
+
+- **Undo / Redo**: **Ctrl+Z** / **Ctrl+Y**
+- **Cut / Copy / Paste**: **Ctrl+X** / **Ctrl+C** / **Ctrl+V**
+- **Select All**: **Ctrl+A**
+
+### Multi-cursor
+
+Hold **Alt** and click to add cursors. Use **Ctrl+Alt+↑** and **Ctrl+Alt+↓** to add cursors on adjacent lines. **Ctrl+Shift+L** selects all occurrences of the current selection.
+
+### Line operations
+
+| Action | Shortcut |
+| --- | --- |
+| Move line up/down | **Alt+↑** / **Alt+↓** |
+| Duplicate line down | **Shift+Alt+↓** |
+| Toggle line comment | **Ctrl+/** |
+| Toggle block comment | **Shift+Alt+A** |
+| Indent / outdent | **Ctrl+]** / **Ctrl+[** |
+
+## Format document
+
+Format the whole file with **Edit → Format Document** or **Alt+Shift+F**. Shape uses Prettier when configured for the project.
+
+Format only the selection via the command palette: **Format Selection** (**Ctrl+K Ctrl+F**).
+
+## Navigation within a file
+
+- **Go to Line**: **Ctrl+G**
+- **Go to Definition**: **F12** (requires language support)
+- **Go to Bracket**: **Ctrl+Shift+\\**
+- **Back / Forward**: **Alt+Left** / **Alt+Right** through cursor history
+
+## Word wrap
+
+Toggle wrap from **View → Word Wrap** or the command palette (**Editor: Toggle Word Wrap**, **Alt+Z**).
+
+## Auto-save
+
+Enable auto-save in **Settings → Editor**. Choose delay or save on focus change. See [Editor Settings](/docs/settings/editor-settings).
+
+## Related
+
+- [Languages and tooling](/docs/editor/languages-and-tooling)
+- [Tabs and Splits](/docs/editor/tabs-and-splits)
+- [IntelliSense](/docs/editor/intellisense)
+- [Command Palette](/docs/workspace/command-palette)
+- [Editor Settings](/docs/settings/editor-settings)

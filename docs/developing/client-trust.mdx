@@ -1,0 +1,20 @@
+---
+title: Client trust and usage
+description: Why Cloud AI is enforced on the server.
+order: 8
+icon: ri-shield-check-line
+---
+
+The desktop app runs on the user's machine. Only the authenticated account on Shape Cloud decides whether an AI request is allowed.
+
+## Official builds
+
+Shape Cloud AI requires an official release ([error 3000](/docs/help/errors/3000) otherwise). Local editing still works in any build. Contributors building from source can develop the IDE without Cloud AI.
+
+## Rules of thumb
+
+| Kind | Meaning |
+| --- | --- |
+| **Display** | Client may show cached usage for UX. Never the authority. |
+| **Client gate** | Client may require sign-in before sending. Not the only check. |
+| **Server authoritative** | Server allows or denies against real account state. |

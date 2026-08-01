@@ -1,0 +1,966 @@
+@import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+:root {
+  /* ── Surface ladder (dark) ─────────────────────────────── */
+  --surface-0: #1A1A1A;
+  --surface-1: #1b1b1b;
+  --surface-2: #1a1a1a;
+  --surface-3: #242424;
+
+  /* neutral scale (for migration, please don't use this) */
+  --neutral-50: #fafafa;
+  --neutral-100: #f5f5f5;
+  --neutral-150: #ededed;
+  --neutral-200: #e5e5e5;
+  --neutral-250: #dcdcdc;
+  --neutral-300: #d4d4d4;
+  --neutral-350: #bbbbbb;
+  --neutral-400: #a3a3a3;
+  --neutral-450: #8b8b8b;
+  --neutral-500: #737373;
+  --neutral-550: #626262;
+  --neutral-600: #525252;
+  --neutral-650: #494949;
+  --neutral-700: #404040;
+  --neutral-750: #333333;
+  --neutral-800: #262626;
+  --neutral-850: #1e1e1e;
+  --neutral-900: #171717;
+  --neutral-950: #141414;
+
+  /* ── Semantic surfaces ─────────────────────────────────── */
+  --background: #141414;
+  --foreground: #ededee;
+
+  --panel: #1a1a1a;
+  --panel-secondary: var(--surface-2);
+  --panel-active: rgba(145, 145, 145, 0.08);
+  --panel-hover: rgba(255, 255, 255, 0.04);
+
+  --titlebar: var(--background);
+  --activitybar: transparent;
+  --sidebar: var(--panel);
+  --editor: #141414;
+  --editor-secondary: var(--neutral-850);
+  --statusbar: transparent;
+  --statusbar-fg: var(--text-primary);
+
+  /* ── Text ──────────────────────────────────────────────── */
+  --text-primary: #ededee;
+  --text-secondary: #a1a1a6;
+  --text-muted: #ffffff73;
+  --text-disabled: #ffffff48;
+  --text-active: #ffffff;
+
+  /* ── Borders ───────────────────────────────────────────── */
+  --border: rgba(255, 255, 255, 0.068);
+  --border-subtle: rgba(255, 255, 255, 0.034);
+  --border-secondary: rgba(255, 255, 255, 0.1);
+  --border-focus: var(--accent);
+
+  /* ── Ember accent ──────────────────────────────────────── */
+  --accent: #3946FF;
+  --accent-hover: #4365FF;
+  --accent-fg: #ffffff;
+
+  /* ── Semantic status (desaturated for dark) ──────────── */
+  --error: #e5484d;
+  --warning: #f5a623;
+  --success: #4ade80;
+  --info: #6eb5ff;
+
+  /* ── Git status ────────────────────────────────────────── */
+  --git-modified: #e2c08d;
+  --git-added: #73c991;
+  --git-deleted: #e4676b;
+  --git-conflict: #f97316;
+
+  /* ── Inputs & buttons ──────────────────────────────────── */
+  --input-bg: var(--surface-2);
+  --input-border: var(--border);
+  --input-placeholder: var(--text-muted);
+
+  --button-bg: var(--accent);
+  --button-fg: var(--accent-fg);
+  --button-hover: var(--accent-hover);
+  --button-secondary-bg: var(--surface-2);
+  --button-secondary-fg: var(--text-primary);
+  --button-secondary-hover: var(--surface-3);
+
+  --scrollbar: rgba(255, 255, 255, 0.15);
+  --scrollbar-hover: rgba(255, 255, 255, 0.25);
+
+  /* ── Geometry ──────────────────────────────────────────── */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 10px;
+
+  /* Floating workbench panels */
+  --workbench-gap: 8px;
+  --workbench-panel-radius: 10px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
+
+  --chrome-height: 28px;
+  --titlebar-height: 34px;
+  --statusbar-height: 30px;
+
+  /* ── Typography (px tokens — predictable on desktop, independent of rem root) */
+  --font-ui: Inter;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Font rendering */
+  --font-smoothing: antialiased;
+  --font-smoothing-moz: grayscale;
+
+  --text-2xs: 11px;
+  --text-xs: 13px;
+  --text-sm: 13px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 17px;
+  --text-2xl: 18px;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+
+  /* ── Motion ────────────────────────────────────────────── */
+  --transition-fast: 120ms;
+  --transition-base: 180ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-overlay: 1000;
+  --z-overlay-content: 1001;
+  --z-titlebar-controls: 1100;
+  --z-tooltip: 1200;
+  --z-notification: 1300;
+
+  --overlay-scrim: transparent;
+
+  /* Allotment split view */
+  --sash-size: 4px;
+  --sash-hover-size: 4px;
+  --separator-border: transparent;
+  --focus-border: transparent;
+}
+
+/* ── Purple theme (dark purple surfaces; leaves :root intact) ── */
+[data-theme="purple"] {
+  --surface-0: #16121c;
+  --surface-1: #1a1522;
+  --surface-2: #1e1828;
+  --surface-3: #2a2238;
+
+  --background: #120e18;
+  --foreground: #efe8f8;
+
+  --panel: #1a1522;
+  --panel-secondary: var(--surface-2);
+  --panel-active: rgba(167, 139, 250, 0.12);
+  --panel-hover: rgba(255, 255, 255, 0.05);
+
+  --titlebar: var(--background);
+  --activitybar: transparent;
+  --sidebar: var(--panel);
+  --editor: #120e18;
+  --editor-secondary: #1a1522;
+  --statusbar: transparent;
+  --statusbar-fg: var(--text-primary);
+
+  --text-primary: #efe8f8;
+  --text-secondary: #b5a8c9;
+  --text-muted: rgba(239, 232, 248, 0.45);
+  --text-disabled: rgba(239, 232, 248, 0.28);
+  --text-active: #ffffff;
+
+  --border: rgba(196, 181, 253, 0.12);
+  --border-subtle: rgba(196, 181, 253, 0.06);
+  --border-secondary: rgba(196, 181, 253, 0.18);
+  --border-focus: var(--accent);
+
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-fg: #120e18;
+
+  --error: #f87171;
+  --warning: #fbbf24;
+  --success: #4ade80;
+  --info: #93c5fd;
+
+  --git-modified: #e2c08d;
+  --git-added: #73c991;
+  --git-deleted: #e4676b;
+  --git-conflict: #f97316;
+
+  --input-bg: var(--surface-2);
+  --input-border: var(--border);
+  --input-placeholder: var(--text-muted);
+
+  --button-bg: var(--accent);
+  --button-fg: var(--accent-fg);
+  --button-hover: var(--accent-hover);
+  --button-secondary-bg: var(--surface-3);
+  --button-secondary-fg: var(--text-primary);
+  --button-secondary-hover: #342a45;
+
+  --scrollbar: rgba(196, 181, 253, 0.2);
+  --scrollbar-hover: rgba(196, 181, 253, 0.35);
+
+  --overlay-scrim: transparent;
+}
+
+/* ── Graphite theme (Zed-style neutral charcoal, blue accent) ── */
+[data-theme="graphite"] {
+  --surface-0: #111111;
+  --surface-1: #151515;
+  --surface-2: #191919;
+  --surface-3: #212121;
+
+  --background: #111111;
+  --foreground: #e4e4e7;
+
+  --panel: #151515;
+  --panel-secondary: var(--surface-2);
+  --panel-active: rgba(77, 128, 247, 0.12);
+  --panel-hover: rgba(255, 255, 255, 0.04);
+
+  --titlebar: var(--background);
+  --activitybar: transparent;
+  --sidebar: var(--panel);
+  --editor: #111111;
+  --editor-secondary: #191919;
+  --statusbar: transparent;
+  --statusbar-fg: var(--text-primary);
+
+  --text-primary: #e4e4e7;
+  --text-secondary: #9a9a9e;
+  --text-muted: rgba(228, 228, 231, 0.45);
+  --text-disabled: rgba(228, 228, 231, 0.28);
+  --text-active: #ffffff;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-secondary: rgba(255, 255, 255, 0.12);
+  --border-focus: var(--accent);
+
+  --accent: #4d80f7;
+  --accent-hover: #6a97f9;
+  --accent-fg: #ffffff;
+
+  --error: #e5484d;
+  --warning: #f5a623;
+  --success: #4ade80;
+  --info: #4d80f7;
+
+  --git-modified: #e2c08d;
+  --git-added: #73c991;
+  --git-deleted: #e4676b;
+  --git-conflict: #f97316;
+
+  --input-bg: var(--surface-2);
+  --input-border: var(--border);
+  --input-placeholder: var(--text-muted);
+
+  --button-bg: var(--accent);
+  --button-fg: var(--accent-fg);
+  --button-hover: var(--accent-hover);
+  --button-secondary-bg: var(--surface-3);
+  --button-secondary-fg: var(--text-primary);
+  --button-secondary-hover: #2a2a2a;
+
+  --scrollbar: rgba(255, 255, 255, 0.15);
+  --scrollbar-hover: rgba(255, 255, 255, 0.25);
+
+  --overlay-scrim: transparent;
+}
+
+/* ── One theme (One Dark — the Atom classic) ── */
+[data-theme="one"] {
+  --surface-0: #282c34;
+  --surface-1: #262a32;
+  --surface-2: #21252b;
+  --surface-3: #2c313a;
+
+  --background: #282c34;
+  --foreground: #abb2bf;
+
+  --panel: #21252b;
+  --panel-secondary: var(--surface-2);
+  --panel-active: rgba(97, 175, 239, 0.14);
+  --panel-hover: rgba(255, 255, 255, 0.04);
+
+  --titlebar: var(--background);
+  --activitybar: transparent;
+  --sidebar: var(--panel);
+  --editor: #282c34;
+  --editor-secondary: #21252b;
+  --statusbar: transparent;
+  --statusbar-fg: var(--text-primary);
+
+  --text-primary: #abb2bf;
+  --text-secondary: #828997;
+  --text-muted: rgba(171, 178, 191, 0.5);
+  --text-disabled: rgba(171, 178, 191, 0.3);
+  --text-active: #ffffff;
+
+  --border: rgba(171, 178, 191, 0.12);
+  --border-subtle: rgba(171, 178, 191, 0.06);
+  --border-secondary: rgba(171, 178, 191, 0.18);
+  --border-focus: var(--accent);
+
+  --accent: #61afef;
+  --accent-hover: #7dc0f5;
+  --accent-fg: #1e2127;
+
+  --error: #e06c75;
+  --warning: #e5c07b;
+  --success: #98c379;
+  --info: #56b6c2;
+
+  --git-modified: #e5c07b;
+  --git-added: #98c379;
+  --git-deleted: #e06c75;
+  --git-conflict: #e5a55d;
+
+  --input-bg: var(--surface-2);
+  --input-border: var(--border);
+  --input-placeholder: var(--text-muted);
+
+  --button-bg: var(--accent);
+  --button-fg: var(--accent-fg);
+  --button-hover: var(--accent-hover);
+  --button-secondary-bg: var(--surface-3);
+  --button-secondary-fg: var(--text-primary);
+  --button-secondary-hover: #333842;
+
+  --scrollbar: rgba(171, 178, 191, 0.2);
+  --scrollbar-hover: rgba(171, 178, 191, 0.35);
+
+  --overlay-scrim: transparent;
+}
+
+.logo-invert {
+  filter: brightness(1);
+}
+
+@theme inline {
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-150: var(--neutral-150);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-250: var(--neutral-250);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-350: var(--neutral-350);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-450: var(--neutral-450);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-550: var(--neutral-550);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-650: var(--neutral-650);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-750: var(--neutral-750);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-850: var(--neutral-850);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-950: var(--neutral-950);
+
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-titlebar: var(--titlebar);
+  --color-activitybar: var(--activitybar);
+  --color-sidebar: var(--sidebar);
+  --color-panel: var(--panel);
+  --color-panel-secondary: var(--panel-secondary);
+  --color-panel-active: var(--panel-active);
+  --color-panel-hover: var(--panel-hover);
+  --color-editor: var(--editor);
+  --color-editor-secondary: var(--editor-secondary);
+  --color-statusbar: var(--statusbar);
+  --color-statusbar-fg: var(--statusbar-fg);
+
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-secondary: var(--border-secondary);
+  --color-border-focus: var(--border-focus);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+  --color-text-active: var(--text-active);
+
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-info: var(--info);
+
+  --color-git-modified: var(--git-modified);
+  --color-git-added: var(--git-added);
+  --color-git-deleted: var(--git-deleted);
+
+  --color-input-bg: var(--input-bg);
+  --color-input-border: var(--input-border);
+  --color-input-placeholder: var(--input-placeholder);
+
+  --color-button-bg: var(--button-bg);
+  --color-button-fg: var(--button-fg);
+  --color-button-hover: var(--button-hover);
+  --color-button-secondary-bg: var(--button-secondary-bg);
+  --color-button-secondary-fg: var(--button-secondary-fg);
+  --color-button-secondary-hover: var(--button-secondary-hover);
+
+  --color-scrollbar: var(--scrollbar);
+  --color-scrollbar-hover: var(--scrollbar-hover);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-mono);
+
+  --font-size-2xs: var(--text-2xs);
+  --font-size-xs: var(--text-xs);
+  --font-size-sm: var(--text-sm);
+  --font-size-base: var(--text-base);
+  --font-size-md: var(--text-md);
+  --font-size-lg: var(--text-lg);
+  --font-size-xl: var(--text-xl);
+  --font-size-2xl: var(--text-2xl);
+
+  --spacing-icon-sm: var(--icon-sm);
+  --spacing-icon-md: var(--icon-md);
+  --spacing-icon-lg: var(--icon-lg);
+
+  /* Do NOT map --spacing-xs/sm/md/lg/xl — that hijacks Tailwind max-w-* to 4–24px.
+     Use @utility px-sm / py-xs / etc. below instead. */
+
+  --spacing-chrome: var(--chrome-height);
+  --spacing-titlebar: var(--titlebar-height);
+  --spacing-statusbar: var(--statusbar-height);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --z-index-dropdown: var(--z-dropdown);
+  --z-index-modal: var(--z-modal);
+  --z-index-overlay: var(--z-overlay);
+  --z-index-overlay-content: var(--z-overlay-content);
+  --z-index-titlebar-controls: var(--z-titlebar-controls);
+  --z-index-tooltip: var(--z-tooltip);
+  --z-index-notification: var(--z-notification);
+
+  --transition-duration-fast: var(--transition-fast);
+  --transition-duration-base: var(--transition-base);
+
+  --ease-out: var(--ease-out);
+  --ease-in: var(--ease-in);
+}
+
+@utility rounded-none { border-radius: 0px; mask-image: none; clip-path: none; }
+@utility rounded-sm { border-radius: var(--radius-sm); }
+@utility rounded-md { border-radius: var(--radius-md); }
+@utility rounded-lg { border-radius: var(--radius-lg); }
+@utility rounded-xl { border-radius: var(--radius-xl); }
+@utility rounded-2xl { border-radius: calc(var(--radius-xl) * 1.5); }
+@utility rounded-full { border-radius: 9999px; }
+
+/*
+ * Design-token spacing utilities (named so they do not collide with max-w-sm etc.)
+ */
+@utility p-xs { padding: var(--space-xs); }
+@utility px-xs { padding-inline: var(--space-xs); }
+@utility py-xs { padding-block: var(--space-xs); }
+@utility mx-xs { margin-inline: var(--space-xs); }
+@utility my-xs { margin-block: var(--space-xs); }
+@utility -mx-xs { margin-inline: calc(var(--space-xs) * -1); }
+@utility px-sm { padding-inline: var(--space-sm); }
+@utility py-sm { padding-block: var(--space-sm); }
+@utility mr-sm { margin-right: var(--space-sm); }
+@utility px-md { padding-inline: var(--space-md); }
+@utility px-lg { padding-inline: var(--space-lg); }
+@utility px-xl { padding-inline: var(--space-xl); }
+
+@utility text-2xs { font-size: var(--text-2xs); line-height: 1.4; }
+@utility h-chrome { height: var(--chrome-height); }
+@utility w-chrome { width: var(--chrome-height); }
+@utility h-titlebar { height: var(--titlebar-height); }
+@utility top-titlebar { top: var(--titlebar-height); }
+@utility z-overlay { z-index: var(--z-overlay); }
+@utility z-overlay-content { z-index: var(--z-overlay-content); }
+@utility z-titlebar-controls { z-index: var(--z-titlebar-controls); }
+@utility z-notification { z-index: var(--z-notification); }
+@utility z-tooltip { z-index: var(--z-tooltip); }
+@utility z-dropdown { z-index: var(--z-dropdown); }
+@utility h-statusbar { height: var(--statusbar-height); }
+
+html {
+  font-size: 13px;
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: var(--font-smoothing);
+  -moz-osx-font-smoothing: var(--font-smoothing-moz);
+  text-rendering: auto;
+  font-synthesis: none;
+  font-synthesis-weight: none;
+  font-synthesis-style: none;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  -webkit-font-smoothing: var(--font-smoothing);
+  -moz-osx-font-smoothing: var(--font-smoothing-moz);
+  text-rendering: auto;
+}
+
+/* Monaco editor surface — dark background, no default light border */
+.shape-editor-surface .monaco-editor,
+.shape-editor-surface .monaco-editor .margin,
+.shape-editor-surface .monaco-editor-background,
+.monaco-diff-editor .monaco-editor,
+.monaco-diff-editor .monaco-editor .margin,
+.monaco-diff-editor .monaco-editor-background {
+  background-color: var(--editor, #141415) !important;
+}
+
+.shape-editor-surface .monaco-editor .overflow-guard,
+.monaco-diff-editor .monaco-editor .overflow-guard,
+.monaco-diff-editor .overflow-guard {
+  border: none !important;
+}
+
+.shape-editor-surface > section,
+.monaco-diff-editor > section {
+  border: none !important;
+  background: transparent !important;
+}
+
+/* Monaco fills the editor pane */
+.monaco-editor,
+.monaco-editor * {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: auto;
+  font-feature-settings: normal;
+}
+
+/* ── Scrollbar hide ─────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* Global scrollbar styling (native overflow areas) */
+*:not(.no-scrollbar) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
+*:not(.no-scrollbar)::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*:not(.no-scrollbar)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*:not(.no-scrollbar)::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 9999px;
+}
+
+*:not(.no-scrollbar)::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+.xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 9999px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+@theme inline {
+  --animate-progress: progress 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* ── Chat markdown (no tailwind typography plugin) ─────── */
+.chat-markdown,
+.chat-markdown-body {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.chat-markdown strong,
+.chat-markdown-body strong {
+  font-weight: 500;
+}
+
+/* ── Prose compact - tight markdown rendering ───────────── */
+.prose-compact p {
+  margin-top: 0.65em;
+  margin-bottom: 0.65em;
+}
+
+.prose-compact h1,
+.prose-compact h2,
+.prose-compact h3,
+.prose-compact h4 {
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+
+.prose-compact ul,
+.prose-compact ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 1.25em;
+}
+
+.prose-compact li {
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+
+.prose-compact blockquote {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose-compact pre {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.prose-compact>*:first-child {
+  margin-top: 0;
+}
+
+.prose-compact>*:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Theme-aware prose (replaces prose-invert) ──────────── */
+.prose-themed {
+  color: var(--text-primary);
+}
+
+.prose-themed code {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.3em;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.prose-themed pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+}
+
+.prose-themed a {
+  color: var(--accent);
+}
+
+/* ── Code block surface ─────────────────────────────────── */
+.code-surface {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+/* ── Custom Monaco Autocomplete / Suggest Widget ───────── */
+.monaco-editor .suggest-widget {
+  background: var(--surface-3) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  padding: 4px !important;
+  z-index: var(--z-dropdown) !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list {
+  background: transparent !important;
+}
+
+.resizing-vertical {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
+/* Never disable pointer-events on the whole tree - that permanently kills
+   titlebar drag / menus if the resize class gets stuck (lost mouseup). */
+.resizing-vertical iframe,
+.resizing-vertical [data-resizing-ignore] {
+  pointer-events: none !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row {
+  border-radius: var(--radius-md) !important;
+  padding: 0 4px !important;
+  margin: 1px 0 !important;
+  font-family: var(--font-mono) !important;
+  color: var(--text-primary) !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row:hover:not(.focused) {
+  background-color: var(--panel-hover) !important;
+  transition: background-color var(--transition-fast) var(--ease-out);
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row.focused {
+  background-color: var(--panel-active) !important;
+  color: var(--text-active) !important;
+  border: 1px solid var(--border-subtle) !important;
+}
+
+.monaco-editor .suggest-widget .suggest-details-container {
+  background: var(--surface-3) !important;
+  border-left: 1px solid var(--border-subtle) !important;
+  box-shadow: inset 4px 0 12px -4px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0 !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list-row .suggest-icon {
+  margin-right: 8px !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list-row .completion-highlight {
+  color: var(--accent) !important;
+  font-weight: bold !important;
+}
+/* ── Popover / menu animations (shadcn-style) ───────────── */
+@keyframes shape-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shape-popover-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.shape-popover-content {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-context-menu-content-transform-origin, var(--radix-tooltip-content-transform-origin, center)));
+  will-change: opacity, transform;
+}
+
+.shape-popover-content[data-state="open"] {
+  animation: shape-popover-in 100ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shape-popover-content[data-state="closed"] {
+  animation: shape-popover-out 75ms cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+/* Modals / command palette: pop-in without clobbering translate centering */
+@keyframes shape-modal-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes shape-modal-out {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+
+.shape-modal-panel {
+  transform-origin: center center;
+  will-change: opacity, scale;
+}
+
+.shape-modal-panel[data-state="open"],
+.shape-modal-panel:not([data-state]) {
+  animation: shape-modal-in 100ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shape-modal-panel[data-state="closed"] {
+  animation: shape-modal-out 75ms cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+.shape-popover-content--from-right {
+  transform-origin: right center;
+}
+
+/* ── Modal overlays (global) ─────────────────────────────── */
+.shape-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: var(--titlebar-height);
+  z-index: var(--z-overlay);
+  background-color: var(--overlay-scrim);
+}
+
+.shape-overlay-content {
+  z-index: var(--z-overlay-content);
+}
+
+.titlebar-window-controls {
+  position: relative;
+  z-index: var(--z-titlebar-controls);
+  pointer-events: auto;
+}
+
+/* ── Chat tab bar (sidebar) ── */
+.chat-tab-bar {
+  overflow-x: clip;
+}
+
+.chat-tab-scroll {
+  overflow-x: auto;
+  overflow-block: clip;
+}
+
+/* ── Workbench tab bar ── */
+.workbench-tab-bar {
+  overflow-x: clip;
+}
+
+.workbench-tab-scroll {
+  overflow-x: auto;
+  overflow-block: clip;
+}
+
+/* ── Floating workbench panels ─────────────────────────── */
+.workbench-panel {
+  height: 100%;
+  width: 100%;
+  border-radius: var(--workbench-panel-radius);
+  overflow: hidden;
+}
+
+/* Long user messages: visually shorten with bottom fade (content still intact). */
+.chat-message-fade-clamp {
+  max-height: 5.5rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+
+/* Streaming assistant text: soft top→bottom reveal while typing. */
+.chat-stream-fade-in {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+}
+
+/* ── Allotment Split View Theme ───────────────────────────── */
+.allotment-module_allotment__1L9_Y {
+  background-color: transparent !important;
+}
+
+[class*="sash-module_sash"]::before,
+[class*="sash-module_sash-hover"]::before,
+[class*="sash-module_active"]::before,
+[class*="sash-module_hover"]::before {
+  opacity: 0 !important;
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
