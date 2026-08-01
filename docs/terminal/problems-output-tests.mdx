@@ -1,0 +1,55 @@
+---
+title: Problems, Output, and Tests
+description: View diagnostics, tool logs, and test results in the bottom panel.
+order: 3
+icon: ri-error-warning-line
+---
+
+Beyond the terminal, the bottom panel hosts tabs for diagnostics and tool output. Use them to track errors while you code.
+## Problems
+
+The **Problems** tab aggregates diagnostics from language servers, ESLint, and design checks.
+
+| Action | Shortcut |
+| --- | --- |
+| Open Problems | **Ctrl+Shift+M** or command palette **View: Show Problems** |
+| Next problem | **F8** |
+| Previous problem | **Shift+F8** |
+
+Click a row to jump to the file and line. The status bar also shows error and warning counts when problems exist.
+
+### Sources
+
+- TypeScript and JavaScript (LSP)
+- ESLint (when enabled in settings)
+- Design diagnostics (contrast and accessibility)
+- CSS and HTML language services
+
+Fix issues in the editor or use **Quick Fix** (**Ctrl+.**) when available.
+
+## Output
+
+The **Output** tab shows logs from Shape tooling and language servers. Open it from the command palette: **View: Show Output**.
+
+Use Output when diagnosing why a language service failed to start or when an extension-like feature prints status messages.
+
+## Tests
+
+When test integration is available for your project, results appear in the **Tests** tab. Failed tests link to the asserting file.
+
+Run tests from the terminal (`npm test`, etc.) or from task configurations. Shape surfaces structured results when the runner reports them.
+
+## Panel workflow
+
+1. Keep **Problems** visible while fixing a type error batch.
+2. Switch to **Terminal** to run builds after fixes.
+3. Check **Output** if Problems does not explain a missing language feature.
+
+Toggle the whole panel with **Ctrl+`** without losing tab contents.
+
+## Related
+
+- [IntelliSense](/docs/editor/intellisense)
+- [Lint and LSP](/docs/settings/lint-and-lsp)
+- [Integrated Terminal](/docs/terminal/integrated-terminal)
+- [Titlebar and Panels](/docs/workspace/titlebar-and-panels)

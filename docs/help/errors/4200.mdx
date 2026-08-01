@@ -1,0 +1,22 @@
+---
+title: "4200 Language server"
+description: A language server failed to start or crashed.
+order: 42
+---
+
+## What it means
+
+IntelliSense, go-to-definition, or diagnostics stopped because a language server exited or never started. Editing still works; language features may be limited.
+
+## What to do
+
+1. Re-open the file or the project folder.
+2. Check **Settings → Languages** and confirm the server for this file type is enabled.
+3. For TypeScript/JavaScript, ensure `node_modules` (or your toolchain) is installed.
+4. Watch **Output → LSP** for the underlying message, then retry.
+
+## Related
+
+- [IntelliSense](/docs/editor/intellisense)
+- [Language servers](/docs/developing/language-servers)
+- [Troubleshooting](/docs/help/troubleshooting)

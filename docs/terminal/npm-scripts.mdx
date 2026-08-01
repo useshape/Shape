@@ -1,0 +1,49 @@
+---
+title: NPM Scripts
+description: Run package.json scripts from the titlebar without typing commands.
+order: 2
+icon: ri-npmjs-line
+---
+
+When your project has a `package.json` with a `scripts` section, Shape surfaces those scripts in the titlebar **Scripts** dropdown.
+## Run a script
+
+1. Open a project folder that contains `package.json`.
+2. Click **Scripts** in the titlebar (right side).
+3. Choose a script (for example `dev`, `build`, `lint`).
+
+Shape runs the equivalent of `npm run <script>` (or your configured package manager) in the [integrated terminal](/docs/terminal/integrated-terminal) and opens the bottom panel if it was hidden.
+
+## Package manager
+
+Shape detects the package manager from lockfiles and **Settings → Node.js & NPM**:
+
+| Lockfile | Default manager |
+| --- | --- |
+| `bun.lock` | Bun |
+| `pnpm-lock.yaml` | pnpm |
+| `yarn.lock` | Yarn |
+| `package-lock.json` | npm |
+
+Override with the **Package Manager** setting if needed.
+
+## Script output
+
+Stdout and stderr appear in the terminal tab. Long-running scripts like `dev` keep the tab open until you stop the process with **Ctrl+C**.
+
+## When Scripts is hidden
+
+The **Scripts** button appears only when:
+
+- A folder is open
+- `package.json` exists at the project root
+- The `scripts` object has at least one entry
+
+Monorepos with scripts in subpackages still run from the root `package.json`. Use the terminal for workspace-specific commands.
+
+## Related
+
+- [Integrated Terminal](/docs/terminal/integrated-terminal)
+- [Titlebar and Panels](/docs/workspace/titlebar-and-panels)
+- [Settings Overview](/docs/settings/settings-overview)
+- [First Project Tutorial](/docs/tutorials/first-project)

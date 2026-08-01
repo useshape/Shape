@@ -1,0 +1,30 @@
+{
+  "sectionOrder": [
+    "introduction",
+    "workspace",
+    "editor",
+    "files",
+    "git",
+    "ai",
+    "terminal",
+    "settings",
+    "tutorials",
+    "reference",
+    "help",
+    "developing"
+  ],
+  "sectionLabels": {
+    "introduction": "Getting started",
+    "workspace": "Using Shape",
+    "editor": "Using Shape",
+    "files": "Using Shape",
+    "git": "Using Shape",
+    "ai": "Using Shape",
+    "terminal": "Using Shape",
+    "settings": "Using Shape",
+    "tutorials": "Guides",
+    "reference": "Reference",
+    "help": "Help",
+    "developing": "For contributors"
+  }
+}

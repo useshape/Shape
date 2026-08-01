@@ -1,0 +1,76 @@
+---
+title: Clone and Commit
+description: Clone a GitHub repository, make a change, and push a commit from Shape.
+order: 3
+icon: ri-git-repository-line
+---
+
+This tutorial covers cloning a repository, committing a change, and pushing to GitHub using Shape's Git UI.
+
+## Clone the repository
+
+### From the welcome screen
+
+1. Click **Clone Repository**.
+2. Paste a Git URL, for example `https://github.com/org/repo.git`.
+3. Choose a parent folder on disk.
+
+Shape runs `git clone` in the terminal.
+
+### Open the clone
+
+After cloning, open the new folder with **File → Open Folder** and select the repository directory.
+
+## Sign in to GitHub
+
+For HTTPS remotes, [sign in with GitHub](/docs/git/github-sign-in) from the avatar menu before pushing. This avoids repeated credential prompts.
+
+Your Shape account (for AI) and GitHub sign-in are separate. See [Accounts](/docs/introduction/accounts).
+
+## Make a change
+
+1. Open a file from the Explorer.
+2. Edit and save (**Ctrl+S**).
+3. Open **Source Control** (**Ctrl+Shift+G**).
+
+The file appears under **Changes**. Click it to open a diff tab and review what changed.
+## Commit
+
+1. Click **+** next to the file to stage it (or stage all from the Changes header).
+2. Enter a commit message, for example `docs: fix typo in readme`.
+3. Click **Commit**.
+
+Optional: click the sparkle icon for an AI-suggested commit message from your diff.
+
+## Push
+
+1. Check the current branch in the Source Control header.
+2. Click **Push** (up arrow) in the toolbar.
+3. If prompted, complete GitHub authentication.
+
+Use **Sync** to pull remote changes first when the status bar shows you are behind the remote.
+
+## View history
+
+Open **Git Graph** from the activity bar to see your commit in the lane diagram. Right-click it to inspect files or compare with the working tree.
+
+## Troubleshooting push
+
+| Issue | Fix |
+| --- | --- |
+| Authentication failed | Sign out and sign in again from the avatar GitHub menu |
+| Rejected non-fast-forward | Click **Pull**, resolve conflicts if any, then push |
+| No remote configured | Add `origin` in the remotes dialog. See [Branches and Remotes](/docs/git/branches-and-remotes) |
+
+## What you learned
+
+- Clone from the welcome screen
+- Stage, commit, and push from Source Control
+- Use Git Graph to confirm history
+
+## Related
+
+- [Source Control](/docs/git/source-control)
+- [GitHub Sign In](/docs/git/github-sign-in)
+- [Branches and Remotes](/docs/git/branches-and-remotes)
+- [Git Graph](/docs/git/git-graph)

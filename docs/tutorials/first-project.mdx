@@ -1,0 +1,72 @@
+---
+title: First Project
+description: Open a web project, run the dev server, and make your first edit in Shape.
+order: 1
+icon: ri-rocket-line
+---
+
+This tutorial walks through opening an existing web project, running it locally, and saving a small change. It assumes Shape is [installed](/docs/introduction/install) on Windows.
+
+## Open the project
+
+1. Launch Shape.
+2. Click **Open Project** on the welcome screen (or **File → Open Folder**, **Ctrl+K Ctrl+O**).
+3. Select a folder that contains a `package.json` (your own app or a cloned repo).
+
+The Explorer sidebar lists project files. Click `package.json` to inspect scripts and dependencies.
+## Install dependencies
+
+1. Open the terminal with **Ctrl+`** or the titlebar panel toggle.
+2. Run your package manager install command:
+
+```bash
+npm install
+```
+
+Use `pnpm install`, `yarn`, or `bun install` if that is what the project expects.
+
+Wait for install to finish before starting the dev server.
+
+## Start the dev server
+
+Option A: click **Scripts** in the titlebar and choose `dev` (or `start`).
+
+Option B: type in the terminal:
+
+```bash
+npm run dev
+```
+
+The terminal shows the local URL (often `http://localhost:3000` or similar). Open it in your browser to confirm the app runs.
+
+## Edit a file
+
+1. Press **Ctrl+P** and type the name of a component or page file.
+2. Make a visible change (for example edit a heading string).
+3. Save with **Ctrl+S**. The browser should hot-reload if the dev server supports it.
+
+## Check for problems
+
+Press **Ctrl+Shift+M** to open the **Problems** panel. Fix any TypeScript or ESLint issues the project reports.
+
+## Try AI Ask mode
+
+1. Open **AI Chat** from the titlebar.
+2. Select **Ask** mode.
+3. Ask: "What does the main entry file do?"
+
+Review the answer without applying edits. Sign in with a Shape account if prompted.
+
+## What you learned
+
+- Open folders and navigate with **Ctrl+P**
+- Run scripts from the titlebar or terminal
+- Save files and read diagnostics
+- Ask questions in read-only AI mode
+
+## Related
+
+- [Quick Start](/docs/introduction/quick-start)
+- [NPM Scripts](/docs/terminal/npm-scripts)
+- [Chat Overview](/docs/ai/chat-overview)
+- [Editing Files](/docs/editor/editing-files)

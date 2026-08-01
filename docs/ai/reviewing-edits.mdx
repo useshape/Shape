@@ -1,0 +1,49 @@
+---
+title: Reviewing Edits
+description: Keep or undo AI file changes after the agent writes them to disk.
+order: 3
+icon: ri-file-check-line
+---
+
+In **Code** mode (and other editing modes), the assistant can change files on disk as it works. Each change shows up for review so you can **Keep** it or **Undo** it.
+
+## How edits land
+
+1. The agent writes the updated file to disk.
+2. Chat shows an edit card with `+/-` line counts for that step.
+3. Open the file (or use **Preview**) to review the diff in the editor.
+4. **Keep** dismisses the review and leaves the file as written.
+5. **Undo** restores the file to how it was before this unresolved edit chain.
+
+If the agent edits the same file again before you Keep or Undo, the review updates to the latest step. Undo restores the baseline from before the first unresolved edit on that file.
+
+## Edit cards
+
+Each file change in the thread shows:
+
+- The affected file path
+- Added and removed line counts for that edit step
+- Actions to open or review the change
+
+## Pending edits bar
+
+When files still need a Keep or Undo decision, a summary appears above the chat input. Use **Keep All** or **Undo All**, or handle files one at a time.
+
+## Auto-apply
+
+By default, edits still appear for review after they are written. Enable **Auto Apply Edits** in [AI Settings](/docs/ai/ai-settings) to auto-Keep proposals as they arrive. Use this only when you trust the workflow.
+
+## Terminal command approval
+
+Separate from file edits, terminal commands show their own approval card. Click **Run** to execute in the integrated terminal or **Reject** to skip. The assistant cannot run shell commands without your approval.
+
+## Session persistence
+
+Kept and undone edits are tracked for the conversation. Reloading the project preserves which proposals you already resolved. If the agent edits a file again after you Keep it, a new review opens for that later change.
+
+## Related
+
+- [Chat Modes](/docs/ai/chat-modes)
+- [Diff and Merge](/docs/editor/diff-and-merge)
+- [AI Settings](/docs/ai/ai-settings)
+- [Chat Overview](/docs/ai/chat-overview)

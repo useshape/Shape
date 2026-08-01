@@ -1,0 +1,60 @@
+---
+title: Tabs and Splits
+description: Manage editor tabs, split groups, and preview modes for open files.
+order: 2
+icon: ri-layout-column-line
+---
+
+Shape opens every file in a **tab** at the top of the editor. Tabs support preview modes, split groups, and quick navigation across your working set.
+## Opening and closing tabs
+
+| Action | Shortcut |
+| --- | --- |
+| Close active tab | **Ctrl+W** |
+| Close all tabs | **Ctrl+K E** |
+| Reopen closed tab | Command palette: **Reopen Closed Editor** |
+
+Dirty tabs show a dot on the label. Save with **Ctrl+S** before closing if you want to keep changes.
+
+Click a tab to switch files. Middle-click a tab (or use the close icon) to close it.
+
+## Split editor
+
+Split the editor to view two files side by side:
+
+1. Click the **Split Editor Right** button on the tab bar, or use the tab context menu.
+2. The active file moves to the right group. The left group keeps its previous file.
+3. Click **Close Split** to return to a single group.
+
+Each split group has its own tab strip and active file. Drag tabs between groups when both are visible.
+
+Splits work in [Zen Mode](/docs/workspace/layout-and-zen-mode). Only sidebars are hidden, not multi-group editing.
+
+## Preview modes
+
+Some file types support alternate views from the tab bar toggle:
+
+| File type | Modes |
+| --- | --- |
+| **Markdown** | Source, split, and rendered preview |
+| **Images** | Raw path and inline preview |
+| **Fonts** | Source and live preview |
+
+For Markdown, cycle through **Source**, **Split View**, and **Preview** with the toggle on the tab. Split view shows the editor and preview at the same time.
+
+## Diff tabs
+
+Git changes open as special diff tabs labeled **Working Tree** or **Index**. These are read-only comparison views. See [Diff and Merge](/docs/editor/diff-and-merge).
+
+## Pinning and ordering
+
+Tabs reflect open order. The most recently used file becomes active when you click its tab or open it from the Explorer.
+
+Use **Ctrl+P** to jump between files without clicking tabs.
+
+## Related
+
+- [Editing Files](/docs/editor/editing-files)
+- [Markdown Preview](/docs/editor/markdown-preview)
+- [Diff and Merge](/docs/editor/diff-and-merge)
+- [Layout and Zen Mode](/docs/workspace/layout-and-zen-mode)

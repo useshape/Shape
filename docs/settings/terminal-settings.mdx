@@ -1,0 +1,51 @@
+---
+title: Terminal Settings
+description: Choose your default shell, font, and scrollback for the integrated terminal.
+order: 4
+icon: ri-terminal-line
+---
+
+**Settings → Terminal** configures the [integrated terminal](/docs/terminal/integrated-terminal) in the bottom panel.
+
+## Shell
+
+**Default shell** selects which program opens for new terminal tabs:
+
+| Option | Shell |
+| --- | --- |
+| **Auto** | Windows default (usually PowerShell) |
+| **PowerShell** | Windows PowerShell |
+| **Command Prompt** | `cmd.exe` |
+| **Git Bash** | Bash from Git for Windows |
+
+Existing tabs keep their shell. Open a **New Terminal** (**Ctrl+Shift+`**) after changing this setting.
+
+## Font
+
+| Setting | Description |
+| --- | --- |
+| **Font family** | Monospace font for terminal text |
+| **Font size** | Terminal text size |
+
+Terminal font is independent from the editor font. Match them in **Editor Settings** if you prefer a unified look.
+
+## Scrollback
+
+**Scrollback** sets how many lines of output the terminal retains. Higher values help when reviewing long build logs. Very large buffers use more memory.
+
+Presets range from a few thousand lines to much larger histories.
+
+## Copy on select
+
+When **Copy on Select** is enabled, highlighting text in the terminal copies it to the clipboard automatically. Disable it if you prefer explicit **Ctrl+C** copy.
+
+## Environment
+
+The terminal inherits your system PATH and user environment variables. Install tools like Node.js and Git at the OS level, then restart Shape so new tabs pick them up.
+
+## Related
+
+- [Integrated Terminal](/docs/terminal/integrated-terminal)
+- [NPM Scripts](/docs/terminal/npm-scripts)
+- [Settings Overview](/docs/settings/settings-overview)
+- [Install](/docs/introduction/install)

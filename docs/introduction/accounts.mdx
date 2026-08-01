@@ -1,0 +1,45 @@
+---
+title: Accounts
+description: Shape account for AI, and GitHub sign-in for remotes.
+order: 3
+icon: ri-user-line
+---
+
+Shape has two sign-in flows. They do different jobs and do not replace each other.
+
+## Shape account
+
+Your Shape account unlocks cloud AI: chat, edits, indexing, and model selection.
+
+1. Open the **avatar** menu in the titlebar.
+2. Choose **Sign in to Shape**.
+3. Finish in the browser, then return to the app.
+
+Local editing, Git, and the terminal work without a Shape account. Sign out from the same menu.
+
+Paid models use credits. The app may show remaining credits for convenience; allow/deny for each request is decided on the server. See [Models and Pricing](/docs/ai/models-and-credits).
+
+## GitHub sign-in
+
+GitHub sign-in authenticates Git against GitHub remotes. It is separate from your Shape account.
+
+1. Open the **avatar** menu.
+2. Under GitHub, choose **Sign in with GitHub**.
+3. Authorize Shape in the browser.
+
+Use it for fetch/push without repeated HTTPS prompts. Sign out only clears remote auth; local commits stay on disk.
+
+## Comparison
+
+| | Shape account | GitHub |
+| --- | --- | --- |
+| Purpose | AI, models, credits | Push/pull to GitHub |
+| Needed for local editing | No | No |
+| Needed for AI chat | Yes | No |
+| Needed for `git push` to GitHub | No | Recommended |
+
+## Related
+
+- [Chat Overview](/docs/ai/chat-overview)
+- [GitHub Sign In](/docs/git/github-sign-in)
+- [Models and Pricing](/docs/ai/models-and-credits)

@@ -1,0 +1,81 @@
+---
+title: Refactor with AI
+description: Use Plan and Code modes to rename a pattern and review each proposed change.
+order: 2
+icon: ri-magic-line
+---
+
+This tutorial shows a safe AI-assisted refactor: extract a repeated utility, update call sites, and review every diff before accepting.
+
+## Prepare
+
+1. Open a project folder in Shape.
+2. Sign in to your [Shape account](/docs/introduction/accounts) for AI access.
+3. Open **AI Chat** from the titlebar.
+
+Pick a small, well-scoped task, such as "Move duplicated date formatting into `lib/format-date.ts` and update imports."
+
+## Optional: Plan first
+
+For larger refactors, start in **Plan** mode:
+
+1. Select **Plan** from the mode dropdown.
+2. Describe the refactor and which files you think are involved.
+3. Send the message.
+
+The assistant researches the codebase and saves a plan to `.shape/plans/`. Open that file in the editor, edit if needed, then continue in **Code** mode.
+
+## Run in Code mode
+
+1. Switch the dropdown to **Code**.
+2. Send a clear instruction, for example:
+
+> Create `lib/format-date.ts` with a `formatDate` function. Replace inline `toLocaleDateString` calls in `components/` with imports from the new module. Do not change unrelated files.
+
+3. Wait for the assistant to propose edits.
+
+## Review each edit
+
+Each changed file appears as a card in the chat thread.
+
+1. Click **Preview** to open a [diff tab](/docs/editor/diff-and-merge).
+2. Read added and removed lines.
+3. Click **Accept** only when the change looks correct.
+4. Click **Reject** on anything that touches files outside scope.
+
+Do not enable auto-apply until you are comfortable with the workflow. See [Reviewing Edits](/docs/ai/reviewing-edits).
+
+## Verify
+
+After accepting edits:
+
+1. Save all files (**Ctrl+K S**).
+2. Open **Problems** (**Ctrl+Shift+M**) and fix new type errors.
+3. Run tests or the dev server from the terminal:
+
+```bash
+npm test
+```
+
+If the assistant proposed a terminal command, approve **Run** on the card and check output in the panel.
+
+## Iterate
+
+If something failed, send a follow-up in the same thread:
+
+> The test in `format-date.test.ts` fails because of timezone. Fix the test to use UTC.
+
+Review and accept the follow-up edits the same way.
+
+## What you learned
+
+- Use **Plan** for design and **Code** for implementation
+- Preview and accept edits one file at a time
+- Verify with Problems and terminal commands
+
+## Related
+
+- [Chat Modes](/docs/ai/chat-modes)
+- [Reviewing Edits](/docs/ai/reviewing-edits)
+- [Diff and Merge](/docs/editor/diff-and-merge)
+- [Problems, Output, and Tests](/docs/terminal/problems-output-tests)

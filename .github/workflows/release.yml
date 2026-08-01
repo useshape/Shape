@@ -1,0 +1,184 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+
+      - name: Build preview runtime
+        run: npm run build:preview-runtime
+
+      - name: Test
+        run: npm run test:all
+
+      - name: Assert tag matches package.json
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          test "$TAG" = "$PKG"
+
+  build:
+    name: Build (Windows ${{ matrix.arch }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x86_64
+            target: ""
+          - runner: windows-11-arm
+            arch: aarch64
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.arch }}
+
+      - run: npm ci
+
+      - name: Sync version
+        run: npm run sync-version
+
+      - name: Build preview runtime
+        run: npm run build:preview-runtime
+
+      - name: Build Monaco workers
+        run: npm run build:monaco-workers
+
+      # Password-protected key in secrets (upload via node/fs, not PowerShell pipe —
+      # UTF-16 piping corrupts the key and surfaces as "Wrong password").
+      - name: Build Tauri (NSIS only)
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Official Shape Cloud AI attestation (same secret as website SHAPE_CLOUD_BUILD_SECRET).
+          SHAPE_CLOUD_BUILD_SECRET: ${{ secrets.SHAPE_CLOUD_BUILD_SECRET }}
+          # Bake production website into Next + Rust (release binaries ignore runtime redirects).
+          NEXT_PUBLIC_SHAPE_WEBSITE_URL: https://www.useshape.org
+        run: |
+          if [ -z "${SHAPE_CLOUD_BUILD_SECRET:-}" ]; then
+            echo "SHAPE_CLOUD_BUILD_SECRET secret is required for release builds" >&2
+            exit 1
+          fi
+          if [ -n "${{ matrix.target }}" ]; then
+            npm run tauri -- build --bundles nsis --target "${{ matrix.target }}"
+          else
+            npm run tauri -- build --bundles nsis
+          fi
+
+      - name: Prepare release assets
+        run: node scripts/release/assets.mjs --arch ${{ matrix.arch }} --out-dir dist/release
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/release
+          merge-multiple: true
+
+      # GitHub artifact attestations require a public repo or a paid org plan.
+      # Skip them here — updater .sig files still ship with the release.
+
+      - name: Previous tag
+        id: prev
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
+
+      - name: Detect prerelease
+        id: meta
+        run: |
+          # Zed-style prerelease tags: v0.2.1-pre (any tag with a hyphen after the version)
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate notes
+        run: |
+          if [ -n "${{ steps.prev.outputs.tag }}" ]; then
+            node scripts/release/notes.mjs --from "${{ steps.prev.outputs.tag }}" --to HEAD --output release-notes.md
+          else
+            node scripts/release/notes.mjs --to HEAD --output release-notes.md
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ARGS=(--tag "${GITHUB_REF_NAME}" --dir dist/release --notes-file release-notes.md --publish)
+          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then
+            ARGS+=(--prerelease)
+          fi
+          # Draft → upload with retries + octet-stream → publish.
+          # softprops dies on intermittent uploads.github.com "Error creating policy".
+          node scripts/release/upload.mjs "${ARGS[@]}"

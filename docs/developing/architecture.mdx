@@ -1,0 +1,26 @@
+---
+title: Architecture
+description: Frontend, Tauri shell, and Rust backend.
+order: 3
+icon: ri-organization-chart
+---
+
+## Layers
+
+1. **Frontend** — React / Next.js App Router, static export for production (`out/`).
+2. **Tauri shell** — OS windows, menus, deep links, asset protocol, process lifecycle.
+3. **Rust backend** — commands, agent, PTY, Git, filesystem, LSP adapters.
+
+Secondary windows (settings, agent, branch, popout editor) load their own routes from the same static export. Production routes use trailing slashes so assets resolve from `/_next/...`.
+
+## Data flow
+
+UI actions go through typed wrappers in `lib/backend`, which invoke Tauri commands. Rust does privileged work and emits events the frontend listens for (chat chunks, PTY output, Git refresh, and similar).
+
+AI chat does not call model providers from the browser. The Rust agent attaches the Shape OAuth token and posts to the website completions proxy. Usage and entitlements are decided on that server. See [Client trust](/docs/developing/client-trust).
+
+## Related
+
+- [Tauri IPC](/docs/developing/tauri-ipc)
+- [Agent tools](/docs/developing/agent-tools)
+- [Local development](/docs/developing/local-development)

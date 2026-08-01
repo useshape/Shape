@@ -1,0 +1,22 @@
+---
+title: "4100 Git failed"
+description: A Git operation failed in Shape.
+order: 41
+---
+
+## What it means
+
+Shape could not complete a Git action (status, commit, push, pull, branch, or fetch). Common causes: bad credentials, no remote, a locked `.git/index.lock`, or merge conflicts.
+
+## What to do
+
+1. Confirm the folder is a Git repo and you have a remote if you are pushing.
+2. If you see a lock error, close other Git tools and delete a stale `.git/index.lock` only when no Git process is running.
+3. Sign in to GitHub from Shape if the remote needs auth.
+4. Resolve merge conflicts, then retry.
+
+## Related
+
+- [Source control](/docs/git/source-control)
+- [GitHub sign-in](/docs/git/github-sign-in)
+- [Troubleshooting](/docs/help/troubleshooting)

@@ -1,0 +1,68 @@
+---
+title: IntelliSense
+description: Completions, hovers, go-to-definition, and diagnostics from language servers.
+order: 6
+icon: ri-lightbulb-line
+---
+
+**IntelliSense** is the language-aware assistance in the editor. Completions, hovers, diagnostics, and navigation.
+
+## Completions
+
+Start typing to see suggestions. Press **Tab** or **Enter** to accept.
+
+Shape includes language servers for common web stacks:
+
+| Language | Features |
+| --- | --- |
+| **TypeScript / JavaScript** | Types, imports, refactor hints |
+| **CSS / HTML** | Selectors, tags, attributes |
+| **JSON** | Schema-aware keys and values |
+| **Tailwind CSS** | Class name completions in `className` |
+
+Toggle individual servers in **Settings → Languages & LSP**.
+
+## Quick Fix
+
+When a diagnostic offers a fix, a lightbulb appears in the gutter. Press **Ctrl+.** to open **Quick Fix** and choose an action.
+
+Common fixes include adding imports, fixing ESLint violations, and applying TypeScript corrections.
+
+## Navigation
+
+| Action | Shortcut |
+| --- | --- |
+| Go to Definition | **F12** |
+| Peek Definition | **Alt+F12** |
+| Find All References | **Shift+F12** |
+| Go to Symbol in Workspace | **Ctrl+T** |
+| Go to Next Problem | **F8** |
+| Go to Previous Problem | **Shift+F8** |
+
+**Go to Symbol in Editor** is available from the command palette for symbols in the current file.
+
+## Hovers
+
+Hover over a symbol to see type information, documentation, and color previews for CSS values. Hold **Ctrl** and hover a symbol to peek its definition inline.
+
+## Diagnostics
+
+Errors and warnings appear as squiggles in the editor and aggregate in the **Problems** panel (**Ctrl+Shift+M**). Sources include:
+
+- TypeScript compiler
+- ESLint (when enabled)
+- Design diagnostics for contrast issues
+- Tailwind CSS language service
+
+Fix issues in the editor or open **Problems** to jump between files.
+
+## Rename symbol
+
+Place the cursor on a symbol and press **F2** to rename it across the project. Preview changes before confirming.
+
+## Related
+
+- [Lint and LSP](/docs/settings/lint-and-lsp)
+- [Design Tools](/docs/editor/design-tools)
+- [Problems, Output, and Tests](/docs/terminal/problems-output-tests)
+- [Command Palette](/docs/workspace/command-palette)

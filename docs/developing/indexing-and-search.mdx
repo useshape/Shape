@@ -1,0 +1,18 @@
+---
+title: Indexing and search
+description: Workspace search, outline, and how indexing feeds discovery features.
+order: 7
+icon: ri-search-line
+---
+
+## Overview
+
+Workspace search and related discovery features call into Rust FS and search adapters (including ripgrep-backed paths when available). The explorer and outline panels consume project state exposed through Tauri commands and events.
+
+Docs site search is separate: MDX under `docs/` is indexed by `npm run docs:index` into `docs/generated/search-index.json`, which the website loads for docs search and docs chat.
+
+## Related
+
+- [Workspace search](/docs/files/workspace-search)
+- [Outline](/docs/files/outline)
+- [Local development](/docs/developing/local-development)

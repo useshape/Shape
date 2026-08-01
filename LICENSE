@@ -1,0 +1,80 @@
+Business Source License 1.1
+
+Parameters
+
+Licensor:             Shape
+Licensed Work:        Shape
+                      The Shape agentic IDE and all associated source code in this repository.
+Additional Use Grant: You may use, copy, modify, create derivative works of, run, and
+                      distribute the Licensed Work for any personal, educational,
+                      internal, or commercial purpose, including self-hosting and
+                      deploying modified versions for yourself, your organization, or
+                      clients you serve directly.
+
+                      You may fork the Licensed Work, contribute changes back, and
+                      share source code under this license.
+
+                      You may NOT sell, license, sublicense, or otherwise offer the
+                      Licensed Work—or a substantially similar derivative product
+                      offered under a different name—as a standalone paid product,
+                      white-label product, or competing IDE/editor to third parties.
+                      This restriction does not prevent you from using Shape in your
+                      own business, building private internal tools on top of it, or
+                      providing services where Shape is not the product being sold.
+
+Change Date:          2030-06-22
+Change License:       Apache License, Version 2.0
+
+For information about alternative licensing, contact the Licensor via GitHub:
+https://github.com/useshape/Shape
+
+--------------------------------------------------------------------
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make an Additional Use Grant, above, permitting limited production
+use.
+
+Under these terms, you may not use the Licensed Work for a Commercial Purpose
+unless the Licensor grants you an Additional Use Grant. You may not alter or
+restrict the terms of this license to recipients of copies or derivative works
+you distribute.
+
+Each version of the Licensed Work is offered under the terms of this license
+or the Change License once the Change Date is reached.
+
+"Commercial Purpose" means any use of the Licensed Work beyond the scope
+permitted by the Additional Use Grant, including use in production for purposes
+not expressly allowed above.
+
+"Licensed Work" means the software and associated materials made available
+under these terms.
+
+"Licensor" means the copyright holder named in the Parameters section.
+
+If you violate these terms, your rights under this license terminate automatically.
+
+--------------------------------------------------------------------
+
+Business Source License 1.1 — Standard Terms
+
+Copyright (c) 2026 Natcale
+
+Licensed under the Business Source License 1.1 (the "License"); you may not use
+this file except in compliance with the License.
+
+You may obtain a copy of the License at:
+https://mariadb.com/bsl11/
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.
+
+--------------------------------------------------------------------
+
+Apache License, Version 2.0 (Change License)
+
+On the Change Date, this software becomes available under Apache License 2.0.
+See: https://www.apache.org/licenses/LICENSE-2.0

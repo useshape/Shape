@@ -1,0 +1,47 @@
+---
+title: Settings Overview
+description: Open the settings editor and navigate categories for editor, Git, AI, and more.
+order: 1
+icon: ri-settings-4-line
+---
+
+Shape stores preferences in a settings editor that opens as a tab in the workbench. Changes apply immediately or on the next relevant action.
+## Open settings
+
+- Click the **gear** icon on the [activity bar](/docs/workspace/activity-bar)
+- Click **Settings** in the titlebar
+- **File → Preferences → Settings** or **Ctrl+,**
+
+Close the settings tab with **Ctrl+W** like any editor tab.
+
+## Categories
+
+| Category | What it controls |
+| --- | --- |
+| **Editor** | Font, tabs, minimap, auto-save, formatting |
+| **Appearance** | UI zoom level |
+| **Terminal** | Shell, font, scrollback |
+| **Git** | Auto-fetch, commit confirmation, blame |
+| **AI** | Models, context, rules, MCP, indexing |
+| **Files** | Exclude patterns, line endings |
+| **Lint & Format** | ESLint and Prettier |
+| **Languages & LSP** | Per-language servers |
+| **Node.js & NPM** | Interpreter, package manager |
+| **Design Tools** | Tailwind controls, design autocomplete |
+
+Select a category from the left sidebar. Settings in each section use toggles, dropdowns, and text fields.
+
+## Persistence
+
+Settings are saved locally on your machine. They apply to all projects unless a project-specific tool config overrides them (for example `.prettierrc`).
+
+## Reset to defaults
+
+Individual settings can be restored by selecting the default value in each control. There is no single "reset all" button. Reinstalling Shape does not remove your saved settings file.
+
+## Related
+
+- [Editor Settings](/docs/settings/editor-settings)
+- [Git Settings](/docs/settings/git-settings)
+- [Terminal Settings](/docs/settings/terminal-settings)
+- [AI Settings](/docs/ai/ai-settings)

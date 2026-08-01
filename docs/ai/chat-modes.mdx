@@ -1,0 +1,60 @@
+---
+title: Chat Modes
+description: Choose Ask, Code, Plan, Design, or Review mode for each conversation.
+order: 2
+icon: ri-sparkling-line
+---
+
+Each chat message runs in a **mode** that controls what the assistant can do. Pick the mode from the dropdown next to the input box before you send.
+
+## Mode reference
+
+| Mode | Behavior | Best for |
+| --- | --- | --- |
+| **Ask** | Read-only. No file edits or terminal commands. | Learning the codebase, explaining errors |
+| **Code** | Can read, edit, and run commands. Proposes changes for review. | Implementing features and fixes |
+| **Plan** | Research only. Writes a markdown plan to `.shape/plans/`. | Designing an approach before coding |
+| **Design** | UI and styling focused. Follows existing design patterns. | Layout, Tailwind, and component polish |
+| **Review** | Systematic investigation of bugs, failures, and security issues, with an optional adversarial self-check. | Tracking down runtime/build errors, auditing auth, input handling, and dependencies |
+
+## Ask mode
+
+Safe default for exploration. The assistant reads your project and answers questions but cannot modify files or run the terminal. Use Ask when onboarding to a new repo.
+
+## Code mode
+
+The default for implementation work. The assistant can:
+
+- Read and search files
+- Propose and apply edits shown as review cards (Keep / Undo)
+- Run terminal commands (with your approval)
+- Call `finish` when the task is done
+
+Switch to Code when you are ready to apply changes. See [Reviewing Edits](/docs/ai/reviewing-edits).
+
+## Plan mode
+
+Plan mode researches the codebase and saves an implementation plan as markdown under `.shape/plans/`. Plans include a `## Todos` checklist. It does not edit project source files.
+
+When the plan is ready, review the file and click **Build this plan** (or switch to **Code** and ask to implement). During build, the assistant maintains a live todo checklist in chat via `update_todos`.
+
+## Visual mode
+
+Visual mode is for UI work. It reuses your project’s component library when present; otherwise it defaults to Radix + Tailwind. Ask it to **preview** a component in chat before adding it, or tell it to **build without stopping**. There is no multi-option gallery or Select UI — reply in chat. Pair with [Design Tools](/docs/editor/design-tools) in the editor.
+
+## Review mode
+
+Review mode combines systematic debugging with security-minded review: it reads errors, logs, and relevant code before suggesting fixes, and watches for vulnerability patterns in auth flows, user input, and unsafe APIs. Enable the adversarial self-check in AI settings to have a second pass challenge the first response before it's shown.
+
+Older **Debug** and **Security** selections are automatically migrated to Review — the two were folded into one mode.
+
+## Switching modes
+
+Change the mode between messages in the same thread. Earlier context carries over, but tool permissions follow the active mode for each new message.
+
+## Related
+
+- [Chat Overview](/docs/ai/chat-overview)
+- [Reviewing Edits](/docs/ai/reviewing-edits)
+- [Refactor with AI Tutorial](/docs/tutorials/refactor-with-ai)
+- [AI Settings](/docs/ai/ai-settings)

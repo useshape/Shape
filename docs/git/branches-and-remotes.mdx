@@ -1,0 +1,60 @@
+---
+title: Branches and Remotes
+description: Switch branches, manage remotes, and keep your local repo in sync.
+order: 2
+icon: ri-git-pull-request-line
+---
+
+Shape exposes common branch and remote operations from the Source Control sidebar and branch picker. You rarely need a separate terminal for day-to-day Git workflow.
+
+## Current branch
+
+The branch name appears at the top of [Source Control](/docs/git/source-control) and in the status bar. Click it to open the **branch picker**.
+## Switch branches
+
+1. Click the current branch name in Source Control.
+2. Select a local branch from the list to check it out.
+3. Shape runs `git checkout` and refreshes the file tree.
+
+Uncommitted changes may block checkout if they conflict. Commit or stash changes first.
+
+## Create a branch
+
+From the branch picker:
+
+1. Choose **Create new branch…**
+2. Enter a name (for example `feature/auth`).
+3. Shape creates the branch from your current HEAD and checks it out.
+
+You can also create a branch from the command palette or integrated terminal if you prefer the CLI.
+
+## Remotes
+
+Manage remotes from the Source Control toolbar or remote dialog:
+
+| Action | Description |
+| --- | --- |
+| **Add remote** | Link a name (usually `origin`) to a URL |
+| **Edit remote** | Change the URL for an existing remote |
+| **Remove remote** | Delete the remote reference (not the server repo) |
+
+Paste an HTTPS or SSH URL when adding a remote. For GitHub HTTPS remotes, [sign in with GitHub](/docs/git/github-sign-in) to simplify authentication.
+
+## Fetch and sync
+
+- **Pull** downloads and merges remote changes into your current branch.
+- **Push** uploads local commits the remote does not have yet.
+- **Sync** runs pull then push.
+
+Enable **Auto Fetch** in [Git Settings](/docs/settings/git-settings) to refresh remote state on an interval.
+
+## Ahead and behind
+
+After fetch, the status bar and branch picker may show counts like `↑2 ↓1` meaning you are two commits ahead and one behind the tracked remote branch. Push and pull to reconcile.
+
+## Related
+
+- [Source Control](/docs/git/source-control)
+- [GitHub Sign In](/docs/git/github-sign-in)
+- [Git Graph](/docs/git/git-graph)
+- [Clone and Commit Tutorial](/docs/tutorials/clone-and-commit)

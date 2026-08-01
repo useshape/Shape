@@ -1,0 +1,18 @@
+---
+title: Language servers
+description: How Shape attaches language servers and surfaces diagnostics in the editor.
+order: 6
+icon: ri-lightbulb-line
+---
+
+## Overview
+
+Language server integration is driven from the editor feature (`features/editor/lsp/`) with Rust adapters where process management is required. Monaco hosts the editor; workers for tokenization and TypeScript are bundled into `public/monaco/` for production.
+
+Workspace trust gates whether LSP and other project-local tooling start for a given folder.
+
+## Related
+
+- [IntelliSense](/docs/editor/intellisense)
+- [Lint and LSP settings](/docs/settings/lint-and-lsp)
+- [Architecture](/docs/developing/architecture)

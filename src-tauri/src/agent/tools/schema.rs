@@ -1,0 +1,506 @@
+/// JSON Schema definitions for the agent's tool surface.
+///
+/// These follow the OpenAI / OpenRouter function-calling spec:
+/// each tool is a `{type: "function", function: {name, description, parameters}}` object.
+/// The model emits structured `tool_calls` referencing these names, the backend dispatches
+/// them via `tools::dispatch::execute_tool`, and the JSON `tool_result` is returned to the
+/// next model turn.
+///
+/// This is the single source of truth for *what* the model can do; the human-readable
+/// system prompt only describes *when* to use which tool.
+
+use serde_json::{json, Value};
+
+/// Return the full tool set as a JSON array ready to drop into a chat completion request.
+pub fn all_tools() -> Vec<Value> {
+    vec![
+        read_file(),
+        list_dir(),
+        search_codebase(),
+        search_files(),
+        grep(),
+        web_search(),
+        create_directory(),
+        create_file(),
+        edit_file(),
+        delete_file(),
+        rename_file(),
+        run_terminal(),
+        git_status(),
+        git_fetch(),
+        git_log(),
+        git_stage(),
+        git_commit(),
+        list_terminals(),
+        read_terminal(),
+        write_to_terminal(),
+        wait(),
+        save_plan(),
+        update_todos(),
+        finish(),
+    ]
+}
+
+/// Return tools appropriate for the active chat mode (reduces token overhead).
+pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
+    if mode.eq_ignore_ascii_case("visual") || mode.eq_ignore_ascii_case("design") {
+        let mut tools = all_tools();
+        tools.push(render_design_previews());
+        tools.extend(extra);
+        return tools;
+    }
+
+    let base = if mode.eq_ignore_ascii_case("plan") {
+        vec![
+            read_file(),
+            list_dir(),
+            search_codebase(),
+            search_files(),
+            grep(),
+            web_search(),
+            save_plan(),
+            finish(),
+        ]
+    } else if mode.eq_ignore_ascii_case("ask") {
+        vec![
+            read_file(),
+            list_dir(),
+            search_codebase(),
+            search_files(),
+            grep(),
+            web_search(),
+            finish(),
+        ]
+    } else {
+        all_tools()
+    };
+    let mut tools = base;
+    if !mode.eq_ignore_ascii_case("ask") && !mode.eq_ignore_ascii_case("plan") {
+        tools.extend(extra);
+    }
+    tools
+}
+
+/// Build a tool descriptor. Kept as a small helper so the per-tool definitions stay terse.
+fn tool(name: &str, description: &str, parameters: Value) -> Value {
+    json!({
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": parameters,
+        }
+    })
+}
+
+fn read_file() -> Value {
+    tool(
+        "read_file",
+        "Read the contents of a file in the project. Always call this before editing a file you have not yet seen this turn. Use start_line/end_line to page through large files (1-indexed, inclusive).",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative path to the file."},
+                "start_line": {"type": "integer", "description": "Optional first line (1-indexed)."},
+                "end_line": {"type": "integer", "description": "Optional last line (1-indexed, inclusive)."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn list_dir() -> Value {
+    tool(
+        "list_dir",
+        "List the immediate entries (files and folders) of a directory.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative directory path. Use '.' for the project root."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn search_files() -> Value {
+    tool(
+        "search_files",
+        "Search the project for files matching a specific filename or partial path. Returns a list of matching file paths.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Filename or partial path to search for (e.g., 'page.tsx' or 'components/ui')."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn search_codebase() -> Value {
+    tool(
+        "search_codebase",
+        "Search the indexed codebase by meaning and keywords. Returns relevant file excerpts with line ranges. Use this first for broad questions like 'where is X handled?' before grepping.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language or keyword search query."},
+                "top_k": {"type": "integer", "description": "Max results to return (default 8, max 20)."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn grep() -> Value {
+    tool(
+        "grep",
+        "Search file contents with ripgrep. The query is a case-insensitive regex (alternations like `foo|bar` work); invalid regex falls back to a literal search. Returns every matching line unless noted as truncated. For finding files by name, use search_files instead.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Regex or literal text to search for in file contents. Use alternation (a|b|c) to check several name variants in one call."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn web_search() -> Value {
+    tool(
+        "web_search",
+        "Search the public web for documentation, APIs, or recent information. Use when the answer requires up-to-date or external knowledge.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language search query."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn create_directory() -> Value {
+    tool(
+        "create_directory",
+        "Create a directory (and any missing parents). No-op if it already exists. Blocked in Ask mode.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative directory path."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn create_file() -> Value {
+    tool(
+        "create_file",
+        "Create a brand-new file with the given content. Fails if the file already exists — use edit_file to modify existing files. On success the result may include SYNTAX ERRORS from a parse of the content — fix those before finish. Blocked in Ask mode.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative path of the new file."},
+                "content": {"type": "string", "description": "Full text content of the new file."}
+            },
+            "required": ["path", "content"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn edit_file() -> Value {
+    tool(
+        "edit_file",
+        "Apply a targeted edit to an existing file. The `code_edit` argument MUST use the SEARCH/REPLACE block format. On success the result may include SYNTAX ERRORS from a parse of the merged file — fix those with another edit_file before finish. Blocked in Ask mode.",
+        json!({
+            "type": "object",
+            "properties": {
+                "target_file": {"type": "string", "description": "Project-relative path of the file to edit."},
+                "instructions": {"type": "string", "description": "One sentence describing what this edit accomplishes."},
+                "code_edit": {"type": "string", "description": "The edit formatted as one or more SEARCH/REPLACE blocks. Example:\n<<<<<<< SEARCH\n[exact existing code]\n=======\n[new code]\n>>>>>>> REPLACE"}
+            },
+            "required": ["target_file", "instructions", "code_edit"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn delete_file() -> Value {
+    tool(
+        "delete_file",
+        "Delete a single file. Directories cannot be deleted by the agent. Blocked in Ask mode.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative path of the file to delete."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn rename_file() -> Value {
+    tool(
+        "rename_file",
+        "Rename or move a file. Blocked in Ask mode.",
+        json!({
+            "type": "object",
+            "properties": {
+                "old_path": {"type": "string", "description": "Current project-relative path."},
+                "new_path": {"type": "string", "description": "Target project-relative path."}
+            },
+            "required": ["old_path", "new_path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn run_terminal() -> Value {
+    tool(
+        "run_terminal",
+        "Run a shell command in the project directory. On Windows uses PowerShell; on macOS/Linux uses bash/sh. Prefer file/search tools for inspection — use this for build, test, install, scaffolding, and other shell workflows. For scaffolding tools always pass non-interactive flags (--yes, -y). Slow commands automatically run in a background terminal — then use wait + read_terminal to poll. Pass background:true to force background mode. NEVER use cat/type/ls/dir for file inspection. Some commands require user approval. Blocked in Ask and Plan modes.",
+        json!({
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "The shell command to execute."},
+                "background": {"type": "boolean", "description": "When true, run in a background terminal session and return immediately with a session_id. Use with wait + read_terminal to poll long commands."}
+            },
+            "required": ["command"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_status() -> Value {
+    tool(
+        "git_status",
+        "Show git working tree and staged file status for the project. Read-only.",
+        json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_fetch() -> Value {
+    tool(
+        "git_fetch",
+        "Fetch updates from all remotes (git fetch --all --prune). Does not modify the working tree.",
+        json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_log() -> Value {
+    tool(
+        "git_log",
+        "Show recent commit history. Read-only.",
+        json!({
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Number of commits to show (default 10, max 50)."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_stage() -> Value {
+    tool(
+        "git_stage",
+        "Stage a file for commit (git add). Path is project-relative.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative file path to stage."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_commit() -> Value {
+    tool(
+        "git_commit",
+        "Create a git commit from staged changes. Requires user approval before running.",
+        json!({
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "Commit message."}
+            },
+            "required": ["message"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn list_terminals() -> Value {
+    tool(
+        "list_terminals",
+        "List active background terminal sessions with session_id, running status, and command. Call before read_terminal or write_to_terminal.",
+        json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn read_terminal() -> Value {
+    tool(
+        "read_terminal",
+        "Read recent output from a background terminal session started by run_terminal. Use after wait when polling long commands (installs, builds, scaffolding).",
+        json!({
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "integer", "description": "PTY session ID from run_terminal or list_terminals."},
+                "tail_chars": {"type": "integer", "description": "How many trailing characters of output to return (default 8000, max 50000)."}
+            },
+            "required": ["session_id"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn wait() -> Value {
+    tool(
+        "wait",
+        "Pause for a number of seconds before checking a long-running command again. Use between read_terminal polls for installs, builds, or scaffolding. Respects user stop.",
+        json!({
+            "type": "object",
+            "properties": {
+                "seconds": {"type": "integer", "description": "Seconds to wait (1–180, default 10)."},
+                "reason": {"type": "string", "description": "Short note on why you are waiting (shown in UI)."}
+            },
+            "required": ["seconds"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn write_to_terminal() -> Value {
+    tool(
+        "write_to_terminal",
+        "Write text or keystrokes to an active terminal session. Use when a command is waiting for interactive input. Append \\r for Enter. Use list_terminals first to get the session_id. Blocked in Ask and Plan modes.",
+        json!({
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "integer", "description": "PTY session ID from list_terminals."},
+                "input": {"type": "string", "description": "Text to send. Use \\r for Enter, \\x03 for Ctrl+C."}
+            },
+            "required": ["session_id", "input"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn save_plan() -> Value {
+    tool(
+        "save_plan",
+        "Save an implementation plan as markdown to .shape/plans/{title}.md. Plan mode only. Call after researching the codebase. Include a markdown checkbox todo list under ## Todos (or numbered implementation steps) so Build can track progress.",
+        json!({
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short slug for the plan file (e.g. auth-refactor)."},
+                "content": {"type": "string", "description": "Full markdown plan body. Must include a ## Todos section with `- [ ]` checkboxes or a numbered implementation steps list."}
+            },
+            "required": ["title", "content"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn update_todos() -> Value {
+    tool(
+        "update_todos",
+        "Create or update the live todo checklist shown in chat (Cursor-style plan progress). Pass the full merged list every call. Use when building a plan in Code mode: seed todos from the plan, set exactly one item in_progress, mark completed as you finish. Not available in Ask/Plan.",
+        json!({
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Checklist title (default: Todos)."},
+                "todos": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "description": "Stable id for the todo (e.g. 1, setup-auth)."},
+                            "content": {"type": "string", "description": "Short todo label."},
+                            "status": {
+                                "type": "string",
+                                "enum": ["pending", "in_progress", "completed", "cancelled"],
+                                "description": "pending | in_progress | completed | cancelled"
+                            }
+                        },
+                        "required": ["id", "content", "status"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["todos"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn finish() -> Value {
+    tool(
+        "finish",
+        "Signal that the turn is complete. Call when there are no more tool actions. `summary` is the user-visible reply: lead with the answer, be concrete, no \"Would you like me to…\". Plain conversational prose.",
+        json!({
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string", "description": "User-facing reply. Direct and specific. Never third-person logs or permission asks."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn render_design_previews() -> Value {
+    tool(
+        "render_design_previews",
+        "Show ONE interactive component preview in chat (Visual mode). Call ONLY when the user asks to see / preview / mock a component before adding it. Do NOT call for routine builds — if they say build it / add it / don't stop, edit the project directly. Exactly one concept. Prefer jsx with function App(). Use the project's UI kit when present; otherwise Radix-style primitives + Tailwind. No remote images. No multi-option galleries.",
+        json!({
+            "type": "object",
+            "properties": {
+                "concepts": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string", "description": "Short component name (e.g. PrimaryButton)."},
+                            "style": {"type": "string", "description": "One-line note (library / intent)."},
+                            "jsx": {"type": "string", "description": "React source defining App (function App() { return (...); }). No export/import. Tailwind className only."},
+                            "html": {"type": "string", "description": "Legacy fallback: raw body HTML only (prefer jsx)."},
+                            "width": {"type": "integer", "description": "Viewport width (default 640)."},
+                            "height": {"type": "integer", "description": "Viewport height (default 360)."}
+                        },
+                        "required": ["id", "name", "style"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["concepts"],
+            "additionalProperties": false
+        }),
+    )
+}

@@ -1,0 +1,123 @@
+---
+title: Languages and tooling
+description: Languages Shape highlights, plus Prettier, ESLint, LSP, Emmet, and design tools.
+order: 6
+icon: ri-code-box-line
+---
+
+Shape contains syntax highlighting for many languages.
+
+Change the language mode anytime with **Change Language Mode** in the command palette (**Ctrl+Shift+P**).
+
+## Syntax highlighting
+
+These languages are available. Opening a file picks one automatically.
+
+| Language | Typical files |
+| --- | --- |
+| Plain Text | unknown extensions |
+| TypeScript | `.ts`, `.tsx` |
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` |
+| JSON | `.json`, `.jsonc` |
+| HTML | `.html`, `.htm` (also used for `.vue`, `.svelte`, `.astro` highlighting) |
+| CSS / SCSS / Less | `.css`, `.scss`, `.sass`, `.less` |
+| Handlebars / Pug / Twig / Liquid | `.hbs`, `.pug`, `.twig`, `.liquid` |
+| Markdown / MDX | `.md`, `.mdx` |
+| XML / YAML | `.xml`, `.yaml`, `.yml` |
+| GraphQL | `.graphql`, `.gql` (also `.prisma` highlighting) |
+| SQL / MySQL / PostgreSQL | `.sql` and related |
+| Python | `.py` |
+| Rust | `.rs` |
+| Go | `.go` |
+| Java | `.java` |
+| C# / F# | `.cs`, `.fs` |
+| C / C++ | `.c`, `.h`, `.cpp`, `.hpp` |
+| Objective-C | `.m`, `.mm` |
+| PHP / Ruby / Swift / Kotlin / Dart / Scala | matching extensions |
+| Clojure / Elixir / Lua / R / Julia / Perl | matching extensions |
+| Shell / PowerShell / Batch | `.sh`, `.ps1`, `.bat`, `.cmd` |
+| Dockerfile | `Dockerfile`, `.dockerfile` |
+| HCL / Terraform | `.tf`, `.hcl` |
+| Bicep | `.bicep` |
+| Ini / TOML / Env | `.ini`, `.toml`, `.env` |
+| Protocol Buffers | `.proto` |
+| Solidity | `.sol` |
+| WGSL | `.wgsl` |
+| TypeSpec | `.tsp` |
+
+Highlighting alone does not mean IntelliSense or formatting for that language. See the tables below for tooling coverage.
+
+## Prettier
+
+Built-in document formatter when **Enable Prettier** is on (**Settings → Lint & Format**).
+
+| Formats with Prettier | Extensions |
+| --- | --- |
+| JavaScript / TypeScript | `.js`, `.jsx`, `.ts`, `.tsx` |
+| JSON | `.json` |
+| CSS / SCSS / Less | `.css`, `.scss`, `.less` |
+| HTML | `.html` |
+| Markdown | `.md` |
+
+Use **Format Document** (**Alt+Shift+F**), or turn on **Format On Save** in editor settings. Shape runs Prettier with your project config (`.prettierrc`, `prettier.config.js`).
+
+## ESLint
+
+Linting for JavaScript and TypeScript projects (**Settings → Lint & Format**).
+
+| Supported | Extensions |
+| --- | --- |
+| ESLint | `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.vue`, `.svelte` |
+
+Issues appear in the editor and the **Problems** panel. Optional **Fix on save** applies auto-fixable rules.
+
+## Language servers (IntelliSense)
+
+| Server | What it covers | Notes |
+| --- | --- | --- |
+| TypeScript | `.ts`, `.tsx`, `.js`, `.jsx` | Completions, go-to-def, rename, quick fixes |
+| HTML | `.html` | Markup IntelliSense |
+| CSS | `.css`, `.scss`, `.less` | Stylesheet IntelliSense |
+| JSON | `.json`, `.jsonc` | Schema-aware editing |
+| Python | `.py` | Pyright |
+| Markdown | `.md` | remark language service |
+| GraphQL | `.graphql` | GraphQL language service |
+| Tailwind CSS | class-aware editing when the project uses Tailwind | Toggle in **Languages & LSP** |
+| Vue / Svelte | when those frameworks are detected in the project | Best results when the file language mode matches |
+
+Toggle the main servers under **Settings → Languages & LSP**. Details: [Lint and LSP](/docs/settings/lint-and-lsp) and [IntelliSense](/docs/editor/intellisense).
+
+## Emmet
+
+HTML/CSS abbreviations and expansions in HTML, CSS/SCSS/Less, and JSX/TSX. Controlled by the **Emmet** toggle under **Languages & LSP**.
+
+## Design tools
+
+For UI work in web files:
+
+| Tool | What it does |
+| --- | --- |
+| Design autocomplete | Suggests Tailwind-style classes and project patterns in `className` |
+| Tailwind controls | Inline panels for flex, gap, padding, colors |
+| Design diagnostics | Contrast and related accessibility checks |
+| CSS variable IntelliSense | Completions and hover for `var(--*)` |
+
+See [Design Tools](/docs/editor/design-tools).
+
+## Other editor extras
+
+| Feature | Where |
+| --- | --- |
+| Bracket pair colorization | Editor settings |
+| Indent and bracket guides | Editor settings |
+| Multi-cursor editing | Monaco defaults — [Editing Files](/docs/editor/editing-files) |
+| Markdown / MDX preview | [Markdown Preview](/docs/editor/markdown-preview) |
+| Format on save | Editor settings (uses Prettier when enabled) |
+
+## Related
+
+- [Editing Files](/docs/editor/editing-files)
+- [IntelliSense](/docs/editor/intellisense)
+- [Lint and LSP](/docs/settings/lint-and-lsp)
+- [Design Tools](/docs/editor/design-tools)
+- [Editor Settings](/docs/settings/editor-settings)

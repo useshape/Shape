@@ -1,0 +1,57 @@
+---
+title: AI Settings
+description: Configure models, context limits, auto-apply, custom rules, and MCP servers.
+order: 5
+icon: ri-settings-3-line
+---
+
+AI behavior is controlled from **Settings → AI** in the settings editor tab. Open settings from the activity bar gear icon or **File → Preferences → Settings**.
+
+## Models
+
+| Setting | Purpose |
+| --- | --- |
+| **Enabled models** | Toggle which models appear in the chat picker |
+| **Default model** | Pre-selected model for new threads |
+
+Disable models you never use to simplify the dropdown.
+
+## Context
+
+**Max context lines** limits how much surrounding code Shape sends with each message. Higher values give the assistant more file context but use more credits. Presets range from focused snippets to larger windows.
+
+## Auto apply edits
+
+When **Auto Apply Edits** is off (default), every file change requires explicit **Accept** in the chat panel. Turn it on only if you want proposals applied without confirmation. See [Reviewing Edits](/docs/ai/reviewing-edits).
+
+## Custom instructions
+
+Two text fields shape assistant behavior:
+
+- **Custom system prompt**: high-level personality and priorities
+- **Custom rules**: project-specific conventions (naming, patterns, files to avoid)
+
+These append to the built-in mode instructions for every message in the workspace.
+
+## Workspace indexing
+
+The indexing section shows progress for semantic codebase search. Re-index after large refactors so AI search stays accurate. Index data is scoped to the open project.
+
+## MCP servers
+
+**Model Context Protocol** servers extend the assistant with external tools. Configure servers in the MCP section or open the MCP config file directly from settings.
+
+Each server entry includes:
+
+- Name and launch command
+- Arguments and environment variables
+- Enabled toggle
+
+Restart or reconnect after changing MCP configuration.
+
+## Related
+
+- [Models and Pricing](/docs/ai/models-and-credits)
+- [Chat Overview](/docs/ai/chat-overview)
+- [Settings Overview](/docs/settings/settings-overview)
+- [Reviewing Edits](/docs/ai/reviewing-edits)

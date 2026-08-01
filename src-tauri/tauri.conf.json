@@ -1,0 +1,107 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Shape",
+  "version": "0.2.7",
+  "identifier": "com.shape.app",
+  "build": {
+    "frontendDist": "../out",
+    "devUrl": "http://localhost:48921",
+    "beforeDevCommand": "node scripts/build/preview.mjs && node scripts/kill-stale.mjs && npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Shape",
+        "visible": false,
+        "width": 1000,
+        "height": 800,
+        "minWidth": 1000,
+        "minHeight": 500,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": false,
+        "dragDropEnabled": false
+      },
+      {
+        "label": "onboarding",
+        "title": "Welcome to Shape",
+        "url": "/onboarding/",
+        "width": 900,
+        "height": 600,
+        "resizable": false,
+        "decorations": false,
+        "transparent": false,
+        "center": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self' asset:",
+        "connect-src": "ipc: http://ipc.localhost https://ipc.localhost http://tauri.localhost https://tauri.localhost http://asset.localhost https://asset.localhost http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss: https: http://ipc.localhost",
+        "font-src": "'self' data: https://fonts.gstatic.com",
+        "img-src": "'self' asset: http://asset.localhost https://asset.localhost blob: data: https: http://localhost:*",
+        "style-src": "'unsafe-inline' 'self' https://fonts.googleapis.com",
+        "style-src-attr": "'unsafe-inline'",
+        "script-src": "'self' 'unsafe-inline' 'wasm-unsafe-eval' asset: http://asset.localhost https://asset.localhost",
+        "worker-src": "'self' blob:",
+        "child-src": "'self' blob: asset: http://asset.localhost https://asset.localhost",
+        "frame-src": "'self' blob: asset: http://asset.localhost https://asset.localhost"
+      },
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ],
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$HOME/**",
+          "$APPDATA/**",
+          "$LOCALAPPDATA/**",
+          "$TEMP/**"
+        ]
+      },
+      "capabilities": [
+        "default"
+      ]
+    },
+    "withGlobalTauri": true
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "shape"
+        ]
+      }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFNTYxRTA2OTk5NjY4MjIKUldRaWFKYVpCaDVXWGcyRjUzZENZUDgvbm9zaEFnOHZvNmQ5cHBzQ3J6VytIajR3U3A5U1lOTEgK",
+      "endpoints": [
+        "https://www.useshape.org/api/updates/desktop"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico"
+      }
+    }
+  }
+}

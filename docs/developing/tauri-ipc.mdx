@@ -1,0 +1,24 @@
+---
+title: Tauri commands and IPC
+description: The boundary between the TypeScript frontend and Rust Tauri commands.
+order: 4
+icon: ri-exchange-line
+---
+
+## Boundary
+
+The frontend never reaches into Rust modules directly. It uses generated or hand-written command wrappers (see `lib/backend`) that call `invoke` with JSON-serializable arguments.
+
+Commands are registered in `src-tauri/src/lib.rs` and implemented under `src-tauri/src/` (`commands/`, `adapters/`, `agent/`, `domain/`).
+
+## Rules of thumb
+
+- Keep long-running or blocking work off the async UI thread; use `spawn_blocking` where appropriate.
+- Prefer events for streaming (chat, PTY) over large synchronous returns.
+- Do not trust client-sent entitlement or credit fields; pass the access token and let the server decide.
+
+## Related
+
+- [Architecture](/docs/developing/architecture)
+- [Agent tools](/docs/developing/agent-tools)
+- [Client trust and usage](/docs/developing/client-trust)
