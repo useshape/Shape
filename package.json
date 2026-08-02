@@ -1,6 +1,6 @@
 {
   "name": "shape",
-  "version": "0.2.8",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
     "dev": "node scripts/build/monaco.mjs && next dev -p 48921",
