@@ -57,6 +57,14 @@
             "key": "Ctrl+Shift+P"
         },
         {
+            "label": "Command Palette",
+            "key": "F1"
+        },
+        {
+            "label": "Go to Symbol in Editor...",
+            "key": "Ctrl+Shift+O"
+        },
+        {
             "label": "Find in Files",
             "key": "Ctrl+Shift+F"
         },

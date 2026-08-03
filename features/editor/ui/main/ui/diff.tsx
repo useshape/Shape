@@ -19,6 +19,7 @@ import {
     parseDiffTabPath,
     useDiffHunkState,
 } from "@/features/git/ui/diff-hunks";
+import { bindDiffEditorNativeUiToShape } from "@/lib/editor/suppress-monaco-native-ui";
 
 interface DiffViewProps {
     path: string;
@@ -121,8 +122,9 @@ export function DiffView({ path, originalContent, content, getLanguage }: DiffVi
                         monacoRef.current = monaco;
                         defineShapeMonacoThemes(monaco);
                     }}
-                    onMount={(editor) => {
+                    onMount={(editor, monaco) => {
                         editorRef.current = editor;
+                        monacoRef.current = monaco;
                         try {
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const diffEditor = editor as any;
@@ -131,10 +133,12 @@ export function DiffView({ path, originalContent, content, getLanguage }: DiffVi
                             setModifiedEditor(mod);
                             const guideOptions = {
                                 guides: { indentation: false, highlightActiveIndentation: false },
+                                contextmenu: false,
                             };
                             originalEditor?.updateOptions?.(guideOptions);
                             mod?.updateOptions?.(guideOptions);
-                            if (monacoRef.current) defineShapeMonacoThemes(monacoRef.current);
+                            defineShapeMonacoThemes(monaco);
+                            bindDiffEditorNativeUiToShape(diffEditor, monaco);
                         } catch {
                             // Diff editor may already be disposing.
                         }
@@ -167,6 +171,8 @@ export function DiffView({ path, originalContent, content, getLanguage }: DiffVi
                         renderSideBySide: false,
                         automaticLayout: true,
                         readOnly: true,
+                        contextmenu: false,
+                        renderGutterMenu: false,
                         guides: { indentation: false, highlightActiveIndentation: false },
                     })}
                 />
