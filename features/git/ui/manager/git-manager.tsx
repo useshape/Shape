@@ -17,7 +17,7 @@ import { BranchWindow } from "@/features/git/ui/branches/branch-window";
 import { LocalTags } from "@/features/git/ui/tags/local-tags";
 import { GitHubSection } from "@/features/git/ui/github/github-section";
 import { ActionsConsole, isActionsSection } from "@/features/git/ui/actions/actions-console";
-import { useFilter } from "./filter-context";
+import { useFilter, isGitSectionId, persistGitSection, readStoredGitSection } from "./filter-context";
 import { useGitRepos } from "@/lib/git/repos";
 
 export type { GitSectionId } from "@/features/git/types";
@@ -80,18 +80,23 @@ const NAV: NavGroup[] = [
 const ALL_SECTION_IDS = NAV.flatMap((g) => g.children.map((c) => c.id));
 
 function isSection(value: string | null | undefined): value is GitSectionId {
-    return !!value && ALL_SECTION_IDS.includes(value as GitSectionId);
+    return isGitSectionId(value) && ALL_SECTION_IDS.includes(value);
 }
 
 function initialSection(pathname: string | null, query: string | null): GitSectionId {
     if (isSection(query)) return query;
+    const stored = readStoredGitSection();
+    if (stored && isSection(stored)) return stored;
     if (pathname?.startsWith("/branch")) return "branches";
     return "source";
 }
 
 type GitEmptyReason = "no-project" | "no-repo" | "no-commits";
 
+const INTRO_SEEN_KEY = "shape-git-manager-intro-seen";
+
 function GitManagerIntro({ children }: { children: React.ReactNode }) {
+    // Always start false so SSR + first paint match; skip splash after mount if already seen.
     const [ready, setReady] = useState(false);
     const [visible, setVisible] = useState(false);
 
@@ -99,6 +104,15 @@ function GitManagerIntro({ children }: { children: React.ReactNode }) {
         let cancelled = false;
         let t1: number | undefined;
         let t2: number | undefined;
+
+        try {
+            if (sessionStorage.getItem(INTRO_SEEN_KEY) === "1") {
+                setReady(true);
+                return;
+            }
+        } catch {
+            /* ignore */
+        }
 
         const fadeIn = requestAnimationFrame(() => {
             if (!cancelled) setVisible(true);
@@ -108,7 +122,13 @@ function GitManagerIntro({ children }: { children: React.ReactNode }) {
             if (cancelled) return;
             setVisible(false);
             t2 = window.setTimeout(() => {
-                if (!cancelled) setReady(true);
+                if (cancelled) return;
+                try {
+                    sessionStorage.setItem(INTRO_SEEN_KEY, "1");
+                } catch {
+                    /* ignore */
+                }
+                setReady(true);
             }, 450);
         }, 1200);
 
@@ -249,16 +269,23 @@ function ManagerShell() {
     const pathname = usePathname();
     const { section, setSection } = useFilter();
     const [query, setQuery] = useState("");
-    const [activeLeafId, setActiveLeafId] = useState<string>("source");
+    const [activeLeafId, setActiveLeafId] = useState<string>(() => section);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
         () => new Set(NAV.map((g) => g.id)),
     );
 
+    // Sync once from URL / storage on mount; avoid resetting to Source on reload.
     useEffect(() => {
         const next = initialSection(pathname, search.get("section"));
         setSection(next);
         setActiveLeafId(next);
-    }, [pathname, search, setSection]);
+        persistGitSection(next);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+    }, []);
+
+    useEffect(() => {
+        setActiveLeafId(section);
+    }, [section]);
 
     useEffect(() => {
         let unlisten: (() => void) | undefined;
