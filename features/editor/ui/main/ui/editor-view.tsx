@@ -67,6 +67,7 @@ import { updateDiagnosticsFromMonaco } from "@/features/diagnostics/store";
 import { getSettings, getMonacoOptionsFromSettings, updateSettingSection, isLspLanguageEnabled } from "@/lib/settings";
 import { isWorkspaceTrusted } from "@/lib/workspace-trust";
 import { registerMonacoEditor } from "@/lib/editor/monaco-registry";
+import { bindMonacoNativeUiToShape } from "@/lib/editor/suppress-monaco-native-ui";
 import { isBenignLspError } from "@/lib/editor/benign-errors";
 import type { ProjectFrameworks } from "../../../lsp/frameworks";
 import { AutocompleteOverlay } from "./autocomplete";
@@ -1550,6 +1551,7 @@ export const CodeEditorView = memo(function CodeEditorView({
                             });
                             const unregisterMonaco = registerMonacoEditor(editor);
                             editor.onDidDispose(() => unregisterMonaco());
+                            bindMonacoNativeUiToShape(editor, monaco);
                             setEditorTracker({ editor, monaco });
                             ensureCssVarProviders(monaco);
                             ensureDesignCompletionProvider(monaco);

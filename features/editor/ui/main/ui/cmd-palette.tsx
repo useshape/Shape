@@ -211,9 +211,12 @@ export function CommandPalette() {
         };
         window.addEventListener("shape-command-palette", handleOpen);
 
-        // Also listen for Ctrl+Shift+P globally
+        // Ctrl+Shift+P / F1 — Shape palette (also stolen from Monaco via suppress-monaco-native-ui)
         const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "P") {
+            const isPaletteChord =
+                ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") ||
+                e.key === "F1";
+            if (isPaletteChord) {
                 e.preventDefault();
                 handleOpen();
             }
