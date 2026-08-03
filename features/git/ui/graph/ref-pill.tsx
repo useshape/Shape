@@ -9,6 +9,10 @@ export type RefInfo = {
     isTag: boolean;
 };
 
+/**
+ * Ref chips styled after vscode-git-graph `.gitRef`:
+ * coloured icon strip + name, active border uses lane colour.
+ */
 function RefPillVisual({
     refInfo,
     color,
@@ -25,18 +29,29 @@ function RefPillVisual({
     return (
         <span
             className={cn(
-                "inline-flex h-[18px] max-w-[190px] shrink-0 items-center overflow-hidden rounded-lg border bg-panel text-text-primary",
-                emphasized ? "border-success" : "border-border-subtle",
+                "inline-flex h-[18px] max-w-[190px] shrink-0 items-center overflow-hidden rounded-[5px] text-text-primary",
+                "bg-black/10 dark:bg-white/10",
                 className,
             )}
+            style={{
+                border: `1px solid ${emphasized ? color : "color-mix(in srgb, var(--color-border) 80%, transparent)"}`,
+            }}
         >
             <span
                 className="flex h-full w-[16px] shrink-0 items-center justify-center"
                 style={{ backgroundColor: color }}
             >
-                <Icon name={icon} size={11} className="text-white" />
+                <Icon name={icon} size={11} className="text-[var(--graph-surface,var(--color-panel))]" />
             </span>
-            <span className="truncate px-1.5 text-xs font-medium leading-none">{raw}</span>
+            <span
+                className={cn(
+                    "truncate px-1.5 text-[12px] leading-[18px]",
+                    emphasized ? "font-semibold" : "font-medium",
+                    refInfo.isRemote && "italic opacity-90",
+                )}
+            >
+                {raw}
+            </span>
         </span>
     );
 }
