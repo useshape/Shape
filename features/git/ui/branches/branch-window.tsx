@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { List, type RowComponentProps } from "react-window";
 import { emit, listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -22,12 +21,9 @@ import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { useGitRepos } from "@/lib/git/repos";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { QuickPick } from "@/components/ui/quick-pick";
-import { ScrollArea } from "@/components/ui/scroll";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
-
-const ROW_HEIGHT = 44;
-const LIST_MAX_HEIGHT = 560;
-const VIRTUAL_BRANCH_THRESHOLD = 8;
+import { Panel } from "@/features/panels";
+import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 
 async function notifyGitRefresh() {
     try {
@@ -37,89 +33,134 @@ async function notifyGitRefresh() {
     }
 }
 
-function BranchRow({
+type BranchKind = "local" | "remote";
+
+type BranchItem = {
+    name: string;
+    displayName: string;
+    kind: BranchKind;
+    remote?: string;
+    author?: string;
+    authorEmail?: string;
+    date?: string;
+    ahead?: number | null;
+    behind?: number | null;
+};
+
+function Avatar({
     name,
-    displayName,
+    email,
+    size = 22,
+}: {
+    name?: string;
+    email?: string;
+    size?: number;
+}) {
+    const url = resolveGithubAvatarUrl(email, name, size * 2);
+    if (!url) {
+        return (
+            <span
+                className="inline-flex shrink-0 items-center justify-center rounded-full bg-panel-hover text-[10px] font-medium text-text-muted"
+                style={{ width: size, height: size }}
+            >
+                {(name || "?").slice(0, 1).toUpperCase()}
+            </span>
+        );
+    }
+    return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt="" width={size} height={size} className="shrink-0 rounded-full" draggable={false} />
+    );
+}
+
+function SyncPills({ ahead, behind }: { ahead?: number | null; behind?: number | null }) {
+    if (ahead == null && behind == null) return null;
+    const a = ahead ?? 0;
+    const b = behind ?? 0;
+    if (a === 0 && b === 0) {
+        return <span className="text-[11px] text-text-muted tabular-nums">synced</span>;
+    }
+    return (
+        <span className="flex items-center gap-1.5 text-[11px] tabular-nums text-text-muted">
+            {a > 0 ? <span className="text-[var(--git-added)]">↑{a}</span> : null}
+            {b > 0 ? <span className="text-[var(--git-deleted)]">↓{b}</span> : null}
+        </span>
+    );
+}
+
+function BranchRow({
+    item,
     isCurrent,
-    author,
-    date,
-    ahead,
-    behind,
+    selected,
+    onSelect,
     onCheckout,
     onDelete,
     onRename,
     onSetUpstream,
-    onViewLog,
+    onCopy,
     onCompare,
-    canDelete,
 }: {
-    name: string;
-    displayName: string;
+    item: BranchItem;
     isCurrent: boolean;
-    author?: string;
-    date?: string;
-    ahead?: number | null;
-    behind?: number | null;
+    selected: boolean;
+    onSelect: () => void;
     onCheckout: () => void;
     onDelete?: () => void;
     onRename?: () => void;
     onSetUpstream?: () => void;
-    onViewLog?: () => void;
+    onCopy: () => void;
     onCompare?: () => void;
-    canDelete?: boolean;
 }) {
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <Button
+                <button
                     type="button"
-                    variant="ghost"
-                    onClick={onCheckout}
+                    onClick={onSelect}
+                    onDoubleClick={onCheckout}
                     className={cn(
-                        "h-auto w-full justify-start gap-2 px-2 py-1.5 rounded-xl text-left font-normal group min-h-[40px]",
-                        isCurrent ? "bg-panel-hover text-text-primary" : "text-text-secondary hover:text-text-primary"
+                        "group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors",
+                        selected
+                            ? "bg-panel-hover text-text-primary"
+                            : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
+                        isCurrent && !selected && "bg-accent/10 text-text-primary",
                     )}
                 >
-                    <Icon name="account_tree" size={16} className="shrink-0 text-text-muted" />
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-sm truncate min-w-0">{displayName}</span>
-                            {isCurrent ? <Icon name="check" size={16} className="shrink-0 text-accent" /> : null}
-                            {ahead != null && behind != null ? (
-                                <span className="text-xs text-text-muted shrink-0 tabular-nums">
-                                    ↑{ahead} ↓{behind}
+                    <Icon
+                        name={item.kind === "remote" ? "cloud" : "account_tree"}
+                        size={15}
+                        className={cn("shrink-0", isCurrent ? "text-accent" : "text-text-muted")}
+                    />
+                    <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-sm">{item.displayName}</span>
+                            {isCurrent ? (
+                                <span className="shrink-0 rounded-md bg-accent/20 px-1 py-px text-[10px] font-medium text-accent">
+                                    HEAD
                                 </span>
                             ) : null}
                         </div>
-                        {(author || date) ? (
-                            <div className="text-sm text-text-muted truncate">
-                                {[author, date].filter(Boolean).join(" · ")}
+                        {(item.author || item.date) ? (
+                            <div className="truncate text-[11px] text-text-muted">
+                                {[item.author, item.date].filter(Boolean).join(" · ")}
                             </div>
                         ) : null}
                     </div>
-                    {canDelete && onDelete ? (
-                        <span
-                            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-error shrink-0"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete();
-                            }}
-                        >
-                            <Icon name="delete" size={16} />
-                        </span>
-                    ) : null}
-                </Button>
+                    <SyncPills ahead={item.ahead} behind={item.behind} />
+                </button>
             </ContextMenuTrigger>
             <ContextMenuContent>
                 <ContextMenuItem onClick={onCheckout}>Checkout</ContextMenuItem>
-                {onRename ? <ContextMenuItem onClick={onRename}>Rename...</ContextMenuItem> : null}
-                {onSetUpstream ? <ContextMenuItem onClick={onSetUpstream}>Set Upstream...</ContextMenuItem> : null}
-                {onViewLog ? <ContextMenuItem onClick={onViewLog}>View Log</ContextMenuItem> : null}
-                {onCompare ? <ContextMenuItem onClick={onCompare}>Compare with Current</ContextMenuItem> : null}
-                {canDelete && onDelete ? (
+                <ContextMenuItem onClick={onCopy}>Copy name</ContextMenuItem>
+                {onCompare ? <ContextMenuItem onClick={onCompare}>Compare with current</ContextMenuItem> : null}
+                {onRename ? <ContextMenuItem onClick={onRename}>Rename…</ContextMenuItem> : null}
+                {onSetUpstream ? <ContextMenuItem onClick={onSetUpstream}>Set upstream…</ContextMenuItem> : null}
+                {onDelete ? (
                     <>
                         <ContextMenuSeparator />
-                        <ContextMenuItem onClick={onDelete} className="text-error">Delete</ContextMenuItem>
+                        <ContextMenuItem onClick={onDelete} className="text-error">
+                            Delete
+                        </ContextMenuItem>
                     </>
                 ) : null}
             </ContextMenuContent>
@@ -127,132 +168,27 @@ function BranchRow({
     );
 }
 
-type LocalBranchItem = {
-    name: string;
-    author?: string;
-    date?: string;
-    ahead?: number | null;
-    behind?: number | null;
-};
-
-type BranchListRowProps = {
-    items: LocalBranchItem[];
-    currentBranch: string;
-    onCheckout: (name: string) => void;
-    onDelete: (name: string) => void;
-    onRename: (name: string) => void;
-    onSetUpstream: (name: string) => void;
-    onViewLog: (name: string) => void;
-    onCompare: (name: string) => void;
-};
-
-function BranchListRow({
-    index,
-    style,
-    ariaAttributes,
-    items,
-    currentBranch,
-    onCheckout,
-    onDelete,
-    onRename,
-    onSetUpstream,
-    onViewLog,
-    onCompare,
-}: RowComponentProps<BranchListRowProps>) {
-    const branch = items[index];
-    return (
-        <div style={style} className="px-0.5" {...ariaAttributes}>
-            <BranchRow
-                name={branch.name}
-                displayName={branch.name}
-                isCurrent={branch.name === currentBranch}
-                author={branch.author}
-                date={branch.date}
-                ahead={branch.ahead}
-                behind={branch.behind}
-                onCheckout={() => onCheckout(branch.name)}
-                onDelete={() => onDelete(branch.name)}
-                onRename={() => onRename(branch.name)}
-                onSetUpstream={() => onSetUpstream(branch.name)}
-                onViewLog={() => onViewLog(branch.name)}
-                onCompare={() => onCompare(branch.name)}
-                canDelete={branch.name !== currentBranch}
-            />
-        </div>
-    );
-}
-
-function VirtualBranchList({
-    items,
-    currentBranch,
-    onCheckout,
-    onDelete,
-    onRename,
-    onSetUpstream,
-    onViewLog,
-    onCompare,
+function SectionHeader({
+    label,
+    count,
+    open,
+    onToggle,
 }: {
-    items: LocalBranchItem[];
-    currentBranch: string;
-    onCheckout: (name: string) => void;
-    onDelete: (name: string) => void;
-    onRename: (name: string) => void;
-    onSetUpstream: (name: string) => void;
-    onViewLog: (name: string) => void;
-    onCompare: (name: string) => void;
+    label: string;
+    count: number;
+    open: boolean;
+    onToggle: () => void;
 }) {
-    const height = Math.min(items.length * ROW_HEIGHT, LIST_MAX_HEIGHT);
-    const listHeight = Math.max(height, ROW_HEIGHT);
-
-    if (items.length === 0) {
-        return <div className="px-3 py-2 text-sm text-text-muted">No branches</div>;
-    }
-
-    if (items.length <= VIRTUAL_BRANCH_THRESHOLD) {
-        return (
-            <div className="space-y-0.5">
-                {items.map((branch) => (
-                    <BranchRow
-                        key={branch.name}
-                        name={branch.name}
-                        displayName={branch.name}
-                        isCurrent={branch.name === currentBranch}
-                        author={branch.author}
-                        date={branch.date}
-                        ahead={branch.ahead}
-                        behind={branch.behind}
-                        onCheckout={() => onCheckout(branch.name)}
-                        onDelete={() => onDelete(branch.name)}
-                        onRename={() => onRename(branch.name)}
-                        onSetUpstream={() => onSetUpstream(branch.name)}
-                        onViewLog={() => onViewLog(branch.name)}
-                        onCompare={() => onCompare(branch.name)}
-                        canDelete={branch.name !== currentBranch}
-                    />
-                ))}
-            </div>
-        );
-    }
-
     return (
-        <List<BranchListRowProps>
-            className="no-scrollbar"
-            rowCount={items.length}
-            rowHeight={ROW_HEIGHT}
-            defaultHeight={listHeight}
-            style={{ height: listHeight, width: "100%" }}
-            rowComponent={BranchListRow}
-            rowProps={{
-                items,
-                currentBranch,
-                onCheckout,
-                onDelete,
-                onRename,
-                onSetUpstream,
-                onViewLog,
-                onCompare,
-            }}
-        />
+        <button
+            type="button"
+            onClick={onToggle}
+            className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium uppercase tracking-wide text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
+        >
+            <Icon name={open ? "expand_more" : "chevron_right"} size={14} className="shrink-0" />
+            <span className="flex-1">{label}</span>
+            <span className="tabular-nums opacity-80">{count}</span>
+        </button>
     );
 }
 
@@ -261,12 +197,19 @@ export function BranchWindow() {
     const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
     const { scmRepoPath } = useGitRepos(workspaceRoot);
     const project_path = scmRepoPath ?? workspaceRoot;
+
     const [localBranches, setLocalBranches] = useState<string[]>([]);
     const [remoteBranches, setRemoteBranches] = useState<string[]>([]);
     const [branchDetails, setBranchDetails] = useState<GitBranchDetail[]>([]);
     const [currentBranch, setCurrentBranch] = useState("");
     const [newBranchName, setNewBranchName] = useState("");
     const [loading, setLoading] = useState(false);
+    const [selectedName, setSelectedName] = useState<string | null>(null);
+    const [localOpen, setLocalOpen] = useState(true);
+    const [remoteOpen, setRemoteOpen] = useState(true);
+    const [collapsedRemotes, setCollapsedRemotes] = useState<Set<string>>(new Set());
+    const [compareSummary, setCompareSummary] = useState<string | null>(null);
+
     const [renameTarget, setRenameTarget] = useState<string | null>(null);
     const [renameQuery, setRenameQuery] = useState("");
     const [upstreamTarget, setUpstreamTarget] = useState<string | null>(null);
@@ -276,13 +219,11 @@ export function BranchWindow() {
         void commands.getProjectState().then((state) => {
             setWorkspaceRoot(state.project_path ?? null);
         });
-
         const unlistenPromise = listen<ProjectState>("project-state-update", (event) => {
             setWorkspaceRoot(event.payload.project_path ?? null);
         });
-
         return () => {
-            void unlistenPromise.then((unlisten) => unlisten()).catch(() => { });
+            void unlistenPromise.then((unlisten) => unlisten()).catch(() => {});
         };
     }, []);
 
@@ -294,13 +235,14 @@ export function BranchWindow() {
                 commands.gitBranches(project_path),
                 commands.gitRemoteBranches(project_path),
                 commands.gitCurrentBranch(project_path),
-                commands.gitBranchDetails(project_path, ""),
+                commands.gitBranchDetails(project_path, "", true),
             ]);
             setLocalBranches(locals);
             setRemoteBranches(remotes);
             setCurrentBranch(current);
-            const detailsWithSync = await commands.gitBranchDetails(project_path, current);
+            const detailsWithSync = await commands.gitBranchDetails(project_path, current, true);
             setBranchDetails(detailsWithSync.length > 0 ? detailsWithSync : details);
+            setSelectedName((prev) => prev ?? current ?? locals[0] ?? remotes[0] ?? null);
         } catch (e) {
             notify.gitError(e);
         } finally {
@@ -314,34 +256,66 @@ export function BranchWindow() {
 
     const detailByName = useMemo(() => {
         const map = new Map<string, GitBranchDetail>();
-        for (const detail of branchDetails) {
-            map.set(detail.name, detail);
-        }
+        for (const detail of branchDetails) map.set(detail.name, detail);
         return map;
     }, [branchDetails]);
 
-    const normalizedFilter = filter.trim().toLowerCase();
+    const q = filter.trim().toLowerCase();
 
-    const filteredLocal = useMemo(
-        () => localBranches
-            .filter((b) => !normalizedFilter || b.toLowerCase().includes(normalizedFilter))
+    const localItems = useMemo((): BranchItem[] => {
+        return localBranches
+            .filter((b) => !q || b.toLowerCase().includes(q))
             .map((name) => {
-                const detail = detailByName.get(name);
+                const d = detailByName.get(name);
                 return {
                     name,
-                    author: detail?.author,
-                    date: detail?.date,
-                    ahead: detail?.ahead,
-                    behind: detail?.behind,
+                    displayName: name,
+                    kind: "local" as const,
+                    author: d?.author,
+                    authorEmail: d?.authorEmail,
+                    date: d?.date,
+                    ahead: d?.ahead,
+                    behind: d?.behind,
                 };
-            }),
-        [localBranches, normalizedFilter, detailByName],
-    );
+            });
+    }, [localBranches, q, detailByName]);
 
-    const filteredRemote = useMemo(
-        () => remoteBranches.filter((b) => !normalizedFilter || b.toLowerCase().includes(normalizedFilter)),
-        [remoteBranches, normalizedFilter],
-    );
+    const remoteGroups = useMemo(() => {
+        const groups = new Map<string, BranchItem[]>();
+        for (const full of remoteBranches) {
+            if (q && !full.toLowerCase().includes(q)) continue;
+            const slash = full.indexOf("/");
+            const remote = slash >= 0 ? full.slice(0, slash) : "remote";
+            const short = slash >= 0 ? full.slice(slash + 1) : full;
+            if (short === "HEAD") continue;
+            const d = detailByName.get(full) ?? detailByName.get(short);
+            const list = groups.get(remote) ?? [];
+            list.push({
+                name: full,
+                displayName: short,
+                kind: "remote",
+                remote,
+                author: d?.author,
+                authorEmail: d?.authorEmail,
+                date: d?.date,
+                ahead: d?.ahead,
+                behind: d?.behind,
+            });
+            groups.set(remote, list);
+        }
+        return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+    }, [remoteBranches, q, detailByName]);
+
+    const selectedItem = useMemo(() => {
+        if (!selectedName) return null;
+        const local = localItems.find((b) => b.name === selectedName);
+        if (local) return local;
+        for (const [, items] of remoteGroups) {
+            const hit = items.find((b) => b.name === selectedName);
+            if (hit) return hit;
+        }
+        return null;
+    }, [selectedName, localItems, remoteGroups]);
 
     const handleSwitch = async (name: string) => {
         if (!project_path) return;
@@ -385,17 +359,13 @@ export function BranchWindow() {
         if (!ok) return;
         try {
             await commands.gitDeleteBranch(project_path, name);
+            if (selectedName === name) setSelectedName(currentBranch || null);
             await refresh();
             await notifyGitRefresh();
             notify.success("Git", `Deleted branch ${name}`);
         } catch (e) {
             notify.gitError(e);
         }
-    };
-
-    const handleRename = (oldName: string) => {
-        setRenameTarget(oldName);
-        setRenameQuery(oldName);
     };
 
     const applyRename = async (next: string) => {
@@ -407,6 +377,7 @@ export function BranchWindow() {
         }
         try {
             await commands.gitRenameBranch(project_path, renameTarget, name);
+            setSelectedName(name);
             await refresh();
             await notifyGitRefresh();
             notify.success("Git", `Renamed ${renameTarget} to ${name}`);
@@ -415,11 +386,6 @@ export function BranchWindow() {
         } finally {
             setRenameTarget(null);
         }
-    };
-
-    const handleSetUpstream = (branch: string) => {
-        setUpstreamTarget(branch);
-        setUpstreamQuery(`origin/${branch}`);
     };
 
     const applyUpstream = async (upstream: string) => {
@@ -441,59 +407,51 @@ export function BranchWindow() {
         }
     };
 
-    const handleViewLog = (branch: string) => {
-        const detail = detailByName.get(branch);
-        if (detail) {
-            notify.info("Git", `Last commit on ${branch}: ${detail.author} · ${detail.date}`);
-        } else {
-            notify.info("Git", `No log details available for ${branch}`);
-        }
-    };
-
     const handleCompare = async (branch: string) => {
         if (!project_path || !currentBranch) return;
-        if (branch === currentBranch) {
+        const short = branch.includes("/") ? branch.split("/").slice(1).join("/") : branch;
+        if (short === currentBranch || branch === currentBranch) {
             notify.info("Git", "Select a different branch to compare.");
             return;
         }
         try {
             const diff = await commands.gitDiffBranches(project_path, currentBranch, branch);
-            const summary = diff.trim() || "No differences.";
-            notify.info("Git Compare", summary.slice(0, 500));
+            const lines = diff.trim().split("\n").filter(Boolean);
+            const files = lines.filter((l) => l.startsWith("diff --git")).length;
+            const summary =
+                files > 0
+                    ? `${files} file${files === 1 ? "" : "s"} differ from ${currentBranch}`
+                    : diff.trim()
+                      ? `${lines.length} change line${lines.length === 1 ? "" : "s"} vs ${currentBranch}`
+                      : `No differences vs ${currentBranch}`;
+            setCompareSummary(summary);
+            notify.info("Git Compare", summary);
         } catch (e) {
             notify.gitError(e, "Compare failed");
         }
     };
 
-    const handlePull = async () => {
-        if (!project_path) return;
-        try {
-            await commands.gitPull(project_path);
-            await refresh();
-            notify.info("Git", "Pulled successfully.");
-        } catch (e) {
-            notify.gitError(e, "Pull failed");
-        }
+    const handleCopy = (name: string) => {
+        void navigator.clipboard.writeText(name);
+        notify.success("Copied", name);
     };
 
-    const handlePush = async () => {
+    const handleOpenRemote = async () => {
         if (!project_path) return;
         try {
-            await commands.gitPush(project_path);
-            notify.info("Git", "Pushed successfully.");
+            let url = await commands.gitRemoteUrl(project_path);
+            if (!url) {
+                notify.error("Git", "No remote URL found");
+                return;
+            }
+            if (url.startsWith("git@")) url = url.replace(/^git@([^:]+):/, "https://$1/");
+            url = url.replace(/\.git$/, "");
+            const branch = selectedItem?.kind === "remote"
+                ? selectedItem.displayName
+                : selectedItem?.name ?? currentBranch;
+            commands.openUrlExternal(`${url}/tree/${encodeURIComponent(branch)}`);
         } catch (e) {
-            notify.gitError(e, "Push failed");
-        }
-    };
-
-    const handleFetch = async () => {
-        if (!project_path) return;
-        try {
-            await commands.gitFetch(project_path);
-            await refresh();
-            notify.info("Git", "Fetched remotes.");
-        } catch (e) {
-            notify.gitError(e, "Fetch failed");
+            notify.error("Git", String(e));
         }
     };
 
@@ -505,100 +463,286 @@ export function BranchWindow() {
         );
     }
 
-    return (
-        <div className="flex h-full flex-col overflow-hidden text-text-primary">
-            <div className="flex shrink-0 items-center gap-2 px-3 py-2">
-                <FadeTruncate className="min-w-0 flex-1 text-sm font-medium" title="Branches">
+    const listPane = (
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+            <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border-subtle/60 px-2">
+                <FadeTruncate className="min-w-0 flex-1 px-1 text-sm font-medium" title="Branches">
                     Branches
                 </FadeTruncate>
                 <Tooltip content="Fetch">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handleFetch()} disabled={loading}>
-                        <Icon name="sync" size={16} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitFetch(project_path).then(refresh)} disabled={loading}>
+                        <Icon name="sync" size={15} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Pull">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handlePull()} disabled={loading}>
-                        <Icon name="download" size={16} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPull(project_path).then(refresh)} disabled={loading}>
+                        <Icon name="cloud_download" size={15} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Push">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handlePush()} disabled={loading}>
-                        <Icon name="upload" size={16} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPush(project_path)} disabled={loading}>
+                        <Icon name="cloud_upload" size={15} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Refresh">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void refresh()} disabled={loading}>
-                        <Icon name="refresh" size={16} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={loading}>
+                        <Icon name="refresh" size={15} />
                     </Button>
                 </Tooltip>
             </div>
 
-            <div className="px-3 py-2 shrink-0">
-                <div className="text-sm text-text-muted mb-1.5">New branch</div>
-                <div className="flex flex-col gap-2 @[420px]:flex-row @container">
-                    <Input
-                        value={newBranchName}
-                        onChange={(e) => setNewBranchName(e.target.value)}
-                        placeholder="Branch name"
-                        className="h-8 min-w-0 flex-1"
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                e.preventDefault();
-                                void handleCreate();
-                            }
-                        }}
-                    />
-                    <Button size="sm" className="shrink-0" onClick={() => void handleCreate()} disabled={!newBranchName.trim()}>
+            <div className="shrink-0 border-b border-border-subtle/60 px-2.5 py-2">
+                <div className="flex items-center gap-2">
+                    <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-transparent px-2.5">
+                        <Icon name="add" size={14} className="shrink-0 text-text-muted" />
+                        <Input
+                            value={newBranchName}
+                            onChange={(e) => setNewBranchName(e.target.value)}
+                            placeholder="New branch from HEAD…"
+                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void handleCreate();
+                                }
+                            }}
+                        />
+                    </div>
+                    <Button
+                        size="sm"
+                        className="h-8 shrink-0"
+                        disabled={!newBranchName.trim()}
+                        onClick={() => void handleCreate()}
+                    >
                         Create
                     </Button>
                 </div>
             </div>
 
-            <ScrollArea className="min-h-0 flex-1 px-3 py-2">
-                <div className="space-y-4 pb-4">
-                <section>
-                    <div className="py-1 text-sm font-medium text-text-muted">
-                        Local branches ({filteredLocal.length})
-                    </div>
-                    <VirtualBranchList
-                        items={filteredLocal}
-                        currentBranch={currentBranch}
-                        onCheckout={(name) => void handleSwitch(name)}
-                        onDelete={(name) => void handleDelete(name)}
-                        onRename={(name) => void handleRename(name)}
-                        onSetUpstream={(name) => void handleSetUpstream(name)}
-                        onViewLog={handleViewLog}
-                        onCompare={(name) => void handleCompare(name)}
-                    />
-                </section>
-
-                <section>
-                    <div className="py-1 text-sm font-medium text-text-muted">
-                        Remote branches ({filteredRemote.length})
-                    </div>
-                    <div className="space-y-0.5">
-                        {filteredRemote.length === 0 ? (
-                            <div className="px-3 py-2 text-sm text-text-muted">No remote branches</div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                <SectionHeader
+                    label="Local"
+                    count={localItems.length}
+                    open={localOpen}
+                    onToggle={() => setLocalOpen((v) => !v)}
+                />
+                {localOpen ? (
+                    <div className="mb-3 space-y-0.5">
+                        {localItems.length === 0 ? (
+                            <div className="px-2 py-2 text-sm text-text-muted">No local branches</div>
                         ) : (
-                            filteredRemote.map((branch) => {
-                                const shortName = branch.includes("/") ? branch.split("/").slice(1).join("/") : branch;
+                            localItems.map((item) => (
+                                <BranchRow
+                                    key={item.name}
+                                    item={item}
+                                    isCurrent={item.name === currentBranch}
+                                    selected={selectedName === item.name}
+                                    onSelect={() => {
+                                        setSelectedName(item.name);
+                                        setCompareSummary(null);
+                                    }}
+                                    onCheckout={() => void handleSwitch(item.name)}
+                                    onDelete={item.name !== currentBranch ? () => void handleDelete(item.name) : undefined}
+                                    onRename={() => {
+                                        setRenameTarget(item.name);
+                                        setRenameQuery(item.name);
+                                    }}
+                                    onSetUpstream={() => {
+                                        setUpstreamTarget(item.name);
+                                        setUpstreamQuery(`origin/${item.name}`);
+                                    }}
+                                    onCopy={() => handleCopy(item.name)}
+                                    onCompare={() => void handleCompare(item.name)}
+                                />
+                            ))
+                        )}
+                    </div>
+                ) : null}
+
+                <SectionHeader
+                    label="Remote"
+                    count={remoteGroups.reduce((n, [, items]) => n + items.length, 0)}
+                    open={remoteOpen}
+                    onToggle={() => setRemoteOpen((v) => !v)}
+                />
+                {remoteOpen ? (
+                    <div className="space-y-2">
+                        {remoteGroups.length === 0 ? (
+                            <div className="px-2 py-2 text-sm text-text-muted">No remote branches</div>
+                        ) : (
+                            remoteGroups.map(([remote, items]) => {
+                                const open = !collapsedRemotes.has(remote);
                                 return (
-                                    <BranchRow
-                                        key={branch}
-                                        name={branch}
-                                        displayName={branch}
-                                        isCurrent={shortName === currentBranch}
-                                        onCheckout={() => void handleSwitch(branch)}
-                                        onViewLog={() => handleViewLog(shortName)}
-                                        onCompare={() => void handleCompare(shortName)}
-                                    />
+                                    <div key={remote}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCollapsedRemotes((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(remote)) next.delete(remote);
+                                                    else next.add(remote);
+                                                    return next;
+                                                });
+                                            }}
+                                            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
+                                        >
+                                            <Icon name={open ? "expand_more" : "chevron_right"} size={14} />
+                                            <Icon name="cloud" size={14} />
+                                            <span className="flex-1 truncate font-medium">{remote}</span>
+                                            <span className="text-xs tabular-nums">{items.length}</span>
+                                        </button>
+                                        {open ? (
+                                            <div className="ml-2 space-y-0.5 border-l border-border-subtle/50 pl-1">
+                                                {items.map((item) => (
+                                                    <BranchRow
+                                                        key={item.name}
+                                                        item={item}
+                                                        isCurrent={item.displayName === currentBranch}
+                                                        selected={selectedName === item.name}
+                                                        onSelect={() => {
+                                                            setSelectedName(item.name);
+                                                            setCompareSummary(null);
+                                                        }}
+                                                        onCheckout={() => void handleSwitch(item.name)}
+                                                        onCopy={() => handleCopy(item.name)}
+                                                        onCompare={() => void handleCompare(item.name)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 );
                             })
                         )}
                     </div>
-                </section>
+                ) : null}
+            </div>
+        </div>
+    );
+
+    const detailPane = (
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+            {!selectedItem ? (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
+                    Select a branch
                 </div>
-            </ScrollArea>
+            ) : (
+                <>
+                    <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border-subtle/60 px-3">
+                        <Icon
+                            name={selectedItem.kind === "remote" ? "cloud" : "account_tree"}
+                            size={15}
+                            className="shrink-0 text-text-muted"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                            {selectedItem.name}
+                        </span>
+                        {selectedItem.name === currentBranch || selectedItem.displayName === currentBranch ? (
+                            <span className="rounded-md bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                                Current
+                            </span>
+                        ) : null}
+                    </div>
+
+                    <div className="space-y-3 border-b border-border-subtle/60 px-3 py-3">
+                        <div className="flex items-center gap-2">
+                            <Avatar name={selectedItem.author} email={selectedItem.authorEmail} />
+                            <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm text-text-primary">
+                                    {selectedItem.author || "Unknown author"}
+                                </div>
+                                <div className="truncate text-xs text-text-muted">
+                                    {selectedItem.date || "No recent commit info"}
+                                </div>
+                            </div>
+                            <SyncPills ahead={selectedItem.ahead} behind={selectedItem.behind} />
+                        </div>
+
+                        {compareSummary ? (
+                            <div className="rounded-lg border border-border-subtle/70 bg-panel/40 px-2.5 py-2 text-xs text-text-secondary">
+                                {compareSummary}
+                            </div>
+                        ) : null}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 px-3 py-3">
+                        <Button
+                            size="sm"
+                            className="h-8"
+                            onClick={() => void handleSwitch(selectedItem.name)}
+                            disabled={selectedItem.name === currentBranch}
+                        >
+                            Checkout
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 rounded-lg border border-border"
+                            onClick={() => void handleCompare(selectedItem.name)}
+                        >
+                            Compare
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 rounded-lg border border-border"
+                            onClick={() => handleCopy(selectedItem.name)}
+                        >
+                            Copy
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 rounded-lg border border-border"
+                            onClick={() => void handleOpenRemote()}
+                        >
+                            Open on GitHub
+                        </Button>
+                        {selectedItem.kind === "local" && selectedItem.name !== currentBranch ? (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 rounded-lg border border-border text-error hover:text-error"
+                                onClick={() => void handleDelete(selectedItem.name)}
+                            >
+                                Delete
+                            </Button>
+                        ) : null}
+                    </div>
+
+                    <div className="px-3 text-xs text-text-muted">
+                        Double-click a branch in the list to check it out. Right-click for rename / upstream.
+                    </div>
+                </>
+            )}
+        </div>
+    );
+
+    return (
+        <div className="flex h-full min-h-0 w-full overflow-hidden">
+            <Panel
+                className="min-h-0 flex-1"
+                direction="horizontal"
+                storageKey="git-manager-branches"
+                hideSeparator
+                paneGap="var(--workbench-gap)"
+                inset="all"
+                panes={[
+                    {
+                        id: "branch-list",
+                        preferredSize: 320,
+                        minSize: 240,
+                        maxSize: 480,
+                        children: listPane,
+                    },
+                    {
+                        id: "branch-detail",
+                        flexible: true,
+                        minSize: 280,
+                        children: detailPane,
+                    },
+                ]}
+            />
 
             <QuickPick
                 open={renameTarget != null}
