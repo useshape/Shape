@@ -23,7 +23,7 @@ import { useGitRepos } from "@/lib/git/repos";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { useSettings } from "@/lib/settings";
 import { graphCache } from "./cache";
-import { EMPTY_ARRAY, EMPTY_NODE } from "./constants";
+import { EMPTY_ARRAY, EMPTY_NODE, commitIsHead } from "./constants";
 import { FilterMenu } from "./filter-menu";
 import { CommitActivitySparkline } from "./activity-sparkline";
 import { GraphCommitRow } from "./commit-row";
@@ -53,6 +53,8 @@ export default function Graph({
     const [branchFilter, setBranchFilter] = useState<string>("all");
     const [localSearch, setLocalSearch] = useState("");
     const [activityPoints, setActivityPoints] = useState<GitActivityPoint[]>([]);
+    const [selectedHash, setSelectedHash] = useState<string | null>(null);
+    const rootRef = useRef<HTMLDivElement | null>(null);
 
     const cacheKey = scmRepoPath
         ? `${scmRepoPath}::${showAllBranches ? "all" : "head"}`
@@ -277,42 +279,84 @@ export default function Graph({
         return { buckets, firstTs: minTs, lastTs: maxTs };
     }, [activityPoints]);
 
-    const filteredGitLogs = useMemo(() => {
+    /** Match predicate — used to mute rows, not drop them (preserves lane topology). */
+    const commitMatchesFilter = useCallback((log: GitLogEntry) => {
         const q = (rich ? localSearch : commitSearch).trim().toLowerCase();
-        return gitLogs.filter((log) => {
-            if (authorFilter !== "all" && log.author.trim() !== authorFilter) return false;
-            if (branchFilter !== "all") {
-                const refs = (log.refs ?? []).map((r) =>
-                    r.replace(/HEAD -> /g, "").replace(/^tag: /, "").trim(),
-                );
-                if (!refs.some((r) => r === branchFilter || r.endsWith(`/${branchFilter}`))) {
-                    return false;
-                }
-            }
-            if (!q) return true;
-            return (
-                log.message.toLowerCase().includes(q)
-                || log.author.toLowerCase().includes(q)
-                || log.hash.toLowerCase().includes(q)
-                || (log.refs ?? []).some((r) => r.toLowerCase().includes(q))
+        if (authorFilter !== "all" && log.author.trim() !== authorFilter) return false;
+        if (branchFilter !== "all") {
+            const refs = (log.refs ?? []).map((r) =>
+                r.replace(/HEAD -> /g, "").replace(/^tag: /, "").trim(),
             );
-        });
-    }, [gitLogs, commitSearch, localSearch, rich, authorFilter, branchFilter]);
+            if (!refs.some((r) => r === branchFilter || r.endsWith(`/${branchFilter}`))) {
+                return false;
+            }
+        }
+        if (!q) return true;
+        return (
+            log.message.toLowerCase().includes(q)
+            || log.author.toLowerCase().includes(q)
+            || log.hash.toLowerCase().includes(q)
+            || (log.refs ?? []).some((r) => r.toLowerCase().includes(q))
+        );
+    }, [rich, localSearch, commitSearch, authorFilter, branchFilter]);
+
+    const hasActiveFilter = useMemo(() => {
+        const q = (rich ? localSearch : commitSearch).trim();
+        return authorFilter !== "all" || branchFilter !== "all" || q.length > 0;
+    }, [rich, localSearch, commitSearch, authorFilter, branchFilter]);
+
+    const mutedHashes = useMemo(() => {
+        if (!hasActiveFilter) return null as Set<string> | null;
+        const muted = new Set<string>();
+        for (const log of gitLogs) {
+            if (!commitMatchesFilter(log)) muted.add(log.hash);
+        }
+        return muted;
+    }, [gitLogs, hasActiveFilter, commitMatchesFilter]);
+
+    const matchCount = useMemo(() => {
+        if (!mutedHashes) return gitLogs.length;
+        return gitLogs.length - mutedHashes.size;
+    }, [gitLogs.length, mutedHashes]);
+
+    const headIndex = useMemo(() => {
+        const idx = gitLogs.findIndex((log) => commitIsHead(log.refs));
+        return idx >= 0 ? idx : 0;
+    }, [gitLogs]);
 
     const rowMeta = useMemo(() => {
         const fileCounts: Record<string, number> = {};
-        for (const log of filteredGitLogs) {
+        for (const log of gitLogs) {
             if (expandedCommits.has(log.hash)) {
                 fileCounts[log.hash] = commitFilesCache[log.hash]?.length ?? 1;
             }
         }
         return computeGraphRowMeta(
-            filteredGitLogs.length,
+            gitLogs.length,
             expandedCommits,
             fileCounts,
-            (index) => filteredGitLogs[index]?.hash ?? "",
+            (index) => gitLogs[index]?.hash ?? "",
         );
-    }, [filteredGitLogs, expandedCommits, commitFilesCache]);
+    }, [gitLogs, expandedCommits, commitFilesCache]);
+
+    const scrollToIndex = useCallback((idx: number, opts?: { select?: boolean; flash?: boolean }) => {
+        const meta = rowMeta[idx];
+        const log = gitLogs[idx];
+        if (!meta || !scrollContainerRef.current || !log) return;
+        scrollContainerRef.current.scrollTop = Math.max(0, meta.top - 40);
+        if (opts?.select !== false) setSelectedHash(log.hash);
+        if (opts?.flash) {
+            requestAnimationFrame(() => {
+                const el = scrollContainerRef.current?.querySelector(`[data-hash="${log.hash}"]`);
+                el?.classList.add("graph-commit-flash");
+                window.setTimeout(() => el?.classList.remove("graph-commit-flash"), 800);
+            });
+        }
+    }, [rowMeta, gitLogs]);
+
+    const jumpToHead = useCallback(() => {
+        scrollToIndex(headIndex, { select: true, flash: true });
+    }, [scrollToIndex, headIndex]);
 
     const jumpToActivityBucket = useCallback((bucketIndex: number) => {
         const { buckets, firstTs, lastTs } = activityBuckets;
@@ -324,8 +368,9 @@ export default function Graph({
         const targetMs = targetSec * 1000;
         let bestIdx = 0;
         let bestDist = Infinity;
-        for (let i = 0; i < filteredGitLogs.length; i++) {
-            const ts = parseInt(filteredGitLogs[i].date, 10) * 1000;
+        for (let i = 0; i < gitLogs.length; i++) {
+            if (mutedHashes?.has(gitLogs[i].hash)) continue;
+            const ts = parseInt(gitLogs[i].date, 10) * 1000;
             if (!Number.isFinite(ts)) continue;
             const dist = Math.abs(ts - targetMs);
             if (dist < bestDist) {
@@ -333,11 +378,23 @@ export default function Graph({
                 bestIdx = i;
             }
         }
-        const meta = rowMeta[bestIdx];
-        if (meta && scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = meta.top;
+        scrollToIndex(bestIdx, { select: true });
+    }, [activityBuckets, gitLogs, mutedHashes, scrollToIndex]);
+
+    const jumpToNextMatch = useCallback((dir: 1 | -1) => {
+        if (!gitLogs.length) return;
+        const start = selectedHash
+            ? gitLogs.findIndex((l) => l.hash === selectedHash)
+            : headIndex;
+        const from = start >= 0 ? start : 0;
+        for (let step = 1; step <= gitLogs.length; step++) {
+            const idx = (from + dir * step + gitLogs.length * 10) % gitLogs.length;
+            const log = gitLogs[idx];
+            if (mutedHashes?.has(log.hash)) continue;
+            scrollToIndex(idx, { select: true, flash: true });
+            return;
         }
-    }, [activityBuckets, filteredGitLogs, rowMeta]);
+    }, [gitLogs, selectedHash, headIndex, mutedHashes, scrollToIndex]);
 
     const totalHeight = rowMeta.length > 0
         ? rowMeta[rowMeta.length - 1].top + rowMeta[rowMeta.length - 1].height
@@ -407,8 +464,52 @@ export default function Graph({
         }
     }, [isLoadingNext]);
 
+    // Keep viewport height accurate on resize (sidebar drag, manager split).
+    useEffect(() => {
+        const node = scrollContainerRef.current;
+        if (!node || typeof ResizeObserver === "undefined") return;
+        const ro = new ResizeObserver((entries) => {
+            const h = entries[0]?.contentRect.height;
+            if (typeof h === "number" && h > 0) setContainerHeight(h);
+        });
+        ro.observe(node);
+        setContainerHeight(node.clientHeight);
+        return () => ro.disconnect();
+    }, [gitLogs.length > 0]);
+
+    // Keyboard: j/k or arrows move selection; Enter expands; n/N next/prev match; H → HEAD.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest("input, textarea, [contenteditable=true]")) return;
+            // Only when the event originates inside this graph panel.
+            if (!rootRef.current || !target || !rootRef.current.contains(target)) return;
+
+            const key = e.key.toLowerCase();
+            if (key === "j" || e.key === "ArrowDown") {
+                e.preventDefault();
+                jumpToNextMatch(1);
+            } else if (key === "k" || e.key === "ArrowUp") {
+                e.preventDefault();
+                jumpToNextMatch(-1);
+            } else if (key === "n" && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                jumpToNextMatch(e.shiftKey ? -1 : 1);
+            } else if (e.key === "Enter" && selectedHash) {
+                e.preventDefault();
+                toggleCommitExpansion(selectedHash);
+            } else if (key === "h" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                jumpToHead();
+            }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [jumpToNextMatch, jumpToHead, selectedHash, toggleCommitExpansion]);
+
     return (
         <div
+            ref={rootRef}
             className={cn("flex flex-col h-full w-full select-none relative", className)}
             style={{
                 // Inner merge/HEAD dots + scroll fade must match the host surface
@@ -418,15 +519,20 @@ export default function Graph({
             }}
         >
             {/* Top gradient: blends the first commit row into the header */}
-            <div className="relative z-10 flex h-9 shrink-0 items-center justify-between gap-2 px-3">
-                <FadeTruncate className="min-w-0 flex-1 text-sm font-regular" title="Graph">
-                    Graph
-                </FadeTruncate>
+            <div className="relative z-10 flex h-9 shrink-0 items-center justify-between gap-2 px-3 border-b border-border-subtle/60">
+                <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <FadeTruncate className="min-w-0 text-sm font-regular" title="Graph">
+                        Graph
+                    </FadeTruncate>
+                    {hasActiveFilter && (
+                        <span className="text-xs text-text-muted tabular-nums shrink-0">
+                            {matchCount}/{gitLogs.length}
+                        </span>
+                    )}
+                </div>
                 <div className="flex shrink-0 items-center gap-1">
-                    <Tooltip content="Go to Current History Item">
-                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={() => {
-                            if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
-                        }}>
+                    <Tooltip content="Go to HEAD (H)">
+                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
                             <Icon name="my_location" size={16} />
                         </Button>
                     </Tooltip>
@@ -488,6 +594,12 @@ export default function Graph({
                                 onChange={(e) => setLocalSearch(e.target.value)}
                                 placeholder="Search commits, authors, hashes…"
                                 className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        jumpToNextMatch(e.shiftKey ? -1 : 1);
+                                    }
+                                }}
                             />
                         </div>
                         <FilterMenu
@@ -524,6 +636,8 @@ export default function Graph({
                             </Button>
                         )}
                     </div>
+                    {/* Subtle separator under filters */}
+                    <div className="h-px bg-border-subtle/70" />
                 </div>
             ) : null}
 
@@ -543,8 +657,12 @@ export default function Graph({
                 }}
             />
             <div
-                className="flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden relative"
+                className="flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden relative outline-none"
+                tabIndex={0}
                 onScroll={handleScroll}
+                onMouseDown={() => {
+                    scrollContainerRef.current?.focus({ preventScroll: true });
+                }}
                 ref={(node) => {
                     if (node) {
                         scrollContainerRef.current = node;
@@ -552,9 +670,9 @@ export default function Graph({
                     }
                 }}
             >
-                {filteredGitLogs.length > 0 ? (
-                    <div style={{ height: totalHeight, position: 'relative' }}>
-                        {filteredGitLogs.slice(startIdx, endIdx + 1).map((log, relIdx) => {
+                {gitLogs.length > 0 ? (
+                    <div style={{ height: totalHeight, position: 'relative' }} role="listbox" aria-label="Commit graph">
+                        {gitLogs.slice(startIdx, endIdx + 1).map((log, relIdx) => {
                             const idx = startIdx + relIdx;
                             const meta = rowMeta[idx];
                             if (!meta) return null;
@@ -566,7 +684,7 @@ export default function Graph({
                                         node={node}
                                         repoPath={gitRepo}
                                         index={idx}
-                                        total={filteredGitLogs.length}
+                                        total={gitLogs.length}
                                         isExpanded={expandedCommits.has(log.hash)}
                                         onToggleExpand={toggleCommitExpansion}
                                         onShowCommitDiff={handleShowCommitDiff}
@@ -577,6 +695,9 @@ export default function Graph({
                                         onFilesLoaded={handleFilesLoaded}
                                         laneAvatarUrl={laneAvatarByHash.get(log.hash) ?? null}
                                         surface={surface}
+                                        muted={mutedHashes?.has(log.hash) ?? false}
+                                        selected={selectedHash === log.hash}
+                                        onSelect={setSelectedHash}
                                     />
                                 </div>
                             );
