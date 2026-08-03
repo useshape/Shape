@@ -1,4 +1,5 @@
 import { GraphNode } from "@/lib/backend";
+import { cn } from "@/lib/utils";
 import {
     LANE_WIDTH,
     ROW_HEIGHT,
@@ -118,12 +119,11 @@ export function GraphSvgRow({
 
     return (
         <svg
-            className="shrink-0 block relative z-0"
+            className={cn("graph-lane-svg shrink-0 block relative z-0", muted && "graph-lane-muted")}
             style={{
                 width: w,
                 height: h,
                 minWidth: w,
-                opacity: muted ? 0.4 : 1,
             }}
             viewBox={`0 0 ${w} ${h}`}
             shapeRendering="geometricPrecision"

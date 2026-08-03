@@ -60,13 +60,41 @@ export function RefPill({
     refInfo,
     color,
     emphasized,
+    /** Manager graph: keep hover styling, skip the tooltip overlay. */
+    hoverOnly = false,
+    onActivate,
 }: {
     refInfo: RefInfo;
     color: string;
     emphasized?: boolean;
+    hoverOnly?: boolean;
+    /** Click / activate — e.g. filter graph to this branch. */
+    onActivate?: (ref: RefInfo) => void;
 }) {
     const raw = refInfo.label.replace(/^tag:\s*/i, "");
     const kind = refInfo.isTag ? "Tag" : refInfo.isRemote ? "Remote branch" : refInfo.isHead ? "HEAD" : "Branch";
+
+    const pill = (
+        <span
+            className={cn(
+                "inline-flex shrink-0 transition-[filter,transform] duration-150",
+                onActivate && "cursor-pointer hover:brightness-110 active:scale-[0.98]",
+                hoverOnly && !onActivate && "cursor-default hover:brightness-110",
+            )}
+            onClick={(e) => {
+                e.stopPropagation();
+                onActivate?.(refInfo);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title={hoverOnly || onActivate ? `${kind}: ${raw}` : undefined}
+        >
+            <RefPillVisual refInfo={refInfo} color={color} emphasized={emphasized} />
+        </span>
+    );
+
+    if (hoverOnly || onActivate) {
+        return pill;
+    }
 
     return (
         <Tooltip
@@ -89,13 +117,7 @@ export function RefPill({
                 </div>
             }
         >
-            <span
-                className="inline-flex shrink-0"
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-            >
-                <RefPillVisual refInfo={refInfo} color={color} emphasized={emphasized} />
-            </span>
+            {pill}
         </Tooltip>
     );
 }

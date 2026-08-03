@@ -32,6 +32,10 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
     muted = false,
     selected = false,
     onSelect,
+    onRefActivate,
+    matchHighlight = false,
+    blendTop = false,
+    blendBottom = false,
 }: {
     log: GitLogEntry; node: GraphNode; repoPath: string | null;
     index: number; total: number; isExpanded: boolean;
@@ -44,11 +48,19 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
     laneAvatarUrl?: string | null;
     /** panel = sidebar graph; editor = Git Manager. Affects commit tooltip placement. */
     surface?: "panel" | "editor";
-    /** Filter miss — dim text/graph but keep lane topology (vscode-git-graph `.mute`). */
+    /** Filter miss — dim lane lines (keep topology); text/refs stay readable. */
     muted?: boolean;
     selected?: boolean;
     onSelect?: (hash: string) => void;
+    /** Manager: clicking a branch/tag pill filters the graph. */
+    onRefActivate?: (ref: RefInfo) => void;
+    /** Filter hit — soft lane emphasis. */
+    matchHighlight?: boolean;
+    /** Adjacent commit above/below is a match — fade mute into it. */
+    blendTop?: boolean;
+    blendBottom?: boolean;
 }) {
+    const isManager = surface === "editor";
     const isHead = commitIsHead(log.refs);
     const isFirst = index === 0;
     const isLast = index === total - 1;
@@ -119,8 +131,14 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
 
     return (
         <div
-            className={cn("flex flex-col px-1.5", muted && "graph-commit-mute")}
+            className={cn(
+                "flex flex-col px-1.5",
+                muted && "graph-commit-mute",
+                matchHighlight && !muted && "graph-commit-match",
+            )}
             data-hash={log.hash}
+            data-blend-top={muted && blendTop ? "1" : undefined}
+            data-blend-bottom={muted && blendBottom ? "1" : undefined}
         >
             <ContextMenu>
                 <ContextMenuTrigger asChild>
@@ -129,8 +147,8 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                         aria-selected={selected}
                         tabIndex={-1}
                         className={cn(
-                            "relative z-0 flex items-center rounded-md cursor-pointer group transition-colors outline-none",
-                            selected && "ring-1 ring-inset ring-accent/40",
+                            "relative z-0 flex items-center rounded-lg cursor-pointer group transition-colors outline-none",
+                            selected && "bg-black/[0.12] dark:bg-white/[0.12]",
                         )}
                         style={{ height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` }}
                         onClick={(e) => {
@@ -161,60 +179,78 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                             avatarUrl={laneAvatarUrl}
                             avatarKey={log.hash}
                         />
-                        <div
-                            className={cn(
-                                "flex-1 flex items-center min-w-0 gap-1.5 pr-2 @container transition-opacity",
-                                muted && !isExpanded && "opacity-45",
-                            )}
-                        >
+                        <div className="flex-1 flex items-center min-w-0 gap-1.5 pr-2 @container">
                             {visibleRefs.map((refInfo) => (
                                 <RefPill
                                     key={refInfo.label}
                                     refInfo={refInfo}
                                     color={node.color}
                                     emphasized={refInfo.isHead || isHead}
+                                    hoverOnly={isManager}
+                                    onActivate={isManager ? onRefActivate : undefined}
                                 />
                             ))}
                             {extraRefCount > 0 && (
-                                <Tooltip
-                                    content={
-                                        <div className="flex flex-col gap-1 max-w-[240px]">
-                                            <span className="text-xs text-text-muted">
-                                                +{extraRefCount} more ref{extraRefCount === 1 ? "" : "s"}
-                                            </span>
-                                            {allRefs
-                                                .filter((r) => r.label.toLowerCase() !== "head")
-                                                .slice(visibleRefs.length)
-                                                .map((r) => (
-                                                    <span key={r.label} className="text-sm text-text-primary truncate">
-                                                        {r.label.replace(/^tag:\s*/i, "")}
-                                                    </span>
-                                                ))}
-                                        </div>
-                                    }
-                                    side="top"
-                                    delayDuration={200}
-                                >
-                                    <span className="text-xs text-text-muted shrink-0 tabular-nums cursor-default">
+                                isManager ? (
+                                    <span
+                                        className="text-xs text-text-muted shrink-0 tabular-nums cursor-default"
+                                        title={allRefs
+                                            .filter((r) => r.label.toLowerCase() !== "head")
+                                            .slice(visibleRefs.length)
+                                            .map((r) => r.label.replace(/^tag:\s*/i, ""))
+                                            .join(", ")}
+                                    >
                                         +{extraRefCount}
                                     </span>
-                                </Tooltip>
+                                ) : (
+                                    <Tooltip
+                                        content={
+                                            <div className="flex flex-col gap-1 max-w-[240px]">
+                                                <span className="text-xs text-text-muted">
+                                                    +{extraRefCount} more ref{extraRefCount === 1 ? "" : "s"}
+                                                </span>
+                                                {allRefs
+                                                    .filter((r) => r.label.toLowerCase() !== "head")
+                                                    .slice(visibleRefs.length)
+                                                    .map((r) => (
+                                                        <span key={r.label} className="text-sm text-text-primary truncate">
+                                                            {r.label.replace(/^tag:\s*/i, "")}
+                                                        </span>
+                                                    ))}
+                                            </div>
+                                        }
+                                        side="top"
+                                        delayDuration={200}
+                                    >
+                                        <span className="text-xs text-text-muted shrink-0 tabular-nums cursor-default">
+                                            +{extraRefCount}
+                                        </span>
+                                    </Tooltip>
+                                )
                             )}
                             {isMerge && <Icon name="merge" size={16} className="text-text-primary shrink-0 opacity-80" />}
+                            {isManager ? (
+                                <span
+                                    className={cn(
+                                        "text-sm truncate flex-1 min-w-0",
+                                        isHead || isExpanded ? "text-text-primary font-medium" : "text-text-secondary",
+                                    )}
+                                >
+                                    {log.message.split('\n')[0]}
+                                </span>
+                            ) : (
                             <Tooltip
                                 open={tooltipOpen}
                                 onOpenChange={(open) => {
                                     if (!open && isDraggingRef.current) return;
                                     setTooltipOpen(open);
                                 }}
-                                side={surface === "panel" ? "right" : "bottom"}
+                                side="right"
                                 align="center"
-                                sideOffset={surface === "panel" ? 10 : 8}
+                                sideOffset={10}
                                 delayDuration={200}
                                 avoidCollisions
-                                collisionPadding={surface === "panel"
-                                    ? { top: 40, bottom: 31, left: 10, right: 10 }
-                                    : { top: 48, bottom: 40, left: 16, right: 16 }}
+                                collisionPadding={{ top: 40, bottom: 31, left: 10, right: 10 }}
                                 content={
                                     <div
                                         id={`tooltip-content-${log.hash}`}
@@ -287,6 +323,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     {log.message.split('\n')[0]}
                                 </span>
                             </Tooltip>
+                            )}
                             <Tooltip content={log.author} side="top" delayDuration={250}>
                                 <span className="text-sm text-text-muted shrink-0 max-w-[100px] truncate hidden @[380px]:inline text-right">
                                     {log.author}
@@ -397,18 +434,17 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                 </ContextMenuContent>
             </ContextMenu>
 
-            {/* Expanded file list — lane continuations use stroke-aligned bars */}
+            {/* Expanded file list — keep same left inset as SVG so lanes don't jump */}
             <div className={isExpanded ? "block" : "hidden"}>
-                <div className="overflow-hidden relative rounded-b-md mx-1 mb-0.5 bg-black/[0.06] dark:bg-white/[0.06]">
+                <div className="overflow-hidden relative rounded-b-lg mb-0.5 bg-black/[0.06] dark:bg-white/[0.06]">
                     {!isLast && node.paths.filter(p => p.type === 'passthrough' || p.type === 'outgoing').map((p, pi) => (
                         <div
                             key={`cont-${pi}`}
-                            className="absolute top-0 bottom-0 pointer-events-none"
+                            className={cn("graph-lane-cont absolute top-0 bottom-0 pointer-events-none")}
                             style={{
                                 left: p.toX * LANE_WIDTH + LANE_WIDTH / 2 + 4 - 1,
                                 width: 2,
                                 backgroundColor: p.color,
-                                opacity: muted ? 0.4 : 1,
                             }}
                         />
                     ))}
