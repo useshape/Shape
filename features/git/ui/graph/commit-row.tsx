@@ -19,17 +19,19 @@ import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { getRelativeTime, renderCommitMessage } from "./utils";
-import { LANE_WIDTH, ROW_HEIGHT } from "./constants";
+import { LANE_WIDTH, ROW_HEIGHT, commitIsHead } from "./constants";
 import { RefPill, type RefInfo } from "./ref-pill";
 import { GraphSvgRow } from "./svg-row";
 import { CreateBranchFromCommitInline } from "./create-branch";
 
-// ── COMMIT ROW ──
 export const GraphCommitRow = React.memo(function GraphCommitRow({
     log, node, repoPath, index, total, isExpanded,
     onToggleExpand, onShowCommitDiff, onOpenFile, onRefresh,
     files, filesLoaded, onFilesLoaded, laneAvatarUrl,
     surface = "panel",
+    muted = false,
+    selected = false,
+    onSelect,
 }: {
     log: GitLogEntry; node: GraphNode; repoPath: string | null;
     index: number; total: number; isExpanded: boolean;
@@ -42,19 +44,20 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
     laneAvatarUrl?: string | null;
     /** panel = sidebar graph; editor = Git Manager. Affects commit tooltip placement. */
     surface?: "panel" | "editor";
+    /** Filter miss — dim text/graph but keep lane topology (vscode-git-graph `.mute`). */
+    muted?: boolean;
+    selected?: boolean;
+    onSelect?: (hash: string) => void;
 }) {
-    const isCurrent = index === 0;
+    const isHead = commitIsHead(log.refs);
     const isFirst = index === 0;
     const isLast = index === total - 1;
     const isMerge = log.parent_count > 1;
     const filesLoadingRef = useRef(false);
     const [showBranchInput, setShowBranchInput] = useState(false);
 
-    // Highly robust Tooltip state interceptor!
     const [tooltipOpen, setTooltipOpen] = useState(false);
     const isDraggingRef = useRef(false);
-
-    // Auto-timeout for Tooltip when dragging finishes outside bounds
     const closeTimeoutRef = useRef<number | null>(null);
 
     const allRefs = useMemo((): RefInfo[] => {
@@ -62,9 +65,9 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
         return log.refs.map(r => {
             const cleaned = r.replace(/HEAD -> /g, '').replace(/HEAD/g, 'head').trim();
             const isRemote = cleaned.startsWith('origin/') || cleaned.startsWith('upstream/');
-            const isHead = r.toLowerCase().includes('head');
+            const isHeadRef = r.toLowerCase().includes('head');
             const isTag = cleaned.startsWith('tag: ');
-            return { label: cleaned, isRemote, isHead, isTag };
+            return { label: cleaned, isRemote, isHead: isHeadRef, isTag };
         });
     }, [log.refs]);
 
@@ -86,6 +89,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
             filesLoadingRef.current = true;
             commands.gitCommitFiles(repoPath, log.hash).then(results => {
                 onFilesLoaded(log.hash, results);
+                filesLoadingRef.current = false;
             }).catch(() => {
                 filesLoadingRef.current = false;
             });
@@ -104,7 +108,6 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
         } catch (err) { notify.error("Git", "Failed to get remote URL: " + String(err)); }
     };
 
-    // Open default mail client for the author
     const handleOpenAuthorEmail = (e?: React.MouseEvent) => {
         if (e) { e.preventDefault(); e.stopPropagation(); }
         if (log.author_email) {
@@ -115,40 +118,89 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
     };
 
     return (
-        <div className="flex flex-col px-1.5">
+        <div
+            className={cn("flex flex-col px-1.5", muted && "graph-commit-mute")}
+            data-hash={log.hash}
+        >
             <ContextMenu>
                 <ContextMenuTrigger asChild>
                     <div
-                        className="relative z-0 flex items-center rounded-lg cursor-pointer group transition-colors"
+                        role="option"
+                        aria-selected={selected}
+                        tabIndex={-1}
+                        className={cn(
+                            "relative z-0 flex items-center rounded-md cursor-pointer group transition-colors outline-none",
+                            selected && "ring-1 ring-inset ring-accent/40",
+                        )}
                         style={{ height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` }}
                         onClick={(e) => {
                             e.stopPropagation();
+                            onSelect?.(log.hash);
                             onToggleExpand(log.hash);
                             if (!filesLoaded && repoPath && !isExpanded) triggerFileLoad();
                         }}
                         onPointerEnter={triggerFileLoad}
                     >
-                        <div className="absolute inset-y-0 left-2 right-2 rounded-lg group-hover:bg-panel-hover pointer-events-none -z-10 transition-colors" />
+                        {/* Hover / selected / expanded backgrounds — vscode-git-graph style */}
+                        <div
+                            className={cn(
+                                "absolute inset-y-0 left-1 right-1 rounded-md pointer-events-none -z-10 transition-colors",
+                                isExpanded
+                                    ? "bg-black/15 dark:bg-white/15"
+                                    : selected
+                                      ? "bg-black/[0.12] dark:bg-white/[0.12]"
+                                      : "group-hover:bg-black/[0.08] dark:group-hover:bg-white/[0.08]",
+                            )}
+                        />
                         <GraphSvgRow
                             node={node}
                             isFirst={isFirst}
                             isLast={isLast}
+                            isHead={isHead}
+                            muted={muted}
                             avatarUrl={laneAvatarUrl}
                             avatarKey={log.hash}
                         />
-                        <div className="flex-1 flex items-center min-w-0 gap-1.5 pr-2 @container">
+                        <div
+                            className={cn(
+                                "flex-1 flex items-center min-w-0 gap-1.5 pr-2 @container transition-opacity",
+                                muted && !isExpanded && "opacity-45",
+                            )}
+                        >
                             {visibleRefs.map((refInfo) => (
                                 <RefPill
                                     key={refInfo.label}
                                     refInfo={refInfo}
                                     color={node.color}
-                                    emphasized={refInfo.isHead || isCurrent}
+                                    emphasized={refInfo.isHead || isHead}
                                 />
                             ))}
                             {extraRefCount > 0 && (
-                                <span className="text-xs text-text-muted shrink-0 tabular-nums">+{extraRefCount}</span>
+                                <Tooltip
+                                    content={
+                                        <div className="flex flex-col gap-1 max-w-[240px]">
+                                            <span className="text-xs text-text-muted">
+                                                +{extraRefCount} more ref{extraRefCount === 1 ? "" : "s"}
+                                            </span>
+                                            {allRefs
+                                                .filter((r) => r.label.toLowerCase() !== "head")
+                                                .slice(visibleRefs.length)
+                                                .map((r) => (
+                                                    <span key={r.label} className="text-sm text-text-primary truncate">
+                                                        {r.label.replace(/^tag:\s*/i, "")}
+                                                    </span>
+                                                ))}
+                                        </div>
+                                    }
+                                    side="top"
+                                    delayDuration={200}
+                                >
+                                    <span className="text-xs text-text-muted shrink-0 tabular-nums cursor-default">
+                                        +{extraRefCount}
+                                    </span>
+                                </Tooltip>
                             )}
-                            {isMerge && <Icon name="merge" size={16} className="text-text-primary shrink-0" />}
+                            {isMerge && <Icon name="merge" size={16} className="text-text-primary shrink-0 opacity-80" />}
                             <Tooltip
                                 open={tooltipOpen}
                                 onOpenChange={(open) => {
@@ -156,7 +208,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     setTooltipOpen(open);
                                 }}
                                 side={surface === "panel" ? "right" : "bottom"}
-                                align={surface === "panel" ? "center" : "center"}
+                                align="center"
                                 sideOffset={surface === "panel" ? 10 : 8}
                                 delayDuration={200}
                                 avoidCollisions
@@ -229,14 +281,32 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                 <span
                                     className={cn(
                                         "text-sm truncate flex-1 min-w-0",
-                                        isCurrent ? "text-text-primary font-medium" : "text-text-secondary",
+                                        isHead || isExpanded ? "text-text-primary font-medium" : "text-text-secondary",
                                     )}
                                 >
                                     {log.message.split('\n')[0]}
                                 </span>
                             </Tooltip>
-                            <span className="text-sm text-text-primary shrink-0 opacity-50 max-w-[60px] truncate hidden @[360px]:inline">{log.author.split(' ')[0]}</span>
-                            <span className="text-sm text-text-primary shrink-0 opacity-35 tabular-nums hidden @[300px]:inline">{getRelativeTime(log.date)}</span>
+                            <Tooltip content={log.author} side="top" delayDuration={250}>
+                                <span className="text-sm text-text-muted shrink-0 max-w-[100px] truncate hidden @[380px]:inline text-right">
+                                    {log.author}
+                                </span>
+                            </Tooltip>
+                            <span className="text-sm text-text-muted shrink-0 tabular-nums w-[52px] text-right hidden @[320px]:inline">
+                                {getRelativeTime(log.date)}
+                            </span>
+                            <Tooltip content={log.hash} side="top" delayDuration={250}>
+                                <span
+                                    className="text-xs text-text-disabled shrink-0 font-mono tabular-nums w-[52px] text-right hidden @[480px]:inline opacity-70 cursor-default"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        void navigator.clipboard.writeText(log.hash);
+                                        notify.success("Copied", "Commit hash copied");
+                                    }}
+                                >
+                                    {log.hash.slice(0, 7)}
+                                </span>
+                            </Tooltip>
                         </div>
                     </div>
                 </ContextMenuTrigger>
@@ -327,17 +397,22 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                 </ContextMenuContent>
             </ContextMenu>
 
-            {/* Expanded file list */}
+            {/* Expanded file list — lane continuations use stroke-aligned bars */}
             <div className={isExpanded ? "block" : "hidden"}>
-                <div className="overflow-hidden relative">
+                <div className="overflow-hidden relative rounded-b-md mx-1 mb-0.5 bg-black/[0.06] dark:bg-white/[0.06]">
                     {!isLast && node.paths.filter(p => p.type === 'passthrough' || p.type === 'outgoing').map((p, pi) => (
                         <div
                             key={`cont-${pi}`}
                             className="absolute top-0 bottom-0 pointer-events-none"
-                            style={{ left: p.toX * LANE_WIDTH + LANE_WIDTH / 2 + 4 - 1, width: 2, backgroundColor: p.color }}
+                            style={{
+                                left: p.toX * LANE_WIDTH + LANE_WIDTH / 2 + 4 - 1,
+                                width: 2,
+                                backgroundColor: p.color,
+                                opacity: muted ? 0.4 : 1,
+                            }}
                         />
                     ))}
-                    <div style={{ paddingLeft: Math.max((rowMaxLane + 1) * LANE_WIDTH, 28) }} className="pr-1 space-y-0 relative z-10">
+                    <div style={{ paddingLeft: Math.max((rowMaxLane + 1) * LANE_WIDTH, 28) }} className="pr-1 py-0.5 space-y-0 relative z-10">
                         {files.length > 0 ? (
                             files.map((file: GitFileParams, i: number) => {
                                 const name = file.path.split(/[\\\/]/).pop() || "";
@@ -353,6 +428,10 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                             >
                                                 <div
                                                     onClick={(e) => { e.stopPropagation(); onShowCommitDiff(log.hash, file.path); }}
+                                                    onDoubleClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onOpenFile(file.path);
+                                                    }}
                                                     className="flex items-center gap-2 group/file cursor-pointer hover:bg-panel-hover px-2 rounded-md w-full"
                                                     style={{ height: 22 }}
                                                 >
@@ -381,12 +460,23 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                             <ContextMenuItem onClick={() => onShowCommitDiff(log.hash, file.path)}>
                                                 Open Changes
                                             </ContextMenuItem>
+                                            <ContextMenuItem onClick={() => onOpenFile(file.path)}>
+                                                Open File
+                                            </ContextMenuItem>
+                                            <ContextMenuItem onClick={() => {
+                                                void navigator.clipboard.writeText(file.path);
+                                                notify.success("Copied", "File path copied");
+                                            }}>
+                                                Copy Path
+                                            </ContextMenuItem>
                                         </ContextMenuContent>
                                     </ContextMenu>
                                 );
                             })
                         ) : (
-                            <div className="text-xs text-text-disabled py-1 pl-2">No changes found</div>
+                            <div className="text-xs text-text-disabled py-1 pl-2">
+                                {filesLoaded ? "No changes found" : "Loading…"}
+                            </div>
                         )}
                     </div>
                 </div>
