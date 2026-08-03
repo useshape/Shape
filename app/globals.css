@@ -964,3 +964,22 @@ body {
   }
 }
 
+
+/* -- Git graph (inspired by mhutchie/vscode-git-graph) -- */
+@keyframes graph-commit-flash {
+  0% { }
+  20% { background-color: color-mix(in srgb, var(--color-accent) 35%, transparent); }
+  40% { background-color: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+  60% { background-color: color-mix(in srgb, var(--color-accent) 28%, transparent); }
+  100% { }
+}
+
+.graph-commit-flash {
+  animation: graph-commit-flash 0.75s linear;
+  border-radius: 8px;
+}
+
+.graph-commit-mute .graph-line,
+.graph-commit-mute .graph-line-shadow {
+  opacity: 0.55;
+}
