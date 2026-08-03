@@ -21,6 +21,7 @@ export function TitlebarSearch() {
 
     return (
         <div
+            data-git-titlebar-search
             className={cn(
                 "flex h-7 w-[min(280px,36vw)] items-center gap-1 rounded-md border border-border/60 bg-editor px-2 transition-colors",
                 focused && "border-border bg-panel-hover/40",
