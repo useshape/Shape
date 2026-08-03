@@ -979,7 +979,98 @@ body {
   border-radius: 8px;
 }
 
-.graph-commit-mute .graph-line,
+.graph-scroll {
+  scrollbar-gutter: stable;
+}
+
+.graph-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.graph-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.graph-scroll::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 9999px;
+}
+
+/* Soft mute — no CSS transitions (they lag when filters change). */
+.graph-commit-mute .graph-line {
+  stroke-opacity: 0.18;
+}
+
 .graph-commit-mute .graph-line-shadow {
-  opacity: 0.55;
+  stroke-opacity: 0.05;
+}
+
+.graph-commit-mute .graph-lane-svg circle,
+.graph-commit-mute .graph-lane-svg image {
+  opacity: 0.28;
+}
+
+/*
+ * Neighbor-aware vertical blend into highlighted (match) rows:
+ * data-blend-top / data-blend-bottom = adjacent commit is a filter hit.
+ * Mask lifts opacity toward that edge so muted lanes fade into matches.
+ */
+.graph-commit-mute .graph-lane-svg {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, var(--mute-edge-top, 0.22)) 0%,
+    rgba(0, 0, 0, 0.22) 38%,
+    rgba(0, 0, 0, 0.22) 62%,
+    rgba(0, 0, 0, var(--mute-edge-bottom, 0.22)) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, var(--mute-edge-top, 0.22)) 0%,
+    rgba(0, 0, 0, 0.22) 38%,
+    rgba(0, 0, 0, 0.22) 62%,
+    rgba(0, 0, 0, var(--mute-edge-bottom, 0.22)) 100%
+  );
+}
+
+.graph-commit-mute[data-blend-top="1"] {
+  --mute-edge-top: 0.92;
+}
+
+.graph-commit-mute[data-blend-bottom="1"] {
+  --mute-edge-bottom: 0.92;
+}
+
+.graph-commit-mute .graph-lane-cont {
+  opacity: 0.2;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, var(--mute-edge-top, 0.35)) 0%,
+    rgba(0, 0, 0, 0.55) 20%,
+    rgba(0, 0, 0, 0.55) 80%,
+    rgba(0, 0, 0, var(--mute-edge-bottom, 0.35)) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, var(--mute-edge-top, 0.35)) 0%,
+    rgba(0, 0, 0, 0.55) 20%,
+    rgba(0, 0, 0, 0.55) 80%,
+    rgba(0, 0, 0, var(--mute-edge-bottom, 0.35)) 100%
+  );
+}
+
+.graph-commit-match .graph-line {
+  stroke-opacity: 1;
+}
+
+.graph-diff-panel .monaco-editor .current-line,
+.graph-diff-panel .monaco-editor .view-overlays .current-line,
+.graph-diff-panel .monaco-editor .margin-view-overlays .current-line,
+.graph-diff-panel .monaco-editor .focused .current-line {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.graph-diff-panel .monaco-editor .cursors-layer > .cursor {
+  display: none !important;
 }
