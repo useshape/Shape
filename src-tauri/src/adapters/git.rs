@@ -111,6 +111,11 @@ pub async fn git_commit(repo_path: String, message: String) -> Result<(), AppErr
 }
 
 #[tauri::command]
+pub async fn git_commit_amend(repo_path: String, message: String) -> Result<(), AppError> {
+    service::git_commit_amend(repo_path, message).await
+}
+
+#[tauri::command]
 pub async fn git_diff(repo_path: String) -> Result<String, AppError> {
     service::git_diff(repo_path).await
 }
@@ -374,6 +379,44 @@ pub async fn git_clone(url: String, parent_dir: String) -> Result<String, AppErr
 #[tauri::command]
 pub async fn git_list_tags(repo_path: String) -> Result<Vec<GitTagEntry>, AppError> {
     service::git_list_tags(repo_path).await
+}
+
+#[tauri::command]
+pub async fn git_reset(repo_path: String, hash: String, mode: String) -> Result<(), AppError> {
+    service::git_reset(repo_path, hash, mode).await
+}
+
+#[tauri::command]
+pub async fn git_create_tag(
+    repo_path: String,
+    name: String,
+    hash: String,
+    message: Option<String>,
+) -> Result<(), AppError> {
+    service::git_create_tag(repo_path, name, hash, message).await
+}
+
+#[tauri::command]
+pub async fn git_delete_tag(repo_path: String, name: String) -> Result<(), AppError> {
+    service::git_delete_tag(repo_path, name).await
+}
+
+#[tauri::command]
+pub async fn git_diff_name_status(
+    repo_path: String,
+    base: String,
+    compare: String,
+) -> Result<Vec<GitFileParams>, AppError> {
+    service::git_diff_name_status(repo_path, base, compare).await
+}
+
+#[tauri::command]
+pub async fn git_get_file_at_ref(
+    repo_path: String,
+    rev: String,
+    file_path: String,
+) -> Result<String, AppError> {
+    service::git_get_file_at_ref(repo_path, rev, file_path).await
 }
 
 #[tauri::command]
