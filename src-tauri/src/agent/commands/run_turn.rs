@@ -27,6 +27,15 @@ Plain prose; bullets only if listing distinct items. No section headers, no soft
 const NUDGE_CONTINUE_OR_FINISH: &str = "Continue the task. If you still need to read or edit files, \
 call the appropriate tools now. If the work is done, call finish with a short summary for the user.";
 
+const NUDGE_REASONING_ONLY: &str = "You thought but did not call any tools or reply to the user. \
+Call the tools you need now (read/search/etc), or give a short answer. Do not only think again.";
+
+const NUDGE_PLAN_REASONING_ONLY: &str = "You thought but did not research or save a plan. \
+Use read/search tools now, then call save_plan when ready. Do not only think again.";
+
+const NUDGE_ASK_REASONING_ONLY: &str = "You thought but did not call tools or answer. \
+Read or search what you need, then answer the user. Do not only think again.";
+
 /// Read-only tools are deterministic within a turn (until a file is written), so an
 /// identical repeated call is always a reasoning loop, never new information.
 const DEDUPED_READONLY_TOOLS: &[&str] = &[
@@ -272,6 +281,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut interrupt_error: Option<String> = None;
     let mut empty_response_retried = false;
     let mut incomplete_text_nudged = false;
+    let mut reasoning_only_nudged = false;
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
@@ -392,8 +402,39 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             break;
         }
 
-        // Reasoning-only stop (no content, no tools) — nothing left to do this loop.
+        // Reasoning-only stop (think tokens, no content, no tools). Common in Plan/Ask
+        // when the model "thinks" then exits — nudge once so the turn continues.
         if outcome.content.trim().is_empty() && outcome.tool_calls.is_empty() {
+            if outcome.had_reasoning
+                && !reasoning_only_nudged
+                && !config.cancel.is_cancelled()
+                && loop_count < config.max_loops
+            {
+                reasoning_only_nudged = true;
+                let nudge = if config.mode.eq_ignore_ascii_case("plan") {
+                    NUDGE_PLAN_REASONING_ONLY
+                } else if config.mode.eq_ignore_ascii_case("ask") {
+                    NUDGE_ASK_REASONING_ONLY
+                } else {
+                    NUDGE_REASONING_ONLY
+                };
+                logging::info(
+                    "chat",
+                    &format!(
+                        "Reasoning-only stop in {} mode — nudging model to continue",
+                        config.mode
+                    ),
+                );
+                config.api_messages.push(json!({
+                    "role": "user",
+                    "content": nudge,
+                }));
+                streaming::emit_chat_status(
+                    &config.app_handle,
+                    json!({ "phase": "model", "label": "Continuing" }),
+                );
+                continue;
+            }
             break;
         }
 
