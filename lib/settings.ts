@@ -76,6 +76,7 @@ export interface ShapeSettings {
         autoApplyEdits: boolean;
         enabledModels: string[];
         defaultModel: string;
+        /** @deprecated Folded into customRules on load. Kept for storage compat. */
         customSystemPrompt: string;
         customRules: string;
         mcpServers: McpServerConfig[];
@@ -321,6 +322,21 @@ let hydrated = false;
 let settingsBridgeInitialized = false;
 const listeners = new Set<() => void>();
 
+function mergeAiSettings(
+    base: ShapeSettings["ai"] | undefined,
+    patch: Partial<ShapeSettings["ai"]> | undefined,
+): ShapeSettings["ai"] {
+    const merged = { ...DEFAULT_SETTINGS.ai, ...base, ...patch };
+    // Legacy "System Instructions" fold into Rules — one concept for user guidance.
+    const legacy = merged.customSystemPrompt?.trim();
+    if (legacy) {
+        const rules = merged.customRules?.trim();
+        merged.customRules = rules ? `${rules}\n\n${legacy}` : legacy;
+        merged.customSystemPrompt = "";
+    }
+    return merged;
+}
+
 function mergeSettings(base: ShapeSettings, patch: Partial<ShapeSettings>): ShapeSettings {
     const aiPatch = patch.ai ? { ...patch.ai } : undefined;
     return {
@@ -336,7 +352,7 @@ function mergeSettings(base: ShapeSettings, patch: Partial<ShapeSettings>): Shap
                 ...(patch.git?.blame ?? {}),
             },
         },
-        ai: { ...DEFAULT_SETTINGS.ai, ...base.ai, ...aiPatch },
+        ai: mergeAiSettings(base.ai, aiPatch),
         files: { ...DEFAULT_SETTINGS.files, ...base.files, ...patch.files },
         eslint: { ...DEFAULT_SETTINGS.eslint, ...base.eslint, ...patch.eslint },
         prettier: { ...DEFAULT_SETTINGS.prettier, ...base.prettier, ...patch.prettier },
