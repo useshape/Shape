@@ -633,7 +633,6 @@ export function useChatSession() {
                 expandedMessage,
                 selectedModel,
                 selectedMode,
-                settings.ai.customSystemPrompt || undefined,
                 mergedRules,
                 token,
                 undefined,

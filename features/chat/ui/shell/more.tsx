@@ -83,13 +83,6 @@ export function ChatMoreMenu() {
                     <Icon name="account_tree" size={16} className="text-text-secondary" />
                     Configure Workflows
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                    className="gap-2.5"
-                    onClick={() => void openSettingsWindow({ category: "ai", section: "memories" })}
-                >
-                    <Icon name="brain" size={16} className="text-text-secondary" />
-                    Edit Memories
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <div className="flex items-center justify-between px-2 py-1.5 text-xs text-text-muted">
                     <div className="flex items-center gap-1.5">

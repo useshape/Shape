@@ -68,7 +68,6 @@ export function useTextRewrite(model = "auto") {
                 prompt,
                 model,
                 "Ask",
-                settings.ai.customSystemPrompt || undefined,
                 settings.ai.customRules || undefined,
                 token,
             );
