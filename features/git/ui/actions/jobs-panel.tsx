@@ -4,7 +4,7 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
 import { cn } from "@/lib/utils";
-import type { WorkflowJob } from "./types";
+import type { WorkflowJob, WorkflowStep } from "./types";
 import { durationLabel, statusIcon, statusTone } from "./utils";
 
 function JobStatusIcon({
@@ -36,35 +36,89 @@ export function JobsPanel({
     selectedJobId,
     expandedJobs,
     loading,
+    mode = "jobs",
     onToggleJob,
     onViewLogs,
     onOpenUrl,
+    onSelectStep,
 }: {
     jobs: WorkflowJob[];
     selectedJobId: number | null;
     expandedJobs: Set<number>;
     loading: boolean;
+    /** Flat step list for the Steps nav focus. */
+    mode?: "jobs" | "steps";
     onToggleJob: (jobId: number) => void;
     onViewLogs: (jobId: number) => void;
     onOpenUrl: (url?: string) => void;
+    onSelectStep?: (jobId: number, step: WorkflowStep) => void;
 }) {
+    if (mode === "steps") {
+        const flat = jobs.flatMap((job) =>
+            (job.steps ?? []).map((step) => ({ job, step })),
+        );
+        return (
+            <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
+                <div className="shrink-0 px-2 py-1.5 text-2xs font-medium text-text-muted">
+                    Steps {loading ? "…" : `(${flat.length})`}
+                </div>
+                <ScrollArea className="min-h-0 flex-1">
+                    {flat.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-text-muted">
+                            {loading ? "Loading…" : "No steps yet."}
+                        </p>
+                    ) : (
+                        <ul className="flex flex-col gap-0.5 p-1">
+                            {flat.map(({ job, step }) => (
+                                <li key={`${job.id}-${step.number}`}>
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs",
+                                            selectedJobId === job.id
+                                                ? "bg-panel-hover"
+                                                : "hover:bg-panel-hover/60",
+                                        )}
+                                        onClick={() => onSelectStep?.(job.id, step)}
+                                    >
+                                        <JobStatusIcon
+                                            status={step.status}
+                                            conclusion={step.conclusion}
+                                            size={12}
+                                        />
+                                        <span className="min-w-0 flex-1 truncate text-text-primary">
+                                            {step.number}. {step.name}
+                                        </span>
+                                        <span className="max-w-[40%] shrink-0 truncate text-2xs text-text-muted">
+                                            {job.name}
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </ScrollArea>
+            </div>
+        );
+    }
+
     return (
-        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-panel border border-border-subtle">
-            <div className="px-2 py-1.5 text-2xs font-medium text-text-muted">
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
+            <div className="shrink-0 px-2 py-1.5 text-2xs font-medium text-text-muted">
                 Jobs {loading ? "…" : `(${jobs.length})`}
             </div>
             <ScrollArea className="min-h-0 flex-1">
                 {jobs.length === 0 ? (
-                    <p className="px-3 py-4 text-sm text-text-muted">No jobs yet.</p>
+                    <p className="px-3 py-4 text-sm text-text-muted">
+                        {loading ? "Loading…" : "No jobs yet."}
+                    </p>
                 ) : (
                     jobs.map((job) => {
                         const open = expandedJobs.has(job.id);
                         return (
                             <div
                                 key={job.id}
-                                className={cn(
-                                    selectedJobId === job.id && "bg-panel-hover/50",
-                                )}
+                                className={cn(selectedJobId === job.id && "bg-panel-hover/50")}
                             >
                                 <Button
                                     variant="ghost"
@@ -96,18 +150,21 @@ export function JobsPanel({
                                 {open && job.steps && job.steps.length > 0 ? (
                                     <ul className="pb-2 pl-7 pr-2">
                                         {job.steps.map((step) => (
-                                            <li
-                                                key={`${job.id}-${step.number}`}
-                                                className="flex items-center gap-2 rounded px-1.5 py-1 text-xs"
-                                            >
-                                                <JobStatusIcon
-                                                    status={step.status}
-                                                    conclusion={step.conclusion}
-                                                    size={12}
-                                                />
-                                                <span className="min-w-0 flex-1 truncate">
-                                                    {step.number}. {step.name}
-                                                </span>
+                                            <li key={`${job.id}-${step.number}`}>
+                                                <button
+                                                    type="button"
+                                                    className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-panel-hover/60"
+                                                    onClick={() => onSelectStep?.(job.id, step)}
+                                                >
+                                                    <JobStatusIcon
+                                                        status={step.status}
+                                                        conclusion={step.conclusion}
+                                                        size={12}
+                                                    />
+                                                    <span className="min-w-0 flex-1 truncate">
+                                                        {step.number}. {step.name}
+                                                    </span>
+                                                </button>
                                             </li>
                                         ))}
                                     </ul>
