@@ -108,7 +108,7 @@ export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
                 </DropdownMenuTrigger>
             </Tooltip>
             <DropdownMenuContent align="start" className="w-72 p-1.5 max-h-64 overflow-y-auto">
-                <div className="px-2 py-1.5 text-[11px] font-medium text-text-muted tracking-wide">
+                <div className="px-2 py-1.5 text-xs font-medium text-text-muted">
                     Sources
                 </div>
                 {results.map((result, i) => {
