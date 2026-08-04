@@ -1,0 +1,101 @@
+/* Colocated with AiActionButton — Magic UI shimmer/rainbow (source inlined). */
+
+.ai-action-btn {
+  --spread: 90deg;
+  --shimmer-color: color-mix(in oklab, var(--accent) 80%, white);
+  --radius: 0.5rem;
+  --speed: 2.8s;
+  --cut: 1px;
+  --bg: var(--panel);
+  --color-1: hsl(0 100% 63%);
+  --color-2: hsl(270 100% 63%);
+  --color-3: hsl(210 100% 63%);
+  --color-4: hsl(195 100% 63%);
+  --color-5: hsl(90 100% 63%);
+}
+
+@keyframes ai-shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+  }
+}
+
+@keyframes ai-spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+  }
+  15%,
+  35% {
+    transform: translateZ(0) rotate(90deg);
+  }
+  65%,
+  85% {
+    transform: translateZ(0) rotate(270deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
+}
+
+@keyframes ai-rainbow {
+  0% {
+    background-position: 0%;
+  }
+  100% {
+    background-position: 200%;
+  }
+}
+
+.ai-action-btn__shimmer-slide {
+  animation: ai-shimmer-slide var(--speed, 2.8s) ease-in-out infinite alternate;
+}
+
+.ai-action-btn__spin-around {
+  animation: ai-spin-around calc(var(--speed, 2.8s) * 2) infinite linear;
+}
+
+.ai-action-btn--rainbow {
+  --speed: 2s;
+  border: 0.1rem solid transparent;
+  background:
+    linear-gradient(var(--panel), var(--panel)),
+    linear-gradient(
+      var(--panel) 50%,
+      color-mix(in oklab, var(--panel) 60%, transparent) 80%,
+      transparent
+    ),
+    linear-gradient(
+      90deg,
+      var(--color-1),
+      var(--color-5),
+      var(--color-3),
+      var(--color-4),
+      var(--color-2)
+    );
+  background-size: 200%;
+  background-clip: padding-box, border-box, border-box;
+  background-origin: border-box;
+  animation: ai-rainbow var(--speed) infinite linear;
+}
+
+.ai-action-btn--rainbow::before {
+  content: "";
+  position: absolute;
+  bottom: -20%;
+  left: 50%;
+  z-index: 0;
+  height: 20%;
+  width: 60%;
+  translate: -50% 0;
+  background: linear-gradient(
+    90deg,
+    var(--color-1),
+    var(--color-5),
+    var(--color-3),
+    var(--color-4),
+    var(--color-2)
+  );
+  background-size: 200%;
+  filter: blur(0.7rem);
+  animation: ai-rainbow var(--speed) infinite linear;
+}

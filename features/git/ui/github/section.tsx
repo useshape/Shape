@@ -23,6 +23,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { GitHubDetailPane } from "./detail";
 import { GitMarkdown } from "./markdown";
+import { GitDetailSkeleton, GitListSkeleton } from "@/features/git/ui/shared/skeletons";
+import { GitOverlayEnter } from "@/features/git/ui/shared/motion";
 
 type IssueStateFilter = "open" | "closed" | "all";
 
@@ -392,7 +394,22 @@ function SimpleDetailPane({
 }) {
     return (
         <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-editor">
-            {!detail && !loading ? (
+            {!detail && loading ? (
+                <>
+                    <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 shrink-0 px-0"
+                            onClick={onBack}
+                            aria-label="Back to list"
+                        >
+                            <Icon name="arrow_back" size={16} />
+                        </Button>
+                    </div>
+                    <GitDetailSkeleton />
+                </>
+            ) : !detail ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
                     Select an item
                 </div>
@@ -413,7 +430,7 @@ function SimpleDetailPane({
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <h2 className="min-w-0 text-sm font-medium text-text-primary">
-                                        {loading && !detail ? "Loading…" : detail?.title}
+                                        {detail.title}
                                     </h2>
                                     <StateBadge status={detail?.status} />
                                 </div>
@@ -552,6 +569,8 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
     useEffect(() => {
         setSelectedId(null);
         setDetail(null);
+        setItems([]);
+        setError(null);
     }, [section, issueState]);
 
     const filtered = useMemo(() => {
@@ -666,26 +685,29 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
             section === "releases";
         return (
             <div className="flex h-full min-h-0 flex-col">
-                {rich ? (
-                    <GitHubDetailPane
-                        section={section}
-                        item={selectedItem}
-                        owner={repo.owner}
-                        repo={repo.repo}
-                        onBack={closeDetail}
-                    />
-                ) : (
-                    <SimpleDetailPane
-                        detail={detail}
-                        loading={detailLoading}
-                        onBack={closeDetail}
-                    />
-                )}
+                <GitOverlayEnter key={String(selectedItem.id)}>
+                    {rich ? (
+                        <GitHubDetailPane
+                            section={section}
+                            item={selectedItem}
+                            owner={repo.owner}
+                            repo={repo.repo}
+                            onBack={closeDetail}
+                        />
+                    ) : (
+                        <SimpleDetailPane
+                            detail={detail}
+                            loading={detailLoading}
+                            onBack={closeDetail}
+                        />
+                    )}
+                </GitOverlayEnter>
             </div>
         );
     }
 
     return (
+        <GitOverlayEnter key={`list-${section}-${issueState}`}>
         <div className="flex h-full min-h-0 flex-col">
             <header className="flex h-9 shrink-0 items-center gap-2 px-3">
                 <Icon name={sectionIcon(section)} size={16} className="shrink-0 text-text-muted" />
@@ -795,9 +817,9 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
 
             <div className="workbench-panel min-h-0 flex-1 overflow-hidden border border-border-subtle bg-panel">
                 <ScrollArea className="h-full min-h-0 p-2" fadeFrom="from-panel">
-                    {loading ? (
-                        <p className="px-2 py-3 text-sm text-text-muted">Loading…</p>
-                    ) : error ? (
+                    {loading && items.length === 0 ? (
+                        <GitListSkeleton rows={10} />
+                    ) : error && items.length === 0 ? (
                         <div className="flex flex-col gap-2 px-2 py-3">
                             <p className="text-sm text-text-muted">{error}</p>
                             {!auth.loggedIn ? (
@@ -855,5 +877,6 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                 </ScrollArea>
             </div>
         </div>
+        </GitOverlayEnter>
     );
 }

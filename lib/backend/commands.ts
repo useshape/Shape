@@ -243,6 +243,8 @@ export const commands = {
     },
     gitCurrentBranch: (path: string) =>
         invokeCachedGit<string>(`git_branch:${path}`, "git_current_branch", { path }),
+    gitLog: (path: string, limit = 50) =>
+        invokeCommand<GitLogEntry[]>("git_log", { path, limit }),
     gitLogStreamStart: (path: string, callerId: string, allRefs = false) =>
         invokeCommand<void>("git_log_stream_start", { path, callerId, allRefs }),
     gitLogStreamNext: (callerId: string, limit: number = 200) =>

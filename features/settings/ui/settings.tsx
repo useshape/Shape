@@ -18,6 +18,7 @@ import { listen, WebviewWindow } from "@/lib/tauri/client-api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import {
     SettingRow,
     SettingSection,
@@ -1036,42 +1037,27 @@ export function SettingsView() {
                     {filteredNav.map((group) => {
                         const open = expandedGroups.has(group.id) || !!query.trim();
                         return (
-                            <div key={group.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => toggleGroup(group.id)}
-                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm font-medium text-text-muted hover:text-text-primary hover:bg-panel-hover/40"
-                                >
-                                    
-      
-                                    {group.label}
-                                </button>
-                                {open && (
-                                    <div className="space-y-0.5">
-                                        {group.children.map((leaf) => (
-                                            <Button
-                                                key={leaf.id}
-                                                variant="ghost"
-                                                type="button"
-                                                onClick={() => onLeafClick(leaf)}
-                                                className={cn(
-                                                    "w-full justify-start h-8",
-                                                    activeLeafId === leaf.id
-                                                        ? "bg-panel-hover text-text-primary"
-                                                        : "text-text-secondary hover:text-text-primary hover:bg-panel-hover/60",
-                                                )}
-                                            >
-                                                <span className="text-sm font-regular -mx-2.5 truncate flex items-center gap-1">
-                                                    {leaf.label}
-                                                    {leaf.href ? (
-                                                        <Icon name="chevron_right" size={14} className="text-text-muted shrink-0" />
-                                                    ) : null}
-                                                </span>
-                                            </Button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <CollapsibleNavGroup
+                                key={group.id}
+                                label={group.label}
+                                open={open}
+                                onToggle={() => toggleGroup(group.id)}
+                            >
+                                {group.children.map((leaf) => (
+                                    <NavLeafButton
+                                        key={leaf.id}
+                                        active={activeLeafId === leaf.id}
+                                        onClick={() => onLeafClick(leaf)}
+                                    >
+                                        <span className="text-sm font-regular -mx-2.5 truncate flex items-center gap-1">
+                                            {leaf.label}
+                                            {leaf.href ? (
+                                                <Icon name="chevron_right" size={14} className="text-text-muted shrink-0" />
+                                            ) : null}
+                                        </span>
+                                    </NavLeafButton>
+                                ))}
+                            </CollapsibleNavGroup>
                         );
                     })}
                 </nav>

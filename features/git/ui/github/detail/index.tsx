@@ -37,6 +37,7 @@ import {
     ThreadMessage,
     openGitHubUser,
 } from "./widgets";
+import { GitDetailSkeleton } from "@/features/git/ui/shared/skeletons";
 
 export type { GhListItem } from "./types";
 
@@ -343,6 +344,30 @@ export function GitHubDetailPane({
         return (
             <div className="workbench-panel flex h-full min-h-0 flex-col items-center justify-center overflow-hidden border border-border-subtle bg-editor px-6 text-sm text-text-muted">
                 Select an item
+            </div>
+        );
+    }
+
+    const showDetailSkeleton =
+        loading && !body.trim() && comments.length === 0 && commits.length === 0;
+
+    if (showDetailSkeleton) {
+        return (
+            <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-editor">
+                <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+                    {onBack ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 shrink-0 px-0"
+                            onClick={onBack}
+                            aria-label="Back to list"
+                        >
+                            <Icon name="arrow_back" size={16} />
+                        </Button>
+                    ) : null}
+                </div>
+                <GitDetailSkeleton />
             </div>
         );
     }

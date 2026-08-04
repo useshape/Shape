@@ -211,6 +211,7 @@ pub fn run() {
             adapters::git::git_remote_branches,
             adapters::git::git_rename_branch,
             adapters::git::git_current_branch,
+            adapters::git::git_log,
             adapters::git::git_log_stream_start,
             adapters::git::git_log_stream_next,
             adapters::git::git_log_stream_stop,

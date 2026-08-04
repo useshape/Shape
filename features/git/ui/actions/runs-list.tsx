@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll";
 import { cn } from "@/lib/utils";
 import type { WorkflowRun } from "./types";
 import { actorAvatarUrl, formatRelative, statusIcon, statusTone } from "./utils";
+import { GitListSkeleton } from "@/features/git/ui/shared/skeletons";
 
 function RunStatusIcon({
     status,
@@ -46,7 +47,9 @@ export function RunsList({
                 Workflow runs {loading ? "…" : `(${runs.length})`}
             </div>
             <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
-                {runs.length === 0 ? (
+                {loading && runs.length === 0 ? (
+                    <GitListSkeleton rows={8} />
+                ) : runs.length === 0 ? (
                     <p className="px-3 py-4 text-sm text-text-muted">No runs match.</p>
                 ) : (
                     runs.map((run) => {

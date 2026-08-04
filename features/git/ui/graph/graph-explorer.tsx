@@ -715,8 +715,8 @@ export function GraphExplorer() {
                     </div>
 
                     {loading ? (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-editor/30 text-sm text-text-muted">
-                            Loading…
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-editor/40">
+                            <div className="h-8 w-40 animate-pulse rounded-lg bg-panel-hover/90" />
                         </div>
                     ) : null}
 
