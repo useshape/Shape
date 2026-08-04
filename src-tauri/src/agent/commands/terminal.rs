@@ -412,11 +412,12 @@ pub async fn execute_terminal_command(
 
     let mut result = String::new();
     if !final_stdout.is_empty() {
-        let truncated = if final_stdout.len() > 50_000 {
+        let truncated = if final_stdout.chars().count() > 50_000 {
+            let head: String = final_stdout.chars().take(50_000).collect();
             format!(
                 "{}... [truncated, {} chars total]",
-                &final_stdout[..50_000],
-                final_stdout.len()
+                head,
+                final_stdout.chars().count()
             )
         } else {
             final_stdout

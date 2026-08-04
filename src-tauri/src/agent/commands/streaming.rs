@@ -279,7 +279,11 @@ pub async fn stream_chat(
         let text = resp.text().await.unwrap_or_default();
         logging::error(
             "stream",
-            &format!("API error {}: {}", status, &text[..text.len().min(500)]),
+            &format!(
+                "API error {}: {}",
+                status,
+                &text[..text.floor_char_boundary(500)]
+            ),
         );
 
         // Capability detection: some models on OpenRouter don't support function calling.
@@ -302,7 +306,7 @@ pub async fn stream_chat(
         return Err(AppError::Message(format!(
             "OpenRouter API error {}: {}",
             status,
-            &text[..text.len().min(800)]
+            &text[..text.floor_char_boundary(800)]
         )));
     }
 
@@ -784,7 +788,10 @@ pub async fn complete_chat(
         .trim_matches('"')
         .to_string();
 
-    logging::debug("complete", &format!("Result: {}", &content[..content.len().min(80)]));
+    logging::debug(
+        "complete",
+        &format!("Result: {}", &content[..content.floor_char_boundary(80)]),
+    );
     Ok(content)
 }
 
