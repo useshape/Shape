@@ -106,6 +106,8 @@ export const commands = {
     getRustDeps: (projectPath: string) => invokeCommand<[string, string][]>("get_rust_deps", { projectPath }),
     getProjectState: () => invokeCommand<ProjectState>("get_project_state"),
     openUrlExternal: (url: string) => invokeCommand("open_url_external", { url }),
+    showDesktopNotification: (title: string, body: string) =>
+        invokeCommand<void>("show_desktop_notification", { title, body }),
     newWindow: () => invokeCommand("spawn_new_window"),
     isFreshWindow: () => invokeCommand<boolean>("is_fresh_window"),
     handleShortcut: (shortcut: string) => invokeCommand("handle_shortcut", { shortcut }),
@@ -402,7 +404,6 @@ export const commands = {
         message: string,
         model?: string,
         mode?: string,
-        customSystemPrompt?: string,
         customRules?: string,
         accessToken?: string,
         designOptions?: {
@@ -419,7 +420,6 @@ export const commands = {
             message,
             model,
             mode,
-            customSystemPrompt: customSystemPrompt ?? null,
             customRules: customRules ?? null,
             accessToken: accessToken ?? null,
             designOptions: designOptions ?? null,

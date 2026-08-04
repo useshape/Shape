@@ -1,4 +1,5 @@
 pub mod device_id;
+pub mod desktop_notification;
 pub mod open;
 pub mod fs;
 pub mod github_auth;

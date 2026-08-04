@@ -55,8 +55,16 @@ export async function showDesktopNotification(
         return;
     }
 
-    // Keep body plain — avoid em dashes / fancy punctuation that looks odd in OS toasts.
     const cleanBody = body.replace(/\u2014/g, "-").replace(/\s+/g, " ").trim();
+    const cleanTitle = title.trim() || "Shape";
+
+    try {
+        const { commands } = await import("@/lib/backend");
+        await commands.showDesktopNotification(cleanTitle, cleanBody);
+        return;
+    } catch {
+        /* fall through */
+    }
 
     try {
         const {
@@ -69,31 +77,9 @@ export async function showDesktopNotification(
             granted = (await requestPermission()) === "granted";
         }
         if (granted) {
-            sendNotification({ title, body: cleanBody });
-            return;
+            sendNotification({ title: cleanTitle, body: cleanBody });
         }
     } catch {
-        /* fall through to Web Notification */
-    }
-
-    if (typeof Notification === "undefined") return;
-    const webGranted = await ensureNotificationPermission();
-    if (!webGranted) return;
-
-    try {
-        const notification = new Notification(title, {
-            body: cleanBody,
-            silent: false,
-        });
-        notification.onclick = () => {
-            try {
-                window.focus();
-            } catch {
-                /* ignore */
-            }
-            notification.close();
-        };
-    } catch {
-        /* WebView may reject Notification construction */
+        /* ignore */
     }
 }

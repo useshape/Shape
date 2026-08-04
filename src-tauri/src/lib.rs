@@ -99,6 +99,9 @@ pub fn run() {
             app.state::<commands::preview_render::PreviewCaptureState>()
                 .register_listener(app.handle());
 
+            #[cfg(windows)]
+            crate::core::windows_notifications::init();
+
             // Initialize menu
             adapters::shortcuts::setup_menu(app.handle())?;
             app.on_menu_event(|app, event| {
@@ -150,6 +153,7 @@ pub fn run() {
             adapters::filesystem::save_color_to_history,
             adapters::filesystem::get_color_history,
             adapters::open::open_url_external,
+            commands::desktop_notification::show_desktop_notification,
             commands::preview_render::capture_html_preview,
             commands::preview_render::cleanup_design_sandbox,
             // project stats
