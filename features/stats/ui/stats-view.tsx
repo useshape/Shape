@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import { commands, useProjectState } from "@/lib/backend";
 import type { EventCounters, ProjectStatsSnapshot } from "@/lib/backend/types";
 import { notify } from "@/features/notifications";
@@ -317,40 +318,27 @@ export function StatsView() {
                     {filteredNav.map((group) => {
                         const open = expandedGroups.has(group.id) || !!query.trim();
                         return (
-                            <div key={group.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => toggleGroup(group.id)}
-                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-primary"
-                                >
-                                    {group.label}
-                                </button>
-                                {open && (
-                                    <div className="space-y-0.5">
-                                        {group.children.map((leaf) => (
-                                            <Button
-                                                key={leaf.id}
-                                                variant="ghost"
-                                                type="button"
-                                                onClick={() => {
-                                                    setActiveLeafId(leaf.id);
-                                                    scrollToTarget(leaf.targetId);
-                                                }}
-                                                className={cn(
-                                                    "h-8 w-full justify-start",
-                                                    activeLeafId === leaf.id
-                                                        ? "bg-panel-hover text-text-primary"
-                                                        : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
-                                                )}
-                                            >
-                                                <span className="-mx-2.5 truncate text-sm font-regular">
-                                                    {leaf.label}
-                                                </span>
-                                            </Button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <CollapsibleNavGroup
+                                key={group.id}
+                                label={group.label}
+                                open={open}
+                                onToggle={() => toggleGroup(group.id)}
+                            >
+                                {group.children.map((leaf) => (
+                                    <NavLeafButton
+                                        key={leaf.id}
+                                        active={activeLeafId === leaf.id}
+                                        onClick={() => {
+                                            setActiveLeafId(leaf.id);
+                                            scrollToTarget(leaf.targetId);
+                                        }}
+                                    >
+                                        <span className="-mx-2.5 truncate text-sm font-regular">
+                                            {leaf.label}
+                                        </span>
+                                    </NavLeafButton>
+                                ))}
+                            </CollapsibleNavGroup>
                         );
                     })}
                 </nav>

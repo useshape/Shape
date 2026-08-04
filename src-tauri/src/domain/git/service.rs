@@ -226,6 +226,12 @@ pub async fn git_current_branch(path: String) -> Result<String, AppError> {
         .map_err(|e| AppError::Message(e.to_string()))?
 }
 
+pub async fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitLogEntry>, AppError> {
+    tauri::async_runtime::spawn_blocking(move || git::git_log(path, limit))
+        .await
+        .map_err(|e| AppError::Message(e.to_string()))?
+}
+
 pub async fn git_log_stream_start(
     path: String,
     caller_id: String,

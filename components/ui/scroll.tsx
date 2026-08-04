@@ -28,23 +28,38 @@ export const ScrollArea = React.forwardRef<
         }
         const { scrollTop, scrollHeight, clientHeight } = el;
         const overflow = scrollHeight > clientHeight + 2;
-        setShowTop(overflow && scrollTop > 4);
-        setShowBottom(overflow && scrollTop + clientHeight < scrollHeight - 4);
+        const nextTop = overflow && scrollTop > 4;
+        const nextBottom = overflow && scrollTop + clientHeight < scrollHeight - 4;
+        setShowTop((prev) => (prev === nextTop ? prev : nextTop));
+        setShowBottom((prev) => (prev === nextBottom ? prev : nextBottom));
     }, [fadeEdges]);
 
     React.useEffect(() => {
         const el = viewportRef.current;
         if (!el || !fadeEdges) return;
-        updateFades();
-        el.addEventListener("scroll", updateFades, { passive: true });
-        const ro = new ResizeObserver(() => updateFades());
-        ro.observe(el);
-        if (el.firstElementChild) ro.observe(el.firstElementChild);
-        return () => {
-            el.removeEventListener("scroll", updateFades);
-            ro.disconnect();
+
+        let raf = 0;
+        const onScroll = () => {
+            if (raf) return;
+            raf = requestAnimationFrame(() => {
+                raf = 0;
+                updateFades();
+            });
         };
-    }, [fadeEdges, updateFades, children]);
+
+        updateFades();
+        el.addEventListener("scroll", onScroll, { passive: true });
+        const ro = new ResizeObserver(onScroll);
+        ro.observe(el);
+        const inner = el.firstElementChild;
+        if (inner) ro.observe(inner);
+        return () => {
+            el.removeEventListener("scroll", onScroll);
+            ro.disconnect();
+            if (raf) cancelAnimationFrame(raf);
+        };
+        // Intentionally omit `children` — rebinding on every render caused major lag.
+    }, [fadeEdges, updateFades]);
 
     return (
         <ScrollAreaPrimitive.Root

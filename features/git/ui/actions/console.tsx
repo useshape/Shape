@@ -42,6 +42,8 @@ import { DispatchDialog } from "./dispatch-dialog";
 import { formatCommandError } from "@/lib/format-error";
 import { notify } from "@/features/notifications";
 import { save } from "@tauri-apps/plugin-dialog";
+import { GitListSkeleton } from "@/features/git/ui/shared/skeletons";
+import { GitOverlayEnter } from "@/features/git/ui/shared/motion";
 
 function reportActionsError(raw: unknown): string {
     const formatted = formatCommandError(raw, "GitHub");
@@ -878,6 +880,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                         flexible: true,
                         minSize: 280,
                         children: (
+                            <GitOverlayEnter key={selectedRunId ?? "empty"}>
                             <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
                                 {!selectedRun && focus !== "workflow-definitions" ? (
                                     <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
@@ -1059,9 +1062,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                           allowedTabs[0] === "artifacts" ? (
                                             <ScrollArea className="min-h-0 flex-1 p-2">
                                                 {loadingDetail ? (
-                                                    <p className="px-2 py-3 text-sm text-text-muted">
-                                                        Loading…
-                                                    </p>
+                                                    <GitListSkeleton rows={5} />
                                                 ) : artifacts.length === 0 ? (
                                                     <p className="px-2 py-3 text-sm text-text-muted">
                                                         No artifacts for this run.
@@ -1169,9 +1170,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                                     >
                                                         <ScrollArea className="min-h-0 flex-1 p-2">
                                                             {loadingDetail ? (
-                                                                <p className="px-2 py-3 text-sm text-text-muted">
-                                                                    Loading…
-                                                                </p>
+                                                                <GitListSkeleton rows={5} />
                                                             ) : artifacts.length === 0 ? (
                                                                 <p className="px-2 py-3 text-sm text-text-muted">
                                                                     No artifacts for this run.
@@ -1200,6 +1199,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                     </>
                                 )}
                             </div>
+                            </GitOverlayEnter>
                         ),
                     },
                 ]}

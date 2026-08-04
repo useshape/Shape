@@ -185,6 +185,11 @@ pub async fn git_current_branch(path: String) -> Result<String, AppError> {
 }
 
 #[tauri::command]
+pub async fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitLogEntry>, AppError> {
+    service::git_log(path, limit).await
+}
+
+#[tauri::command]
 pub async fn git_log_stream_start(
     path: String,
     caller_id: String,

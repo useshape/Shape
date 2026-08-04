@@ -1,11 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
 import { cn } from "@/lib/utils";
 import type { WorkflowJob, WorkflowStep } from "./types";
 import { durationLabel, statusIcon, statusTone } from "./utils";
+import { GitListSkeleton } from "@/features/git/ui/shared/skeletons";
 
 function JobStatusIcon({
     status,
@@ -28,6 +30,19 @@ function JobStatusIcon({
                 icon.spin && "animate-spin",
             )}
         />
+    );
+}
+
+function AnimatedCollapse({ open, children }: { open: boolean; children: ReactNode }) {
+    return (
+        <div
+            className={cn(
+                "grid transition-[grid-template-rows,opacity] duration-200 ease-[var(--ease-out)]",
+                open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+            )}
+        >
+            <div className="min-h-0 overflow-hidden">{children}</div>
+        </div>
     );
 }
 
@@ -63,10 +78,10 @@ export function JobsPanel({
                     Steps {loading ? "…" : `(${flat.length})`}
                 </div>
                 <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
-                    {flat.length === 0 ? (
-                        <p className="px-3 py-4 text-sm text-text-muted">
-                            {loading ? "Loading…" : "No steps yet."}
-                        </p>
+                    {loading && flat.length === 0 ? (
+                        <GitListSkeleton rows={8} />
+                    ) : flat.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-text-muted">No steps yet.</p>
                     ) : (
                         <ul className="flex flex-col gap-0.5 p-1">
                             {flat.map(({ job, step }) => (
@@ -108,10 +123,10 @@ export function JobsPanel({
                 Jobs {loading ? "…" : `(${jobs.length})`}
             </div>
             <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
-                {jobs.length === 0 ? (
-                    <p className="px-3 py-4 text-sm text-text-muted">
-                        {loading ? "Loading…" : "No jobs yet."}
-                    </p>
+                {loading && jobs.length === 0 ? (
+                    <GitListSkeleton rows={6} />
+                ) : jobs.length === 0 ? (
+                    <p className="px-3 py-4 text-sm text-text-muted">No jobs yet.</p>
                 ) : (
                     jobs.map((job) => {
                         const open = expandedJobs.has(job.id);
@@ -126,9 +141,12 @@ export function JobsPanel({
                                     onClick={() => onToggleJob(job.id)}
                                 >
                                     <Icon
-                                        name={open ? "expand_more" : "chevron_right"}
+                                        name="chevron_right"
                                         size={14}
-                                        className="mt-0.5 shrink-0 text-text-muted"
+                                        className={cn(
+                                            "mt-0.5 shrink-0 text-text-muted transition-transform duration-200 ease-[var(--ease-out)]",
+                                            open && "rotate-90",
+                                        )}
                                     />
                                     <JobStatusIcon
                                         status={job.status}
@@ -147,29 +165,29 @@ export function JobsPanel({
                                         </div>
                                     </div>
                                 </Button>
-                                {open && job.steps && job.steps.length > 0 ? (
-                                    <ul className="pb-2 pl-7 pr-2">
-                                        {job.steps.map((step) => (
-                                            <li key={`${job.id}-${step.number}`}>
-                                                <button
-                                                    type="button"
-                                                    className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-panel-hover/60"
-                                                    onClick={() => onSelectStep?.(job.id, step)}
-                                                >
-                                                    <JobStatusIcon
-                                                        status={step.status}
-                                                        conclusion={step.conclusion}
-                                                        size={12}
-                                                    />
-                                                    <span className="min-w-0 flex-1 truncate">
-                                                        {step.number}. {step.name}
-                                                    </span>
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : null}
-                                {open ? (
+                                <AnimatedCollapse open={open}>
+                                    {job.steps && job.steps.length > 0 ? (
+                                        <ul className="pb-2 pl-7 pr-2">
+                                            {job.steps.map((step) => (
+                                                <li key={`${job.id}-${step.number}`}>
+                                                    <button
+                                                        type="button"
+                                                        className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-panel-hover/60"
+                                                        onClick={() => onSelectStep?.(job.id, step)}
+                                                    >
+                                                        <JobStatusIcon
+                                                            status={step.status}
+                                                            conclusion={step.conclusion}
+                                                            size={12}
+                                                        />
+                                                        <span className="min-w-0 flex-1 truncate">
+                                                            {step.number}. {step.name}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : null}
                                     <div className="flex gap-1 px-2 pb-2 pl-7">
                                         <Button
                                             variant="ghost"
@@ -192,7 +210,7 @@ export function JobsPanel({
                                             </Button>
                                         ) : null}
                                     </div>
-                                ) : null}
+                                </AnimatedCollapse>
                             </div>
                         );
                     })

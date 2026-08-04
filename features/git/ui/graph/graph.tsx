@@ -17,17 +17,17 @@ import { computeGraphRowMeta, computeVisibleRange, GRAPH_OVERSCAN_PX } from "@/l
 import { Tooltip } from "@/components/ui/tooltip";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { useLoading } from "@/features/loading/context";
-import { LoadingBar } from "@/components/ui/loading";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { useGitRepos } from "@/lib/git/repos";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { useSettings } from "@/lib/settings";
-import { graphCache } from "./cache";
+import { graphCache, activityCacheKey } from "./cache";
 import { EMPTY_ARRAY, EMPTY_NODE, commitIsHead } from "./constants";
 import { FilterMenu } from "./filter-menu";
 import { CommitActivitySparkline } from "./activity-sparkline";
 import { GraphCommitRow } from "./commit-row";
 import { GraphDetailPanel, type GraphDetailSelection } from "./graph-detail-panel";
+import { GitOverlayEnter } from "@/features/git/ui/shared/motion";
 import type { RefInfo } from "./ref-pill";
 import { Panel } from "@/features/panels";
 import { GitManagerTrigger } from "@/features/git/ui/manager/git-manager-trigger";
@@ -92,11 +92,14 @@ export default function Graph({
     useEffect(() => {
         if (!cacheKey) return;
         if (gitLogs.length > 0) {
+            const prev = graphCache[cacheKey];
             graphCache[cacheKey] = {
                 logs: gitLogs,
                 expanded: expandedCommits,
                 filesCache: commitFilesCache,
-                scrollTop: scrollTop
+                scrollTop: scrollTop,
+                activityPoints: prev?.activityPoints,
+                activityKey: prev?.activityKey,
             };
         }
     }, [cacheKey, gitLogs, expandedCommits, commitFilesCache, scrollTop]);
@@ -128,17 +131,20 @@ export default function Graph({
     const drainStream = useCallback(async (count: number, gen: number) => {
         let remaining = count;
         while (remaining > 0 && gen === streamGenRef.current) {
-            const batch = await commands.gitLogStreamNext("graph", Math.min(remaining, 200));
+            const batch = await commands.gitLogStreamNext("graph", Math.min(remaining, 400));
             if (batch.length === 0) break;
             remaining -= batch.length;
+            // Yield so keep-alive remounts don't freeze the UI while catching the stream up.
+            await new Promise<void>((r) => requestAnimationFrame(() => r()));
         }
     }, []);
 
-    const refresh = useCallback(async () => {
+    const refresh = useCallback(async (opts?: { track?: boolean }) => {
         if (!gitRepo) return;
+        const track = opts?.track !== false;
         const gen = ++streamGenRef.current;
         streamActiveRef.current = false;
-        startLoading();
+        if (track) startLoading();
         try {
             await commands.gitLogStreamStart(gitRepo, "graph", showAllBranches);
             if (gen !== streamGenRef.current) return;
@@ -154,7 +160,8 @@ export default function Graph({
         } catch {
             if (gen === streamGenRef.current) setGitLogs([]);
         } finally {
-            if (gen === streamGenRef.current) stopLoading();
+            // Always pair start/stop — skipping on gen mismatch left the bar stuck forever.
+            if (track) stopLoading();
         }
     }, [gitRepo, showAllBranches, startLoading, stopLoading]);
 
@@ -190,7 +197,7 @@ export default function Graph({
                     })();
                 }
             } else {
-                refresh();
+                void refresh({ track: false });
             }
         }
         return () => {
@@ -269,8 +276,14 @@ export default function Graph({
 
     // Full-history activity (timestamp+hash only) — independent of virtualized list.
     useEffect(() => {
-        if (!rich || !gitRepo) {
+        if (!rich || !gitRepo || !cacheKey) {
             setActivityPoints([]);
+            return;
+        }
+        const key = activityCacheKey(gitRepo, branchFilter, authorFilter);
+        const cachedEntry = graphCache[cacheKey];
+        if (cachedEntry?.activityKey === key && cachedEntry.activityPoints?.length) {
+            setActivityPoints(cachedEntry.activityPoints);
             return;
         }
         let cancelled = false;
@@ -282,7 +295,19 @@ export default function Graph({
                     rev: branchFilter === "all" ? null : branchFilter,
                     author: authorFilter === "all" ? null : authorFilter,
                 });
-                if (!cancelled) setActivityPoints(points);
+                if (cancelled) return;
+                setActivityPoints(points);
+                const prev = graphCache[cacheKey] ?? {
+                    logs: [],
+                    expanded: new Set<string>(),
+                    filesCache: {},
+                    scrollTop: 0,
+                };
+                graphCache[cacheKey] = {
+                    ...prev,
+                    activityPoints: points,
+                    activityKey: key,
+                };
             } catch {
                 if (!cancelled) setActivityPoints([]);
             }
@@ -291,7 +316,7 @@ export default function Graph({
         return () => {
             cancelled = true;
         };
-    }, [rich, gitRepo, branchFilter, authorFilter]);
+    }, [rich, gitRepo, branchFilter, authorFilter, cacheKey]);
 
     const activityBuckets = useMemo(() => {
         const bucketCount = 80;
@@ -786,8 +811,11 @@ export default function Graph({
                         <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={async () => {
                             if (!gitRepo) return;
                             startLoading();
-                            try { await commands.gitFetch(gitRepo); notify.info("Git", "Fetched from all remotes."); refresh(); }
-                            catch (e) { notify.error("Git Error", String(e)); }
+                            try {
+                                await commands.gitFetch(gitRepo);
+                                notify.info("Git", "Fetched from all remotes.");
+                                await refresh({ track: false });
+                            } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
                             <Icon name="sync" size={16} />
@@ -797,8 +825,11 @@ export default function Graph({
                         <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={async () => {
                             if (!gitRepo) return;
                             startLoading();
-                            try { await commands.gitPull(gitRepo); notify.info("Git", "Pulled successfully."); refresh(); }
-                            catch (e) { notify.error("Git Error", String(e)); }
+                            try {
+                                await commands.gitPull(gitRepo);
+                                notify.info("Git", "Pulled successfully.");
+                                await refresh({ track: false });
+                            } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
                             <Icon name="cloud_download" size={16} />
@@ -808,15 +839,18 @@ export default function Graph({
                         <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={async () => {
                             if (!gitRepo) return;
                             startLoading();
-                            try { await commands.gitPush(gitRepo); notify.info("Git", "Pushed successfully."); refresh(); }
-                            catch (e) { notify.error("Git Error", String(e)); }
+                            try {
+                                await commands.gitPush(gitRepo);
+                                notify.info("Git", "Pushed successfully.");
+                                await refresh({ track: false });
+                            } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
                             <Icon name="cloud_upload" size={16} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Refresh Graph">
-                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={refresh}>
+                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={() => void refresh()}>
                             <Icon name="refresh" size={16} />
                         </Button>
                     </Tooltip>
@@ -952,10 +986,6 @@ export default function Graph({
                 </div>
             ) : null}
 
-            {isInitialLoading && (
-                <LoadingBar className="absolute top-9 left-0 right-0 z-50 pointer-events-none" />
-            )}
-
             <div
                 className="shrink-0 pointer-events-none relative z-10 transition-opacity duration-200"
                 style={{
@@ -1006,17 +1036,25 @@ export default function Graph({
                             maxSize: 720,
                             visible: true,
                             children: (
-                                <GraphDetailPanel
-                                    selection={detail}
-                                    repoPath={gitRepo}
-                                    onClose={() => setDetail(null)}
-                                    onClearFile={() => {
-                                        if (detail?.log) setDetail({ kind: "commit", log: detail.log });
-                                    }}
-                                    onOpenFile={(file) => {
-                                        if (detail?.log) setDetail({ kind: "file", log: detail.log, file });
-                                    }}
-                                />
+                                <GitOverlayEnter
+                                    key={
+                                        detail
+                                            ? `${detail.kind}-${detail.log.hash}${detail.kind === "file" ? `-${detail.file.path}` : ""}`
+                                            : "empty"
+                                    }
+                                >
+                                    <GraphDetailPanel
+                                        selection={detail}
+                                        repoPath={gitRepo}
+                                        onClose={() => setDetail(null)}
+                                        onClearFile={() => {
+                                            if (detail?.log) setDetail({ kind: "commit", log: detail.log });
+                                        }}
+                                        onOpenFile={(file) => {
+                                            if (detail?.log) setDetail({ kind: "file", log: detail.log, file });
+                                        }}
+                                    />
+                                </GitOverlayEnter>
                             ),
                         },
                     ]}

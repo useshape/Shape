@@ -6,7 +6,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { listen } from "@tauri-apps/api/event";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { Icon } from "@/components/ui/icon";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
@@ -19,6 +18,11 @@ import { GitHubSection } from "@/features/git/ui/github/section";
 import { ActionsConsole, isActionsSection } from "@/features/git/ui/actions/console";
 import { useFilter, isGitSectionId, persistGitSection, readStoredGitSection } from "./filter-context";
 import { useGitRepos } from "@/lib/git/repos";
+import { LoadingBar } from "@/components/ui/loading";
+import { useLoading } from "@/features/loading/context";
+import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
+import { GitManagerShellSkeleton } from "@/features/git/ui/shared/skeletons";
+import "@/features/git/ui/shared/motion.css";
 
 export type { GitSectionId } from "@/features/git/types";
 
@@ -198,7 +202,6 @@ function GitManagerGate() {
 
     useEffect(() => {
         let cancelled = false;
-        const streamId = `git-manager-gate-${Date.now()}`;
 
         async function check() {
             if (!project_path) {
@@ -209,7 +212,10 @@ function GitManagerGate() {
                 return;
             }
             if (loading) {
-                if (!cancelled) setChecking(true);
+                if (!cancelled) {
+                    setChecking(true);
+                    setEmptyReason(null);
+                }
                 return;
             }
             if (!repoPath) {
@@ -220,59 +226,64 @@ function GitManagerGate() {
                 return;
             }
 
-            if (!cancelled) setChecking(true);
+            // Show the shell immediately once we have a repo — don't wait on log I/O.
+            if (!cancelled) {
+                setEmptyReason(null);
+                setChecking(false);
+            }
+
             try {
-                await commands.gitLogStreamStart(repoPath, streamId);
-                if (cancelled) {
-                    void commands.gitLogStreamStop(streamId);
-                    return;
-                }
-                const logs = await commands.gitLogStreamNext(streamId, 1);
-                void commands.gitLogStreamStop(streamId);
-                if (!cancelled) {
-                    setEmptyReason(logs.length === 0 ? "no-commits" : null);
-                    setChecking(false);
+                // One cheap `git log -1` — avoid starting a full unbounded stream just to probe.
+                const logs = await commands.gitLog(repoPath, 1);
+                if (!cancelled && logs.length === 0) {
+                    setEmptyReason("no-commits");
                 }
             } catch {
-                void commands.gitLogStreamStop(streamId).catch(() => undefined);
-                if (!cancelled) {
-                    setEmptyReason("no-repo");
-                    setChecking(false);
-                }
+                if (!cancelled) setEmptyReason("no-repo");
             }
         }
 
         void check();
         return () => {
             cancelled = true;
-            void commands.gitLogStreamStop(streamId).catch(() => undefined);
         };
     }, [project_path, loading, repoPath, refreshToken]);
-
-    if (checking && project_path) {
-        return (
-            <div className="flex h-full items-center justify-center bg-editor text-sm text-text-muted">
-                Loading…
-            </div>
-        );
-    }
 
     if (emptyReason) {
         return <GitManagerEmpty reason={emptyReason} />;
     }
 
-    return <ManagerShell key={project_path ?? "none"} />;
+    if (checking || loading || !project_path) {
+        return <GitManagerShellSkeleton />;
+    }
+
+    return <ManagerShell key={project_path} />;
 }
 
 function ManagerShell() {
     const search = useSearchParams();
     const pathname = usePathname();
     const { section, setSection } = useFilter();
+    const { resetLoading } = useLoading();
     const [query, setQuery] = useState("");
     const [activeLeafId, setActiveLeafId] = useState<string>(() => section);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
         () => new Set(NAV.map((g) => g.id)),
     );
+    // Mount each heavy local pane once, then keep it alive while switching.
+    const [visited, setVisited] = useState<Set<string>>(() => new Set([section]));
+
+    useEffect(() => {
+        setVisited((prev) => {
+            if (prev.has(section)) return prev;
+            const next = new Set(prev);
+            next.add(section);
+            return next;
+        });
+    }, [section]);
+
+    // Clear any leaked global loading starts when leaving Git Manager.
+    useEffect(() => () => resetLoading(), [resetLoading]);
 
     // Sync once from URL / storage on mount; avoid resetting to Source on reload.
     useEffect(() => {
@@ -337,74 +348,110 @@ function ManagerShell() {
     );
 
     return (
-        <div className="flex h-full w-full min-w-0 overflow-hidden select-none bg-editor text-text-primary">
-            <aside className="flex w-64 shrink-0 flex-col">
-                <div className="p-2">
-                    <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                        <Input
-                            placeholder="Search git"
-                            value={query}
-                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                            onChange={(e) => setQuery(e.target.value)}
-                        />
+        <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden select-none bg-editor text-text-primary">
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <aside className="flex w-64 shrink-0 flex-col">
+                    <div className="p-2">
+                        <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
+                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                            <Input
+                                placeholder="Search git"
+                                value={query}
+                                className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                                onChange={(e) => setQuery(e.target.value)}
+                            />
+                        </div>
                     </div>
-                </div>
-                <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-                    {filteredNav.map((group) => {
-                        const open = expandedGroups.has(group.id) || !!query.trim();
-                        return (
-                            <div key={group.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => toggleGroup(group.id)}
-                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-primary"
+                    <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+                        {filteredNav.map((group) => {
+                            const open = expandedGroups.has(group.id) || !!query.trim();
+                            return (
+                                <CollapsibleNavGroup
+                                    key={group.id}
+                                    label={group.label}
+                                    open={open}
+                                    onToggle={() => toggleGroup(group.id)}
                                 >
-                                    {group.label}
-                                </button>
-                                {open && (
-                                    <div className="space-y-0.5">
-                                        {group.children.map((leaf) => (
-                                            <Button
-                                                key={leaf.id}
-                                                variant="ghost"
-                                                type="button"
-                                                onClick={() => select(leaf.id)}
-                                                className={cn(
-                                                    "h-8 w-full justify-start",
-                                                    activeLeafId === leaf.id || section === leaf.id
-                                                        ? "bg-panel-hover text-text-primary"
-                                                        : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
-                                                )}
-                                            >
-                                                <span className="-mx-2.5 truncate text-sm font-regular">
-                                                    {leaf.label}
-                                                </span>
-                                            </Button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </nav>
-            </aside>
+                                    {group.children.map((leaf) => (
+                                        <NavLeafButton
+                                            key={leaf.id}
+                                            active={activeLeafId === leaf.id || section === leaf.id}
+                                            onClick={() => select(leaf.id)}
+                                        >
+                                            <span className="-mx-2.5 truncate text-sm font-regular">
+                                                {leaf.label}
+                                            </span>
+                                        </NavLeafButton>
+                                    ))}
+                                </CollapsibleNavGroup>
+                            );
+                        })}
+                    </nav>
+                </aside>
 
-            <section className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                {section === "source" ? (
-                    <Source embedded />
-                ) : section === "graph" ? (
-                    <Graph surface="editor" rich />
-                ) : section === "branches" ? (
-                    <BranchWindow />
-                ) : section === "tags" ? (
-                    <LocalTags />
-                ) : isActionsSection(section) ? (
-                    <ActionsConsole focus={section} />
-                ) : (
-                    <GitHubSection section={section} />
-                )}
-            </section>
+                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                    {/* Local panes stay mounted after first visit — remounting Graph/Source is the main stutter. */}
+                    {visited.has("source") ? (
+                        <div
+                            className={cn(
+                                "absolute inset-0 min-h-0 min-w-0",
+                                section === "source" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                            )}
+                            aria-hidden={section !== "source"}
+                        >
+                            <Source embedded />
+                        </div>
+                    ) : null}
+                    {visited.has("graph") ? (
+                        <div
+                            className={cn(
+                                "absolute inset-0 min-h-0 min-w-0",
+                                section === "graph" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                            )}
+                            aria-hidden={section !== "graph"}
+                        >
+                            <Graph surface="editor" rich />
+                        </div>
+                    ) : null}
+                    {visited.has("branches") ? (
+                        <div
+                            className={cn(
+                                "absolute inset-0 min-h-0 min-w-0",
+                                section === "branches" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                            )}
+                            aria-hidden={section !== "branches"}
+                        >
+                            <BranchWindow />
+                        </div>
+                    ) : null}
+                    {visited.has("tags") ? (
+                        <div
+                            className={cn(
+                                "absolute inset-0 min-h-0 min-w-0",
+                                section === "tags" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                            )}
+                            aria-hidden={section !== "tags"}
+                        >
+                            <LocalTags />
+                        </div>
+                    ) : null}
+                    {isActionsSection(section) ? (
+                        <div className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter">
+                            <ActionsConsole focus={section} />
+                        </div>
+                    ) : null}
+                    {!isActionsSection(section) &&
+                    section !== "source" &&
+                    section !== "graph" &&
+                    section !== "branches" &&
+                    section !== "tags" ? (
+                        <div className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter">
+                            <GitHubSection section={section} />
+                        </div>
+                    ) : null}
+                </section>
+            </div>
+            <LoadingBar className="absolute inset-x-0 bottom-0 z-50 pointer-events-none" />
         </div>
     );
 }

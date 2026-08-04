@@ -37,7 +37,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { LoadingBar } from "@/components/ui/loading";
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -276,11 +275,12 @@ export default function Source({
     const { startLoading, stopLoading } = useLoading();
     const settings = useSettings();
 
-    const refresh = useCallback(async () => {
+    const refresh = useCallback(async (opts?: { track?: boolean }) => {
+        const track = opts?.track !== false;
         const repoPath = scmRepoPath;
         if (project_path && repoPath) {
             statusProgress.push("git-refresh", "Refreshing git status...");
-            startLoading();
+            if (track) startLoading();
             try {
                 await Promise.all([
                     commands.gitStatus(repoPath).then((c) => {
@@ -300,8 +300,7 @@ export default function Source({
                     commands.gitHasRemote(repoPath).then(setHasRemote).catch(() => {
                         setHasRemote(false);
                     }),
-                    commands.gitLogStreamStart(repoPath, "source")
-                        .then(() => commands.gitLogStreamNext("source", 1))
+                    commands.gitLog(repoPath, 1)
                         .then(logs => {
                             if (logs.length > 0) setLastCommit(logs[0]);
                             else setLastCommit(null);
@@ -311,7 +310,7 @@ export default function Source({
                     }).catch(() => setNeedsSync(false)),
                 ]);
             } finally {
-                stopLoading();
+                if (track) stopLoading();
                 statusProgress.remove("git-refresh");
             }
         } else if (project_path && !reposLoading) {
@@ -323,7 +322,8 @@ export default function Source({
     }, [project_path, scmRepoPath, repos.length, reposLoading, startLoading, stopLoading]);
 
     useEffect(() => {
-        refresh();
+        // Soft refresh on mount — don't flash the global loading bar for routine open.
+        void refresh({ track: false });
     }, [refresh]);
 
     useEffect(() => {
@@ -557,7 +557,7 @@ export default function Source({
             await commands.gitPush(gitRepo);
             notify.info("Git", "Pushed successfully.");
             setNeedsSync(false);
-            refresh();
+            await refresh({ track: false });
         } catch (err) {
             notify.gitError(err, "Push failed");
         } finally {
@@ -572,7 +572,7 @@ export default function Source({
             await commands.gitSync(gitRepo);
             notify.info("Git Sync", "Successfully synced with remote.");
             setNeedsSync(false);
-            refresh();
+            await refresh({ track: false });
         } catch (err) {
             notify.gitError(err, "Sync failed");
         } finally {
@@ -586,7 +586,7 @@ export default function Source({
         try {
             await commands.gitPull(gitRepo);
             notify.info("Git", "Pulled successfully.");
-            refresh();
+            await refresh({ track: false });
         } catch (err) {
             notify.gitError(err, "Pull failed");
         } finally {
@@ -600,7 +600,7 @@ export default function Source({
         try {
             await commands.gitFetch(gitRepo);
             notify.info("Git", "Fetched from all remotes.");
-            refresh();
+            await refresh({ track: false });
         } catch (err) {
             notify.gitError(err, "Fetch failed");
         } finally {
@@ -685,7 +685,7 @@ export default function Source({
                 {isGitRepo && (
                     <div className="flex shrink-0 items-center gap-0.5">
                         <Tooltip content="Refresh Repository">
-                            <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={refresh}>
+                            <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={() => void refresh()}>
                                 <Icon name="refresh" size={16} />
                             </Button>
                         </Tooltip>
@@ -782,7 +782,6 @@ export default function Source({
                     </div>
                 )}
             </div>
-            <LoadingBar />
 
             {changes.some((c) => c.status === "C") && gitRepo ? (
                 <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--git-conflict)]/40 bg-[color:var(--git-conflict)]/10 px-2 py-1.5 text-xs text-text-primary">

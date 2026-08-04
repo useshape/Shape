@@ -25,6 +25,7 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import { QuickPick } from "@/components/ui/quick-pick";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
+import { GitOverlayEnter } from "@/features/git/ui/shared/motion";
 
 async function notifyGitRefresh() {
     try {
@@ -184,12 +185,33 @@ function SectionHeader({
         <button
             type="button"
             onClick={onToggle}
+            aria-expanded={open}
             className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium uppercase tracking-wide text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
         >
-            <Icon name={open ? "expand_more" : "chevron_right"} size={14} className="shrink-0" />
+            <Icon
+                name="chevron_right"
+                size={14}
+                className={cn(
+                    "shrink-0 transition-transform duration-200 ease-[var(--ease-out)]",
+                    open && "rotate-90",
+                )}
+            />
             <span className="flex-1">{label}</span>
             <span className="tabular-nums opacity-80">{count}</span>
         </button>
+    );
+}
+
+function AnimatedCollapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+    return (
+        <div
+            className={cn(
+                "grid transition-[grid-template-rows,opacity] duration-200 ease-[var(--ease-out)]",
+                open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+            )}
+        >
+            <div className="min-h-0 overflow-hidden">{children}</div>
+        </div>
     );
 }
 
@@ -238,17 +260,17 @@ export function BranchWindow() {
         if (!project_path) return;
         setLoading(true);
         try {
-            const [locals, remotes, current, details] = await Promise.all([
+            // Parallel cheap git2 lists + one for-each-ref (was 5 calls with duplicate details).
+            const [locals, remotes, current] = await Promise.all([
                 commands.gitBranches(project_path),
                 commands.gitRemoteBranches(project_path),
                 commands.gitCurrentBranch(project_path),
-                commands.gitBranchDetails(project_path, "", true),
             ]);
+            const details = await commands.gitBranchDetails(project_path, current, true);
             setLocalBranches(locals);
             setRemoteBranches(remotes);
             setCurrentBranch(current);
-            const detailsWithSync = await commands.gitBranchDetails(project_path, current, true);
-            setBranchDetails(detailsWithSync.length > 0 ? detailsWithSync : details);
+            setBranchDetails(details);
             setSelectedName((prev) => {
                 if (prev == null) return null;
                 if (locals.includes(prev) || remotes.includes(prev)) return prev;
@@ -568,7 +590,7 @@ export function BranchWindow() {
                     open={localOpen}
                     onToggle={() => setLocalOpen((v) => !v)}
                 />
-                {localOpen ? (
+                <AnimatedCollapse open={localOpen}>
                     <div className="mb-3 space-y-0.5">
                         {localItems.length === 0 ? (
                             <div className="px-2 py-2 text-sm text-text-muted">No local branches</div>
@@ -599,7 +621,7 @@ export function BranchWindow() {
                             ))
                         )}
                     </div>
-                ) : null}
+                </AnimatedCollapse>
 
                 <SectionHeader
                     label="Remote"
@@ -607,7 +629,7 @@ export function BranchWindow() {
                     open={remoteOpen}
                     onToggle={() => setRemoteOpen((v) => !v)}
                 />
-                {remoteOpen ? (
+                <AnimatedCollapse open={remoteOpen}>
                     <div className="space-y-2">
                         {remoteGroups.length === 0 ? (
                             <div className="px-2 py-2 text-sm text-text-muted">No remote branches</div>
@@ -628,12 +650,19 @@ export function BranchWindow() {
                                             }}
                                             className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
                                         >
-                                            <Icon name={open ? "expand_more" : "chevron_right"} size={14} />
+                                            <Icon
+                                                name="chevron_right"
+                                                size={14}
+                                                className={cn(
+                                                    "transition-transform duration-200 ease-[var(--ease-out)]",
+                                                    open && "rotate-90",
+                                                )}
+                                            />
                                             <Icon name="cloud" size={14} />
                                             <span className="flex-1 truncate font-medium">{remote}</span>
                                             <span className="text-xs tabular-nums">{items.length}</span>
                                         </button>
-                                        {open ? (
+                                        <AnimatedCollapse open={open}>
                                             <div className="ml-2 space-y-0.5 border-l border-border-subtle/50 pl-1">
                                                 {items.map((item) => (
                                                     <BranchRow
@@ -651,13 +680,13 @@ export function BranchWindow() {
                                                     />
                                                 ))}
                                             </div>
-                                        ) : null}
+                                        </AnimatedCollapse>
                                     </div>
                                 );
                             })
                         )}
                     </div>
-                ) : null}
+                </AnimatedCollapse>
             </div>
         </div>
     );
@@ -895,7 +924,18 @@ export function BranchWindow() {
 
     return (
         <div className="flex h-full min-h-0 w-full overflow-hidden">
-            {selectedItem ? detailPane : listPane}
+            <div
+                className={cn(
+                    "flex h-full min-h-0 w-full overflow-hidden",
+                    selectedItem && "hidden",
+                )}
+                aria-hidden={!!selectedItem}
+            >
+                {listPane}
+            </div>
+            {selectedItem ? (
+                <GitOverlayEnter key={selectedItem.name}>{detailPane}</GitOverlayEnter>
+            ) : null}
 
             <QuickPick
                 open={renameTarget != null}

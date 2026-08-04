@@ -9,8 +9,6 @@ import { commands, useProjectState } from "@/lib/backend";
 import { useGitRepos } from "@/lib/git/repos";
 import { notify } from "@/features/notifications";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
-import { useLoading } from "@/features/loading/context";
-import { LoadingBar } from "@/components/ui/loading";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -29,17 +27,17 @@ export function LocalTags() {
     const { scmRepoPath } = useGitRepos(project_path);
     const gitRepo = scmRepoPath ?? project_path;
     const { query } = useFilter();
-    const { startLoading, stopLoading } = useLoading();
     const [tags, setTags] = useState<TagEntry[]>([]);
     const [newTagName, setNewTagName] = useState("");
     const [creating, setCreating] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const refresh = useCallback(async () => {
         if (!gitRepo) {
             setTags([]);
             return;
         }
-        startLoading();
+        setLoading(true);
         try {
             const list = await commands.gitListTags(gitRepo);
             setTags(list);
@@ -47,9 +45,9 @@ export function LocalTags() {
             setTags([]);
             notify.gitError(err, "Failed to load tags");
         } finally {
-            stopLoading();
+            setLoading(false);
         }
-    }, [gitRepo, startLoading, stopLoading]);
+    }, [gitRepo]);
 
     useEffect(() => {
         void refresh();
@@ -147,7 +145,6 @@ export function LocalTags() {
                     <Icon name="refresh" size={16} />
                 </Button>
             </div>
-            <LoadingBar />
             {gitRepo ? (
                 <div className="shrink-0 px-2.5 pb-2">
                     <div className="flex items-center gap-2">

@@ -29,14 +29,14 @@ export function GitAiInsight({
                 className,
             )}
         >
-            <div className="flex items-center gap-2 border-b border-border-subtle/60 px-3 py-2">
+            <div className="flex items-center gap-2 px-2 py-1">
                 <ShapeLogo size={14} className="shrink-0" />
                 <span className="text-sm font-medium text-text-primary">{title}</span>
                 {onDismiss ? (
                     <Button
                         variant="ghost"
-                        size="sm"
-                        className="ml-auto h-6 px-1.5 text-text-muted"
+                        size="icon"
+                        className="ml-auto text-text-muted"
                         onClick={onDismiss}
                         aria-label="Dismiss"
                     >

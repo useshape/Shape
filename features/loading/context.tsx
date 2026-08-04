@@ -7,6 +7,8 @@ interface LoadingContextType {
     isLoading: boolean;
     startLoading: (message?: string) => void;
     stopLoading: (message?: string) => void;
+    /** Force-clear the counter (e.g. when leaving a view that may have leaked starts). */
+    resetLoading: () => void;
 }
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
@@ -26,9 +28,13 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
         });
         if (message) statusProgress.remove(message);
     }, []);
+    const resetLoading = useCallback(() => {
+        setLoadingCount(0);
+        statusProgress.remove("global-loading");
+    }, []);
 
     return (
-        <LoadingContext.Provider value={{ isLoading: loadingCount > 0, startLoading, stopLoading }}>
+        <LoadingContext.Provider value={{ isLoading: loadingCount > 0, startLoading, stopLoading, resetLoading }}>
             {children}
         </LoadingContext.Provider>
     );

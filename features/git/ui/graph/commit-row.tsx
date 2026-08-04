@@ -568,8 +568,15 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                 );
                             })
                         ) : (
-                            <div className="text-xs text-text-disabled py-1 pl-2">
-                                {filesLoaded ? "No changes found" : "Loading…"}
+                            <div className="flex flex-col gap-1 py-1 pl-2" aria-busy={!filesLoaded}>
+                                {!filesLoaded ? (
+                                    <>
+                                        <div className="h-[18px] w-3/5 animate-pulse rounded bg-panel-hover/80" />
+                                        <div className="h-[18px] w-2/5 animate-pulse rounded bg-panel-hover/80" />
+                                    </>
+                                ) : (
+                                    <div className="text-xs text-text-disabled">No changes found</div>
+                                )}
                             </div>
                         )}
                     </div>

@@ -278,9 +278,9 @@ pub struct GitActivityPoint {
     pub hash: String,
 }
 
-/// Fetch only timestamp + short hash for every commit (or a filtered rev).
-/// Used by the Git Manager activity chart so it covers the whole history without
-/// waiting for the virtualized commit list to load.
+/// Fetch timestamp + short hash samples for the Git Manager activity chart.
+/// Streams git stdout (no giant String buffer), hard-caps samples, and prefers
+/// recent history so opening Graph stays responsive on large repos.
 pub fn git_activity_timeline(
     path: String,
     all_refs: Option<bool>,
@@ -289,6 +289,7 @@ pub fn git_activity_timeline(
 ) -> Result<Vec<GitActivityPoint>, AppError> {
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
+    use std::io::{BufRead, BufReader};
     use std::process::Stdio;
 
     let include_all = all_refs.unwrap_or(true);
@@ -296,7 +297,9 @@ pub fn git_activity_timeline(
     cmd.current_dir(&path)
         .arg("log")
         .arg("--date-order")
-        .arg("--format=%ct %h");
+        .arg("--format=%ct %h")
+        // Soft cap — chart only needs density, not every commit over IPC.
+        .arg("--max-count=12000");
 
     if let Some(a) = author.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         cmd.arg(format!("--author={}", a));
@@ -314,20 +317,21 @@ pub fn git_activity_timeline(
     #[cfg(windows)]
     cmd.creation_flags(0x08000000);
 
-    let output = cmd
-        .output()
+    let mut child = cmd
+        .spawn()
         .map_err(|e| AppError::Message(format!("git activity timeline failed: {}", e)))?;
-    if !output.status.success() {
-        return Ok(Vec::new());
-    }
+    let stdout = child.stdout.take().ok_or_else(|| {
+        AppError::Message("git activity timeline: missing stdout".into())
+    })?;
 
-    let text = String::from_utf8_lossy(&output.stdout);
+    let reader = BufReader::new(stdout);
     let mut points = Vec::with_capacity(4096);
-    const MAX_POINTS: usize = 80_000;
-    for line in text.lines() {
+    const MAX_POINTS: usize = 12_000;
+    for line in reader.lines() {
         if points.len() >= MAX_POINTS {
             break;
         }
+        let Ok(line) = line else { continue };
         let mut parts = line.split_whitespace();
         let Some(ts_raw) = parts.next() else { continue };
         let Some(hash) = parts.next() else { continue };
@@ -337,6 +341,8 @@ pub fn git_activity_timeline(
             hash: hash.to_string(),
         });
     }
+    let _ = child.kill();
+    let _ = child.wait();
     Ok(points)
 }
 
@@ -1033,7 +1039,7 @@ pub fn git_branch_details(
     if include_remotes {
         cmd.arg("refs/remotes/");
     }
-    cmd.arg("--format=%(refname:short)|%(authorname)|%(authoremail)|%(committerdate:relative)");
+    cmd.arg("--format=%(refname)|%(refname:short)|%(authorname)|%(authoremail)|%(committerdate:relative)");
     #[cfg(windows)]
     cmd.creation_flags(0x08000000);
 
@@ -1050,24 +1056,30 @@ pub fn git_branch_details(
     let mut details: Vec<GitBranchDetail> = stdout
         .lines()
         .filter_map(|line| {
-            let parts: Vec<&str> = line.splitn(4, '|').collect();
-            if parts.len() < 4 {
+            let parts: Vec<&str> = line.splitn(5, '|').collect();
+            if parts.len() < 5 {
                 return None;
             }
-            let email = parts[2]
+            let full_ref = parts[0].trim();
+            let email = parts[3]
                 .trim()
                 .trim_start_matches('<')
                 .trim_end_matches('>')
                 .to_string();
-            let name = parts[0].trim().to_string();
-            if name.ends_with("/HEAD") {
+            // Remotes keep `origin/foo` short name; locals keep branch name (may contain `/`).
+            let name = if full_ref.starts_with("refs/remotes/") {
+                full_ref.trim_start_matches("refs/remotes/").to_string()
+            } else {
+                parts[1].trim().to_string()
+            };
+            if name.ends_with("/HEAD") || name == "HEAD" {
                 return None;
             }
             Some(GitBranchDetail {
                 name,
-                author: parts[1].trim().to_string(),
+                author: parts[2].trim().to_string(),
                 author_email: email,
-                date: parts[3].trim().to_string(),
+                date: parts[4].trim().to_string(),
                 ahead: None,
                 behind: None,
             })
@@ -1686,7 +1698,9 @@ pub fn git_log_stream_start(
         cmd.arg("--all");
     }
     cmd.args([
-        "--format=@@@START@@@%H%x00%an%x00%ae%x00%ct%x00%B%x00%D%x00%P%x00@@@MSG_END@@@",
+        // Subject only — full bodies bloated IPC/parse for the virtualized list.
+        // Detail views already show the first line; clipboard copies subject.
+        "--format=@@@START@@@%H%x00%an%x00%ae%x00%ct%x00%s%x00%D%x00%P%x00@@@MSG_END@@@",
     ])
     .stdout(Stdio::piped())
     .stderr(Stdio::null());
@@ -1959,11 +1973,13 @@ pub fn git_log_stream_next(caller_id: String, limit: usize) -> Result<Vec<GitLog
     }
 
     let duration = start.elapsed();
-    eprintln!(
-        "git_log_stream_next: dynamic load block of {} commits processed in {:?}",
-        logs.len(),
-        duration
-    );
+    if duration.as_millis() > 50 {
+        eprintln!(
+            "git_log_stream_next: {} commits in {:?}",
+            logs.len(),
+            duration
+        );
+    }
 
     Ok(logs)
 }
@@ -1978,7 +1994,7 @@ pub fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitLogEntry>, A
         "log",
         "-n",
         &limit_str,
-        "--format=%H%x00%an%x00%ae%x00%ct%x00%B%x00%D%x00%P",
+        "--format=%H%x00%an%x00%ae%x00%ct%x00%s%x00%D%x00%P",
     ]);
 
     #[cfg(windows)]

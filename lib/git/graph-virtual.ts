@@ -32,24 +32,37 @@ export function computeVisibleRange(
     if (rowMeta.length === 0) return { startIdx: 0, endIdx: 0 };
     const viewTop = Math.max(0, scrollTop - overscanPx);
     const viewBottom = scrollTop + containerHeight + overscanPx;
+
+    // Binary search first row whose bottom is past viewTop.
+    let lo = 0;
+    let hi = rowMeta.length - 1;
     let startIdx = 0;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const bottom = rowMeta[mid].top + rowMeta[mid].height;
+        if (bottom < viewTop) {
+            startIdx = mid + 1;
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+
+    lo = startIdx;
+    hi = rowMeta.length - 1;
     let endIdx = rowMeta.length - 1;
-    for (let i = 0; i < rowMeta.length; i++) {
-        if (rowMeta[i].top + rowMeta[i].height < viewTop) {
-            startIdx = i + 1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (rowMeta[mid].top > viewBottom) {
+            endIdx = mid - 1;
+            hi = mid - 1;
         } else {
-            break;
+            lo = mid + 1;
         }
     }
-    for (let i = rowMeta.length - 1; i >= 0; i--) {
-        if (rowMeta[i].top > viewBottom) {
-            endIdx = i - 1;
-        } else {
-            break;
-        }
-    }
+
     return {
-        startIdx: Math.max(0, startIdx),
-        endIdx: Math.min(rowMeta.length - 1, Math.max(0, endIdx)),
+        startIdx: Math.max(0, Math.min(startIdx, rowMeta.length - 1)),
+        endIdx: Math.max(0, Math.min(endIdx, rowMeta.length - 1)),
     };
 }
