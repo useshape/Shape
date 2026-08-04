@@ -255,13 +255,14 @@ export default function Source({
     const [commitDescription, setCommitDescription] = useState("");
     const [commitSuggestionStatus, setCommitSuggestionStatus] = useState<"idle" | "loading">("idle");
     const { project_path } = useProjectState();
-    const { repos, scmRepoPath, hasMultipleRepos, setActiveRepo, activeRepoPath } = useGitRepos(project_path);
+    const { repos, scmRepoPath, hasMultipleRepos, setActiveRepo, activeRepoPath, loading: reposLoading } = useGitRepos(project_path);
     const gitRepo = scmRepoPath;
     const [changes, setChanges] = useState<GitFileParams[]>([]);
     const [currentBranch, setCurrentBranch] = useState("...");
     const [hasRemote, setHasRemote] = useState(false);
     const [lastCommit, setLastCommit] = useState<GitLogEntry | null>(null);
     const [needsSync, setNeedsSync] = useState(false);
+    // Assume repo until discovery proves otherwise — avoids empty-state flash on remount.
     const [isGitRepo, setIsGitRepo] = useState(true);
 
     const [isChangesOpen, setIsChangesOpen] = useState(true);
@@ -313,12 +314,13 @@ export default function Source({
                 stopLoading();
                 statusProgress.remove("git-refresh");
             }
-        } else if (project_path) {
+        } else if (project_path && !reposLoading) {
+            // Only clear after discovery finished with no repo — never during the async gap.
             setIsGitRepo(false);
             setChanges([]);
             setLastCommit(null);
         }
-    }, [project_path, scmRepoPath, repos.length, startLoading, stopLoading]);
+    }, [project_path, scmRepoPath, repos.length, reposLoading, startLoading, stopLoading]);
 
     useEffect(() => {
         refresh();
@@ -415,12 +417,41 @@ export default function Source({
         }
     };
 
-    const handleCommit = async (all: boolean = false) => {
+    const handleCommit = async (
+        all: boolean = false,
+        opts?: { amend?: boolean; promptSyncAfter?: boolean },
+    ) => {
         if (!gitRepo || !commitTitle) {
             notify.error("Git", "Please enter a commit title");
             return false;
         }
+        const amend = opts?.amend === true;
         try {
+            if (amend) {
+                if (!lastCommit) {
+                    notify.error("Git", "Nothing to amend");
+                    return false;
+                }
+                if (hasRemote) {
+                    const status = await commands.gitSyncStatus(gitRepo).catch(() => ({
+                        ahead: 0,
+                        behind: 0,
+                    }));
+                    if (status.ahead === 0) {
+                        const rewrite = await confirm(
+                            "The latest commit appears to be on the remote. Amending rewrites history. Continue?",
+                            {
+                                title: "Amend published commit",
+                                kind: "warning",
+                                okLabel: "Amend",
+                                cancelLabel: "Cancel",
+                            },
+                        );
+                        if (!rewrite) return false;
+                    }
+                }
+            }
+
             if (all) {
                 const unstaged = changes.filter((c: GitFileParams) => !c.staged);
                 for (const file of unstaged) {
@@ -428,7 +459,7 @@ export default function Source({
                 }
             } else {
                 const staged = changes.filter((c: GitFileParams) => c.staged);
-                if (staged.length === 0) {
+                if (staged.length === 0 && !amend) {
                     const stageAll = await confirm(
                         "There are no staged changes to commit. Stage all changes and commit?",
                         {
@@ -446,36 +477,91 @@ export default function Source({
                     } else {
                         return false;
                     }
+                } else if (staged.length === 0 && amend && changes.length > 0) {
+                    const stageAll = await confirm(
+                        "Stage all changes into the amended commit?",
+                        {
+                            title: "Amend commit",
+                            kind: "info",
+                            okLabel: "Stage & Amend",
+                            cancelLabel: "Amend message only",
+                        },
+                    );
+                    if (stageAll) {
+                        const unstaged = changes.filter((c: GitFileParams) => !c.staged);
+                        for (const file of unstaged) {
+                            await commands.gitStage(gitRepo, file.path);
+                        }
+                    }
                 }
             }
 
             const fullMessage = commitDescription ? `${commitTitle}\n\n${commitDescription}` : commitTitle;
 
             if (getSettings().git.confirmBeforeCommit) {
-                const ok = await confirm(`Create commit?\n\n${fullMessage}`, {
-                    title: "Create commit",
-                    kind: "info",
-                    okLabel: "Commit",
-                    cancelLabel: "Cancel",
-                });
+                const ok = await confirm(
+                    amend ? `Amend last commit?\n\n${fullMessage}` : `Create commit?\n\n${fullMessage}`,
+                    {
+                        title: amend ? "Amend commit" : "Create commit",
+                        kind: "info",
+                        okLabel: amend ? "Amend" : "Commit",
+                        cancelLabel: "Cancel",
+                    },
+                );
                 if (!ok) return false;
             }
 
-            await commands.gitCommit(gitRepo, fullMessage);
+            if (amend) {
+                await commands.gitCommitAmend(gitRepo, fullMessage);
+            } else {
+                await commands.gitCommit(gitRepo, fullMessage);
+            }
             setCommitTitle("");
             setCommitDescription("");
             setCommitSuggestionStatus("idle");
+            let ahead = 0;
             if (hasRemote) {
                 const status = await commands.gitSyncStatus(gitRepo).catch(() => ({ ahead: 0, behind: 0 }));
-                setNeedsSync(status.ahead > 0);
+                ahead = status.ahead;
+                setNeedsSync(ahead > 0);
             }
             refresh();
-            notify.success("Git", "Commit successful");
+            notify.success("Git", amend ? "Commit amended" : "Commit successful");
+
+            if (opts?.promptSyncAfter && hasRemote && ahead > 0) {
+                const syncNow = await confirm(
+                    "Commit created. Sync with remote now?",
+                    {
+                        title: "Sync",
+                        kind: "info",
+                        okLabel: "Sync",
+                        cancelLabel: "Not now",
+                    },
+                );
+                if (syncNow) {
+                    await handleSync();
+                }
+            }
             return true;
         } catch (e) {
             console.error("Commit failed:", e);
-            notify.gitError(e, "Commit failed");
+            notify.gitError(e, amend ? "Amend failed" : "Commit failed");
             return false;
+        }
+    };
+
+    const handlePush = async () => {
+        if (!gitRepo) return;
+        startLoading();
+        try {
+            await commands.gitPush(gitRepo);
+            notify.info("Git", "Pushed successfully.");
+            setNeedsSync(false);
+            refresh();
+        } catch (err) {
+            notify.gitError(err, "Push failed");
+        } finally {
+            stopLoading();
         }
     };
 
@@ -503,21 +589,6 @@ export default function Source({
             refresh();
         } catch (err) {
             notify.gitError(err, "Pull failed");
-        } finally {
-            stopLoading();
-        }
-    };
-
-    const handlePush = async () => {
-        if (!gitRepo) return;
-        startLoading();
-        try {
-            await commands.gitPush(gitRepo);
-            notify.info("Git", "Pushed successfully.");
-            setNeedsSync(false);
-            refresh();
-        } catch (err) {
-            notify.gitError(err, "Push failed");
         } finally {
             stopLoading();
         }
@@ -637,7 +708,7 @@ export default function Source({
                         {/* Tooltip must wrap the whole menu - nesting Tooltip around DropdownMenuTrigger breaks both. */}
                         <Tooltip content="More actions">
                             <span className="inline-flex">
-                                <DropdownMenu>
+                                <DropdownMenu modal={false}>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="w-6 h-6" aria-label="More actions">
                                             <Icon name="more_horiz" size={16} />
@@ -743,7 +814,7 @@ export default function Source({
 
             {hasMultipleRepos && isGitRepo && (
                 <div className="px-3 pb-2 shrink-0">
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="ghost"
@@ -780,7 +851,11 @@ export default function Source({
             )}
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                {!isGitRepo ? (
+                {reposLoading && !scmRepoPath ? (
+                    <div className="flex h-full items-center justify-center p-4 text-sm text-text-muted">
+                        Looking for Git repositories…
+                    </div>
+                ) : !isGitRepo ? (
                     <div className="flex flex-col items-center p-4 text-center h-full gap-4">
                         <p className="text-sm text-text-primary text-left font-normal leading-normal">
                             The folder currently open doesn&apos;t have a Git repository. You can initialize a repository which will enable source control features powered by Git. To learn more about how to use Git and source control in Shape <a href="#" className="text-accent hover:underline">Read our docs</a>.
@@ -861,7 +936,7 @@ export default function Source({
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                                             e.preventDefault();
-                                            handleCommit();
+                                            void handleCommit(false, { promptSyncAfter: true });
                                         }
                                     }}
                                     className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-2 bg-transparent"
@@ -873,7 +948,7 @@ export default function Source({
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                                             e.preventDefault();
-                                            handleCommit();
+                                            void handleCommit(false, { promptSyncAfter: true });
                                         }
                                     }}
                                     className="border-none shadow-none resize-none text-sm min-h-[60px] focus-visible:ring-0 focus-visible:ring-offset-0 px-2 pb-2 mt-0 rounded-none bg-transparent"
@@ -893,31 +968,104 @@ export default function Source({
                                     Generate
                                 </Button>
 
-                                <div className="flex gap-1.5">
-                                    {needsSync ? (
-                                        <Button variant="default" size="sm" className="gap-1 px-3 h-7 text-xs font-medium" onClick={handleSync}>
+                                <div className="flex items-center gap-1.5">
+                                    {needsSync && changes.length === 0 ? (
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            className="gap-1 px-3 h-7 text-xs font-medium"
+                                            onClick={() => void handleSync()}
+                                        >
                                             <Icon name="cloud_upload" size={14} />
                                             <span>Push</span>
                                         </Button>
                                     ) : (
-                                        <>
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => handleCommit(false)}
-                                                disabled={changes.length === 0 || !commitTitle.trim()}
-                                            >
-                                                Commit
-                                            </Button>
+                                        <div className="flex items-stretch overflow-hidden rounded-lg">
                                             <Button
                                                 variant="default"
                                                 size="sm"
-                                                onClick={async () => { if (await handleCommit(false)) await handleSync(); }}
-                                                disabled={changes.length === 0 || !commitTitle.trim()}
+                                                className="h-7 rounded-none px-3 text-xs font-medium"
+                                                onClick={() =>
+                                                    void handleCommit(false, { promptSyncAfter: true })
+                                                }
+                                                disabled={!commitTitle.trim() || changes.length === 0}
                                             >
-                                                Commit & Sync
+                                                Commit
                                             </Button>
-                                        </>
+                                            <DropdownMenu modal={false}>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="default"
+                                                        size="sm"
+                                                        className="h-7 rounded-none border-l border-white/20 px-1.5"
+                                                        disabled={!commitTitle.trim()}
+                                                        aria-label="Commit options"
+                                                    >
+                                                        <Icon name="expand_more" size={14} />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuItem
+                                                        disabled={!commitTitle.trim() || changes.length === 0}
+                                                        onClick={() =>
+                                                            void handleCommit(false, {
+                                                                promptSyncAfter: true,
+                                                            })
+                                                        }
+                                                    >
+                                                        Commit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        disabled={!commitTitle.trim() || !lastCommit}
+                                                        onClick={() =>
+                                                            void handleCommit(false, {
+                                                                amend: true,
+                                                                promptSyncAfter: true,
+                                                            })
+                                                        }
+                                                    >
+                                                        Commit (Amend)
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        disabled={
+                                                            !commitTitle.trim() ||
+                                                            changes.length === 0 ||
+                                                            !hasRemote
+                                                        }
+                                                        onClick={async () => {
+                                                            if (
+                                                                await handleCommit(false, {
+                                                                    promptSyncAfter: false,
+                                                                })
+                                                            ) {
+                                                                await handlePush();
+                                                            }
+                                                        }}
+                                                    >
+                                                        Commit & Push
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        disabled={
+                                                            !commitTitle.trim() ||
+                                                            changes.length === 0 ||
+                                                            !hasRemote
+                                                        }
+                                                        onClick={async () => {
+                                                            if (
+                                                                await handleCommit(false, {
+                                                                    promptSyncAfter: false,
+                                                                })
+                                                            ) {
+                                                                await handleSync();
+                                                            }
+                                                        }}
+                                                    >
+                                                        Commit & Sync
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
                                     )}
                                 </div>
                             </div>
