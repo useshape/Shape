@@ -30,6 +30,7 @@ export type WorkflowRun = {
     created_at?: string;
     updated_at?: string;
     path?: string;
+    workflow_id?: number;
     actor?: { login?: string; avatar_url?: string };
 };
 
@@ -92,4 +93,40 @@ export function defaultTabForFocus(focus: ActionsFocus): DetailTab {
     if (focus === "artifacts") return "artifacts";
     if (focus === "workflow-definitions") return "workflows";
     return "jobs";
+}
+
+/** Which detail tabs matter for this nav focus (hide the rest). */
+export function tabsForFocus(focus: ActionsFocus): DetailTab[] {
+    switch (focus) {
+        case "workflow-definitions":
+            return ["workflows", "jobs"];
+        case "artifacts":
+            return ["artifacts"];
+        case "logs":
+        case "jobs":
+        case "steps":
+        case "live-status":
+            return ["jobs"];
+        default:
+            return ["jobs", "artifacts", "workflows"];
+    }
+}
+
+export function focusTitle(focus: ActionsFocus): string {
+    switch (focus) {
+        case "workflow-runs":
+            return "Workflow runs";
+        case "workflow-definitions":
+            return "Workflow definitions";
+        case "jobs":
+            return "Jobs";
+        case "steps":
+            return "Steps";
+        case "live-status":
+            return "Live status";
+        case "logs":
+            return "Logs";
+        case "artifacts":
+            return "Artifacts";
+    }
 }
