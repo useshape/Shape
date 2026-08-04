@@ -659,6 +659,53 @@ pub fn git_commit(repo_path: String, message: String) -> Result<(), AppError> {
     result
 }
 
+/// Amend HEAD with the current index and a new message (Git Desktop / GitKraken-style).
+pub fn git_commit_amend(repo_path: String, message: String) -> Result<(), AppError> {
+    let try_op = || -> Result<(), AppError> {
+        let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
+        let mut index = repo.index().map_err(|e| AppError::Git(e))?;
+        let oid = index.write_tree().map_err(|e| AppError::Git(e))?;
+        let tree = repo.find_tree(oid).map_err(|e| AppError::Git(e))?;
+
+        let sig = repo.signature().map_err(|_| {
+            AppError::Message(
+                "Failed to find git signature (user.name/email configured?)".to_string(),
+            )
+        })?;
+
+        let head = repo
+            .head()
+            .map_err(|e| AppError::Git(e))?
+            .peel_to_commit()
+            .map_err(|e| AppError::Git(e))?;
+
+        head.amend(
+            Some("HEAD"),
+            Some(&sig),
+            Some(&sig),
+            None,
+            Some(message.as_str()),
+            Some(&tree),
+        )
+        .map_err(|e| AppError::Git(e))?;
+
+        Ok(())
+    };
+
+    let result = match try_op() {
+        Err(AppError::Git(e)) if e.code() == git2::ErrorCode::Locked => {
+            let lock_path = Path::new(&repo_path).join(".git").join("index.lock");
+            let _ = std::fs::remove_file(lock_path);
+            try_op()
+        }
+        res => res,
+    };
+    if result.is_ok() {
+        crate::commands::stats::bump_event(&repo_path, "user_git_commits");
+    }
+    result
+}
+
 pub fn git_diff(repo_path: String) -> Result<String, AppError> {
     let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
     let mut output = String::new();
@@ -2620,6 +2667,153 @@ pub fn git_list_tags(repo_path: String) -> Result<Vec<GitTagEntry>, AppError> {
         });
     }
     Ok(tags)
+}
+
+/// Reset current branch to `hash`. mode: soft | mixed | hard
+pub fn git_reset(repo_path: String, hash: String, mode: String) -> Result<(), AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let flag = match mode.trim().to_lowercase().as_str() {
+        "soft" => "--soft",
+        "hard" => "--hard",
+        _ => "--mixed",
+    };
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["reset", flag, &hash]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let output = cmd.output().map_err(|e| AppError::Io(e))?;
+    if !output.status.success() {
+        return Err(AppError::Message(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn git_create_tag(
+    repo_path: String,
+    name: String,
+    hash: String,
+    message: Option<String>,
+) -> Result<(), AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path);
+    let msg = message.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty());
+    if let Some(m) = msg {
+        cmd.args(["tag", "-a", &name, &hash, "-m", m]);
+    } else {
+        cmd.args(["tag", &name, &hash]);
+    }
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let output = cmd.output().map_err(|e| AppError::Io(e))?;
+    if !output.status.success() {
+        return Err(AppError::Message(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn git_delete_tag(repo_path: String, name: String) -> Result<(), AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["tag", "-d", &name]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let output = cmd.output().map_err(|e| AppError::Io(e))?;
+    if !output.status.success() {
+        return Err(AppError::Message(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Changed files between two refs (`base...compare`), name-status only.
+pub fn git_diff_name_status(
+    repo_path: String,
+    base: String,
+    compare: String,
+) -> Result<Vec<GitFileParams>, AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let range = format!("{}...{}", base, compare);
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path)
+        .args(["diff", "--name-status", "--find-renames", &range]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd
+        .output()
+        .map_err(|e| AppError::Message(format!("git diff name-status failed: {}", e)))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Message(format!("git diff name-status failed: {}", stderr)));
+    }
+
+    let mut files = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split('\t');
+        let Some(status_raw) = parts.next() else { continue };
+        let status_char = status_raw.chars().next().unwrap_or('M');
+        let status = status_char.to_string();
+        // Renames: R100\told\tnew — take the new path.
+        let path = if status_char == 'R' || status_char == 'C' {
+            parts.next();
+            parts.next().unwrap_or("").to_string()
+        } else {
+            parts.next().unwrap_or("").to_string()
+        };
+        if path.is_empty() {
+            continue;
+        }
+        files.push(GitFileParams {
+            path,
+            status,
+            staged: false,
+        });
+    }
+    Ok(files)
+}
+
+/// File contents at a ref (`git show rev:path`). Missing file → empty string.
+pub fn git_get_file_at_ref(
+    repo_path: String,
+    rev: String,
+    file_path: String,
+) -> Result<String, AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let normalized = file_path.replace('\\', "/");
+    let spec = format!("{}:{}", rev, normalized);
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["show", &spec]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd
+        .output()
+        .map_err(|e| AppError::Message(format!("git show failed: {}", e)))?;
+    if !output.status.success() {
+        // New/deleted files are expected to miss on one side.
+        return Ok(String::new());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 /// Abort an in-progress merge (`MERGE_HEAD` present).

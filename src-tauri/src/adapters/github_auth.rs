@@ -65,3 +65,45 @@ pub async fn github_actions_logs(
     .await
     .map_err(|e| AppError::Message(format!("github actions logs join: {e}")))?
 }
+
+/// Download an Actions artifact zip to a local path (authenticated via gh).
+#[tauri::command]
+pub async fn github_actions_download_artifact(
+    repo: String,
+    artifact_id: u64,
+    dest_path: String,
+) -> Result<(), AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        github_auth::actions_download_artifact(&repo, artifact_id, &dest_path)
+    })
+    .await
+    .map_err(|e| AppError::Message(format!("github artifact download join: {e}")))?
+}
+
+/// Fetch workflow file YAML for discovering `workflow_dispatch` inputs.
+#[tauri::command]
+pub async fn github_actions_workflow_yaml(
+    repo: String,
+    workflow: String,
+) -> Result<String, AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        github_auth::actions_workflow_yaml(&repo, &workflow)
+    })
+    .await
+    .map_err(|e| AppError::Message(format!("github workflow yaml join: {e}")))?
+}
+
+/// Trigger `workflow_dispatch` (`gh workflow run`), optionally with JSON inputs.
+#[tauri::command]
+pub async fn github_actions_workflow_dispatch(
+    repo: String,
+    workflow: String,
+    git_ref: String,
+    inputs_json: Option<String>,
+) -> Result<String, AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        github_auth::actions_workflow_dispatch(&repo, &workflow, &git_ref, inputs_json)
+    })
+    .await
+    .map_err(|e| AppError::Message(format!("github workflow dispatch join: {e}")))?
+}

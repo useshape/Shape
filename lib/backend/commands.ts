@@ -192,6 +192,11 @@ export const commands = {
         invalidateGitCacheForPath(repoPath);
         return result;
     },
+    gitCommitAmend: async (repoPath: string, message: string) => {
+        const result = await invokeCommand("git_commit_amend", { repoPath, message });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
     gitDiff: (repoPath: string) => invokeCommand<string>("git_diff", { repoPath }),
     gitFileDiff: (repoPath: string, filePath: string) => invokeCommand<string>("git_file_diff", { repoPath, filePath }),
     gitBranches: (path: string) => invokeCommand<string[]>("git_branches", { path }),
@@ -281,6 +286,30 @@ export const commands = {
             "git_list_tags",
             { repoPath },
         ),
+    gitReset: async (repoPath: string, hash: string, mode: "soft" | "mixed" | "hard") => {
+        const result = await invokeCommand("git_reset", { repoPath, hash, mode });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
+    gitCreateTag: async (repoPath: string, name: string, hash: string, message?: string | null) => {
+        const result = await invokeCommand("git_create_tag", {
+            repoPath,
+            name,
+            hash,
+            message: message ?? null,
+        });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
+    gitDeleteTag: async (repoPath: string, name: string) => {
+        const result = await invokeCommand("git_delete_tag", { repoPath, name });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
+    gitDiffNameStatus: (repoPath: string, base: string, compare: string) =>
+        invokeCommand<GitFileParams[]>("git_diff_name_status", { repoPath, base, compare }),
+    gitGetFileAtRef: (repoPath: string, rev: string, filePath: string) =>
+        invokeCommand<string>("git_get_file_at_ref", { repoPath, rev, filePath }),
     gitMergeAbort: async (repoPath: string) => {
         const result = await invokeCommand("git_merge_abort", { repoPath });
         invalidateGitCacheForPath(repoPath);
@@ -560,6 +589,26 @@ export const commands = {
             runId,
             jobId: jobId ?? null,
             failedOnly: failedOnly ?? null,
+        }),
+    githubActionsDownloadArtifact: (repo: string, artifactId: number, destPath: string) =>
+        invokeCommand<void>("github_actions_download_artifact", {
+            repo,
+            artifactId,
+            destPath,
+        }),
+    githubActionsWorkflowYaml: (repo: string, workflow: string) =>
+        invokeCommand<string>("github_actions_workflow_yaml", { repo, workflow }),
+    githubActionsWorkflowDispatch: (
+        repo: string,
+        workflow: string,
+        gitRef: string,
+        inputsJson?: string | null,
+    ) =>
+        invokeCommand<string>("github_actions_workflow_dispatch", {
+            repo,
+            workflow,
+            gitRef,
+            inputsJson: inputsJson ?? null,
         }),
     getDeviceId: () => invokeCommand<string>("get_device_id"),
     setWorkspaceTrusted: (path: string, trusted: boolean) =>
