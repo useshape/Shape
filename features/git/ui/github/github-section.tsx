@@ -21,6 +21,11 @@ import { formatCommandError } from "@/lib/format-error";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
+import { Panel } from "@/features/panels";
+import { GitHubDetailPane } from "./github-detail";
+import { GitMarkdown } from "./git-markdown";
+
+type IssueStateFilter = "open" | "closed" | "all";
 
 type GhItem = {
     id: string | number;
@@ -28,6 +33,19 @@ type GhItem = {
     subtitle?: string;
     url?: string;
     status?: string;
+    meta?: string;
+    number?: number;
+    author?: string;
+    body?: string;
+};
+
+type GhDetail = {
+    title: string;
+    status?: string;
+    author?: string;
+    body?: string;
+    url?: string;
+    subtitle?: string;
     meta?: string;
 };
 
@@ -48,46 +66,62 @@ export type GitHubListSection = Exclude<
 
 const SECTION_META: Record<
     GitHubListSection,
-    { title: string; empty: string; endpoint: (owner: string, repo: string) => string }
+    {
+        title: string;
+        empty: (state?: IssueStateFilter) => string;
+        endpoint: (owner: string, repo: string, state?: IssueStateFilter) => string;
+    }
 > = {
     issues: {
         title: "Issues",
-        empty: "No open issues",
-        endpoint: (o, r) => `/repos/${o}/${r}/issues?state=open&per_page=50`,
+        empty: (state) =>
+            state === "closed"
+                ? "No closed issues"
+                : state === "all"
+                  ? "No issues"
+                  : "No open issues",
+        endpoint: (o, r, state = "open") =>
+            `/repos/${o}/${r}/issues?state=${state}&per_page=50`,
     },
     "pull-requests": {
         title: "Pull requests",
-        empty: "No open pull requests",
-        endpoint: (o, r) => `/repos/${o}/${r}/pulls?state=open&per_page=50`,
+        empty: (state) =>
+            state === "closed"
+                ? "No closed pull requests"
+                : state === "all"
+                  ? "No pull requests"
+                  : "No open pull requests",
+        endpoint: (o, r, state = "open") =>
+            `/repos/${o}/${r}/pulls?state=${state}&per_page=50`,
     },
     releases: {
         title: "Releases",
-        empty: "No releases",
+        empty: () => "No releases",
         endpoint: (o, r) => `/repos/${o}/${r}/releases?per_page=40`,
     },
     "check-runs": {
         title: "Check runs",
-        empty: "No check runs for HEAD",
+        empty: () => "No check runs for HEAD",
         endpoint: (o, r) => `/repos/${o}/${r}/commits/HEAD/check-runs?per_page=50`,
     },
     "check-suites": {
         title: "Check suites",
-        empty: "No check suites for HEAD",
+        empty: () => "No check suites for HEAD",
         endpoint: (o, r) => `/repos/${o}/${r}/commits/HEAD/check-suites?per_page=30`,
     },
     deployments: {
         title: "Deployments",
-        empty: "No deployments",
+        empty: () => "No deployments",
         endpoint: (o, r) => `/repos/${o}/${r}/deployments?per_page=40`,
     },
     "deployment-statuses": {
         title: "Deployment statuses",
-        empty: "No deployment statuses",
+        empty: () => "No deployment statuses",
         endpoint: (o, r) => `/repos/${o}/${r}/deployments?per_page=20`,
     },
     "commit-statuses": {
         title: "Commit statuses",
-        empty: "No commit statuses for HEAD",
+        empty: () => "No commit statuses for HEAD",
         endpoint: (o, r) => `/repos/${o}/${r}/commits/HEAD/status`,
     },
 };
@@ -152,6 +186,10 @@ function sectionIcon(section: GitHubListSection): string {
     }
 }
 
+function supportsStateFilter(section: GitHubListSection): boolean {
+    return section === "issues" || section === "pull-requests";
+}
+
 function normalize(section: GitHubListSection, data: unknown): GhItem[] {
     if (section === "check-runs") {
         const runs = (data as { check_runs?: unknown[] })?.check_runs ?? asArr(data);
@@ -164,6 +202,11 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
                 url: typeof c.html_url === "string" ? c.html_url : undefined,
                 status: String(c.conclusion ?? c.status ?? ""),
                 meta: formatRelative(c.completed_at ?? c.started_at),
+                body: typeof c.output === "object" && c.output
+                    ? String((c.output as { summary?: string; title?: string }).summary
+                        ?? (c.output as { title?: string }).title
+                        ?? "")
+                    : undefined,
             };
         });
     }
@@ -190,6 +233,7 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
                 url: typeof s.target_url === "string" ? s.target_url : undefined,
                 status: String(s.state ?? ""),
                 meta: formatRelative(s.updated_at),
+                body: typeof s.description === "string" ? s.description : undefined,
             };
         });
     }
@@ -208,6 +252,11 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
                     .join(" · "),
                 url: typeof r.html_url === "string" ? r.html_url : undefined,
                 meta: formatRelative(r.published_at ?? r.created_at),
+                author:
+                    r.author && typeof r.author === "object"
+                        ? (r.author as { login?: string }).login
+                        : undefined,
+                body: typeof r.body === "string" ? r.body : undefined,
             };
         });
     }
@@ -223,7 +272,7 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
                 const user =
                     i.user && typeof i.user === "object"
                         ? (i.user as { login?: string }).login
-                        : null;
+                        : undefined;
                 const labels = Array.isArray(i.labels)
                     ? i.labels
                           .map((l) =>
@@ -235,6 +284,7 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
                           .slice(0, 3)
                           .join(", ")
                     : "";
+                const number = typeof i.number === "number" ? i.number : Number(i.number);
                 return {
                     id: String(i.id ?? i.number ?? Math.random()),
                     title: String(i.title ?? `#${i.number}`),
@@ -242,6 +292,9 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
                     url: typeof i.html_url === "string" ? i.html_url : undefined,
                     status: String(i.state ?? ""),
                     meta: formatRelative(i.updated_at ?? i.created_at),
+                    number: Number.isFinite(number) ? number : undefined,
+                    author: user,
+                    body: typeof i.body === "string" ? i.body : undefined,
                 };
             });
     }
@@ -255,6 +308,7 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
                 url: typeof s.log_url === "string" ? s.log_url : undefined,
                 status: String(s.state ?? ""),
                 meta: formatRelative(s.created_at),
+                body: typeof s.description === "string" ? s.description : undefined,
             };
         });
     }
@@ -275,6 +329,18 @@ function normalize(section: GitHubListSection, data: unknown): GhItem[] {
             url: typeof i.html_url === "string" ? i.html_url : undefined,
             status: typeof i.state === "string" ? i.state : undefined,
             meta: formatRelative(i.updated_at ?? i.created_at),
+            author:
+                i.creator && typeof i.creator === "object"
+                    ? (i.creator as { login?: string }).login
+                    : i.user && typeof i.user === "object"
+                      ? (i.user as { login?: string }).login
+                      : undefined,
+            body:
+                typeof i.description === "string"
+                    ? i.description
+                    : typeof i.payload === "object" && i.payload
+                      ? JSON.stringify(i.payload, null, 2)
+                      : undefined,
         };
     });
 }
@@ -301,6 +367,89 @@ async function parseApi(path: string): Promise<unknown> {
     return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
+function StateBadge({ status }: { status?: string }) {
+    if (!status) return null;
+    return (
+        <span
+            className={cn(
+                "inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide",
+                statusTone(status),
+                "bg-panel-hover",
+            )}
+        >
+            {status}
+        </span>
+    );
+}
+
+function SimpleDetailPane({
+    detail,
+    loading,
+}: {
+    detail: GhDetail | null;
+    loading: boolean;
+}) {
+    return (
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+            {!detail && !loading ? (
+                <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
+                    Select an item
+                </div>
+            ) : (
+                <>
+                    <div className="flex shrink-0 flex-col gap-2 border-b border-border-subtle px-3 py-3">
+                        <div className="flex items-start gap-2">
+                            <ItemStatusIcon status={detail?.status} />
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h2 className="min-w-0 text-sm font-medium text-text-primary">
+                                        {loading && !detail ? "Loading…" : detail?.title}
+                                    </h2>
+                                    <StateBadge status={detail?.status} />
+                                </div>
+                                {detail?.subtitle ? (
+                                    <p className="mt-0.5 truncate text-xs text-text-muted">
+                                        {detail.subtitle}
+                                    </p>
+                                ) : null}
+                            </div>
+                            {detail?.url ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 shrink-0 gap-1 px-2"
+                                    onClick={() => {
+                                        window.open(detail.url, "_blank", "noreferrer");
+                                    }}
+                                >
+                                    <Icon name="open_in_new" size={14} />
+                                    Open on GitHub
+                                </Button>
+                            ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+                            {detail?.author ? <span>@{detail.author}</span> : null}
+                            {detail?.meta ? <span>{detail.meta}</span> : null}
+                            {loading ? <span>Refreshing…</span> : null}
+                        </div>
+                    </div>
+                    <ScrollArea className="min-h-0 flex-1">
+                        <div className="px-3 py-3">
+                            {detail?.body?.trim() ? (
+                                <GitMarkdown content={detail.body} />
+                            ) : (
+                                <p className="text-sm text-text-muted">
+                                    {loading ? "Loading details…" : "No description."}
+                                </p>
+                            )}
+                        </div>
+                    </ScrollArea>
+                </>
+            )}
+        </div>
+    );
+}
+
 export function GitHubSection({ section }: { section: GitHubListSection }) {
     const meta = SECTION_META[section];
     const { project_path } = useProjectState();
@@ -312,6 +461,10 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [repo, setRepo] = useState<{ owner: string; repo: string } | null>(null);
+    const [issueState, setIssueState] = useState<IssueStateFilter>("open");
+    const [selectedId, setSelectedId] = useState<string | number | null>(null);
+    const [detail, setDetail] = useState<GhDetail | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -363,7 +516,13 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
             }
 
             setDeps([]);
-            setItems(normalize(section, await parseApi(meta.endpoint(resolved.owner, resolved.repo))));
+            const state = supportsStateFilter(section) ? issueState : undefined;
+            setItems(
+                normalize(
+                    section,
+                    await parseApi(meta.endpoint(resolved.owner, resolved.repo, state)),
+                ),
+            );
         } catch (e) {
             setItems([]);
             const formatted = formatCommandError(e, "GitHub");
@@ -374,11 +533,16 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
         } finally {
             setLoading(false);
         }
-    }, [auth.loggedIn, meta, project_path, section, selectedDepId]);
+    }, [auth.loggedIn, issueState, meta, project_path, section, selectedDepId]);
 
     useEffect(() => {
         void load();
     }, [load]);
+
+    useEffect(() => {
+        setSelectedId(null);
+        setDetail(null);
+    }, [section, issueState]);
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -387,9 +551,88 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
             (item) =>
                 item.title.toLowerCase().includes(q) ||
                 item.subtitle?.toLowerCase().includes(q) ||
-                item.status?.toLowerCase().includes(q),
+                item.status?.toLowerCase().includes(q) ||
+                item.author?.toLowerCase().includes(q),
         );
     }, [items, query]);
+
+    const selectedItem = useMemo(
+        () => filtered.find((item) => item.id === selectedId) ?? null,
+        [filtered, selectedId],
+    );
+
+    useEffect(() => {
+        if (!selectedItem) {
+            setDetail(null);
+            setDetailLoading(false);
+            return;
+        }
+
+        const fromList: GhDetail = {
+            title: selectedItem.title,
+            status: selectedItem.status,
+            author: selectedItem.author,
+            body: selectedItem.body,
+            url: selectedItem.url,
+            subtitle: selectedItem.subtitle,
+            meta: selectedItem.meta,
+        };
+        setDetail(fromList);
+
+        if (
+            !repo ||
+            !supportsStateFilter(section) ||
+            selectedItem.number == null
+        ) {
+            setDetailLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setDetailLoading(true);
+        const path =
+            section === "pull-requests"
+                ? `/repos/${repo.owner}/${repo.repo}/pulls/${selectedItem.number}`
+                : `/repos/${repo.owner}/${repo.repo}/issues/${selectedItem.number}`;
+
+        void parseApi(path)
+            .then((raw) => {
+                if (cancelled) return;
+                const d = raw as Record<string, unknown>;
+                const user =
+                    d.user && typeof d.user === "object"
+                        ? (d.user as { login?: string }).login
+                        : selectedItem.author;
+                setDetail({
+                    title: String(d.title ?? selectedItem.title),
+                    status: String(d.state ?? selectedItem.status ?? ""),
+                    author: user,
+                    body: typeof d.body === "string" ? d.body : selectedItem.body,
+                    url:
+                        typeof d.html_url === "string"
+                            ? d.html_url
+                            : selectedItem.url,
+                    subtitle: selectedItem.subtitle,
+                    meta: formatRelative(d.updated_at ?? d.created_at) || selectedItem.meta,
+                });
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    // Keep list-derived detail; body may already be present from the list payload.
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setDetailLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [repo, section, selectedItem]);
+
+    const emptyLabel = supportsStateFilter(section)
+        ? meta.empty(issueState)
+        : meta.empty();
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -412,6 +655,34 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                     ) : null}
                 </FadeTruncate>
                 <div className="flex shrink-0 items-center gap-1">
+                    {supportsStateFilter(section) ? (
+                        <DropdownMenu modal={false}>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 gap-1 px-2 capitalize"
+                                >
+                                    {issueState}
+                                    <Icon name="expand_more" size={14} />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuRadioGroup
+                                    value={issueState}
+                                    onValueChange={(v) =>
+                                        setIssueState(v as IssueStateFilter)
+                                    }
+                                >
+                                    <DropdownMenuRadioItem value="open">Open</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="closed">
+                                        Closed
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                                </DropdownMenuRadioGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    ) : null}
                     {!auth.loggedIn ? (
                         <Button
                             variant="secondary"
@@ -438,7 +709,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
             </header>
             {section === "deployment-statuses" && deps.length > 0 ? (
                 <div className="shrink-0 px-3 pb-2">
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="ghost"
@@ -452,7 +723,10 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                 <Icon name="expand_more" size={14} className="shrink-0" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[480px]">
+                        <DropdownMenuContent
+                            align="start"
+                            className="min-w-(--radix-dropdown-menu-trigger-width) max-w-120"
+                        >
                             <DropdownMenuRadioGroup
                                 value={selectedDepId != null ? String(selectedDepId) : undefined}
                                 onValueChange={(v) => setSelectedDepId(Number(v) || null)}
@@ -467,79 +741,122 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                     </DropdownMenu>
                 </div>
             ) : null}
-            <ScrollArea className="min-h-0 flex-1 p-2">
-                {loading ? (
-                    <p className="px-2 py-3 text-sm text-text-muted">Loading…</p>
-                ) : error ? (
-                    <div className="flex flex-col gap-2 px-2 py-3">
-                        <p className="text-sm text-text-muted">{error}</p>
-                        {!auth.loggedIn ? (
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                className="w-fit"
-                                onClick={() => void loginGitHub()}
-                            >
-                                Sign in with GitHub
-                            </Button>
-                        ) : null}
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <p className="px-2 py-3 text-sm text-text-muted">{meta.empty}</p>
-                ) : (
-                    <ul className="flex flex-col gap-0.5">
-                        {filtered.map((item) => {
-                            const body = (
-                                <>
-                                    <div className="flex items-start justify-between gap-2">
-                                        <span className="flex min-w-0 items-start gap-2 text-sm leading-snug text-text-primary">
-                                            <ItemStatusIcon status={item.status} />
-                                            <span>{item.title}</span>
-                                        </span>
-                                        {item.meta ? (
-                                            <span className="shrink-0 text-2xs text-text-muted">
-                                                {item.meta}
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    {item.subtitle ? (
-                                        <div className="flex items-center gap-2 pl-6">
-                                            <span className="truncate text-xs text-text-muted">
-                                                {item.subtitle}
-                                            </span>
-                                            {item.url ? (
-                                                <Icon
-                                                    name="open_in_new"
-                                                    size={12}
-                                                    className="shrink-0 text-text-muted"
-                                                />
+
+            <Panel
+                direction="horizontal"
+                paneGap="var(--workbench-gap)"
+                hideSeparator
+                storageKey={`git-github-${section}-detail`}
+                className="min-h-0 flex-1"
+                panes={[
+                    {
+                        id: "github-list",
+                        preferredSize: 280,
+                        minSize: 200,
+                        maxSize: 420,
+                        snap: true,
+                        children: (
+                            <div className="workbench-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-border-subtle bg-panel">
+                                <ScrollArea className="min-h-0 min-w-0 flex-1 p-2">
+                                    {loading ? (
+                                        <p className="px-2 py-3 text-sm text-text-muted">
+                                            Loading…
+                                        </p>
+                                    ) : error ? (
+                                        <div className="flex flex-col gap-2 px-2 py-3">
+                                            <p className="text-sm text-text-muted">{error}</p>
+                                            {!auth.loggedIn ? (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    className="w-fit"
+                                                    onClick={() => void loginGitHub()}
+                                                >
+                                                    Sign in with GitHub
+                                                </Button>
                                             ) : null}
                                         </div>
-                                    ) : null}
-                                </>
-                            );
-                            return (
-                                <li key={item.id}>
-                                    {item.url ? (
-                                        <a
-                                            href={item.url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="flex flex-col gap-0.5 rounded-lg px-2 py-2 hover:bg-panel-hover"
-                                        >
-                                            {body}
-                                        </a>
+                                    ) : filtered.length === 0 ? (
+                                        <p className="px-2 py-3 text-sm text-text-muted">
+                                            {emptyLabel}
+                                        </p>
                                     ) : (
-                                        <div className="flex flex-col gap-0.5 rounded-lg px-2 py-2">
-                                            {body}
-                                        </div>
+                                        <ul className="flex flex-col gap-0.5">
+                                            {filtered.map((item) => (
+                                                <li key={item.id}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedId(item.id)}
+                                                        className={cn(
+                                                            "flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left",
+                                                            selectedId === item.id
+                                                                ? "bg-panel-hover"
+                                                                : "hover:bg-panel-hover/60",
+                                                        )}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <span className="flex min-w-0 items-start gap-2 text-sm leading-snug text-text-primary">
+                                                                <ItemStatusIcon
+                                                                    status={item.status}
+                                                                />
+                                                                <span className="line-clamp-2">
+                                                                    {item.title}
+                                                                </span>
+                                                            </span>
+                                                            {item.meta ? (
+                                                                <span className="shrink-0 text-2xs text-text-muted">
+                                                                    {item.meta}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        {item.subtitle ? (
+                                                            <div className="flex items-center gap-2 pl-6">
+                                                                <span className="truncate text-xs text-text-muted">
+                                                                    {item.subtitle}
+                                                                </span>
+                                                                {item.url ? (
+                                                                    <Icon
+                                                                        name="open_in_new"
+                                                                        size={12}
+                                                                        className="shrink-0 text-text-muted"
+                                                                    />
+                                                                ) : null}
+                                                            </div>
+                                                        ) : null}
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     )}
-                                </li>
-                            );
-                        })}
-                    </ul>
-                )}
-            </ScrollArea>
+                                </ScrollArea>
+                            </div>
+                        ),
+                    },
+                    {
+                        id: "github-detail",
+                        flexible: true,
+                        minSize: 240,
+                        children: (
+                            repo &&
+                            (section === "issues" ||
+                                section === "pull-requests" ||
+                                section === "releases") ? (
+                                <GitHubDetailPane
+                                    section={section}
+                                    item={selectedItem}
+                                    owner={repo.owner}
+                                    repo={repo.repo}
+                                />
+                            ) : (
+                                <SimpleDetailPane
+                                    detail={detail}
+                                    loading={detailLoading}
+                                />
+                            )
+                        ),
+                    },
+                ]}
+            />
         </div>
     );
 }
