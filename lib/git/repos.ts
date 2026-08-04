@@ -85,12 +85,24 @@ export function setActiveRepoPath(repoPath: string, workspaceRoot?: string | nul
 }
 
 export function useGitRepos(workspaceRoot: string | null) {
-    const [repos, setRepos] = useState<GitRepoInfo[]>([]);
-    const [activeRepoPath, setActiveRepoPathState] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const rootNorm = workspaceRoot ? normalize(workspaceRoot) : null;
+    const cacheHit =
+        rootNorm != null &&
+        cachedWorkspace === rootNorm &&
+        cachedRepos.length > 0;
+
+    const [repos, setRepos] = useState<GitRepoInfo[]>(() =>
+        cacheHit ? cachedRepos : [],
+    );
+    const [activeRepoPath, setActiveRepoPathState] = useState<string | null>(() =>
+        cacheHit && workspaceRoot
+            ? pickDefaultRepo(workspaceRoot, cachedRepos)
+            : null,
+    );
+    const [loading, setLoading] = useState(() => !cacheHit && !!workspaceRoot);
     const generationRef = useRef(0);
 
-    const rescan = useCallback(async () => {
+    const rescan = useCallback(async (force = false) => {
         const gen = ++generationRef.current;
 
         if (!workspaceRoot) {
@@ -103,9 +115,26 @@ export function useGitRepos(workspaceRoot: string | null) {
         }
 
         const rootAtStart = normalize(workspaceRoot);
+
+        // Reuse module cache — avoids the ~1s "no repo" flash when Source remounts.
+        if (
+            !force &&
+            cachedWorkspace === rootAtStart &&
+            cachedRepos.length > 0
+        ) {
+            if (gen === generationRef.current) {
+                setRepos(cachedRepos);
+                const defaultRepo = pickDefaultRepo(workspaceRoot, cachedRepos);
+                setActiveRepoPathState(defaultRepo);
+                if (defaultRepo) setActiveRepoPath(defaultRepo, workspaceRoot);
+                setLoading(false);
+            }
+            return;
+        }
+
         setLoading(true);
         try {
-            invalidateGitRepoCache();
+            if (force) invalidateGitRepoCache();
             const discovered = await discoverGitRepos(workspaceRoot);
             // Project closed or switched while discover was in flight.
             if (gen !== generationRef.current) return;
@@ -127,7 +156,7 @@ export function useGitRepos(workspaceRoot: string | null) {
     }, [workspaceRoot]);
 
     useEffect(() => {
-        void rescan();
+        void rescan(false);
         return () => {
             // Invalidate in-flight work when workspace changes or unmounts.
             generationRef.current += 1;
@@ -136,7 +165,7 @@ export function useGitRepos(workspaceRoot: string | null) {
 
     useEffect(() => {
         const onRefresh = () => {
-            void rescan();
+            void rescan(true);
         };
         window.addEventListener("shape-git-refresh", onRefresh);
         return () => window.removeEventListener("shape-git-refresh", onRefresh);
