@@ -985,15 +985,15 @@ export default function Graph({
                     storageKey="git-manager-graph-detail"
                     hideSeparator
                     paneGap="var(--workbench-gap)"
-                    inset="all"
                     panes={[
                         {
                             id: "graph-main",
                             flexible: true,
                             minSize: 360,
                             preferredSize: 640,
+                            // Main graph canvas — flush like Actions content, not a workbench card.
                             children: (
-                                <div className="workbench-panel relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+                                <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
                                     {graphChrome}
                                 </div>
                             ),
@@ -1012,6 +1012,9 @@ export default function Graph({
                                     onClose={() => setDetail(null)}
                                     onClearFile={() => {
                                         if (detail?.log) setDetail({ kind: "commit", log: detail.log });
+                                    }}
+                                    onOpenFile={(file) => {
+                                        if (detail?.log) setDetail({ kind: "file", log: detail.log, file });
                                     }}
                                 />
                             ),

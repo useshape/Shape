@@ -427,6 +427,64 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                     }}>
                         Revert Commit
                     </ContextMenuItem>
+                    <ContextMenuItem onClick={async () => {
+                        if (!repoPath) return;
+                        const ok = await confirm(
+                            `Soft reset HEAD to ${log.hash.slice(0, 7)}? Keeps your working tree and index changes.`,
+                            { title: "Soft reset", kind: "warning", okLabel: "Reset", cancelLabel: "Cancel" },
+                        );
+                        if (!ok) return;
+                        try {
+                            await commands.gitReset(repoPath, log.hash, "soft");
+                            notify.success("Git", `Soft reset to ${log.hash.slice(0, 7)}`);
+                            onRefresh();
+                        } catch (e) { notify.gitError(e); }
+                    }}>
+                        Soft Reset to Here...
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={async () => {
+                        if (!repoPath) return;
+                        const ok = await confirm(
+                            `Mixed reset HEAD to ${log.hash.slice(0, 7)}? Keeps working tree; unstages index.`,
+                            { title: "Mixed reset", kind: "warning", okLabel: "Reset", cancelLabel: "Cancel" },
+                        );
+                        if (!ok) return;
+                        try {
+                            await commands.gitReset(repoPath, log.hash, "mixed");
+                            notify.success("Git", `Mixed reset to ${log.hash.slice(0, 7)}`);
+                            onRefresh();
+                        } catch (e) { notify.gitError(e); }
+                    }}>
+                        Mixed Reset to Here...
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={async () => {
+                        if (!repoPath) return;
+                        const ok = await confirm(
+                            `HARD reset HEAD to ${log.hash.slice(0, 7)}? Discards uncommitted changes.`,
+                            { title: "Hard reset", kind: "warning", okLabel: "Hard reset", cancelLabel: "Cancel" },
+                        );
+                        if (!ok) return;
+                        try {
+                            await commands.gitReset(repoPath, log.hash, "hard");
+                            notify.success("Git", `Hard reset to ${log.hash.slice(0, 7)}`);
+                            onRefresh();
+                        } catch (e) { notify.gitError(e); }
+                    }}>
+                        Hard Reset to Here...
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onClick={async () => {
+                        if (!repoPath) return;
+                        const name = window.prompt("Tag name", `v-${log.hash.slice(0, 7)}`);
+                        if (!name?.trim()) return;
+                        try {
+                            await commands.gitCreateTag(repoPath, name.trim(), log.hash, null);
+                            notify.success("Git", `Created tag ${name.trim()}`);
+                            onRefresh();
+                        } catch (e) { notify.gitError(e); }
+                    }}>
+                        Create Tag Here...
+                    </ContextMenuItem>
                     <ContextMenuSeparator />
                     <ContextMenuItem onClick={handleOpenGitHub}>
                         Open in GitHub
