@@ -248,7 +248,7 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 expandable: false,
                 onClick: () => {
                     if (block.content) {
-                        window.dispatchEvent(new CustomEvent("shape-open-file", { detail: { path: block.content } }));
+                        void openProjectFile(block.content);
                     }
                 },
             };

@@ -24,6 +24,7 @@ import {
 } from "@/lib/usage-display";
 import { parseShapeContinueAction } from "@/lib/shape-continue-action";
 import { mentionRanges, mentionDisplayLabel } from "@/lib/chat-mentions";
+import { openProjectFile } from "@/lib/open-project-file";
 import { WebSourcesMenu } from "../blocks/search";
 
 type ChatMessageItemProps = {
@@ -71,12 +72,31 @@ function MentionRichText({ text }: { text: string }) {
                 </span>,
             );
         }
+        const { mention } = range;
+        const openable =
+            (mention.kind === "file" || mention.kind === "folder") && !!mention.path;
         nodes.push(
             <span
                 key={`m-${i}`}
-                className="mx-0.5 inline-flex items-center rounded-md border border-accent/30 bg-accent/15 px-1 py-0.5 text-[0.8125rem] font-medium text-accent"
+                role={openable ? "button" : undefined}
+                tabIndex={openable ? 0 : undefined}
+                onClick={
+                    openable
+                        ? () => {
+                              const path =
+                                  mention.kind === "folder" && !mention.path!.endsWith("/")
+                                      ? `${mention.path}/`
+                                      : mention.path!;
+                              void openProjectFile(path, mentionDisplayLabel(mention));
+                          }
+                        : undefined
+                }
+                className={cn(
+                    "mx-0.5 inline-flex items-center rounded-md border border-accent/30 bg-accent/15 px-1 py-0.5 text-[0.8125rem] font-medium text-accent",
+                    openable && "cursor-pointer hover:bg-accent/25 transition-colors",
+                )}
             >
-                @{mentionDisplayLabel(range.mention)}
+                @{mentionDisplayLabel(mention)}
             </span>,
         );
         cursor = range.end;
