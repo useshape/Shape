@@ -36,6 +36,7 @@ import {
     MAX_CONTEXT_PRESETS,
 } from "./setting-controls";
 import { AiSettingsPanel } from "./ai-settings";
+import { McpLibraryView } from "./mcp/library";
 import { AccountSettingsPanel } from "./account-settings";
 import { ThemePicker } from "./theme-picker";
 import { normalizeColorTheme } from "@/lib/themes";
@@ -401,8 +402,14 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
     );
 }
 
-function AiSettings({ settings }: { settings: ShapeSettings }) {
-    return <AiSettingsPanel settings={settings} />;
+function AiSettings({
+    settings,
+    onOpenMcpLibrary,
+}: {
+    settings: ShapeSettings;
+    onOpenMcpLibrary?: () => void;
+}) {
+    return <AiSettingsPanel settings={settings} onOpenMcpLibrary={onOpenMcpLibrary} />;
 }
 
 function LintSettings({ settings }: { settings: ShapeSettings }) {
@@ -866,6 +873,7 @@ export function SettingsView() {
     const router = useRouter();
     const [query, setQuery] = useState("");
     const [activeLeafId, setActiveLeafId] = useState("account-profile");
+    const [subView, setSubView] = useState<"mcp-library" | null>(null);
     const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
         () => new Set(SETTINGS_NAV.map((g) => g.id)),
@@ -874,7 +882,8 @@ export function SettingsView() {
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "rules") return "settings-ai-rules";
-        if (section === "memories") return "settings-ai-memories";
+        // Legacy deep link: "memories" (System Instructions) merged into Rules.
+        if (section === "memories") return "settings-ai-rules";
         switch (category) {
             case "account":
             case "general":
@@ -1008,15 +1017,25 @@ export function SettingsView() {
     };
 
     const onLeafClick = (leaf: SettingsNavLeaf) => {
+        if (leaf.view) {
+            setActiveLeafId(leaf.id);
+            setSubView(leaf.view);
+            return;
+        }
         if (leaf.href) {
             router.push(leaf.href);
             return;
         }
+        setSubView(null);
         if (leaf.targetId) {
             setActiveLeafId(leaf.id);
             scrollToTarget(leaf.targetId);
         }
     };
+
+    if (subView === "mcp-library") {
+        return <McpLibraryView onBack={() => setSubView(null)} />;
+    }
 
     return (
         <div className="flex h-full w-full min-w-0 overflow-hidden select-none">
@@ -1042,8 +1061,6 @@ export function SettingsView() {
                                     onClick={() => toggleGroup(group.id)}
                                     className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm font-medium text-text-muted hover:text-text-primary hover:bg-panel-hover/40"
                                 >
-                                    
-      
                                     {group.label}
                                 </button>
                                 {open && (
@@ -1093,7 +1110,13 @@ export function SettingsView() {
             <section className="flex-1 min-w-0 overflow-y-auto no-scrollbar">
                 <div className="w-full p-6 pb-24 space-y-2">
                     <AccountSettingsPanel />
-                    <AiSettings settings={settings} />
+                    <AiSettings
+                        settings={settings}
+                        onOpenMcpLibrary={() => {
+                            setActiveLeafId("mcp-library");
+                            setSubView("mcp-library");
+                        }}
+                    />
                     <EditorSettings settings={settings} />
                     <TerminalSettings settings={settings} />
                     <GitSettings settings={settings} />

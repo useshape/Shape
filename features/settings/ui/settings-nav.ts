@@ -5,6 +5,8 @@ export type SettingsNavLeaf = {
     targetId?: string;
     /** Navigate to a separate settings sub-page instead of scrolling */
     href?: string;
+    /** Open an in-place settings sub-view (works in both the settings window and the editor tab) */
+    view?: "mcp-library";
 };
 
 export type SettingsNavGroup = {
@@ -28,10 +30,10 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Agents",
         children: [
             { id: "ai-models", label: "Models", targetId: "settings-ai-models" },
-            { id: "ai-instructions", label: "Instructions", targetId: "settings-ai-memories" },
             { id: "ai-rules", label: "Rules", targetId: "settings-ai-rules" },
             { id: "ai-context", label: "Context", targetId: "settings-ai-context" },
             { id: "mcp", label: "MCP", targetId: "settings-ai-mcp" },
+            { id: "mcp-library", label: "MCP Library", view: "mcp-library" },
         ],
     },
     {
