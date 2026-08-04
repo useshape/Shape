@@ -1035,6 +1035,138 @@ pub async fn generate_commit_message(
     Ok(message)
 }
 
+fn require_shape_token(access_token: Option<String>) -> Result<String, AppError> {
+    access_token
+        .filter(|t| !t.trim().is_empty())
+        .ok_or_else(|| AppError::Env("Sign in to Shape to use AI.".to_string()))
+}
+
+fn truncate_for_prompt(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        return s.to_string();
+    }
+    let mut end = max.min(s.len());
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}… [truncated]", &s[..end])
+}
+
+/// One-shot AI summary of a pull request for the Git Manager detail pane.
+#[tauri::command]
+pub async fn summarize_pull_request(
+    access_token: Option<String>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> Result<String, AppError> {
+    let auth_token = require_shape_token(access_token)?;
+    let client = Client::new();
+    let model = MODEL_TITLE_GEN;
+    let slug = format!("{owner}/{repo}");
+
+    let pr_path = format!("repos/{slug}/pulls/{number}");
+    let files_path = format!("repos/{slug}/pulls/{number}/files?per_page=100");
+    let pr_raw = crate::commands::github_auth::api_get(&pr_path)?;
+    let files_raw = crate::commands::github_auth::api_get(&files_path).unwrap_or_else(|_| "[]".into());
+
+    let pr: serde_json::Value =
+        serde_json::from_str(&pr_raw).map_err(|e| AppError::Message(e.to_string()))?;
+    let files: serde_json::Value =
+        serde_json::from_str(&files_raw).unwrap_or_else(|_| serde_json::json!([]));
+
+    let title = pr.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
+    let body = pr.get("body").and_then(|v| v.as_str()).unwrap_or("");
+    let state = pr.get("state").and_then(|v| v.as_str()).unwrap_or("");
+    let base = pr
+        .pointer("/base/ref")
+        .and_then(|v| v.as_str())
+        .unwrap_or("?");
+    let head = pr
+        .pointer("/head/ref")
+        .and_then(|v| v.as_str())
+        .unwrap_or("?");
+    let user = pr
+        .pointer("/user/login")
+        .and_then(|v| v.as_str())
+        .unwrap_or("?");
+    let additions = pr.get("additions").and_then(|v| v.as_u64()).unwrap_or(0);
+    let deletions = pr.get("deletions").and_then(|v| v.as_u64()).unwrap_or(0);
+
+    let mut file_lines = Vec::new();
+    if let Some(arr) = files.as_array() {
+        for f in arr.iter().take(80) {
+            let name = f.get("filename").and_then(|v| v.as_str()).unwrap_or("?");
+            let status = f.get("status").and_then(|v| v.as_str()).unwrap_or("modified");
+            let a = f.get("additions").and_then(|v| v.as_u64()).unwrap_or(0);
+            let d = f.get("deletions").and_then(|v| v.as_u64()).unwrap_or(0);
+            file_lines.push(format!("- [{status}] {name} (+{a}/−{d})"));
+        }
+        if arr.len() > 80 {
+            file_lines.push(format!("- … and {} more files", arr.len() - 80));
+        }
+    }
+
+    let mut prompt = format!("{}\n\n", prompts::PR_SUMMARY_MD);
+    prompt.push_str(&format!(
+        "## PR\n- Repo: {slug}\n- Number: #{number}\n- Author: {user}\n- State: {state}\n- Base ← Head: {base} ← {head}\n- Diffstat: +{additions} −{deletions}\n\n## Title\n{title}\n\n## Body\n{}\n\n## Files\n{}\n",
+        truncate_for_prompt(body, 8_000),
+        if file_lines.is_empty() {
+            "(none)".to_string()
+        } else {
+            file_lines.join("\n")
+        }
+    ));
+
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    let ctx = streaming::ProxyContext::new("pr_summary").with_turn(Some(turn_id), None);
+    let (message, _, _) =
+        streaming::complete_chat_with_max_tokens(&client, &auth_token, &prompt, model, 700, &ctx)
+            .await?;
+    if message.trim().is_empty() {
+        return Err(AppError::Message("Failed to summarize pull request".into()));
+    }
+    Ok(message)
+}
+
+/// One-shot AI explanation of a CI / Actions log for the Git Manager logs pane.
+#[tauri::command]
+pub async fn explain_ci_log(
+    access_token: Option<String>,
+    log_text: String,
+    context: Option<String>,
+) -> Result<String, AppError> {
+    let auth_token = require_shape_token(access_token)?;
+    let client = Client::new();
+    let model = MODEL_TITLE_GEN;
+
+    let trimmed = log_text.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Message(
+            "No log text to explain. Load job logs first.".into(),
+        ));
+    }
+
+    let mut prompt = format!("{}\n\n", prompts::CI_EXPLAIN_MD);
+    if let Some(ctx_line) = context.filter(|s| !s.trim().is_empty()) {
+        prompt.push_str("## Job context\n");
+        prompt.push_str(&ctx_line);
+        prompt.push_str("\n\n");
+    }
+    prompt.push_str("## Log\n");
+    prompt.push_str(&truncate_for_prompt(trimmed, 16_000));
+
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    let ctx = streaming::ProxyContext::new("ci_explain").with_turn(Some(turn_id), None);
+    let (message, _, _) =
+        streaming::complete_chat_with_max_tokens(&client, &auth_token, &prompt, model, 700, &ctx)
+            .await?;
+    if message.trim().is_empty() {
+        return Err(AppError::Message("Failed to explain CI log".into()));
+    }
+    Ok(message)
+}
+
 #[tauri::command]
 pub fn get_chat_title(state: tauri::State<'_, AgentState>) -> Result<String, AppError> {
     Ok(state

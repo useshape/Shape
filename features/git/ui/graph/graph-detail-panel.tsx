@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { commands, type GitFileParams, type GitLogEntry } from "@/lib/backend";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { renderCommitMessage, getRelativeTime } from "./utils";
-import { ManagerDiffEditor } from "@/features/git/ui/manager/monaco-diff";
+import { ManagerDiffEditor } from "@/features/git/ui/shared/monaco-diff";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -176,9 +176,9 @@ export function GraphDetailPanel({
                         <span className="min-w-0 flex-1 truncate text-sm text-text-secondary">{fileName}</span>
                         {diffStats ? (
                             <span className="shrink-0 tabular-nums text-xs">
-                                <span className="text-[var(--git-added)]">+{diffStats.added}</span>
+                                <span className="text-git-added">+{diffStats.added}</span>
                                 {" "}
-                                <span className="text-[var(--git-deleted)]">−{diffStats.removed}</span>
+                                <span className="text-git-deleted">−{diffStats.removed}</span>
                             </span>
                         ) : null}
                         <Tooltip content={sideBySide ? "Inline diff" : "Side by side"}>

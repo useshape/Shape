@@ -29,6 +29,8 @@ pub fn all_tools() -> Vec<Value> {
         git_status(),
         git_fetch(),
         git_log(),
+        git_diff(),
+        git_branches(),
         git_stage(),
         git_commit(),
         list_terminals(),
@@ -58,6 +60,10 @@ pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
             search_files(),
             grep(),
             web_search(),
+            git_status(),
+            git_log(),
+            git_diff(),
+            git_branches(),
             save_plan(),
             finish(),
         ]
@@ -69,6 +75,10 @@ pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
             search_files(),
             grep(),
             web_search(),
+            git_status(),
+            git_log(),
+            git_diff(),
+            git_branches(),
             finish(),
         ]
     } else {
@@ -308,11 +318,50 @@ fn git_fetch() -> Value {
 fn git_log() -> Value {
     tool(
         "git_log",
-        "Show recent commit history. Read-only.",
+        "Show recent commit history. Read-only. Prefer this over running `git log` in the terminal.",
         json!({
             "type": "object",
             "properties": {
                 "limit": {"type": "integer", "description": "Number of commits to show (default 10, max 50)."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_diff() -> Value {
+    tool(
+        "git_diff",
+        "Show the working-tree and/or staged diff for the project (or a single file). Read-only. Prefer this over `git diff` in the terminal so results render with structured UI.",
+        json!({
+            "type": "object",
+            "properties": {
+                "scope": {
+                    "type": "string",
+                    "enum": ["all", "staged"],
+                    "description": "Which changes to include. Default: all (staged + unstaged worktree)."
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional project-relative file path to diff a single file."
+                }
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_branches() -> Value {
+    tool(
+        "git_branches",
+        "List local (and optionally remote) branches with the current branch marked. Read-only.",
+        json!({
+            "type": "object",
+            "properties": {
+                "include_remote": {
+                    "type": "boolean",
+                    "description": "Include remote-tracking branches. Default false."
+                }
             },
             "additionalProperties": false
         }),

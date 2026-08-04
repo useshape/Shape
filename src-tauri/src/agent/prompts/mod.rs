@@ -2,4 +2,6 @@ pub const SYSTEM_MD: &str = include_str!("SYSTEM.MD");
 pub const PLAN_MD: &str = include_str!("PLAN.MD");
 pub const REVIEW_MD: &str = include_str!("REVIEW.MD");
 pub const COMMIT_MD: &str = include_str!("COMMIT.MD");
+pub const PR_SUMMARY_MD: &str = include_str!("PR_SUMMARY.MD");
+pub const CI_EXPLAIN_MD: &str = include_str!("CI_EXPLAIN.MD");
 pub const DESIGN_MD: &str = include_str!("DESIGN.md");

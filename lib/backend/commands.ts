@@ -493,6 +493,24 @@ export const commands = {
         invokeCommand<void>("apply_file_edit", { path, original, replacement }),
     generateCommitMessage: (accessToken?: string) =>
         invokeCommand<string>("generate_commit_message", { accessToken: accessToken ?? null }),
+    summarizePullRequest: (
+        owner: string,
+        repo: string,
+        number: number,
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("summarize_pull_request", {
+            owner,
+            repo,
+            number,
+            accessToken: accessToken ?? null,
+        }),
+    explainCiLog: (logText: string, context?: string | null, accessToken?: string) =>
+        invokeCommand<string>("explain_ci_log", {
+            logText,
+            context: context ?? null,
+            accessToken: accessToken ?? null,
+        }),
     restoreCheckpoint: (index: number) => invokeCommand<void>("restore_checkpoint", { index }),
     // Codebase index
     indexProject: (projectPath?: string, accessToken?: string) =>

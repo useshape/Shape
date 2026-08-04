@@ -21,9 +21,8 @@ import { formatCommandError } from "@/lib/format-error";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
-import { Panel } from "@/features/panels";
-import { GitHubDetailPane } from "./github-detail";
-import { GitMarkdown } from "./git-markdown";
+import { GitHubDetailPane } from "./detail";
+import { GitMarkdown } from "./markdown";
 
 type IssueStateFilter = "open" | "closed" | "all";
 
@@ -385,20 +384,31 @@ function StateBadge({ status }: { status?: string }) {
 function SimpleDetailPane({
     detail,
     loading,
+    onBack,
 }: {
     detail: GhDetail | null;
     loading: boolean;
+    onBack: () => void;
 }) {
     return (
-        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-editor">
             {!detail && !loading ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
                     Select an item
                 </div>
             ) : (
                 <>
-                    <div className="flex shrink-0 flex-col gap-2 border-b border-border-subtle px-3 py-3">
+                    <div className="flex shrink-0 flex-col gap-2 px-3 py-3">
                         <div className="flex items-start gap-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 shrink-0 px-0"
+                                onClick={onBack}
+                                aria-label="Back to list"
+                            >
+                                <Icon name="arrow_back" size={16} />
+                            </Button>
                             <ItemStatusIcon status={detail?.status} />
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -419,7 +429,7 @@ function SimpleDetailPane({
                                     size="sm"
                                     className="h-7 shrink-0 gap-1 px-2"
                                     onClick={() => {
-                                        window.open(detail.url, "_blank", "noreferrer");
+                                        if (detail.url) void commands.openUrlExternal(detail.url);
                                     }}
                                 >
                                     <Icon name="open_in_new" size={14} />
@@ -427,7 +437,7 @@ function SimpleDetailPane({
                                 </Button>
                             ) : null}
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+                        <div className="flex flex-wrap items-center gap-3 pl-9 text-xs text-text-muted">
                             {detail?.author ? <span>@{detail.author}</span> : null}
                             {detail?.meta ? <span>{detail.meta}</span> : null}
                             {loading ? <span>Refreshing…</span> : null}
@@ -634,6 +644,47 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
         ? meta.empty(issueState)
         : meta.empty();
 
+    const closeDetail = useCallback(() => setSelectedId(null), []);
+
+    useEffect(() => {
+        if (!selectedItem) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                closeDetail();
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [selectedItem, closeDetail]);
+
+    // Detail overlays the list (back arrow / Escape) — no side-by-side split.
+    if (selectedItem && repo) {
+        const rich =
+            section === "issues" ||
+            section === "pull-requests" ||
+            section === "releases";
+        return (
+            <div className="flex h-full min-h-0 flex-col">
+                {rich ? (
+                    <GitHubDetailPane
+                        section={section}
+                        item={selectedItem}
+                        owner={repo.owner}
+                        repo={repo.repo}
+                        onBack={closeDetail}
+                    />
+                ) : (
+                    <SimpleDetailPane
+                        detail={detail}
+                        loading={detailLoading}
+                        onBack={closeDetail}
+                    />
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-full min-h-0 flex-col">
             <header className="flex h-9 shrink-0 items-center gap-2 px-3">
@@ -742,121 +793,67 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                 </div>
             ) : null}
 
-            <Panel
-                direction="horizontal"
-                paneGap="var(--workbench-gap)"
-                hideSeparator
-                storageKey={`git-github-${section}-detail`}
-                className="min-h-0 flex-1"
-                panes={[
-                    {
-                        id: "github-list",
-                        preferredSize: 280,
-                        minSize: 200,
-                        maxSize: 420,
-                        snap: true,
-                        children: (
-                            <div className="workbench-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-border-subtle bg-panel">
-                                <ScrollArea className="min-h-0 min-w-0 flex-1 p-2">
-                                    {loading ? (
-                                        <p className="px-2 py-3 text-sm text-text-muted">
-                                            Loading…
-                                        </p>
-                                    ) : error ? (
-                                        <div className="flex flex-col gap-2 px-2 py-3">
-                                            <p className="text-sm text-text-muted">{error}</p>
-                                            {!auth.loggedIn ? (
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    className="w-fit"
-                                                    onClick={() => void loginGitHub()}
-                                                >
-                                                    Sign in with GitHub
-                                                </Button>
+            <div className="workbench-panel min-h-0 flex-1 overflow-hidden border border-border-subtle bg-panel">
+                <ScrollArea className="h-full min-h-0 p-2" fadeFrom="from-panel">
+                    {loading ? (
+                        <p className="px-2 py-3 text-sm text-text-muted">Loading…</p>
+                    ) : error ? (
+                        <div className="flex flex-col gap-2 px-2 py-3">
+                            <p className="text-sm text-text-muted">{error}</p>
+                            {!auth.loggedIn ? (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="w-fit"
+                                    onClick={() => void loginGitHub()}
+                                >
+                                    Sign in with GitHub
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <p className="px-2 py-3 text-sm text-text-muted">{emptyLabel}</p>
+                    ) : (
+                        <ul className="flex flex-col gap-0.5">
+                            {filtered.map((item) => (
+                                <li key={item.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedId(item.id)}
+                                        className="flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left hover:bg-panel-hover/60"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="flex min-w-0 items-start gap-2 text-sm leading-snug text-text-primary">
+                                                <ItemStatusIcon status={item.status} />
+                                                <span className="line-clamp-2">{item.title}</span>
+                                            </span>
+                                            {item.meta ? (
+                                                <span className="shrink-0 text-2xs text-text-muted">
+                                                    {item.meta}
+                                                </span>
                                             ) : null}
                                         </div>
-                                    ) : filtered.length === 0 ? (
-                                        <p className="px-2 py-3 text-sm text-text-muted">
-                                            {emptyLabel}
-                                        </p>
-                                    ) : (
-                                        <ul className="flex flex-col gap-0.5">
-                                            {filtered.map((item) => (
-                                                <li key={item.id}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setSelectedId(item.id)}
-                                                        className={cn(
-                                                            "flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left",
-                                                            selectedId === item.id
-                                                                ? "bg-panel-hover"
-                                                                : "hover:bg-panel-hover/60",
-                                                        )}
-                                                    >
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <span className="flex min-w-0 items-start gap-2 text-sm leading-snug text-text-primary">
-                                                                <ItemStatusIcon
-                                                                    status={item.status}
-                                                                />
-                                                                <span className="line-clamp-2">
-                                                                    {item.title}
-                                                                </span>
-                                                            </span>
-                                                            {item.meta ? (
-                                                                <span className="shrink-0 text-2xs text-text-muted">
-                                                                    {item.meta}
-                                                                </span>
-                                                            ) : null}
-                                                        </div>
-                                                        {item.subtitle ? (
-                                                            <div className="flex items-center gap-2 pl-6">
-                                                                <span className="truncate text-xs text-text-muted">
-                                                                    {item.subtitle}
-                                                                </span>
-                                                                {item.url ? (
-                                                                    <Icon
-                                                                        name="open_in_new"
-                                                                        size={12}
-                                                                        className="shrink-0 text-text-muted"
-                                                                    />
-                                                                ) : null}
-                                                            </div>
-                                                        ) : null}
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </ScrollArea>
-                            </div>
-                        ),
-                    },
-                    {
-                        id: "github-detail",
-                        flexible: true,
-                        minSize: 240,
-                        children: (
-                            repo &&
-                            (section === "issues" ||
-                                section === "pull-requests" ||
-                                section === "releases") ? (
-                                <GitHubDetailPane
-                                    section={section}
-                                    item={selectedItem}
-                                    owner={repo.owner}
-                                    repo={repo.repo}
-                                />
-                            ) : (
-                                <SimpleDetailPane
-                                    detail={detail}
-                                    loading={detailLoading}
-                                />
-                            )
-                        ),
-                    },
-                ]}
-            />
+                                        {item.subtitle ? (
+                                            <div className="flex items-center gap-2 pl-6">
+                                                <span className="truncate text-xs text-text-muted">
+                                                    {item.subtitle}
+                                                </span>
+                                                {item.url ? (
+                                                    <Icon
+                                                        name="open_in_new"
+                                                        size={12}
+                                                        className="shrink-0 text-text-muted"
+                                                    />
+                                                ) : null}
+                                            </div>
+                                        ) : null}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </ScrollArea>
+            </div>
         </div>
     );
 }

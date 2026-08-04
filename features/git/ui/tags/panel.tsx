@@ -180,7 +180,7 @@ export function LocalTags() {
                     </div>
                 </div>
             ) : null}
-            <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
+            <ScrollArea className="min-h-0 flex-1 px-2 pb-3" fadeFrom="from-panel">
                 {filtered.length === 0 ? (
                     <p className="px-2 py-6 text-sm text-text-muted">
                         {gitRepo ? "No local tags in this repository." : "Open a Git repository to view tags."}

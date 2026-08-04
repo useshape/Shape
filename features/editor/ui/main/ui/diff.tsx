@@ -18,7 +18,7 @@ import {
     DiffHunkToolbar,
     parseDiffTabPath,
     useDiffHunkState,
-} from "@/features/git/ui/diff-hunks";
+} from "@/features/git/ui/shared/diff-hunks";
 import { bindDiffEditorNativeUiToShape } from "@/lib/editor/suppress-monaco-native-ui";
 
 interface DiffViewProps {
