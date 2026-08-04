@@ -34,6 +34,30 @@ const SENSITIVE_PATTERNS: &[&str] = &[
 /// Filename suffixes matched case-insensitively.
 const SENSITIVE_SUFFIXES: &[&str] = &[".pem", ".key", ".p12", ".pfx", ".code-workspace"];
 
+/// Globs for ripgrep / walkers — keep in sync with `is_sensitive_path`.
+pub const SENSITIVE_RG_GLOBS: &[&str] = &[
+    "!.env",
+    "!.env.*",
+    "!*.env",
+    "!id_rsa",
+    "!id_ed25519",
+    "!id_ecdsa",
+    "!*.pem",
+    "!*.key",
+    "!*.p12",
+    "!*.pfx",
+    "!credentials.json",
+    "!service-account.json",
+    "!secrets.json",
+    "!token.json",
+    "!.npmrc",
+    "!.pypirc",
+    "!.git",
+    "!.ssh",
+    "!.gnupg",
+    "!.aws",
+];
+
 /// Editor config dirs — `settings.json` only sensitive inside these.
 const EDITOR_CONFIG_DIRS: &[&str] = &[".vscode", ".cursor", ".shape"];
 
@@ -163,6 +187,14 @@ pub fn is_sensitive_path(path: &Path) -> bool {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("");
+
+    // Any `.env*` / `*.env` variant (`.env.staging`, `local.env`, …).
+    if ascii_eq_ignore_case(name, ".env")
+        || name.to_ascii_lowercase().starts_with(".env.")
+        || ascii_ends_with_ignore_case(name, ".env")
+    {
+        return true;
+    }
 
     for pattern in SENSITIVE_PATTERNS {
         if ascii_eq_ignore_case(name, pattern) {

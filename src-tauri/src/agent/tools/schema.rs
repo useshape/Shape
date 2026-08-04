@@ -35,50 +35,47 @@ pub fn all_tools() -> Vec<Value> {
         read_terminal(),
         write_to_terminal(),
         wait(),
-        save_plan(),
         update_todos(),
         finish(),
     ]
 }
 
-/// Return tools appropriate for the active chat mode (reduces token overhead).
-pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
-    if mode.eq_ignore_ascii_case("visual") || mode.eq_ignore_ascii_case("design") {
-        let mut tools = all_tools();
-        tools.push(render_design_previews());
-        tools.extend(extra);
-        return tools;
-    }
+fn ask_tools() -> Vec<Value> {
+    vec![
+        read_file(),
+        list_dir(),
+        search_codebase(),
+        search_files(),
+        grep(),
+        web_search(),
+        finish(),
+    ]
+}
 
-    let base = if mode.eq_ignore_ascii_case("plan") {
-        vec![
-            read_file(),
-            list_dir(),
-            search_codebase(),
-            search_files(),
-            grep(),
-            web_search(),
-            save_plan(),
-            finish(),
-        ]
-    } else if mode.eq_ignore_ascii_case("ask") {
-        vec![
-            read_file(),
-            list_dir(),
-            search_codebase(),
-            search_files(),
-            grep(),
-            web_search(),
-            finish(),
-        ]
-    } else {
-        all_tools()
-    };
-    let mut tools = base;
-    if !mode.eq_ignore_ascii_case("ask") && !mode.eq_ignore_ascii_case("plan") {
-        tools.extend(extra);
+/// Return tools appropriate for the active chat mode (reduces token overhead).
+/// Unknown modes fail closed to Ask (read-only).
+pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
+    match mode.to_ascii_lowercase().as_str() {
+        "plan" => {
+            let mut tools = ask_tools();
+            tools.insert(tools.len().saturating_sub(1), save_plan());
+            tools
+        }
+        "ask" => ask_tools(),
+        "visual" | "design" => {
+            let mut tools = all_tools();
+            tools.push(render_design_previews());
+            tools.extend(extra);
+            tools
+        }
+        "code" | "review" | "agent" => {
+            let mut tools = all_tools();
+            tools.extend(extra);
+            tools
+        }
+        // Fail closed: unknown mode strings get read-only Ask tools.
+        _ => ask_tools(),
     }
-    tools
 }
 
 /// Build a tool descriptor. Kept as a small helper so the per-tool definitions stay terse.

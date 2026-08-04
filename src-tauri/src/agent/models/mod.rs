@@ -61,6 +61,12 @@ pub struct PendingCommand {
     pub command: String,
     pub safety: String,
     pub reason: String,
+    /// When set, approval runs this internal action instead of a shell command.
+    /// e.g. `"git_commit"` with `payload` = commit message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

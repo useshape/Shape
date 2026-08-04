@@ -8,37 +8,45 @@ pub async fn execute_local_search(query: &str, project_path: &Option<String>) ->
     let search_path = std::path::PathBuf::from(path);
 
     // Models sometimes pass a file path to grep; return that file directly.
-    // This only triggers on an exact existing path — never on a partial
-    // filename match, which used to shadow the actual content search.
+    // Must go through the same sensitive-path guards as read_file.
     let clean_query = query.trim_start_matches(|c| c == '/' || c == '\\');
     if !clean_query.contains("..") {
-        let target = search_path.join(clean_query);
-        if target.is_file() {
-            if let Ok(content) = std::fs::read_to_string(&target) {
-                let char_count = content.chars().count();
-                if char_count > 40_000 {
-                    let head: String = content.chars().take(40_000).collect();
-                    return format!(
-                        "File {}:\n{}\n\n[truncated — file is {} chars; use read_file with start_line/end_line to see more]",
-                        clean_query, head, char_count
-                    );
-                }
-                return format!("File {}:\n{}", clean_query, content);
-            }
-        } else if target.is_dir() {
-            let mut list = String::new();
-            if let Ok(entries) = std::fs::read_dir(&target) {
-                list.push_str(&format!("Listing Folder contents of '{}':\n", clean_query));
-                for entry in entries.filter_map(|e| e.ok()) {
-                    let name = entry.file_name().to_string_lossy().into_owned();
-                    if entry.path().is_dir() {
-                        list.push_str(&format!("- {}/\n", name));
-                    } else {
-                        list.push_str(&format!("- {}\n", name));
+        match crate::agent::security::paths::validate_read_path(clean_query, path) {
+            Ok(target) if target.is_file() => {
+                if let Ok(content) = std::fs::read_to_string(&target) {
+                    let char_count = content.chars().count();
+                    if char_count > 40_000 {
+                        let head: String = content.chars().take(40_000).collect();
+                        return format!(
+                            "File {}:\n{}\n\n[truncated — file is {} chars; use read_file with start_line/end_line to see more]",
+                            clean_query, head, char_count
+                        );
                     }
+                    return format!("File {}:\n{}", clean_query, content);
                 }
-                return list;
             }
+            Ok(target) if target.is_dir() => {
+                let mut list = String::new();
+                if let Ok(entries) = std::fs::read_dir(&target) {
+                    list.push_str(&format!("Listing Folder contents of '{}':\n", clean_query));
+                    for entry in entries.filter_map(|e| e.ok()) {
+                        let name = entry.file_name().to_string_lossy().into_owned();
+                        if entry.path().is_dir() {
+                            list.push_str(&format!("- {}/\n", name));
+                        } else {
+                            list.push_str(&format!("- {}\n", name));
+                        }
+                    }
+                    return list;
+                }
+            }
+            Err(e) => {
+                // Exact path looked sensitive / out of bounds — do not fall through to rg.
+                if search_path.join(clean_query).exists() {
+                    return format!("ERROR: {}", e);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -56,9 +64,10 @@ pub async fn execute_local_search(query: &str, project_path: &Option<String>) ->
             .arg("300")
             .arg("--max-columns-preview")
             .arg("--glob")
-            .arg("!.git")
-            .arg("--glob")
             .arg("!node_modules");
+        for glob in crate::agent::security::paths::SENSITIVE_RG_GLOBS {
+            cmd.arg("--glob").arg(glob);
+        }
         if fixed_string {
             cmd.arg("-F");
         }
@@ -126,6 +135,8 @@ pub async fn execute_local_search(query: &str, project_path: &Option<String>) ->
 
                 if p.is_dir() {
                     search_recursive(&p, q, depth + 1, limits, out, base);
+                } else if crate::agent::security::paths::is_sensitive_path(&p) {
+                    continue;
                 } else if let Some(ext) = p.extension().and_then(|s| s.to_str()) {
                     if matches!(
                         ext,

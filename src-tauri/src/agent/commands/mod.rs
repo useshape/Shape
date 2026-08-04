@@ -303,8 +303,14 @@ pub async fn send_chat_message(
     logging::debug("chat", &format!("Context built: {} chars", context_string.len()));
 
     let mut prompt_parts = vec![prompts::SYSTEM_MD.to_string()];
-    if let Some(rules) = custom_rules.as_ref().filter(|s| !s.trim().is_empty()) {
-        prompt_parts.push(format!("\n<user_rules>\n{}\n</user_rules>", rules.trim()));
+    // Legacy "system instructions" are folded into rules — one concept for user guidance.
+    let merged_rules = [custom_rules.as_deref(), custom_system_prompt.as_deref()]
+        .iter()
+        .filter_map(|s| s.map(str::trim).filter(|s| !s.is_empty()))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if !merged_rules.is_empty() {
+        prompt_parts.push(format!("\n<user_rules>\n{}\n</user_rules>", merged_rules));
     }
     if !mode_prompt.is_empty() {
         prompt_parts.push(mode_prompt.to_string());
@@ -316,10 +322,6 @@ pub async fn send_chat_message(
         // No design-options UI anymore — always start a sandbox session for optional previews.
         state.begin_design_turn(None, &message);
     }
-    if let Some(custom) = custom_system_prompt.as_ref().filter(|s| !s.trim().is_empty()) {
-        prompt_parts.push(format!("\n<custom_instructions>\n{}\n</custom_instructions>", custom.trim()));
-    }
-
     let final_system_prompt = format!(
         "{}\n\nCURRENT CONTEXT:\n{}",
         prompt_parts.join("\n"),
@@ -336,11 +338,12 @@ pub async fn send_chat_message(
                     "Summarize this coding assistant conversation for future context. Preserve goals, decisions, files changed, errors fixed, and what the user is working on now. Be concise.\n\n{}",
                     middle
                 );
-                if let Ok(summary) = streaming::complete_chat(
+                if let Ok((summary, _, _)) = streaming::complete_chat_with_max_tokens(
                     &client,
                     &auth_token,
                     &prompt,
                     MODEL_TITLE_GEN,
+                    800,
                     &proxy_base
                         .clone()
                         .with_turn(Some(turn_id.clone()), conversation_id.clone()),
@@ -995,8 +998,9 @@ pub async fn generate_commit_message(
     };
     let chat_excerpt = related_chat_for_commit(&history, summary.as_deref(), &staged_paths);
 
-    let diff_trimmed = if diff.len() > 14000 {
-        format!("{}... [truncated]", &diff[..14000])
+    let diff_trimmed = if diff.chars().count() > 14000 {
+        let head: String = diff.chars().take(14000).collect();
+        format!("{}... [truncated]", head)
     } else {
         diff
     };
@@ -1466,32 +1470,40 @@ pub async fn approve_terminal_command(
         .clone()
         .unwrap_or_else(|| ".".to_string());
 
-    let cancel = state
-        .cancellation_token
-        .lock()
-        .map_err(|e| AppError::Poison(e.to_string()))?
-        .clone();
-
-    let output = match terminal::classify_command(&cmd.command) {
-        terminal::CommandExecutionMode::LongRunning => {
-            terminal::execute_long_running_in_pty(
-                &cmd.command,
-                &project_path,
-                &app,
-                &pty_state,
-                &state,
-            )
-            .await
+    let output = if cmd.action.as_deref() == Some("git_commit") {
+        let message = cmd.payload.unwrap_or_default();
+        match crate::domain::git::service::git_commit(project_path, message).await {
+            Ok(()) => "Commit created.".to_string(),
+            Err(e) => format!("Commit failed: {}", e),
         }
-        terminal::CommandExecutionMode::Quick => {
-            terminal::execute_terminal_command(
-                &cmd.command,
-                &project_path,
-                Some(&app),
-                Some(cancel),
-                Some(&state),
-            )
-            .await
+    } else {
+        let cancel = state
+            .cancellation_token
+            .lock()
+            .map_err(|e| AppError::Poison(e.to_string()))?
+            .clone();
+
+        match terminal::classify_command(&cmd.command) {
+            terminal::CommandExecutionMode::LongRunning => {
+                terminal::execute_long_running_in_pty(
+                    &cmd.command,
+                    &project_path,
+                    &app,
+                    &pty_state,
+                    &state,
+                )
+                .await
+            }
+            terminal::CommandExecutionMode::Quick => {
+                terminal::execute_terminal_command(
+                    &cmd.command,
+                    &project_path,
+                    Some(&app),
+                    Some(cancel),
+                    Some(&state),
+                )
+                .await
+            }
         }
     };
 

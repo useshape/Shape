@@ -19,7 +19,7 @@ use tauri::{Emitter, Manager};
 use crate::agent::security::{self, commands::CommandSafety};
 use crate::agent::models::{AgentState, PendingCommand};
 use crate::core::workspace_trust::WorkspaceTrustState;
-use crate::agent::commands::{checkpoints, logging, streaming, terminal::{self, classify_command, CommandExecutionMode}, history::now_f64};
+use crate::agent::commands::{checkpoints, logging, streaming, terminal::{self, classify_command, CommandExecutionMode}};
 use crate::agent::tools::{files, search};
 use crate::commands::git;
 use crate::commands::design_sandbox;
@@ -99,6 +99,14 @@ pub enum SideEffect {
 pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if design_gate_blocks_tool(name, ctx) {
         return blocked_outcome(name, DESIGN_GATE_BLOCK_MSG);
+    }
+
+    // Ask/Plan are read-only — block MCP (and any hallucinated write tools) entirely.
+    if is_read_only_mode(ctx.mode) && name.starts_with("mcp_") {
+        return blocked_outcome(
+            name,
+            "MCP tools are not available in Ask or Plan mode.",
+        );
     }
 
     // mcp_* tools can mutate external systems / local state; gate like writes.
@@ -200,10 +208,11 @@ fn tool_read_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
     match res {
         Ok(content) => {
-            let display = if content.len() > 30_000 {
+            let display = if content.chars().count() > 30_000 {
+                let head: String = content.chars().take(30_000).collect();
                 format!(
                     "{}\n\n[truncated — file longer than 30,000 chars; call read_file again with start_line/end_line to see more]",
-                    &content[..30_000]
+                    head
                 )
             } else {
                 content.clone()
@@ -625,22 +634,18 @@ async fn tool_git_commit(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         return blocked_outcome("git_commit", "Committing is not allowed in Ask or Plan mode.");
     }
     let message = match get_str(args, "message") {
-        Ok(s) => s,
+        Ok(s) => s.to_string(),
         Err(e) => return error_outcome("git_commit", &e),
     };
     if message.trim().is_empty() {
         return error_outcome("git_commit", "Commit message cannot be empty.");
     }
-    let command = format!(
+    // Approval UI shows a preview; execution uses libgit2 (no shell interpolation).
+    let preview = format!(
         "git commit -m {}",
-        serde_json::to_string(&message).unwrap_or_else(|_| format!("\"{}\"", message))
+        serde_json::to_string(&message).unwrap_or_else(|_| "\"…\"".to_string())
     );
-    run_with_approval(
-        &command,
-        "Creates a git commit with your currently staged changes.",
-        ctx,
-    )
-    .await
+    run_git_commit_with_approval(&preview, &message, ctx).await
 }
 
 async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
@@ -838,13 +843,92 @@ fn intercept_file_inspection_command(command: &str, ctx: &ToolCtx<'_>) -> Option
     }
 }
 
+async fn run_git_commit_with_approval(
+    preview: &str,
+    message: &str,
+    ctx: &ToolCtx<'_>,
+) -> ToolOutcome {
+    let cmd_id = format!("cmd-{}", uuid::Uuid::new_v4());
+    let pending = PendingCommand {
+        id: cmd_id.clone(),
+        command: preview.to_string(),
+        safety: "needs_approval".to_string(),
+        reason: "Creates a git commit with your currently staged changes.".to_string(),
+        action: Some("git_commit".to_string()),
+        payload: Some(message.to_string()),
+    };
+
+    if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
+        pendings.insert(cmd_id.clone(), pending.clone());
+    }
+
+    let _ = ctx.emit_ui_token(format!(
+        "\n<terminal_command status=\"pending\" id=\"{}\">{}\nAwaiting approval: {}</terminal_command>\n",
+        cmd_id, preview, pending.reason
+    ));
+    let _ = ctx.app_handle.emit("agent-command-pending", pending);
+
+    let approval_timeout = std::time::Duration::from_secs(120);
+    let start = std::time::Instant::now();
+    let mut approved = false;
+    let mut result_output = String::new();
+
+    loop {
+        if start.elapsed() > approval_timeout || ctx.cancel.is_cancelled() {
+            break;
+        }
+        if let Ok(results) = ctx.agent_state.command_results.lock() {
+            if let Some(output) = results.get(&cmd_id) {
+                result_output = output.clone();
+                approved = true;
+                break;
+            }
+        }
+        if let Ok(pendings) = ctx.agent_state.pending_commands.lock() {
+            if !pendings.contains_key(&cmd_id) {
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
+        pendings.remove(&cmd_id);
+    }
+    if let Ok(mut results) = ctx.agent_state.command_results.lock() {
+        results.remove(&cmd_id);
+    }
+
+    if approved {
+        ToolOutcome {
+            tool_result: format!("Commit created.\n{}", clip(&result_output, 2000)),
+            ui_chunk: format!(
+                "\n<terminal_command status=\"completed\" id=\"{}\">{}\n</terminal_command>\n",
+                cmd_id, preview
+            ),
+            side_effect: None,
+        }
+    } else {
+        ToolOutcome {
+            tool_result: "Commit was rejected by the user (or timed out). Do NOT retry it.".to_string(),
+            ui_chunk: format!(
+                "\n<terminal_command status=\"rejected\" id=\"{}\">{}\n</terminal_command>\n",
+                cmd_id, preview
+            ),
+            side_effect: None,
+        }
+    }
+}
+
 async fn run_with_approval(command: &str, reason: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
-    let cmd_id = format!("cmd-{}", now_f64() as u64);
+    let cmd_id = format!("cmd-{}", uuid::Uuid::new_v4());
     let pending = PendingCommand {
         id: cmd_id.clone(),
         command: command.to_string(),
         safety: "needs_approval".to_string(),
         reason: reason.to_string(),
+        action: None,
+        payload: None,
     };
 
     if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {

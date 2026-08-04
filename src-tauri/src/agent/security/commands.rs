@@ -6,8 +6,7 @@ const SAFE_COMMANDS: &[&str] = &[
     "git show", "git stash list",
     "npm list", "npm ls", "npm outdated", "npm audit",
     "pnpm list", "pnpm ls", "pnpm audit", "pnpm outdated",
-    // cargo check/clippy are relatively safe; build/test execute project code → approval
-    "cargo check", "cargo clippy",
+    // cargo check/clippy run build.rs + proc-macros → approval (same as build/test)
     "node --version", "npm --version", "pnpm --version", "cargo --version",
     "python --version", "rustc --version", "go version",
     "which", "where", "type", "tree", "wc",
@@ -43,7 +42,7 @@ const WARN_PATTERNS: &[&str] = &[
     "npx create", "npm create", "pnpm create", "yarn create", "bun create",
     "create-next-app", "create-react-app", "create-vite", "create-remix",
     "npm install", "npm i ", "yarn add", "pnpm add", "pnpm install", "pnpm i ",
-    "cargo add", "cargo build", "cargo test", "pip install",
+    "cargo add", "cargo build", "cargo test", "cargo check", "cargo clippy", "pip install",
     "git push",
     "docker", "kubectl",
     "curl", "wget", "fetch",
@@ -103,11 +102,14 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
     safe_sorted.sort_by_key(|s| std::cmp::Reverse(s.len()));
     for safe in safe_sorted {
         if cmd_lower == safe || cmd_lower.starts_with(&format!("{safe} ")) {
-            // Reject if leftover looks like another command injection attempt
             let rest = cmd_lower.strip_prefix(safe).unwrap_or("").trim_start();
-            if rest.is_empty() || !rest.contains("&&") {
-                return CommandSafety::Safe;
+            // Safe-listed git/read commands must not write via --output / -o.
+            if has_output_redirect_flag(rest) {
+                return CommandSafety::NeedsApproval {
+                    reason: "Command writes via --output/-o and needs review.".to_string(),
+                };
             }
+            return CommandSafety::Safe;
         }
     }
 
@@ -118,7 +120,7 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
                     "Scaffolding command ('{}') will modify the project. Review flags (--yes, -y) before running.",
                     pattern.trim()
                 )
-            } else if *pattern == "cargo build" || *pattern == "cargo test" {
+            } else if pattern.starts_with("cargo ") {
                 format!(
                     "'{}' executes project build scripts and macros. Approve only for trusted workspaces.",
                     pattern.trim()
@@ -154,11 +156,46 @@ fn has_shell_metacharacters(cmd: &str) -> bool {
             return true;
         }
     }
-    // Redirects: `>` / `<` outside of comparison-looking tokens is still risky
+    // Redirects, PowerShell subexpressions `(...)`, sh background `&`, and `$` expansion.
+    // Note: `%` is intentionally allowed (common in `git log --format=%H`).
     if cmd.contains('>') || cmd.contains('<') {
         return true;
     }
+    if cmd.contains('(') || cmd.contains(')') {
+        return true;
+    }
+    if cmd.contains('&') || cmd.contains('$') {
+        return true;
+    }
     false
+}
+
+/// Reject `git log --output=file` style write primitives on otherwise-safe commands.
+fn has_output_redirect_flag(rest: &str) -> bool {
+    let mut chars = rest.chars().peekable();
+    let mut token = String::new();
+    let flush = |tok: &mut String| -> bool {
+        if tok.is_empty() {
+            return false;
+        }
+        let t = tok.to_ascii_lowercase();
+        tok.clear();
+        t == "-o"
+            || t == "--output"
+            || t.starts_with("--output=")
+            || t == "--output-directory"
+            || t.starts_with("--output-directory=")
+    };
+    while let Some(c) = chars.next() {
+        if c.is_whitespace() {
+            if flush(&mut token) {
+                return true;
+            }
+        } else {
+            token.push(c);
+        }
+    }
+    flush(&mut token)
 }
 
 #[cfg(test)]
@@ -269,5 +306,42 @@ mod tests {
         } else {
             panic!("expected NeedsApproval for scaffolding command");
         }
+    }
+
+    #[test]
+    fn test_powershell_subexpression_needs_approval() {
+        assert!(matches!(
+            check_command_safety("echo (Remove-Item -Recurse $home)"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("echo hi & calc.exe"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+    }
+
+    #[test]
+    fn test_git_output_flag_needs_approval() {
+        assert!(matches!(
+            check_command_safety("git log -1 --output=.vscode/settings.json"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("git diff --output=/tmp/x"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert_eq!(check_command_safety("git log -1 --oneline"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn test_cargo_check_needs_approval() {
+        assert!(matches!(
+            check_command_safety("cargo check"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("cargo clippy"),
+            CommandSafety::NeedsApproval { .. }
+        ));
     }
 }
