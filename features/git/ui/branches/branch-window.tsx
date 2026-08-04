@@ -5,9 +5,10 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
-import type { GitBranchDetail, ProjectState } from "@/lib/backend/types";
+import type { GitBranchDetail, GitFileParams, ProjectState } from "@/lib/backend/types";
 import { notify } from "@/features/notifications";
 import {
     ContextMenu,
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/context";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
+import { ManagerDiffEditor } from "@/features/git/ui/manager/monaco-diff";
 import { useGitRepos } from "@/lib/git/repos";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { QuickPick } from "@/components/ui/quick-pick";
@@ -208,7 +210,13 @@ export function BranchWindow() {
     const [localOpen, setLocalOpen] = useState(true);
     const [remoteOpen, setRemoteOpen] = useState(true);
     const [collapsedRemotes, setCollapsedRemotes] = useState<Set<string>>(new Set());
-    const [compareSummary, setCompareSummary] = useState<string | null>(null);
+    const [compareFiles, setCompareFiles] = useState<GitFileParams[]>([]);
+    const [compareLoading, setCompareLoading] = useState(false);
+    const [compareFile, setCompareFile] = useState<GitFileParams | null>(null);
+    const [compareOriginal, setCompareOriginal] = useState("");
+    const [compareModified, setCompareModified] = useState("");
+    const [sideBySide, setSideBySide] = useState(false);
+    const [compareDiffLoading, setCompareDiffLoading] = useState(false);
 
     const [renameTarget, setRenameTarget] = useState<string | null>(null);
     const [renameQuery, setRenameQuery] = useState("");
@@ -407,6 +415,15 @@ export function BranchWindow() {
         }
     };
 
+    const clearCompare = useCallback(() => {
+        setCompareFiles([]);
+        setCompareFile(null);
+        setCompareOriginal("");
+        setCompareModified("");
+        setCompareLoading(false);
+        setCompareDiffLoading(false);
+    }, []);
+
     const handleCompare = async (branch: string) => {
         if (!project_path || !currentBranch) return;
         const short = branch.includes("/") ? branch.split("/").slice(1).join("/") : branch;
@@ -414,20 +431,42 @@ export function BranchWindow() {
             notify.info("Git", "Select a different branch to compare.");
             return;
         }
+        setSelectedName(branch);
+        setCompareFile(null);
+        setCompareOriginal("");
+        setCompareModified("");
+        setCompareLoading(true);
         try {
-            const diff = await commands.gitDiffBranches(project_path, currentBranch, branch);
-            const lines = diff.trim().split("\n").filter(Boolean);
-            const files = lines.filter((l) => l.startsWith("diff --git")).length;
-            const summary =
-                files > 0
-                    ? `${files} file${files === 1 ? "" : "s"} differ from ${currentBranch}`
-                    : diff.trim()
-                      ? `${lines.length} change line${lines.length === 1 ? "" : "s"} vs ${currentBranch}`
-                      : `No differences vs ${currentBranch}`;
-            setCompareSummary(summary);
-            notify.info("Git Compare", summary);
+            const files = await commands.gitDiffNameStatus(project_path, currentBranch, branch);
+            setCompareFiles(files);
+            if (files.length === 0) {
+                notify.info("Git Compare", `No differences vs ${currentBranch}`);
+            }
         } catch (e) {
+            setCompareFiles([]);
             notify.gitError(e, "Compare failed");
+        } finally {
+            setCompareLoading(false);
+        }
+    };
+
+    const openCompareFile = async (file: GitFileParams) => {
+        if (!project_path || !currentBranch || !selectedName) return;
+        setCompareFile(file);
+        setCompareDiffLoading(true);
+        try {
+            const [original, modified] = await Promise.all([
+                commands.gitGetFileAtRef(project_path, currentBranch, file.path).catch(() => ""),
+                commands.gitGetFileAtRef(project_path, selectedName, file.path).catch(() => ""),
+            ]);
+            setCompareOriginal(original);
+            setCompareModified(modified);
+        } catch (e) {
+            setCompareOriginal("");
+            setCompareModified("");
+            notify.gitError(e, "Failed to load file diff");
+        } finally {
+            setCompareDiffLoading(false);
         }
     };
 
@@ -464,7 +503,7 @@ export function BranchWindow() {
     }
 
     const listPane = (
-        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
             <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border-subtle/60 px-2">
                 <FadeTruncate className="min-w-0 flex-1 px-1 text-sm font-medium" title="Branches">
                     Branches
@@ -539,7 +578,7 @@ export function BranchWindow() {
                                     selected={selectedName === item.name}
                                     onSelect={() => {
                                         setSelectedName(item.name);
-                                        setCompareSummary(null);
+                                        clearCompare();
                                     }}
                                     onCheckout={() => void handleSwitch(item.name)}
                                     onDelete={item.name !== currentBranch ? () => void handleDelete(item.name) : undefined}
@@ -601,7 +640,7 @@ export function BranchWindow() {
                                                         selected={selectedName === item.name}
                                                         onSelect={() => {
                                                             setSelectedName(item.name);
-                                                            setCompareSummary(null);
+                                                            clearCompare();
                                                         }}
                                                         onCheckout={() => void handleSwitch(item.name)}
                                                         onCopy={() => handleCopy(item.name)}
@@ -642,6 +681,19 @@ export function BranchWindow() {
                                 Current
                             </span>
                         ) : null}
+                        {compareFiles.length > 0 || compareLoading ? (
+                            <Tooltip content="Clear compare">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0 p-0"
+                                    onClick={clearCompare}
+                                >
+                                    <Icon name="close" size={15} />
+                                </Button>
+                            </Tooltip>
+                        ) : null}
                     </div>
 
                     <div className="space-y-3 border-b border-border-subtle/60 px-3 py-3">
@@ -657,15 +709,9 @@ export function BranchWindow() {
                             </div>
                             <SyncPills ahead={selectedItem.ahead} behind={selectedItem.behind} />
                         </div>
-
-                        {compareSummary ? (
-                            <div className="rounded-lg border border-border-subtle/70 bg-panel/40 px-2.5 py-2 text-xs text-text-secondary">
-                                {compareSummary}
-                            </div>
-                        ) : null}
                     </div>
 
-                    <div className="flex flex-wrap gap-2 px-3 py-3">
+                    <div className="flex flex-wrap gap-2 border-b border-border-subtle/60 px-3 py-3">
                         <Button
                             size="sm"
                             className="h-8"
@@ -676,24 +722,25 @@ export function BranchWindow() {
                         </Button>
                         <Button
                             size="sm"
-                            variant="ghost"
-                            className="h-8 rounded-lg border border-border"
+                            variant="outline"
+                            className="h-8"
                             onClick={() => void handleCompare(selectedItem.name)}
+                            disabled={compareLoading}
                         >
                             Compare
                         </Button>
                         <Button
                             size="sm"
-                            variant="ghost"
-                            className="h-8 rounded-lg border border-border"
+                            variant="outline"
+                            className="h-8"
                             onClick={() => handleCopy(selectedItem.name)}
                         >
                             Copy
                         </Button>
                         <Button
                             size="sm"
-                            variant="ghost"
-                            className="h-8 rounded-lg border border-border"
+                            variant="outline"
+                            className="h-8"
                             onClick={() => void handleOpenRemote()}
                         >
                             Open on GitHub
@@ -701,8 +748,8 @@ export function BranchWindow() {
                         {selectedItem.kind === "local" && selectedItem.name !== currentBranch ? (
                             <Button
                                 size="sm"
-                                variant="ghost"
-                                className="h-8 rounded-lg border border-border text-error hover:text-error"
+                                variant="outline"
+                                className="h-8 text-error hover:text-error"
                                 onClick={() => void handleDelete(selectedItem.name)}
                             >
                                 Delete
@@ -710,9 +757,121 @@ export function BranchWindow() {
                         ) : null}
                     </div>
 
-                    <div className="px-3 text-xs text-text-muted">
-                        Double-click a branch in the list to check it out. Right-click for rename / upstream.
-                    </div>
+                    {compareLoading ? (
+                        <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-text-muted">
+                            Loading compare…
+                        </div>
+                    ) : compareFiles.length > 0 ? (
+                        <div className="flex min-h-0 flex-1 overflow-hidden">
+                            <div className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-border-subtle/60">
+                                <div className="flex h-8 shrink-0 items-center px-2.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                                    {compareFiles.length} file{compareFiles.length === 1 ? "" : "s"}
+                                    <span className="ml-1.5 truncate font-normal normal-case tracking-normal">
+                                        vs {currentBranch}
+                                    </span>
+                                </div>
+                                <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+                                    <div className="space-y-0.5">
+                                        {compareFiles.map((f) => {
+                                            const name = f.path.split(/[\\/]/).pop() || f.path;
+                                            const folder = f.path.slice(0, Math.max(0, f.path.length - name.length - 1));
+                                            const selected = compareFile?.path === f.path;
+                                            return (
+                                                <button
+                                                    key={f.path}
+                                                    type="button"
+                                                    onClick={() => void openCompareFile(f)}
+                                                    className={cn(
+                                                        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left",
+                                                        selected
+                                                            ? "bg-panel-hover text-text-primary"
+                                                            : "hover:bg-panel-hover/60",
+                                                    )}
+                                                >
+                                                    <FileIcon name={name} className="h-3.5 w-3.5 shrink-0" />
+                                                    <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                                                        {name}
+                                                        {folder ? (
+                                                            <span className="text-text-muted"> · {folder}</span>
+                                                        ) : null}
+                                                    </span>
+                                                    <span
+                                                        className="w-4 shrink-0 text-center text-xs font-medium"
+                                                        style={{
+                                                            color:
+                                                                f.status === "C"
+                                                                    ? "var(--git-conflict)"
+                                                                    : f.status === "M"
+                                                                      ? "var(--git-modified)"
+                                                                      : f.status === "A" || f.status === "U"
+                                                                        ? "var(--git-added)"
+                                                                        : f.status === "D"
+                                                                          ? "var(--git-deleted)"
+                                                                          : "var(--git-added)",
+                                                        }}
+                                                    >
+                                                        {f.status}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                                {!compareFile ? (
+                                    <div className="flex h-full items-center justify-center text-sm text-text-muted">
+                                        Select a file to diff
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-subtle/60 px-2.5">
+                                            <FileIcon
+                                                name={compareFile.path.split(/[\\/]/).pop() || compareFile.path}
+                                                className="h-3.5 w-3.5 shrink-0"
+                                            />
+                                            <span className="min-w-0 flex-1 truncate text-xs text-text-secondary">
+                                                {compareFile.path}
+                                            </span>
+                                            <Tooltip content={sideBySide ? "Inline diff" : "Side by side"}>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 shrink-0 p-0"
+                                                    onClick={() => setSideBySide((v) => !v)}
+                                                >
+                                                    <Icon
+                                                        name={sideBySide ? "split_horizontal" : "vertical_split"}
+                                                        size={15}
+                                                    />
+                                                </Button>
+                                            </Tooltip>
+                                        </div>
+                                        <div className="relative min-h-0 flex-1 overflow-hidden">
+                                            {compareDiffLoading ? (
+                                                <div className="flex h-full items-center justify-center text-sm text-text-muted">
+                                                    Loading diff…
+                                                </div>
+                                            ) : (
+                                                <ManagerDiffEditor
+                                                    original={compareOriginal}
+                                                    modified={compareModified}
+                                                    path={compareFile.path}
+                                                    sideBySide={sideBySide}
+                                                />
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="px-3 py-3 text-xs text-text-muted">
+                            Double-click a branch in the list to check it out. Right-click for rename / upstream.
+                            Use Compare to diff against {currentBranch || "HEAD"}.
+                        </div>
+                    )}
                 </>
             )}
         </div>
@@ -726,7 +885,6 @@ export function BranchWindow() {
                 storageKey="git-manager-branches"
                 hideSeparator
                 paneGap="var(--workbench-gap)"
-                inset="all"
                 panes={[
                     {
                         id: "branch-list",
