@@ -135,6 +135,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "git_status" => tool_git_status(ctx),
         "git_fetch" => tool_git_fetch(ctx),
         "git_log" => tool_git_log(&args, ctx),
+        "git_diff" => tool_git_diff(&args, ctx),
+        "git_branches" => tool_git_branches(&args, ctx),
         "git_stage" => tool_git_stage(&args, ctx),
         "git_commit" => tool_git_commit(&args, ctx).await,
         "list_terminals" => tool_list_terminals(ctx),
@@ -584,7 +586,14 @@ fn tool_git_log(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
                     .map(|e| {
                         let short = e.hash.chars().take(7).collect::<String>();
                         let subject = e.message.lines().next().unwrap_or("").trim();
-                        format!("{} {} — {} ({})", short, e.date, subject, e.author)
+                        // Structured lines for chat UI: [commit] hash|date|author|subject
+                        format!(
+                            "[commit] {}|{}|{}|{}",
+                            short,
+                            e.date.replace('|', "/"),
+                            e.author.replace('|', "/"),
+                            subject.replace('|', "/")
+                        )
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
@@ -596,6 +605,111 @@ fn tool_git_log(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             }
         }
         Err(e) => error_outcome("git_log", &e.to_string()),
+    }
+}
+
+fn truncate_diff_for_agent(diff: &str, max_chars: usize) -> String {
+    if diff.len() <= max_chars {
+        return diff.to_string();
+    }
+    let mut end = max_chars.min(diff.len());
+    while end > 0 && !diff.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!(
+        "{}\n… [diff truncated — {} more characters]",
+        &diff[..end],
+        diff.len().saturating_sub(end)
+    )
+}
+
+fn tool_git_diff(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let scope = args
+        .get("scope")
+        .and_then(|v| v.as_str())
+        .unwrap_or("all")
+        .to_ascii_lowercase();
+    let path = args
+        .get("path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let raw = if let Some(file) = path {
+        git::git_file_diff(ctx.project_path.to_string(), file.clone()).map(|d| {
+            if d.trim().is_empty() {
+                format!("No changes for {}.", file)
+            } else {
+                format!("[file] {}\n{}", file, d)
+            }
+        })
+    } else {
+        match scope.as_str() {
+            "staged" => git::git_staged_diff(ctx.project_path.to_string()).map(|d| {
+                if d.trim().is_empty() {
+                    "No staged changes.".to_string()
+                } else {
+                    format!("[scope] staged\n{}", d)
+                }
+            }),
+            _ => git::git_diff(ctx.project_path.to_string()).map(|d| {
+                if d.trim().is_empty() {
+                    "Working tree clean — no staged or unstaged changes.".to_string()
+                } else {
+                    format!("[scope] all\n{}", d)
+                }
+            }),
+        }
+    };
+
+    match raw {
+        Ok(out) => {
+            let clipped = truncate_diff_for_agent(&out, 48_000);
+            ToolOutcome {
+                tool_result: clipped.clone(),
+                ui_chunk: git_ui_chunk("diff", "completed", &clipped),
+                side_effect: None,
+            }
+        }
+        Err(e) => error_outcome("git_diff", &e.to_string()),
+    }
+}
+
+fn tool_git_branches(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let include_remote = args
+        .get("include_remote")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let current = git::git_current_branch(ctx.project_path.to_string()).unwrap_or_default();
+    let locals = match git::git_branches(ctx.project_path.to_string()) {
+        Ok(v) => v,
+        Err(e) => return error_outcome("git_branches", &e.to_string()),
+    };
+    let mut lines: Vec<String> = locals
+        .into_iter()
+        .map(|name| {
+            let mark = if name == current { "*" } else { " " };
+            format!("[{}] {}", mark, name)
+        })
+        .collect();
+    if include_remote {
+        match git::git_remote_branches(ctx.project_path.to_string()) {
+            Ok(remotes) => {
+                for name in remotes {
+                    lines.push(format!("[r] {}", name));
+                }
+            }
+            Err(e) => lines.push(format!("[!] remote branches unavailable: {}", e)),
+        }
+    }
+    if lines.is_empty() {
+        lines.push("No branches found.".to_string());
+    }
+    let out = lines.join("\n");
+    ToolOutcome {
+        tool_result: out.clone(),
+        ui_chunk: git_ui_chunk("branches", "completed", &out),
+        side_effect: None,
     }
 }
 

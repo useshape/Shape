@@ -9,190 +9,49 @@ import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { parseApi } from "@/features/git/ui/actions/utils";
 import { statusIcon, statusTone } from "@/features/git/ui/actions/utils";
-import { GitMarkdown, type GitMarkdownCtx } from "./git-markdown";
+import { GitMarkdown, type GitMarkdownCtx } from "../markdown";
+import { GitAiInsight } from "@/features/git/ui/shared/ai-insight";
+import { AiActionButton } from "@/features/git/ui/shared/ai-action-button";
 import { openProjectFile } from "@/lib/open-project-file";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
+import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import {
+    type CheckRun,
+    type Comment,
+    type DetailSection,
+    type GhListItem,
+    type Label,
+    type Person,
+    type PrCommit,
+    type PrFile,
+    type ReleaseAsset,
+    formatBytes,
+    formatRelative,
+} from "./types";
+import {
+    Avatar,
+    CommentCard,
+    SidebarSection,
+    StateBadge,
+    ThreadMessage,
+    openGitHubUser,
+} from "./widgets";
 
-export type GhListItem = {
-    id: string | number;
-    title: string;
-    subtitle?: string;
-    url?: string;
-    status?: string;
-    meta?: string;
-    number?: number;
-    author?: string;
-    body?: string;
-};
-
-type DetailSection =
-    | "issues"
-    | "pull-requests"
-    | "releases"
-    | "check-runs"
-    | "check-suites"
-    | "commit-statuses"
-    | "deployments"
-    | "deployment-statuses";
-
-type Label = { name: string; color?: string };
-type Person = { login: string; avatar_url?: string };
-type Comment = {
-    id: number;
-    body: string;
-    user?: Person;
-    created_at?: string;
-    author_association?: string;
-};
-type PrCommit = {
-    sha: string;
-    commit: { message: string; author?: { name?: string; date?: string } };
-    author?: Person;
-};
-type PrFile = {
-    filename: string;
-    status: string;
-    additions?: number;
-    deletions?: number;
-    changes?: number;
-};
-type CheckRun = {
-    id: number;
-    name: string;
-    status: string;
-    conclusion: string | null;
-    html_url?: string;
-};
-type ReleaseAsset = {
-    id: number;
-    name: string;
-    size?: number;
-    download_count?: number;
-    browser_download_url?: string;
-};
-
-function formatRelative(iso?: unknown): string {
-    if (typeof iso !== "string" || !iso) return "";
-    const t = Date.parse(iso);
-    if (Number.isNaN(t)) return "";
-    const mins = Math.round((Date.now() - t) / 60_000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.round(mins / 60);
-    if (hrs < 48) return `${hrs}h ago`;
-    return `${Math.round(hrs / 24)}d ago`;
-}
-
-function formatBytes(n?: number): string {
-    if (n == null || !Number.isFinite(n)) return "";
-    if (n < 1024) return `${n} B`;
-    if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function StateBadge({ status, merged }: { status?: string; merged?: boolean }) {
-    if (merged) {
-        return (
-            <span className="inline-flex shrink-0 items-center rounded-full bg-accent/20 px-2 py-0.5 text-2xs font-medium text-accent">
-                Merged
-            </span>
-        );
-    }
-    const s = (status || "").toLowerCase();
-    const tone =
-        s === "open"
-            ? "bg-success/15 text-success"
-            : s === "closed"
-              ? "bg-error/15 text-error"
-              : "bg-panel-hover text-text-muted";
-    return (
-        <span
-            className={cn(
-                "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-2xs font-medium capitalize",
-                tone,
-            )}
-        >
-            {status || "unknown"}
-        </span>
-    );
-}
-
-function Avatar({ person, size = 20 }: { person?: Person | null; size?: number }) {
-    if (!person?.login) return null;
-    const src =
-        person.avatar_url || `https://github.com/${person.login}.png?size=${size * 2}`;
-    return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-            src={src}
-            alt=""
-            width={size}
-            height={size}
-            className="shrink-0 rounded-full"
-            loading="lazy"
-        />
-    );
-}
-
-function SidebarSection({
-    title,
-    children,
-}: {
-    title: string;
-    children: React.ReactNode;
-}) {
-    return (
-        <div className="border-b border-border-subtle/60 px-3 py-3 last:border-b-0">
-            <div className="mb-1.5 text-2xs font-medium uppercase tracking-wide text-text-muted">
-                {title}
-            </div>
-            <div className="text-sm text-text-secondary">{children}</div>
-        </div>
-    );
-}
-
-function CommentCard({
-    comment,
-    ctx,
-}: {
-    comment: Comment;
-    ctx?: GitMarkdownCtx;
-}) {
-    return (
-        <div className="min-w-0 overflow-hidden rounded-xl border border-border-subtle bg-panel/40">
-            <div className="flex items-center gap-2 border-b border-border-subtle/60 px-3 py-2">
-                <Avatar person={comment.user} size={22} />
-                <span className="text-sm font-medium text-text-primary">
-                    {comment.user?.login ?? "unknown"}
-                </span>
-                {comment.author_association &&
-                comment.author_association !== "NONE" ? (
-                    <span className="rounded border border-border-subtle px-1.5 py-0.5 text-2xs text-text-muted">
-                        {comment.author_association.toLowerCase().replace(/_/g, " ")}
-                    </span>
-                ) : null}
-                <span className="ml-auto text-2xs text-text-muted">
-                    {formatRelative(comment.created_at)}
-                </span>
-            </div>
-            <div className="min-w-0 overflow-x-auto px-3 py-3">
-                <GitMarkdown content={comment.body || ""} ctx={ctx} />
-            </div>
-        </div>
-    );
-}
+export type { GhListItem } from "./types";
 
 export function GitHubDetailPane({
     section,
     item,
     owner,
     repo,
+    onBack,
 }: {
     section: DetailSection;
     item: GhListItem | null;
     owner: string;
     repo: string;
+    onBack?: () => void;
 }) {
     const [loading, setLoading] = useState(false);
     const [title, setTitle] = useState("");
@@ -219,6 +78,8 @@ export function GitHubDetailPane({
     const [additions, setAdditions] = useState(0);
     const [deletions, setDeletions] = useState(0);
     const [tab, setTab] = useState("conversation");
+    const [aiSummary, setAiSummary] = useState<string | null>(null);
+    const [aiLoading, setAiLoading] = useState(false);
 
     const isPr = section === "pull-requests";
     const isIssue = section === "issues";
@@ -226,6 +87,8 @@ export function GitHubDetailPane({
 
     useEffect(() => {
         setTab("conversation");
+        setAiSummary(null);
+        setAiLoading(false);
     }, [item?.id, section]);
 
     useEffect(() => {
@@ -514,64 +377,167 @@ export function GitHubDetailPane({
         notify.info("Opened on GitHub", path);
     };
 
+    const handleSummarizePr = async () => {
+        if (!isPr || item?.number == null) return;
+        const token = getShapeAccessToken();
+        if (!token) {
+            notify.error("AI Error", "Sign in to Shape to summarize pull requests.");
+            return;
+        }
+        setAiLoading(true);
+        try {
+            const summary = await commands.summarizePullRequest(
+                owner,
+                repo,
+                item.number,
+                token,
+            );
+            setAiSummary(summary.trim());
+            void import("@/lib/shape-auth/store")
+                .then(({ refreshShapeAuth }) => {
+                    void refreshShapeAuth();
+                })
+                .catch(() => undefined);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            notify.error("AI Error", msg);
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const openBranch = (ref?: string) => {
+        if (!ref) return;
+        void commands.openUrlExternal(
+            `https://github.com/${owner}/${repo}/tree/${encodeURIComponent(ref)}`,
+        );
+    };
+
     return (
-        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
-            {/* Header — GitHub-style title + badge + merge line */}
-            <div className="shrink-0 border-b border-border-subtle/60 px-4 py-3">
-                <div className="flex items-start gap-3">
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-editor">
+            {/* Header — back + title + actions */}
+            <div className="shrink-0 px-3 py-3">
+                <div className="flex items-start gap-2">
+                    {onBack ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mt-0.5 h-7 w-7 shrink-0 px-0"
+                            onClick={onBack}
+                            aria-label="Back to list"
+                        >
+                            <Icon name="arrow_back" size={16} />
+                        </Button>
+                    ) : null}
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="min-w-0 text-base font-semibold text-text-primary">
-                                {title}
-                                {item.number != null ? (
-                                    <span className="ml-1.5 font-normal text-text-muted">
-                                        #{item.number}
-                                    </span>
-                                ) : null}
-                            </h2>
+                            {url ? (
+                                <button
+                                    type="button"
+                                    className="min-w-0 text-left text-base font-semibold text-text-primary hover:text-accent"
+                                    onClick={() => void commands.openUrlExternal(url)}
+                                    title="Open on GitHub"
+                                >
+                                    {title}
+                                    {item.number != null ? (
+                                        <span className="ml-1.5 font-normal text-text-muted">
+                                            #{item.number}
+                                        </span>
+                                    ) : null}
+                                </button>
+                            ) : (
+                                <h2 className="min-w-0 text-base font-semibold text-text-primary">
+                                    {title}
+                                    {item.number != null ? (
+                                        <span className="ml-1.5 font-normal text-text-muted">
+                                            #{item.number}
+                                        </span>
+                                    ) : null}
+                                </h2>
+                            )}
                             <StateBadge status={status} merged={merged} />
                         </div>
                         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-text-muted">
                             {author ? (
-                                <>
+                                <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1.5 text-text-secondary hover:text-accent"
+                                    onClick={() => openGitHubUser(author.login)}
+                                >
                                     <Avatar person={author} size={16} />
-                                    <span className="text-text-secondary">{author.login}</span>
-                                </>
+                                    <span>{author.login}</span>
+                                </button>
                             ) : null}
                             {isPr && baseRef && headRef ? (
                                 <span>
                                     {merged ? "merged" : status === "open" ? "wants to merge" : "closed"}{" "}
-                                    into <code className="text-text-secondary">{baseRef}</code> from{" "}
-                                    <code className="text-text-secondary">{headRef}</code>
+                                    into{" "}
+                                    <button
+                                        type="button"
+                                        className="font-mono text-text-secondary hover:text-accent hover:underline"
+                                        onClick={() => openBranch(baseRef)}
+                                    >
+                                        {baseRef}
+                                    </button>{" "}
+                                    from{" "}
+                                    <button
+                                        type="button"
+                                        className="font-mono text-text-secondary hover:text-accent hover:underline"
+                                        onClick={() => openBranch(headRef)}
+                                    >
+                                        {headRef}
+                                    </button>
                                 </span>
                             ) : null}
-                            {isRelease && tagName ? <span>tag {tagName}</span> : null}
+                            {isRelease && tagName ? (
+                                <button
+                                    type="button"
+                                    className="hover:text-accent hover:underline"
+                                    onClick={() => openBranch(tagName)}
+                                >
+                                    tag {tagName}
+                                </button>
+                            ) : null}
                             {createdAt ? <span>· {formatRelative(createdAt)}</span> : null}
                             {loading ? <span>· Loading…</span> : null}
                         </p>
                     </div>
-                    {url ? (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 shrink-0 gap-1 px-2"
-                    onClick={() => {
-                        if (url) void commands.openUrlExternal(url);
-                    }}
-                >
-                    <Icon name="open_in_new" size={14} />
-                    Open on GitHub
-                </Button>
-                    ) : null}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        {isPr && item?.number != null ? (
+                            <AiActionButton
+                                loading={aiLoading}
+                                onClick={() => void handleSummarizePr()}
+                            >
+                                {aiLoading
+                                    ? "Summarizing…"
+                                    : aiSummary
+                                      ? "Re-summarize"
+                                      : "Summarize"}
+                            </AiActionButton>
+                        ) : null}
+                        {url ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 px-2"
+                                onClick={() => {
+                                    if (url) void commands.openUrlExternal(url);
+                                }}
+                            >
+                                <Icon name="open_in_new" size={14} />
+                                Open on GitHub
+                            </Button>
+                        ) : null}
+                    </div>
                 </div>
 
                 {isPr && (additions > 0 || deletions > 0 || files.length > 0) ? (
-                    <div className="mt-2 flex items-center gap-2 text-xs">
-                        <span className="text-[var(--git-added)]">+{additions}</span>
-                        <span className="text-[var(--git-deleted)]">−{deletions}</span>
+                    <div className={cn("mt-2 flex items-center gap-2 text-xs", onBack && "pl-9")}>
+                        <span className="text-git-added">+{additions}</span>
+                        <span className="text-git-deleted">−{deletions}</span>
                         <span className="h-2 w-16 overflow-hidden rounded-sm bg-panel-hover">
                             <span
-                                className="block h-full bg-[var(--git-added)]"
+                                className="block h-full bg-git-added"
                                 style={{
                                     width: `${Math.min(100, (additions / Math.max(1, additions + deletions)) * 100)}%`,
                                 }}
@@ -589,7 +555,7 @@ export function GitHubDetailPane({
                         onValueChange={setTab}
                         className="flex h-0 min-h-0 flex-1 flex-col"
                     >
-                        <div className="flex shrink-0 items-center border-b border-border-subtle/60 px-2 py-1">
+                        <div className="flex shrink-0 items-center px-2 py-1">
                             <TabsList>
                                 {tabs.map((t) => (
                                     <TabsTrigger key={t.id} value={t.id}>
@@ -604,29 +570,34 @@ export function GitHubDetailPane({
                             className="flex h-0 min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
                         >
                             <ScrollArea className="min-h-0 flex-1">
-                                <div className="flex flex-col gap-3 p-3">
-                                    <div className="overflow-hidden rounded-xl border border-border-subtle bg-panel/40">
-                                        <div className="flex items-center gap-2 border-b border-border-subtle/60 px-3 py-2">
-                                            <Avatar person={author} size={22} />
-                                            <span className="text-sm font-medium">
-                                                {author?.login ?? "author"}
-                                            </span>
-                                            <span className="ml-auto text-2xs text-text-muted">
-                                                {formatRelative(createdAt)}
-                                            </span>
-                                        </div>
-                                        <div className="min-w-0 overflow-x-auto px-3 py-3">
-                                            {body.trim() ? (
-                                                <GitMarkdown content={body} ctx={mdCtx} />
-                                            ) : (
-                                                <p className="text-sm text-text-muted">
-                                                    No description provided.
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {comments.map((c) => (
-                                        <CommentCard key={c.id} comment={c} ctx={mdCtx} />
+                                <div className="flex flex-col gap-0 p-3">
+                                    <GitAiInsight
+                                        title="AI summary"
+                                        content={aiSummary}
+                                        mdCtx={mdCtx}
+                                        className="mb-3"
+                                        onDismiss={() => setAiSummary(null)}
+                                    />
+                                    <ThreadMessage
+                                        person={author}
+                                        when={formatRelative(createdAt)}
+                                        isLast={comments.length === 0}
+                                    >
+                                        {body.trim() ? (
+                                            <GitMarkdown content={body} ctx={mdCtx} />
+                                        ) : (
+                                            <p className="text-sm text-text-muted">
+                                                No description provided.
+                                            </p>
+                                        )}
+                                    </ThreadMessage>
+                                    {comments.map((c, i) => (
+                                        <CommentCard
+                                            key={c.id}
+                                            comment={c}
+                                            ctx={mdCtx}
+                                            isLast={i === comments.length - 1}
+                                        />
                                     ))}
                                 </div>
                             </ScrollArea>
@@ -770,10 +741,10 @@ export function GitHubDetailPane({
                                                         {f.filename}
                                                     </span>
                                                     <span className="shrink-0 text-2xs tabular-nums">
-                                                        <span className="text-[var(--git-added)]">
+                                                        <span className="text-git-added">
                                                             +{f.additions ?? 0}
                                                         </span>{" "}
-                                                        <span className="text-[var(--git-deleted)]">
+                                                        <span className="text-git-deleted">
                                                             −{f.deletions ?? 0}
                                                         </span>
                                                     </span>
@@ -837,7 +808,7 @@ export function GitHubDetailPane({
 
                 {/* Sidebar metadata */}
                 {(isPr || isIssue || isRelease) && (
-                    <aside className="hidden w-[200px] shrink-0 flex-col overflow-hidden border-l border-border-subtle/60 min-[720px]:flex">
+                    <aside className="hidden w-50 shrink-0 flex-col overflow-hidden min-[720px]:flex">
                         <ScrollArea className="min-h-0 flex-1">
                             {(isPr || isIssue) && (
                                 <>
@@ -848,14 +819,17 @@ export function GitHubDetailPane({
                                             ) : (
                                                 <ul className="flex flex-col gap-1.5">
                                                     {reviewers.map((r) => (
-                                                        <li
-                                                            key={r.login}
-                                                            className="flex items-center gap-1.5"
-                                                        >
-                                                            <Avatar person={r} size={18} />
-                                                            <span className="truncate">
-                                                                {r.login}
-                                                            </span>
+                                                        <li key={r.login}>
+                                                            <button
+                                                                type="button"
+                                                                className="flex w-full items-center gap-1.5 text-left hover:text-accent"
+                                                                onClick={() => openGitHubUser(r.login)}
+                                                            >
+                                                                <Avatar person={r} size={18} />
+                                                                <span className="truncate">
+                                                                    {r.login}
+                                                                </span>
+                                                            </button>
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -868,12 +842,15 @@ export function GitHubDetailPane({
                                         ) : (
                                             <ul className="flex flex-col gap-1.5">
                                                 {assignees.map((a) => (
-                                                    <li
-                                                        key={a.login}
-                                                        className="flex items-center gap-1.5"
-                                                    >
-                                                        <Avatar person={a} size={18} />
-                                                        <span className="truncate">{a.login}</span>
+                                                    <li key={a.login}>
+                                                        <button
+                                                            type="button"
+                                                            className="flex w-full items-center gap-1.5 text-left hover:text-accent"
+                                                            onClick={() => openGitHubUser(a.login)}
+                                                        >
+                                                            <Avatar person={a} size={18} />
+                                                            <span className="truncate">{a.login}</span>
+                                                        </button>
                                                     </li>
                                                 ))}
                                             </ul>
@@ -919,10 +896,14 @@ export function GitHubDetailPane({
                             ) : null}
                             <SidebarSection title="Participants">
                                 {author ? (
-                                    <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-1.5 hover:text-accent"
+                                        onClick={() => openGitHubUser(author.login)}
+                                    >
                                         <Avatar person={author} size={18} />
                                         <span className="truncate">{author.login}</span>
-                                    </div>
+                                    </button>
                                 ) : (
                                     <span className="text-text-muted">—</span>
                                 )}

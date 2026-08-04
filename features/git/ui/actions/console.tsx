@@ -686,6 +686,24 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                       logRef={logRef}
                                       highlight={logHighlight}
                                       stepFilterActive={!!logHighlight && stepFilterActive}
+                                      explainContext={
+                                          repoSlug
+                                              ? [
+                                                    `Repo: ${repoSlug}`,
+                                                    selectedRun?.name
+                                                        ? `Workflow: ${selectedRun.name}`
+                                                        : null,
+                                                    selectedRun?.display_title
+                                                        ? `Title: ${selectedRun.display_title}`
+                                                        : null,
+                                                    selectedRun?.conclusion
+                                                        ? `Run conclusion: ${selectedRun.conclusion}`
+                                                        : null,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join("\n")
+                                              : null
+                                      }
                                       onToggleStepFilter={() => setStepFilterActive((v) => !v)}
                                       onReload={() => {
                                           if (selectedRunId) {
@@ -772,6 +790,24 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                       logRef={logRef}
                                       highlight={logHighlight}
                                       stepFilterActive={!!logHighlight && stepFilterActive}
+                                      explainContext={
+                                          repoSlug
+                                              ? [
+                                                    `Repo: ${repoSlug}`,
+                                                    selectedRun?.name
+                                                        ? `Workflow: ${selectedRun.name}`
+                                                        : null,
+                                                    selectedRun?.display_title
+                                                        ? `Title: ${selectedRun.display_title}`
+                                                        : null,
+                                                    selectedRun?.conclusion
+                                                        ? `Run conclusion: ${selectedRun.conclusion}`
+                                                        : null,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join("\n")
+                                              : null
+                                      }
                                       onToggleStepFilter={() => setStepFilterActive((v) => !v)}
                                       onReload={() => {
                                           if (selectedRunId) {

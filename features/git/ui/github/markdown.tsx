@@ -132,11 +132,13 @@ function createComponents(ctx?: GitMarkdownCtx): Components {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         img: ({ src, alt }: any) => {
             if (!src) return null;
-            // Tiny status badges / emoji images from bots
+            // Status badges / shields only — not screenshots with short alts.
             const isBadge =
-                /\/badge|shields\.io|camo\.githubusercontent|github\.com\/.*\.svg/i.test(
+                /shields\.io|\/badge\/|badge\.fury|img\.shields|github\.com\/.*\/actions\/workflows\/.*\/badge/i.test(
                     src,
-                ) || (alt?.length ?? 0) < 40;
+                ) ||
+                (/\.svg(\?|$)/i.test(src) &&
+                    /workflow|build|coverage|license|npm|version|status|pass|fail/i.test(src));
             return (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -144,10 +146,10 @@ function createComponents(ctx?: GitMarkdownCtx): Components {
                     alt={alt || ""}
                     loading="lazy"
                     className={cn(
-                        "inline-block max-w-full object-contain",
+                        "max-w-full object-contain",
                         isBadge
-                            ? "my-0.5 max-h-5 align-middle"
-                            : "my-2 max-h-80 rounded-lg border border-border-subtle",
+                            ? "my-0.5 inline-block max-h-5 align-middle"
+                            : "my-3 block h-auto max-h-96 w-auto rounded-lg border border-border-subtle",
                     )}
                 />
             );
@@ -175,32 +177,32 @@ function createComponents(ctx?: GitMarkdownCtx): Components {
         },
 
         details: ({ children }) => (
-            <details className="my-2 overflow-hidden rounded-lg border border-border-subtle bg-panel/30 open:bg-panel/50">
+            <details className="my-2 overflow-hidden rounded-lg border border-border-subtle bg-panel-hover open:bg-panel/50">
                 {children}
             </details>
         ),
         summary: ({ children }) => (
-            <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-text-primary marker:content-none [&::-webkit-details-marker]:hidden hover:bg-panel-hover/50">
+            <summary className="cursor-pointer list-none px-2 py-1.5 text-sm font-medium text-text-primary marker:content-none [&::-webkit-details-marker]:hidden hover:bg-panel-hover/50">
                 <span className="inline-flex items-center gap-1.5">{children}</span>
             </summary>
         ),
 
         table: ({ children }) => (
-            <div className="my-3 max-w-full overflow-x-auto rounded-lg border border-border-subtle">
+            <div className="my-3 max-w-full overflow-x-auto rounded-xl border border-border">
                 <table className="w-max min-w-full border-collapse text-left text-sm">
                     {children}
                 </table>
             </div>
         ),
         thead: ({ children }) => (
-            <thead className="bg-panel-hover/60 text-text-muted">{children}</thead>
+            <thead className="bg-panel-hover text-text-muted">{children}</thead>
         ),
         tbody: ({ children }) => (
             <tbody className="divide-y divide-border-subtle/60">{children}</tbody>
         ),
         tr: ({ children }) => <tr className="align-top">{children}</tr>,
         th: ({ children }) => (
-            <th className="whitespace-nowrap px-3 py-1.5 text-2xs font-medium uppercase tracking-wide">
+            <th className="whitespace-nowrap px-3 py-1.5 text-sm font-medium">
                 {children}
             </th>
         ),

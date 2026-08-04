@@ -62,7 +62,7 @@ export function JobsPanel({
                 <div className="shrink-0 px-2 py-1.5 text-2xs font-medium text-text-muted">
                     Steps {loading ? "…" : `(${flat.length})`}
                 </div>
-                <ScrollArea className="min-h-0 flex-1">
+                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
                     {flat.length === 0 ? (
                         <p className="px-3 py-4 text-sm text-text-muted">
                             {loading ? "Loading…" : "No steps yet."}
@@ -107,7 +107,7 @@ export function JobsPanel({
             <div className="shrink-0 px-2 py-1.5 text-2xs font-medium text-text-muted">
                 Jobs {loading ? "…" : `(${jobs.length})`}
             </div>
-            <ScrollArea className="min-h-0 flex-1">
+            <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
                 {jobs.length === 0 ? (
                     <p className="px-3 py-4 text-sm text-text-muted">
                         {loading ? "Loading…" : "No jobs yet."}

@@ -45,7 +45,7 @@ export function RunsList({
             <div className="px-2 py-1.5 text-2xs font-medium text-text-muted">
                 Workflow runs {loading ? "…" : `(${runs.length})`}
             </div>
-            <ScrollArea className="min-h-0 flex-1">
+            <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
                 {runs.length === 0 ? (
                     <p className="px-3 py-4 text-sm text-text-muted">No runs match.</p>
                 ) : (

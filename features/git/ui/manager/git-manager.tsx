@@ -13,10 +13,10 @@ import { commands, useProjectState } from "@/lib/backend";
 import type { GitSectionId } from "@/features/git/types";
 import Source from "@/features/git/ui/source/source";
 import Graph from "@/features/git/ui/graph/graph";
-import { BranchWindow } from "@/features/git/ui/branches/branch-window";
-import { LocalTags } from "@/features/git/ui/tags/local-tags";
-import { GitHubSection } from "@/features/git/ui/github/github-section";
-import { ActionsConsole, isActionsSection } from "@/features/git/ui/actions/actions-console";
+import { BranchWindow } from "@/features/git/ui/branches/panel";
+import { LocalTags } from "@/features/git/ui/tags/panel";
+import { GitHubSection } from "@/features/git/ui/github/section";
+import { ActionsConsole, isActionsSection } from "@/features/git/ui/actions/console";
 import { useFilter, isGitSectionId, persistGitSection, readStoredGitSection } from "./filter-context";
 import { useGitRepos } from "@/lib/git/repos";
 

@@ -19,12 +19,11 @@ import {
 } from "@/components/ui/context";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
-import { ManagerDiffEditor } from "@/features/git/ui/manager/monaco-diff";
+import { ManagerDiffEditor } from "@/features/git/ui/shared/monaco-diff";
 import { useGitRepos } from "@/lib/git/repos";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { QuickPick } from "@/components/ui/quick-pick";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
-import { Panel } from "@/features/panels";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 
 async function notifyGitRefresh() {
@@ -84,8 +83,8 @@ function SyncPills({ ahead, behind }: { ahead?: number | null; behind?: number |
     }
     return (
         <span className="flex items-center gap-1.5 text-[11px] tabular-nums text-text-muted">
-            {a > 0 ? <span className="text-[var(--git-added)]">↑{a}</span> : null}
-            {b > 0 ? <span className="text-[var(--git-deleted)]">↓{b}</span> : null}
+            {a > 0 ? <span className="text-git-added">↑{a}</span> : null}
+            {b > 0 ? <span className="text-git-deleted">↓{b}</span> : null}
         </span>
     );
 }
@@ -250,7 +249,11 @@ export function BranchWindow() {
             setCurrentBranch(current);
             const detailsWithSync = await commands.gitBranchDetails(project_path, current, true);
             setBranchDetails(detailsWithSync.length > 0 ? detailsWithSync : details);
-            setSelectedName((prev) => prev ?? current ?? locals[0] ?? remotes[0] ?? null);
+            setSelectedName((prev) => {
+                if (prev == null) return null;
+                if (locals.includes(prev) || remotes.includes(prev)) return prev;
+                return null;
+            });
         } catch (e) {
             notify.gitError(e);
         } finally {
@@ -660,14 +663,27 @@ export function BranchWindow() {
     );
 
     const detailPane = (
-        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-editor">
             {!selectedItem ? (
                 <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
                     Select a branch
                 </div>
             ) : (
                 <>
-                    <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border-subtle/60 px-3">
+                    <div className="flex h-9 shrink-0 items-center gap-2 px-2">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => {
+                                setSelectedName(null);
+                                clearCompare();
+                            }}
+                            aria-label="Back to branches"
+                        >
+                            <Icon name="arrow_back" size={16} />
+                        </Button>
                         <Icon
                             name={selectedItem.kind === "remote" ? "cloud" : "account_tree"}
                             size={15}
@@ -879,28 +895,7 @@ export function BranchWindow() {
 
     return (
         <div className="flex h-full min-h-0 w-full overflow-hidden">
-            <Panel
-                className="min-h-0 flex-1"
-                direction="horizontal"
-                storageKey="git-manager-branches"
-                hideSeparator
-                paneGap="var(--workbench-gap)"
-                panes={[
-                    {
-                        id: "branch-list",
-                        preferredSize: 320,
-                        minSize: 240,
-                        maxSize: 480,
-                        children: listPane,
-                    },
-                    {
-                        id: "branch-detail",
-                        flexible: true,
-                        minSize: 280,
-                        children: detailPane,
-                    },
-                ]}
-            />
+            {selectedItem ? detailPane : listPane}
 
             <QuickPick
                 open={renameTarget != null}

@@ -274,6 +274,8 @@ pub fn run() {
             agent::get_conversations,
             agent::apply_file_edit,
             agent::generate_commit_message,
+            agent::summarize_pull_request,
+            agent::explain_ci_log,
             agent::approve_terminal_command,
             agent::reject_terminal_command,
             agent::restore_checkpoint,

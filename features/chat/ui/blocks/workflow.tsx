@@ -61,6 +61,69 @@ export function parseGitStatusLines(content?: string): GitStatusLine[] {
     });
 }
 
+type GitLogLine = { hash: string; date: string; author: string; subject: string };
+
+export function parseGitLogLines(content?: string): GitLogLine[] {
+    if (!content?.trim()) return [];
+    return content.split("\n").flatMap((line) => {
+        const trimmed = line.trim();
+        // New structured form
+        const structured = trimmed.match(/^\[commit\]\s+([^|]+)\|([^|]*)\|([^|]*)\|(.*)$/);
+        if (structured) {
+            return [{
+                hash: structured[1].trim(),
+                date: structured[2].trim(),
+                author: structured[3].trim(),
+                subject: structured[4].trim(),
+            }];
+        }
+        // Legacy: `abc1234 2024-01-01 — subject (author)`
+        const legacy = trimmed.match(/^([0-9a-f]{7,40})\s+(\S+)\s+—\s+(.+?)\s+\(([^)]+)\)\s*$/i);
+        if (legacy) {
+            return [{
+                hash: legacy[1],
+                date: legacy[2],
+                subject: legacy[3].trim(),
+                author: legacy[4].trim(),
+            }];
+        }
+        return [];
+    });
+}
+
+type GitBranchLine = { name: string; current: boolean; remote: boolean };
+
+export function parseGitBranchLines(content?: string): GitBranchLine[] {
+    if (!content?.trim()) return [];
+    return content.split("\n").flatMap((line) => {
+        const trimmed = line.trim();
+        const match = trimmed.match(/^\[([* r!])\]\s+(.+)$/);
+        if (!match) return [];
+        const mark = match[1];
+        if (mark === "!") return [];
+        return [{
+            name: match[2].trim(),
+            current: mark === "*",
+            remote: mark === "r",
+        }];
+    });
+}
+
+export function parseGitDiffMeta(content?: string): { file?: string; scope?: string; body: string } {
+    if (!content?.trim()) return { body: "" };
+    const lines = content.split("\n");
+    const first = lines[0]?.trim() ?? "";
+    const fileMatch = first.match(/^\[file\]\s+(.+)$/);
+    if (fileMatch) {
+        return { file: fileMatch[1].trim(), body: lines.slice(1).join("\n") };
+    }
+    const scopeMatch = first.match(/^\[scope\]\s+(\w+)$/);
+    if (scopeMatch) {
+        return { scope: scopeMatch[1], body: lines.slice(1).join("\n") };
+    }
+    return { body: content };
+}
+
 type WorkflowRow =
     | { kind: "block"; block: Chunk }
     | { kind: "git_stage_group"; paths: string[] };
@@ -179,6 +242,151 @@ function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
                     </span>
                 ) : null}
             </div>
+        </div>
+    );
+}
+
+function GitLogGroup({ lines }: { lines: GitLogLine[] }) {
+    const [open, setOpen] = useState(false);
+    const preview = lines.slice(0, 5);
+    const shown = open ? lines : preview;
+
+    return (
+        <div className="flex flex-col gap-1 py-0.5">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="flex items-center gap-1.5 w-fit text-left group"
+            >
+                <Icon name="history" size={14} className="text-text-muted shrink-0" />
+                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
+                    Git log
+                </span>
+                <span className="text-xs text-text-disabled">{lines.length} commits</span>
+                <Icon
+                    name={open ? "expand_less" : "expand_more"}
+                    size={12}
+                    className="text-text-disabled shrink-0"
+                />
+            </button>
+            <div className="flex flex-col gap-0.5 pl-5">
+                {shown.map((line) => (
+                    <div key={line.hash} className="flex items-baseline gap-2 min-w-0 text-xs">
+                        <span className="font-mono shrink-0 text-accent">{line.hash}</span>
+                        <span className="min-w-0 truncate text-text-secondary">{line.subject}</span>
+                        <span className="shrink-0 text-text-disabled">{line.author}</span>
+                    </div>
+                ))}
+                {!open && lines.length > preview.length ? (
+                    <span className="text-xs text-text-disabled pl-1">
+                        +{lines.length - preview.length} more
+                    </span>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function GitBranchesGroup({ lines }: { lines: GitBranchLine[] }) {
+    const [open, setOpen] = useState(false);
+    const current = lines.find((l) => l.current);
+    const preview = lines.slice(0, 8);
+    const shown = open ? lines : preview;
+
+    return (
+        <div className="flex flex-col gap-1 py-0.5">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="flex items-center gap-1.5 w-fit text-left group"
+            >
+                <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
+                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
+                    Branches
+                </span>
+                <span className="text-xs text-text-disabled">
+                    {lines.length}
+                    {current ? ` · on ${current.name}` : ""}
+                </span>
+                <Icon
+                    name={open ? "expand_less" : "expand_more"}
+                    size={12}
+                    className="text-text-disabled shrink-0"
+                />
+            </button>
+            <div className="flex flex-col gap-0.5 pl-5">
+                {shown.map((line) => (
+                    <div key={line.name} className="flex items-center gap-1.5 min-w-0 text-xs">
+                        <span
+                            className={cn(
+                                "w-3 shrink-0 text-center font-mono",
+                                line.current ? "text-success" : "text-transparent",
+                            )}
+                        >
+                            {line.current ? "●" : "·"}
+                        </span>
+                        <span
+                            className={cn(
+                                "min-w-0 truncate font-mono",
+                                line.current ? "text-text-primary" : "text-text-secondary",
+                                line.remote && "text-text-muted",
+                            )}
+                        >
+                            {line.name}
+                        </span>
+                    </div>
+                ))}
+                {!open && lines.length > preview.length ? (
+                    <span className="text-xs text-text-disabled pl-4">
+                        +{lines.length - preview.length} more
+                    </span>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function GitDiffGroup({
+    file,
+    scope,
+    body,
+}: {
+    file?: string;
+    scope?: string;
+    body: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const lineCount = body ? body.split("\n").filter(Boolean).length : 0;
+    const label = file
+        ? `Diff · ${file.split(/[/\\]/).pop()}`
+        : scope === "staged"
+          ? "Staged diff"
+          : "Git diff";
+
+    return (
+        <div className="flex flex-col gap-1 py-0.5">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="flex items-center gap-1.5 w-fit text-left group"
+            >
+                <Icon name="code" size={14} className="text-text-muted shrink-0" />
+                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
+                    {label}
+                </span>
+                {file ? <FilePill path={file} /> : null}
+                <span className="text-xs text-text-disabled">{lineCount} lines</span>
+                <Icon
+                    name={open ? "expand_less" : "expand_more"}
+                    size={12}
+                    className="text-text-disabled shrink-0"
+                />
+            </button>
+            {open && body.trim() ? (
+                <pre className="ml-5 max-h-64 overflow-auto rounded-md border border-border-subtle bg-editor px-2 py-1.5 font-mono text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap break-all">
+                    {body}
+                </pre>
+            ) : null}
         </div>
     );
 }
@@ -319,6 +527,9 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
             const status = block.gitStatus ?? "completed";
             const stagePath = op === "stage" ? parseGitStagePath(block.content) : null;
             const statusLines = op === "status" ? parseGitStatusLines(block.content) : [];
+            const logLines = op === "log" ? parseGitLogLines(block.content) : [];
+            const branchLines = op === "branches" ? parseGitBranchLines(block.content) : [];
+            const diffMeta = op === "diff" ? parseGitDiffMeta(block.content) : null;
             const label =
                 status === "running"
                     ? `${op}…`
@@ -332,25 +543,39 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                                     ? "Git status"
                                     : op === "log"
                                         ? "Git log"
-                                        : op === "stage"
-                                            ? "Staged"
-                                            : op === "commit"
-                                                ? "Committed"
-                                                : `Git ${op}`;
+                                        : op === "diff"
+                                            ? "Git diff"
+                                            : op === "branches"
+                                                ? "Branches"
+                                                : op === "stage"
+                                                    ? "Staged"
+                                                    : op === "commit"
+                                                        ? "Committed"
+                                                        : `Git ${op}`;
             return {
                 label,
-                file: stagePath ?? undefined,
+                file: stagePath ?? diffMeta?.file ?? undefined,
                 query:
-                    op === "stage" || op === "status"
+                    op === "stage" ||
+                    op === "status" ||
+                    op === "log" ||
+                    op === "branches" ||
+                    op === "diff"
                         ? undefined
                         : block.content?.trim() || undefined,
                 expandable:
                     op !== "stage" &&
                     op !== "status" &&
+                    op !== "log" &&
+                    op !== "branches" &&
+                    op !== "diff" &&
                     Boolean(block.content && block.content.length > 80),
                 content: block.content,
                 icon: status === "running" ? "sync" : "account_tree",
                 gitStatusLines: statusLines.length > 0 ? statusLines : undefined,
+                gitLogLines: logLines.length > 0 ? logLines : undefined,
+                gitBranchLines: branchLines.length > 0 ? branchLines : undefined,
+                gitDiffMeta: diffMeta?.body ? diffMeta : undefined,
             };
         }
         default:
@@ -565,6 +790,24 @@ function ActionItem({
 
     if (block.type === "git_operation" && block.gitOp === "status" && config.gitStatusLines?.length) {
         return <GitStatusGroup lines={config.gitStatusLines} />;
+    }
+
+    if (block.type === "git_operation" && block.gitOp === "log" && config.gitLogLines?.length) {
+        return <GitLogGroup lines={config.gitLogLines} />;
+    }
+
+    if (block.type === "git_operation" && block.gitOp === "branches" && config.gitBranchLines?.length) {
+        return <GitBranchesGroup lines={config.gitBranchLines} />;
+    }
+
+    if (block.type === "git_operation" && block.gitOp === "diff" && config.gitDiffMeta) {
+        return (
+            <GitDiffGroup
+                file={config.gitDiffMeta.file}
+                scope={config.gitDiffMeta.scope}
+                body={config.gitDiffMeta.body}
+            />
+        );
     }
 
     if (block.type === "git_operation" && block.gitOp === "stage" && config.file) {

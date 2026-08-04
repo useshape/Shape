@@ -442,6 +442,15 @@ function StepRow({ block }: { block: Chunk }) {
     if (block.type === "git_operation" && block.gitOp === "status") {
         return <div className="py-0.5 text-xs text-text-disabled">Git status</div>;
     }
+    if (block.type === "git_operation" && block.gitOp === "log") {
+        return <div className="py-0.5 text-xs text-text-disabled">Git log</div>;
+    }
+    if (block.type === "git_operation" && block.gitOp === "diff") {
+        return <div className="py-0.5 text-xs text-text-disabled">Git diff</div>;
+    }
+    if (block.type === "git_operation" && block.gitOp === "branches") {
+        return <div className="py-0.5 text-xs text-text-disabled">Branches</div>;
+    }
 
     return null;
 }
