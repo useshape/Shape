@@ -134,6 +134,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "grep" => tool_grep(&args, ctx).await,
         "search_codebase" => tool_search_codebase(&args, ctx).await,
         "web_search" => tool_web_search(&args, ctx).await,
+        "visit_url" => tool_visit_url(&args, ctx).await,
         "create_directory" => tool_create_directory(&args, ctx),
         "create_file" => tool_create_file(&args, ctx),
         "edit_file" => tool_edit_file(&args, ctx).await,
@@ -176,7 +177,7 @@ fn record_tool_event(name: &str, outcome: &ToolOutcome, project_path: &str) {
         "create_file" | "create_directory" => "ai_file_creates",
         "delete_file" => "ai_file_deletes",
         "rename_file" => "ai_file_renames",
-        "search_files" | "grep" | "search_codebase" | "web_search" => "ai_searches",
+        "search_files" | "grep" | "search_codebase" | "web_search" | "visit_url" => "ai_searches",
         "read_file" | "list_dir" | "read_terminal" | "list_terminals" => "ai_reads",
         "git_commit" => "ai_git_commits",
         "git_fetch" => "ai_git_fetches",
@@ -267,7 +268,7 @@ async fn tool_search_files(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         escape_xml_text(&clip(&res, 2000))
     );
     ToolOutcome {
-        tool_result: clip(&res, 12000),
+        tool_result: clip(&res, 6000),
         ui_chunk: ui,
         side_effect: None,
     }
@@ -278,15 +279,37 @@ async fn tool_grep(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         Ok(s) => s,
         Err(e) => return error_outcome("grep", &e),
     };
+    let opts = search::GrepOptions {
+        path: args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        glob: args
+            .get("glob")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        context: args
+            .get("context")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize,
+        case_sensitive: args
+            .get("case_sensitive")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        head_limit: args
+            .get("head_limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(80) as usize,
+    };
     let proj_opt = Some(ctx.project_path.to_string());
-    let res = search::execute_local_search(&query, &proj_opt).await;
+    let res = search::execute_grep(&query, &proj_opt, opts).await;
     let ui = format!(
         "\n<search_result query=\"{}\">\n{}\n</search_result>\n",
         escape_xml_attr(&query),
-        escape_xml_text(&clip(&res, 2000))
+        escape_xml_text(&clip(&res, 1500))
     );
     ToolOutcome {
-        tool_result: clip(&res, 12000),
+        tool_result: clip(&res, 8000),
         ui_chunk: ui,
         side_effect: None,
     }
@@ -304,9 +327,50 @@ async fn tool_web_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         escape_xml_text(&clip(&res, 4000))
     );
     ToolOutcome {
-        tool_result: clip(&res, 12000),
+        tool_result: clip(&res, 6000),
         ui_chunk: ui,
         side_effect: None,
+    }
+}
+
+async fn tool_visit_url(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let url = match get_str(args, "url") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("visit_url", &e),
+    };
+    streaming::emit_chat_status(
+        ctx.app_handle,
+        json!({
+            "phase": "tool",
+            "tool": "visit_url",
+            "label": format!("Visiting {url}"),
+        }),
+    );
+    match search::execute_visit_url(&url, ctx.api_key).await {
+        Ok(res) => {
+            let host = if res.host.is_empty() {
+                res.url.clone()
+            } else {
+                res.host.clone()
+            };
+            let title = if res.title.is_empty() {
+                host.clone()
+            } else {
+                res.title.clone()
+            };
+            let ui = format!(
+                "\n<web_visit url=\"{}\" host=\"{}\" title=\"{}\"></web_visit>\n",
+                escape_xml_attr(&res.url),
+                escape_xml_attr(&host),
+                escape_xml_attr(&title),
+            );
+            ToolOutcome {
+                tool_result: clip(&res.formatted, 10000),
+                ui_chunk: ui,
+                side_effect: None,
+            }
+        }
+        Err(e) => error_outcome("visit_url", &e),
     }
 }
 
@@ -1624,12 +1688,12 @@ async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
             .get("width")
             .and_then(|v| v.as_u64())
             .unwrap_or(640)
-            .clamp(280, 1200) as u32;
+            .clamp(320, 1200) as u32;
         let height = concept
             .get("height")
             .and_then(|v| v.as_u64())
             .unwrap_or(360)
-            .clamp(160, 800) as u32;
+            .clamp(200, 640) as u32;
 
         // Live HTML iframes — no PNG capture. WebView2 iframe + html-to-image was
         // unreliable (asset protocol / ready timeouts). Self-contained HTML with
@@ -1679,7 +1743,7 @@ async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
 
     ToolOutcome {
         tool_result: format!(
-            "Prepared a live component preview in chat (session {session_id}). It stays in the chat canvas — interactive. Ask in plain language whether to add it to the project, or wait for the user to say go ahead / build it / change something. Do not invent a selection UI. When implementing, match the project's existing UI library (shadcn/Radix/etc.); if the project has no UI stack yet, use Radix primitives + Tailwind."
+            "Prepared a live component preview in chat (session {session_id}). Full-width card; the sandbox centers the component with padding so menus are not clipped. Call finish NOW with a short note. Do not call more tools unless the user asks for a change."
         ),
         ui_chunk: format!("\n{ui}\n"),
         side_effect: None,

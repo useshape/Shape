@@ -26,7 +26,9 @@ import {
     type ComposerTaskItem,
 } from "./activity";
 import { MediaLightbox } from "../blocks/lightbox";
-import { mentionRanges } from "@/lib/chat-mentions";
+import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText } from "@/lib/chat-mentions";
+import { FileIcon } from "@/components/ui/file-icon";
+import { Favicon } from "@/components/ui/favicon";
 import { resolveChatUsageDisplay } from "@/lib/usage-display";
 import { UsageRing } from "./usage";
 import { getVisibleModels, type ModelInfo } from "@/lib/models";
@@ -130,7 +132,7 @@ const ModelItem = ({
 }) => {
     const unavailableTooltip =
         disabledReason ??
-        "Auto is available on Free. Direct model selection for this model is limited to paid plans. Upgrade or keep Auto selected.";
+        "Direct model selection for this model is limited to paid plans. Upgrade to use.";
 
     return (
         <Tooltip
@@ -249,20 +251,46 @@ export function ChatInput({
     const [mentionCaret, setMentionCaret] = React.useState(0);
 
     const handleInputChangeWithMentions = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const val = e.target.value;
-        onInputChange(e);
-        const caret = e.target.selectionStart ?? val.length;
-        const before = val.slice(0, caret);
-        const atMatch = before.match(/@([\w./-]*)$/);
+        const raw = e.target.value;
+        const caretRaw = e.target.selectionStart ?? raw.length;
+        const shortened = shortenMentionTokensInText(raw);
+        const delta = raw.length - shortened.length;
+        const caret = Math.max(0, caretRaw - (delta > 0 && caretRaw > shortened.length ? delta : 0));
+        // If we collapsed a long path token, rewrite value + restore caret near the edit.
+        if (shortened !== raw) {
+            onInputChange({ target: { value: shortened } } as React.ChangeEvent<HTMLTextAreaElement>);
+            requestAnimationFrame(() => {
+                const el = textareaRef.current;
+                if (!el) return;
+                const pos = Math.min(caret, shortened.length);
+                el.setSelectionRange(pos, pos);
+            });
+        } else {
+            onInputChange(e);
+        }
+        const val = shortened;
+        const caretNow = shortened !== raw ? Math.min(caret, shortened.length) : caretRaw;
+        const before = val.slice(0, caretNow);
+        // Allow hostnames / paths after @ (sites, files). Anchor menu at the `@`, not caret end.
+        const atMatch = before.match(/@([\w./:-]*)$/);
         if (atMatch) {
+            const atStart = caretNow - atMatch[0].length;
             setMentionOpen(true);
             setMentionQuery(atMatch[1] ?? "");
-            setMentionCaret(caret);
+            setMentionCaret(atStart);
         } else {
             setMentionOpen(false);
             setMentionQuery("");
         }
     }, [onInputChange]);
+
+    // Collapse any long path mentions already in the composer (e.g. pasted / leftover).
+    React.useEffect(() => {
+        const shortened = shortenMentionTokensInText(inputValue);
+        if (shortened !== inputValue) {
+            onInputChange({ target: { value: shortened } } as React.ChangeEvent<HTMLTextAreaElement>);
+        }
+    }, [inputValue, onInputChange]);
 
     const insertMention = React.useCallback((token: string) => {
         const textarea = textareaRef.current;
@@ -413,8 +441,8 @@ export function ChatInput({
     const inputPanel = (
                 <div
                     className={cn(
-                        "relative w-full border border-border bg-surface-3 focus-within:border-border-secondary transition-colors flex flex-col",
-                        hasComposerChrome ? "rounded-xl" : "rounded-xl",
+                        "relative w-full border border-border-subtle bg-surface-3 focus-within:border-border transition-colors flex flex-col",
+                        hasComposerChrome ? "rounded-2xl" : "rounded-2xl",
                         needsSignIn && "opacity-50 cursor-not-allowed pointer-events-none",
                     )}
                     onDrop={needsSignIn ? undefined : handleDrop}
@@ -493,12 +521,44 @@ export function ChatInput({
                                 if (range.start > cursor) {
                                     nodes.push(inputValue.slice(cursor, range.start));
                                 }
+                                const raw = inputValue.slice(range.start, range.end);
+                                const { mention } = range;
+                                const label = mentionDisplayLabel(mention);
+                                // Keep `raw` in the flow for caret alignment; icon overlays the leading `@`.
                                 nodes.push(
                                     <span
                                         key={`m-${i}`}
-                                        className="rounded-[3px] bg-accent/30 text-accent"
+                                        className="relative inline rounded-[3px] bg-accent/30 text-accent"
                                     >
-                                        {inputValue.slice(range.start, range.end)}
+                                        <span className="pointer-events-none absolute left-[2px] top-1/2 z-[1] -translate-y-1/2 opacity-95">
+                                            {mention.kind === "file" ||
+                                            mention.kind === "folder" ||
+                                            mention.kind === "docs" ? (
+                                                <FileIcon name={label} className="h-3 w-3" />
+                                            ) : mention.kind === "browser" ? (
+                                                <Favicon url={mention.path || label} size={12} />
+                                            ) : (
+                                                <Icon
+                                                    name={
+                                                        mention.kind === "chat"
+                                                            ? "chat"
+                                                            : mention.kind === "design"
+                                                              ? "palette"
+                                                              : mention.kind === "terminal"
+                                                                ? "terminal"
+                                                                : mention.kind === "branch"
+                                                                  ? "account_tree"
+                                                                  : mention.kind === "codebase"
+                                                                    ? "search"
+                                                                    : mention.kind === "selection"
+                                                                      ? "code"
+                                                                      : "alternate_email"
+                                                    }
+                                                    size={12}
+                                                />
+                                            )}
+                                        </span>
+                                        {raw}
                                     </span>,
                                 );
                                 cursor = range.end;
@@ -520,7 +580,16 @@ export function ChatInput({
                                 onPaste={needsSignIn ? undefined : handlePaste}
                                 onSelect={(e) => {
                                     if (!mentionOpen) return;
-                                    setMentionCaret(e.currentTarget.selectionStart ?? 0);
+                                    const el = e.currentTarget;
+                                    const caret = el.selectionStart ?? 0;
+                                    const before = el.value.slice(0, caret);
+                                    const atMatch = before.match(/@([\w./:-]*)$/);
+                                    if (atMatch) {
+                                        setMentionCaret(caret - atMatch[0].length);
+                                        setMentionQuery(atMatch[1] ?? "");
+                                    } else {
+                                        setMentionOpen(false);
+                                    }
                                 }}
                                 readOnly={needsSignIn}
                                 placeholder={needsSignIn ? "Sign in to use the chat" : "Ask anything…"}

@@ -14,6 +14,7 @@ import { commands } from "@/lib/backend";
 import type { McpStatusEntry } from "@/lib/backend/types";
 import type { McpServerConfig } from "@/lib/settings";
 import { loadMcpServersFromFile, saveMcpServers, openMcpConfig } from "@/lib/mcp-config";
+import { SettingSection } from "../setting-controls";
 import {
     MCP_CATALOG,
     MCP_CATEGORIES,
@@ -22,109 +23,57 @@ import {
     type McpCategory,
 } from "./catalog";
 
-type EntryState = {
-    installed: boolean;
-    status?: McpStatusEntry["status"];
-    busy?: "adding" | "connecting";
-};
+type BusyKind = "adding" | "removing" | "connecting";
 
-const SECTION_PREVIEW = 6;
-
-function CatalogRow({
-    entry,
-    state,
-    onAdd,
-    onConnect,
-}: {
-    entry: McpCatalogEntry;
-    state: EntryState;
-    onAdd: () => void;
-    onConnect: () => void;
-}) {
-    return (
-        <div className="flex items-center gap-3 min-w-0 py-2">
-            <McpLogo entry={entry} size={32} />
-            <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-text-primary truncate">{entry.name}</div>
-                <p className="text-xs text-text-muted truncate">{entry.description}</p>
-            </div>
-            {state.busy ? (
-                <span className="text-xs text-text-muted shrink-0">
-                    {state.busy === "adding" ? "Adding…" : "Connecting…"}
-                </span>
-            ) : !state.installed ? (
-                <Button variant="outline" size="sm" onClick={onAdd}>
-                    Add
-                </Button>
-            ) : state.status === "needs_auth" ? (
-                <Button variant="outline" size="sm" onClick={onConnect}>
-                    Connect
-                </Button>
-            ) : (
-                <span
-                    className={
-                        state.status === "error" ? "text-xs text-error shrink-0" : "text-xs text-success shrink-0"
-                    }
-                >
-                    {state.status === "error" ? "Error" : "Added"}
-                </span>
-            )}
-        </div>
-    );
+function statusLabel(status?: McpStatusEntry["status"]): string {
+    switch (status) {
+        case "connected":
+            return "Connected";
+        case "needs_auth":
+            return "Sign in required";
+        case "error":
+            return "Error";
+        case "disabled":
+            return "Disabled";
+        default:
+            return "Installed";
+    }
 }
 
-function DiscoverCard({
-    entry,
-    state,
-    onAdd,
-    onConnect,
+function ServerRow({
+    name,
+    description,
+    logo,
+    trailing,
 }: {
-    entry: McpCatalogEntry;
-    state: EntryState;
-    onAdd: () => void;
-    onConnect: () => void;
+    name: string;
+    description: string;
+    logo: React.ReactNode;
+    trailing: React.ReactNode;
 }) {
     return (
-        <div className="flex min-w-60 max-w-70 shrink-0 items-start gap-3 rounded-xl border border-border bg-panel p-3.5">
-            <McpLogo entry={entry} size={40} />
+        <div className="flex items-center gap-3 px-3.5 py-2.5">
+            {logo}
             <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-text-primary truncate">{entry.name}</div>
-                <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{entry.description}</p>
-                <div className="mt-2.5">
-                    {state.busy ? (
-                        <span className="text-xs text-text-muted">
-                            {state.busy === "adding" ? "Adding…" : "Connecting…"}
-                        </span>
-                    ) : !state.installed ? (
-                        <Button variant="outline" size="sm" onClick={onAdd}>
-                            Add
-                        </Button>
-                    ) : state.status === "needs_auth" ? (
-                        <Button variant="outline" size="sm" onClick={onConnect}>
-                            Connect
-                        </Button>
-                    ) : (
-                        <span className={state.status === "error" ? "text-xs text-error" : "text-xs text-success"}>
-                            {state.status === "error" ? "Error" : "Added"}
-                        </span>
-                    )}
-                </div>
+                <div className="text-sm font-medium text-text-primary truncate">{name}</div>
+                <p className="text-sm text-text-muted mt-0.5 truncate" title={description}>
+                    {description}
+                </p>
             </div>
+            <div className="flex items-center gap-2 shrink-0">{trailing}</div>
         </div>
     );
 }
 
 /**
- * Settings sub-view: browse curated MCP servers (Discover + categories).
- * OAuth is started automatically when a server needs sign-in.
+ * Settings sub-view: manage installed MCP servers and browse the catalog.
  */
 export function McpLibraryView({ onBack }: { onBack: () => void }) {
     const [query, setQuery] = React.useState("");
     const [categoryFilter, setCategoryFilter] = React.useState<"All" | McpCategory>("All");
     const [servers, setServers] = React.useState<McpServerConfig[]>([]);
     const [statuses, setStatuses] = React.useState<McpStatusEntry[]>([]);
-    const [busy, setBusy] = React.useState<Record<string, EntryState["busy"]>>({});
-    const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+    const [busy, setBusy] = React.useState<Record<string, BusyKind>>({});
 
     const refresh = React.useCallback(async () => {
         try {
@@ -154,14 +103,15 @@ export function McpLibraryView({ onBack }: { onBack: () => void }) {
         return () => unlisten?.();
     }, [refresh]);
 
-    const stateFor = React.useCallback(
-        (entry: McpCatalogEntry): EntryState => {
-            const installed = servers.some((s) => s.id === entry.id);
-            const status = statuses.find((s) => s.id === entry.id)?.status;
-            return { installed, status, busy: busy[entry.id] };
-        },
-        [servers, statuses, busy],
-    );
+    const statusFor = (id: string) => statuses.find((s) => s.id === id);
+
+    const persist = async (next: McpServerConfig[]) => {
+        await saveMcpServers(next);
+        setServers(next);
+        const status = (await commands.syncMcpServers(next)) as McpStatusEntry[];
+        setStatuses(status);
+        return status;
+    };
 
     const handleAdd = async (entry: McpCatalogEntry) => {
         setBusy((b) => ({ ...b, [entry.id]: "adding" }));
@@ -174,11 +124,7 @@ export function McpLibraryView({ onBack }: { onBack: () => void }) {
                 enabled: true,
                 ...entry.config,
             });
-            await saveMcpServers(next);
-            setServers(next);
-            const status = (await commands.syncMcpServers(next)) as McpStatusEntry[];
-            setStatuses(status);
-
+            const status = await persist(next);
             const added = status.find((s) => s.id === entry.id);
             if (added?.status === "needs_auth") {
                 setBusy((b) => ({ ...b, [entry.id]: "connecting" }));
@@ -195,21 +141,51 @@ export function McpLibraryView({ onBack }: { onBack: () => void }) {
         });
     };
 
-    const handleConnect = async (entry: McpCatalogEntry) => {
-        setBusy((b) => ({ ...b, [entry.id]: "connecting" }));
+    const handleRemove = async (id: string) => {
+        setBusy((b) => ({ ...b, [id]: "removing" }));
         try {
-            await commands.mcpStartOAuth(entry.id);
+            const existing = await loadMcpServersFromFile();
+            await persist(existing.filter((s) => s.id !== id));
+        } catch {
+            /* keep installed */
+        }
+        setBusy((b) => {
+            const next = { ...b };
+            delete next[id];
+            return next;
+        });
+    };
+
+    const handleConnect = async (id: string) => {
+        setBusy((b) => ({ ...b, [id]: "connecting" }));
+        try {
+            await commands.mcpStartOAuth(id);
         } catch {
             setBusy((b) => {
                 const next = { ...b };
-                delete next[entry.id];
+                delete next[id];
                 return next;
             });
         }
     };
 
     const q = query.trim().toLowerCase();
-    const filtered = MCP_CATALOG.filter((e) => {
+    const installedIds = new Set(servers.map((s) => s.id));
+
+    const installedRows = servers
+        .map((server) => {
+            const entry = MCP_CATALOG.find((e) => e.id === server.id);
+            return { server, entry, status: statusFor(server.id) };
+        })
+        .filter(({ server, entry }) => {
+            if (!q) return true;
+            const name = (entry?.name ?? server.name).toLowerCase();
+            const desc = (entry?.description ?? "").toLowerCase();
+            return name.includes(q) || desc.includes(q) || server.id.toLowerCase().includes(q);
+        });
+
+    const available = MCP_CATALOG.filter((e) => {
+        if (installedIds.has(e.id)) return false;
         if (categoryFilter !== "All" && e.category !== categoryFilter) return false;
         if (!q) return true;
         return (
@@ -219,12 +195,14 @@ export function McpLibraryView({ onBack }: { onBack: () => void }) {
         );
     });
 
-    const discover = filtered.filter((e) => e.discover);
-    const searching = q.length > 0 || categoryFilter !== "All";
+    const availableByCategory = MCP_CATEGORIES.map((category) => ({
+        category,
+        items: available.filter((e) => e.category === category),
+    })).filter((g) => g.items.length > 0);
 
     return (
         <div className="flex h-full w-full min-w-0 flex-col overflow-hidden select-none">
-            <div className="px-6 pt-5 pb-3 space-y-3">
+            <div className="px-6 pt-5 pb-4 space-y-4">
                 <button
                     type="button"
                     onClick={onBack}
@@ -234,10 +212,17 @@ export function McpLibraryView({ onBack }: { onBack: () => void }) {
                     Settings
                 </button>
 
+                <div>
+                    <h1 className="text-lg font-medium text-text-primary">MCP Library</h1>
+                    <p className="text-sm text-text-muted mt-1">
+                        Add tools for the agent, or remove ones you no longer need.
+                    </p>
+                </div>
+
                 <div className="flex items-center gap-2">
                     <div className="flex h-9 flex-1 items-center rounded-lg border border-border bg-panel px-3">
                         <SearchInput
-                            placeholder="Search MCPs…"
+                            placeholder="Search servers…"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             className="flex-1"
@@ -263,65 +248,125 @@ export function McpLibraryView({ onBack }: { onBack: () => void }) {
                         </DropdownMenu>
                     </div>
                     <Button variant="secondary" size="sm" onClick={() => void openMcpConfig()}>
-                        Manage
+                        Edit mcp.json
                     </Button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-8 space-y-7">
-                {!searching && discover.length > 0 ? (
-                    <section>
-                        <h2 className="text-sm font-medium text-text-primary mb-3">Discover</h2>
-                        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-                            {discover.map((entry) => (
-                                <DiscoverCard
-                                    key={entry.id}
-                                    entry={entry}
-                                    state={stateFor(entry)}
-                                    onAdd={() => void handleAdd(entry)}
-                                    onConnect={() => void handleConnect(entry)}
-                                />
-                            ))}
+            <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-10">
+                <SettingSection
+                    title="Installed"
+                    description={
+                        installedRows.length === 0
+                            ? "Nothing installed yet. Add a server from the catalog below."
+                            : undefined
+                    }
+                >
+                    {installedRows.length === 0 ? (
+                        <div className="px-3.5 py-6 text-center text-sm text-text-muted">
+                            No MCP servers installed
                         </div>
-                    </section>
+                    ) : (
+                        installedRows.map(({ server, entry, status }) => {
+                            const id = server.id;
+                            const name = entry?.name ?? server.name;
+                            const description =
+                                status?.status === "error" && status.error
+                                    ? status.error
+                                    : entry?.description ?? statusLabel(status?.status);
+                            const busyKind = busy[id];
+
+                            return (
+                                <ServerRow
+                                    key={id}
+                                    name={name}
+                                    description={description}
+                                    logo={<McpLogo entry={entry} server={server} size={30} />}
+                                    trailing={
+                                        busyKind ? (
+                                            <span className="text-xs text-text-muted">
+                                                {busyKind === "removing"
+                                                    ? "Removing…"
+                                                    : busyKind === "connecting"
+                                                      ? "Connecting…"
+                                                      : "Working…"}
+                                            </span>
+                                        ) : (
+                                            <>
+                                                {status?.status === "needs_auth" ? (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => void handleConnect(id)}
+                                                    >
+                                                        Connect
+                                                    </Button>
+                                                ) : (
+                                                    <span
+                                                        className={
+                                                            status?.status === "error"
+                                                                ? "text-xs text-error"
+                                                                : status?.status === "connected"
+                                                                  ? "text-xs text-success"
+                                                                  : "text-xs text-text-muted"
+                                                        }
+                                                    >
+                                                        {statusLabel(status?.status)}
+                                                    </span>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => void handleRemove(id)}
+                                                >
+                                                    Remove
+                                                </Button>
+                                            </>
+                                        )
+                                    }
+                                />
+                            );
+                        })
+                    )}
+                </SettingSection>
+
+                {availableByCategory.map(({ category, items }) => (
+                    <SettingSection key={category} title={category}>
+                        {items.map((entry) => {
+                            const busyKind = busy[entry.id];
+                            return (
+                                <ServerRow
+                                    key={entry.id}
+                                    name={entry.name}
+                                    description={entry.description}
+                                    logo={<McpLogo entry={entry} size={30} />}
+                                    trailing={
+                                        busyKind === "adding" || busyKind === "connecting" ? (
+                                            <span className="text-xs text-text-muted">
+                                                {busyKind === "connecting" ? "Connecting…" : "Adding…"}
+                                            </span>
+                                        ) : (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => void handleAdd(entry)}
+                                            >
+                                                Add
+                                            </Button>
+                                        )
+                                    }
+                                />
+                            );
+                        })}
+                    </SettingSection>
+                ))}
+
+                {available.length === 0 && installedRows.length > 0 && q ? (
+                    <p className="pt-4 text-center text-sm text-text-muted">No matching servers to add</p>
                 ) : null}
 
-                {MCP_CATEGORIES.map((category) => {
-                    const items = filtered.filter((e) => e.category === category);
-                    if (items.length === 0) return null;
-                    const isOpen = expanded[category] || searching;
-                    const visible = isOpen ? items : items.slice(0, SECTION_PREVIEW);
-                    const remaining = items.length - visible.length;
-
-                    return (
-                        <section key={category}>
-                            <h2 className="text-sm font-medium text-text-primary mb-1">{category}</h2>
-                            <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
-                                {visible.map((entry) => (
-                                    <CatalogRow
-                                        key={entry.id}
-                                        entry={entry}
-                                        state={stateFor(entry)}
-                                        onAdd={() => void handleAdd(entry)}
-                                        onConnect={() => void handleConnect(entry)}
-                                    />
-                                ))}
-                            </div>
-                            {remaining > 0 ? (
-                                <button
-                                    type="button"
-                                    className="mt-1 text-sm text-text-muted hover:text-text-primary transition-colors"
-                                    onClick={() => setExpanded((e) => ({ ...e, [category]: true }))}
-                                >
-                                    Show {remaining} more
-                                </button>
-                            ) : null}
-                        </section>
-                    );
-                })}
-
-                {filtered.length === 0 ? (
-                    <p className="pt-8 text-center text-sm text-text-muted">No matches</p>
+                {available.length === 0 && installedRows.length === 0 && q ? (
+                    <p className="pt-4 text-center text-sm text-text-muted">No matches</p>
                 ) : null}
             </div>
         </div>

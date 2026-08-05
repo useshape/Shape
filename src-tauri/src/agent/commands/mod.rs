@@ -30,7 +30,7 @@ use history::now_f64;
 
 const MODEL_DEFAULT: &str = "anthropic/claude-sonnet-4.6";
 const MODEL_TITLE_GEN: &str = model_router::MODEL_FAST;
-const MAX_TOOL_LOOPS: usize = run_turn::MAX_TOOL_LOOPS;
+// Loop limits live in run_turn; callers use max_loops_for_mode.
 
 #[tauri::command]
 pub async fn send_chat_message(
@@ -416,7 +416,7 @@ pub async fn send_chat_message(
         pty_state: Some(&*pty_state),
         cancel: cancel.clone(),
         proxy_ctx: proxy_base.clone(),
-        max_loops: MAX_TOOL_LOOPS,
+        max_loops: run_turn::max_loops_for_mode(&mode_to_use),
         emit_complete: true,
     })
     .await

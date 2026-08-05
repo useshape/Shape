@@ -54,11 +54,9 @@ describe("chat-mentions: formatMentionToken / round-trip", () => {
         expect(formatMentionToken({ kind: "codebase", label: "Codebase" })).toBe("@codebase");
     });
 
-    it("formats file/folder tokens with their path", () => {
-        expect(formatMentionToken({ kind: "file", path: "a/b.ts", label: "a/b.ts" })).toBe("@a/b.ts");
-        expect(formatMentionToken({ kind: "folder", path: "src/lib", label: "src/lib" })).toBe(
-            "@src/lib/",
-        );
+    it("formats file/folder tokens with a short basename", () => {
+        expect(formatMentionToken({ kind: "file", path: "a/b.ts", label: "b.ts" })).toBe("@b.ts");
+        expect(formatMentionToken({ kind: "folder", path: "src/lib", label: "lib" })).toBe("@lib/");
     });
 
     it("formats design tokens as clean @Name", () => {
@@ -67,10 +65,38 @@ describe("chat-mentions: formatMentionToken / round-trip", () => {
         ).toBe("@Calm-Operator");
     });
 
+    it("formats chat tokens with the title slug, not the raw id", () => {
+        expect(
+            formatMentionToken({
+                kind: "chat",
+                path: "115151",
+                id: "115151",
+                label: "Project setup",
+            }),
+        ).toBe("@chat:Project-setup");
+    });
+
+    it("formats browser tokens with the hostname", () => {
+        expect(
+            formatMentionToken({
+                kind: "browser",
+                path: "https://shape.com/docs",
+                label: "shape.com",
+            }),
+        ).toBe("@browser:shape.com");
+    });
+
+    it("parses chat tokens into friendly labels", () => {
+        expect(parseMentionTokens("see @chat:Project-setup")[0]).toMatchObject({
+            kind: "chat",
+            label: "Project setup",
+        });
+    });
+
     it("round-trips: formatted tokens parse back to the same kind", () => {
         const kinds = ["file", "folder", "codebase", "selection"] as const;
         for (const kind of kinds) {
-            const token = formatMentionToken({ kind, path: "x/y", label: "x/y" });
+            const token = formatMentionToken({ kind, path: "x/y", label: "y" });
             const parsed = parseMentionTokens(`hello ${token} world`);
             expect(parsed).toHaveLength(1);
             expect(parsed[0].kind).toBe(kind);

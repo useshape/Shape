@@ -56,7 +56,7 @@ export function ChatMoreMenu() {
                     <Icon name="more_horiz" size={16} />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 p-1">
+            <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem
                     className="gap-2.5"
                     onClick={() => void openSettingsWindow({ category: "general" })}

@@ -31,7 +31,7 @@ export function SettingSection({
                 <h2 className="text-lg font-medium text-text-primary">{title}</h2>
                 {description && <p className="text-sm text-text-muted mt-1">{description}</p>}
             </div>
-            <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-panel divide-y divide-border">
+            <div className="flex flex-col overflow-hidden rounded-xl bg-panel divide-y divide-border">
                 {children}
             </div>
         </div>

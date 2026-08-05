@@ -15,6 +15,11 @@ import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import { DesignPreviewGallery, type DesignPreviewItem } from '../blocks/gallery';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { QuestionBlock } from '../blocks/question';
+import { hostnameOf } from '@/lib/favicon';
+
+function hostnameFromUrl(url: string): string {
+    return hostnameOf(url);
+}
 
 const TERMINAL_STATUS_RANK: Record<string, number> = {
     pending: 1,
@@ -67,7 +72,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question';
+    type: 'text' | 'edit' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question';
     content?: string;
     file?: string;
     query?: string;
@@ -86,6 +91,9 @@ export type Chunk = {
     selectedConcept?: string;
     questionOptions?: string[];
     todos?: Array<{ id: string; label: string; status: "done" | "active" | "pending" | "cancelled" }>;
+    visitUrl?: string;
+    visitHost?: string;
+    visitTitle?: string;
 };
 
 export function parseMessageContent(text: string): Chunk[] {
@@ -265,6 +273,21 @@ export function parseMessageContent(text: string): Chunk[] {
         };
     };
 
+    const parseWebVisitBlock = (tagFull: string, isGenerating: boolean): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        const url = get("url");
+        const host = get("host") || hostnameFromUrl(url);
+        const title = get("title") || host;
+        return {
+            type: "web_visit",
+            visitUrl: url,
+            visitHost: host,
+            visitTitle: title,
+            content: host,
+            isGenerating,
+        };
+    };
+
     while (currentIndex < text.length) {
         const searchTags = [
             { type: 'edit', start: '<edit', end: '</edit>' },
@@ -283,6 +306,7 @@ export function parseMessageContent(text: string): Chunk[] {
             { type: 'plan_saved', start: '<plan_saved', end: '</plan_saved>' },
             { type: 'todos', start: '<todos', end: '</todos>' },
             { type: 'web_result', start: '<web_result', end: '</web_result>' },
+            { type: 'web_visit', start: '<web_visit', end: '</web_visit>' },
             { type: 'ls', start: '<ls', end: '</ls>' },
             { type: 'cat', start: '<cat', end: '</cat>' },
             { type: 'run', start: '<run', end: '</run>' },
@@ -418,6 +442,9 @@ export function parseMessageContent(text: string): Chunk[] {
                     query: queryMatch ? queryMatch[1] : undefined,
                     isGenerating: true
                 });
+            } else if (firstMatch.type === 'web_visit') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseWebVisitBlock(tagFull, true));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -486,6 +513,9 @@ export function parseMessageContent(text: string): Chunk[] {
                     query: queryMatch ? queryMatch[1] : undefined,
                     isGenerating: false
                 });
+            } else if (firstMatch.type === 'web_visit') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseWebVisitBlock(tagFull, false));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -536,12 +566,24 @@ function parseWebResults(blockContent: string): WebSearchResultItem[] {
     return results;
 }
 
-/** Collect unique web search hit URLs from a message for the footer sources menu. */
+/** Collect unique web search/visit hit URLs from a message for the footer sources menu. */
 export function extractWebSearchResults(content: string): WebSearchResultItem[] {
     const chunks = parseMessageContent(content);
     const results: WebSearchResultItem[] = [];
     const seen = new Set<string>();
     for (const item of chunks) {
+        if (item.type === "web_visit") {
+            const url = item.visitUrl || "";
+            const key = url || item.visitHost || "";
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            results.push({
+                title: item.visitTitle || item.visitHost || "Visited",
+                url,
+                snippet: item.visitHost ? `Visited ${item.visitHost}` : "Visited page",
+            });
+            continue;
+        }
         if (item.type !== 'web_result' && item.type !== 'web_search') continue;
         if (item.type !== 'web_result') continue;
         for (const hit of parseWebResults(item.content || '')) {

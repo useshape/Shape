@@ -18,7 +18,7 @@ import {
     updateSettingSection,
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
-import { loadMcpServersFromFile, openMcpConfig } from "@/lib/mcp-config";
+import { loadMcpServersFromFile, openMcpConfig, saveMcpServers } from "@/lib/mcp-config";
 import { McpLogo } from "./mcp/catalog";
 import {
     SettingSection,
@@ -183,6 +183,18 @@ export function AiSettingsPanel({
             await commands.mcpStartOAuth(serverId);
         } catch {
             setMcpConnecting(null);
+        }
+    };
+
+    const handleMcpRemove = async (serverId: string) => {
+        try {
+            const list = await loadMcpServersFromFile();
+            const next = list.filter((s) => s.id !== serverId);
+            await saveMcpServers(next);
+            const status = await commands.syncMcpServers(next);
+            setMcpStatus(status as McpStatusEntry[]);
+        } catch {
+            /* keep list */
         }
     };
 
@@ -415,6 +427,13 @@ export function AiSettingsPanel({
                                 ) : s.status === "error" ? (
                                     <span className="text-xs text-error">Error</span>
                                 ) : null}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => void handleMcpRemove(s.id)}
+                                >
+                                    Remove
+                                </Button>
                             </div>
                         </div>
                     ))
