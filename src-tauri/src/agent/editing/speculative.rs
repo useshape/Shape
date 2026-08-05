@@ -22,6 +22,13 @@ pub fn resolve(original_text: &str, code_edit_text: &str) -> Result<String, Stri
 
     let blocks = parse_blocks(&code_edit_text);
     if blocks.is_empty() {
+        if code_edit_text.lines().any(|l| l.starts_with("<<<<<<< SEARCH")) {
+            return Err(
+                "Incomplete SEARCH/REPLACE block. Each block must include `<<<<<<< SEARCH`, \
+`=======`, and `>>>>>>> REPLACE` markers. Do not leave REPLACE empty unless you intend to delete the matched region."
+                    .to_string(),
+            );
+        }
         return Err("No `<<<<<<< SEARCH` blocks found in the edit. You must use the search/replace block format.".to_string());
     }
 
@@ -223,22 +230,51 @@ fn parse_blocks<'a>(edit_text: &'a str) -> Vec<EditBlock<'a>> {
             let mut search = Vec::new();
             i += 1;
             while i < lines.len() && !lines[i].starts_with("=======") {
+                // Incomplete: another SEARCH before separator.
+                if lines[i].starts_with("<<<<<<< SEARCH") {
+                    break;
+                }
                 search.push(lines[i]);
                 i += 1;
             }
+            // Require a complete block: ======= separator and >>>>>>> REPLACE closer.
+            if i >= lines.len() || !lines[i].starts_with("=======") {
+                // Incomplete block — skip so resolve() can error clearly.
+                // Push a sentinel empty block that resolve will reject via incomplete check.
+                return Vec::new(); // signal incomplete via empty + marker presence
+            }
             let mut replace = Vec::new();
-            if i < lines.len() && lines[i].starts_with("=======") {
-                i += 1;
-                while i < lines.len() && !lines[i].starts_with(">>>>>>> REPLACE") {
-                    replace.push(lines[i]);
-                    i += 1;
+            i += 1; // skip =======
+            let mut closed = false;
+            while i < lines.len() {
+                if lines[i].starts_with(">>>>>>> REPLACE") {
+                    closed = true;
+                    break;
                 }
+                if lines[i].starts_with("<<<<<<< SEARCH") {
+                    // Nested SEARCH without closing previous — incomplete.
+                    return Vec::new();
+                }
+                replace.push(lines[i]);
+                i += 1;
+            }
+            if !closed {
+                return Vec::new();
             }
             blocks.push(EditBlock { search, replace });
         }
         i += 1;
     }
     blocks
+}
+
+/// Returns true when the edit text contains SEARCH markers but no complete blocks.
+pub fn has_incomplete_search_blocks(edit_text: &str) -> bool {
+    let text = edit_text.replace("\r\n", "\n");
+    if !text.lines().any(|l| l.starts_with("<<<<<<< SEARCH")) {
+        return false;
+    }
+    parse_blocks(&text).is_empty()
 }
 
 fn lines_match(a: &str, b: &str) -> bool {
@@ -289,5 +325,23 @@ mod tests {
         let edit = "<<<<<<< SEARCH\na\nb\nWRONG\ne\n=======\na\nb\nZZ\ne\n>>>>>>> REPLACE\n";
         let out = resolve(orig, edit).unwrap();
         assert!(out.contains("ZZ"));
+    }
+
+    #[test]
+    fn incomplete_block_rejected() {
+        let orig = "fn a() {\n  let x = 1;\n}\n";
+        let edit = "<<<<<<< SEARCH\n  let x = 1;\n=======\n  let x = 2;\n";
+        let err = resolve(orig, edit).unwrap_err();
+        assert!(err.contains("Incomplete"));
+    }
+
+    #[test]
+    fn has_incomplete_search_blocks_detects() {
+        assert!(has_incomplete_search_blocks(
+            "<<<<<<< SEARCH\nfoo\n=======\nbar\n"
+        ));
+        assert!(!has_incomplete_search_blocks(
+            "<<<<<<< SEARCH\nfoo\n=======\nbar\n>>>>>>> REPLACE\n"
+        ));
     }
 }

@@ -11,9 +11,16 @@
 
 use serde_json::{json, Value};
 
+use crate::agent::model_router::ModelFamily;
+
 /// Return the full tool set as a JSON array ready to drop into a chat completion request.
+#[allow(dead_code)]
 pub fn all_tools() -> Vec<Value> {
-    vec![
+    all_tools_for_family(ModelFamily::Other)
+}
+
+fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
+    let mut tools = vec![
         read_file(),
         list_dir(),
         search_codebase(),
@@ -23,7 +30,13 @@ pub fn all_tools() -> Vec<Value> {
         visit_url(),
         create_directory(),
         create_file(),
-        edit_file(),
+    ];
+    if family.uses_apply_patch() {
+        tools.push(apply_patch());
+    } else {
+        tools.push(edit_file());
+    }
+    tools.extend([
         delete_file(),
         rename_file(),
         run_terminal(),
@@ -36,9 +49,11 @@ pub fn all_tools() -> Vec<Value> {
         read_terminal(),
         write_to_terminal(),
         wait(),
+        read_lints(),
         update_todos(),
         finish(),
-    ]
+    ]);
+    tools
 }
 
 fn ask_tools() -> Vec<Value> {
@@ -50,13 +65,24 @@ fn ask_tools() -> Vec<Value> {
         grep(),
         web_search(),
         visit_url(),
+        read_lints(),
         finish(),
     ]
 }
 
 /// Return tools appropriate for the active chat mode (reduces token overhead).
 /// Unknown modes fail closed to Ask (read-only).
+#[allow(dead_code)]
 pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
+    tools_for_mode_and_family(mode, ModelFamily::Other, extra)
+}
+
+/// Mode + model-family tool selection (Cursor-style per-model tool shapes).
+pub fn tools_for_mode_and_family(
+    mode: &str,
+    family: ModelFamily,
+    extra: Vec<Value>,
+) -> Vec<Value> {
     match mode.to_ascii_lowercase().as_str() {
         "plan" => {
             let mut tools = ask_tools();
@@ -65,13 +91,13 @@ pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
         }
         "ask" => ask_tools(),
         "visual" | "design" => {
-            let mut tools = all_tools();
+            let mut tools = all_tools_for_family(family);
             tools.push(render_design_previews());
             tools.extend(extra);
             tools
         }
         "code" | "review" | "agent" => {
-            let mut tools = all_tools();
+            let mut tools = all_tools_for_family(family);
             tools.extend(extra);
             tools
         }
@@ -224,7 +250,7 @@ fn create_file() -> Value {
 fn edit_file() -> Value {
     tool(
         "edit_file",
-        "Apply a targeted edit to an existing file. The `code_edit` argument MUST use the SEARCH/REPLACE block format. On success the result may include SYNTAX ERRORS from a parse of the merged file — fix those with another edit_file before finish. Blocked in Ask mode.",
+        "Apply a targeted edit to an existing file. The `code_edit` argument MUST use the SEARCH/REPLACE block format. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish. Blocked in Ask mode.",
         json!({
             "type": "object",
             "properties": {
@@ -233,6 +259,39 @@ fn edit_file() -> Value {
                 "code_edit": {"type": "string", "description": "The edit formatted as one or more SEARCH/REPLACE blocks. Example:\n<<<<<<< SEARCH\n[exact existing code]\n=======\n[new code]\n>>>>>>> REPLACE"}
             },
             "required": ["target_file", "instructions", "code_edit"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn apply_patch() -> Value {
+    tool(
+        "apply_patch",
+        "Apply a Codex-style multi-file patch. Pass the entire patch as `input` (not JSON-wrapped hunks). Format:\n*** Begin Patch\n*** Update File: path\n@@\n context\n-old\n+new\n*** Add File: path\n+line\n*** Delete File: path\n*** End Patch\nAlways include Begin and End markers. Prefer this over shell edits. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish. Blocked in Ask mode.",
+        json!({
+            "type": "object",
+            "properties": {
+                "input": {"type": "string", "description": "Full apply_patch document including Begin/End markers."}
+            },
+            "required": ["input"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn read_lints() -> Value {
+    tool(
+        "read_lints",
+        "Read current IDE/linter diagnostics for one or more files (or recently open files if paths omitted). Call after substantive edits to catch errors you introduced.",
+        json!({
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Project-relative paths to check. Omit to read diagnostics for open files."
+                }
+            },
             "additionalProperties": false
         }),
     )
@@ -526,3 +585,50 @@ fn visit_url() -> Value {
         }),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::model_router::ModelFamily;
+
+    fn tool_names(tools: &[Value]) -> Vec<String> {
+        tools
+            .iter()
+            .filter_map(|t| {
+                t.get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn openai_family_gets_apply_patch_not_edit_file() {
+        let tools = tools_for_mode_and_family("code", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"apply_patch".to_string()));
+        assert!(!names.contains(&"edit_file".to_string()));
+        assert!(names.contains(&"read_lints".to_string()));
+    }
+
+    #[test]
+    fn deepseek_family_gets_edit_file_not_apply_patch() {
+        let tools = tools_for_mode_and_family("code", ModelFamily::DeepSeek, vec![]);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"edit_file".to_string()));
+        assert!(!names.contains(&"apply_patch".to_string()));
+        assert!(names.contains(&"read_lints".to_string()));
+    }
+
+    #[test]
+    fn ask_mode_is_read_only() {
+        let tools = tools_for_mode_and_family("ask", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(!names.contains(&"edit_file".to_string()));
+        assert!(!names.contains(&"apply_patch".to_string()));
+        assert!(!names.contains(&"run_terminal".to_string()));
+        assert!(names.contains(&"read_lints".to_string()));
+    }
+}
+

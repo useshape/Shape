@@ -39,6 +39,7 @@ type StreamState = {
     exitCode: number | null;
     sessionId: number | null;
     cancelled: boolean;
+    waitingForInput: boolean;
 };
 
 type AgentTerminalEvent = {
@@ -61,6 +62,7 @@ export function useAgentTerminalStream(commandId: string | undefined, enabled: b
         exitCode: null,
         sessionId: null,
         cancelled: false,
+        waitingForInput: false,
     });
     const bufferRef = useRef("");
 
@@ -78,6 +80,7 @@ export function useAgentTerminalStream(commandId: string | undefined, enabled: b
                     exitCode: null,
                     sessionId: payload.sessionId ?? null,
                     cancelled: false,
+                    waitingForInput: false,
                 });
             } else if (payload.kind === "data" && payload.data) {
                 bufferRef.current = (bufferRef.current + stripAnsi(payload.data)).slice(-OUTPUT_CAP);
@@ -87,6 +90,14 @@ export function useAgentTerminalStream(commandId: string | undefined, enabled: b
                     phase: prev.phase === "idle" ? "running" : prev.phase,
                     output,
                     sessionId: payload.sessionId ?? prev.sessionId,
+                    waitingForInput: false,
+                }));
+            } else if (payload.kind === "waiting_for_input") {
+                setState((prev) => ({
+                    ...prev,
+                    phase: prev.phase === "idle" ? "running" : prev.phase,
+                    sessionId: payload.sessionId ?? prev.sessionId,
+                    waitingForInput: true,
                 }));
             } else if (payload.kind === "background") {
                 setState((prev) => ({ ...prev, phase: "background" }));
@@ -101,6 +112,7 @@ export function useAgentTerminalStream(commandId: string | undefined, enabled: b
                     output,
                     exitCode: payload.exitCode ?? -1,
                     cancelled: payload.cancelled ?? false,
+                    waitingForInput: false,
                 }));
             }
         });
@@ -271,7 +283,10 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
 
     // Live events can outrun the transcript chunk (approval → start → exit).
     const couldBeLive =
-        chunkStatus === "pending" || chunkStatus === "background" || Boolean(block.isGenerating);
+        chunkStatus === "pending"
+        || chunkStatus === "running"
+        || chunkStatus === "background"
+        || Boolean(block.isGenerating);
     const stream = useAgentTerminalStream(block.commandId, couldBeLive);
 
     // Approval resolution flips the card before any stream/chunk update lands.
@@ -366,6 +381,11 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
                         <span className="font-mono text-[11px] text-text-secondary">{command}</span>
                     </span>
                 </div>
+                {stream.waitingForInput ? (
+                    <div className="my-1 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+                        Waiting for input — the agent can answer with write_to_terminal, or stop the turn.
+                    </div>
+                ) : null}
                 <LiveTerminalOutput text={liveText} />
             </div>
         );

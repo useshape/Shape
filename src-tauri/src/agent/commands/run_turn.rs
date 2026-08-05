@@ -26,6 +26,9 @@ pub fn max_loops_for_mode(mode: &str) -> usize {
 /// Soft cap per file; a successful read_file on that path resets the counter so
 /// iterative fix-ups can continue instead of dead-ending after three edits.
 const MAX_EDITS_PER_FILE_PER_TURN: usize = 6;
+/// After this many consecutive failed edits on one file without a re-read, block
+/// further edit_file calls until the model reads the file again.
+const MAX_CONSECUTIVE_EDIT_FAILURES: usize = 3;
 // Low bar on purpose: forced synthesis is a rescue path for turns that end with
 // literally nothing to show, not a quality gate. The old 80-char bar triggered
 // an extra hidden model call after turns that had already answered briefly.
@@ -81,6 +84,7 @@ const DEDUPED_READONLY_TOOLS: &[&str] = &[
     "web_search",
     "visit_url",
     "list_terminals",
+    "read_lints",
 ];
 
 /// Cap how many times the agent can call `wait` in one turn (stops sleep loops).
@@ -311,6 +315,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut total_output_tokens = 0usize;
     let mut read_paths: HashSet<String> = HashSet::new();
     let mut edit_counts: HashMap<String, usize> = HashMap::new();
+    let mut edit_fail_counts: HashMap<String, usize> = HashMap::new();
+    let mut needs_reread: HashSet<String> = HashSet::new();
+    let mut file_cache: HashMap<String, String> = HashMap::new();
     let mut executed_readonly_calls: HashSet<String> = HashSet::new();
     let mut wait_calls = 0usize;
     let mut final_full_response = String::new();
@@ -483,6 +490,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             "role": "assistant",
             "content": if outcome.content.is_empty() { Value::Null } else { Value::String(outcome.content.clone()) },
         });
+        if let Some(reasoning) = &outcome.reasoning {
+            if !reasoning.is_empty() {
+                assistant_msg["reasoning"] = Value::String(reasoning.clone());
+                // DeepSeek-compatible routes expect reasoning_content on tool-call turns.
+                assistant_msg["reasoning_content"] = Value::String(reasoning.clone());
+            }
+        }
+        if let Some(details) = &outcome.reasoning_details {
+            assistant_msg["reasoning_details"] = details.clone();
+        }
         if !outcome.tool_calls.is_empty() {
             let calls: Vec<Value> = outcome
                 .tool_calls
@@ -616,10 +633,13 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     &call.name,
                     &tool_outcome.tool_result,
                 );
-                if let Some(SideEffect::FileRead { path, .. }) = tool_outcome.side_effect {
+                if let Some(SideEffect::FileRead { path, content }) = tool_outcome.side_effect {
                     let abs = resolve_abs(&path, config.project_path);
                     read_paths.insert(abs.clone());
+                    file_cache.insert(abs.clone(), content);
                     edit_counts.remove(&abs);
+                    edit_fail_counts.remove(&abs);
+                    needs_reread.remove(&abs);
                 }
             }
 
@@ -704,6 +724,19 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         .to_string();
                     if !target.is_empty() {
                         let abs = resolve_abs(&target, config.project_path);
+                        if needs_reread.contains(&abs) {
+                            let fails = edit_fail_counts.get(&abs).copied().unwrap_or(0);
+                            let hint_msg = format!(
+                                "BLOCKED: edit_file on '{}' failed {} time(s) this turn. \
+                                 Call read_file on it now (required), then retry with a unique SEARCH block from the latest content.",
+                                target, fails.max(1)
+                            );
+                            push_tool_result(config.api_messages, &call.id, &call.name, &hint_msg);
+                            let ui = format!("\n<tool_result>\n[edit_file] {}\n</tool_result>\n", hint_msg);
+                            emit_turn_chat_token(&config, ui.clone());
+                            final_full_response.push_str(&ui);
+                            continue;
+                        }
                         let count = edit_counts.entry(abs.clone()).or_insert(0);
                         *count += 1;
                         if *count > MAX_EDITS_PER_FILE_PER_TURN {
@@ -724,6 +757,41 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                                 "Hint: you have not read '{}' this turn. Call read_file first if the edit fails.",
                                 target
                             ));
+                        }
+                    }
+                }
+            }
+
+            // Serve unchanged full-file reads from the turn cache when possible.
+            if call.name == "read_file" {
+                if let Ok(args_val) = serde_json::from_str::<Value>(&call.arguments) {
+                    let path = args_val.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                    let has_range = args_val.get("start_line").is_some()
+                        || args_val.get("end_line").is_some();
+                    if !path.is_empty() && !has_range {
+                        let abs = resolve_abs(path, config.project_path);
+                        if !needs_reread.contains(&abs) {
+                            if let Some(cached) = file_cache.get(&abs) {
+                                let display = if cached.chars().count() > 30_000 {
+                                    let head: String = cached.chars().take(30_000).collect();
+                                    format!(
+                                        "{}\n\n[truncated — file longer than 30,000 chars; call read_file again with start_line/end_line to see more]\n\
+                                         [served from turn cache]",
+                                        head
+                                    )
+                                } else {
+                                    format!("{}\n\n[served from turn cache — content unchanged since last read/write]", cached)
+                                };
+                                let ui = format!("\n<cat>{}</cat>\n", path);
+                                upsert_terminal_ui_chunk(&mut final_full_response, &ui);
+                                emit_turn_chat_token(&config, ui.clone());
+                                track_stream_chunk(&config, &ui, None);
+                                push_tool_result(config.api_messages, &call.id, &call.name, &display);
+                                read_paths.insert(abs.clone());
+                                edit_counts.remove(&abs);
+                                edit_fail_counts.remove(&abs);
+                                continue;
+                            }
                         }
                     }
                 }
@@ -764,23 +832,67 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
             push_tool_result(config.api_messages, &call.id, &call.name, &content);
 
+            // Track failed edits so we force a re-read before the next attempt.
+            if call.name == "edit_file"
+                && (content.starts_with("ERROR:") || content.starts_with("BLOCKED:"))
+            {
+                if let Ok(args_val) = serde_json::from_str::<Value>(&call.arguments) {
+                    let target = args_val
+                        .get("target_file")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if !target.is_empty() {
+                        let abs = resolve_abs(target, config.project_path);
+                        let fails = edit_fail_counts.entry(abs.clone()).or_insert(0);
+                        *fails += 1;
+                        file_cache.remove(&abs);
+                        if *fails >= MAX_CONSECUTIVE_EDIT_FAILURES {
+                            needs_reread.insert(abs);
+                        } else {
+                            // Even one failure: require re-read before the next edit.
+                            needs_reread.insert(abs);
+                        }
+                    }
+                }
+            }
+
             if let Some(effect) = tool_outcome.side_effect {
                 match effect {
-                    SideEffect::FileRead { path, .. } => {
+                    SideEffect::FileRead { path, content: file_content } => {
                         let abs = resolve_abs(&path, config.project_path);
                         read_paths.insert(abs.clone());
+                        file_cache.insert(abs.clone(), file_content);
                         // Re-reading unlocks another edit budget for this file.
                         edit_counts.remove(&abs);
+                        edit_fail_counts.remove(&abs);
+                        needs_reread.remove(&abs);
                     }
-                    SideEffect::FileWritten { path, .. } => {
+                    SideEffect::FileWritten { path, content: file_content } => {
                         wrote_files = true;
-                        read_paths.insert(resolve_abs(&path, config.project_path));
+                        let abs = resolve_abs(&path, config.project_path);
+                        read_paths.insert(abs.clone());
+                        file_cache.insert(abs.clone(), file_content);
+                        edit_fail_counts.remove(&abs);
+                        needs_reread.remove(&abs);
+                    }
+                    SideEffect::FilesWritten { files } => {
+                        wrote_files = true;
+                        for (path, file_content) in files {
+                            let abs = resolve_abs(&path, config.project_path);
+                            read_paths.insert(abs.clone());
+                            file_cache.insert(abs.clone(), file_content);
+                            edit_fail_counts.remove(&abs);
+                            needs_reread.remove(&abs);
+                        }
                     }
                     SideEffect::FileDeleted { path } => {
                         wrote_files = true;
                         let abs = resolve_abs(&path, config.project_path);
                         read_paths.remove(&abs);
                         edit_counts.remove(&abs);
+                        edit_fail_counts.remove(&abs);
+                        needs_reread.remove(&abs);
+                        file_cache.remove(&abs);
                     }
                     SideEffect::Finished { summary } => {
                         finished_signal = Some(summary.unwrap_or_default());
