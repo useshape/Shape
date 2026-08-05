@@ -588,7 +588,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
 
     const workflowsListPane = (
         <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
-            <div className="shrink-0 px-2 py-1.5 text-2xs font-medium text-text-muted">
+            <div className="shrink-0 px-2 py-1.5 text-xs font-medium text-text-muted">
                 Workflows {loadingRuns ? "…" : `(${filteredWorkflows.length})`}
             </div>
             <ScrollArea className="min-h-0 flex-1 p-1">
@@ -881,7 +881,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                         minSize: 280,
                         children: (
                             <GitOverlayEnter key={selectedRunId ?? "empty"}>
-                            <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
+                            <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden">
                                 {!selectedRun && focus !== "workflow-definitions" ? (
                                     <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
                                         Select a workflow run
@@ -912,7 +912,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle/60 px-3 py-2">
+                                        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
                                             <div className="flex min-w-0 flex-1 basis-[min(100%,18rem)] items-center gap-2">
                                                 {(() => {
                                                     const runIcon = statusIcon(
@@ -1081,7 +1081,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                                 }
                                                 className="flex h-0 min-h-0 flex-1 flex-col"
                                             >
-                                                <div className="flex shrink-0 items-center px-2 py-1">
+                                                <div className="flex shrink-0 items-center px-2 py-1 pb-4">
                                                     <TabsList>
                                                         {allowedTabs.includes("jobs") ? (
                                                             <TabsTrigger value="jobs">

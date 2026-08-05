@@ -74,7 +74,7 @@ export function JobsPanel({
         );
         return (
             <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
-                <div className="shrink-0 px-2 py-1.5 text-2xs font-medium text-text-muted">
+                <div className="shrink-0 px-2 py-1.5 text-sm font-medium text-text-muted">
                     Steps {loading ? "…" : `(${flat.length})`}
                 </div>
                 <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
@@ -119,10 +119,10 @@ export function JobsPanel({
 
     return (
         <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
-            <div className="shrink-0 px-2 py-1.5 text-2xs font-medium text-text-muted">
+            <div className="shrink-0 px-2 py-1.5 text-sm font-medium text-text-muted">
                 Jobs {loading ? "…" : `(${jobs.length})`}
             </div>
-            <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
+            <ScrollArea className="min-h-0 flex-1 mx-1.5" fadeFrom="from-panel">
                 {loading && jobs.length === 0 ? (
                     <GitListSkeleton rows={6} />
                 ) : jobs.length === 0 ? (
@@ -133,11 +133,11 @@ export function JobsPanel({
                         return (
                             <div
                                 key={job.id}
-                                className={cn(selectedJobId === job.id && "bg-panel-hover/50")}
+                                className={cn(selectedJobId === job.id && "bg-panel-hover/50 rounded-xl")}
                             >
                                 <Button
                                     variant="ghost"
-                                    className="h-auto w-full items-start gap-1 rounded-none px-2 py-2 text-left font-normal"
+                                    className="h-auto w-full items-start gap-1 rounded-xl px-2 py-2 text-left font-normal"
                                     onClick={() => onToggleJob(job.id)}
                                 >
                                     <Icon
@@ -157,7 +157,7 @@ export function JobsPanel({
                                         <div className="truncate text-sm text-text-primary">
                                             {job.name}
                                         </div>
-                                        <div className="text-2xs text-text-muted">
+                                        <div className="text-xs text-text-muted">
                                             {durationLabel(job.started_at, job.completed_at)}
                                             {(job.steps?.length ?? 0) > 0
                                                 ? ` · ${job.steps!.length} steps`
@@ -172,7 +172,7 @@ export function JobsPanel({
                                                 <li key={`${job.id}-${step.number}`}>
                                                     <button
                                                         type="button"
-                                                        className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-panel-hover/60"
+                                                        className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left text-xs hover:bg-panel-hover/60"
                                                         onClick={() => onSelectStep?.(job.id, step)}
                                                     >
                                                         <JobStatusIcon
@@ -192,7 +192,7 @@ export function JobsPanel({
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-6 gap-1 px-2 text-2xs"
+                                            className="gap-1"
                                             onClick={() => onViewLogs(job.id)}
                                         >
                                             <Icon name="terminal" size={12} />
@@ -202,7 +202,7 @@ export function JobsPanel({
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-6 gap-1 px-2 text-2xs"
+                                                className="gap-1"
                                                 onClick={() => onOpenUrl(job.html_url)}
                                             >
                                                 <Icon name="github" size={12} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DiffEditor, loader } from "@monaco-editor/react";
 import { defineShapeMonacoThemes, getMonacoEditorOptions } from "@/lib/ui/monaco-theme";
 import { bindDiffEditorNativeUiToShape } from "@/lib/editor/suppress-monaco-native-ui";
@@ -61,13 +61,31 @@ export function ManagerDiffEditor({
     modified,
     path,
     sideBySide = false,
+    active = true,
 }: {
     original: string;
     modified: string;
     path: string;
     sideBySide?: boolean;
+    /**
+     * When false, unmount DiffEditor so Monaco widgets/overlays are disposed and
+     * cannot paint over other Git Manager sections (visibility:hidden is not enough).
+     */
+    active?: boolean;
 }) {
     const monacoReady = useGitManagerMonaco();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const diffRef = useRef<any>(null);
+
+    useEffect(() => {
+        try {
+            diffRef.current?.updateOptions?.({ renderSideBySide: sideBySide });
+        } catch {
+            /* disposing */
+        }
+    }, [sideBySide]);
+
+    if (!active) return null;
     if (!monacoReady) {
         return (
             <div className="flex h-full items-center justify-center text-sm text-text-muted">
@@ -79,6 +97,7 @@ export function ManagerDiffEditor({
     return (
         <div className="graph-diff-panel shape-editor-surface relative h-full min-h-0 w-full overflow-hidden">
             <DiffEditor
+                key={sideBySide ? "side-by-side" : "inline"}
                 height="100%"
                 width="100%"
                 original={original}
@@ -89,6 +108,7 @@ export function ManagerDiffEditor({
                 beforeMount={(monaco) => defineShapeMonacoThemes(monaco)}
                 onMount={(editor, monaco) => {
                     try {
+                        diffRef.current = editor;
                         defineShapeMonacoThemes(monaco);
                         monaco.editor.setTheme("shape-dark");
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,7 +119,9 @@ export function ManagerDiffEditor({
                             renderLineHighlight: "none" as const,
                             occurrencesHighlight: "off" as const,
                             selectionHighlight: false,
+                            renderSideBySide: sideBySide,
                         };
+                        diff.updateOptions?.({ renderSideBySide: sideBySide });
                         diff.getOriginalEditor?.()?.updateOptions?.(opts);
                         diff.getModifiedEditor?.()?.updateOptions?.(opts);
                         const empty = {

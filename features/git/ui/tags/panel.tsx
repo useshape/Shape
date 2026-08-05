@@ -128,6 +128,9 @@ export function LocalTags() {
             t.hash.toLowerCase().includes(q)
         );
     });
+    const TAG_LIST_CAP = 500;
+    const visibleTags = filtered.slice(0, TAG_LIST_CAP);
+    const tagsTruncated = filtered.length - visibleTags.length;
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -184,7 +187,7 @@ export function LocalTags() {
                     </p>
                 ) : (
                     <div className="flex flex-col gap-0.5">
-                        {filtered.map((tag) => (
+                        {visibleTags.map((tag) => (
                             <ContextMenu key={tag.name}>
                                 <ContextMenuTrigger asChild>
                                     <button
@@ -233,6 +236,11 @@ export function LocalTags() {
                                 </ContextMenuContent>
                             </ContextMenu>
                         ))}
+                        {tagsTruncated > 0 ? (
+                            <p className="px-2 py-2 text-xs text-text-muted">
+                                Showing {visibleTags.length} of {filtered.length} tags — type to search
+                            </p>
+                        ) : null}
                     </div>
                 )}
             </ScrollArea>

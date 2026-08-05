@@ -63,8 +63,8 @@
   --border-focus: var(--accent);
 
   /* ── Ember accent ──────────────────────────────────────── */
-  --accent: #3946FF;
-  --accent-hover: #4365FF;
+  --accent: #5661ff;
+  --accent-hover: #6e89ff;
   --accent-fg: #ffffff;
 
   /* ── Semantic status (desaturated for dark) ──────────── */
@@ -119,8 +119,9 @@
   --statusbar-height: 30px;
 
   /* ── Typography (px tokens — predictable on desktop, independent of rem root) */
-  --font-ui: Inter;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* Quoted + sans fallbacks: if Inter fails to load, browsers otherwise use Times. */
+  --font-ui: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   /* Font rendering */
   --font-smoothing: antialiased;

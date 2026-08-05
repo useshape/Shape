@@ -15,6 +15,7 @@ import Graph from "@/features/git/ui/graph/graph";
 import { BranchWindow } from "@/features/git/ui/branches/panel";
 import { LocalTags } from "@/features/git/ui/tags/panel";
 import { GitHubSection } from "@/features/git/ui/github/section";
+import { ReleasesPage } from "@/features/git/ui/github/releases-page";
 import { ActionsConsole, isActionsSection } from "@/features/git/ui/actions/console";
 import { useFilter, isGitSectionId, persistGitSection, readStoredGitSection } from "./filter-context";
 import { useGitRepos } from "@/lib/git/repos";
@@ -390,45 +391,46 @@ function ManagerShell() {
                 </aside>
 
                 <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                    {/* Local panes stay mounted after first visit — remounting Graph/Source is the main stutter. */}
+                    {/* Keep-alive panes use `hidden` (not `invisible`) so Monaco/diff
+                        overlays cannot paint over other sections when inactive. */}
                     {visited.has("source") ? (
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "source" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                                section === "source" ? "git-pane-enter z-10" : "hidden",
                             )}
                             aria-hidden={section !== "source"}
                         >
-                            <Source embedded />
+                            <Source embedded active={section === "source"} />
                         </div>
                     ) : null}
                     {visited.has("graph") ? (
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "graph" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                                section === "graph" ? "git-pane-enter z-10" : "hidden",
                             )}
                             aria-hidden={section !== "graph"}
                         >
-                            <Graph surface="editor" rich />
+                            <Graph surface="editor" rich active={section === "graph"} />
                         </div>
                     ) : null}
                     {visited.has("branches") ? (
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "branches" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                                section === "branches" ? "git-pane-enter z-10" : "hidden",
                             )}
                             aria-hidden={section !== "branches"}
                         >
-                            <BranchWindow />
+                            <BranchWindow active={section === "branches"} />
                         </div>
                     ) : null}
                     {visited.has("tags") ? (
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "tags" ? "git-pane-enter z-10" : "invisible pointer-events-none z-0",
+                                section === "tags" ? "git-pane-enter z-10" : "hidden",
                             )}
                             aria-hidden={section !== "tags"}
                         >
@@ -436,16 +438,31 @@ function ManagerShell() {
                         </div>
                     ) : null}
                     {isActionsSection(section) ? (
-                        <div className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter">
+                        <div
+                            key={`actions-${section}`}
+                            className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter"
+                        >
                             <ActionsConsole focus={section} />
+                        </div>
+                    ) : null}
+                    {section === "releases" ? (
+                        <div
+                            key="releases"
+                            className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter"
+                        >
+                            <ReleasesPage />
                         </div>
                     ) : null}
                     {!isActionsSection(section) &&
                     section !== "source" &&
                     section !== "graph" &&
                     section !== "branches" &&
-                    section !== "tags" ? (
-                        <div className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter">
+                    section !== "tags" &&
+                    section !== "releases" ? (
+                        <div
+                            key={section}
+                            className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter"
+                        >
                             <GitHubSection section={section} />
                         </div>
                     ) : null}
