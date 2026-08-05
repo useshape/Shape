@@ -615,6 +615,16 @@ pub async fn set_project_path(
 
     if let Some(p) = path {
         start_watcher(app.clone(), &p);
+        // Kick off codebase indexing in the background as soon as a project
+        // opens (incremental + skipped when fresh), instead of lazily on the
+        // first chat message.
+        if let Some(index_state) =
+            app.try_state::<crate::agent::index::IndexState>()
+        {
+            if index_state.should_background_index(&p) {
+                let _ = index_state.spawn_background_index(app.clone(), p.clone());
+            }
+        }
     }
 
     clear_cache();

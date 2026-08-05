@@ -32,12 +32,6 @@ impl Default for ContextOptions {
     }
 }
 
-pub async fn build_context(
-    app_state: &tauri::State<'_, AppState>,
-) -> Result<(String, Option<String>, Option<String>), AppError> {
-    build_context_with_options(app_state, ContextOptions::default()).await
-}
-
 pub async fn build_context_with_options(
     app_state: &tauri::State<'_, AppState>,
     opts: ContextOptions,

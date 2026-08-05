@@ -1,19 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { diffLines } from "diff";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import type { Chunk } from "../md/renderer";
 import { openProjectFile } from "@/lib/open-project-file";
+import { commands } from "@/lib/backend/commands";
 import { Collapse } from "./collapse";
+import { TerminalCommandStep } from "./terminal-live";
 import {
     groupWorkflowRows,
     isRenderableWorkflowBlock,
     parseGitStagePath,
-    TerminalApprovalRow,
 } from "./workflow";
 
 function formatDuration(ms?: number): string {
@@ -104,6 +107,14 @@ function computeTurnStats(blocks: Chunk[]) {
                 break;
             case "edit":
                 if (block.file) {
+                    editedFiles.add(block.file);
+                    const { add, del } = editDelta(block);
+                    linesAdded += add;
+                    linesRemoved += del;
+                }
+                break;
+            case "edit_pending":
+                if (block.file && block.commandStatus === "applied") {
                     editedFiles.add(block.file);
                     const { add, del } = editDelta(block);
                     linesAdded += add;
@@ -341,6 +352,177 @@ function WorkflowEditPreview({
     );
 }
 
+/**
+ * Approval card for a staged file edit (require-edit-approval mode):
+ * header with filename and +/− counts, expandable diff preview, Skip / Accept.
+ */
+function EditApprovalRow({ block }: { block: Chunk }) {
+    const [localStatus, setLocalStatus] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [diffOpen, setDiffOpen] = useState(true);
+    const { add, del } = editDelta(block);
+    const file = block.file || "";
+
+    const resolve = useCallback(
+        (approved: boolean) => {
+            if (!block.commandId || isProcessing) return;
+            setIsProcessing(true);
+            void commands
+                .resolveEditApproval(block.commandId, approved)
+                .then(() => setLocalStatus(approved ? "applied" : "rejected"))
+                .catch(() => { /* backend upsert corrects the card */ })
+                .finally(() => setIsProcessing(false));
+        },
+        [block.commandId, isProcessing],
+    );
+
+    // Backend resolution (or another window) flips the card instantly.
+    useEffect(() => {
+        if (!block.commandId) return;
+        let disposed = false;
+        const unlistenPromise = listen<{ id?: string; approved?: boolean }>(
+            "agent-edit-resolved",
+            (event) => {
+                if (disposed || event.payload?.id !== block.commandId) return;
+                setLocalStatus(event.payload?.approved ? "applied" : "rejected");
+            },
+        );
+        return () => {
+            disposed = true;
+            void unlistenPromise.then((unlisten) => unlisten()).catch(() => { /* ignore */ });
+        };
+    }, [block.commandId]);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (isProcessing) return;
+            const t = e.target as HTMLElement | null;
+            if (t?.closest("textarea, input, [contenteditable='true']")) return;
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                resolve(true);
+            }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [isProcessing, resolve]);
+
+    const status = localStatus ?? block.commandStatus ?? "pending";
+    if (status !== "pending") {
+        // Applied/rejected states render via the regular step rows once the
+        // upserted chunk arrives; show a minimal line meanwhile.
+        return (
+            <div className="py-0.5 text-xs text-text-muted">
+                {status === "applied" ? "Applying edit to " : "Rejected edit to "}
+                <span className="text-text-secondary">{fileName(file)}</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="my-1 overflow-hidden rounded-lg border border-border-subtle bg-panel">
+            <button
+                type="button"
+                onClick={() => setDiffOpen((v) => !v)}
+                className="flex w-full items-center gap-2 px-3 pt-2 text-left"
+            >
+                {isProcessing ? (
+                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
+                ) : (
+                    <Icon name="edit" size={13} className="shrink-0 text-text-muted" />
+                )}
+                <span className="truncate text-xs text-text-primary">{fileName(file)}</span>
+                <span className="flex shrink-0 items-center gap-1 text-xs">
+                    <span className="text-success">+{add}</span>
+                    <span className="text-error">-{del}</span>
+                </span>
+                <Icon
+                    name="chevron_right"
+                    size={12}
+                    className={cn(
+                        "ml-auto shrink-0 opacity-50 transition-transform duration-200",
+                        diffOpen && "rotate-90",
+                    )}
+                />
+            </button>
+            <div className="px-3">
+                <Collapse open={diffOpen}>
+                    <WorkflowEditPreview
+                        file={file}
+                        original={block.original || ""}
+                        replacement={block.replacement || ""}
+                    />
+                </Collapse>
+            </div>
+            <div className="flex items-center justify-end gap-1.5 border-t border-border-subtle px-2.5 py-1.5">
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    disabled={isProcessing}
+                    onClick={() => resolve(false)}
+                >
+                    Skip
+                </Button>
+                <Button
+                    type="button"
+                    variant="default"
+                    size="xs"
+                    disabled={isProcessing}
+                    onClick={() => resolve(true)}
+                >
+                    Accept
+                    <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded bg-background px-1 py-px font-sans text-xs leading-none text-text-foreground">
+                        ↵
+                    </kbd>
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+/** Applied (previously gated) edit — same presentation as a normal edit row. */
+function StepRowAppliedEdit({ block }: { block: Chunk }) {
+    const [diffOpen, setDiffOpen] = useState(false);
+    const { add, del } = editDelta(block);
+    const hasDiff = add > 0 || del > 0;
+    const file = block.file || "";
+    return (
+        <div className="py-0.5">
+            <button
+                type="button"
+                onClick={() => hasDiff && setDiffOpen((v) => !v)}
+                className={cn(
+                    "flex items-center gap-1.5 text-xs text-text-muted w-fit max-w-full text-left",
+                    hasDiff && "hover:text-text-primary transition-colors",
+                )}
+            >
+                <span>
+                    Edited <span className="text-text-secondary">{fileName(file)}</span>
+                </span>
+                <LineDelta add={add} del={del} />
+                {hasDiff ? (
+                    <Icon
+                        name="chevron_right"
+                        size={12}
+                        className={cn("opacity-50 transition-transform duration-200 shrink-0", diffOpen && "rotate-90")}
+                    />
+                ) : null}
+            </button>
+            {hasDiff ? (
+                <Collapse open={diffOpen}>
+                    <WorkflowEditPreview
+                        file={file}
+                        original={block.original || ""}
+                        replacement={block.replacement || ""}
+                    />
+                </Collapse>
+            ) : null}
+        </div>
+    );
+}
+
 function StepRow({ block }: { block: Chunk }) {
     const [diffOpen, setDiffOpen] = useState(false);
 
@@ -420,11 +602,12 @@ function StepRow({ block }: { block: Chunk }) {
     }
 
     if (block.type === "terminal_command" || block.type === "run") {
-        if (block.type === "terminal_command" && block.commandStatus === "pending") {
-            return <TerminalApprovalRow block={block} />;
-        }
         const cmd = (block.command || block.content || "").trim();
-        if (isLintCommand(cmd)) {
+        const finishedFine =
+            !block.commandStatus
+            || block.commandStatus === "completed"
+            || block.commandStatus === "background";
+        if (finishedFine && !block.isGenerating && isLintCommand(cmd)) {
             const status = lintStatusFromOutput(block.content || "");
             if (status === "clean") {
                 return <div className="py-0.5 text-xs text-text-muted">No linter errors</div>;
@@ -433,9 +616,22 @@ function StepRow({ block }: { block: Chunk }) {
                 return <div className="py-0.5 text-xs text-text-muted">Linter errors found</div>;
             }
         }
+        return <TerminalCommandStep block={block} />;
+    }
+
+    if (block.type === "edit_pending") {
+        const status = block.commandStatus || "pending";
+        if (status === "pending") {
+            return <EditApprovalRow block={block} />;
+        }
+        if (status === "applied" && block.file) {
+            // Applied edits render like a normal edit row (with the diff).
+            return <StepRowAppliedEdit block={block} />;
+        }
         return (
-            <div className="py-0.5 text-xs text-text-muted truncate">
-                Ran <span className="font-mono text-[11px] text-text-secondary">{cmd}</span>
+            <div className="py-0.5 text-xs text-text-muted">
+                {status === "cancelled" ? "Cancelled edit to " : "Rejected edit to "}
+                <span className="text-text-secondary">{block.file ? fileName(block.file) : "file"}</span>
             </div>
         );
     }
@@ -484,7 +680,9 @@ export function TurnWorkflowSummary({
 }) {
     const visible = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
     const hasPendingApproval = visible.some(
-        (b) => b.type === "terminal_command" && b.commandStatus === "pending",
+        (b) =>
+            (b.type === "terminal_command" || b.type === "edit_pending")
+            && b.commandStatus === "pending",
     );
     const [open, setOpen] = useState(!!isActive || hasPendingApproval);
     const [stepsOpen, setStepsOpen] = useState(hasPendingApproval);
@@ -528,10 +726,18 @@ export function TurnWorkflowSummary({
     const pendingApprovalRows = (
         <div className="flex flex-col gap-1 my-1">
             {visible
-                .filter((b) => b.type === "terminal_command" && b.commandStatus === "pending")
-                .map((b, i) => (
-                    <TerminalApprovalRow key={b.commandId || `pending-${i}`} block={b} />
-                ))}
+                .filter(
+                    (b) =>
+                        (b.type === "terminal_command" || b.type === "edit_pending")
+                        && b.commandStatus === "pending",
+                )
+                .map((b, i) =>
+                    b.type === "edit_pending" ? (
+                        <EditApprovalRow key={b.commandId || `pending-edit-${i}`} block={b} />
+                    ) : (
+                        <TerminalCommandStep key={b.commandId || `pending-${i}`} block={b} />
+                    ),
+                )}
         </div>
     );
 

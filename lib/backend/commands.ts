@@ -415,6 +415,11 @@ export const commands = {
             accessibilityPass: boolean;
         },
         reviewAdversarialEnabled?: boolean,
+        executionPolicy?: {
+            autoRunMode?: string;
+            requireEditApproval?: boolean;
+            protectDestructiveGit?: boolean;
+        },
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -424,6 +429,9 @@ export const commands = {
             accessToken: accessToken ?? null,
             designOptions: designOptions ?? null,
             reviewAdversarialEnabled: reviewAdversarialEnabled ?? null,
+            autoRunMode: executionPolicy?.autoRunMode ?? null,
+            requireEditApproval: executionPolicy?.requireEditApproval ?? null,
+            protectDestructiveGit: executionPolicy?.protectDestructiveGit ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -495,6 +503,11 @@ export const commands = {
     // Terminal command approval
     approveTerminalCommand: (id: string) => invokeCommand<string>("approve_terminal_command", { id }),
     rejectTerminalCommand: (id: string) => invokeCommand<void>("reject_terminal_command", { id }),
+    // Edit approval (when "require edit approval" is enabled)
+    resolveEditApproval: (id: string, approved: boolean) =>
+        invokeCommand<void>("resolve_edit_approval", { id, approved }),
+    setIndexEmbeddings: (enabled: boolean) =>
+        invokeCommand<void>("set_index_embeddings", { enabled }),
     setDiagnostics: (path: string, diagnostics: unknown[]) => invokeCommand<void>("set_diagnostics", { path, diagnostics }),
     lspStart: (
         language: string,

@@ -26,37 +26,46 @@ use reqwest::Client;
 use crate::core::error::AppError;
 use super::commands::logging;
 
-/// Outcome of a successful edit, returned to the agent's tool_result.
-pub struct EditOutcome {
+/// A merged edit that has NOT been written to disk yet. Produced by
+/// [`resolve_edit`]; written by [`write_resolved_edit`] (or discarded when the
+/// user rejects it in the edit-approval flow).
+pub struct ResolvedEdit {
     pub merged_content: String,
+    pub original_content: String,
     pub strategy: &'static str,
     pub original_lines: usize,
     pub merged_lines: usize,
+    pub is_new_file: bool,
 }
 
-/// Apply a speculative edit to a file.
+/// Write a previously resolved edit to disk.
+pub async fn write_resolved_edit(
+    app: &tauri::AppHandle,
+    path: &str,
+    resolved: &ResolvedEdit,
+) -> Result<(), AppError> {
+    save(app, path, &resolved.merged_content).await
+}
+
+/// Compute the merged content for an edit WITHOUT touching the disk.
 ///
-/// `path` must be the absolute, already-security-validated path. `code_edit` is the
-/// model's edit (possibly with `// ... existing code ...` markers). `instructions` is
-/// a one-line human-readable hint used by the fast-apply LLM.
-///
-/// Returns Ok(EditOutcome) on success (file saved). On failure, the error message
-/// includes the current file contents so the model can read its mistake and retry.
-pub async fn apply_edit(
-    path: String,
-    instructions: String,
-    code_edit: String,
-    app: tauri::AppHandle,
+/// This is the shared front half of the edit pipeline: the normal path writes
+/// the result immediately, while the edit-approval path shows it to the user
+/// first and only writes on approval.
+pub async fn resolve_edit(
+    path: &str,
+    instructions: &str,
+    code_edit: &str,
     client: &Client,
     api_key: &str,
-) -> Result<EditOutcome, AppError> {
+) -> Result<ResolvedEdit, AppError> {
     let code_edit = code_edit.replace("\r\n", "\n");
-    let is_new_file = !std::path::Path::new(&path).exists();
+    let is_new_file = !std::path::Path::new(path).exists();
 
     logging::info(
         "editing",
         &format!(
-            "apply_edit: path={}, is_new={}, edit_len={}",
+            "resolve_edit: path={}, is_new={}, edit_len={}",
             path,
             is_new_file,
             code_edit.len()
@@ -70,17 +79,18 @@ pub async fn apply_edit(
                     .to_string(),
             ));
         }
-        save(&app, &path, &code_edit).await?;
         let lines = code_edit.lines().count();
-        return Ok(EditOutcome {
+        return Ok(ResolvedEdit {
             merged_content: code_edit,
+            original_content: String::new(),
             strategy: "new_file",
             original_lines: 0,
             merged_lines: lines,
+            is_new_file: true,
         });
     }
 
-    let original = tokio::fs::read_to_string(&path)
+    let original = tokio::fs::read_to_string(path)
         .await
         .map_err(|e| {
             logging::error("editing", &format!("Failed to read {}: {}", path, e));
@@ -93,18 +103,19 @@ pub async fn apply_edit(
             logging::info(
                 "editing",
                 &format!(
-                    "merge conflict detected; applying direct full-file replacement ({} -> {} lines)",
+                    "merge conflict detected; using direct full-file replacement ({} -> {} lines)",
                     original.lines().count(),
                     code_edit.lines().count()
                 ),
             );
-            save(&app, &path, &code_edit).await?;
             let merged_lines = code_edit.lines().count();
-            return Ok(EditOutcome {
-                merged_content: code_edit,
-                strategy: "merge_conflict_full_file",
+            return Ok(ResolvedEdit {
                 original_lines: original.lines().count(),
+                merged_content: code_edit,
+                original_content: original,
+                strategy: "merge_conflict_full_file",
                 merged_lines,
+                is_new_file: false,
             });
         }
     }
@@ -129,13 +140,14 @@ pub async fn apply_edit(
                     merged.lines().count()
                 ),
             );
-            save(&app, &path, &merged).await?;
             let merged_lines = merged.lines().count();
-            return Ok(EditOutcome {
+            return Ok(ResolvedEdit {
                 merged_content: merged,
+                original_content: original,
                 strategy: "speculative",
                 original_lines,
                 merged_lines,
+                is_new_file: false,
             });
         }
         Err(e) => {
@@ -175,27 +187,29 @@ Remove all conflict markers and use `edit_file` with the entire corrected file a
                 code_edit.lines().count()
             ),
         );
-        save(&app, &path, &code_edit).await?;
         let merged_lines = code_edit.lines().count();
-        return Ok(EditOutcome {
+        return Ok(ResolvedEdit {
             merged_content: code_edit,
+            original_content: original,
             strategy: "full_file",
             original_lines,
             merged_lines,
+            is_new_file: false,
         });
     }
 
     // 3) Fast-apply LLM fallback.
     logging::info("editing", "speculative resolver declined, falling back to fast-apply");
-    match apply::fast_apply(client, api_key, &original, &code_edit, &instructions).await {
+    match apply::fast_apply(client, api_key, &original, &code_edit, instructions).await {
         Ok(merged) => {
-            save(&app, &path, &merged).await?;
             let merged_lines = merged.lines().count();
-            Ok(EditOutcome {
+            Ok(ResolvedEdit {
                 merged_content: merged,
+                original_content: original,
                 strategy: "fast_apply",
                 original_lines,
                 merged_lines,
+                is_new_file: false,
             })
         }
         Err(e) => {

@@ -16,7 +16,7 @@ use serde_json::json;
 use tauri::{Emitter, Manager};
 
 use super::context::{build_context_with_options, context_options_for_query};
-use super::models::{AgentState, ChatMessage};
+use super::models::{AgentState, AutoRunMode, ChatMessage, TurnPolicy};
 use super::prompts;
 use super::tools::schema;
 use crate::agent::model_router;
@@ -42,6 +42,9 @@ pub async fn send_chat_message(
     access_token: Option<String>,
     _design_options: Option<crate::commands::preview_render::DesignAgentOptions>,
     review_adversarial_enabled: Option<bool>,
+    auto_run_mode: Option<String>,
+    require_edit_approval: Option<bool>,
+    protect_destructive_git: Option<bool>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -137,6 +140,13 @@ pub async fn send_chat_message(
     let turn_id = uuid::Uuid::new_v4().to_string();
     let conversation_id = Some(owned_conversation_id.clone());
     state.reset_turn_meter();
+    // Stale approvals from an earlier turn must never resolve this turn's items.
+    state.clear_pending_approvals();
+    state.set_turn_policy(TurnPolicy {
+        auto_run_mode: AutoRunMode::from_setting(auto_run_mode.as_deref()),
+        require_edit_approval: require_edit_approval.unwrap_or(false),
+        protect_destructive_git: protect_destructive_git.unwrap_or(true),
+    });
     if !state.try_begin_in_flight(turn_id.clone(), Some(owned_conversation_id.clone())) {
         // Roll back the optimistic user message we just pushed.
         if let Ok(mut hist) = state.history.lock() {
@@ -442,6 +452,12 @@ pub async fn send_chat_message(
     let mut final_full_response = turn_outcome.response_text;
     let loop_count = turn_outcome.loop_count;
     let interrupt_error = turn_outcome.interrupt_error;
+
+    // Keep the codebase index fresh after turns that changed files. The scan is
+    // incremental (mtime manifest) and skipped when a job is already running.
+    if turn_outcome.wrote_files && !project_path.is_empty() {
+        let _ = index_state.spawn_background_index(app_handle.clone(), project_path.clone());
+    }
 
     if mode_to_use.eq_ignore_ascii_case("review")
         && review_adversarial_enabled.unwrap_or(true)
@@ -1265,8 +1281,12 @@ pub fn new_chat(
     state.clear_design_preview_state();
     state.clear_file_checkpoints();
 
+    // Refresh the index only when it is actually stale — an unconditional
+    // rescan on every new chat wasted a full project walk.
     if let Some(path) = app_state.0.lock()?.project_path.clone() {
-        let _ = index_state.spawn_background_index(app_handle, path);
+        if index_state.should_background_index(&path) {
+            let _ = index_state.spawn_background_index(app_handle, path);
+        }
     }
 
     Ok(())
@@ -1362,6 +1382,8 @@ pub async fn stop_chat_message(
         logging::debug("chat", "Stop ignored — generation already stopping");
     } else {
         logging::info("chat", "Stop requested by user");
+        // Dismiss any approval cards still waiting on the user.
+        state.clear_pending_approvals();
         state
             .cancellation_token
             .lock()
@@ -1443,75 +1465,24 @@ pub async fn apply_file_edit(
     Ok(())
 }
 
+/// Record the user's approval. Execution happens inside the agent turn's
+/// waiting tool call (same session engine, streaming, and cancel token as
+/// auto-approved commands). The old design executed the command *here* and the
+/// tool-side waiter timed out after 120s — a slow approval plus a slow command
+/// told the model "rejected, do NOT retry" while the command actually ran.
 #[tauri::command]
-pub async fn approve_terminal_command(
+pub fn approve_terminal_command(
     id: String,
     state: tauri::State<'_, AgentState>,
-    app_state: tauri::State<'_, AppState>,
-    pty_state: tauri::State<'_, crate::commands::pty::PtyState>,
-    app: tauri::AppHandle,
 ) -> Result<String, AppError> {
     logging::info("terminal", &format!("Command approved: {}", id));
-    let pending = {
-        let pending_cmds = state.pending_commands.lock()?;
-        pending_cmds.get(&id).cloned()
-    };
-
-    let Some(cmd) = pending else {
+    if !state.pending_commands.lock()?.contains_key(&id) {
         return Err(AppError::Message(
             "Command not found or already processed".to_string(),
         ));
-    };
-
-    let project_path = app_state
-        .0
-        .lock()?
-        .project_path
-        .clone()
-        .unwrap_or_else(|| ".".to_string());
-
-    let output = if cmd.action.as_deref() == Some("git_commit") {
-        let message = cmd.payload.unwrap_or_default();
-        match crate::domain::git::service::git_commit(project_path, message).await {
-            Ok(()) => "Commit created.".to_string(),
-            Err(e) => format!("Commit failed: {}", e),
-        }
-    } else {
-        let cancel = state
-            .cancellation_token
-            .lock()
-            .map_err(|e| AppError::Poison(e.to_string()))?
-            .clone();
-
-        match terminal::classify_command(&cmd.command) {
-            terminal::CommandExecutionMode::LongRunning => {
-                terminal::execute_long_running_in_pty(
-                    &cmd.command,
-                    &project_path,
-                    &app,
-                    &pty_state,
-                    &state,
-                )
-                .await
-            }
-            terminal::CommandExecutionMode::Quick => {
-                terminal::execute_terminal_command(
-                    &cmd.command,
-                    &project_path,
-                    Some(&app),
-                    Some(cancel),
-                    Some(&state),
-                )
-                .await
-            }
-        }
-    };
-
-    state.command_results.lock()?.insert(id.clone(), output.clone());
-    // Allow the approval waiter to observe completion and exit cleanly.
-    state.pending_commands.lock()?.remove(&id);
-
-    Ok(output)
+    }
+    state.command_decisions.lock()?.insert(id, true);
+    Ok("approved".to_string())
 }
 
 #[tauri::command]
@@ -1520,6 +1491,31 @@ pub fn reject_terminal_command(
     state: tauri::State<'_, AgentState>,
 ) -> Result<(), AppError> {
     logging::info("terminal", &format!("Command rejected: {}", id));
+    state.command_decisions.lock()?.insert(id.clone(), false);
     state.pending_commands.lock()?.remove(&id);
+    Ok(())
+}
+
+/// Approve or reject a staged file edit (edit-approval mode). The waiting
+/// `edit_file` / `create_file` tool call writes the file on approval.
+#[tauri::command]
+pub fn resolve_edit_approval(
+    id: String,
+    approved: bool,
+    state: tauri::State<'_, AgentState>,
+) -> Result<(), AppError> {
+    logging::info(
+        "editing",
+        &format!("Edit {}: {}", if approved { "approved" } else { "rejected" }, id),
+    );
+    if !state.pending_edits.lock()?.contains_key(&id) {
+        return Err(AppError::Message(
+            "Edit not found or already processed".to_string(),
+        ));
+    }
+    state.edit_decisions.lock()?.insert(id.clone(), approved);
+    if !approved {
+        state.pending_edits.lock()?.remove(&id);
+    }
     Ok(())
 }

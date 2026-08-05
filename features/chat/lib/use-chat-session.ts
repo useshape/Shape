@@ -637,6 +637,11 @@ export function useChatSession() {
                 token,
                 undefined,
                 selectedMode === "Review" ? settings.ai.reviewAdversarialEnabled : undefined,
+                {
+                    autoRunMode: settings.ai.autoRunMode,
+                    requireEditApproval: settings.ai.requireEditApproval,
+                    protectDestructiveGit: settings.ai.protectDestructiveGit,
+                },
             );
             await refreshMetadata();
             return true;

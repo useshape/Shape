@@ -17,14 +17,14 @@ use serde_json::{json, Value};
 use tauri::{Emitter, Manager};
 
 use crate::agent::security::{self, commands::CommandSafety};
-use crate::agent::models::{AgentState, PendingCommand};
+use crate::agent::models::{AgentState, PendingCommand, PendingEdit};
 use crate::core::workspace_trust::WorkspaceTrustState;
-use crate::agent::commands::{checkpoints, logging, streaming, terminal::{self, classify_command, CommandExecutionMode}};
+use crate::agent::commands::{checkpoints, logging, streaming, terminal};
 use crate::agent::tools::{files, search};
 use crate::commands::git;
 use crate::commands::design_sandbox;
 use crate::commands::preview_render;
-use crate::commands::pty::PtyState;
+use crate::commands::pty::{PtyState, SessionKind};
 
 const DESIGN_GATE_BLOCK_MSG: &str = "Design preview phase is active. Call render_design_previews with React JSX concepts first and wait for the user to pick one. Do not scaffold projects (create-next-app, npm init), run terminal commands, or edit files until a concept is selected.";
 
@@ -136,7 +136,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "web_search" => tool_web_search(&args, ctx).await,
         "visit_url" => tool_visit_url(&args, ctx).await,
         "create_directory" => tool_create_directory(&args, ctx),
-        "create_file" => tool_create_file(&args, ctx),
+        "create_file" => tool_create_file(&args, ctx).await,
         "edit_file" => tool_edit_file(&args, ctx).await,
         "delete_file" => tool_delete_file(&args, ctx),
         "rename_file" => tool_rename_file(&args, ctx),
@@ -395,7 +395,7 @@ fn tool_create_directory(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     }
 }
 
-fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+async fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
         return blocked_outcome("create_file", "File creation is not allowed in Ask or Plan mode.");
     }
@@ -408,20 +408,55 @@ fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+
+    let mut approved_edit_id: Option<String> = None;
+    if ctx.agent_state.turn_policy().require_edit_approval {
+        // Refuse duplicates before asking for approval — same check create_file
+        // itself performs on write.
+        if security::paths::resolve_safe_path(&path, ctx.project_path)
+            .map(|p| p.exists())
+            .unwrap_or(false)
+        {
+            return error_outcome(
+                "create_file",
+                &format!("File '{}' already exists — use edit_file to modify it.", path),
+            );
+        }
+        let resolved = crate::agent::editing::ResolvedEdit {
+            merged_content: content.clone(),
+            original_content: String::new(),
+            strategy: "new_file",
+            original_lines: 0,
+            merged_lines: content.lines().count(),
+            is_new_file: true,
+        };
+        match gate_edit_approval(&path, &resolved, ctx).await {
+            Ok(id) => approved_edit_id = Some(id),
+            Err(outcome) => return outcome,
+        }
+    }
+
     match files::create_file(&path, &content, ctx.project_path) {
         Ok(_) => {
             let _ = ctx.app_handle.emit("shape-file-edited", &path);
             record_checkpoint(ctx, &path, None);
             let mut tool_result = format!("Created file {} ({} chars)", path, content.len());
+            if approved_edit_id.is_some() {
+                tool_result.push_str(" (approved by user)");
+            }
             let syntax_errors = crate::agent::editing::syntax_check::check_syntax(&path, &content);
             if let Some(feedback) =
                 crate::agent::editing::syntax_check::format_syntax_feedback(&path, &syntax_errors)
             {
                 tool_result.push_str(&feedback);
             }
+            let ui = match &approved_edit_id {
+                Some(edit_id) => edit_pending_chunk(edit_id, &path, "applied", "", &content),
+                None => format!("\n<create_file>{}</create_file>\n", path),
+            };
             ToolOutcome {
                 tool_result,
-                ui_chunk: format!("\n<create_file>{}</create_file>\n", path),
+                ui_chunk: ui,
                 side_effect: Some(SideEffect::FileWritten {
                     path,
                     content,
@@ -429,6 +464,148 @@ fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             }
         }
         Err(e) => error_outcome("create_file", &e.to_string()),
+    }
+}
+
+/// Wait until the user approves/rejects a staged edit, or the turn is
+/// cancelled. Same no-timeout contract as command approvals.
+async fn wait_for_edit_decision(edit_id: &str, ctx: &ToolCtx<'_>) -> ApprovalDecision {
+    loop {
+        if ctx.cancel.is_cancelled() {
+            return ApprovalDecision::Cancelled;
+        }
+        if let Ok(mut decisions) = ctx.agent_state.edit_decisions.lock() {
+            if let Some(approved) = decisions.remove(edit_id) {
+                return if approved {
+                    ApprovalDecision::Approved
+                } else {
+                    ApprovalDecision::Rejected
+                };
+            }
+        }
+        let still_pending = ctx
+            .agent_state
+            .pending_edits
+            .lock()
+            .map(|p| p.contains_key(edit_id))
+            .unwrap_or(false);
+        if !still_pending {
+            if let Ok(mut decisions) = ctx.agent_state.edit_decisions.lock() {
+                if let Some(approved) = decisions.remove(edit_id) {
+                    return if approved {
+                        ApprovalDecision::Approved
+                    } else {
+                        ApprovalDecision::Rejected
+                    };
+                }
+            }
+            return ApprovalDecision::Rejected;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
+}
+
+fn cleanup_pending_edit(edit_id: &str, ctx: &ToolCtx<'_>) {
+    if let Ok(mut pendings) = ctx.agent_state.pending_edits.lock() {
+        pendings.remove(edit_id);
+    }
+    if let Ok(mut decisions) = ctx.agent_state.edit_decisions.lock() {
+        decisions.remove(edit_id);
+    }
+}
+
+fn edit_pending_chunk(
+    edit_id: &str,
+    path: &str,
+    status: &str,
+    original: &str,
+    replacement: &str,
+) -> String {
+    format!(
+        "\n<edit_pending id=\"{}\" file=\"{}\" status=\"{}\"><original>{}</original><replacement>{}</replacement></edit_pending>\n",
+        escape_xml_attr(edit_id),
+        escape_xml_attr(path),
+        status,
+        escape_xml_text(original),
+        escape_xml_text(replacement),
+    )
+}
+
+/// Stage a resolved edit for user approval. Returns `Ok(edit_id)` when approved
+/// (caller writes the file) or `Err(outcome)` when rejected/cancelled.
+async fn gate_edit_approval(
+    target: &str,
+    resolved: &crate::agent::editing::ResolvedEdit,
+    ctx: &ToolCtx<'_>,
+) -> Result<String, ToolOutcome> {
+    let edit_id = format!("edit-{}", uuid::Uuid::new_v4());
+    let pending = PendingEdit {
+        id: edit_id.clone(),
+        path: target.to_string(),
+        is_new_file: resolved.is_new_file,
+    };
+    if let Ok(mut pendings) = ctx.agent_state.pending_edits.lock() {
+        pendings.insert(edit_id.clone(), pending.clone());
+    }
+
+    ctx.emit_ui_token(edit_pending_chunk(
+        &edit_id,
+        target,
+        "pending",
+        &resolved.original_content,
+        &resolved.merged_content,
+    ));
+    let _ = ctx.app_handle.emit("agent-edit-pending", &pending);
+    streaming::emit_chat_status(
+        ctx.app_handle,
+        json!({ "phase": "approval", "label": "Waiting for edit approval" }),
+    );
+
+    let decision = wait_for_edit_decision(&edit_id, ctx).await;
+    cleanup_pending_edit(&edit_id, ctx);
+
+    // Final state chunks are returned through the ToolOutcome (persisted into
+    // the transcript by the turn loop); only the transient "pending" card goes
+    // through the live-only token channel above.
+    match decision {
+        ApprovalDecision::Approved => {
+            let _ = ctx.app_handle.emit(
+                "agent-edit-resolved",
+                json!({ "id": edit_id, "approved": true }),
+            );
+            Ok(edit_id)
+        }
+        ApprovalDecision::Rejected => {
+            let _ = ctx.app_handle.emit(
+                "agent-edit-resolved",
+                json!({ "id": edit_id, "approved": false }),
+            );
+            Err(ToolOutcome {
+                tool_result: format!(
+                    "The user rejected this edit to '{}'. The file was NOT changed. Do NOT retry the same edit. Continue without it, or ask the user how to proceed.",
+                    target
+                ),
+                ui_chunk: edit_pending_chunk(
+                    &edit_id,
+                    target,
+                    "rejected",
+                    &resolved.original_content,
+                    &resolved.merged_content,
+                ),
+                side_effect: None,
+            })
+        }
+        ApprovalDecision::Cancelled => Err(ToolOutcome {
+            tool_result: "Turn was cancelled while waiting for edit approval.".to_string(),
+            ui_chunk: edit_pending_chunk(
+                &edit_id,
+                target,
+                "cancelled",
+                &resolved.original_content,
+                &resolved.merged_content,
+            ),
+            side_effect: None,
+        }),
     }
 }
 
@@ -474,63 +651,87 @@ async fn tool_edit_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         Err(e) => return error_outcome("edit_file", &format!("Cannot resolve '{}': {}", target, e)),
     };
 
-    // Read the current content for the UI preview (the renderer wants original/replacement)
-    // and for the checkpoint snapshot (existence matters: a missing file means restore
-    // should delete it rather than write back an empty string).
-    let file_existed = tokio::fs::metadata(&abs_path).await.is_ok();
-    let original_preview = if file_existed {
-        tokio::fs::read_to_string(&abs_path).await.unwrap_or_default()
-    } else {
-        String::new()
-    };
-
-    match crate::agent::editing::apply_edit(
-        abs_path.clone(),
-        instructions,
-        code_edit,
-        ctx.app_handle.clone(),
+    // Resolve (merge) first without touching disk — the approval flow shows the
+    // result to the user before anything is written.
+    let resolved = match crate::agent::editing::resolve_edit(
+        &abs_path,
+        &instructions,
+        &code_edit,
         ctx.client,
         ctx.api_key,
     )
     .await
     {
-        Ok(outcome) => {
-            let _ = ctx.app_handle.emit("shape-file-edited", &abs_path);
-            record_checkpoint(
-                ctx,
-                &target,
-                if file_existed { Some(original_preview.clone()) } else { None },
-            );
-            let ui = format!(
-                "\n<edit file=\"{}\"><original>{}</original><replacement>{}</replacement></edit>\n",
-                escape_xml_attr(&target),
-                escape_xml_text(&original_preview),
-                escape_xml_text(&outcome.merged_content),
-            );
-            let mut tool_result = format!(
-                "Edit applied to {} via {} strategy ({} -> {} lines).",
-                target, outcome.strategy, outcome.original_lines, outcome.merged_lines
-            );
-            let syntax_errors =
-                crate::agent::editing::syntax_check::check_syntax(&target, &outcome.merged_content);
-            if let Some(feedback) =
-                crate::agent::editing::syntax_check::format_syntax_feedback(&target, &syntax_errors)
-            {
-                tool_result.push_str(&feedback);
-            }
-            ToolOutcome {
-                tool_result,
-                ui_chunk: ui,
-                side_effect: Some(SideEffect::FileWritten {
-                    path: target,
-                    content: outcome.merged_content,
-                }),
-            }
-        }
+        Ok(r) => r,
         Err(e) => {
             logging::error("dispatch", &format!("edit_file failed for {}: {}", target, e));
-            error_outcome("edit_file", &e.to_string())
+            return error_outcome("edit_file", &e.to_string());
         }
+    };
+
+    let mut approved_edit_id: Option<String> = None;
+    if ctx.agent_state.turn_policy().require_edit_approval {
+        match gate_edit_approval(&target, &resolved, ctx).await {
+            Ok(id) => approved_edit_id = Some(id),
+            Err(outcome) => return outcome,
+        }
+    }
+
+    if let Err(e) =
+        crate::agent::editing::write_resolved_edit(ctx.app_handle, &abs_path, &resolved).await
+    {
+        logging::error("dispatch", &format!("edit_file write failed for {}: {}", target, e));
+        return error_outcome("edit_file", &e.to_string());
+    }
+
+    let _ = ctx.app_handle.emit("shape-file-edited", &abs_path);
+    record_checkpoint(
+        ctx,
+        &target,
+        if resolved.is_new_file {
+            None
+        } else {
+            Some(resolved.original_content.clone())
+        },
+    );
+    // Gated edits keep their edit_pending identity (status flips to applied);
+    // ungated edits use the classic <edit> chunk.
+    let ui = match &approved_edit_id {
+        Some(edit_id) => edit_pending_chunk(
+            edit_id,
+            &target,
+            "applied",
+            &resolved.original_content,
+            &resolved.merged_content,
+        ),
+        None => format!(
+            "\n<edit file=\"{}\"><original>{}</original><replacement>{}</replacement></edit>\n",
+            escape_xml_attr(&target),
+            escape_xml_text(&resolved.original_content),
+            escape_xml_text(&resolved.merged_content),
+        ),
+    };
+    let mut tool_result = format!(
+        "Edit applied to {} via {} strategy ({} -> {} lines).",
+        target, resolved.strategy, resolved.original_lines, resolved.merged_lines
+    );
+    if approved_edit_id.is_some() {
+        tool_result.push_str(" (approved by user)");
+    }
+    let syntax_errors =
+        crate::agent::editing::syntax_check::check_syntax(&target, &resolved.merged_content);
+    if let Some(feedback) =
+        crate::agent::editing::syntax_check::format_syntax_feedback(&target, &syntax_errors)
+    {
+        tool_result.push_str(&feedback);
+    }
+    ToolOutcome {
+        tool_result,
+        ui_chunk: ui,
+        side_effect: Some(SideEffect::FileWritten {
+            path: target,
+            content: resolved.merged_content,
+        }),
     }
 }
 
@@ -720,10 +921,6 @@ async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         Ok(s) => s,
         Err(e) => return error_outcome("run_terminal", &e),
     };
-    let background = args
-        .get("background")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
 
     // Models sometimes try `cat file` / `dir folder` via the terminal even though
     // dedicated tools exist. Running a shell for simple file inspection wastes loops,
@@ -737,7 +934,13 @@ async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         return outcome;
     }
 
-    let safety = security::commands::check_command_safety(&command);
+    let policy = ctx.agent_state.turn_policy();
+    let safety = security::commands::apply_auto_run_mode(
+        security::commands::check_command_safety(&command),
+        &command,
+        policy.auto_run_mode,
+        policy.protect_destructive_git,
+    );
     match safety {
         CommandSafety::Blocked { reason } => {
             logging::warn("dispatch", &format!("Command blocked: {}", reason));
@@ -751,45 +954,85 @@ async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             }
         }
         CommandSafety::Safe => {
-            let use_background = background
-                || matches!(classify_command(&command), CommandExecutionMode::LongRunning);
-            let output = if use_background && ctx.pty_state.is_some() {
-                terminal::execute_long_running_in_pty(
-                    &command,
-                    ctx.project_path,
-                    ctx.app_handle,
-                    ctx.pty_state.unwrap(),
-                    ctx.agent_state,
-                )
-                .await
-            } else {
-                terminal::execute_terminal_command(
-                    &command,
-                    ctx.project_path,
-                    Some(ctx.app_handle),
-                    Some(ctx.cancel.clone()),
-                    Some(ctx.agent_state),
-                )
-                .await
-            };
-            let status = if use_background && ctx.pty_state.is_some() {
-                "background"
-            } else {
-                "completed"
-            };
-            ToolOutcome {
-                tool_result: format!("Command: {}\nOutput:\n{}", command, clip(&output, 10000)),
-                ui_chunk: format!(
-                    "\n<terminal_command status=\"{}\">{}\n{}\n</terminal_command>\n",
-                    status,
-                    command,
-                    escape_xml_text(&clip(&output, 2000))
-                ),
-                side_effect: None,
-            }
+            let cmd_id = format!("cmd-{}", uuid::Uuid::new_v4());
+            execute_terminal_session(&command, &cmd_id, ctx).await
         }
         CommandSafety::NeedsApproval { reason } => {
             run_with_approval(&command, &reason, ctx).await
+        }
+    }
+}
+
+/// Run a command through the unified session engine and build the tool outcome.
+/// The `cmd_id` correlates the chat card, live output events, and this result.
+async fn execute_terminal_session(command: &str, cmd_id: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let Some(pty_state) = ctx.pty_state else {
+        return error_outcome("run_terminal", "Terminal state is not available.");
+    };
+
+    streaming::emit_chat_status(
+        ctx.app_handle,
+        json!({
+            "phase": "tool",
+            "tool": "run_terminal",
+            "label": format!("Running {}", clip(command, 60)),
+        }),
+    );
+
+    let result = terminal::run_agent_command(
+        command,
+        ctx.project_path,
+        ctx.app_handle,
+        pty_state,
+        ctx.agent_state,
+        ctx.cancel.clone(),
+        cmd_id,
+    )
+    .await;
+
+    if result.cancelled {
+        return ToolOutcome {
+            tool_result: "[Command cancelled by user]".to_string(),
+            ui_chunk: format!(
+                "\n<terminal_command status=\"cancelled\" id=\"{}\" session=\"{}\">{}\n</terminal_command>\n",
+                cmd_id, result.session_id, command
+            ),
+            side_effect: None,
+        };
+    }
+
+    if result.completed {
+        let failed = result.exit_code.map(|c| c != 0).unwrap_or(false);
+        let status = if failed { "failed" } else { "completed" };
+        let tool_result = format!(
+            "Command: {}\nOutput:\n{}",
+            command,
+            clip(&terminal::format_command_result(&result), 10_000)
+        );
+        ToolOutcome {
+            tool_result,
+            ui_chunk: format!(
+                "\n<terminal_command status=\"{}\" id=\"{}\" session=\"{}\" exit=\"{}\">{}\n{}\n</terminal_command>\n",
+                status,
+                cmd_id,
+                result.session_id,
+                result.exit_code.unwrap_or(-1),
+                command,
+                escape_xml_text(&clip(&result.output, 2_000))
+            ),
+            side_effect: None,
+        }
+    } else {
+        ToolOutcome {
+            tool_result: terminal::format_background_result(&result, command),
+            ui_chunk: format!(
+                "\n<terminal_command status=\"background\" id=\"{}\" session=\"{}\">{}\n{}\n</terminal_command>\n",
+                cmd_id,
+                result.session_id,
+                command,
+                escape_xml_text(&clip(&result.output, 2_000))
+            ),
+            side_effect: None,
         }
     }
 }
@@ -907,6 +1150,71 @@ fn intercept_file_inspection_command(command: &str, ctx: &ToolCtx<'_>) -> Option
     }
 }
 
+/// Outcome of waiting for a user decision on a pending approval.
+enum ApprovalDecision {
+    Approved,
+    Rejected,
+    Cancelled,
+}
+
+/// Wait until the user approves/rejects the pending command, or the turn is
+/// cancelled. There is deliberately NO timeout: silently converting "no answer
+/// yet" into a rejection desynced the model from reality (the user could
+/// approve later and the command would run with the model believing it was
+/// rejected). The Stop button (cancel token) is the escape hatch.
+async fn wait_for_command_decision(cmd_id: &str, ctx: &ToolCtx<'_>) -> ApprovalDecision {
+    loop {
+        if ctx.cancel.is_cancelled() {
+            return ApprovalDecision::Cancelled;
+        }
+        if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
+            if let Some(approved) = decisions.remove(cmd_id) {
+                return if approved {
+                    ApprovalDecision::Approved
+                } else {
+                    ApprovalDecision::Rejected
+                };
+            }
+        }
+        // Defensive: pending entry vanished without a decision (e.g. state reset).
+        let still_pending = ctx
+            .agent_state
+            .pending_commands
+            .lock()
+            .map(|p| p.contains_key(cmd_id))
+            .unwrap_or(false);
+        if !still_pending {
+            if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
+                if let Some(approved) = decisions.remove(cmd_id) {
+                    return if approved {
+                        ApprovalDecision::Approved
+                    } else {
+                        ApprovalDecision::Rejected
+                    };
+                }
+            }
+            return ApprovalDecision::Rejected;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
+}
+
+fn cleanup_pending_command(cmd_id: &str, ctx: &ToolCtx<'_>) {
+    if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
+        pendings.remove(cmd_id);
+    }
+    if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
+        decisions.remove(cmd_id);
+    }
+}
+
+fn emit_command_resolved(ctx: &ToolCtx<'_>, cmd_id: &str, approved: bool) {
+    let _ = ctx.app_handle.emit(
+        "agent-command-resolved",
+        json!({ "id": cmd_id, "approved": approved }),
+    );
+}
+
 async fn run_git_commit_with_approval(
     preview: &str,
     message: &str,
@@ -931,56 +1239,62 @@ async fn run_git_commit_with_approval(
         cmd_id, preview, pending.reason
     ));
     let _ = ctx.app_handle.emit("agent-command-pending", pending);
+    streaming::emit_chat_status(
+        ctx.app_handle,
+        json!({ "phase": "approval", "label": "Waiting for approval" }),
+    );
 
-    let approval_timeout = std::time::Duration::from_secs(120);
-    let start = std::time::Instant::now();
-    let mut approved = false;
-    let mut result_output = String::new();
+    let decision = wait_for_command_decision(&cmd_id, ctx).await;
+    cleanup_pending_command(&cmd_id, ctx);
 
-    loop {
-        if start.elapsed() > approval_timeout || ctx.cancel.is_cancelled() {
-            break;
-        }
-        if let Ok(results) = ctx.agent_state.command_results.lock() {
-            if let Some(output) = results.get(&cmd_id) {
-                result_output = output.clone();
-                approved = true;
-                break;
+    match decision {
+        ApprovalDecision::Approved => {
+            emit_command_resolved(ctx, &cmd_id, true);
+            let result = crate::domain::git::service::git_commit(
+                ctx.project_path.to_string(),
+                message.to_string(),
+            )
+            .await;
+            match result {
+                Ok(()) => ToolOutcome {
+                    tool_result: "Commit created.".to_string(),
+                    ui_chunk: format!(
+                        "\n<terminal_command status=\"completed\" id=\"{}\">{}\n</terminal_command>\n",
+                        cmd_id, preview
+                    ),
+                    side_effect: None,
+                },
+                Err(e) => ToolOutcome {
+                    tool_result: format!("Commit failed: {}", e),
+                    ui_chunk: format!(
+                        "\n<terminal_command status=\"failed\" id=\"{}\">{}\n{}\n</terminal_command>\n",
+                        cmd_id,
+                        preview,
+                        escape_xml_text(&e.to_string())
+                    ),
+                    side_effect: None,
+                },
             }
         }
-        if let Ok(pendings) = ctx.agent_state.pending_commands.lock() {
-            if !pendings.contains_key(&cmd_id) {
-                break;
+        ApprovalDecision::Rejected => {
+            emit_command_resolved(ctx, &cmd_id, false);
+            ToolOutcome {
+                tool_result: "Commit was rejected by the user. Do NOT retry it.".to_string(),
+                ui_chunk: format!(
+                    "\n<terminal_command status=\"rejected\" id=\"{}\">{}\n</terminal_command>\n",
+                    cmd_id, preview
+                ),
+                side_effect: None,
             }
         }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
-
-    if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
-        pendings.remove(&cmd_id);
-    }
-    if let Ok(mut results) = ctx.agent_state.command_results.lock() {
-        results.remove(&cmd_id);
-    }
-
-    if approved {
-        ToolOutcome {
-            tool_result: format!("Commit created.\n{}", clip(&result_output, 2000)),
+        ApprovalDecision::Cancelled => ToolOutcome {
+            tool_result: "Turn was cancelled while waiting for commit approval.".to_string(),
             ui_chunk: format!(
-                "\n<terminal_command status=\"completed\" id=\"{}\">{}\n</terminal_command>\n",
+                "\n<terminal_command status=\"cancelled\" id=\"{}\">{}\n</terminal_command>\n",
                 cmd_id, preview
             ),
             side_effect: None,
-        }
-    } else {
-        ToolOutcome {
-            tool_result: "Commit was rejected by the user (or timed out). Do NOT retry it.".to_string(),
-            ui_chunk: format!(
-                "\n<terminal_command status=\"rejected\" id=\"{}\">{}\n</terminal_command>\n",
-                cmd_id, preview
-            ),
-            side_effect: None,
-        }
+        },
     }
 }
 
@@ -1004,59 +1318,45 @@ async fn run_with_approval(command: &str, reason: &str, ctx: &ToolCtx<'_>) -> To
         cmd_id, command, reason
     ));
     let _ = ctx.app_handle.emit("agent-command-pending", pending);
+    streaming::emit_chat_status(
+        ctx.app_handle,
+        json!({ "phase": "approval", "label": "Waiting for approval" }),
+    );
 
-    let approval_timeout = std::time::Duration::from_secs(120);
-    let start = std::time::Instant::now();
-    let mut approved = false;
-    let mut result_output = String::new();
+    let decision = wait_for_command_decision(&cmd_id, ctx).await;
+    cleanup_pending_command(&cmd_id, ctx);
 
-    loop {
-        if start.elapsed() > approval_timeout || ctx.cancel.is_cancelled() {
-            break;
+    match decision {
+        ApprovalDecision::Approved => {
+            emit_command_resolved(ctx, &cmd_id, true);
+            // Execute through the SAME path as auto-approved commands: same
+            // session engine, same streaming, same cancel token, same card id.
+            let mut outcome = execute_terminal_session(command, &cmd_id, ctx).await;
+            outcome.tool_result = format!("(approved by user)\n{}", outcome.tool_result);
+            outcome
         }
-        if let Ok(results) = ctx.agent_state.command_results.lock() {
-            if let Some(output) = results.get(&cmd_id) {
-                result_output = output.clone();
-                approved = true;
-                break;
+        ApprovalDecision::Rejected => {
+            emit_command_resolved(ctx, &cmd_id, false);
+            ToolOutcome {
+                tool_result: format!(
+                    "Command '{}' was rejected by the user. Do NOT retry it or attempt an equivalent command. Continue the task without it, or ask the user how to proceed.",
+                    command
+                ),
+                ui_chunk: format!(
+                    "\n<terminal_command status=\"rejected\" id=\"{}\">{}\n</terminal_command>\n",
+                    cmd_id, command
+                ),
+                side_effect: None,
             }
         }
-        if let Ok(pendings) = ctx.agent_state.pending_commands.lock() {
-            if !pendings.contains_key(&cmd_id) {
-                break;
-            }
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
-
-    if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
-        pendings.remove(&cmd_id);
-    }
-    if let Ok(mut results) = ctx.agent_state.command_results.lock() {
-        results.remove(&cmd_id);
-    }
-
-    if approved {
-        ToolOutcome {
-            tool_result: format!("Command: {} (approved by user)\nOutput:\n{}", command, clip(&result_output, 10000)),
+        ApprovalDecision::Cancelled => ToolOutcome {
+            tool_result: "Turn was cancelled while waiting for command approval.".to_string(),
             ui_chunk: format!(
-                "\n<terminal_command status=\"completed\" id=\"{}\">{}\n</terminal_command>\n",
+                "\n<terminal_command status=\"cancelled\" id=\"{}\">{}\n</terminal_command>\n",
                 cmd_id, command
             ),
             side_effect: None,
-        }
-    } else {
-        ToolOutcome {
-            tool_result: format!(
-                "Command '{}' was rejected by the user (or timed out). Do NOT retry it or attempt an equivalent command. Continue the task without it, or ask the user how to proceed.",
-                command
-            ),
-            ui_chunk: format!(
-                "\n<terminal_command status=\"rejected\" id=\"{}\">{}\n</terminal_command>\n",
-                cmd_id, command
-            ),
-            side_effect: None,
-        }
+        },
     }
 }
 
@@ -1191,6 +1491,45 @@ fn tool_list_terminals(ctx: &ToolCtx<'_>) -> ToolOutcome {
     }
 }
 
+/// Render a session snapshot as model-facing text (shared by read_terminal and
+/// session-aware wait).
+fn format_session_snapshot(
+    snapshot: &crate::commands::pty::TerminalSessionSnapshot,
+    tail_chars: usize,
+) -> String {
+    let status = if snapshot.running {
+        if snapshot.waiting_for_input {
+            "still running — output ends in what looks like an interactive prompt; \
+             it may be waiting for input (use write_to_terminal to answer it)"
+                .to_string()
+        } else {
+            "still running".to_string()
+        }
+    } else {
+        format!("finished, exit code {}", snapshot.exit_code.unwrap_or(-1))
+    };
+    let header = format!(
+        "Terminal session {} ({}) — {} chars captured",
+        snapshot.session_id, status, snapshot.output_chars
+    );
+    let command_line = snapshot
+        .command
+        .as_ref()
+        .map(|c| format!("Command: {}", c))
+        .unwrap_or_default();
+    let cleaned = if snapshot.kind == SessionKind::AgentPiped {
+        snapshot.output.clone()
+    } else {
+        terminal::strip_ansi(&snapshot.output)
+    };
+    let body = if cleaned.trim().is_empty() {
+        "(no output yet)".to_string()
+    } else {
+        cleaned
+    };
+    format!("{}\n{}\n\n{}", header, command_line, clip(&body, tail_chars))
+}
+
 fn tool_read_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let session_id = match args.get("session_id").and_then(|v| v.as_u64()) {
         Some(id) => id as u32,
@@ -1206,30 +1545,7 @@ fn tool_read_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
     match pty_state.read_session_output(session_id, tail_chars) {
         Ok(snapshot) => {
-            let status = if snapshot.running {
-                "still running"
-            } else {
-                "finished"
-            };
-            let header = format!(
-                "Terminal session {} ({}) — {} chars captured",
-                snapshot.session_id, status, snapshot.output_chars
-            );
-            let command_line = snapshot
-                .command
-                .map(|c| format!("Command: {}", c))
-                .unwrap_or_default();
-            let body = if snapshot.output.is_empty() {
-                "(no output yet)".to_string()
-            } else {
-                snapshot.output.clone()
-            };
-            let tool_result = format!(
-                "{}\n{}\n\n{}",
-                header,
-                command_line,
-                clip(&body, 12_000)
-            );
+            let tool_result = format_session_snapshot(&snapshot, 12_000);
             ToolOutcome {
                 tool_result: tool_result.clone(),
                 ui_chunk: format!(
@@ -1255,6 +1571,56 @@ async fn tool_wait(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         .get("reason")
         .and_then(|v| v.as_str())
         .unwrap_or("Waiting before checking command progress");
+    let session_id = args
+        .get("session_id")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+
+    // Session-aware wait: returns as soon as the session exits instead of
+    // sleeping blind. One wait call rides until completion (or the cap).
+    if let Some(id) = session_id {
+        let Some(pty_state) = ctx.pty_state else {
+            return error_outcome("wait", "Terminal state is not available.");
+        };
+        let started = std::time::Instant::now();
+        let finished = pty_state
+            .wait_for_session_exit(
+                id,
+                std::time::Duration::from_secs(seconds),
+                &ctx.cancel,
+            )
+            .await;
+        if ctx.cancel.is_cancelled() {
+            return ToolOutcome {
+                tool_result: "Wait cancelled.".to_string(),
+                ui_chunk: "\n<status>Wait cancelled</status>\n".to_string(),
+                side_effect: None,
+            };
+        }
+        let waited = started.elapsed().as_secs();
+        let snapshot_text = pty_state
+            .read_session_output(id, 8_000)
+            .map(|s| format_session_snapshot(&s, 12_000))
+            .unwrap_or_else(|e| format!("(could not read session {}: {})", id, e));
+        let headline = if finished {
+            format!("Session {} finished after {}s of waiting.", id, waited)
+        } else {
+            format!(
+                "Session {} is still running after {}s. Wait again with session_id={} or continue other work.",
+                id, waited, id
+            )
+        };
+        return ToolOutcome {
+            tool_result: format!("{}\n\n{}", headline, snapshot_text),
+            ui_chunk: format!(
+                "\n<status>Waited {}s for session {} — {}</status>\n",
+                waited,
+                id,
+                if finished { "finished" } else { "still running" }
+            ),
+            side_effect: None,
+        };
+    }
 
     let total = std::time::Duration::from_secs(seconds);
     let step = std::time::Duration::from_millis(250);
