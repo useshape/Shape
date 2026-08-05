@@ -14,6 +14,7 @@ import {
 } from "@/lib/catalog-store";
 import { isModelEnabled, type ModelInfo } from "@/lib/models";
 import {
+    type AutoRunModeSetting,
     type ShapeSettings,
     updateSettingSection,
 } from "@/lib/settings";
@@ -319,10 +320,50 @@ export function AiSettingsPanel({
                 </SettingRow>
             </SettingSection>
 
+            <SettingSection
+                title="Auto-Run"
+                description="How the agent runs shell commands and other gated tools"
+            >
+                <SettingRow
+                    title="Auto-run mode"
+                    description="Ask every time, auto-run safe commands, or run everything (except hard-blocked)"
+                >
+                    <SettingSelect
+                        value={a.autoRunMode}
+                        options={[
+                            { value: "ask", label: "Ask every time" },
+                            { value: "auto", label: "Auto (safe commands)" },
+                            { value: "always", label: "Run everything" },
+                        ] satisfies Array<{ value: AutoRunModeSetting; label: string }>}
+                        onChange={(v) =>
+                            updateSettingSection("ai", { autoRunMode: v as AutoRunModeSetting })
+                        }
+                    />
+                </SettingRow>
+                <SettingRow
+                    title="Protect destructive git"
+                    description="Always ask before git reset, clean, restore, force-push, and similar"
+                >
+                    <SettingSwitch
+                        checked={a.protectDestructiveGit}
+                        onChange={(on) => updateSettingSection("ai", { protectDestructiveGit: on })}
+                    />
+                </SettingRow>
+            </SettingSection>
+
             <SettingSection title="Edits">
                 <SettingRow
+                    title="Require edit approval"
+                    description="Stage agent file edits for Accept / Skip before they are written to disk"
+                >
+                    <SettingSwitch
+                        checked={a.requireEditApproval}
+                        onChange={(on) => updateSettingSection("ai", { requireEditApproval: on })}
+                    />
+                </SettingRow>
+                <SettingRow
                     title="Auto-apply agent edits"
-                    description="Automatically accept file edits from the agent without showing the review panel"
+                    description="Skip the composer review strip after edits land (unrelated to edit approval above)"
                 >
                     <SettingSwitch
                         checked={a.autoApplyEdits}
@@ -354,6 +395,24 @@ export function AiSettingsPanel({
                         onChange={(v) => updateSettingSection("ai", { maxContextLines: v })}
                     />
                 </SettingRow>
+                <SettingRow
+                    title="Semantic codebase index"
+                    description="Builds a local search index on project open and after agent edits. Powers search_codebase for the agent. Incremental and runs in the background."
+                >
+                    <span className="text-xs text-text-muted">Always on</span>
+                </SettingRow>
+                <SettingRow
+                    title="Semantic embeddings"
+                    description="Use remote embeddings with BM25 for richer codebase search. Requires sign-in. Off = keyword search only."
+                >
+                    <SettingSwitch
+                        checked={a.indexEmbeddings}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { indexEmbeddings: on });
+                            void commands.setIndexEmbeddings(on).catch(() => { /* ignore */ });
+                        }}
+                    />
+                </SettingRow>
                 <div className="px-3.5 py-3 space-y-3">
                     <IndexProgressBar percent={indexPercent} indexing={indexing} phase={indexPhase} />
                     <div className="text-sm text-text-muted">
@@ -365,7 +424,7 @@ export function AiSettingsPanel({
                                       ? ` · Last indexed ${new Date(indexStatus.lastIndexedAt * 1000).toLocaleString()}`
                                       : ""
                               }`
-                            : "Not indexed yet"}
+                            : "Not indexed yet — opens automatically when you open a project"}
                     </div>
                     <div className="flex gap-2">
                         <Button variant="secondary" size="sm" disabled={indexing} onClick={() => void handleReindex()}>

@@ -56,6 +56,17 @@ pub fn search_codebase(
         .map_err(|e| AppError::Message(e))
 }
 
+/// Toggle semantic embeddings for codebase search (BM25 keeps working either
+/// way). Called by the settings UI on startup and on change.
+#[tauri::command]
+pub fn set_index_embeddings(
+    enabled: bool,
+    index_state: tauri::State<'_, IndexState>,
+) -> Result<(), AppError> {
+    index_state.set_embeddings_enabled(enabled);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_index_status(
     project_path: Option<String>,

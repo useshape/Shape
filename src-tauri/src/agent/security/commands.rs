@@ -56,6 +56,54 @@ pub enum CommandSafety {
     Blocked { reason: String },
 }
 
+/// True for git commands that can permanently discard uncommitted work.
+pub fn is_destructive_git(command: &str) -> bool {
+    let cmd_lower = command.trim().to_lowercase();
+    DESTRUCTIVE_GIT_PATTERNS.iter().any(|pattern| {
+        if !cmd_lower.contains(pattern) {
+            return false;
+        }
+        // Creating a branch is not destructive.
+        !(*pattern == "git checkout"
+            && (cmd_lower.contains("git checkout -b") || cmd_lower.contains("git checkout --orphan")))
+    })
+}
+
+/// Apply the user's auto-run mode on top of the base safety analysis.
+///
+/// * `Blocked` is never relaxed.
+/// * `Ask` asks for everything (including safe-listed commands).
+/// * `Auto` keeps the base verdict.
+/// * `Always` auto-approves NeedsApproval, except destructive git commands
+///   while that protection is enabled.
+pub fn apply_auto_run_mode(
+    base: CommandSafety,
+    command: &str,
+    mode: crate::agent::models::AutoRunMode,
+    protect_destructive_git: bool,
+) -> CommandSafety {
+    use crate::agent::models::AutoRunMode;
+    match (&base, mode) {
+        (CommandSafety::Blocked { .. }, _) => base,
+        (_, AutoRunMode::Auto) => base,
+        (CommandSafety::Safe, AutoRunMode::Ask) => CommandSafety::NeedsApproval {
+            reason: "Ask-every-time mode: approve each command before it runs.".to_string(),
+        },
+        (CommandSafety::NeedsApproval { .. }, AutoRunMode::Ask) => base,
+        (_, AutoRunMode::Always) => {
+            if protect_destructive_git && is_destructive_git(command) {
+                CommandSafety::NeedsApproval {
+                    reason: "This git command can permanently discard uncommitted changes. \
+                             Approval is required even in run-everything mode."
+                        .to_string(),
+                }
+            } else {
+                CommandSafety::Safe
+            }
+        }
+    }
+}
+
 /// Analyze a command string for safety.
 pub fn check_command_safety(command: &str) -> CommandSafety {
     let cmd_trimmed = command.trim();
@@ -343,5 +391,54 @@ mod tests {
             check_command_safety("cargo clippy"),
             CommandSafety::NeedsApproval { .. }
         ));
+    }
+
+    #[test]
+    fn test_auto_run_modes() {
+        use crate::agent::models::AutoRunMode;
+
+        // Always: approval-class commands run, blocked stays blocked.
+        let base = check_command_safety("npm install express");
+        assert_eq!(
+            apply_auto_run_mode(base, "npm install express", AutoRunMode::Always, true),
+            CommandSafety::Safe
+        );
+        let blocked = check_command_safety("sudo rm -rf .");
+        assert!(matches!(
+            apply_auto_run_mode(blocked, "sudo rm -rf .", AutoRunMode::Always, true),
+            CommandSafety::Blocked { .. }
+        ));
+
+        // Always + git protection: destructive git still asks.
+        let git = check_command_safety("git reset --hard HEAD");
+        assert!(matches!(
+            apply_auto_run_mode(git.clone(), "git reset --hard HEAD", AutoRunMode::Always, true),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        // Protection off: it runs.
+        assert_eq!(
+            apply_auto_run_mode(git, "git reset --hard HEAD", AutoRunMode::Always, false),
+            CommandSafety::Safe
+        );
+
+        // Ask: even safe commands ask.
+        assert!(matches!(
+            apply_auto_run_mode(CommandSafety::Safe, "git status", AutoRunMode::Ask, true),
+            CommandSafety::NeedsApproval { .. }
+        ));
+
+        // Auto: base verdict unchanged.
+        assert_eq!(
+            apply_auto_run_mode(CommandSafety::Safe, "git status", AutoRunMode::Auto, true),
+            CommandSafety::Safe
+        );
+    }
+
+    #[test]
+    fn test_is_destructive_git() {
+        assert!(is_destructive_git("git reset --hard"));
+        assert!(is_destructive_git("git clean -fd"));
+        assert!(!is_destructive_git("git checkout -b feature/x"));
+        assert!(!is_destructive_git("git status"));
     }
 }

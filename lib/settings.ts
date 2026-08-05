@@ -11,6 +11,9 @@ export type CursorStyleSetting = "line" | "block" | "underline";
 export type DefaultShellSetting = "auto" | "powershell" | "cmd" | "git-bash";
 export type UpdateChannel = "stable" | "pre";
 export type ColorThemeSetting = ColorThemeId;
+/** How agent terminal commands are approved: ask for everything, safe-list
+ * auto-runs (default), or run everything except hard-blocked commands. */
+export type AutoRunModeSetting = "ask" | "auto" | "always";
 
 export interface McpServerConfig {
     id: string;
@@ -81,6 +84,14 @@ export interface ShapeSettings {
         customRules: string;
         mcpServers: McpServerConfig[];
         reviewAdversarialEnabled: boolean;
+        /** Terminal command approval mode (Cursor-style run modes). */
+        autoRunMode: AutoRunModeSetting;
+        /** Stage agent file edits for approval before they touch disk. */
+        requireEditApproval: boolean;
+        /** Destructive git commands always ask, even in "run everything". */
+        protectDestructiveGit: boolean;
+        /** Semantic embeddings for codebase search (BM25 always on). */
+        indexEmbeddings: boolean;
     };
     files: {
         exclude: string;
@@ -219,6 +230,10 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         customRules: "",
         mcpServers: [],
         reviewAdversarialEnabled: true,
+        autoRunMode: "auto",
+        requireEditApproval: false,
+        protectDestructiveGit: true,
+        indexEmbeddings: true,
     },
     files: {
         exclude: "**/node_modules,**/.git,**/dist,**/build,**/.next",
@@ -530,6 +545,12 @@ export async function initSettings(): Promise<void> {
     hydrated = true;
     applyAppearanceSettings(currentSettings);
     emit();
+    // Keep the Rust indexer embeddings flag in sync with persisted settings.
+    void import("@/lib/backend").then(({ commands }) =>
+        commands.setIndexEmbeddings(currentSettings.ai.indexEmbeddings).catch(() => {
+            /* desktop bridge may not be ready yet */
+        }),
+    );
 }
 
 export function getSettings(): ShapeSettings {

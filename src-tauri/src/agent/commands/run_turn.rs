@@ -47,14 +47,28 @@ Use read/search tools now, then call save_plan when ready. Do not only think aga
 const NUDGE_ASK_REASONING_ONLY: &str = "You thought but did not call tools or answer. \
 Read or search what you need, then answer the user. Do not only think again.";
 
-const NUDGE_STOP_EXPLORING: &str = "Stop exploring the repo. You already have enough context. \
-Produce the answer now: call render_design_previews if the user asked to see a preview, \
-edit/create the files if they asked to build it, or reply in plain prose. Do not call more search/read tools.";
+const NUDGE_START_EDITING: &str = "You've done a lot of read-only exploration. Prefer making progress now: \
+edit/create the files the user asked for, call render_design_previews if they want a preview, \
+or answer in plain prose. You may still read a specific file you need — avoid broad search/list loops.";
 
-/// After this many consecutive read-only rounds, nudge once to stop thrashing.
-const READONLY_NUDGE_AFTER: usize = 4;
-/// After this many consecutive read-only rounds, hard-stop the turn (prevents 7‑minute loops).
-const READONLY_HARD_STOP_AFTER: usize = 7;
+/// After this many consecutive read-only rounds, nudge once toward editing.
+/// Code tasks routinely need many reads; keep Visual tight (preview thrash).
+fn readonly_nudge_after(mode: &str) -> usize {
+    match mode.to_ascii_lowercase().as_str() {
+        "visual" | "design" => 5,
+        "ask" | "plan" => 10,
+        _ => 12, // code / agent / review
+    }
+}
+
+/// Hard-stop only after extended read-only thrash (safety valve; max loops still apply).
+fn readonly_hard_stop_after(mode: &str) -> usize {
+    match mode.to_ascii_lowercase().as_str() {
+        "visual" | "design" => 10,
+        "ask" | "plan" => 16,
+        _ => 20,
+    }
+}
 
 /// Read-only tools are deterministic within a turn (until a file is written), so an
 /// identical repeated call is always a reasoning loop, never new information.
@@ -275,6 +289,9 @@ pub struct AgentTurnOutcome {
     /// When the model stream died mid-turn (e.g. provider 403), we keep the
     /// partial tool transcript but surface this to the UI as `chat_complete.error`.
     pub interrupt_error: Option<String>,
+    /// True when any tool wrote/deleted files this turn (drives the post-turn
+    /// incremental index refresh).
+    pub wrote_files: bool,
 }
 
 fn emit_turn_chat_token(config: &AgentTurnConfig<'_>, chunk: impl Into<String>) {
@@ -300,6 +317,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut finished_signal: Option<String> = None;
     let mut ended_with_text_completion = false;
     let mut interrupt_error: Option<String> = None;
+    let mut wrote_files = false;
     let mut empty_response_retried = false;
     let mut incomplete_text_nudged = false;
     let mut reasoning_only_nudged = false;
@@ -524,27 +542,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 break 'outer;
             }
 
-            // After the explore nudge, refuse another all-read batch.
-            if explore_nudge_sent && consecutive_readonly_rounds >= READONLY_NUDGE_AFTER {
-                for call in &tool_calls {
-                    push_tool_result(
-                        config.api_messages,
-                        &call.id,
-                        &call.name,
-                        &format!("BLOCKED: {}", NUDGE_STOP_EXPLORING),
-                    );
-                }
-                consecutive_readonly_rounds += 1;
-                if consecutive_readonly_rounds >= READONLY_HARD_STOP_AFTER {
-                    logging::warn("chat", "Read-only thrash — hard-stopping after blocked batch");
-                    final_full_response.push_str(
-                        "\n<tool_result>\n[chat] Stopped after too many search/read loops. Ask me to continue with a narrower request.\n</tool_result>\n",
-                    );
-                    break 'outer;
-                }
-                continue;
-            }
-
             streaming::emit_chat_status(
                 &config.app_handle,
                 json!({ "phase": "tool", "tool": tool_calls[0].name }),
@@ -630,7 +627,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
             // Count this parallel read-only batch as one explore round.
             consecutive_readonly_rounds += 1;
-            if consecutive_readonly_rounds >= READONLY_HARD_STOP_AFTER {
+            let hard_stop = readonly_hard_stop_after(config.mode);
+            if consecutive_readonly_rounds >= hard_stop {
                 logging::warn(
                     "chat",
                     &format!(
@@ -643,12 +641,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 );
                 break 'outer;
             }
-            if consecutive_readonly_rounds >= READONLY_NUDGE_AFTER && !explore_nudge_sent {
+            if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {
                 explore_nudge_sent = true;
-                logging::info("chat", "Read-only thrash — nudging model to stop exploring");
+                logging::info("chat", "Read-only thrash — nudging model toward editing");
                 config.api_messages.push(json!({
                     "role": "user",
-                    "content": NUDGE_STOP_EXPLORING,
+                    "content": NUDGE_START_EDITING,
                 }));
             }
             continue;
@@ -677,15 +675,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 let key = duplicate_call_key(&call.name, &call.arguments);
                 if !executed_readonly_calls.insert(key) {
                     let msg = duplicate_call_message(&call.name);
-                    push_tool_result(config.api_messages, &call.id, &call.name, &msg);
-                    continue;
-                }
-                // After the explore nudge, block further reads so the model must act.
-                if explore_nudge_sent && consecutive_readonly_rounds >= READONLY_NUDGE_AFTER {
-                    let msg = format!(
-                        "BLOCKED: {}",
-                        NUDGE_STOP_EXPLORING
-                    );
                     push_tool_result(config.api_messages, &call.id, &call.name, &msg);
                     continue;
                 }
@@ -784,9 +773,11 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         edit_counts.remove(&abs);
                     }
                     SideEffect::FileWritten { path, .. } => {
+                        wrote_files = true;
                         read_paths.insert(resolve_abs(&path, config.project_path));
                     }
                     SideEffect::FileDeleted { path } => {
+                        wrote_files = true;
                         let abs = resolve_abs(&path, config.project_path);
                         read_paths.remove(&abs);
                         edit_counts.remove(&abs);
@@ -806,7 +797,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             consecutive_readonly_rounds = 0;
         } else {
             consecutive_readonly_rounds += 1;
-            if consecutive_readonly_rounds >= READONLY_HARD_STOP_AFTER {
+            let hard_stop = readonly_hard_stop_after(config.mode);
+            if consecutive_readonly_rounds >= hard_stop {
                 logging::warn(
                     "chat",
                     &format!(
@@ -819,12 +811,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 );
                 break;
             }
-            if consecutive_readonly_rounds >= READONLY_NUDGE_AFTER && !explore_nudge_sent {
+            if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {
                 explore_nudge_sent = true;
-                logging::info("chat", "Read-only thrash — nudging model to stop exploring");
+                logging::info("chat", "Read-only thrash — nudging model toward editing");
                 config.api_messages.push(json!({
                     "role": "user",
-                    "content": NUDGE_STOP_EXPLORING,
+                    "content": NUDGE_START_EDITING,
                 }));
             }
         }
@@ -865,6 +857,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         response_text: final_full_response,
         loop_count,
         interrupt_error,
+        wrote_files,
     })
 }
 
@@ -907,10 +900,14 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
         upsert_tagged_block(accumulated, chunk, "<todos", "</todos>");
         return;
     }
-    if !chunk.contains("<terminal_command") {
+    let tag = if chunk.contains("<terminal_command") {
+        ("<terminal_command", "</terminal_command>")
+    } else if chunk.contains("<edit_pending") {
+        ("<edit_pending", "</edit_pending>")
+    } else {
         accumulated.push_str(chunk);
         return;
-    }
+    };
 
     let Some(id) = extract_xml_attr(chunk, "id") else {
         accumulated.push_str(chunk);
@@ -923,17 +920,17 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
         return;
     };
 
-    let Some(block_start) = accumulated[..marker_pos].rfind("<terminal_command") else {
+    let Some(block_start) = accumulated[..marker_pos].rfind(tag.0) else {
         accumulated.push_str(chunk);
         return;
     };
 
-    let Some(rel_end) = accumulated[block_start..].find("</terminal_command>") else {
+    let Some(rel_end) = accumulated[block_start..].find(tag.1) else {
         accumulated.push_str(chunk);
         return;
     };
 
-    let block_end = block_start + rel_end + "</terminal_command>".len();
+    let block_end = block_start + rel_end + tag.1.len();
     accumulated.replace_range(block_start..block_end, chunk);
 }
 

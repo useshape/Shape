@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
-import { ApprovalBar } from "./approval";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { diffLines } from "diff";
@@ -13,11 +12,12 @@ import { ChatMarkdown } from "../md/view";
 import { looksLikeProseMarkdown } from "../md/stream";
 import { openProjectFile } from "@/lib/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
+import { TerminalCommandStep } from "./terminal-live";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
-    "think", "thought", "run", "tool_result", "edit", "terminal_command", "git_operation",
+    "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -311,6 +311,24 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 replacement: block.replacement,
             };
         }
+        case "edit_pending": {
+            const file = block.file || "";
+            const label =
+                block.commandStatus === "applied"
+                    ? "Edited"
+                    : block.commandStatus === "rejected"
+                        ? "Rejected edit"
+                        : block.commandStatus === "cancelled"
+                            ? "Cancelled edit"
+                            : "Proposed edit";
+            return {
+                label,
+                file,
+                expandable: false,
+                original: block.original,
+                replacement: block.replacement,
+            };
+        }
         case "terminal_command":
         case "run":
             return {
@@ -484,67 +502,6 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
     );
 }
 
-export function TerminalApprovalRow({ block }: { block: Chunk }) {
-    const [status, setStatus] = useState(block.commandStatus || "pending");
-    const [isProcessing, setIsProcessing] = useState(false);
-
-    // Stay in sync when stream updates the pending → completed XML.
-    useEffect(() => {
-        if (block.commandStatus) setStatus(block.commandStatus);
-    }, [block.commandStatus]);
-
-    const handleApprove = useCallback(async () => {
-        if (!block.commandId || isProcessing) return;
-        setIsProcessing(true);
-        // Demo showcase commands are local-only.
-        if (block.commandId.startsWith("demo-")) {
-            setStatus("completed");
-            setIsProcessing(false);
-            return;
-        }
-        try {
-            await commands.approveTerminalCommand(block.commandId);
-            // Keep pending UI until the stream replaces this block with a completed one.
-        } catch {
-            setStatus("error");
-            setIsProcessing(false);
-        }
-    }, [block.commandId, isProcessing]);
-
-    const handleReject = useCallback(async () => {
-        if (!block.commandId || isProcessing) return;
-        setIsProcessing(true);
-        if (block.commandId.startsWith("demo-")) {
-            setStatus("rejected");
-            setIsProcessing(false);
-            return;
-        }
-        try {
-            await commands.rejectTerminalCommand(block.commandId);
-            setStatus("rejected");
-        } catch {
-            setStatus("error");
-        } finally {
-            setIsProcessing(false);
-        }
-    }, [block.commandId, isProcessing]);
-
-    if (status !== "pending") return null;
-
-    const command = block.command || block.content || "command";
-
-    return (
-        <ApprovalBar
-            label="Approve command"
-            subject={command}
-            acceptLabel="Run"
-            isProcessing={isProcessing}
-            onAccept={() => { void handleApprove(); }}
-            onReject={() => { void handleReject(); }}
-        />
-    );
-}
-
 function ActionItem({
     block,
     isFileEditResolved,
@@ -572,8 +529,21 @@ function ActionItem({
 
     if (!config) return null;
 
-    if (block.type === "terminal_command" && block.commandStatus === "pending") {
-        return <TerminalApprovalRow block={block} />;
+    if (block.type === "terminal_command") {
+        return <TerminalCommandStep block={block} />;
+    }
+
+    if (block.type === "edit_pending" && (block.commandStatus || "pending") === "pending") {
+        // Edit approval cards live in TurnWorkflowSummary; keep a compact
+        // fallback if this legacy AgentWorkflow path still renders one.
+        return (
+            <div className="py-0.5 text-xs text-text-muted">
+                Pending edit approval for{" "}
+                <span className="text-text-secondary">
+                    {(block.file || "").split(/[\\/]/).pop() || "file"}
+                </span>
+            </div>
+        );
     }
 
     if (block.type === "git_operation" && block.gitOp === "status" && config.gitStatusLines?.length) {

@@ -201,12 +201,10 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     turnId: completeTurnId,
                 });
                 if (!forThisView) {
-                    // Background chat finished - in-app toast; OS toast only when unfocused.
+                    // Background chat finished — OS when unfocused, in-app toast when focused. Never both.
                     if (!error) {
-                        void import("@/features/notifications").then(({ notify }) => {
-                            notify.info("Shape", "Generation finished");
-                        });
-                        if (document.hidden || !document.hasFocus()) {
+                        const background = document.hidden || !document.hasFocus();
+                        if (background) {
                             void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
                                 showDesktopNotification(
                                     "generationComplete",
@@ -214,6 +212,10 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                                     "Generation finished",
                                 ),
                             );
+                        } else {
+                            void import("@/features/notifications").then(({ notify }) => {
+                                notify.info("Shape", "Generation finished");
+                            });
                         }
                     }
                     return;
@@ -269,6 +271,18 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             }),
         );
 
+        const notifyApproval = (title: string, body: string) => {
+            if (document.hidden || !document.hasFocus()) {
+                void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
+                    showDesktopNotification("approvalRequired", title, body),
+                );
+            } else {
+                void import("@/features/notifications").then(({ notify }) => {
+                    notify.warning(title, body);
+                });
+            }
+        };
+
         register(
             listen<{
                 id?: string;
@@ -281,17 +295,25 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 if (turnIdRef.current) {
                     setActivityLabel("Waiting for approval");
                 }
-                // Prefer in-app toast; OS toasts on Windows look like PowerShell and
-                // are reserved for when the app is in the background.
-                const body = reason ? `${cmd}: ${reason}` : cmd;
-                void import("@/features/notifications").then(({ notify }) => {
-                    notify.warning("Approval required", body);
-                });
-                if (document.hidden || !document.hasFocus()) {
-                    void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
-                        showDesktopNotification("approvalRequired", "Approval required", body),
-                    );
+                notifyApproval("Approval required", reason ? `${cmd}: ${reason}` : cmd);
+            }),
+        );
+
+        register(
+            listen<{
+                id?: string;
+                file?: string;
+                reason?: string;
+            }>("agent-edit-pending", (event) => {
+                const file = event.payload?.file?.trim() || "file";
+                const reason = event.payload?.reason?.trim();
+                if (turnIdRef.current) {
+                    setActivityLabel("Waiting for edit approval");
                 }
+                notifyApproval(
+                    "Edit approval required",
+                    reason ? `${file}: ${reason}` : file,
+                );
             }),
         );
 
@@ -302,9 +324,20 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 const { phase, tool, label } = event.payload ?? {};
                 setIsLoading(true);
                 setActivityLabel((prev) => {
-                    if (prev === "Waiting for approval") {
-                        // Stay until the turn leaves the terminal tool phase.
-                        if (phase === "tool" && (!tool || tool === "run_terminal")) return prev;
+                    if (phase === "approval") {
+                        return label?.trim() || "Waiting for approval";
+                    }
+                    if (
+                        prev === "Waiting for approval" ||
+                        prev === "Waiting for edit approval"
+                    ) {
+                        // Stay until the turn leaves the gated tool phase.
+                        if (
+                            phase === "tool" &&
+                            (!tool || tool === "run_terminal" || tool === "edit_file")
+                        ) {
+                            return prev;
+                        }
                     }
                     if (label && label.trim()) return label.trim();
                     if (phase === "tool" && tool) {

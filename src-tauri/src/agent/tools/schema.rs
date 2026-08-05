@@ -272,12 +272,11 @@ fn rename_file() -> Value {
 fn run_terminal() -> Value {
     tool(
         "run_terminal",
-        "Run a shell command in the project directory. On Windows uses PowerShell; on macOS/Linux uses bash/sh. Prefer file/search tools for inspection — use this for build, test, install, scaffolding, and other shell workflows. For scaffolding tools always pass non-interactive flags (--yes, -y). Slow commands automatically run in a background terminal — then use wait + read_terminal to poll. Pass background:true to force background mode. NEVER use cat/type/ls/dir for file inspection. Some commands require user approval. Blocked in Ask and Plan modes.",
+        "Run a shell command in the project directory. On Windows uses PowerShell; on macOS/Linux uses bash/sh. Prefer file/search tools for inspection — use this for build, test, install, scaffolding, and other shell workflows. For scaffolding tools always pass non-interactive flags (--yes, -y). Commands that finish quickly return their full output and exit code directly. Commands still running after ~25s keep running and return a background session_id — then call `wait` with that session_id (it returns as soon as the command finishes). Dev servers/watchers background immediately and run until stopped. Some commands require user approval; approval may take as long as the user needs, and a rejected command must NOT be retried. NEVER use cat/type/ls/dir for file inspection. Blocked in Ask and Plan modes.",
         json!({
             "type": "object",
             "properties": {
-                "command": {"type": "string", "description": "The shell command to execute."},
-                "background": {"type": "boolean", "description": "When true, run in a background terminal session and return immediately with a session_id. Use with wait + read_terminal to poll long commands."}
+                "command": {"type": "string", "description": "The shell command to execute."}
             },
             "required": ["command"],
             "additionalProperties": false
@@ -368,11 +367,11 @@ fn list_terminals() -> Value {
 fn read_terminal() -> Value {
     tool(
         "read_terminal",
-        "Read recent output from a background terminal session started by run_terminal. Use after wait when polling long commands (installs, builds, scaffolding).",
+        "Read recent output and status from a terminal session. Reports running state, exit code when finished, and flags output that looks like an interactive prompt waiting for input. For waiting on completion prefer `wait` with session_id — it returns the same status the moment the command finishes.",
         json!({
             "type": "object",
             "properties": {
-                "session_id": {"type": "integer", "description": "PTY session ID from run_terminal or list_terminals."},
+                "session_id": {"type": "integer", "description": "Session ID from run_terminal or list_terminals."},
                 "tail_chars": {"type": "integer", "description": "How many trailing characters of output to return (default 8000, max 50000)."}
             },
             "required": ["session_id"],
@@ -384,11 +383,12 @@ fn read_terminal() -> Value {
 fn wait() -> Value {
     tool(
         "wait",
-        "Pause for a number of seconds before checking a long-running command again. Use between read_terminal polls for installs, builds, or scaffolding. Respects user stop.",
+        "Wait for a background terminal session to finish. With session_id, returns IMMEDIATELY when the session exits (with exit code and output) — one call rides until completion, no repeated polling needed. Give `seconds` as the max you are willing to wait (e.g. 120–180 for installs/builds). If it returns with the session still running, call wait again or continue other work. Without session_id, plain sleep. Respects user stop.",
         json!({
             "type": "object",
             "properties": {
-                "seconds": {"type": "integer", "description": "Seconds to wait (1–180, default 10)."},
+                "seconds": {"type": "integer", "description": "Max seconds to wait (1–180, default 10). With session_id, returns as soon as the command finishes — a generous value costs nothing."},
+                "session_id": {"type": "integer", "description": "Terminal session to wait on (from run_terminal). Strongly preferred over blind sleeping."},
                 "reason": {"type": "string", "description": "Short note on why you are waiting (shown in UI)."}
             },
             "required": ["seconds"],
@@ -432,7 +432,9 @@ fn save_plan() -> Value {
 fn update_todos() -> Value {
     tool(
         "update_todos",
-        "Create or update the live todo checklist shown in chat (Cursor-style plan progress). Pass the full merged list every call. Use when building a plan in Code mode: seed todos from the plan, set exactly one item in_progress, mark completed as you finish. Not available in Ask/Plan.",
+        "Optional live checklist for LONG multi-step implementation only (e.g. building from a saved plan, or 5+ distinct workstreams). \
+Skip for ordinary Code/Visual work: single features, UI polish, shadcn installs, refactors of a few files — just do the work. \
+When used: 3–6 short items max, exactly one in_progress, pass the full merged list every call. Not available in Ask/Plan.",
         json!({
             "type": "object",
             "properties": {
@@ -440,6 +442,7 @@ fn update_todos() -> Value {
                 "todos": {
                     "type": "array",
                     "minItems": 1,
+                    "maxItems": 8,
                     "items": {
                         "type": "object",
                         "properties": {
