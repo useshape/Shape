@@ -39,7 +39,6 @@ export function FadeTruncate({
     return (
         <span
             ref={ref}
-            title={title}
             className={cn(
                 "block min-w-0 overflow-hidden whitespace-nowrap",
                 overflowing &&

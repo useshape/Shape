@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeGraphRowMeta, computeVisibleRange } from "@/lib/git/graph-virtual";
+import {
+    computeGraphRowLayout,
+    computeGraphRowMeta,
+    computeVisibleRange,
+    GRAPH_ROW_HEIGHT,
+} from "@/lib/git/graph-virtual";
 
 describe("graph", () => {
     it("rows", () => {
@@ -32,5 +37,15 @@ describe("graph", () => {
     it("collapsed rows use base height", () => {
         const meta = computeGraphRowMeta(3, new Set(), {}, () => "hash");
         expect(meta.every((row) => row.height === 26)).toBe(true);
+    });
+
+    it("uniform layout avoids O(n) meta when nothing is expanded", () => {
+        const layout = computeGraphRowLayout(8_000, new Set(), {}, () => "hash");
+        expect(layout.kind).toBe("uniform");
+        if (layout.kind !== "uniform") return;
+        expect(layout.totalHeight).toBe(8_000 * GRAPH_ROW_HEIGHT);
+        const { startIdx, endIdx } = computeVisibleRange(layout, 1200, 600, 400);
+        expect(startIdx).toBeGreaterThan(0);
+        expect(endIdx - startIdx).toBeLessThan(100);
     });
 });

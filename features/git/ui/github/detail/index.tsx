@@ -10,8 +10,7 @@ import { cn } from "@/lib/utils";
 import { parseApi } from "@/features/git/ui/actions/utils";
 import { statusIcon, statusTone } from "@/features/git/ui/actions/utils";
 import { GitMarkdown, type GitMarkdownCtx } from "../markdown";
-import { GitAiInsight } from "@/features/git/ui/shared/ai-insight";
-import { AiActionButton } from "@/features/git/ui/shared/ai-action-button";
+import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { openProjectFile } from "@/lib/open-project-file";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
@@ -431,6 +430,30 @@ export function GitHubDetailPane({
         }
     };
 
+    const handleSummarizeIssue = async () => {
+        if (!isIssue || item?.number == null) return;
+        const token = getShapeAccessToken();
+        if (!token) {
+            notify.error("AI Error", "Sign in to Shape to summarize issues.");
+            return;
+        }
+        setAiLoading(true);
+        try {
+            const summary = await commands.summarizeIssue(owner, repo, item.number, token);
+            setAiSummary(summary.trim());
+            void import("@/lib/shape-auth/store")
+                .then(({ refreshShapeAuth }) => {
+                    void refreshShapeAuth();
+                })
+                .catch(() => undefined);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            notify.error("AI Error", msg);
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
     const openBranch = (ref?: string) => {
         if (!ref) return;
         void commands.openUrlExternal(
@@ -529,16 +552,24 @@ export function GitHubDetailPane({
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                         {isPr && item?.number != null ? (
-                            <AiActionButton
+                            <GitAiAction
+                                label="Summarize"
+                                title="AI summary"
+                                content={aiSummary}
                                 loading={aiLoading}
-                                onClick={() => void handleSummarizePr()}
-                            >
-                                {aiLoading
-                                    ? "Summarizing…"
-                                    : aiSummary
-                                      ? "Re-summarize"
-                                      : "Summarize"}
-                            </AiActionButton>
+                                onRun={handleSummarizePr}
+                                mdCtx={mdCtx}
+                            />
+                        ) : null}
+                        {isIssue && item?.number != null ? (
+                            <GitAiAction
+                                label="Summarize"
+                                title="AI summary"
+                                content={aiSummary}
+                                loading={aiLoading}
+                                onRun={handleSummarizeIssue}
+                                mdCtx={mdCtx}
+                            />
                         ) : null}
                         {url ? (
                             <Button
@@ -596,13 +627,6 @@ export function GitHubDetailPane({
                         >
                             <ScrollArea className="min-h-0 flex-1">
                                 <div className="flex flex-col gap-0 p-3">
-                                    <GitAiInsight
-                                        title="AI summary"
-                                        content={aiSummary}
-                                        mdCtx={mdCtx}
-                                        className="mb-3"
-                                        onDismiss={() => setAiSummary(null)}
-                                    />
                                     <ThreadMessage
                                         person={author}
                                         when={formatRelative(createdAt)}

@@ -24,6 +24,7 @@ import { ProjectStatsActivityTracker } from "@/features/stats/ui/activity-tracke
 import { installBenignErrorFilters } from "@/lib/editor/benign-errors";
 import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
 import { FilterProvider } from "@/features/git/ui/manager/filter-context";
+import { SuppressNativeTooltips } from "@/components/ui/suppress-native-tooltips";
 
 function CommandPaletteBridge() {
     const CommandPalette = React.useMemo(
@@ -258,6 +259,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
             <LoadingProvider>
                 <NotificationProvider>
+                    <SuppressNativeTooltips />
                     <GlobalContextMenu>
                         <EditorViewProvider>
                             <AgentLayoutProvider>
@@ -285,6 +287,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
             <LoadingProvider>
                 <NotificationProvider>
+                    <SuppressNativeTooltips />
                     <GlobalContextMenu>
                         <EditorViewProvider>
                             <EditorSplitProvider>
@@ -319,6 +322,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
             <LoadingProvider>
                 <NotificationProvider>
+                    <SuppressNativeTooltips />
                     <GlobalContextMenu>
                         {isBranch ? <FilterProvider>{body}</FilterProvider> : body}
                     </GlobalContextMenu>
@@ -329,8 +333,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     return (
         <LoadingProvider>
-            <NotificationProvider>
-                <LayoutProvider>
+                <NotificationProvider>
+                    <SuppressNativeTooltips />
+                    <LayoutProvider>
                     <GlobalContextMenu>
                         <EditorViewProvider>
                             <EditorSplitProvider>

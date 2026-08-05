@@ -5,6 +5,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ShapeLogo } from "@/components/ui/shape-logo";
 import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
@@ -20,12 +21,14 @@ import {
 import { Tooltip } from "@/components/ui/tooltip";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { ManagerDiffEditor } from "@/features/git/ui/shared/monaco-diff";
+import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
+import { getShapeAccessToken } from "@/lib/shape-auth/store";
 import { useGitRepos } from "@/lib/git/repos";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { QuickPick } from "@/components/ui/quick-pick";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
-import { GitOverlayEnter } from "@/features/git/ui/shared/motion";
+import { Panel } from "@/features/panels";
 
 async function notifyGitRefresh() {
     try {
@@ -186,7 +189,7 @@ function SectionHeader({
             type="button"
             onClick={onToggle}
             aria-expanded={open}
-            className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium uppercase tracking-wide text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
+            className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
         >
             <Icon
                 name="chevron_right"
@@ -215,7 +218,7 @@ function AnimatedCollapse({ open, children }: { open: boolean; children: React.R
     );
 }
 
-export function BranchWindow() {
+export function BranchWindow({ active = true }: { active?: boolean }) {
     const { query: filter } = useFilter();
     const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
     const { scmRepoPath } = useGitRepos(workspaceRoot);
@@ -238,6 +241,8 @@ export function BranchWindow() {
     const [compareModified, setCompareModified] = useState("");
     const [sideBySide, setSideBySide] = useState(false);
     const [compareDiffLoading, setCompareDiffLoading] = useState(false);
+    const [branchExplain, setBranchExplain] = useState<string | null>(null);
+    const [branchExplainLoading, setBranchExplainLoading] = useState(false);
 
     const [renameTarget, setRenameTarget] = useState<string | null>(null);
     const [renameQuery, setRenameQuery] = useState("");
@@ -294,6 +299,8 @@ export function BranchWindow() {
     }, [branchDetails]);
 
     const q = filter.trim().toLowerCase();
+    /** Cap DOM rows — huge remotes (CI bots) otherwise mount thousands of BranchRows. */
+    const BRANCH_LIST_CAP = 400;
 
     const localItems = useMemo((): BranchItem[] => {
         return localBranches
@@ -312,6 +319,12 @@ export function BranchWindow() {
                 };
             });
     }, [localBranches, q, detailByName]);
+
+    const localVisible = useMemo(
+        () => localItems.slice(0, BRANCH_LIST_CAP),
+        [localItems],
+    );
+    const localTruncated = localItems.length - localVisible.length;
 
     const remoteGroups = useMemo(() => {
         const groups = new Map<string, BranchItem[]>();
@@ -338,6 +351,21 @@ export function BranchWindow() {
         }
         return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
     }, [remoteBranches, q, detailByName]);
+
+    const remoteGroupsVisible = useMemo(() => {
+        let remaining = BRANCH_LIST_CAP;
+        const out: Array<[string, BranchItem[], number]> = [];
+        for (const [remote, items] of remoteGroups) {
+            if (remaining <= 0) break;
+            const slice = items.slice(0, remaining);
+            remaining -= slice.length;
+            out.push([remote, slice, items.length]);
+        }
+        return out;
+    }, [remoteGroups]);
+    const remoteTotal = remoteGroups.reduce((n, [, items]) => n + items.length, 0);
+    const remoteVisibleCount = remoteGroupsVisible.reduce((n, [, items]) => n + items.length, 0);
+    const remoteTruncated = remoteTotal - remoteVisibleCount;
 
     const selectedItem = useMemo(() => {
         if (!selectedName) return null;
@@ -447,7 +475,37 @@ export function BranchWindow() {
         setCompareModified("");
         setCompareLoading(false);
         setCompareDiffLoading(false);
+        setBranchExplain(null);
+        setBranchExplainLoading(false);
     }, []);
+
+    const handleExplainBranch = async (branch: string) => {
+        if (!project_path || !currentBranch) return;
+        const token = getShapeAccessToken();
+        if (!token) {
+            notify.error("AI Error", "Sign in to Shape to explain branch diffs.");
+            return;
+        }
+        setBranchExplainLoading(true);
+        try {
+            const text = await commands.explainGitChanges("branch", {
+                base: currentBranch,
+                compare: branch,
+                repoPath: project_path,
+                accessToken: token,
+            });
+            setBranchExplain(text.trim());
+            void import("@/lib/shape-auth/store")
+                .then(({ refreshShapeAuth }) => {
+                    void refreshShapeAuth();
+                })
+                .catch(() => undefined);
+        } catch (err) {
+            notify.error("AI Error", err instanceof Error ? err.message : String(err));
+        } finally {
+            setBranchExplainLoading(false);
+        }
+    };
 
     const handleCompare = async (branch: string) => {
         if (!project_path || !currentBranch) return;
@@ -528,8 +586,8 @@ export function BranchWindow() {
     }
 
     const listPane = (
-        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
-            <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border-subtle/60 px-2">
+        <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <div className="flex h-9 shrink-0 items-center gap-1 px-2">
                 <FadeTruncate className="min-w-0 flex-1 px-1 text-sm font-medium" title="Branches">
                     Branches
                 </FadeTruncate>
@@ -555,9 +613,9 @@ export function BranchWindow() {
                 </Tooltip>
             </div>
 
-            <div className="shrink-0 border-b border-border-subtle/60 px-2.5 py-2">
+            <div className="shrink-0 px-2.5 py-2">
                 <div className="flex items-center gap-2">
-                    <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-transparent px-2.5">
+                    <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5">
                         <Icon name="add" size={14} className="shrink-0 text-text-muted" />
                         <Input
                             value={newBranchName}
@@ -595,37 +653,45 @@ export function BranchWindow() {
                         {localItems.length === 0 ? (
                             <div className="px-2 py-2 text-sm text-text-muted">No local branches</div>
                         ) : (
-                            localItems.map((item) => (
-                                <BranchRow
-                                    key={item.name}
-                                    item={item}
-                                    isCurrent={item.name === currentBranch}
-                                    selected={selectedName === item.name}
-                                    onSelect={() => {
-                                        setSelectedName(item.name);
-                                        clearCompare();
-                                    }}
-                                    onCheckout={() => void handleSwitch(item.name)}
-                                    onDelete={item.name !== currentBranch ? () => void handleDelete(item.name) : undefined}
-                                    onRename={() => {
-                                        setRenameTarget(item.name);
-                                        setRenameQuery(item.name);
-                                    }}
-                                    onSetUpstream={() => {
-                                        setUpstreamTarget(item.name);
-                                        setUpstreamQuery(`origin/${item.name}`);
-                                    }}
-                                    onCopy={() => handleCopy(item.name)}
-                                    onCompare={() => void handleCompare(item.name)}
-                                />
-                            ))
+                            <>
+                                {localVisible.map((item) => (
+                                    <BranchRow
+                                        key={item.name}
+                                        item={item}
+                                        isCurrent={item.name === currentBranch}
+                                        selected={selectedName === item.name}
+                                        onSelect={() => {
+                                            setSelectedName(item.name);
+                                            clearCompare();
+                                        }}
+                                        onCheckout={() => void handleSwitch(item.name)}
+                                        onDelete={item.name !== currentBranch ? () => void handleDelete(item.name) : undefined}
+                                        onRename={() => {
+                                            setRenameTarget(item.name);
+                                            setRenameQuery(item.name);
+                                        }}
+                                        onSetUpstream={() => {
+                                            setUpstreamTarget(item.name);
+                                            setUpstreamQuery(`origin/${item.name}`);
+                                        }}
+                                        onCopy={() => handleCopy(item.name)}
+                                        onCompare={() => void handleCompare(item.name)}
+                                    />
+                                ))}
+                                {localTruncated > 0 ? (
+                                    <div className="px-2 py-1.5 text-xs text-text-muted">
+                                        Showing {localVisible.length} of {localItems.length}
+                                        {q ? " matches" : " branches"} — type to search
+                                    </div>
+                                ) : null}
+                            </>
                         )}
                     </div>
                 </AnimatedCollapse>
 
                 <SectionHeader
                     label="Remote"
-                    count={remoteGroups.reduce((n, [, items]) => n + items.length, 0)}
+                    count={remoteTotal}
                     open={remoteOpen}
                     onToggle={() => setRemoteOpen((v) => !v)}
                 />
@@ -634,56 +700,64 @@ export function BranchWindow() {
                         {remoteGroups.length === 0 ? (
                             <div className="px-2 py-2 text-sm text-text-muted">No remote branches</div>
                         ) : (
-                            remoteGroups.map(([remote, items]) => {
-                                const open = !collapsedRemotes.has(remote);
-                                return (
-                                    <div key={remote}>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setCollapsedRemotes((prev) => {
-                                                    const next = new Set(prev);
-                                                    if (next.has(remote)) next.delete(remote);
-                                                    else next.add(remote);
-                                                    return next;
-                                                });
-                                            }}
-                                            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
-                                        >
-                                            <Icon
-                                                name="chevron_right"
-                                                size={14}
-                                                className={cn(
-                                                    "transition-transform duration-200 ease-[var(--ease-out)]",
-                                                    open && "rotate-90",
-                                                )}
-                                            />
-                                            <Icon name="cloud" size={14} />
-                                            <span className="flex-1 truncate font-medium">{remote}</span>
-                                            <span className="text-xs tabular-nums">{items.length}</span>
-                                        </button>
-                                        <AnimatedCollapse open={open}>
-                                            <div className="ml-2 space-y-0.5 border-l border-border-subtle/50 pl-1">
-                                                {items.map((item) => (
-                                                    <BranchRow
-                                                        key={item.name}
-                                                        item={item}
-                                                        isCurrent={item.displayName === currentBranch}
-                                                        selected={selectedName === item.name}
-                                                        onSelect={() => {
-                                                            setSelectedName(item.name);
-                                                            clearCompare();
-                                                        }}
-                                                        onCheckout={() => void handleSwitch(item.name)}
-                                                        onCopy={() => handleCopy(item.name)}
-                                                        onCompare={() => void handleCompare(item.name)}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </AnimatedCollapse>
+                            <>
+                                {remoteGroupsVisible.map(([remote, items, fullCount]) => {
+                                    const open = !collapsedRemotes.has(remote);
+                                    return (
+                                        <div key={remote}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCollapsedRemotes((prev) => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(remote)) next.delete(remote);
+                                                        else next.add(remote);
+                                                        return next;
+                                                    });
+                                                }}
+                                                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
+                                            >
+                                                <Icon
+                                                    name="chevron_right"
+                                                    size={14}
+                                                    className={cn(
+                                                        "transition-transform duration-200 ease-[var(--ease-out)]",
+                                                        open && "rotate-90",
+                                                    )}
+                                                />
+                                                <Icon name="cloud" size={14} />
+                                                <span className="flex-1 truncate font-medium">{remote}</span>
+                                                <span className="text-xs tabular-nums">{fullCount}</span>
+                                            </button>
+                                            <AnimatedCollapse open={open}>
+                                                <div className="ml-2 space-y-0.5 border-l border-border-subtle/50 pl-1">
+                                                    {items.map((item) => (
+                                                        <BranchRow
+                                                            key={item.name}
+                                                            item={item}
+                                                            isCurrent={item.displayName === currentBranch}
+                                                            selected={selectedName === item.name}
+                                                            onSelect={() => {
+                                                                setSelectedName(item.name);
+                                                                clearCompare();
+                                                            }}
+                                                            onCheckout={() => void handleSwitch(item.name)}
+                                                            onCopy={() => handleCopy(item.name)}
+                                                            onCompare={() => void handleCompare(item.name)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </AnimatedCollapse>
+                                        </div>
+                                    );
+                                })}
+                                {remoteTruncated > 0 ? (
+                                    <div className="px-2 py-1.5 text-xs text-text-muted">
+                                        Showing {remoteVisibleCount} of {remoteTotal}
+                                        {q ? " matches" : " remote branches"} — type to search
                                     </div>
-                                );
-                            })
+                                ) : null}
+                            </>
                         )}
                     </div>
                 </AnimatedCollapse>
@@ -692,27 +766,14 @@ export function BranchWindow() {
     );
 
     const detailPane = (
-        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-editor">
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
             {!selectedItem ? (
                 <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
                     Select a branch
                 </div>
             ) : (
                 <>
-                    <div className="flex h-9 shrink-0 items-center gap-2 px-2">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() => {
-                                setSelectedName(null);
-                                clearCompare();
-                            }}
-                            aria-label="Back to branches"
-                        >
-                            <Icon name="arrow_back" size={16} />
-                        </Button>
+                    <div className="flex h-9 shrink-0 items-center gap-2 px-3">
                         <Icon
                             name={selectedItem.kind === "remote" ? "cloud" : "account_tree"}
                             size={15}
@@ -722,7 +783,7 @@ export function BranchWindow() {
                             {selectedItem.name}
                         </span>
                         {selectedItem.name === currentBranch || selectedItem.displayName === currentBranch ? (
-                            <span className="rounded-md bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                            <span className="rounded-md bg-accent/20 px-1.5 py-0.5 text-xs font-medium text-accent">
                                 Current
                             </span>
                         ) : null}
@@ -741,7 +802,7 @@ export function BranchWindow() {
                         ) : null}
                     </div>
 
-                    <div className="space-y-3 border-b border-border-subtle/60 px-3 py-3">
+                    <div className="space-y-3 px-3 py-3">
                         <div className="flex items-center gap-2">
                             <Avatar name={selectedItem.author} email={selectedItem.authorEmail} />
                             <div className="min-w-0 flex-1">
@@ -756,7 +817,7 @@ export function BranchWindow() {
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 border-b border-border-subtle/60 px-3 py-3">
+                    <div className="flex flex-wrap gap-2 px-3 pb-3">
                         <Button
                             size="sm"
                             className="h-8"
@@ -774,6 +835,18 @@ export function BranchWindow() {
                         >
                             Compare
                         </Button>
+                        <GitAiAction
+                            label="Explain"
+                            title={`vs ${currentBranch}`}
+                            content={branchExplain}
+                            loading={branchExplainLoading}
+                            disabled={
+                                !currentBranch
+                                || selectedItem.name === currentBranch
+                                || selectedItem.name.split("/").slice(-1)[0] === currentBranch
+                            }
+                            onRun={() => handleExplainBranch(selectedItem.name)}
+                        />
                         <Button
                             size="sm"
                             variant="outline"
@@ -808,10 +881,10 @@ export function BranchWindow() {
                         </div>
                     ) : compareFiles.length > 0 ? (
                         <div className="flex min-h-0 flex-1 overflow-hidden">
-                            <div className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-border-subtle/60">
-                                <div className="flex h-8 shrink-0 items-center px-2.5 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                            <div className="flex w-56 shrink-0 flex-col overflow-hidden">
+                                <div className="flex h-8 shrink-0 items-center px-2.5 text-xs font-medium text-text-muted">
                                     {compareFiles.length} file{compareFiles.length === 1 ? "" : "s"}
-                                    <span className="ml-1.5 truncate font-normal normal-case tracking-normal">
+                                    <span className="ml-1.5 truncate font-normal">
                                         vs {currentBranch}
                                     </span>
                                 </div>
@@ -870,7 +943,7 @@ export function BranchWindow() {
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-subtle/60 px-2.5">
+                                        <div className="flex h-8 shrink-0 items-center gap-2 px-2.5">
                                             <FileIcon
                                                 name={compareFile.path.split(/[\\/]/).pop() || compareFile.path}
                                                 className="h-3.5 w-3.5 shrink-0"
@@ -900,6 +973,7 @@ export function BranchWindow() {
                                                 </div>
                                             ) : (
                                                 <ManagerDiffEditor
+                                                    active={active}
                                                     original={compareOriginal}
                                                     modified={compareModified}
                                                     path={compareFile.path}
@@ -924,18 +998,29 @@ export function BranchWindow() {
 
     return (
         <div className="flex h-full min-h-0 w-full overflow-hidden">
-            <div
-                className={cn(
-                    "flex h-full min-h-0 w-full overflow-hidden",
-                    selectedItem && "hidden",
-                )}
-                aria-hidden={!!selectedItem}
-            >
-                {listPane}
-            </div>
-            {selectedItem ? (
-                <GitOverlayEnter key={selectedItem.name}>{detailPane}</GitOverlayEnter>
-            ) : null}
+            <Panel
+                direction="horizontal"
+                paneGap="var(--workbench-gap)"
+                storageKey="git-branches-split"
+                hideSeparator
+                className="h-full min-h-0 flex-1"
+                panes={[
+                    {
+                        id: "branches-list",
+                        preferredSize: 280,
+                        minSize: 200,
+                        maxSize: 420,
+                        snap: true,
+                        children: listPane,
+                    },
+                    {
+                        id: "branches-detail",
+                        flexible: true,
+                        minSize: 280,
+                        children: detailPane,
+                    },
+                ]}
+            />
 
             <QuickPick
                 open={renameTarget != null}

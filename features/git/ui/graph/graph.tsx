@@ -13,7 +13,7 @@ import {
     GitLogEntry,
 } from "@/lib/backend";
 import { notify } from "@/features/notifications";
-import { computeGraphRowMeta, computeVisibleRange, GRAPH_OVERSCAN_PX } from "@/lib/git/graph-virtual";
+import { computeGraphRowLayout, computeVisibleRange, GRAPH_LOG_SOFT_CAP, GRAPH_OVERSCAN_PX, rowTop } from "@/lib/git/graph-virtual";
 import { Tooltip } from "@/components/ui/tooltip";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { useLoading } from "@/features/loading/context";
@@ -39,11 +39,14 @@ export default function Graph({
     className,
     surface = "panel",
     rich = false,
+    active = true,
 }: {
     className?: string;
     surface?: "panel" | "editor";
     /** Manager-only chrome: activity sparkline + author/branch filters. */
     rich?: boolean;
+    /** When false (keep-alive pane hidden), unmount Monaco so it cannot overlay other pages. */
+    active?: boolean;
 }) {
     const { project_path } = useProjectState();
     const { scmRepoPath } = useGitRepos(project_path);
@@ -93,8 +96,12 @@ export default function Graph({
         if (!cacheKey) return;
         if (gitLogs.length > 0) {
             const prev = graphCache[cacheKey];
+            const logs =
+                gitLogs.length > GRAPH_LOG_SOFT_CAP
+                    ? gitLogs.slice(0, GRAPH_LOG_SOFT_CAP)
+                    : gitLogs;
             graphCache[cacheKey] = {
-                logs: gitLogs,
+                logs,
                 expanded: expandedCommits,
                 filesCache: commitFilesCache,
                 scrollTop: scrollTop,
@@ -129,14 +136,24 @@ export default function Graph({
     const streamActiveRef = useRef(false);
 
     const drainStream = useCallback(async (count: number, gen: number) => {
-        let remaining = count;
+        // Cap catch-up so remounting a large cache doesn't freeze the UI.
+        let remaining = Math.min(count, GRAPH_LOG_SOFT_CAP);
         while (remaining > 0 && gen === streamGenRef.current) {
             const batch = await commands.gitLogStreamNext("graph", Math.min(remaining, 400));
             if (batch.length === 0) break;
             remaining -= batch.length;
-            // Yield so keep-alive remounts don't freeze the UI while catching the stream up.
             await new Promise<void>((r) => requestAnimationFrame(() => r()));
         }
+    }, []);
+
+    const appendLogs = useCallback((more: GitLogEntry[]) => {
+        if (more.length === 0) return;
+        setGitLogs((prev) => {
+            if (prev.length >= GRAPH_LOG_SOFT_CAP) return prev;
+            const room = GRAPH_LOG_SOFT_CAP - prev.length;
+            if (more.length <= room) return [...prev, ...more];
+            return [...prev, ...more.slice(0, room)];
+        });
     }, []);
 
     const refresh = useCallback(async (opts?: { track?: boolean }) => {
@@ -153,9 +170,9 @@ export default function Graph({
             if (gen !== streamGenRef.current) return;
             setGitLogs(initialLogs);
 
-            void commands.gitLogStreamNext("graph", 200).then(more => {
+            void commands.gitLogStreamNext("graph", 200).then((more) => {
                 if (gen !== streamGenRef.current || !streamActiveRef.current) return;
-                if (more.length > 0) setGitLogs(prev => [...prev, ...more]);
+                appendLogs(more);
             });
         } catch {
             if (gen === streamGenRef.current) setGitLogs([]);
@@ -163,7 +180,7 @@ export default function Graph({
             // Always pair start/stop — skipping on gen mismatch left the bar stuck forever.
             if (track) stopLoading();
         }
-    }, [gitRepo, showAllBranches, startLoading, stopLoading]);
+    }, [gitRepo, showAllBranches, startLoading, stopLoading, appendLogs]);
 
     const hasInitialized = useRef(false);
 
@@ -177,7 +194,8 @@ export default function Graph({
 
             const c = graphCache[cacheKey];
             if (c && c.logs.length > 0) {
-                setGitLogs(c.logs);
+                // Soft-cap restored logs so huge caches don't rehydrate the whole history.
+                setGitLogs(c.logs.length > GRAPH_LOG_SOFT_CAP ? c.logs.slice(0, GRAPH_LOG_SOFT_CAP) : c.logs);
                 setExpandedCommits(c.expanded);
                 setCommitFilesCache(c.filesCache);
                 setScrollTop(c.scrollTop);
@@ -256,20 +274,26 @@ export default function Graph({
     // Pre-compute cumulative top offsets once. Only changes when expand state or file count changes.
     const authors = useMemo(() => {
         const set = new Set<string>();
-        for (const log of gitLogs) {
-            if (log.author?.trim()) set.add(log.author.trim());
+        // Cap scan + options — author dropdown doesn't need every unique name from 8k commits.
+        const limit = Math.min(gitLogs.length, 2_000);
+        for (let i = 0; i < limit; i++) {
+            const a = gitLogs[i].author?.trim();
+            if (a) set.add(a);
+            if (set.size >= 80) break;
         }
         return Array.from(set).sort((a, b) => a.localeCompare(b));
     }, [gitLogs]);
 
     const branchHints = useMemo(() => {
         const set = new Set<string>();
-        for (const log of gitLogs) {
-            for (const ref of log.refs ?? []) {
+        const limit = Math.min(gitLogs.length, 2_000);
+        for (let i = 0; i < limit; i++) {
+            for (const ref of gitLogs[i].refs ?? []) {
                 const cleaned = ref.replace(/HEAD -> /g, "").replace(/^tag: /, "").trim();
                 if (!cleaned || cleaned.toLowerCase() === "head") continue;
                 set.add(cleaned);
             }
+            if (set.size >= 80) break;
         }
         return Array.from(set).sort((a, b) => a.localeCompare(b)).slice(0, 80);
     }, [gitLogs]);
@@ -424,14 +448,14 @@ export default function Graph({
         return idx >= 0 ? idx : 0;
     }, [gitLogs]);
 
-    const rowMeta = useMemo(() => {
+    const rowLayout = useMemo(() => {
         const fileCounts: Record<string, number> = {};
-        for (const log of gitLogs) {
-            if (expandedCommits.has(log.hash)) {
-                fileCounts[log.hash] = commitFilesCache[log.hash]?.length ?? 1;
+        if (expandedCommits.size > 0) {
+            for (const hash of expandedCommits) {
+                fileCounts[hash] = commitFilesCache[hash]?.length ?? 1;
             }
         }
-        return computeGraphRowMeta(
+        return computeGraphRowLayout(
             gitLogs.length,
             expandedCommits,
             fileCounts,
@@ -440,10 +464,9 @@ export default function Graph({
     }, [gitLogs, expandedCommits, commitFilesCache]);
 
     const scrollToIndex = useCallback((idx: number, opts?: { select?: boolean; flash?: boolean }) => {
-        const meta = rowMeta[idx];
         const log = gitLogs[idx];
-        if (!meta || !scrollContainerRef.current || !log) return;
-        scrollContainerRef.current.scrollTop = Math.max(0, meta.top - 40);
+        if (!log || !scrollContainerRef.current) return;
+        scrollContainerRef.current.scrollTop = Math.max(0, rowTop(rowLayout, idx) - 40);
         if (opts?.select !== false) setSelectedHash(log.hash);
         if (opts?.flash) {
             requestAnimationFrame(() => {
@@ -452,7 +475,7 @@ export default function Graph({
                 window.setTimeout(() => el?.classList.remove("graph-commit-flash"), 800);
             });
         }
-    }, [rowMeta, gitLogs]);
+    }, [rowLayout, gitLogs]);
 
     const jumpToHead = useCallback(() => {
         const headLog = gitLogs[headIndex];
@@ -537,12 +560,15 @@ export default function Graph({
             let logs = gitLogs;
             for (let i = 0; i < 50; i++) {
                 if (!streamActiveRef.current) break;
+                if (logs.length >= GRAPH_LOG_SOFT_CAP) break;
                 const more = await commands.gitLogStreamNext("graph", 400);
                 if (!more.length) break;
-                logs = [...logs, ...more];
+                const room = GRAPH_LOG_SOFT_CAP - logs.length;
+                const chunk = more.length <= room ? more : more.slice(0, room);
+                logs = [...logs, ...chunk];
                 setGitLogs(logs);
                 if (hashMatch(logs) >= 0) {
-                    // rowMeta updates next paint
+                    // layout updates next paint
                     requestAnimationFrame(() => go(logs));
                     return;
                 }
@@ -568,13 +594,11 @@ export default function Graph({
         }
     }, [gitLogs, selectedHash, headIndex, mutedHashes, scrollToIndex]);
 
-    const totalHeight = rowMeta.length > 0
-        ? rowMeta[rowMeta.length - 1].top + rowMeta[rowMeta.length - 1].height
-        : 0;
+    const totalHeight = rowLayout.totalHeight;
 
     const { startIdx, endIdx } = useMemo(
-        () => computeVisibleRange(rowMeta, scrollTop, containerHeight, OVERSCAN_PX),
-        [rowMeta, scrollTop, containerHeight],
+        () => computeVisibleRange(rowLayout, scrollTop, containerHeight, OVERSCAN_PX),
+        [rowLayout, scrollTop, containerHeight],
     );
 
     // Avatars on branch/tag tips (commits with refs) and HEAD. Unique SVG clip ids
@@ -594,7 +618,9 @@ export default function Graph({
 
         // One tip avatar per lane from ref-bearing commits (branch/tag heads).
         const laneSeen = new Set<number>();
-        for (const log of gitLogs) {
+        const scanLimit = Math.min(gitLogs.length, 2_500);
+        for (let i = 0; i < scanLimit; i++) {
+            const log = gitLogs[i];
             if (!log.refs?.length) continue;
             const lane = log.graphNode?.lane;
             if (lane == null || laneSeen.has(lane)) continue;
@@ -603,7 +629,8 @@ export default function Graph({
         }
 
         // Fallback: if a lane never had a ref tip, still mark its first commit.
-        for (const log of gitLogs) {
+        for (let i = 0; i < scanLimit; i++) {
+            const log = gitLogs[i];
             const lane = log.graphNode?.lane;
             if (lane == null || laneSeen.has(lane)) continue;
             laneSeen.add(lane);
@@ -622,19 +649,21 @@ export default function Graph({
             scrollRafRef.current = null;
         });
 
-        if (st + clientHeight > scrollHeight - 1500 && !isLoadingNext && streamActiveRef.current) {
+        if (
+            st + clientHeight > scrollHeight - 1500
+            && !isLoadingNext
+            && streamActiveRef.current
+        ) {
             const gen = streamGenRef.current;
             setIsLoadingNext(true);
-            void commands.gitLogStreamNext("graph", 300).then(moreLogs => {
+            void commands.gitLogStreamNext("graph", 300).then((moreLogs) => {
                 if (gen !== streamGenRef.current || !streamActiveRef.current) return;
-                if (moreLogs.length > 0) {
-                    setGitLogs(prev => [...prev, ...moreLogs]);
-                }
+                appendLogs(moreLogs);
             }).finally(() => {
                 if (gen === streamGenRef.current) setIsLoadingNext(false);
             });
         }
-    }, [isLoadingNext]);
+    }, [isLoadingNext, appendLogs]);
 
     // Keep viewport height accurate on resize (sidebar drag, manager split).
     useEffect(() => {
@@ -744,14 +773,13 @@ export default function Graph({
                 <div style={{ height: totalHeight, position: "relative" }} role="listbox" aria-label="Commit graph">
                     {gitLogs.slice(startIdx, endIdx + 1).map((log, relIdx) => {
                         const idx = startIdx + relIdx;
-                        const meta = rowMeta[idx];
-                        if (!meta) return null;
+                        const top = rowTop(rowLayout, idx);
                         const node = log.graphNode || EMPTY_NODE;
                         const isMuted = mutedHashes?.has(log.hash) ?? false;
                         const prevMuted = idx > 0 ? (mutedHashes?.has(gitLogs[idx - 1].hash) ?? false) : true;
                         const nextMuted = idx < gitLogs.length - 1 ? (mutedHashes?.has(gitLogs[idx + 1].hash) ?? false) : true;
                         return (
-                            <div key={log.hash} style={{ position: "absolute", top: meta.top, left: 0, right: 0 }}>
+                            <div key={log.hash} style={{ position: "absolute", top, left: 0, right: 0 }}>
                                 <GraphCommitRow
                                     log={log}
                                     node={node}
@@ -790,7 +818,7 @@ export default function Graph({
 
     const graphChrome = (
         <>
-            <div className="relative z-10 flex h-9 shrink-0 items-center justify-between gap-2 px-3 border-b border-border-subtle/60">
+            <div className="relative z-10 flex h-9 shrink-0 items-center justify-between gap-2 px-3">
                 <div className="min-w-0 flex-1 flex items-center gap-2">
                     <FadeTruncate className="min-w-0 text-sm font-regular" title="Graph">
                         Graph
@@ -1046,6 +1074,7 @@ export default function Graph({
                                     <GraphDetailPanel
                                         selection={detail}
                                         repoPath={gitRepo}
+                                        active={active}
                                         onClose={() => setDetail(null)}
                                         onClearFile={() => {
                                             if (detail?.log) setDetail({ kind: "commit", log: detail.log });

@@ -493,8 +493,11 @@ export const commands = {
     deleteConversation: (id: string) => invokeCommand<void>("delete_conversation", { id }),
     applyFileEdit: (path: string, original: string, replacement: string) =>
         invokeCommand<void>("apply_file_edit", { path, original, replacement }),
-    generateCommitMessage: (accessToken?: string) =>
-        invokeCommand<string>("generate_commit_message", { accessToken: accessToken ?? null }),
+    generateCommitMessage: (accessToken?: string, repoPath?: string | null) =>
+        invokeCommand<string>("generate_commit_message", {
+            accessToken: accessToken ?? null,
+            repoPath: repoPath ?? null,
+        }),
     summarizePullRequest: (
         owner: string,
         repo: string,
@@ -507,11 +510,55 @@ export const commands = {
             number,
             accessToken: accessToken ?? null,
         }),
+    summarizeIssue: (
+        owner: string,
+        repo: string,
+        number: number,
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("summarize_issue", {
+            owner,
+            repo,
+            number,
+            accessToken: accessToken ?? null,
+        }),
+    summarizeRelease: (
+        owner: string,
+        repo: string,
+        releaseId: number,
+        mode?: "summarize" | "upgrade" | "announce",
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("summarize_release", {
+            owner,
+            repo,
+            releaseId,
+            mode: mode ?? null,
+            accessToken: accessToken ?? null,
+        }),
     explainCiLog: (logText: string, context?: string | null, accessToken?: string) =>
         invokeCommand<string>("explain_ci_log", {
             logText,
             context: context ?? null,
             accessToken: accessToken ?? null,
+        }),
+    explainGitChanges: (
+        kind: "commit" | "working" | "branch" | "conflict",
+        opts?: {
+            hash?: string | null;
+            base?: string | null;
+            compare?: string | null;
+            repoPath?: string | null;
+            accessToken?: string;
+        },
+    ) =>
+        invokeCommand<string>("explain_git_changes", {
+            kind,
+            hash: opts?.hash ?? null,
+            base: opts?.base ?? null,
+            compare: opts?.compare ?? null,
+            repoPath: opts?.repoPath ?? null,
+            accessToken: opts?.accessToken ?? null,
         }),
     restoreCheckpoint: (index: number) => invokeCommand<void>("restore_checkpoint", { index }),
     // Codebase index

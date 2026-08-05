@@ -9,6 +9,8 @@ import { commands, type GitFileParams, type GitLogEntry } from "@/lib/backend";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { renderCommitMessage, getRelativeTime } from "./utils";
 import { ManagerDiffEditor } from "@/features/git/ui/shared/monaco-diff";
+import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
+import { getShapeAccessToken } from "@/lib/shape-auth/store";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -63,12 +65,15 @@ function AuthorAvatar({ log, size = 20 }: { log: GitLogEntry; size?: number }) {
 export function GraphDetailPanel({
     selection,
     repoPath,
+    active = true,
     onClose,
     onClearFile,
     onOpenFile,
 }: {
     selection: GraphDetailSelection | null;
     repoPath: string | null;
+    /** Unmount Monaco while the graph pane is keep-alive-hidden. */
+    active?: boolean;
     onClose: () => void;
     onClearFile?: () => void;
     onOpenFile?: (file: GitFileParams) => void;
@@ -82,6 +87,13 @@ export function GraphDetailPanel({
     const [sideBySide, setSideBySide] = useState(false);
     const [commitFiles, setCommitFiles] = useState<GitFileParams[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
+    const [aiExplain, setAiExplain] = useState<string | null>(null);
+    const [aiLoading, setAiLoading] = useState(false);
+
+    useEffect(() => {
+        setAiExplain(null);
+        setAiLoading(false);
+    }, [log?.hash]);
 
     useEffect(() => {
         if (!log || !repoPath || file) {
@@ -154,18 +166,19 @@ export function GraphDetailPanel({
 
     return (
         <div className="workbench-panel flex h-full min-w-0 flex-col overflow-hidden border border-border-subtle bg-editor">
-            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border-subtle/60 px-3">
+            <div className="flex h-9 shrink-0 items-center gap-2 px-3">
                 {file ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 shrink-0 p-0"
-                        onClick={onClearFile}
-                        title="Back to commit"
-                    >
-                        <Icon name="arrow_back" size={15} />
-                    </Button>
+                    <Tooltip content="Back to commit">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0 p-0"
+                            onClick={onClearFile}
+                        >
+                            <Icon name="arrow_back" size={15} />
+                        </Button>
+                    </Tooltip>
                 ) : null}
                 <AuthorAvatar log={log} size={18} />
                 <span className="shrink-0 text-sm text-text-primary">{log.author}</span>
@@ -200,6 +213,43 @@ export function GraphDetailPanel({
                             {log.hash.slice(0, 7)}
                         </span>
                         <span className="shrink-0 text-xs text-text-muted">{getRelativeTime(log.date)}</span>
+                        <GitAiAction
+                            compact
+                            label="Explain"
+                            title="Commit explanation"
+                            content={aiExplain}
+                            loading={aiLoading}
+                            disabled={!repoPath}
+                            onRun={async () => {
+                                if (!repoPath) return;
+                                const token = getShapeAccessToken();
+                                if (!token) {
+                                    notify.error("AI Error", "Sign in to Shape to explain commits.");
+                                    return;
+                                }
+                                setAiLoading(true);
+                                try {
+                                    const text = await commands.explainGitChanges("commit", {
+                                        hash: log.hash,
+                                        repoPath,
+                                        accessToken: token,
+                                    });
+                                    setAiExplain(text.trim());
+                                    void import("@/lib/shape-auth/store")
+                                        .then(({ refreshShapeAuth }) => {
+                                            void refreshShapeAuth();
+                                        })
+                                        .catch(() => undefined);
+                                } catch (err) {
+                                    notify.error(
+                                        "AI Error",
+                                        err instanceof Error ? err.message : String(err),
+                                    );
+                                } finally {
+                                    setAiLoading(false);
+                                }
+                            }}
+                        />
                     </>
                 )}
                 <Button
@@ -213,10 +263,10 @@ export function GraphDetailPanel({
                 </Button>
             </div>
 
-            <div className="relative shrink-0 border-b border-border-subtle/60">
+            <div className="relative shrink-0">
                 <div
                     className={cn(
-                        "no-scrollbar max-h-[7.5rem] overflow-y-auto px-3 py-2.5",
+                        "no-scrollbar max-h-30 overflow-y-auto px-3 py-2.5",
                         "text-sm leading-relaxed whitespace-pre-wrap wrap-break-word text-text-primary",
                     )}
                 >
@@ -231,7 +281,7 @@ export function GraphDetailPanel({
             </div>
 
             {!file && parents.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5 border-b border-border-subtle/60 px-3 py-2 text-xs text-text-muted">
+                <div className="flex flex-wrap gap-1.5 px-3 py-2 text-xs text-text-muted">
                     <span className="shrink-0">Parents</span>
                     {parents.map((p) => (
                         <button
@@ -242,7 +292,6 @@ export function GraphDetailPanel({
                                 void navigator.clipboard.writeText(p);
                                 notify.success("Copied", "Parent hash copied");
                             }}
-                            title="Copy parent hash"
                         >
                             {p.slice(0, 7)}
                         </button>
@@ -258,6 +307,7 @@ export function GraphDetailPanel({
                         </div>
                     ) : (
                         <ManagerDiffEditor
+                            active={active}
                             original={original}
                             modified={modified}
                             path={file.path}

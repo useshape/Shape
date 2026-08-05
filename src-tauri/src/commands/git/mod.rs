@@ -299,7 +299,7 @@ pub fn git_activity_timeline(
         .arg("--date-order")
         .arg("--format=%ct %h")
         // Soft cap — chart only needs density, not every commit over IPC.
-        .arg("--max-count=12000");
+        .arg("--max-count=2500");
 
     if let Some(a) = author.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         cmd.arg(format!("--author={}", a));
@@ -325,8 +325,8 @@ pub fn git_activity_timeline(
     })?;
 
     let reader = BufReader::new(stdout);
-    let mut points = Vec::with_capacity(4096);
-    const MAX_POINTS: usize = 12_000;
+    let mut points = Vec::with_capacity(1024);
+    const MAX_POINTS: usize = 2_500;
     for line in reader.lines() {
         if points.len() >= MAX_POINTS {
             break;
@@ -2092,6 +2092,70 @@ pub fn git_commit_files(repo_path: String, hash: String) -> Result<Vec<GitFilePa
     .map_err(|e| AppError::Git(e))?;
 
     Ok(results)
+}
+
+/// Patch text for a single commit (parent₀ → commit), for AI explain / review.
+pub fn git_commit_patch(repo_path: String, hash: String) -> Result<String, AppError> {
+    let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
+    let obj = repo.revparse_single(&hash).map_err(|e| AppError::Git(e))?;
+    let commit = obj
+        .as_commit()
+        .ok_or(AppError::Message("Object is not a commit".to_string()))?;
+    let tree = commit.tree().map_err(|e| AppError::Git(e))?;
+    let parent_tree = if commit.parent_count() > 0 {
+        let parent = commit.parent(0).map_err(|e| AppError::Git(e))?;
+        Some(parent.tree().map_err(|e| AppError::Git(e))?)
+    } else {
+        None
+    };
+
+    let diff = repo
+        .diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)
+        .map_err(|e| AppError::Git(e))?;
+
+    let mut output = String::new();
+    diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
+        if let Ok(text) = str::from_utf8(line.content()) {
+            output.push_str(text);
+        }
+        true
+    })
+    .map_err(|e| AppError::Git(e))?;
+    Ok(output)
+}
+
+pub fn git_commit_message(repo_path: String, hash: String) -> Result<String, AppError> {
+    let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
+    let obj = repo.revparse_single(&hash).map_err(|e| AppError::Git(e))?;
+    let commit = obj
+        .as_commit()
+        .ok_or(AppError::Message("Object is not a commit".to_string()))?;
+    Ok(commit.message().unwrap_or("").trim().to_string())
+}
+
+/// Full patch for `base...compare` (three-dot), for AI branch explain.
+pub fn git_diff_range_patch(
+    repo_path: String,
+    base: String,
+    compare: String,
+) -> Result<String, AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let range = format!("{base}...{compare}");
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["diff", &range]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd
+        .output()
+        .map_err(|e| AppError::Message(format!("git diff failed: {e}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Message(format!("git diff failed: {stderr}")));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 pub fn git_cherry_pick(repo_path: String, hash: String) -> Result<(), AppError> {
