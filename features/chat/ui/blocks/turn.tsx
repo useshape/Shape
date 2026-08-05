@@ -99,6 +99,7 @@ function computeTurnStats(blocks: Chunk[]) {
             case "search_result":
             case "web_search":
             case "web_result":
+            case "web_visit":
                 searches += 1;
                 break;
             case "edit":

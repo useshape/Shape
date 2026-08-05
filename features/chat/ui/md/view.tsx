@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
+import { Favicon } from "@/components/ui/favicon";
 import { openProjectFile } from "@/lib/open-project-file";
 import { commands } from "@/lib/backend";
 import { cn } from "@/lib/utils";
@@ -134,14 +135,15 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
             return (
                 <a
                     href={href}
-                    className="text-accent underline hover:text-accent/80 transition-colors font-normal font-sans cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-accent underline hover:text-accent/80 transition-colors font-normal font-sans cursor-pointer mx-0.5 align-middle"
                     onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         if (href) void commands.openUrlExternal(href);
                     }}
                 >
-                    {children}
+                    {href && /^https?:\/\//i.test(href) ? <Favicon url={href} size={12} /> : null}
+                    <span>{children}</span>
                 </a>
             );
         },

@@ -227,7 +227,7 @@ export function McpLogo({
     return (
         <span
             className={cn(
-                "inline-flex items-center justify-center rounded-lg border border-border-subtle bg-surface-2 shrink-0 select-none",
+                "inline-flex items-center justify-center rounded-xl bg-surface-3 shrink-0 select-none",
                 className,
             )}
             style={{ width: size, height: size }}

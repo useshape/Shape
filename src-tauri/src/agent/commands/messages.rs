@@ -94,7 +94,7 @@ const TOOL_RESULT_SOFT_BUDGET: usize = 60_000;
 /// Hard budget (~25k tokens): clear old tool results entirely.
 const TOOL_RESULT_CHAR_BUDGET: usize = 100_000;
 /// Never touch results from the most recent tool rounds.
-const TOOL_RESULT_KEEP_ROUNDS: usize = 4;
+const TOOL_RESULT_KEEP_ROUNDS: usize = 3;
 const TOOL_RESULT_TRIM_CHARS: usize = 600;
 
 /// Strip verbose tool XML from prior assistant turns, then trim middle history
@@ -219,12 +219,12 @@ fn protected_tool_round_index(api_messages: &[Value]) -> usize {
     tool_round_starts[tool_round_starts.len() - TOOL_RESULT_KEEP_ROUNDS]
 }
 
-/// ~30k tokens — fold older turns into a running summary before the window fills.
-pub const HISTORY_CHAR_BUDGET: usize = 120_000;
+/// ~15k tokens — fold older turns before the window gets expensive on cheap models.
+pub const HISTORY_CHAR_BUDGET: usize = 60_000;
 /// Soft cap on API history chars before middle turns are head/tail trimmed.
-const API_HISTORY_SOFT_BUDGET: usize = 80_000;
-const KEEP_RECENT_MESSAGES: usize = 12;
-const MIDDLE_MESSAGE_MAX_CHARS: usize = 1_200;
+const API_HISTORY_SOFT_BUDGET: usize = 40_000;
+const KEEP_RECENT_MESSAGES: usize = 10;
+const MIDDLE_MESSAGE_MAX_CHARS: usize = 800;
 
 pub fn history_char_count(history: &[ChatMessage]) -> usize {
     history.iter().map(|m| m.content.len()).sum()

@@ -12,9 +12,14 @@ import { cn } from "@/lib/utils";
  * Shared Styles & Helpers
  */
 
-const itemClasses = "group relative flex cursor-default select-none items-center gap-3 rounded-xl px-1 py-1 text-sm outline-none focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]";
-const containerClasses = "shape-popover-content z-dropdown overflow-hidden rounded-xl bg-surface-3 text-text-primary shadow-md";
-const shortcutClasses = "ml-auto shrink-0 pr-2 text-sm text-text-muted group-focus:text-text-primary";
+const itemClasses =
+    "group relative flex cursor-default select-none items-center gap-3 rounded-lg px-1 py-1 text-sm outline-none focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]";
+const containerClasses =
+    "shape-popover-content z-dropdown border border-border-subtle overflow-hidden rounded-2xl bg-surface-3 text-text-primary shadow-md";
+const shortcutClasses =
+    "ml-auto shrink-0 pr-2 text-sm text-text-muted group-focus:text-text-primary";
+/** Consistent inset so first/last items never sit flush against the panel edge. */
+const menuInsetClasses = "px-1 py-1.5";
 
 /** Circular scroll affordance — shows when a menu has more content above/below. */
 function DropdownScrollHint({
@@ -110,7 +115,12 @@ function DropdownScrollArea({
             <div
                 ref={ref}
                 onScroll={update}
-                className={cn("overflow-y-auto p-1 no-scrollbar", className)}
+                className={cn(
+                    "overflow-y-auto no-scrollbar",
+                    className,
+                    // After className so call-site `p-*` cannot remove top/bottom inset.
+                    menuInsetClasses,
+                )}
             >
                 {children}
             </div>
@@ -294,7 +304,11 @@ const DropdownMenuLabel = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
     <DropdownMenuPrimitive.Label
         ref={ref}
-        className={cn("mx-xs px-xs py-xs text-xs font-normal text-text-secondary", inset && "pl-7", className)}
+        className={cn(
+            "mx-0.5 px-2 py-1.5 text-xs font-medium text-text-muted",
+            inset && "pl-7",
+            className,
+        )}
         {...props}
     />
 ));
@@ -306,7 +320,7 @@ const DropdownMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <DropdownMenuPrimitive.Separator
         ref={ref}
-        className={cn("-mx-xs my-xs h-px bg-border-subtle", className)}
+        className={cn("mx-1 my-1.5 h-px bg-border-subtle", className)}
         {...props}
     />
 ));
@@ -507,7 +521,8 @@ const MenubarSubContent = React.forwardRef<
             className={cn(
                 containerClasses,
                 "min-w-32",
-                className
+                menuInsetClasses,
+                className,
             )}
             {...props}
         />
@@ -528,7 +543,8 @@ const MenubarContent = React.forwardRef<
             className={cn(
                 containerClasses,
                 "min-w-32",
-                className
+                menuInsetClasses,
+                className,
             )}
             {...props}
         />
@@ -605,7 +621,11 @@ const MenubarLabel = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
     <MenubarPrimitive.Label
         ref={ref}
-        className={cn("mx-xs px-xs py-xs text-xs font-normal text-text-secondary", inset && "pl-7", className)}
+        className={cn(
+            "mx-0.5 px-2 py-1.5 text-xs font-medium text-text-muted",
+            inset && "pl-7",
+            className,
+        )}
         {...props}
     />
 ));
@@ -617,7 +637,7 @@ const MenubarSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <MenubarPrimitive.Separator
         ref={ref}
-        className={cn("-mx-xs my-xs h-px bg-border-subtle", className)}
+        className={cn("mx-1 my-1.5 h-px bg-border-subtle", className)}
         {...props}
     />
 ));

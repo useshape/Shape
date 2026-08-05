@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
+import { Favicon } from "@/components/ui/favicon";
 import { ApprovalBar } from "./approval";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
@@ -14,7 +15,7 @@ import { openProjectFile } from "@/lib/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
-    "search", "grep", "status", "web_search", "web_result", "search_result",
+    "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
     "think", "thought", "run", "tool_result", "edit", "terminal_command", "git_operation",
 ]);
@@ -187,7 +188,7 @@ function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
 function computeGroupHeader(visible: Chunk[]) {
     const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
     const hasExplore = visible.some((b) =>
-        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result"].includes(b.type),
+        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit"].includes(b.type),
     );
     const hasEdit = visible.some((b) =>
         ["edit", "create_file", "mkdir", "delete_file", "rename_file"].includes(b.type),
@@ -233,6 +234,18 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 query: block.query || block.content,
                 expandable: !!block.content,
                 content: block.content,
+            };
+        case "web_visit":
+            return {
+                label: block.isGenerating ? "Visiting" : "Visited",
+                query: block.visitHost || block.visitTitle || block.content,
+                file: undefined,
+                expandable: false,
+                faviconUrl: block.visitUrl || block.visitHost,
+                onClick: () => {
+                    const href = block.visitUrl;
+                    if (href) void commands.openUrlExternal(href);
+                },
             };
         case "grep":
             return {
@@ -612,11 +625,17 @@ function ActionItem({
                     {isEdit && editResolved ? "Applied" : config.label}
                 </span>
 
+                {"faviconUrl" in config && config.faviconUrl ? (
+                    <Favicon url={String(config.faviconUrl)} size={14} />
+                ) : null}
+
                 {config.query && (
                     <span className="text-sm text-text-muted truncate max-w-[260px]">
                         {typeof config.query === "string" && config.query.length > 60
                             ? `"${config.query.slice(0, 60)}…"`
-                            : `"${config.query}"`}
+                            : block.type === "web_visit"
+                              ? String(config.query)
+                              : `"${config.query}"`}
                     </span>
                 )}
 

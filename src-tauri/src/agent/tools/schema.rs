@@ -20,6 +20,7 @@ pub fn all_tools() -> Vec<Value> {
         search_files(),
         grep(),
         web_search(),
+        visit_url(),
         create_directory(),
         create_file(),
         edit_file(),
@@ -48,6 +49,7 @@ fn ask_tools() -> Vec<Value> {
         search_files(),
         grep(),
         web_search(),
+        visit_url(),
         finish(),
     ]
 }
@@ -156,11 +158,16 @@ fn search_codebase() -> Value {
 fn grep() -> Value {
     tool(
         "grep",
-        "Search file contents with ripgrep. The query is a case-insensitive regex (alternations like `foo|bar` work); invalid regex falls back to a literal search. Returns every matching line unless noted as truncated. For finding files by name, use search_files instead.",
+        "Search file contents with ripgrep. Prefer a narrow path or glob so results stay small (cost). Query is a case-insensitive regex; invalid regex falls back to literal. For finding files by name, use search_files instead.",
         json!({
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Regex or literal text to search for in file contents. Use alternation (a|b|c) to check several name variants in one call."}
+                "query": {"type": "string", "description": "Regex or literal text to search for in file contents. Use alternation (a|b|c) to check several name variants in one call."},
+                "path": {"type": "string", "description": "Optional project-relative file or directory to limit the search (strongly preferred for large repos)."},
+                "glob": {"type": "string", "description": "Optional ripgrep glob, e.g. '*.ts' or '**/*.{tsx,ts}'."},
+                "context": {"type": "integer", "description": "Lines of context before/after each match (0–3, default 0). Keep low to save tokens."},
+                "case_sensitive": {"type": "boolean", "description": "If true, disable ignore-case (default false)."},
+                "head_limit": {"type": "integer", "description": "Max matching lines to return (default 80, max 200)."}
             },
             "required": ["query"],
             "additionalProperties": false
@@ -458,7 +465,7 @@ fn update_todos() -> Value {
 fn finish() -> Value {
     tool(
         "finish",
-        "Signal that the turn is complete. Call when there are no more tool actions. `summary` is the user-visible reply: lead with the answer, be concrete, no \"Would you like me to…\". Plain conversational prose.",
+        "Optional: end the turn with a user-visible summary. Prefer this when you want a clean stop after tools. You may also end by replying in plain prose with no further tool calls — that also completes the turn. `summary` is the user-facing reply when using this tool.",
         json!({
             "type": "object",
             "properties": {
@@ -472,7 +479,7 @@ fn finish() -> Value {
 fn render_design_previews() -> Value {
     tool(
         "render_design_previews",
-        "Show ONE interactive component preview in chat (Visual mode). Call ONLY when the user asks to see / preview / mock a component before adding it. Do NOT call for routine builds — if they say build it / add it / don't stop, edit the project directly. Exactly one concept. Prefer jsx with function App(). Use the project's UI kit when present; otherwise Radix-style primitives + Tailwind. No remote images. No multi-option galleries.",
+        "Show ONE interactive component preview in chat (Visual mode). Call ONLY when the user asks to see / preview / mock a component before adding it. Do NOT call for routine builds — if they say build it / add it / don't stop, edit the project directly. Exactly one concept. Prefer jsx with function App(). Use the project's UI kit when present; otherwise Radix-style primitives + Tailwind. No remote images. No multi-option galleries. The preview frame is full-width and centers #root — keep the component in normal document flow (no full-bleed absolute positioning that clips). Leave room for menus/popovers. Prefer width≈640 height≈360. After the preview renders, call finish immediately with a short note; do not keep calling tools.",
         json!({
             "type": "object",
             "properties": {
@@ -484,12 +491,12 @@ fn render_design_previews() -> Value {
                         "type": "object",
                         "properties": {
                             "id": {"type": "string"},
-                            "name": {"type": "string", "description": "Short component name (e.g. PrimaryButton)."},
-                            "style": {"type": "string", "description": "One-line note (library / intent)."},
-                            "jsx": {"type": "string", "description": "React source defining App (function App() { return (...); }). No export/import. Tailwind className only."},
+                            "name": {"type": "string", "description": "Internal component name (not shown in chat)."},
+                            "style": {"type": "string", "description": "Internal note (not shown in chat)."},
+                            "jsx": {"type": "string", "description": "React source defining App (function App() { return (...); }). No export/import. Tailwind className only. Keep the component centered; avoid position:fixed/absolute that pins to the iframe corner."},
                             "html": {"type": "string", "description": "Legacy fallback: raw body HTML only (prefer jsx)."},
-                            "width": {"type": "integer", "description": "Viewport width (default 640)."},
-                            "height": {"type": "integer", "description": "Viewport height (default 360)."}
+                            "width": {"type": "integer", "description": "Logical viewport width (default 640)."},
+                            "height": {"type": "integer", "description": "Preview card height (default 360)."}
                         },
                         "required": ["id", "name", "style"],
                         "additionalProperties": false
@@ -497,6 +504,21 @@ fn render_design_previews() -> Value {
                 }
             },
             "required": ["concepts"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn visit_url() -> Value {
+    tool(
+        "visit_url",
+        "Open a public webpage and extract its text, structure, and styling cues (colors, fonts, theme). Use when the user pastes a URL, asks you to recreate/reference a site, or @-mentions a browser/site. Prefer this over web_search when you need the actual page contents.",
+        json!({
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Full URL (https://…) or bare hostname (shape.com)."}
+            },
+            "required": ["url"],
             "additionalProperties": false
         }),
     )
