@@ -50,7 +50,9 @@ pub async fn build_context_with_options(
     context_string.push_str("=== RUNTIME ENVIRONMENT ===\n");
     #[cfg(target_os = "windows")]
     {
-        context_string.push_str("OS: Windows | Shell: PowerShell\n");
+        context_string.push_str(
+            "OS: Windows | Shell: PowerShell\nShell rules: chain commands with `;` — never `&&` (PowerShell treats `&&` as a parse error in many versions). Prefer Shape file/search tools over shell for reading files.\n",
+        );
     }
     #[cfg(target_os = "macos")]
     {

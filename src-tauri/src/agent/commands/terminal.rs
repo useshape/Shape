@@ -154,6 +154,8 @@ fn make_callbacks(
     let app_exit = app.clone();
     let cmd_id_out = command_id.to_string();
     let cmd_id_exit = command_id.to_string();
+    let output_buf = Arc::new(std::sync::Mutex::new(String::new()));
+    let waiting_emitted = Arc::new(std::sync::atomic::AtomicBool::new(false));
     AgentSessionCallbacks {
         on_output: Arc::new(move |session_id, data| {
             emit_chat_stream(
@@ -165,6 +167,26 @@ fn make_callbacks(
                     "data": data,
                 }),
             );
+            if let Ok(mut buf) = output_buf.lock() {
+                buf.push_str(&data);
+                if buf.len() > 8_000 {
+                    let drain = buf.len() - 8_000;
+                    buf.drain(..drain);
+                }
+                if !waiting_emitted.load(std::sync::atomic::Ordering::Relaxed)
+                    && pty::looks_like_input_prompt(&strip_ansi(&buf))
+                {
+                    waiting_emitted.store(true, std::sync::atomic::Ordering::Relaxed);
+                    emit_chat_stream(
+                        &app_out,
+                        json!({
+                            "commandId": cmd_id_out,
+                            "sessionId": session_id,
+                            "kind": "waiting_for_input",
+                        }),
+                    );
+                }
+            }
             if forward_panel_data {
                 emit_panel_event(
                     &app_out,
@@ -259,7 +281,7 @@ pub async fn run_agent_command(
 
     if cancel.is_cancelled() {
         let _ = pty::kill_session(pty_state, session_id).await;
-        agent_state.clear_active_terminal();
+        agent_state.unregister_session(session_id);
         emit_panel_event(app, json!({ "type": "finish", "exitCode": -1, "cancelled": true }));
         emit_chat_stream(
             app,
@@ -288,7 +310,7 @@ pub async fn run_agent_command(
     let exit_code = snapshot.as_ref().and_then(|s| s.exit_code);
 
     if finished {
-        agent_state.clear_active_terminal();
+        agent_state.unregister_session(session_id);
         logging::info(
             "terminal",
             &format!(
@@ -307,6 +329,7 @@ pub async fn run_agent_command(
     } else {
         // Still running: hand it to the background. Deliberately NOT killed —
         // the session keeps streaming and `wait`/`read_terminal` track it.
+        // Keep session registered so Stop can still kill it.
         emit_chat_stream(
             app,
             json!({

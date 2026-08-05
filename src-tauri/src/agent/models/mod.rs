@@ -160,8 +160,8 @@ pub struct AgentState {
     pub conversations: Mutex<HashMap<String, Vec<Conversation>>>,
     pub current_conversation_id: Mutex<Option<String>>,
     pub cancellation_token: Mutex<CancellationToken>,
-    /// In-flight agent terminal session id for stop/cancel.
-    pub active_terminal: Mutex<Option<u32>>,
+    /// In-flight agent terminal session ids for stop/cancel (supports concurrent background jobs).
+    pub active_terminals: Mutex<std::collections::HashSet<u32>>,
     /// Terminal commands awaiting user approval.
     pub pending_commands: Mutex<HashMap<String, PendingCommand>>,
     /// User decisions for pending commands: id -> approved. The waiting tool
@@ -204,7 +204,7 @@ impl AgentState {
             conversations: Mutex::new(HashMap::new()),
             current_conversation_id: Mutex::new(None),
             cancellation_token: Mutex::new(CancellationToken::new()),
-            active_terminal: Mutex::new(None),
+            active_terminals: Mutex::new(std::collections::HashSet::new()),
             pending_commands: Mutex::new(HashMap::new()),
             command_decisions: Mutex::new(HashMap::new()),
             pending_edits: Mutex::new(HashMap::new()),
@@ -552,24 +552,41 @@ impl AgentState {
     }
 
     pub fn register_session(&self, id: u32) {
-        if let Ok(mut slot) = self.active_terminal.lock() {
-            *slot = Some(id);
+        if let Ok(mut set) = self.active_terminals.lock() {
+            set.insert(id);
         }
     }
 
     pub fn clear_active_terminal(&self) {
-        if let Ok(mut slot) = self.active_terminal.lock() {
-            *slot = None;
+        // Prefer unregister_session(id). Kept for Stop/cancel fallbacks that
+        // need to drop every tracked agent session at once.
+        if let Ok(mut set) = self.active_terminals.lock() {
+            set.clear();
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn has_active_terminals(&self) -> bool {
+        self.active_terminals
+            .lock()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)
+    }
+
+    pub fn unregister_session(&self, id: u32) {
+        if let Ok(mut set) = self.active_terminals.lock() {
+            set.remove(&id);
         }
     }
 
     pub async fn kill_active_terminal(&self, pty_state: &crate::commands::pty::PtyState) {
-        let taken = self
-            .active_terminal
+        let ids: Vec<u32> = self
+            .active_terminals
             .lock()
             .ok()
-            .and_then(|mut guard| guard.take());
-        if let Some(id) = taken {
+            .map(|mut guard| guard.drain().collect())
+            .unwrap_or_default();
+        for id in ids {
             let _ = crate::commands::pty::kill_session(pty_state, id).await;
         }
     }

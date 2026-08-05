@@ -18,6 +18,7 @@ import {
     getResolvedFiles,
     getResolvedContentHash,
     editContentHash,
+    pathsEqual,
 } from "./proposed-edits";
 import {
     resolveChatFilePath,
@@ -28,6 +29,7 @@ import { getSettings } from "@/lib/settings";
 import { getVisibleModels } from "@/lib/models";
 import { getCatalogModels } from "@/lib/catalog-store";
 import { useShapeAuth } from "@/lib/shape-auth/store";
+import { notify } from "@/features/notifications";
 import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
 import { messageLengthBucket } from "@/lib/telemetry-sanitize";
 import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat-mentions";
@@ -106,6 +108,8 @@ export function useChatSession() {
     }, []);
 
     const [resolvedFiles, setResolvedFiles] = React.useState<Set<string>>(() => new Set());
+    /** Bumped on every Keep/Undo so pendingEdits recomputes after localStorage resolve. */
+    const [resolveRevision, setResolveRevision] = React.useState(0);
 
     const { project_path } = useProjectState();
     const shapeAuth = useShapeAuth();
@@ -129,10 +133,8 @@ export function useChatSession() {
             }
             // Before a conversation id exists, fall back to the session Set.
             if (replacement !== undefined) return false;
-            const n = editFile.replace(/\\/g, "/").toLowerCase();
             for (const r of resolvedFiles) {
-                if (r === n || n.endsWith("/" + r) || r.endsWith("/" + n) || n.endsWith(r) || r.endsWith(n))
-                    return true;
+                if (pathsEqual(r, editFile)) return true;
             }
             return false;
         },
@@ -158,6 +160,7 @@ export function useChatSession() {
             if (convId) {
                 markFileResolved(convId, file, status, replacement);
             }
+            setResolveRevision((v) => v + 1);
         },
         [conversationId],
     );
@@ -174,12 +177,20 @@ export function useChatSession() {
         type Step = { id: string; file: string; original: string; replacement: string };
         const stepsByFile = new Map<string, Step[]>();
 
+        const isReviewableEdit = (c: Chunk): c is Chunk & { file: string } => {
+            if (!c.file) return false;
+            if (c.type === "edit") return true;
+            // Applied edits under require-edit-approval land as edit_pending status=applied.
+            if (c.type === "edit_pending" && (c.commandStatus === "applied" || c.commandStatus === "approved")) {
+                return true;
+            }
+            return false;
+        };
+
         messages.forEach((m, msgIdx) => {
             if (m.role !== "assistant") return;
             const chunks = parseMessageContent(m.content);
-            const editsInMsg = chunks.filter(
-                (c): c is Chunk & { file: string } => c.type === "edit" && !!c.file,
-            );
+            const editsInMsg = chunks.filter(isReviewableEdit);
 
             editsInMsg.forEach((e, editIdx) => {
                 const list = stepsByFile.get(e.file) || [];
@@ -195,6 +206,12 @@ export function useChatSession() {
 
         const edits: Pending[] = [];
         stepsByFile.forEach((steps, file) => {
+            // Session Set covers the no-conversationId fallback and immediate Keep/Undo.
+            if (!conversationId) {
+                const n = file.replace(/\\/g, "/").toLowerCase();
+                if ([...resolvedFiles].some((r) => pathsEqual(r, n))) return;
+            }
+
             const resolvedHash = getResolvedContentHash(conversationId, file);
             let startIdx = 0;
             if (resolvedHash) {
@@ -214,6 +231,8 @@ export function useChatSession() {
                 }
             } else if (isFileResolved(conversationId, file, steps[steps.length - 1]?.replacement)) {
                 return;
+            } else if (isFileResolved(conversationId, file)) {
+                return;
             }
 
             const chain = steps.slice(startIdx);
@@ -229,35 +248,17 @@ export function useChatSession() {
         });
 
         return edits;
-    }, [messages, conversationId]);
-
-    React.useEffect(() => {
-        if (pendingEdits.length === 0) return;
-        setResolvedFiles((prev) => {
-            let changed = false;
-            const next = new Set(prev);
-            for (const edit of pendingEdits) {
-                const n = edit.file.replace(/\\/g, "/").toLowerCase();
-                for (const r of [...next]) {
-                    if (
-                        r === n
-                        || n.endsWith("/" + r)
-                        || r.endsWith("/" + n)
-                        || n.endsWith(r)
-                        || r.endsWith(n)
-                    ) {
-                        next.delete(r);
-                        changed = true;
-                    }
-                }
-            }
-            return changed ? next : prev;
-        });
-    }, [pendingEdits]);
+        // resolveRevision forces recompute after Keep/Undo writes localStorage.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages, conversationId, resolvedFiles, resolveRevision]);
 
     React.useEffect(() => {
         pendingEdits.forEach((edit) => {
             if (conversationId && isFileResolved(conversationId, edit.file, edit.replacement)) {
+                clearProposedEdit(edit.file);
+                return;
+            }
+            if (!conversationId && [...resolvedFiles].some((r) => pathsEqual(r, edit.file))) {
                 clearProposedEdit(edit.file);
                 return;
             }
@@ -276,7 +277,7 @@ export function useChatSession() {
                 });
             }
         });
-    }, [pendingEdits, conversationId]);
+    }, [pendingEdits, conversationId, resolvedFiles]);
 
     const handleAcceptAll = async () => {
         for (const edit of pendingEdits) {
@@ -291,18 +292,26 @@ export function useChatSession() {
     };
 
     const handleRejectAll = async () => {
+        const failures: string[] = [];
         for (const edit of pendingEdits) {
             const resolved = resolveChatFilePath(edit.file, project_path);
             try {
                 await commands.applyFileEdit(resolved, "", edit.baseline);
             } catch (e) {
                 console.error("Failed to revert edit for", edit.file, e);
+                failures.push(edit.file.split(/[\\/]/).pop() || edit.file);
             }
             await markEditResolved(edit.file, "rejected", edit.replacement);
             window.dispatchEvent(
                 new CustomEvent("shape-dismiss-diff", {
                     detail: { path: resolved, rawPath: edit.file },
                 }),
+            );
+        }
+        if (failures.length > 0) {
+            notify.error(
+                "Undo failed",
+                `Could not restore ${failures.length === 1 ? failures[0] : `${failures.length} files`}.`,
             );
         }
     };
@@ -327,6 +336,10 @@ export function useChatSession() {
             await commands.applyFileEdit(resolved, "", edit.baseline);
         } catch (e) {
             console.error("Failed to revert edit for", edit.file, e);
+            notify.error(
+                "Undo failed",
+                `Could not restore ${edit.file.split(/[\\/]/).pop() || edit.file}.`,
+            );
         }
         await markEditResolved(edit.file, "rejected", edit.replacement);
         window.dispatchEvent(

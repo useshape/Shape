@@ -185,6 +185,12 @@ pub struct StreamOutcome {
     pub output_tokens: usize,
     /// True when any reasoning/thinking tokens were streamed this completion.
     pub had_reasoning: bool,
+    /// Accumulated reasoning text (OpenRouter `reasoning` / `reasoning_content`).
+    /// Replayed on the next in-turn request so models keep plan continuity.
+    pub reasoning: Option<String>,
+    /// Structured reasoning blocks when the provider emits them (must be echoed
+    /// unmodified for Gemini/Anthropic/Codex-style continuity).
+    pub reasoning_details: Option<Value>,
 }
 
 /// Stream a chat completion from OpenRouter with native tool calling.
@@ -326,6 +332,8 @@ pub async fn stream_chat(
     let mut output_tokens: usize = 0;
     let mut in_thinking = false;
     let mut had_reasoning = false;
+    let mut reasoning_acc = String::new();
+    let mut reasoning_details_acc: Vec<Value> = Vec::new();
     let mut finish_reason: Option<String> = None;
     // When tools are available, buffer normal content until we know whether this
     // completion also issued tool calls. Models (esp. Gemini) often narrate into
@@ -354,6 +362,8 @@ pub async fn stream_chat(
                 input_tokens,
                 output_tokens,
                 had_reasoning,
+                reasoning: nonempty_string(reasoning_acc.clone()),
+                reasoning_details: nonempty_details(&reasoning_details_acc),
             });
         }
 
@@ -395,6 +405,8 @@ pub async fn stream_chat(
                     input_tokens,
                     output_tokens,
                     had_reasoning,
+                    reasoning: nonempty_string(reasoning_acc.clone()),
+                    reasoning_details: nonempty_details(&reasoning_details_acc),
                 });
             }
             let line = buffer[..newline_pos].trim().to_string();
@@ -475,12 +487,38 @@ pub async fn stream_chat(
             if let Some(reasoning_text) = reasoning {
                 if !reasoning_text.is_empty() {
                     had_reasoning = true;
+                    reasoning_acc.push_str(reasoning_text);
                     if !in_thinking {
                         token_buffer.push_str("<think>");
                         in_thinking = true;
                     }
                     token_buffer.push_str(reasoning_text);
                     token_count += 1;
+                }
+            }
+
+            // OpenRouter may stream reasoning_details as an array delta or full objects.
+            if let Some(details) = delta.get("reasoning_details") {
+                had_reasoning = true;
+                if let Some(arr) = details.as_array() {
+                    for item in arr {
+                        reasoning_details_acc.push(item.clone());
+                    }
+                } else if !details.is_null() {
+                    reasoning_details_acc.push(details.clone());
+                }
+            }
+            // Some providers put accumulated details on the choice message (non-delta).
+            if let Some(choice) = parsed.get("choices").and_then(|c| c.get(0)) {
+                if let Some(msg_details) = choice
+                    .get("message")
+                    .and_then(|m| m.get("reasoning_details"))
+                {
+                    if let Some(arr) = msg_details.as_array() {
+                        if !arr.is_empty() {
+                            reasoning_details_acc = arr.clone();
+                        }
+                    }
                 }
             }
 
@@ -671,7 +709,25 @@ pub async fn stream_chat(
         input_tokens: final_input,
         output_tokens: final_output,
         had_reasoning,
+        reasoning: nonempty_string(reasoning_acc),
+        reasoning_details: nonempty_details(&reasoning_details_acc),
     })
+}
+
+fn nonempty_string(s: String) -> Option<String> {
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn nonempty_details(details: &[Value]) -> Option<Value> {
+    if details.is_empty() {
+        None
+    } else {
+        Some(Value::Array(details.to_vec()))
+    }
 }
 
 /// Stream with one automatic retry on a completely empty response.
