@@ -242,6 +242,15 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             }>("chat_complete", (event) => {
                 const { stats, model, error, conversationId, turnId: completeTurnId } =
                     event.payload ?? {};
+                if (!error && stats) {
+                    void import("@/lib/last-turn-usage").then(({ setLastTurnUsage }) => {
+                        setLastTurnUsage({
+                            tokens: stats.tokens ?? ((stats.inputTokens ?? 0) + (stats.outputTokens ?? 0)),
+                            creditsCharged: stats.creditsCharged ?? 0,
+                            usedAuto: stats.usedAuto,
+                        });
+                    });
+                }
                 const forThisView = acceptsStream({
                     conversationId,
                     turnId: completeTurnId,

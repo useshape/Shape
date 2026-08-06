@@ -694,6 +694,15 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
             </SettingSection>
             <SettingSection title="Startup">
                 <SettingRow
+                    title="Start with Agent view"
+                    description="Open the Agent window on launch. The editor stays available but hidden until you open it."
+                >
+                    <SettingSwitch
+                        checked={p.startupWithAgentView}
+                        onChange={(v) => updateSettingSection("privacy", { startupWithAgentView: v })}
+                    />
+                </SettingRow>
+                <SettingRow
                     title="Show welcome page on startup"
                     description="Prefer the welcome screen when Shape opens with no project."
                 >

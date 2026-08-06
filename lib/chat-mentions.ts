@@ -2,6 +2,7 @@ import { commands } from "@/lib/backend/commands";
 import { listDesignPreviewSessions } from "@/lib/design-preview-store";
 import { hostnameOf } from "@/lib/favicon";
 import { lookupMentionToken, registerMentionToken } from "@/lib/mention-registry";
+import { getPreviewCurrentUrl } from "@/features/preview/store";
 
 export type MentionKind =
     | "file"
@@ -22,6 +23,14 @@ export type ChatMention = {
     /** Design concept id when kind === "design"; chat id when kind === "chat" */
     id?: string;
 };
+
+/** Resolve `@browser:current` to the Preview panel URL when available. */
+export function resolveBrowserMentionPath(path: string | undefined): string | null {
+    if (!path || path === "current") {
+        return getPreviewCurrentUrl();
+    }
+    return path;
+}
 
 /** Explicit typed tokens + bare paths / design names (no spaces). */
 const MENTION_PATTERN =
@@ -69,7 +78,9 @@ export function mentionDisplayLabel(mention: ChatMention): string {
         return unslugMentionLabel(raw);
     }
     if (mention.kind === "browser") {
-        return hostnameOf(mention.path || mention.label || "") || mention.label || "Browser";
+        const resolved = resolveBrowserMentionPath(mention.path) || mention.path || mention.label || "";
+        if (!resolved || resolved === "current") return "Current page";
+        return hostnameOf(resolved) || mention.label || "Browser";
     }
     if (mention.kind === "terminal") {
         return mention.label && mention.label !== mention.path
@@ -114,9 +125,10 @@ export function formatMentionToken(mention: ChatMention): string {
     } else if (mention.kind === "branch") {
         token = `@branch:${slugifyMentionLabel(mention.label || mention.path || "main")}`;
     } else if (mention.kind === "browser") {
+        const resolved = resolveBrowserMentionPath(mention.path) || mention.path || "";
         const host =
-            hostnameOf(mention.path || mention.label || "") ||
-            slugifyMentionLabel(mention.label || "page");
+            hostnameOf(resolved) ||
+            (resolved === "current" || !resolved ? "current" : slugifyMentionLabel(mention.label || "page"));
         token = `@browser:${host}`;
     } else {
         token = `@${mention.kind}:${mention.path ?? mention.label}`;
@@ -431,8 +443,17 @@ async function readMentionContext(
     ) {
         const path = mention.path ?? mention.label;
         const label = mentionDisplayLabel(mention);
-        if (mention.kind === "browser" && path && path !== "current") {
-            return `<mention_context type="browser" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced the website ${escapeXmlAttr(label)} (${escapeXmlAttr(path)}). Use the visit_url tool to fetch its content and styling if you need to recreate or reference it.</mention_context>`;
+        if (mention.kind === "browser") {
+            const resolved = resolveBrowserMentionPath(path);
+            if (resolved) {
+                const isLocal =
+                    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?/i.test(resolved);
+                return `<mention_context type="browser" path="${escapeXmlAttr(resolved)}" label="${escapeXmlAttr(hostnameOf(resolved) || resolved)}">The user referenced the ${isLocal ? "local preview page" : "website"} ${escapeXmlAttr(hostnameOf(resolved) || resolved)} (${escapeXmlAttr(resolved)}). ${isLocal ? "This is the URL currently open in the Shape Preview panel." : "Use the visit_url tool to fetch its content and styling if you need to recreate or reference it."}</mention_context>`;
+            }
+            if (path && path !== "current") {
+                return `<mention_context type="browser" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced the website ${escapeXmlAttr(label)} (${escapeXmlAttr(path)}). Use the visit_url tool to fetch its content and styling if you need to recreate or reference it.</mention_context>`;
+            }
+            return `<mention_context type="browser" path="current" label="Current page">The user referenced the Preview panel current page, but no local preview URL is loaded yet. Ask them for the localhost URL or open Preview.</mention_context>`;
         }
         if (mention.kind === "chat") {
             return `<mention_context type="chat" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced a past chat titled "${escapeXmlAttr(label)}".</mention_context>`;

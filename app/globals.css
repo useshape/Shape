@@ -1,81 +1,82 @@
 @import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 
 :root {
-  /* ── Surface ladder (dark) ─────────────────────────────── */
+  /* ── Surface ladder ────────────────────────────────────── */
   --surface-0: #1A1A1A;
   --surface-1: #1b1b1b;
   --surface-2: #1a1a1a;
   --surface-3: #242424;
 
-  /* neutral scale (for migration, please don't use this) */
-  --neutral-50: #fafafa;
-  --neutral-100: #f5f5f5;
-  --neutral-150: #ededed;
-  --neutral-200: #e5e5e5;
-  --neutral-250: #dcdcdc;
-  --neutral-300: #d4d4d4;
-  --neutral-350: #bbbbbb;
-  --neutral-400: #a3a3a3;
-  --neutral-450: #8b8b8b;
-  --neutral-500: #737373;
-  --neutral-550: #626262;
-  --neutral-600: #525252;
-  --neutral-650: #494949;
-  --neutral-700: #404040;
-  --neutral-750: #333333;
-  --neutral-800: #262626;
-  --neutral-850: #1e1e1e;
-  --neutral-900: #171717;
-  --neutral-950: #141414;
+  /* ── Role surfaces (Modern UI–style) ───────────────────── */
+  --chrome: #161616;
+  --sidebar: #1a1a1a;
+  --editor: #161616;
+  --base: #ededee;
 
-  /* ── Semantic surfaces ─────────────────────────────────── */
-  --background: #141414;
-  --foreground: #ededee;
-
-  --panel: #1a1a1a;
+  /* Compat aliases for existing class names */
+  --background: var(--chrome);
+  --foreground: var(--base);
+  --panel: var(--sidebar);
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(145, 145, 145, 0.08);
   --panel-hover: rgba(255, 255, 255, 0.04);
-
-  --titlebar: var(--background);
+  --titlebar: var(--chrome);
   --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #141414;
-  --editor-secondary: var(--neutral-850);
+  --editor-secondary: var(--surface-1);
   --statusbar: transparent;
   --statusbar-fg: var(--text-primary);
 
   /* ── Text ──────────────────────────────────────────────── */
-  --text-primary: #ededee;
+  --text-primary: var(--base);
   --text-secondary: #a1a1a6;
   --text-muted: #ffffff73;
   --text-disabled: #ffffff48;
   --text-active: #ffffff;
 
-  /* ── Borders ───────────────────────────────────────────── */
+  /* ── Borders / stroke ──────────────────────────────────── */
   --border: rgba(255, 255, 255, 0.068);
   --border-subtle: rgba(255, 255, 255, 0.034);
   --border-secondary: rgba(255, 255, 255, 0.1);
-  --border-focus: var(--accent);
+  --stroke: 1px;
 
-  /* ── Ember accent ──────────────────────────────────────── */
+  /* ── Actions ───────────────────────────────────────────── */
   --accent: #3946FF;
   --accent-hover: #4365FF;
-  --accent-fg: #ffffff;
+  --action-label: #ffffff;
+  --brand: var(--accent);
+  --focus: var(--accent);
+  --accent-fg: var(--action-label);
+  --border-focus: var(--focus);
 
-  /* ── Semantic status (desaturated for dark) ──────────── */
-  --error: #e5484d;
-  --warning: #f5a623;
+  /* ── Status ────────────────────────────────────────────── */
   --success: #4ade80;
+  --warn: #f5a623;
+  --danger: #e5484d;
   --info: #6eb5ff;
+  /* Compat */
+  --error: var(--danger);
+  --warning: var(--warn);
 
-  /* ── Git status ────────────────────────────────────────── */
-  --git-modified: #e2c08d;
-  --git-added: #73c991;
-  --git-deleted: #e4676b;
+  /* ── Git / SCM ─────────────────────────────────────────── */
+  --added: #73c991;
+  --modified: #e2c08d;
+  --removed: #e4676b;
+  --untracked: #73c991;
+  --git-added: var(--added);
+  --git-modified: var(--modified);
+  --git-deleted: var(--removed);
   --git-conflict: #f97316;
+
+  /* ── Diff backgrounds ──────────────────────────────────── */
+  --diff-added-line-bg: rgba(115, 201, 145, 0.15);
+  --diff-added-text-bg: rgba(115, 201, 145, 0.28);
+  --diff-removed-line-bg: rgba(228, 103, 107, 0.15);
+  --diff-removed-text-bg: rgba(228, 103, 107, 0.28);
 
   /* ── Inputs & buttons ──────────────────────────────────── */
   --input-bg: var(--surface-2);
@@ -83,7 +84,7 @@
   --input-placeholder: var(--text-muted);
 
   --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
+  --button-fg: var(--action-label);
   --button-hover: var(--accent-hover);
   --button-secondary-bg: var(--surface-2);
   --button-secondary-fg: var(--text-primary);
@@ -93,14 +94,19 @@
   --scrollbar-hover: rgba(255, 255, 255, 0.25);
 
   /* ── Geometry ──────────────────────────────────────────── */
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 10px;
+  --radius-none: 0px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
+  --radius-full: 9999px;
 
   /* Floating workbench panels */
   --workbench-gap: 8px;
-  --workbench-panel-radius: 10px;
+  --workbench-panel-radius: var(--radius-xl);
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -116,22 +122,38 @@
   --titlebar-height: 34px;
   --statusbar-height: 30px;
 
-  /* ── Typography (px tokens — predictable on desktop, independent of rem root) */
-  --font-ui: Inter;
+  /* ── Typography (11/12/13/14 scale; Inter — must be @imported above) ── */
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
 
   /* Font rendering */
   --font-smoothing: antialiased;
   --font-smoothing-moz: grayscale;
 
   --text-2xs: 11px;
-  --text-xs: 13px;
+  --text-xs: 12px;
   --text-sm: 13px;
   --text-base: 13px;
   --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 17px;
+  --text-lg: 14px;
+  --text-xl: 16px;
   --text-2xl: 18px;
+
+  --line-height-xs: 14px;
+  --line-height-sm: 16px;
+  --line-height-base: 18px;
+  --line-height-lg: 20px;
+
+  --conversation-text-font-size: var(--text-base);
+  --conversation-tool-font-size: var(--text-base);
+  --conversation-tray-font-size: var(--text-base);
+  --conversation-font-size: var(--conversation-text-font-size);
+  --conversation-line-height: 1.6;
+  --conversation-block-gap: 10px;
+  --conversation-list-item-gap: 6px;
 
   --tracking-tight: -0.02em;
   --tracking-normal: 0;
@@ -166,23 +188,15 @@
   --surface-2: #1e1828;
   --surface-3: #2a2238;
 
-  --background: #120e18;
-  --foreground: #efe8f8;
+  --chrome: #120e18;
+  --sidebar: #1a1522;
+  --editor: #120e18;
+  --base: #efe8f8;
 
-  --panel: #1a1522;
-  --panel-secondary: var(--surface-2);
   --panel-active: rgba(167, 139, 250, 0.12);
   --panel-hover: rgba(255, 255, 255, 0.05);
-
-  --titlebar: var(--background);
-  --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #120e18;
   --editor-secondary: #1a1522;
-  --statusbar: transparent;
-  --statusbar-fg: var(--text-primary);
 
-  --text-primary: #efe8f8;
   --text-secondary: #b5a8c9;
   --text-muted: rgba(239, 232, 248, 0.45);
   --text-disabled: rgba(239, 232, 248, 0.28);
@@ -191,36 +205,27 @@
   --border: rgba(196, 181, 253, 0.12);
   --border-subtle: rgba(196, 181, 253, 0.06);
   --border-secondary: rgba(196, 181, 253, 0.18);
-  --border-focus: var(--accent);
 
   --accent: #a78bfa;
   --accent-hover: #c4b5fd;
-  --accent-fg: #120e18;
+  --action-label: #120e18;
+  --brand: var(--accent);
+  --focus: var(--accent);
 
-  --error: #f87171;
-  --warning: #fbbf24;
+  --danger: #f87171;
+  --warn: #fbbf24;
   --success: #4ade80;
   --info: #93c5fd;
 
-  --git-modified: #e2c08d;
-  --git-added: #73c991;
-  --git-deleted: #e4676b;
+  --added: #73c991;
+  --modified: #e2c08d;
+  --removed: #e4676b;
+  --untracked: #73c991;
   --git-conflict: #f97316;
 
-  --input-bg: var(--surface-2);
-  --input-border: var(--border);
-  --input-placeholder: var(--text-muted);
-
-  --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
-  --button-hover: var(--accent-hover);
-  --button-secondary-bg: var(--surface-3);
-  --button-secondary-fg: var(--text-primary);
   --button-secondary-hover: #342a45;
-
   --scrollbar: rgba(196, 181, 253, 0.2);
   --scrollbar-hover: rgba(196, 181, 253, 0.35);
-
   --overlay-scrim: transparent;
 }
 
@@ -231,23 +236,15 @@
   --surface-2: #191919;
   --surface-3: #212121;
 
-  --background: #111111;
-  --foreground: #e4e4e7;
+  --chrome: #111111;
+  --sidebar: #151515;
+  --editor: #111111;
+  --base: #e4e4e7;
 
-  --panel: #151515;
-  --panel-secondary: var(--surface-2);
   --panel-active: rgba(77, 128, 247, 0.12);
   --panel-hover: rgba(255, 255, 255, 0.04);
-
-  --titlebar: var(--background);
-  --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #111111;
   --editor-secondary: #191919;
-  --statusbar: transparent;
-  --statusbar-fg: var(--text-primary);
 
-  --text-primary: #e4e4e7;
   --text-secondary: #9a9a9e;
   --text-muted: rgba(228, 228, 231, 0.45);
   --text-disabled: rgba(228, 228, 231, 0.28);
@@ -256,36 +253,27 @@
   --border: rgba(255, 255, 255, 0.08);
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-secondary: rgba(255, 255, 255, 0.12);
-  --border-focus: var(--accent);
 
   --accent: #4d80f7;
   --accent-hover: #6a97f9;
-  --accent-fg: #ffffff;
+  --action-label: #ffffff;
+  --brand: var(--accent);
+  --focus: var(--accent);
 
-  --error: #e5484d;
-  --warning: #f5a623;
+  --danger: #e5484d;
+  --warn: #f5a623;
   --success: #4ade80;
   --info: #4d80f7;
 
-  --git-modified: #e2c08d;
-  --git-added: #73c991;
-  --git-deleted: #e4676b;
+  --added: #73c991;
+  --modified: #e2c08d;
+  --removed: #e4676b;
+  --untracked: #73c991;
   --git-conflict: #f97316;
 
-  --input-bg: var(--surface-2);
-  --input-border: var(--border);
-  --input-placeholder: var(--text-muted);
-
-  --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
-  --button-hover: var(--accent-hover);
-  --button-secondary-bg: var(--surface-3);
-  --button-secondary-fg: var(--text-primary);
   --button-secondary-hover: #2a2a2a;
-
   --scrollbar: rgba(255, 255, 255, 0.15);
   --scrollbar-hover: rgba(255, 255, 255, 0.25);
-
   --overlay-scrim: transparent;
 }
 
@@ -296,23 +284,15 @@
   --surface-2: #21252b;
   --surface-3: #2c313a;
 
-  --background: #282c34;
-  --foreground: #abb2bf;
+  --chrome: #282c34;
+  --sidebar: #21252b;
+  --editor: #282c34;
+  --base: #abb2bf;
 
-  --panel: #21252b;
-  --panel-secondary: var(--surface-2);
   --panel-active: rgba(97, 175, 239, 0.14);
   --panel-hover: rgba(255, 255, 255, 0.04);
-
-  --titlebar: var(--background);
-  --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #282c34;
   --editor-secondary: #21252b;
-  --statusbar: transparent;
-  --statusbar-fg: var(--text-primary);
 
-  --text-primary: #abb2bf;
   --text-secondary: #828997;
   --text-muted: rgba(171, 178, 191, 0.5);
   --text-disabled: rgba(171, 178, 191, 0.3);
@@ -321,36 +301,27 @@
   --border: rgba(171, 178, 191, 0.12);
   --border-subtle: rgba(171, 178, 191, 0.06);
   --border-secondary: rgba(171, 178, 191, 0.18);
-  --border-focus: var(--accent);
 
   --accent: #61afef;
   --accent-hover: #7dc0f5;
-  --accent-fg: #1e2127;
+  --action-label: #1e2127;
+  --brand: var(--accent);
+  --focus: var(--accent);
 
-  --error: #e06c75;
-  --warning: #e5c07b;
+  --danger: #e06c75;
+  --warn: #e5c07b;
   --success: #98c379;
   --info: #56b6c2;
 
-  --git-modified: #e5c07b;
-  --git-added: #98c379;
-  --git-deleted: #e06c75;
+  --added: #98c379;
+  --modified: #e5c07b;
+  --removed: #e06c75;
+  --untracked: #98c379;
   --git-conflict: #e5a55d;
 
-  --input-bg: var(--surface-2);
-  --input-border: var(--border);
-  --input-placeholder: var(--text-muted);
-
-  --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
-  --button-hover: var(--accent-hover);
-  --button-secondary-bg: var(--surface-3);
-  --button-secondary-fg: var(--text-primary);
   --button-secondary-hover: #333842;
-
   --scrollbar: rgba(171, 178, 191, 0.2);
   --scrollbar-hover: rgba(171, 178, 191, 0.35);
-
   --overlay-scrim: transparent;
 }
 
@@ -359,41 +330,32 @@
 }
 
 @theme inline {
-  --color-neutral-50: var(--neutral-50);
-  --color-neutral-100: var(--neutral-100);
-  --color-neutral-150: var(--neutral-150);
-  --color-neutral-200: var(--neutral-200);
-  --color-neutral-250: var(--neutral-250);
-  --color-neutral-300: var(--neutral-300);
-  --color-neutral-350: var(--neutral-350);
-  --color-neutral-400: var(--neutral-400);
-  --color-neutral-450: var(--neutral-450);
-  --color-neutral-500: var(--neutral-500);
-  --color-neutral-550: var(--neutral-550);
-  --color-neutral-600: var(--neutral-600);
-  --color-neutral-650: var(--neutral-650);
-  --color-neutral-700: var(--neutral-700);
-  --color-neutral-750: var(--neutral-750);
-  --color-neutral-800: var(--neutral-800);
-  --color-neutral-850: var(--neutral-850);
-  --color-neutral-900: var(--neutral-900);
-  --color-neutral-950: var(--neutral-950);
-
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
 
+  --color-chrome: var(--chrome);
+  --color-sidebar: var(--sidebar);
+  --color-editor: var(--editor);
+  --color-base: var(--base);
+  --color-brand: var(--brand);
+  --color-focus: var(--focus);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-added: var(--added);
+  --color-modified: var(--modified);
+  --color-removed: var(--removed);
+  --color-untracked: var(--untracked);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-titlebar: var(--titlebar);
   --color-activitybar: var(--activitybar);
-  --color-sidebar: var(--sidebar);
   --color-panel: var(--panel);
   --color-panel-secondary: var(--panel-secondary);
   --color-panel-active: var(--panel-active);
   --color-panel-hover: var(--panel-hover);
-  --color-editor: var(--editor);
   --color-editor-secondary: var(--editor-secondary);
   --color-statusbar: var(--statusbar);
   --color-statusbar-fg: var(--statusbar-fg);
@@ -517,15 +479,19 @@
 @utility h-statusbar { height: var(--statusbar-height); }
 
 html {
+  /* Keep rem root at 13px so Tailwind spacing (p-2, gap-3, …) matches the rest of the IDE. */
   font-size: 13px;
   font-family: var(--font-ui);
-  -webkit-font-smoothing: var(--font-smoothing);
-  -moz-osx-font-smoothing: var(--font-smoothing-moz);
-  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   font-synthesis: none;
   font-synthesis-weight: none;
   font-synthesis-style: none;
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  letter-spacing: -0.011em;
 }
 
 body {
@@ -533,9 +499,13 @@ body {
   color: var(--foreground);
   font-family: var(--font-ui);
   font-size: var(--text-base);
-  -webkit-font-smoothing: var(--font-smoothing);
-  -moz-osx-font-smoothing: var(--font-smoothing-moz);
-  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  letter-spacing: -0.011em;
 }
 
 /* Monaco editor surface — dark background, no default light border */
@@ -916,12 +886,33 @@ body {
   overflow-block: clip;
 }
 
-/* ── Floating workbench panels ─────────────────────────── */
+/* ── Floating workbench panels (Modern UI chrome) ──────── */
 .workbench-panel {
   height: 100%;
   width: 100%;
   border-radius: var(--workbench-panel-radius);
   overflow: hidden;
+}
+
+/* Outer floating card: gutter + perimeter stroke + radius.
+   Prefer this over flush layout seams (border-r / titlebar underlines). */
+.floating-panel {
+  margin: var(--workbench-gap);
+  border: var(--stroke) solid var(--border);
+  border-radius: var(--workbench-panel-radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+@keyframes agent-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Long user messages: visually shorten with bottom fade (content still intact). */

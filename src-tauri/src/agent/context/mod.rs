@@ -1,5 +1,7 @@
+mod breakdown;
 mod repo_map;
 
+pub use breakdown::build_context_breakdown;
 pub use repo_map::DEFAULT_REPO_MAP_TOKENS;
 
 use crate::agent::context::repo_map::{build_repo_map, format_repo_map_section, RepoMapInput};

@@ -30,6 +30,7 @@ import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText } from "
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
 import { resolveChatUsageDisplay } from "@/lib/usage-display";
+import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/last-turn-usage";
 import { UsageRing } from "./usage";
 import { getVisibleModels, type ModelInfo } from "@/lib/models";
 import {
@@ -397,9 +398,15 @@ export function ChatInput({
     const providerOrder = getCatalogProviderOrder();
     const needsSignIn = !shapeAuth.isLoading && !shapeAuth.loggedIn;
 
+    const lastTurnUsage = React.useSyncExternalStore(
+        subscribeLastTurnUsage,
+        getLastTurnUsage,
+        getLastTurnUsage,
+    );
+
     const usageDisplay = React.useMemo(
-        () => resolveChatUsageDisplay(selectedModel, shapeAuth),
-        [selectedModel, shapeAuth],
+        () => resolveChatUsageDisplay(selectedModel, shapeAuth, lastTurnUsage),
+        [selectedModel, shapeAuth, lastTurnUsage],
     );
 
     React.useEffect(() => {
@@ -760,7 +767,14 @@ export function ChatInput({
 
                     <div className="flex items-center gap-1.5 shrink-0">
                         {shapeAuth.loggedIn ? (
-                            <Tooltip content={usageDisplay.tooltip}>
+                            <Tooltip
+                                content={
+                                    <span className="whitespace-nowrap text-[12px] leading-[16px] text-text-primary">
+                                        {usageDisplay.tooltip}
+                                    </span>
+                                }
+                                className="rounded-lg bg-[#0a0a0a] px-2.5 py-1.5"
+                            >
                                 <button
                                     type="button"
                                     className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:text-text-primary transition-colors"

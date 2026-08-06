@@ -1,5 +1,7 @@
 //! Primary chat turn entrypoint.
-use crate::agent::context::{build_context_with_options, context_options_for_query};
+use crate::agent::context::{
+    build_context_breakdown, build_context_with_options, context_options_for_query,
+};
 use super::adversarial_review;
 use super::history;
 use super::journals;
@@ -412,6 +414,22 @@ pub async fn send_chat_message(
 
     let mcp_tools = mcp_state.tools_as_openai_schema().unwrap_or_default();
     let tools = schema::tools_for_mode_and_family(&mode_to_use, family, mcp_tools);
+
+    let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());
+    let conversation_json =
+        serde_json::to_string(&messages::build_api_history(&history_snapshot)).unwrap_or_default();
+    let breakdown = build_context_breakdown(
+        prompts::SYSTEM_MD,
+        family_prompt,
+        &merged_rules,
+        mode_prompt,
+        &context_string,
+        &tools,
+        &conversation_json,
+        summarized.as_deref(),
+        &model_to_use,
+    );
+    let proxy_base = proxy_base.with_context_breakdown(Some(breakdown));
 
     let project_path = current_proj_path.clone().unwrap_or_default();
     if !project_path.is_empty() && index_state.should_background_index(&project_path) {

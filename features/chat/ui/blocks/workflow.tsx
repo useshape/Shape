@@ -491,7 +491,7 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
             onClick={handleOpen}
             onKeyDown={(e) => { if (e.key === "Enter") handleOpen(); }}
             className={cn(
-                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs",
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm",
                 "border border-border-subtle bg-panel text-text-primary",
                 "cursor-pointer hover:bg-panel-hover",
             )}

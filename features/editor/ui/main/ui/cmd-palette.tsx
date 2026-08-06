@@ -712,6 +712,14 @@ function getAppCommands(): EditorAction[] {
             },
         },
         {
+            id: "app.view.preview",
+            label: "View: Show Preview",
+            run: () => {
+                window.dispatchEvent(new Event("shape-open-preview"));
+                window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
+            },
+        },
+        {
             id: "app.view.terminal",
             label: "View: Toggle Terminal Panel",
             shortcut: shortcut("Terminal"),
