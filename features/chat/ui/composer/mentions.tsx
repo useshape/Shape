@@ -11,6 +11,7 @@ import { formatMentionToken, type ChatMention } from "@/lib/chat-mentions";
 import { listDesignPreviewSessions } from "@/lib/design-preview-store";
 import { getTextareaCaretViewportRect } from "@/lib/textarea-caret";
 import { hostnameOf } from "@/lib/favicon";
+import { getPreviewCurrentUrl } from "@/features/preview/store";
 
 type CategoryId = "files" | "docs" | "terminals" | "chats" | "branch" | "browser" | "design" | null;
 
@@ -219,8 +220,15 @@ export function MentionPicker({
         if (activeCategory === "browser") {
             const raw = query.trim();
             const host = hostnameOf(raw);
+            const currentUrl = getPreviewCurrentUrl();
             const items: ChatMention[] = [
-                { kind: "browser" as const, path: "current", label: "Current page" },
+                {
+                    kind: "browser" as const,
+                    path: currentUrl || "current",
+                    label: currentUrl
+                        ? `Current page (${hostnameOf(currentUrl) || currentUrl})`
+                        : "Current page",
+                },
             ];
             if (host && /\./.test(host)) {
                 items.unshift({

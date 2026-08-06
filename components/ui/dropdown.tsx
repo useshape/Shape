@@ -480,7 +480,7 @@ const MenubarTrigger = React.forwardRef<
             if (onPointerDown) onPointerDown(e);
         }}
         className={cn(
-            "flex cursor-default select-none items-center rounded-md px-sm py-xs text-sm font-normal outline-none focus:bg-panel-hover focus:text-text-primary data-[state=open]:bg-panel-hover data-[state=open]:text-text-primary transition-colors",
+            "flex cursor-default select-none items-center rounded-md px-sm py-xs text-sm font-normal leading-none outline-none focus:bg-panel-hover focus:text-text-primary data-[state=open]:bg-panel-hover data-[state=open]:text-text-primary transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
             className
         )}
         {...props}

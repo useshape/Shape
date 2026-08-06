@@ -94,7 +94,7 @@ function MentionRichText({ text }: { text: string }) {
                         : undefined
                 }
                 className={cn(
-                    "mx-0.5 inline-flex items-center gap-1 rounded-md border border-accent/30 bg-accent/15 px-1.5 py-0.5 text-[0.8125rem] font-medium text-accent align-middle",
+                    "mx-0.5 inline-flex items-center gap-1 rounded-md border border-accent/30 bg-accent/15 px-1.5 py-0.5 text-sm font-medium text-accent align-middle",
                     openable && "cursor-pointer hover:bg-accent/25 transition-colors",
                 )}
             >
@@ -236,7 +236,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                         }
                     } : undefined}
                     className={cn(
-                        "relative z-10 w-full rounded-xl border border-border bg-transparent px-2.5 py-2",
+                        "relative z-10 w-full rounded-xl border border-border bg-panel px-2.5 py-2",
                         "text-sm text-text-primary group select-text",
                         isLong && "cursor-pointer",
                     )}
@@ -248,7 +248,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                                     {userParts.attachments.map((name, i) => (
                                         <span
                                             key={`${name}-${i}`}
-                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs border border-border-subtle bg-panel text-text-secondary"
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm border border-border-subtle bg-panel text-text-secondary"
                                         >
                                             <FileIcon name={name} className="w-3.5 h-3.5 shrink-0" />
                                             <span className="truncate max-w-[160px]">{name}</span>

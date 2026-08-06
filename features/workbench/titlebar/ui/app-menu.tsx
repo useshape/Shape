@@ -148,13 +148,15 @@ export function TitlebarMenubar({
     onAction,
     repoHistory,
     onClearHistory,
+    structure = menuStructure,
 }: {
     windowWidth: number;
     onAction: (label: string) => void;
     repoHistory: RepoHistoryEntry[];
     onClearHistory: () => void;
+    structure?: Record<string, MenuItem[]>;
 }) {
-    const entries = Object.entries(menuStructure);
+    const entries = Object.entries(structure);
     let visibleCount = entries.length;
     if (windowWidth < 800) visibleCount = 2;
     else if (windowWidth < 950) visibleCount = 3;

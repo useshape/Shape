@@ -188,7 +188,7 @@ function buildSummaryLabel(stats: ReturnType<typeof computeTurnStats>): string |
 function LineDelta({ add, del }: { add: number; del: number }) {
     if (add === 0 && del === 0) return null;
     return (
-        <span className="inline-flex items-center gap-1 font-mono text-[11px] shrink-0 tabular-nums">
+        <span className="inline-flex items-center gap-1 font-mono text-sm shrink-0 tabular-nums">
             {add > 0 ? <span className="text-success">+{add}</span> : null}
             {del > 0 ? <span className="text-error">-{del}</span> : null}
         </span>
@@ -231,7 +231,7 @@ function ThoughtStep({
                 type="button"
                 onClick={() => expandable && setOpen((v) => !v)}
                 className={cn(
-                    "flex items-center gap-1 text-xs transition-colors",
+                    "flex items-center gap-1 text-sm transition-colors",
                     expandable ? "text-text-muted hover:text-text-primary cursor-pointer" : "text-text-muted cursor-default",
                 )}
             >
@@ -242,7 +242,7 @@ function ThoughtStep({
                     <Icon
                         name="chevron_right"
                         size={12}
-                        className={cn("opacity-50 transition-transform duration-200", open && "rotate-90")}
+                        className={cn("opacity-0 transition-transform duration-200", open && "rotate-90 opacity-50")}
                     />
                 ) : null}
             </button>
@@ -317,7 +317,7 @@ function WorkflowEditPreview({
 
     return (
         <div className="my-1.5 rounded-md border border-border-subtle overflow-hidden bg-panel/40 max-w-full">
-            <div className="max-h-[220px] overflow-y-auto custom-scrollbar text-[11px] font-mono">
+            <div className="max-h-[220px] overflow-y-auto custom-scrollbar text-sm font-mono">
                 {rows.map((row, i) => (
                     <div
                         key={`${row.type}-${i}`}
@@ -432,8 +432,8 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                 ) : (
                     <Icon name="edit" size={13} className="shrink-0 text-text-muted" />
                 )}
-                <span className="truncate text-xs text-text-primary">{fileName(file)}</span>
-                <span className="flex shrink-0 items-center gap-1 text-xs">
+                <span className="truncate text-sm text-text-primary">{fileName(file)}</span>
+                <span className="flex shrink-0 items-center gap-1 text-sm">
                     <span className="text-success">+{add}</span>
                     <span className="text-error">-{del}</span>
                 </span>
@@ -494,7 +494,7 @@ function StepRowAppliedEdit({ block }: { block: Chunk }) {
                 type="button"
                 onClick={() => hasDiff && setDiffOpen((v) => !v)}
                 className={cn(
-                    "flex items-center gap-1.5 text-xs text-text-muted w-fit max-w-full text-left",
+                    "flex items-center gap-1.5 text-sm text-text-muted w-fit max-w-full text-left",
                     hasDiff && "hover:text-text-primary transition-colors",
                 )}
             >
@@ -537,7 +537,7 @@ function StepRow({ block }: { block: Chunk }) {
             <button
                 type="button"
                 onClick={() => path && void openProjectFile(path)}
-                className="py-0.5 text-xs text-text-muted hover:text-text-primary transition-colors w-fit text-left cursor-pointer"
+                className="py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors w-fit text-left cursor-pointer"
             >
                 Read <span className="text-text-secondary">{fileName(path)}</span>
                 {range ? <span> {range}</span> : null}
@@ -548,7 +548,7 @@ function StepRow({ block }: { block: Chunk }) {
     if (block.type === "grep") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-xs text-text-muted truncate">
+            <div className="py-0.5 text-sm text-text-muted truncate">
                 Grepped <span className="text-text-secondary">{q}</span>
             </div>
         );
@@ -557,7 +557,7 @@ function StepRow({ block }: { block: Chunk }) {
     if (block.type === "search" || block.type === "search_result" || block.type === "web_search") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-xs text-text-muted truncate">
+            <div className="py-0.5 text-sm text-text-muted truncate">
                 Searched <span className="text-text-secondary">{q}</span>
             </div>
         );
@@ -572,7 +572,7 @@ function StepRow({ block }: { block: Chunk }) {
                     type="button"
                     onClick={() => hasDiff && setDiffOpen((v) => !v)}
                     className={cn(
-                        "flex items-center gap-1.5 text-xs text-text-muted w-fit max-w-full text-left",
+                        "flex items-center gap-1.5 text-sm text-text-muted w-fit max-w-full text-left",
                         hasDiff && "hover:text-text-primary transition-colors",
                     )}
                 >
@@ -584,7 +584,7 @@ function StepRow({ block }: { block: Chunk }) {
                         <Icon
                             name="chevron_right"
                             size={12}
-                            className={cn("opacity-50 transition-transform duration-200 shrink-0", diffOpen && "rotate-90")}
+                            className={cn("opacity-0 transition-transform duration-200 shrink-0", diffOpen && "rotate-90 opacity-50")}
                         />
                     ) : null}
                 </button>
@@ -610,10 +610,10 @@ function StepRow({ block }: { block: Chunk }) {
         if (finishedFine && !block.isGenerating && isLintCommand(cmd)) {
             const status = lintStatusFromOutput(block.content || "");
             if (status === "clean") {
-                return <div className="py-0.5 text-xs text-text-muted">No linter errors</div>;
+                return <div className="py-0.5 text-sm text-text-muted">No linter errors</div>;
             }
             if (status === "errors") {
-                return <div className="py-0.5 text-xs text-text-muted">Linter errors found</div>;
+                return <div className="py-0.5 text-sm text-text-muted">Linter errors found</div>;
             }
         }
         return <TerminalCommandStep block={block} />;
@@ -629,7 +629,7 @@ function StepRow({ block }: { block: Chunk }) {
             return <StepRowAppliedEdit block={block} />;
         }
         return (
-            <div className="py-0.5 text-xs text-text-muted">
+            <div className="py-0.5 text-sm text-text-muted">
                 {status === "cancelled" ? "Cancelled edit to " : "Rejected edit to "}
                 <span className="text-text-secondary">{block.file ? fileName(block.file) : "file"}</span>
             </div>
@@ -646,7 +646,7 @@ function StepRow({ block }: { block: Chunk }) {
                     ? "Deleted"
                     : "Renamed";
         return (
-            <div className="py-0.5 text-xs text-text-muted">
+            <div className="py-0.5 text-sm text-text-muted">
                 {label}{" "}
                 <span className="text-text-secondary">
                     {block.content ? fileName(block.content) : ""}
@@ -656,7 +656,7 @@ function StepRow({ block }: { block: Chunk }) {
     }
 
     if (block.type === "git_operation" && block.gitOp === "status") {
-        return <div className="py-0.5 text-xs text-text-muted">Git status</div>;
+        return <div className="py-0.5 text-sm text-text-muted">Git status</div>;
     }
 
     return null;
@@ -664,7 +664,7 @@ function StepRow({ block }: { block: Chunk }) {
 
 function GitStageStep({ count }: { count: number }) {
     if (count === 0) return null;
-    return <div className="py-0.5 text-xs text-text-muted">Staged {count} files</div>;
+    return <div className="py-0.5 text-sm text-text-muted">Staged {count} files</div>;
 }
 
 export function TurnWorkflowSummary({
@@ -746,7 +746,7 @@ export function TurnWorkflowSummary({
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex w-fit max-w-full items-center gap-1 py-0.5 text-xs text-text-muted hover:text-text-primary transition-colors"
+                className="flex w-fit max-w-full items-center gap-1 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors"
             >
                 <span>
                     {isActive ? (
@@ -761,7 +761,7 @@ export function TurnWorkflowSummary({
                 <Icon
                     name="chevron_right"
                     size={14}
-                    className={cn("shrink-0 opacity-60 transition-transform duration-200", open && "rotate-90")}
+                    className={cn("shrink-0 opacity-0 transition-transform duration-200", open && "rotate-90 opacity-50")}
                 />
             </button>
 
@@ -776,7 +776,7 @@ export function TurnWorkflowSummary({
                             type="button"
                             title={summaryLabel}
                             onClick={() => setStepsOpen((v) => !v)}
-                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-xs text-text-muted hover:text-text-primary transition-colors"
+                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-sm text-text-muted hover:text-text-primary transition-colors"
                         >
                             <span className="min-w-0 truncate">{summaryLabel}</span>
                             {hasLintDelta ? (
@@ -786,8 +786,8 @@ export function TurnWorkflowSummary({
                                 name="chevron_right"
                                 size={12}
                                 className={cn(
-                                    "shrink-0 opacity-50 transition-transform duration-200",
-                                    stepsOpen && "rotate-90",
+                                    "shrink-0 opacity-0 transition-transform duration-200",
+                                    stepsOpen && "rotate-90 opacity-50",
                                 )}
                             />
                         </button>
@@ -819,7 +819,7 @@ export function TurnWorkflowSummary({
                                 });
                             })()}
                             {showLintFooter && !lintShownInSteps ? (
-                                <div className="py-0.5 text-xs text-text-muted">No linter errors</div>
+                                <div className="py-0.5 text-sm text-text-muted">No linter errors</div>
                             ) : null}
                         </div>
                     </Collapse>

@@ -19,11 +19,10 @@ import { Tooltip } from "@/components/ui/tooltip";
 import Problems from "@/features/diagnostics/ui/problems";
 import OutputPanel from "@/features/output/ui/output";
 import TestPanel from "@/features/testing/ui/test-panel";
+import PreviewPanel from "@/features/preview/ui/preview-panel";
 import { Button } from "@/components/ui/button";
 import { getSettings, resolveDefaultTerminalShell } from "@/lib/settings";
-
-let globalLastDevUrl: string | null = null;
-export function getLastDevUrl() { return globalLastDevUrl; }
+import { setLastDevUrl } from "@/features/preview/store";
 
 type TerminalShell = TerminalShellProfile["id"] | "ai";
 type TerminalTab = { id: string; title: string; shell: TerminalShell; cwd: string; boundPtyId?: number; };
@@ -218,10 +217,10 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                     if (e.payload.id === ptyId && term) {
                         term.write(e.payload.data);
 
-                        // Detect development server URLs to open them later automatically
+                        // Detect development server URLs for the Preview panel
                         const devMatch = e.payload.data.match(/https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d+/);
                         if (devMatch) {
-                            globalLastDevUrl = devMatch[0];
+                            setLastDevUrl(devMatch[0]);
                         }
                     }
                 });
@@ -347,14 +346,23 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
     return <div className="h-full w-full overflow-hidden bg-panel p-3" ref={terminalRef} />;
 }
 
-export default function Terminal({ onClose, isOpen }: { onClose?: () => void; isOpen?: boolean }) {
+export default function Terminal({
+    onClose,
+    isOpen,
+    terminalOnly = false,
+}: {
+    onClose?: () => void;
+    isOpen?: boolean;
+    /** Hide Problems/Output/Tests/Preview chrome — terminal tabs only (agent rail). */
+    terminalOnly?: boolean;
+}) {
     const { project_path } = useProjectState();
     const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>(globalTerminalStore.tabs);
     const [projectActiveTabs, setProjectActiveTabs] = useState<Record<string, string | null>>(globalTerminalStore.activeProjectTabs);
     const safeCwd = project_path || "global";
     const currentTabs = terminalTabs.filter(t => t.cwd === safeCwd);
     const activeTerminalId = projectActiveTabs[safeCwd] || null;
-    const [activeView, setActiveView] = useState<"terminal" | "problems" | "tests" | "output">("terminal");
+    const [activeView, setActiveView] = useState<"terminal" | "problems" | "tests" | "output" | "preview">("terminal");
     const [availableShells, setAvailableShells] = useState<TerminalShellProfile[]>([]);
     const tabScrollRef = useRef<HTMLDivElement>(null);
 
@@ -391,11 +399,17 @@ export default function Terminal({ onClose, isOpen }: { onClose?: () => void; is
             setActiveView("output");
             window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
         };
+        const handleOpenPreview = () => {
+            setActiveView("preview");
+            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
+        };
         window.addEventListener("shape-open-problems", handleOpenProblems);
         window.addEventListener("shape-open-output", handleOpenOutput);
+        window.addEventListener("shape-open-preview", handleOpenPreview);
         return () => {
             window.removeEventListener("shape-open-problems", handleOpenProblems);
             window.removeEventListener("shape-open-output", handleOpenOutput);
+            window.removeEventListener("shape-open-preview", handleOpenPreview);
         };
     }, []);
 
@@ -607,7 +621,7 @@ export default function Terminal({ onClose, isOpen }: { onClose?: () => void; is
         window.addEventListener("shape-terminal-run", handleTerminalRun as EventListener);
         const handleTerminalView = (e: Event) => {
             const view = (e as CustomEvent<string>).detail;
-            if (view === "output" || view === "problems" || view === "tests" || view === "terminal") {
+            if (view === "output" || view === "problems" || view === "tests" || view === "terminal" || view === "preview") {
                 setActiveView(view);
             }
         };
@@ -653,32 +667,36 @@ export default function Terminal({ onClose, isOpen }: { onClose?: () => void; is
         }
     }, []);
 
+    const view = terminalOnly ? "terminal" : activeView;
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-panel select-none font-sans" data-terminal-root="true">
             {/* ── Row 1: view selectors (left) + X to hide (right) ── */}
+            {!terminalOnly ? (
             <div className="relative z-20 flex shrink-0 items-center gap-1 px-2 pb-1.5 pt-2 min-w-0">
                 <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-                    {(["problems", "output", "tests", "terminal"] as const).map((view) => {
+                    {(["problems", "output", "tests", "preview", "terminal"] as const).map((viewId) => {
                         const labels: Record<string, string> = {
                             problems: "Problems",
                             output: "Output",
                             tests: "Tests",
+                            preview: "Preview",
                             terminal: "Terminal",
                         };
                         return (
                             <Button
-                                key={view}
+                                key={viewId}
                                 variant="ghost"
                                 size="sm"
                                 className={cn(
                                     "h-7 px-2 text-sm",
-                                    activeView === view
+                                    activeView === viewId
                                         ? "bg-surface-2 text-text-primary"
                                         : "text-text-muted hover:text-text-secondary"
                                 )}
-                                onClick={() => setActiveView(view)}
+                                onClick={() => setActiveView(viewId)}
                             >
-                                {labels[view]}
+                                {labels[viewId]}
                             </Button>
                         );
                     })}
@@ -691,10 +709,14 @@ export default function Terminal({ onClose, isOpen }: { onClose?: () => void; is
                     </Button>
                 </div>
             </div>
+            ) : null}
 
             {/* ── Row 2: terminal tabs — only visible when terminal view is active ── */}
-            {activeView === "terminal" && (
-                <div className="relative z-10 flex shrink-0 items-center gap-1 px-2 pb-1.5 min-w-0">
+            {view === "terminal" && (
+                <div className={cn(
+                    "relative z-10 flex shrink-0 items-center gap-1 px-2 min-w-0",
+                    terminalOnly ? "pt-2 pb-1.5" : "pb-1.5",
+                )}>
                     <div
                         ref={tabScrollRef}
                         onWheel={handleWheel}
@@ -770,20 +792,22 @@ export default function Terminal({ onClose, isOpen }: { onClose?: () => void; is
             )}
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-                {activeView === "problems" ? (
+                {view === "problems" ? (
                     <Problems />
-                ) : activeView === "output" ? (
+                ) : view === "output" ? (
                     <OutputPanel />
-                ) : activeView === "tests" ? (
+                ) : view === "tests" ? (
                     <TestPanel />
+                ) : view === "preview" ? (
+                    <PreviewPanel />
                 ) : null}
                 <div className={cn(
                     "absolute inset-0 bg-transparent overflow-hidden",
-                    activeView !== "terminal" && "invisible pointer-events-none"
+                    view !== "terminal" && "invisible pointer-events-none"
                 )}>
                     {currentTabs.map(tab => (
                         <div key={tab.id} className={cn("absolute inset-0 bg-transparent transition-opacity duration-150 overflow-hidden", tab.id === activeTerminalId ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none")}>
-                            <TerminalInstance tab={tab} isActive={activeView === "terminal" && tab.id === activeTerminalId} />
+                            <TerminalInstance tab={tab} isActive={view === "terminal" && tab.id === activeTerminalId} />
                         </div>
                     ))}
                 </div>

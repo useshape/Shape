@@ -730,6 +730,7 @@ export function useChatSession() {
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
     const [scrolledFromTop, setScrolledFromTop] = React.useState(false);
+    const [scrolledFromBottom, setScrolledFromBottom] = React.useState(false);
     const isNearBottomRef = React.useRef(true);
 
     const handleRestore = React.useCallback(
@@ -915,6 +916,7 @@ export function useChatSession() {
         const threshold = 150;
         isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
         setScrolledFromTop(el.scrollTop > 4);
+        setScrolledFromBottom(!isNearBottomRef.current);
     }, []);
 
     React.useEffect(() => {
@@ -925,7 +927,12 @@ export function useChatSession() {
         }
         // Keep top-fade in sync after programmatic scroll (scroll events can lag).
         const el = scrollContainerRef.current;
-        if (el) setScrolledFromTop(el.scrollTop > 4);
+        if (el) {
+            setScrolledFromTop(el.scrollTop > 4);
+            setScrolledFromBottom(
+                el.scrollHeight - el.scrollTop - el.clientHeight >= 150,
+            );
+        }
     }, [messages, isLoading]);
 
     const handleLoadConversation = React.useCallback(
@@ -1013,6 +1020,7 @@ export function useChatSession() {
         scrollContainerRef,
         handleScroll,
         scrolledFromTop,
+        scrolledFromBottom,
         isEditResolved,
         handleAcceptAll,
         handleRejectAll,

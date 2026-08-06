@@ -36,6 +36,8 @@ pub struct ProxyContext {
     pub conversation_id: Option<String>,
     pub request_id: Option<String>,
     pub project_path: Option<String>,
+    /// Serialized JSON context composition for usage analytics.
+    pub context_breakdown: Option<String>,
 }
 
 impl ProxyContext {
@@ -46,6 +48,7 @@ impl ProxyContext {
             conversation_id: None,
             request_id: Some(uuid::Uuid::new_v4().to_string()),
             project_path: None,
+            context_breakdown: None,
         }
     }
 
@@ -57,6 +60,11 @@ impl ProxyContext {
 
     pub fn with_project_path(mut self, project_path: Option<String>) -> Self {
         self.project_path = project_path;
+        self
+    }
+
+    pub fn with_context_breakdown(mut self, breakdown: Option<Value>) -> Self {
+        self.context_breakdown = breakdown.map(|v| v.to_string());
         self
     }
 
@@ -134,6 +142,12 @@ pub(crate) fn shape_proxy_request(
     }
     if let Some(request_id) = &ctx.request_id {
         builder = builder.header("X-Shape-Request-Id", request_id);
+    }
+    if let Some(breakdown) = &ctx.context_breakdown {
+        // Keep header under common proxy limits; breakdown is a small JSON object.
+        if breakdown.len() < 8_000 {
+            builder = builder.header("X-Shape-Context-Breakdown", breakdown);
+        }
     }
     let device_id = crate::commands::device_id::get_device_id()
         .ok()
