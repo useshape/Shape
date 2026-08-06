@@ -11,15 +11,14 @@ import { useWindowControls } from "../hooks/use-window-controls";
 import { useRepoHistory } from "../hooks/use-repo-history";
 import { useEditorBuffer } from "../hooks/use-editor-buffer";
 import { TitlebarMenubar } from "../ui/app-menu";
-import { CommandCenterSearch } from "../ui/command-center";
+import { CommandOmnibar } from "../ui/command-center";
 import { AgentChatSearch } from "@/features/agent/ui/agent-chat-search";
-import { AgentTitlebarNav } from "@/features/agent/ui/agent-titlebar-nav";
-import { AgentSessionsToggle } from "@/features/agent/ui/agent-titlebar-controls";
 import { AccountMenu } from "../ui/account-menu";
 import { WindowControls } from "../ui/window-controls";
 import { TitlebarLayoutControls, TitlebarSidebarToggle } from "../ui/layout-controls";
 import { TitlebarUpdateButton } from "../ui/update-button";
 import { TitlebarSearch } from "@/features/git/ui/manager/titlebar-search";
+import { focusMainWindow } from "@/lib/open-agent-window";
 
 // logo.svg is 46x56 — width must scale with height to avoid Next Image's
 // aspect-ratio warning (and the visual squish into a square icon).
@@ -37,17 +36,6 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
     const { isMaximized, minimize, toggleMaximize, close, closeWindow } = useWindowControls();
     const { repoHistory, clearHistory } = useRepoHistory(project_path);
     const { readLatestContent } = useEditorBuffer();
-
-    const projectLabel = useMemo(() => {
-        if (!project_path) return "Go to File";
-        return project_path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "Go to File";
-    }, [project_path]);
-
-    const searchLabel = active_file
-        ? `${projectLabel} - ${active_file.split(/[\\/]/).pop()}`
-        : project_path
-            ? projectLabel
-            : "Go to File";
 
     const handleMenuClick = useMemo(
         () =>
@@ -76,28 +64,33 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
 
     if (agent && !isCompact) {
         return (
-            <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal text-text-primary">
+            <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal leading-none text-text-primary">
                 <div className="titlebar-drag-region absolute left-0 top-0 z-0 h-full w-full" data-tauri-drag-region />
 
-                <div className="titlebar-left relative z-20 flex shrink-0 items-center">
-                    <div className="flex shrink-0 items-center">
-                        <div className="window-appicon flex h-full w-11 shrink-0 items-center justify-center">
-                            <Image
-                                src="/logos/logo.svg"
-                                alt="Logo"
-                                width={Math.round(16 * LOGO_ASPECT_RATIO)}
-                                height={16}
-                                className="logo-invert rounded-sm"
-                            />
-                        </div>
-                        <AgentSessionsToggle />
+                <div className="titlebar-left relative z-20 flex shrink-0 items-center gap-1 pl-1">
+                    <div className="window-appicon flex h-full w-11 shrink-0 items-center justify-center">
+                        <Image
+                            src="/logos/logo.svg"
+                            alt="Logo"
+                            width={Math.round(16 * LOGO_ASPECT_RATIO)}
+                            height={16}
+                            className="logo-invert rounded-sm"
+                        />
                     </div>
-                    <AgentTitlebarNav />
+                    <button
+                        type="button"
+                        onClick={() => void focusMainWindow()}
+                        className="relative z-20 inline-flex h-7 items-center rounded-md px-2.5 text-sm font-medium text-text-secondary transition-[color,background-color] duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary"
+                        title="Show IDE window"
+                        aria-label="Show IDE window"
+                    >
+                        IDE
+                    </button>
                 </div>
 
                 <div className="pointer-events-none min-w-0 flex-1" aria-hidden />
 
-                <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center">
+                <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5">
                     {showSearch ? (
                         <div className="flex h-full items-center px-1">
                             <AgentChatSearch />
@@ -115,7 +108,7 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
     }
 
     return (
-        <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal text-text-primary">
+        <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal leading-none text-text-primary">
             <div className="titlebar-drag-region absolute left-0 top-0 z-0 h-full w-full" data-tauri-drag-region />
 
             <div className="titlebar-left relative z-20 flex shrink-0 items-center">
@@ -143,16 +136,20 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
                         ) : null}
                     </>
                 ) : settings ? (
-                    <div className="flex items-center gap-2.5 px-3 py-1 text-sm text-text-primary">
-                        <Image
-                            src="/logos/logo.svg"
-                            alt="Logo"
-                            width={Math.round(18 * LOGO_ASPECT_RATIO)}
-                            height={18}
-                            className="logo-invert rounded-sm"
-                        />
-                        <span>{title || "Settings"}</span>
-                    </div>
+                    title && title !== "Settings" ? (
+                        <div className="flex items-center gap-2.5 px-3 py-1 text-sm text-text-primary">
+                            <Image
+                                src="/logos/logo.svg"
+                                alt="Logo"
+                                width={Math.round(18 * LOGO_ASPECT_RATIO)}
+                                height={18}
+                                className="logo-invert rounded-sm"
+                            />
+                            <span>{title}</span>
+                        </div>
+                    ) : (
+                        <div className="h-full w-2" aria-hidden />
+                    )
                 ) : title ? (
                     <div className="flex items-center gap-1 px-4 text-sm font-normal text-text-primary">
                         {onBack && (
@@ -178,8 +175,8 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
                     </div>
                 ) : null}
                 {!isCompact && showSearch ? (
-                    <div className="flex h-full items-center px-1">
-                        <CommandCenterSearch label={searchLabel} activeFile={active_file} />
+                    <div className="flex h-full min-w-0 max-w-[min(420px,36vw)] items-center px-1">
+                        <CommandOmnibar />
                     </div>
                 ) : null}
                 {!isCompact && !isFocus && (

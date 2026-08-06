@@ -99,6 +99,9 @@ pub fn run() {
             app.state::<commands::preview_render::PreviewCaptureState>()
                 .register_listener(app.handle());
 
+            #[cfg(windows)]
+            crate::core::windows_notifications::init();
+
             // Initialize menu
             adapters::shortcuts::setup_menu(app.handle())?;
             app.on_menu_event(|app, event| {
@@ -150,6 +153,7 @@ pub fn run() {
             adapters::filesystem::save_color_to_history,
             adapters::filesystem::get_color_history,
             adapters::open::open_url_external,
+            commands::desktop_notification::show_desktop_notification,
             commands::preview_render::capture_html_preview,
             commands::preview_render::cleanup_design_sandbox,
             // project stats
@@ -262,32 +266,34 @@ pub fn run() {
             // outline
             adapters::outline::get_outline,
             // agent
-            agent::send_chat_message,
-            agent::get_chat_history,
-            agent::get_chat_generation_state,
-            agent::clear_chat_history,
-            agent::new_chat,
-            agent::load_conversation,
-            agent::delete_conversation,
-            agent::stop_chat_message,
-            agent::get_chat_title,
-            agent::get_current_conversation_id,
-            agent::get_conversations,
-            agent::apply_file_edit,
-            agent::generate_commit_message,
-            agent::summarize_pull_request,
-            agent::summarize_issue,
-            agent::summarize_release,
-            agent::explain_ci_log,
-            agent::explain_git_changes,
-            agent::approve_terminal_command,
-            agent::reject_terminal_command,
-            agent::restore_checkpoint,
-            agent::get_turn_journal,
-            agent::get_open_turn_journals,
+            agent::commands::send_chat::send_chat_message,
+            agent::commands::conversation::get_chat_history,
+            agent::commands::conversation::get_chat_generation_state,
+            agent::commands::conversation::clear_chat_history,
+            agent::commands::conversation::new_chat,
+            agent::commands::conversation::load_conversation,
+            agent::commands::conversation::delete_conversation,
+            agent::commands::approvals::stop_chat_message,
+            agent::commands::conversation::get_chat_title,
+            agent::commands::conversation::get_current_conversation_id,
+            agent::commands::conversation::get_conversations,
+            agent::commands::approvals::apply_file_edit,
+            agent::commands::commit_message::generate_commit_message,
+            agent::commands::git_ai::summarize_pull_request,
+            agent::commands::git_ai::summarize_issue,
+            agent::commands::git_ai::summarize_release,
+            agent::commands::git_ai::explain_ci_log,
+            agent::commands::git_ai::explain_git_changes,
+            agent::commands::approvals::approve_terminal_command,
+            agent::commands::approvals::reject_terminal_command,
+            agent::commands::approvals::resolve_edit_approval,
+            agent::commands::conversation::restore_checkpoint,
+            agent::commands::conversation::get_turn_journal,
+            agent::commands::conversation::get_open_turn_journals,
             agent::commands::indexing::index_project,
             agent::commands::indexing::search_codebase,
             agent::commands::indexing::get_index_status,
+            agent::commands::indexing::set_index_embeddings,
             agent::commands::mcp_cmds::sync_mcp_servers,
             agent::commands::mcp_cmds::get_mcp_config_path,
             agent::commands::mcp_cmds::ensure_mcp_config,

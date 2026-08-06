@@ -24,6 +24,8 @@ import {
 } from "@/lib/usage-display";
 import { parseShapeContinueAction } from "@/lib/shape-continue-action";
 import { mentionRanges, mentionDisplayLabel } from "@/lib/chat-mentions";
+import { openProjectFile } from "@/lib/open-project-file";
+import { Favicon } from "@/components/ui/favicon";
 import { WebSourcesMenu } from "../blocks/search";
 
 type ChatMessageItemProps = {
@@ -71,12 +73,37 @@ function MentionRichText({ text }: { text: string }) {
                 </span>,
             );
         }
+        const { mention } = range;
+        const openable =
+            (mention.kind === "file" || mention.kind === "folder") && !!mention.path;
+        const label = mentionDisplayLabel(mention);
         nodes.push(
             <span
                 key={`m-${i}`}
-                className="mx-0.5 inline-flex items-center rounded-md border border-accent/30 bg-accent/15 px-1 py-0.5 text-[0.8125rem] font-medium text-accent"
+                role={openable ? "button" : undefined}
+                tabIndex={openable ? 0 : undefined}
+                onClick={
+                    openable
+                        ? () => {
+                              const path =
+                                  mention.kind === "folder" && !mention.path!.endsWith("/")
+                                      ? `${mention.path}/`
+                                      : mention.path!;
+                              void openProjectFile(path, label);
+                          }
+                        : undefined
+                }
+                className={cn(
+                    "mx-0.5 inline-flex items-center gap-1 rounded-md border border-accent/30 bg-accent/15 px-1.5 py-0.5 text-sm font-medium text-accent align-middle",
+                    openable && "cursor-pointer hover:bg-accent/25 transition-colors",
+                )}
             >
-                @{mentionDisplayLabel(range.mention)}
+                {mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs" ? (
+                    <FileIcon name={label} className="h-3 w-3 shrink-0" />
+                ) : mention.kind === "browser" ? (
+                    <Favicon url={mention.path || label} size={12} />
+                ) : null}
+                <span>@{label}</span>
             </span>,
         );
         cursor = range.end;
@@ -209,7 +236,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                         }
                     } : undefined}
                     className={cn(
-                        "relative z-10 w-full rounded-xl border border-border-subtle bg-surface-3 px-3 py-2",
+                        "relative z-10 w-full rounded-xl border border-border bg-panel px-2.5 py-2",
                         "text-sm text-text-primary group select-text",
                         isLong && "cursor-pointer",
                     )}
@@ -221,7 +248,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                                     {userParts.attachments.map((name, i) => (
                                         <span
                                             key={`${name}-${i}`}
-                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs border border-border-subtle bg-panel text-text-secondary"
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm border border-border-subtle bg-panel text-text-secondary"
                                         >
                                             <FileIcon name={name} className="w-3.5 h-3.5 shrink-0" />
                                             <span className="truncate max-w-[160px]">{name}</span>
@@ -323,7 +350,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                                 <Icon name="more_horiz" size={14} />
                             </button>
                         </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-52 p-2.5">
+                            <DropdownMenuContent align="start" className="w-52">
                                 <div className="flex flex-col gap-1.5 text-xs">
                                     <div className="flex items-center justify-between gap-4">
                                         <span className="text-text-muted">Model</span>

@@ -30,10 +30,24 @@ describe("notifications", () => {
         vi.useRealTimers();
     });
 
-    it("removes notification by id", () => {
-        const id = notificationStore.add("Temp");
-        notificationStore.remove(id);
+    it("dismissToast removes from history so the bell menu does not retain forever", () => {
+        const id = notificationStore.add("Temp success", "success");
+        notificationStore.dismissToast(id);
         expect(notificationStore.getSnapshot().notifications).toHaveLength(0);
+        expect(notificationStore.getSnapshot().toastIds).toHaveLength(0);
+    });
+
+    it("prunes notifications older than the history TTL", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        notificationStore.clearAll();
+        notificationStore.add("Old", "info");
+        vi.setSystemTime(6 * 60 * 1000);
+        notificationStore.add("New", "info");
+        notificationStore.markViewed();
+        const messages = notificationStore.getSnapshot().notifications.map((n) => n.message);
+        expect(messages).toEqual(["New"]);
+        vi.useRealTimers();
     });
 
     it("limits toast ids to three", () => {

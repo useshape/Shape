@@ -2,7 +2,6 @@
 
 import React, { useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Icon } from "@/components/ui/icon";
 import { useDesignPreviewSession } from "@/lib/design-preview-store";
 
 function isHtmlPreview(path: string, kind?: string): boolean {
@@ -34,33 +33,23 @@ export function DesignPreviewView({ sessionId }: { sessionId: string }) {
 
     const html = isHtmlPreview(item.path, item.kind);
     const src = resolvePreviewSrc(item.path);
-    const urlLabel = item.style
-        ? `preview://${item.name.toLowerCase().replace(/\s+/g, "-")} · ${item.style}`
-        : `preview://${item.name.toLowerCase().replace(/\s+/g, "-")}`;
 
     return (
         <div className="flex h-full min-h-0 w-full flex-col bg-editor p-2">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-subtle bg-panel">
-                <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-panel-hover/40 px-2.5 py-1.5">
-                    <Icon name="public" size={14} className="shrink-0 text-text-muted" />
-                    <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border-subtle bg-editor px-2 py-1 text-xs text-text-muted">
-                        <Icon name="lock" size={12} className="shrink-0 opacity-70" />
-                        <span className="truncate">{urlLabel}</span>
-                    </div>
-                </div>
-                <div className="relative min-h-0 flex-1 bg-white">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-subtle bg-transparent">
+                <div className="relative min-h-0 flex-1 bg-transparent">
                     {html ? (
                         <iframe
-                            title={item.name}
+                            title={item.name || "Component preview"}
                             src={src}
-                            className="h-full w-full border-0"
+                            className="h-full w-full border-0 bg-transparent"
                             sandbox="allow-scripts allow-same-origin"
                         />
                     ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                             src={src}
-                            alt={item.name}
+                            alt={item.name || "Preview"}
                             className="h-full w-full object-contain object-top"
                             draggable={false}
                         />

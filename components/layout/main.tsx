@@ -8,6 +8,7 @@ import { EditorLayout } from "@/features/editor/ui/layout";
 import { ActivityBar } from "@/features/activity-bar";
 import { dispatchShortcutAction } from "@/lib/ui/shortcut-actions";
 import { useLayout } from "@/core/providers/layout";
+import { WorkbenchActivityChrome } from "@/features/workbench/ui/workbench-chrome";
 
 function TauriShortcutBridge() {
     useEffect(() => {
@@ -172,27 +173,30 @@ export default function Main({ children }: { children: React.ReactNode }) {
             data-workbench-main
         >
             {!zenMode && (
-                <div className="z-20 h-full shrink-0 bg-transparent">
-                    <ActivityBar
-                        activeTab={activeTab}
-                        toggleTab={(id) => {
-                            if (activeTab === id) {
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-layout-toggle", {
-                                        detail: { id: "primary-sidebar" },
-                                    }),
-                                );
-                            } else {
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-set-active-tab", { detail: id }),
-                                );
-                            }
-                        }}
-                    />
+                <div className="z-20 flex h-full shrink-0 flex-col border-r border-border bg-panel">
+                    <WorkbenchActivityChrome />
+                    <div className="min-h-0 flex-1">
+                        <ActivityBar
+                            activeTab={activeTab}
+                            toggleTab={(id) => {
+                                if (activeTab === id) {
+                                    window.dispatchEvent(
+                                        new CustomEvent("shape-layout-toggle", {
+                                            detail: { id: "primary-sidebar" },
+                                        }),
+                                    );
+                                } else {
+                                    window.dispatchEvent(
+                                        new CustomEvent("shape-set-active-tab", { detail: id }),
+                                    );
+                                }
+                            }}
+                        />
+                    </div>
                 </div>
             )}
 
-            <div className="flex-1 flex overflow-hidden pointer-events-auto relative z-10 min-w-0">
+            <div className="relative z-10 flex min-w-0 flex-1 overflow-hidden pointer-events-auto">
                 <EditorLayout
                     activeTab={activeTab}
                     leftOpen={zenMode ? false : leftOpen}

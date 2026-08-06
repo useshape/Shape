@@ -153,6 +153,39 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
                 unlisten = await win.onCloseRequested(async (event) => {
                     const { getProjectSnapshot, commands } = await import("@/lib/backend");
+                    const { WebviewWindow } = await import("@/lib/tauri/client-api");
+                    const agent = await WebviewWindow.getByLabel("agent");
+                    if (agent) {
+                        // Keep process alive for the Agent window — hide editor instead of quitting.
+                        event.preventDefault();
+                        const dirty = getProjectSnapshot().open_files.filter((f) => f.is_dirty);
+                        if (dirty.length > 0) {
+                            const save = await confirm(
+                                dirty.length === 1
+                                    ? `Save changes to ${dirty[0].name || dirty[0].path} before closing?`
+                                    : `Save changes to ${dirty.length} files before closing?`,
+                                {
+                                    title: "Unsaved changes",
+                                    kind: "warning",
+                                    okLabel: "Save",
+                                    cancelLabel: "Don't save",
+                                },
+                            );
+                            if (save) {
+                                window.dispatchEvent(new Event("save-all-request"));
+                                await new Promise((r) => setTimeout(r, 400));
+                            } else {
+                                const { clearDirtyBuffer } = await import("@/lib/dirty-buffers");
+                                for (const f of dirty) {
+                                    clearDirtyBuffer(f.path);
+                                    void commands.markFileDirty(f.path, false);
+                                }
+                            }
+                        }
+                        if (!cancelled) await win.hide();
+                        return;
+                    }
+
                     const dirty = getProjectSnapshot().open_files.filter((f) => f.is_dirty);
                     if (dirty.length === 0) return;
 
@@ -236,7 +269,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     if (onboarding) {
                         await onboarding.close();
                     }
-                    await currentWindow.show();
+
+                    const { initSettings, getSettings } = await import("@/lib/settings");
+                    await initSettings();
+                    const { openAgentWindow } = await import("@/lib/open-agent-window");
+                    const startWithAgent = getSettings().privacy.startupWithAgentView;
+                    if (startWithAgent) {
+                        await openAgentWindow({ hideMain: true });
+                    } else {
+                        await currentWindow.show();
+                    }
                 }
             } catch (e) {
                 console.error("Failed to manage window flow:", e);
@@ -266,9 +308,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                                 <ChatStreamProvider>
                                     <div
                                         id="shape-agent"
-                                        className="flex h-screen w-full flex-col overflow-hidden bg-titlebar font-sans text-sm text-text-primary select-none"
+                                        className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-text-primary select-none"
                                     >
-                                        <Titlebar agent />
                                         <main className="min-h-0 flex-1 overflow-hidden bg-editor">
                                             {children}
                                         </main>
@@ -312,7 +353,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if (isSettings || isBranch || isStats) {
         const windowTitle = isBranch ? "Git" : isStats ? "Statistics" : "Settings";
         const body = (
-            <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-titlebar font-sans text-sm text-text-primary select-none">
+            <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
                 <Titlebar settings title={windowTitle} />
                 <main className="min-h-0 flex-1 overflow-hidden bg-editor">
                     {children}
@@ -362,7 +403,6 @@ function Content({ children }: { children: React.ReactNode }) {
             className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background select-none"
         >
             <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col">
-                <Titlebar />
                 <Main>{children}</Main>
                 {!zenMode && <Status />}
                 <LoginPromptDialog />

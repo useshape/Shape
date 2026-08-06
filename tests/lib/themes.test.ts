@@ -10,13 +10,14 @@ function withColorTheme(colorTheme: unknown): ShapeSettings {
 }
 
 describe("theme registry", () => {
-    it("registers dark, graphite, one, and purple", () => {
+    it("registers dark, graphite, one, and purple (Umber)", () => {
         expect(Object.keys(COLOR_THEMES).sort()).toEqual([
             "dark",
             "graphite",
             "one",
             "purple",
         ]);
+        expect(COLOR_THEMES.purple.label).toBe("Umber");
     });
 
     it("recognizes valid theme ids", () => {

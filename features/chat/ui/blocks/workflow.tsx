@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
-import { ApprovalBar } from "./approval";
+import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { diffLines } from "diff";
@@ -12,11 +12,12 @@ import { ChatMarkdown } from "../md/view";
 import { looksLikeProseMarkdown } from "../md/stream";
 import { openProjectFile } from "@/lib/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
+import { TerminalCommandStep } from "./terminal-live";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
-    "search", "grep", "status", "web_search", "web_result", "search_result",
+    "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
-    "think", "thought", "run", "tool_result", "edit", "terminal_command", "git_operation",
+    "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -395,7 +396,7 @@ function GitDiffGroup({
 function computeGroupHeader(visible: Chunk[]) {
     const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
     const hasExplore = visible.some((b) =>
-        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result"].includes(b.type),
+        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit"].includes(b.type),
     );
     const hasEdit = visible.some((b) =>
         ["edit", "create_file", "mkdir", "delete_file", "rename_file"].includes(b.type),
@@ -442,6 +443,18 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 expandable: !!block.content,
                 content: block.content,
             };
+        case "web_visit":
+            return {
+                label: block.isGenerating ? "Visiting" : "Visited",
+                query: block.visitHost || block.visitTitle || block.content,
+                file: undefined,
+                expandable: false,
+                faviconUrl: block.visitUrl || block.visitHost,
+                onClick: () => {
+                    const href = block.visitUrl;
+                    if (href) void commands.openUrlExternal(href);
+                },
+            };
         case "grep":
             return {
                 label: inFlight ? "Grepping" : "Grepped",
@@ -456,7 +469,7 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 expandable: false,
                 onClick: () => {
                     if (block.content) {
-                        window.dispatchEvent(new CustomEvent("shape-open-file", { detail: { path: block.content } }));
+                        void openProjectFile(block.content);
                     }
                 },
             };
@@ -500,6 +513,24 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
             const file = block.file || "";
             return {
                 label: block.isGenerating ? "Editing" : "Edited",
+                file,
+                expandable: false,
+                original: block.original,
+                replacement: block.replacement,
+            };
+        }
+        case "edit_pending": {
+            const file = block.file || "";
+            const label =
+                block.commandStatus === "applied"
+                    ? "Edited"
+                    : block.commandStatus === "rejected"
+                        ? "Rejected edit"
+                        : block.commandStatus === "cancelled"
+                            ? "Cancelled edit"
+                            : "Proposed edit";
+            return {
+                label,
                 file,
                 expandable: false,
                 original: block.original,
@@ -685,7 +716,7 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
             onClick={handleOpen}
             onKeyDown={(e) => { if (e.key === "Enter") handleOpen(); }}
             className={cn(
-                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs",
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm",
                 "border border-border-subtle bg-panel text-text-primary",
                 "cursor-pointer hover:bg-panel-hover",
             )}
@@ -693,67 +724,6 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
             <FileIcon name={fileName} className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate max-w-[180px]">{fileName}</span>
         </span>
-    );
-}
-
-export function TerminalApprovalRow({ block }: { block: Chunk }) {
-    const [status, setStatus] = useState(block.commandStatus || "pending");
-    const [isProcessing, setIsProcessing] = useState(false);
-
-    // Stay in sync when stream updates the pending → completed XML.
-    useEffect(() => {
-        if (block.commandStatus) setStatus(block.commandStatus);
-    }, [block.commandStatus]);
-
-    const handleApprove = useCallback(async () => {
-        if (!block.commandId || isProcessing) return;
-        setIsProcessing(true);
-        // Demo showcase commands are local-only.
-        if (block.commandId.startsWith("demo-")) {
-            setStatus("completed");
-            setIsProcessing(false);
-            return;
-        }
-        try {
-            await commands.approveTerminalCommand(block.commandId);
-            // Keep pending UI until the stream replaces this block with a completed one.
-        } catch {
-            setStatus("error");
-            setIsProcessing(false);
-        }
-    }, [block.commandId, isProcessing]);
-
-    const handleReject = useCallback(async () => {
-        if (!block.commandId || isProcessing) return;
-        setIsProcessing(true);
-        if (block.commandId.startsWith("demo-")) {
-            setStatus("rejected");
-            setIsProcessing(false);
-            return;
-        }
-        try {
-            await commands.rejectTerminalCommand(block.commandId);
-            setStatus("rejected");
-        } catch {
-            setStatus("error");
-        } finally {
-            setIsProcessing(false);
-        }
-    }, [block.commandId, isProcessing]);
-
-    if (status !== "pending") return null;
-
-    const command = block.command || block.content || "command";
-
-    return (
-        <ApprovalBar
-            label="Approve command"
-            subject={command}
-            acceptLabel="Run"
-            isProcessing={isProcessing}
-            onAccept={() => { void handleApprove(); }}
-            onReject={() => { void handleReject(); }}
-        />
     );
 }
 
@@ -784,8 +754,21 @@ function ActionItem({
 
     if (!config) return null;
 
-    if (block.type === "terminal_command" && block.commandStatus === "pending") {
-        return <TerminalApprovalRow block={block} />;
+    if (block.type === "terminal_command") {
+        return <TerminalCommandStep block={block} />;
+    }
+
+    if (block.type === "edit_pending" && (block.commandStatus || "pending") === "pending") {
+        // Edit approval cards live in TurnWorkflowSummary; keep a compact
+        // fallback if this legacy AgentWorkflow path still renders one.
+        return (
+            <div className="py-0.5 text-xs text-text-muted">
+                Pending edit approval for{" "}
+                <span className="text-text-secondary">
+                    {(block.file || "").split(/[\\/]/).pop() || "file"}
+                </span>
+            </div>
+        );
     }
 
     if (block.type === "git_operation" && block.gitOp === "status" && config.gitStatusLines?.length) {
@@ -855,11 +838,17 @@ function ActionItem({
                     {isEdit && editResolved ? "Applied" : config.label}
                 </span>
 
+                {"faviconUrl" in config && config.faviconUrl ? (
+                    <Favicon url={String(config.faviconUrl)} size={14} />
+                ) : null}
+
                 {config.query && (
                     <span className="text-sm text-text-muted truncate max-w-[260px]">
                         {typeof config.query === "string" && config.query.length > 60
                             ? `"${config.query.slice(0, 60)}…"`
-                            : `"${config.query}"`}
+                            : block.type === "web_visit"
+                              ? String(config.query)
+                              : `"${config.query}"`}
                     </span>
                 )}
 

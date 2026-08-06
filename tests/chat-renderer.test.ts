@@ -48,6 +48,17 @@ describe("parseMessageContent", () => {
         expect(cat?.catStartLine).toBe(1);
         expect(cat?.catEndLine).toBe(244);
     });
+    it("dedupes edit_pending chunks for the same id, keeping applied over pending", () => {
+        const text = [
+            '<edit_pending id="e1" file="src/a.ts" status="pending"><original>a</original><replacement>b</replacement></edit_pending>',
+            '<edit_pending id="e1" file="src/a.ts" status="applied"><original>a</original><replacement>b</replacement></edit_pending>',
+        ].join("\n");
+        const chunks = parseMessageContent(text);
+        const edits = chunks.filter((c) => c.type === "edit_pending");
+        expect(edits).toHaveLength(1);
+        expect(edits[0].commandStatus).toBe("applied");
+        expect(edits[0].file).toBe("src/a.ts");
+    });
 });
 
 describe("dedupeTerminalChunks", () => {
@@ -59,8 +70,39 @@ describe("dedupeTerminalChunks", () => {
         expect(result).toHaveLength(1);
         expect(result[0].commandStatus).toBe("completed");
     });
-});
 
+    it("dedupes edit_pending by id independently from terminal commands", () => {
+        const result = dedupeTerminalChunks([
+            {
+                type: "edit_pending",
+                commandId: "e1",
+                commandStatus: "pending",
+                file: "a.ts",
+                original: "x",
+                replacement: "y",
+            },
+            {
+                type: "edit_pending",
+                commandId: "e1",
+                commandStatus: "applied",
+                file: "a.ts",
+                original: "x",
+                replacement: "y",
+            },
+            {
+                type: "terminal_command",
+                commandId: "e1",
+                commandStatus: "pending",
+                command: "echo",
+            },
+        ]);
+        const edits = result.filter((c) => c.type === "edit_pending");
+        const terms = result.filter((c) => c.type === "terminal_command");
+        expect(edits).toHaveLength(1);
+        expect(edits[0].commandStatus).toBe("applied");
+        expect(terms).toHaveLength(1);
+    });
+});
 describe("preprocessChatMarkdown", () => {
     it("strips standalone horizontal rules", () => {
         expect(preprocessChatMarkdown("Hello\n---\nWorld")).toBe("Hello\n\nWorld");

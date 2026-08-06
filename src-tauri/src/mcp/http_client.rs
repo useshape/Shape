@@ -193,7 +193,11 @@ impl HttpMcpClient {
                     server_id: self.server_id.clone(),
                     server_name: self.server_name.clone(),
                     name: name.clone(),
-                    qualified_name: format!("mcp_{}_{}", self.server_id, name),
+                    qualified_name: format!(
+                        "mcp_{}_{}",
+                        crate::mcp::client::sanitize_name(&self.server_id),
+                        crate::mcp::client::sanitize_name(&name)
+                    ),
                     description,
                     input_schema,
                 })

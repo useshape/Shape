@@ -9,6 +9,8 @@ import { getShortcutForLabel } from "@/lib/ui/shortcuts";
 import { SHAPE_MODAL_PANEL_CLASS, SHAPE_OVERLAY_CLASS, SHAPE_OVERLAY_CONTENT_CLASS } from "@/lib/ui/modal-overlay";
 import { cn } from "@/lib/utils";
 import { isPopoutPath } from "@/lib/tauri-window";
+import { SETTINGS_CATEGORIES } from "@/features/settings/ui/settings-nav";
+import { openSettingsWindow } from "@/lib/open-settings";
 
 interface EditorAction {
     id: string;
@@ -16,10 +18,24 @@ interface EditorAction {
     shortcut: string;
     /** Optional file name used with FileIcon (e.g. `python.py`). */
     icon?: string;
+    /** Optional section header when browsing (Recent Agents, etc.). */
+    section?: string;
+    /** Right-side muted meta (path, relative time) — preferred over shortcut badges for browse rows. */
+    meta?: string;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     run: () => any;
     delete?: (e: React.MouseEvent) => void;
 }
+
+type PaletteFilter = "all" | "agents" | "files" | "actions" | "settings";
+
+const PALETTE_FILTERS: { id: PaletteFilter; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "agents", label: "Agents" },
+    { id: "files", label: "Files" },
+    { id: "actions", label: "Actions" },
+    { id: "settings", label: "Settings" },
+];
 
 interface CommandPaletteOpenDetail {
     mode?: string;
@@ -27,6 +43,62 @@ interface CommandPaletteOpenDetail {
     placeholder?: string;
     recent?: boolean;
     actions?: EditorAction[];
+}
+
+function isBrowseMode(mode: string): boolean {
+    return !mode || mode === "files";
+}
+
+function formatRelativeAgo(timestamp: number): string {
+    const now = Date.now() / 1000;
+    const diff = Math.max(0, now - timestamp);
+    const minutes = Math.floor(diff / 60);
+    const hours = Math.floor(diff / 3600);
+    const days = Math.floor(diff / 86400);
+    if (days >= 1) return `${days}d`;
+    if (hours >= 1) return `${hours}h`;
+    return `${Math.max(1, minutes)}m`;
+}
+
+function projectNameFromPath(path?: string | null): string {
+    if (!path) return "";
+    return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "";
+}
+
+function openAgentConversation(id: string, projectPath?: string | null) {
+    window.dispatchEvent(
+        new CustomEvent("shape-layout-toggle", {
+            detail: { id: "secondary-sidebar", value: true },
+        }),
+    );
+    void import("@/lib/backend").then(({ commands }) => {
+        void commands.loadConversation(id, projectPath ?? undefined).then(() => {
+            window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
+        });
+    });
+}
+
+function getSettingsPaletteActions(): EditorAction[] {
+    return [
+        {
+            id: "settings:open",
+            label: "Open Settings",
+            shortcut: "",
+            meta: "Settings",
+            section: "Settings",
+            run: () => window.dispatchEvent(new Event("shape-open-settings")),
+        },
+        ...SETTINGS_CATEGORIES.map((cat) => ({
+            id: `settings:${cat.id}`,
+            label: cat.label,
+            shortcut: "",
+            meta: "Settings",
+            section: "Settings",
+            run: () => {
+                void openSettingsWindow({ category: cat.id });
+            },
+        })),
+    ];
 }
 
 function shortcut(label: string) {
@@ -148,48 +220,55 @@ export function CommandPalette() {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [actions, setActions] = useState<EditorAction[]>([]);
+    const [agentActions, setAgentActions] = useState<EditorAction[]>([]);
+    const [fileActions, setFileActions] = useState<EditorAction[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [mode, setMode] = useState<string>("");
+    const [filterTab, setFilterTab] = useState<PaletteFilter>("all");
     const [recentFiles, setRecentFiles] = useState(false);
-    const [placeholder, setPlaceholder] = useState("Type a command...");
+    const [placeholder, setPlaceholder] = useState("Search agents, files, actions...");
     const listRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Listen for open event
+    const browse = isBrowseMode(mode);
+
     useEffect(() => {
         const handleOpen = (e?: Event) => {
             const customEvent = e as CustomEvent<CommandPaletteOpenDetail>;
             const detail = customEvent?.detail;
             const openMode = detail?.mode || "";
+            const requestedFilter = (detail?.filter || "") as PaletteFilter | "";
             setMode(openMode);
             setRecentFiles(Boolean(detail?.recent));
-            setPlaceholder(detail?.placeholder || (
-                openMode === "files" ? "Search files by name..."
-                    : openMode === "goto_line" ? "Line : Column"
-                        : openMode === "editor_symbols" ? "Search symbols in file…"
-                        : "Type a command..."
-            ));
+
+            if (requestedFilter && PALETTE_FILTERS.some((f) => f.id === requestedFilter)) {
+                setFilterTab(requestedFilter);
+            } else if (openMode === "files") {
+                setFilterTab("files");
+            } else if (!openMode) {
+                setFilterTab("all");
+            }
+
+            const defaultPlaceholder = browsePlaceholder(openMode, requestedFilter || (openMode === "files" ? "files" : "all"));
+            setPlaceholder(detail?.placeholder || defaultPlaceholder);
+
             if (openMode === "workspace_symbols") {
                 import("@/features/editor/lsp/workspace-symbols").then(({ buildWorkspaceSymbolActions }) => {
                     buildWorkspaceSymbolActions().then((symbolActions) => {
                         setActions(symbolActions);
-                        setQuery(detail?.filter || "");
+                        setQuery(detail?.filter && !PALETTE_FILTERS.some((f) => f.id === detail.filter) ? detail.filter : "");
                         setOpen(true);
                     });
                 });
-            } else if (openMode === "files") {
-                setActions([]);
-                setQuery(detail?.filter || "");
-                setOpen(true);
             } else if (openMode === "goto_line") {
                 setActions([]);
                 setQuery(detail?.filter || "");
                 setOpen(true);
             } else if (openMode === "editor_symbols") {
                 import("@/features/editor/lsp/document-symbols").then(({ buildDocumentSymbolActions }) => {
-                    buildDocumentSymbolActions(detail?.filter || "").then((symbolActions) => {
+                    buildDocumentSymbolActions("").then((symbolActions) => {
                         setActions(symbolActions);
-                        setQuery(detail?.filter || "");
+                        setQuery("");
                         setOpen(true);
                     });
                 });
@@ -197,21 +276,23 @@ export function CommandPalette() {
                 setActions(detail.actions);
                 setQuery(detail.filter || "");
                 setOpen(true);
-            } else if (detail?.actions?.length) {
+            } else if (detail?.actions?.length && openMode && openMode !== "files") {
                 setActions(detail.actions);
                 setQuery(detail.filter || "");
                 setOpen(true);
             } else {
-                // Get actions from the current Monaco editor
-                const editorActions = getMonacoActions();
-                setActions(editorActions);
-                setQuery(detail?.filter || "");
+                // Browse mode: All / Agents / Files / Actions / Settings
+                setActions(getMonacoActions());
+                setQuery(
+                    detail?.filter && !PALETTE_FILTERS.some((f) => f.id === detail.filter)
+                        ? detail.filter
+                        : "",
+                );
                 setOpen(true);
             }
         };
         window.addEventListener("shape-command-palette", handleOpen);
 
-        // Ctrl+Shift+P / F1 — Shape palette (also stolen from Monaco via suppress-monaco-native-ui)
         const handleKeyDown = (e: KeyboardEvent) => {
             const isPaletteChord =
                 ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") ||
@@ -229,33 +310,107 @@ export function CommandPalette() {
         };
     }, []);
 
-    // Handler for open/close changes
     const handleOpenChange = useCallback((value: boolean) => {
         setOpen(value);
         if (!value) {
             setQuery("");
             setSelectedIndex(0);
             setMode("");
+            setFilterTab("all");
             setRecentFiles(false);
             setActions([]);
-            setPlaceholder("Type a command...");
+            setAgentActions([]);
+            setFileActions([]);
+            setPlaceholder("Search agents, files, actions...");
         }
     }, []);
 
-    // Filter actions based on query
-    const filtered = useMemo(() => {
-        if (!query.trim()) return actions;
-        const q = query.toLowerCase();
-        return actions
-            .map((action) => ({
-                action,
-                score: Math.max(fuzzyScore(q, action.label), fuzzyScore(q, action.id) * 0.8),
-            }))
-            .filter((entry) => entry.score > 0)
-            .sort((a, b) => b.score - a.score)
-            .map((entry) => entry.action);
-    }, [actions, query]);
+    // Load agents when browsing
+    useEffect(() => {
+        if (!open || !browse) return;
+        if (filterTab !== "all" && filterTab !== "agents") {
+            setAgentActions([]);
+            return;
+        }
+        void import("@/lib/backend").then(({ commands }) => {
+            void commands.getConversations().then((convs) => {
+                setAgentActions(
+                    convs.slice(0, 40).map((conv) => {
+                        const project = projectNameFromPath(conv.project_path);
+                        const rel = formatRelativeAgo(conv.timestamp);
+                        return {
+                            id: `agent:${conv.id}`,
+                            label: conv.title || "Untitled",
+                            shortcut: "",
+                            meta: [project, rel].filter(Boolean).join(" "),
+                            section: "Recent Agents",
+                            run: () => openAgentConversation(conv.id, conv.project_path),
+                            delete: (e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                void commands.deleteConversation(conv.id).then(() => {
+                                    setAgentActions((prev) => prev.filter((a) => a.id !== `agent:${conv.id}`));
+                                    window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
+                                });
+                            },
+                        } satisfies EditorAction;
+                    }),
+                );
+            }).catch(() => setAgentActions([]));
+        });
+    }, [open, browse, filterTab]);
 
+    // Load files when browsing files / all
+    useEffect(() => {
+        if (!open || !browse) return;
+        if (filterTab !== "all" && filterTab !== "files") {
+            setFileActions([]);
+            return;
+        }
+        const handle = window.setTimeout(() => {
+            if (query.length > 0 && query.length < 2 && filterTab === "files") {
+                setFileActions([]);
+                return;
+            }
+            void import("@/lib/backend").then(({ commands }) => {
+                if ((recentFiles || filterTab === "all") && !query.trim()) {
+                    void commands.getProjectState().then((state) => {
+                        const ordered = [...state.open_files].reverse().slice(0, 12);
+                        setFileActions(
+                            ordered.map((file) => ({
+                                id: `file:${file.path}`,
+                                label: file.name,
+                                shortcut: "",
+                                meta: file.path.replace(/\\/g, "/"),
+                                section: "Recent Files",
+                                icon: file.name,
+                                run: () => commands.setActiveFile(file.path),
+                            })),
+                        );
+                    }).catch(() => setFileActions([]));
+                    return;
+                }
+                void commands.searchProjectFiles(query, 80)
+                    .then((results) => {
+                        setFileActions(
+                            results.map((result) => ({
+                                id: `file:${result.path}`,
+                                label: result.name,
+                                shortcut: "",
+                                meta: result.relative_path,
+                                section: "Files",
+                                icon: result.name,
+                                run: () => commands.openFile(result.path, result.name),
+                            })),
+                        );
+                    })
+                    .catch(() => setFileActions([]));
+            });
+        }, query.trim() ? 140 : 0);
+        return () => window.clearTimeout(handle);
+    }, [open, browse, filterTab, query, recentFiles]);
+
+    // Legacy mode: files-only when mode===files still uses fileActions via browse
     useEffect(() => {
         if (mode !== "editor_symbols" || !open) return;
         const handle = window.setTimeout(() => {
@@ -276,64 +431,69 @@ export function CommandPalette() {
         return () => window.clearTimeout(handle);
     }, [mode, open, query]);
 
-    useEffect(() => {
-        if (mode !== "files" || !open) return;
-        const handle = window.setTimeout(() => {
-            if (query.length > 0 && query.length < 2) {
-                setActions([]);
-                return;
-            }
-            if (recentFiles && !query.trim()) {
-                import("@/lib/backend").then(({ commands }) => {
-                    commands.getProjectState().then((state) => {
-                        const active = state.active_file;
-                        const ordered = [...state.open_files];
-                        if (active) {
-                            const idx = ordered.findIndex((f) => f.path === active);
-                            if (idx > 0) {
-                                const [item] = ordered.splice(idx, 1);
-                                ordered.unshift(item);
-                            }
-                        }
-                        ordered.reverse();
-                        setActions(ordered.map((file) => ({
-                            id: `file:${file.path}`,
-                            label: file.name,
-                            shortcut: file.path,
-                            run: () => commands.setActiveFile(file.path),
-                        })));
-                    }).catch(() => setActions([]));
-                });
-                return;
-            }
-            import("@/lib/backend").then(({ commands }) => {
-                commands.searchProjectFiles(query, 80)
-                    .then((results) => {
-                        setActions(results.map((result) => ({
-                            id: `file:${result.path}`,
-                            label: result.name,
-                            shortcut: result.relative_path,
-                            run: () => commands.openFile(result.path, result.name),
-                        })));
-                    })
-                    .catch(() => setActions([]));
-            });
-        }, query.trim() ? 140 : 0);
-        return () => window.clearTimeout(handle);
-    }, [mode, open, query, recentFiles]);
+    const actionCommands = useMemo(() => {
+        if (!browse) return actions;
+        // getMonacoActions() already merges app + editor commands
+        return actions.map((a) => ({ ...a, section: a.section || "Skills & Commands" }));
+    }, [browse, actions]);
 
-    // Scroll selected item into view
+    const settingsCommands = useMemo(() => getSettingsPaletteActions(), []);
+
+    const filtered = useMemo(() => {
+        if (!browse) {
+            if (!query.trim()) return actions;
+            const q = query.toLowerCase();
+            return actions
+                .map((action) => ({
+                    action,
+                    score: Math.max(fuzzyScore(q, action.label), fuzzyScore(q, action.id) * 0.8),
+                }))
+                .filter((entry) => entry.score > 0)
+                .sort((a, b) => b.score - a.score)
+                .map((entry) => entry.action);
+        }
+
+        let pool: EditorAction[] = [];
+        if (filterTab === "all") {
+            pool = [...agentActions.slice(0, 8), ...fileActions.slice(0, 8), ...actionCommands.slice(0, 24), ...settingsCommands.slice(0, 8)];
+        } else if (filterTab === "agents") {
+            pool = agentActions;
+        } else if (filterTab === "files") {
+            pool = fileActions;
+        } else if (filterTab === "actions") {
+            pool = actionCommands;
+        } else if (filterTab === "settings") {
+            pool = settingsCommands;
+        }
+
+        if (!query.trim()) return pool;
+        const q = query.toLowerCase();
+        return pool
+            .map((action) => ({
+                action,
+                score: Math.max(
+                    fuzzyScore(q, action.label),
+                    fuzzyScore(q, action.meta || "") * 0.7,
+                    fuzzyScore(q, action.id) * 0.5,
+                ),
+            }))
+            .filter((entry) => entry.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((entry) => entry.action);
+    }, [browse, actions, filterTab, agentActions, fileActions, actionCommands, settingsCommands, query]);
+
+    useEffect(() => {
+        setSelectedIndex(0);
+    }, [filterTab, query, open]);
+
     useEffect(() => {
         if (!listRef.current) return;
-        const item = listRef.current.children[selectedIndex] as HTMLElement;
-        if (item) {
-            item.scrollIntoView({ block: "nearest" });
-        }
+        const item = listRef.current.querySelector(`[data-palette-index="${selectedIndex}"]`) as HTMLElement | null;
+        item?.scrollIntoView({ block: "nearest" });
     }, [selectedIndex]);
 
     const runAction = useCallback((action: EditorAction) => {
         setOpen(false);
-        // Defer so the dialog fully closes and editor regains focus
         setTimeout(() => {
             try {
                 action.run();
@@ -343,10 +503,23 @@ export function CommandPalette() {
         }, 50);
     }, []);
 
+    const cycleFilter = useCallback((dir: 1 | -1) => {
+        if (!browse) return;
+        const idx = PALETTE_FILTERS.findIndex((f) => f.id === filterTab);
+        const next = (idx + dir + PALETTE_FILTERS.length) % PALETTE_FILTERS.length;
+        setFilterTab(PALETTE_FILTERS[next].id);
+        setSelectedIndex(0);
+    }, [browse, filterTab]);
+
     const onInputKeyDown = (e: React.KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === "[" || e.key === "]")) {
+            e.preventDefault();
+            cycleFilter(e.key === "]" ? 1 : -1);
+            return;
+        }
         if (e.key === "ArrowDown") {
             e.preventDefault();
-            setSelectedIndex((idx) => Math.min(idx + 1, filtered.length - 1));
+            setSelectedIndex((idx) => Math.min(idx + 1, Math.max(filtered.length - 1, 0)));
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
             setSelectedIndex((idx) => Math.max(idx - 1, 0));
@@ -370,6 +543,10 @@ export function CommandPalette() {
         }
     };
 
+    // Group for section headers when query empty in browse
+    const showSections = browse && !query.trim();
+    let lastSection = "";
+
     return (
         <Dialog.Root open={open} onOpenChange={handleOpenChange}>
             <Dialog.Portal>
@@ -377,16 +554,15 @@ export function CommandPalette() {
                 <Dialog.Content className={cn(
                     SHAPE_OVERLAY_CONTENT_CLASS,
                     SHAPE_MODAL_PANEL_CLASS,
-                    "fixed top-[12%] left-1/2 -translate-x-1/2 w-full max-w-[640px] overflow-hidden focus:outline-none",
+                    "fixed top-[12%] left-1/2 -translate-x-1/2 flex w-full max-w-[640px] flex-col overflow-hidden focus:outline-none",
                 )}>
                     <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
-                    <Dialog.Description className="sr-only">Search commands</Dialog.Description>
-                    <div className="flex items-center gap-2 px-3 h-10 border-b border-border-subtle">
-                        {!mode && <span className="text-text-muted text-lg shrink-0">&gt;</span>}
-                        {mode === "files" && <Icon name="insert_drive_file" size={14} className="text-text-muted shrink-0" />}
+                    <Dialog.Description className="sr-only">Search agents, files, and actions</Dialog.Description>
+                    <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border-subtle px-3">
+                        <Icon name="search" size={15} className="shrink-0 text-text-muted" />
                         <input
                             ref={inputRef}
-                            className="h-9 border-none bg-transparent px-0 text-sm outline-none flex-1 text-text-primary placeholder:text-text-muted font-sans"
+                            className="h-10 flex-1 border-none bg-transparent px-0 font-sans text-sm text-text-primary outline-none placeholder:text-text-muted"
                             placeholder={placeholder}
                             autoFocus
                             value={query}
@@ -398,57 +574,134 @@ export function CommandPalette() {
                         />
                     </div>
 
+                    {browse ? (
+                        <div className="flex shrink-0 items-center gap-1 border-b border-border-subtle px-3 py-2">
+                            {PALETTE_FILTERS.map((f) => (
+                                <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setFilterTab(f.id);
+                                        setSelectedIndex(0);
+                                    }}
+                                    className={cn(
+                                        "rounded-md px-2.5 py-1 text-xs transition-colors",
+                                        filterTab === f.id
+                                            ? "bg-surface-3 text-text-primary"
+                                            : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
+                                    )}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    ) : null}
+
                     <div
                         ref={listRef}
-                        className="py-1 max-h-[420px] overflow-y-auto overflow-x-hidden custom-scrollbar"
+                        className="max-h-[420px] min-h-0 flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar py-1"
                     >
                         {filtered.length === 0 && (
-                            <div className="px-4 py-6 text-sm text-text-muted text-center">
+                            <div className="px-4 py-6 text-center text-sm text-text-muted">
                                 {mode === "goto_line"
                                     ? "Line number, optional column (e.g. 42:10)"
                                     : mode === "editor_symbols"
                                       ? "No symbols in the current file"
-                                      : "No matching commands"}
+                                      : filterTab === "agents"
+                                        ? "No agents yet"
+                                        : "No matching results"}
                             </div>
                         )}
-                        {filtered.map((action, idx) => (
-                            <div
-                                key={action.id}
-                                role="button"
-                                tabIndex={0}
-                                className={`mx-1 min-w-0 text-left px-3 py-1.5 group flex items-center justify-between cursor-pointer rounded-lg ${idx === selectedIndex ? "bg-panel-hover text-text-primary" : "hover:bg-panel-hover text-text-secondary"
-                                    }`}
-                                onMouseEnter={() => setSelectedIndex(idx)}
-                                onClick={() => runAction(action)}
-                            >
-                                <div className="flex items-center overflow-hidden min-w-0 flex-1 gap-2">
-                                    {mode === "files" && <FileIcon name={action.label} className="w-4 h-4 shrink-0 opacity-70" />}
-                                    {!mode && action.icon && (
-                                        <FileIcon name={action.icon} className="w-4 h-4 shrink-0 opacity-70" />
-                                    )}
-                                    <span className="text-xs truncate min-w-0">
-                                        {action.label}
-                                    </span>
-                                </div>
-                                <div className="flex items-center min-w-0">
-                                    <ShortcutBadge shortcut={action.shortcut} />
-                                    {action.delete && (
-                                        <button
-                                            onClick={action.delete}
-                                            className="ml-2 p-1 rounded text-text-muted hover:text-error hover:bg-error/10 transition-colors shrink-0"
-                                            title="Delete chat"
-                                        >
-                                            <Icon name="delete" size={14} />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                        {filtered.map((action, idx) => {
+                            const section = showSections ? action.section : undefined;
+                            const showHeader = Boolean(section && section !== lastSection);
+                            if (section) lastSection = section;
+                            return (
+                                <React.Fragment key={action.id}>
+                                    {showHeader ? (
+                                        <div className="px-3 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-text-muted">
+                                            {section}
+                                        </div>
+                                    ) : null}
+                                    <div
+                                        data-palette-index={idx}
+                                        role="button"
+                                        tabIndex={0}
+                                        className={cn(
+                                            "mx-1 flex min-w-0 cursor-pointer items-center justify-between rounded-lg px-3 py-1.5 text-left",
+                                            idx === selectedIndex
+                                                ? "bg-panel-hover text-text-primary"
+                                                : "text-text-secondary hover:bg-panel-hover",
+                                        )}
+                                        onMouseEnter={() => setSelectedIndex(idx)}
+                                        onClick={() => runAction(action)}
+                                    >
+                                        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                                            {(browse && (filterTab === "files" || action.id.startsWith("file:"))) || mode === "files" ? (
+                                                <FileIcon name={action.icon || action.label} className="h-4 w-4 shrink-0 opacity-70" />
+                                            ) : null}
+                                            {browse && action.id.startsWith("agent:") ? (
+                                                <Icon name="agents" size={14} className="shrink-0 text-text-muted" />
+                                            ) : null}
+                                            {!browse && action.icon ? (
+                                                <FileIcon name={action.icon} className="h-4 w-4 shrink-0 opacity-70" />
+                                            ) : null}
+                                            <span className="min-w-0 truncate text-sm">{action.label}</span>
+                                        </div>
+                                        <div className="flex min-w-0 items-center">
+                                            {action.meta ? (
+                                                <span className="ml-2 max-w-[220px] truncate text-xs text-text-muted">
+                                                    {action.meta}
+                                                </span>
+                                            ) : (
+                                                <ShortcutBadge shortcut={action.shortcut} />
+                                            )}
+                                            {action.delete ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={action.delete}
+                                                    className="ml-2 shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-error/10 hover:text-error"
+                                                    title="Delete"
+                                                >
+                                                    <Icon name="delete" size={14} />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                </React.Fragment>
+                            );
+                        })}
                     </div>
+
+                    {browse ? (
+                        <div className="flex shrink-0 items-center gap-4 border-t border-border-subtle px-3 py-2 text-2xs text-text-muted">
+                            <span>
+                                <kbd className="text-text-secondary">↑↓</kbd> Select
+                            </span>
+                            <span>
+                                <kbd className="text-text-secondary">⏎</kbd> Open
+                            </span>
+                            <span>
+                                <kbd className="text-text-secondary">Ctrl+[</kbd>
+                                {" or "}
+                                <kbd className="text-text-secondary">Ctrl+]</kbd>
+                                {" Change Filter"}
+                            </span>
+                        </div>
+                    ) : null}
                 </Dialog.Content>
             </Dialog.Portal>
         </Dialog.Root>
     );
+}
+
+function browsePlaceholder(mode: string, filter: string): string {
+    if (mode === "goto_line") return "Line : Column";
+    if (mode === "editor_symbols") return "Search symbols in file…";
+    if (mode === "workspace_symbols") return "Search symbols in workspace…";
+    if (filter === "files" || mode === "files") return "Search files by name...";
+    if (filter === "agents") return "Search agents…";
+    return "Search agents, files, actions...";
 }
 
 /**
@@ -712,6 +965,15 @@ function getAppCommands(): EditorAction[] {
             },
         },
         {
+            id: "app.view.preview",
+            label: "View: Show Preview",
+            shortcut: "",
+            run: () => {
+                window.dispatchEvent(new Event("shape-open-preview"));
+                window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
+            },
+        },
+        {
             id: "app.view.terminal",
             label: "View: Toggle Terminal Panel",
             shortcut: shortcut("Terminal"),
@@ -772,9 +1034,14 @@ function getAppCommands(): EditorAction[] {
                         detail: { id: "secondary-sidebar", value: true },
                     }),
                 );
-                import("@/features/chat/ui/shell/history").then(({ openChatHistoryMenu }) => {
-                    window.requestAnimationFrame(() => openChatHistoryMenu());
-                });
+                window.dispatchEvent(
+                    new CustomEvent("shape-command-palette", {
+                        detail: {
+                            filter: "agents",
+                            placeholder: "Search agents…",
+                        },
+                    }),
+                );
             },
         },
         // ── Editor settings ────────────────────────────────────────────────────

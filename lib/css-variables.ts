@@ -127,27 +127,38 @@ function getCssVariableSection(name: string, kind: CssVariableKind): CssVariable
 
     if (
         n === "background" ||
+        n === "chrome" ||
+        n === "base" ||
         n.startsWith("surface-") ||
         n.startsWith("panel") ||
         n.startsWith("editor") ||
         n.startsWith("sidebar") ||
         n.startsWith("titlebar") ||
         n.startsWith("activitybar") ||
-        n.startsWith("statusbar") ||
-        n.startsWith("neutral-")
+        n.startsWith("statusbar")
     ) {
         return "background";
     }
 
     if (n.startsWith("text-") || n === "foreground") return "text";
-    if (n.startsWith("border")) return "border";
+    if (n.startsWith("border") || n === "stroke") return "border";
     if (n.includes("shadow") || n.startsWith("z-") || n.includes("z-index")) return "effects";
     if (
         n.includes("accent") ||
+        n === "brand" ||
+        n === "focus" ||
+        n === "action-label" ||
         n.includes("error") ||
         n.includes("warning") ||
+        n.includes("warn") ||
+        n.includes("danger") ||
         n.includes("success") ||
-        n.includes("info")
+        n.includes("info") ||
+        n === "added" ||
+        n === "modified" ||
+        n === "removed" ||
+        n === "untracked" ||
+        n.startsWith("diff-")
     ) {
         return "accent";
     }

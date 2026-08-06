@@ -14,7 +14,7 @@ function formatStatusLabel(label: string, elapsedSec: number): string {
 /**
  * Single status line shown at the bottom of a streaming message. Shows the
  * real current activity (from backend chat_status events) or a generic
- * "Working" shimmer  -  never fake rotating labels.
+ * "Working" label, animated with a gradient shimmer inside the text.
  */
 export function GeneratingIndicator({ label }: { label?: string }) {
     const [elapsedSec, setElapsedSec] = React.useState(0);
@@ -39,9 +39,8 @@ export function GeneratingIndicator({ label }: { label?: string }) {
         : "Working";
 
     return (
-        <div className="flex items-center gap-2 py-1.5 px-1 animate-in fade-in duration-300">
-            <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
-            <span className="text-sm font-medium tracking-tight text-text-muted whitespace-nowrap">
+        <div className="flex items-center py-1.5 px-1 animate-in fade-in duration-300">
+            <span className="ai-shimmer-text text-sm font-medium tracking-tight whitespace-nowrap">
                 {display}
             </span>
         </div>

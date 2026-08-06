@@ -7,10 +7,10 @@ export const activityBarClassName =
     "flex flex-col items-stretch w-[36px] h-full shrink-0 overflow-y-auto no-scrollbar";
 
 const itemClassName =
-    "group relative flex items-center justify-center w-full h-10 shrink-0 border-none bg-transparent p-0 outline-none cursor-pointer text-white/52 hover:text-white transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]";
+    "group relative flex items-center justify-center w-full h-9 shrink-0 border-none bg-transparent p-0 outline-none cursor-pointer text-white/52 hover:text-white transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]";
 
 const iconClassName =
-    "flex items-center justify-center size-8 rounded-lg transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] group-hover:bg-white/10 group-[.is-active]:bg-white/10";
+    "flex items-center justify-center size-7 rounded-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] group-hover:bg-white/10 group-[.is-active]:bg-white/10";
 
 export function ActivityBarItem({
     label,

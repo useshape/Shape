@@ -21,7 +21,7 @@ export function ActivityBar({
 
     return (
         <nav
-            className={cn(activityBarClassName, "h-full justify-between py-1")}
+            className={cn(activityBarClassName, "h-full justify-between py-0.5")}
             aria-label="Active View Switcher"
         >
             <div className="flex flex-col items-stretch">

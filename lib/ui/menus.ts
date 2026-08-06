@@ -57,6 +57,8 @@ export function buildMenuStructure(): Record<string, MenuItem[]> {
             { label: "Git Graph", shortcut: getShortcutForLabel("Git Graph") },
             { label: "Outline", shortcut: getShortcutForLabel("Outline") },
             { label: "Problems", shortcut: getShortcutForLabel("Problems") },
+            { label: "Output" },
+            { label: "Preview" },
 
             { type: "separator" },
             { label: "AI Chat", shortcut: getShortcutForLabel("AI Chat") },
@@ -117,5 +119,57 @@ export function buildMenuStructure(): Record<string, MenuItem[]> {
     };
 }
 
+/** Agent window menubar — File / Edit / View / Selection / Help. */
+export function buildAgentMenuStructure(): Record<string, MenuItem[]> {
+    return {
+        File: [
+            { label: "New Chat" },
+            { label: "Open Folder", shortcut: getShortcutForLabel("Open Folder") },
+            { type: "separator" },
+            { label: "Settings", shortcut: getShortcutForLabel("Settings") },
+            { type: "separator" },
+            { label: "Close Window", shortcut: getShortcutForLabel("Close Window") },
+            { label: "Exit" },
+        ],
+        Edit: [
+            { label: "Undo", shortcut: getShortcutForLabel("Undo") },
+            { label: "Redo", shortcut: getShortcutForLabel("Redo") },
+            { type: "separator" },
+            { label: "Cut", shortcut: getShortcutForLabel("Cut") },
+            { label: "Copy", shortcut: getShortcutForLabel("Copy") },
+            { label: "Paste", shortcut: getShortcutForLabel("Paste") },
+            { type: "separator" },
+            { label: "Find in Files", shortcut: getShortcutForLabel("Find in Files") },
+        ],
+        View: [
+            { label: "Command Palette...", shortcut: getShortcutForLabel("Command Palette...") },
+            { type: "separator" },
+            { label: "Toggle Sessions" },
+            { label: "Toggle Panel" },
+            { label: "Changes" },
+            { label: "Preview" },
+            { label: "Terminal" },
+            { type: "separator" },
+            { label: "Open Editor Window" },
+        ],
+        Selection: [
+            { label: "Select All", shortcut: getShortcutForLabel("Select All") },
+            { type: "separator" },
+            { label: "Copy", shortcut: getShortcutForLabel("Copy") },
+            { label: "Cut", shortcut: getShortcutForLabel("Cut") },
+            { label: "Paste", shortcut: getShortcutForLabel("Paste") },
+        ],
+        Help: [
+            { label: "Documentation" },
+            { label: "Release Notes" },
+            { type: "separator" },
+            { label: "Report Issue" },
+            { type: "separator" },
+            { label: "About" },
+        ],
+    };
+}
+
 // For backwards compatibility: a static snapshot (computed once at module init)
 export const menuStructure = buildMenuStructure();
+export const agentMenuStructure = buildAgentMenuStructure();

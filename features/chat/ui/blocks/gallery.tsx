@@ -29,8 +29,7 @@ function resolveSrc(path: string): string {
 }
 
 /**
- * Single interactive component preview, fixed in the chat column.
- * No lightbox, no multi-card picker, no Select — reply in chat to continue.
+ * Full-width preview card; iframe fills the card and the sandbox centers the component.
  */
 export function DesignPreviewGallery({
     previews,
@@ -47,39 +46,21 @@ export function DesignPreviewGallery({
 
     const html = isHtmlPreview(item);
     const src = resolveSrc(item.path);
-    const frameW = Math.min(Math.max(item.width || 640, 280), 900);
-    const frameH = Math.min(Math.max(item.height || 360, 160), 520);
+    const frameH = Math.min(Math.max(item.height || 360, 200), 480);
 
     return (
-        <div className="my-2 w-full max-w-full overflow-hidden rounded-lg border border-border-subtle bg-panel">
-            {(item.name || item.style) && (
-                <div className="flex items-baseline gap-2 border-b border-border-subtle px-2.5 py-1.5">
-                    {item.name ? (
-                        <span className="truncate text-xs font-medium text-text-primary">
-                            {item.name}
-                        </span>
-                    ) : null}
-                    {item.style ? (
-                        <span className="truncate text-[11px] text-text-muted">{item.style}</span>
-                    ) : null}
-                </div>
+        <div
+            className={cn(
+                "my-2 w-full max-w-full overflow-hidden rounded-lg border border-border-subtle",
+                "bg-zinc-950",
             )}
-            <div
-                className={cn(
-                    "relative w-full overflow-auto bg-white",
-                    "max-h-[min(520px,55vh)]",
-                )}
-            >
+        >
+            <div className="relative w-full overflow-hidden" style={{ height: frameH }}>
                 {html ? (
                     <iframe
                         title={item.name || "Component preview"}
                         src={src}
-                        className="block border-0"
-                        style={{
-                            width: frameW,
-                            height: frameH,
-                            maxWidth: "100%",
-                        }}
+                        className="absolute inset-0 h-full w-full border-0"
                         sandbox="allow-scripts allow-same-origin"
                     />
                 ) : (
@@ -87,7 +68,7 @@ export function DesignPreviewGallery({
                     <img
                         src={src}
                         alt={item.name || "Preview"}
-                        className="block h-auto max-h-[min(520px,55vh)] w-full object-contain object-top"
+                        className="absolute inset-0 h-full w-full object-contain object-center"
                         draggable={false}
                     />
                 )}

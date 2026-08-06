@@ -1,83 +1,79 @@
 @import "tailwindcss";
-@import "@fontsource/inter/400.css";
-@import "@fontsource/inter/500.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 
 :root {
-  /* ── Surface ladder (dark) ─────────────────────────────── */
+  /* ── Surface ladder ────────────────────────────────────── */
   --surface-0: #1A1A1A;
   --surface-1: #1b1b1b;
   --surface-2: #1a1a1a;
   --surface-3: #242424;
 
-  /* neutral scale (for migration, please don't use this) */
-  --neutral-50: #fafafa;
-  --neutral-100: #f5f5f5;
-  --neutral-150: #ededed;
-  --neutral-200: #e5e5e5;
-  --neutral-250: #dcdcdc;
-  --neutral-300: #d4d4d4;
-  --neutral-350: #bbbbbb;
-  --neutral-400: #a3a3a3;
-  --neutral-450: #8b8b8b;
-  --neutral-500: #737373;
-  --neutral-550: #626262;
-  --neutral-600: #525252;
-  --neutral-650: #494949;
-  --neutral-700: #404040;
-  --neutral-750: #333333;
-  --neutral-800: #262626;
-  --neutral-850: #1e1e1e;
-  --neutral-900: #171717;
-  --neutral-950: #141414;
+  /* ── Role surfaces (Modern UI–style) ───────────────────── */
+  --chrome: #161616;
+  --sidebar: #1a1a1a;
+  --editor: #161616;
+  --base: #ededee;
 
-  /* ── Semantic surfaces ─────────────────────────────────── */
-  --background: #141414;
-  --foreground: #ededee;
-
-  --panel: #1a1a1a;
+  /* Compat aliases for existing class names */
+  --background: var(--chrome);
+  --foreground: var(--base);
+  --panel: var(--sidebar);
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(145, 145, 145, 0.08);
   --panel-hover: rgba(255, 255, 255, 0.04);
-
-  --titlebar: var(--background);
+  --titlebar: var(--chrome);
   --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #141414;
-  --editor-secondary: var(--neutral-850);
+  --editor-secondary: var(--surface-1);
   --statusbar: transparent;
   --statusbar-fg: var(--text-primary);
 
   /* ── Text ──────────────────────────────────────────────── */
-  --text-primary: #ededee;
+  --text-primary: var(--base);
   --text-secondary: #a1a1a6;
   --text-muted: #ffffff73;
   --text-disabled: #ffffff48;
   --text-active: #ffffff;
 
-  /* ── Borders ───────────────────────────────────────────── */
+  /* ── Borders / stroke ──────────────────────────────────── */
   --border: rgba(255, 255, 255, 0.068);
   --border-subtle: rgba(255, 255, 255, 0.034);
   --border-secondary: rgba(255, 255, 255, 0.1);
-  --border-focus: var(--accent);
+  --stroke: 1px;
 
-  /* ── Ember accent ──────────────────────────────────────── */
-  --accent: #5661ff;
-  --accent-hover: #6e89ff;
-  --accent-fg: #ffffff;
+  /* ── Actions ───────────────────────────────────────────── */
+  --accent: #3946FF;
+  --accent-hover: #4365FF;
+  --action-label: #ffffff;
+  --brand: var(--accent);
+  --focus: var(--accent);
+  --accent-fg: var(--action-label);
+  --border-focus: var(--focus);
 
-  /* ── Semantic status (desaturated for dark) ──────────── */
-  --error: #e5484d;
-  --warning: #f5a623;
+  /* ── Status ────────────────────────────────────────────── */
   --success: #4ade80;
+  --warn: #f5a623;
+  --danger: #e5484d;
   --info: #6eb5ff;
+  /* Compat */
+  --error: var(--danger);
+  --warning: var(--warn);
 
-  /* ── Git status ────────────────────────────────────────── */
-  --git-modified: #e2c08d;
-  --git-added: #73c991;
-  --git-deleted: #e4676b;
+  /* ── Git / SCM ─────────────────────────────────────────── */
+  --added: #73c991;
+  --modified: #e2c08d;
+  --removed: #e4676b;
+  --untracked: #73c991;
+  --git-added: var(--added);
+  --git-modified: var(--modified);
+  --git-deleted: var(--removed);
   --git-conflict: #f97316;
+
+  /* ── Diff backgrounds ──────────────────────────────────── */
+  --diff-added-line-bg: rgba(115, 201, 145, 0.15);
+  --diff-added-text-bg: rgba(115, 201, 145, 0.28);
+  --diff-removed-line-bg: rgba(228, 103, 107, 0.15);
+  --diff-removed-text-bg: rgba(228, 103, 107, 0.28);
 
   /* ── Inputs & buttons ──────────────────────────────────── */
   --input-bg: var(--surface-2);
@@ -85,7 +81,7 @@
   --input-placeholder: var(--text-muted);
 
   --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
+  --button-fg: var(--action-label);
   --button-hover: var(--accent-hover);
   --button-secondary-bg: var(--surface-2);
   --button-secondary-fg: var(--text-primary);
@@ -95,14 +91,19 @@
   --scrollbar-hover: rgba(255, 255, 255, 0.25);
 
   /* ── Geometry ──────────────────────────────────────────── */
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 10px;
+  --radius-none: 0px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
+  --radius-full: 9999px;
 
-  /* Floating workbench panels */
-  --workbench-gap: 8px;
-  --workbench-panel-radius: 10px;
+  /* Flush workbench columns — hairline borders run full height (no float gap). */
+  --workbench-gap: 0px;
+  --workbench-panel-radius: 0px;
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -118,23 +119,39 @@
   --titlebar-height: 34px;
   --statusbar-height: 30px;
 
-  /* ── Typography (px tokens — predictable on desktop, independent of rem root) */
-  /* Quoted + sans fallbacks: if Inter fails to load, browsers otherwise use Times. */
-  --font-ui: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* ── Typography (11/12/13/14; Geist Sans — same family as Conductor) ── */
+  --font-ui: var(--font-geist-sans), "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
 
   /* Font rendering */
   --font-smoothing: antialiased;
   --font-smoothing-moz: grayscale;
 
   --text-2xs: 11px;
-  --text-xs: 13px;
+  --text-xs: 12px;
   --text-sm: 13px;
   --text-base: 13px;
   --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 17px;
+  --text-lg: 14px;
+  --text-xl: 16px;
   --text-2xl: 18px;
+
+  --line-height-xs: 14px;
+  --line-height-sm: 16px;
+  --line-height-base: 18px;
+  --line-height-lg: 20px;
+
+  --conversation-text-font-size: var(--text-md);
+  --conversation-tool-font-size: var(--text-base);
+  --conversation-tray-font-size: var(--text-base);
+  --conversation-font-size: var(--conversation-text-font-size);
+  /* Conductor-like body copy: roomy, not condensed */
+  --conversation-line-height: 1.7;
+  --conversation-block-gap: 10px;
+  --conversation-list-item-gap: 6px;
 
   --tracking-tight: -0.02em;
   --tracking-normal: 0;
@@ -162,198 +179,148 @@
   --focus-border: transparent;
 }
 
-/* ── Purple theme (dark purple surfaces; leaves :root intact) ── */
+/* ── Umber (id: purple) — warm brownish-red charcoal ─────── */
 [data-theme="purple"] {
-  --surface-0: #16121c;
-  --surface-1: #1a1522;
-  --surface-2: #1e1828;
-  --surface-3: #2a2238;
+  --surface-0: #1a1514;
+  --surface-1: #1e1816;
+  --surface-2: #221c1a;
+  --surface-3: #2c2421;
 
-  --background: #120e18;
-  --foreground: #efe8f8;
+  --chrome: #161211;
+  --sidebar: #1e1816;
+  --editor: #161211;
+  --base: #e8e0d8;
 
-  --panel: #1a1522;
-  --panel-secondary: var(--surface-2);
-  --panel-active: rgba(167, 139, 250, 0.12);
-  --panel-hover: rgba(255, 255, 255, 0.05);
+  /* Neutral selection — no loud tint */
+  --panel-active: rgba(255, 255, 255, 0.07);
+  --panel-hover: rgba(255, 255, 255, 0.04);
+  --editor-secondary: #1e1816;
 
-  --titlebar: var(--background);
-  --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #120e18;
-  --editor-secondary: #1a1522;
-  --statusbar: transparent;
-  --statusbar-fg: var(--text-primary);
+  --text-secondary: #a8998c;
+  --text-muted: rgba(232, 224, 216, 0.42);
+  --text-disabled: rgba(232, 224, 216, 0.26);
+  --text-active: #f5efe8;
 
-  --text-primary: #efe8f8;
-  --text-secondary: #b5a8c9;
-  --text-muted: rgba(239, 232, 248, 0.45);
-  --text-disabled: rgba(239, 232, 248, 0.28);
-  --text-active: #ffffff;
+  --border: rgba(232, 224, 216, 0.09);
+  --border-subtle: rgba(232, 224, 216, 0.05);
+  --border-secondary: rgba(232, 224, 216, 0.14);
 
-  --border: rgba(196, 181, 253, 0.12);
-  --border-subtle: rgba(196, 181, 253, 0.06);
-  --border-secondary: rgba(196, 181, 253, 0.18);
-  --border-focus: var(--accent);
+  --accent: #c4a484;
+  --accent-hover: #d4b896;
+  --action-label: #1a1514;
+  --brand: var(--accent);
+  --focus: var(--accent);
 
-  --accent: #a78bfa;
-  --accent-hover: #c4b5fd;
-  --accent-fg: #120e18;
+  --danger: #d47878;
+  --warn: #d4a574;
+  --success: #7aab84;
+  --info: #a8998c;
 
-  --error: #f87171;
-  --warning: #fbbf24;
-  --success: #4ade80;
-  --info: #93c5fd;
+  --added: #7aab84;
+  --modified: #d4a574;
+  --removed: #d47878;
+  --untracked: #7aab84;
+  --git-conflict: #d4a574;
 
-  --git-modified: #e2c08d;
-  --git-added: #73c991;
-  --git-deleted: #e4676b;
-  --git-conflict: #f97316;
-
-  --input-bg: var(--surface-2);
-  --input-border: var(--border);
-  --input-placeholder: var(--text-muted);
-
-  --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
-  --button-hover: var(--accent-hover);
-  --button-secondary-bg: var(--surface-3);
-  --button-secondary-fg: var(--text-primary);
-  --button-secondary-hover: #342a45;
-
-  --scrollbar: rgba(196, 181, 253, 0.2);
-  --scrollbar-hover: rgba(196, 181, 253, 0.35);
-
+  --button-secondary-hover: #322926;
+  --scrollbar: rgba(232, 224, 216, 0.14);
+  --scrollbar-hover: rgba(232, 224, 216, 0.28);
   --overlay-scrim: transparent;
 }
 
-/* ── Graphite theme (Zed-style neutral charcoal, blue accent) ── */
+/* ── Graphite — deeper charcoal, calm neutrals (no blue wash) ── */
 [data-theme="graphite"] {
-  --surface-0: #111111;
-  --surface-1: #151515;
-  --surface-2: #191919;
-  --surface-3: #212121;
+  --surface-0: #0e0e0e;
+  --surface-1: #121212;
+  --surface-2: #161616;
+  --surface-3: #1e1e1e;
 
-  --background: #111111;
-  --foreground: #e4e4e7;
+  --chrome: #0c0c0c;
+  --sidebar: #121212;
+  --editor: #0c0c0c;
+  --base: #d4d4d4;
 
-  --panel: #151515;
-  --panel-secondary: var(--surface-2);
-  --panel-active: rgba(77, 128, 247, 0.12);
+  --panel-active: rgba(255, 255, 255, 0.08);
   --panel-hover: rgba(255, 255, 255, 0.04);
+  --editor-secondary: #161616;
 
-  --titlebar: var(--background);
-  --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #111111;
-  --editor-secondary: #191919;
-  --statusbar: transparent;
-  --statusbar-fg: var(--text-primary);
+  --text-secondary: #8e8e8e;
+  --text-muted: rgba(212, 212, 212, 0.42);
+  --text-disabled: rgba(212, 212, 212, 0.26);
+  --text-active: #f0f0f0;
 
-  --text-primary: #e4e4e7;
-  --text-secondary: #9a9a9e;
-  --text-muted: rgba(228, 228, 231, 0.45);
-  --text-disabled: rgba(228, 228, 231, 0.28);
-  --text-active: #ffffff;
-
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.07);
   --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-secondary: rgba(255, 255, 255, 0.12);
-  --border-focus: var(--accent);
+  --border-secondary: rgba(255, 255, 255, 0.11);
 
-  --accent: #4d80f7;
-  --accent-hover: #6a97f9;
-  --accent-fg: #ffffff;
+  --accent: #b0b0b0;
+  --accent-hover: #c8c8c8;
+  --action-label: #0c0c0c;
+  --brand: var(--accent);
+  --focus: rgba(255, 255, 255, 0.35);
 
-  --error: #e5484d;
-  --warning: #f5a623;
-  --success: #4ade80;
-  --info: #4d80f7;
+  --danger: #c96b6b;
+  --warn: #c9a06a;
+  --success: #6fa87a;
+  --info: #8e8e8e;
 
-  --git-modified: #e2c08d;
-  --git-added: #73c991;
-  --git-deleted: #e4676b;
-  --git-conflict: #f97316;
+  --added: #6fa87a;
+  --modified: #c9a06a;
+  --removed: #c96b6b;
+  --untracked: #6fa87a;
+  --git-conflict: #c9a06a;
 
-  --input-bg: var(--surface-2);
-  --input-border: var(--border);
-  --input-placeholder: var(--text-muted);
-
-  --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
-  --button-hover: var(--accent-hover);
-  --button-secondary-bg: var(--surface-3);
-  --button-secondary-fg: var(--text-primary);
-  --button-secondary-hover: #2a2a2a;
-
-  --scrollbar: rgba(255, 255, 255, 0.15);
-  --scrollbar-hover: rgba(255, 255, 255, 0.25);
-
+  --button-secondary-hover: #262626;
+  --scrollbar: rgba(255, 255, 255, 0.12);
+  --scrollbar-hover: rgba(255, 255, 255, 0.22);
   --overlay-scrim: transparent;
 }
 
-/* ── One theme (One Dark — the Atom classic) ── */
+/* ── One — soft slate, muted teal (calm, not Atom-loud) ── */
 [data-theme="one"] {
-  --surface-0: #282c34;
-  --surface-1: #262a32;
-  --surface-2: #21252b;
-  --surface-3: #2c313a;
+  --surface-0: #1c1f24;
+  --surface-1: #20242a;
+  --surface-2: #23272e;
+  --surface-3: #2c3138;
 
-  --background: #282c34;
-  --foreground: #abb2bf;
+  --chrome: #181b20;
+  --sidebar: #20242a;
+  --editor: #181b20;
+  --base: #c5cad3;
 
-  --panel: #21252b;
-  --panel-secondary: var(--surface-2);
-  --panel-active: rgba(97, 175, 239, 0.14);
+  --panel-active: rgba(255, 255, 255, 0.07);
   --panel-hover: rgba(255, 255, 255, 0.04);
+  --editor-secondary: #20242a;
 
-  --titlebar: var(--background);
-  --activitybar: transparent;
-  --sidebar: var(--panel);
-  --editor: #282c34;
-  --editor-secondary: #21252b;
-  --statusbar: transparent;
-  --statusbar-fg: var(--text-primary);
+  --text-secondary: #8b929e;
+  --text-muted: rgba(197, 202, 211, 0.42);
+  --text-disabled: rgba(197, 202, 211, 0.26);
+  --text-active: #e8ebf0;
 
-  --text-primary: #abb2bf;
-  --text-secondary: #828997;
-  --text-muted: rgba(171, 178, 191, 0.5);
-  --text-disabled: rgba(171, 178, 191, 0.3);
-  --text-active: #ffffff;
+  --border: rgba(197, 202, 211, 0.09);
+  --border-subtle: rgba(197, 202, 211, 0.05);
+  --border-secondary: rgba(197, 202, 211, 0.14);
 
-  --border: rgba(171, 178, 191, 0.12);
-  --border-subtle: rgba(171, 178, 191, 0.06);
-  --border-secondary: rgba(171, 178, 191, 0.18);
-  --border-focus: var(--accent);
+  --accent: #7aa2a8;
+  --accent-hover: #8eb4b9;
+  --action-label: #181b20;
+  --brand: var(--accent);
+  --focus: var(--accent);
 
-  --accent: #61afef;
-  --accent-hover: #7dc0f5;
-  --accent-fg: #1e2127;
+  --danger: #c97a82;
+  --warn: #c9b07a;
+  --success: #7aab8a;
+  --info: #7aa2a8;
 
-  --error: #e06c75;
-  --warning: #e5c07b;
-  --success: #98c379;
-  --info: #56b6c2;
+  --added: #7aab8a;
+  --modified: #c9b07a;
+  --removed: #c97a82;
+  --untracked: #7aab8a;
+  --git-conflict: #c9b07a;
 
-  --git-modified: #e5c07b;
-  --git-added: #98c379;
-  --git-deleted: #e06c75;
-  --git-conflict: #e5a55d;
-
-  --input-bg: var(--surface-2);
-  --input-border: var(--border);
-  --input-placeholder: var(--text-muted);
-
-  --button-bg: var(--accent);
-  --button-fg: var(--accent-fg);
-  --button-hover: var(--accent-hover);
-  --button-secondary-bg: var(--surface-3);
-  --button-secondary-fg: var(--text-primary);
-  --button-secondary-hover: #333842;
-
-  --scrollbar: rgba(171, 178, 191, 0.2);
-  --scrollbar-hover: rgba(171, 178, 191, 0.35);
-
+  --button-secondary-hover: #343a44;
+  --scrollbar: rgba(197, 202, 211, 0.14);
+  --scrollbar-hover: rgba(197, 202, 211, 0.28);
   --overlay-scrim: transparent;
 }
 
@@ -362,41 +329,32 @@
 }
 
 @theme inline {
-  --color-neutral-50: var(--neutral-50);
-  --color-neutral-100: var(--neutral-100);
-  --color-neutral-150: var(--neutral-150);
-  --color-neutral-200: var(--neutral-200);
-  --color-neutral-250: var(--neutral-250);
-  --color-neutral-300: var(--neutral-300);
-  --color-neutral-350: var(--neutral-350);
-  --color-neutral-400: var(--neutral-400);
-  --color-neutral-450: var(--neutral-450);
-  --color-neutral-500: var(--neutral-500);
-  --color-neutral-550: var(--neutral-550);
-  --color-neutral-600: var(--neutral-600);
-  --color-neutral-650: var(--neutral-650);
-  --color-neutral-700: var(--neutral-700);
-  --color-neutral-750: var(--neutral-750);
-  --color-neutral-800: var(--neutral-800);
-  --color-neutral-850: var(--neutral-850);
-  --color-neutral-900: var(--neutral-900);
-  --color-neutral-950: var(--neutral-950);
-
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
 
+  --color-chrome: var(--chrome);
+  --color-sidebar: var(--sidebar);
+  --color-editor: var(--editor);
+  --color-base: var(--base);
+  --color-brand: var(--brand);
+  --color-focus: var(--focus);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-added: var(--added);
+  --color-modified: var(--modified);
+  --color-removed: var(--removed);
+  --color-untracked: var(--untracked);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-titlebar: var(--titlebar);
   --color-activitybar: var(--activitybar);
-  --color-sidebar: var(--sidebar);
   --color-panel: var(--panel);
   --color-panel-secondary: var(--panel-secondary);
   --color-panel-active: var(--panel-active);
   --color-panel-hover: var(--panel-hover);
-  --color-editor: var(--editor);
   --color-editor-secondary: var(--editor-secondary);
   --color-statusbar: var(--statusbar);
   --color-statusbar-fg: var(--statusbar-fg);
@@ -520,15 +478,19 @@
 @utility h-statusbar { height: var(--statusbar-height); }
 
 html {
+  /* Keep rem root at 13px so Tailwind spacing (p-2, gap-3, …) matches the rest of the IDE. */
   font-size: 13px;
   font-family: var(--font-ui);
-  -webkit-font-smoothing: var(--font-smoothing);
-  -moz-osx-font-smoothing: var(--font-smoothing-moz);
-  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   font-synthesis: none;
   font-synthesis-weight: none;
   font-synthesis-style: none;
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  letter-spacing: -0.011em;
 }
 
 body {
@@ -536,9 +498,13 @@ body {
   color: var(--foreground);
   font-family: var(--font-ui);
   font-size: var(--text-base);
-  -webkit-font-smoothing: var(--font-smoothing);
-  -moz-osx-font-smoothing: var(--font-smoothing-moz);
-  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  letter-spacing: -0.011em;
 }
 
 /* Monaco editor surface — dark background, no default light border */
@@ -647,48 +613,54 @@ body {
 .chat-markdown-body {
   font-family: var(--font-ui);
   font-weight: 400;
+  font-size: var(--conversation-font-size);
+  line-height: var(--conversation-line-height);
+  letter-spacing: -0.006em;
   color: var(--text-primary);
 }
 
 .chat-markdown strong,
 .chat-markdown-body strong {
-  font-weight: 500;
+  font-weight: 560;
 }
 
-/* ── Prose compact - tight markdown rendering ───────────── */
+/* ── Prose — comfortable markdown (Conductor density) ───── */
 .prose-compact p {
-  margin-top: 0.65em;
-  margin-bottom: 0.65em;
+  margin-top: 0.85em;
+  margin-bottom: 0.85em;
 }
 
 .prose-compact h1,
 .prose-compact h2,
 .prose-compact h3,
 .prose-compact h4 {
-  margin-top: 1em;
-  margin-bottom: 0.4em;
+  margin-top: 1.25em;
+  margin-bottom: 0.55em;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
 }
 
 .prose-compact ul,
 .prose-compact ol {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-  padding-left: 1.25em;
+  margin-top: 0.7em;
+  margin-bottom: 0.7em;
+  padding-left: 1.35em;
 }
 
 .prose-compact li {
-  margin-top: 0.2em;
-  margin-bottom: 0.2em;
+  margin-top: 0.35em;
+  margin-bottom: 0.35em;
+  line-height: var(--conversation-line-height);
 }
 
 .prose-compact blockquote {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
 }
 
 .prose-compact pre {
-  margin-top: 0.75em;
-  margin-bottom: 0.75em;
+  margin-top: 0.9em;
+  margin-bottom: 0.9em;
   background: var(--surface-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -915,12 +887,33 @@ body {
   overflow-block: clip;
 }
 
-/* ── Floating workbench panels ─────────────────────────── */
+/* ── Sharp workbench panels (editor chrome) ─────────────── */
 .workbench-panel {
   height: 100%;
   width: 100%;
-  border-radius: var(--workbench-panel-radius);
+  border-radius: 0;
   overflow: hidden;
+}
+
+/* Outer floating card: gutter + perimeter stroke + radius.
+   Prefer this over flush layout seams (border-r / titlebar underlines). */
+.floating-panel {
+  margin: var(--workbench-gap);
+  border: var(--stroke) solid var(--border);
+  border-radius: var(--workbench-panel-radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+@keyframes agent-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Long user messages: visually shorten with bottom fade (content still intact). */
@@ -935,6 +928,62 @@ body {
 .chat-stream-fade-in {
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+}
+
+/* ── AI status shimmer: animated gradient sweeping through the text ── */
+@keyframes ai-text-shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+.ai-shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--text-disabled) 0%,
+    var(--text-disabled) 35%,
+    var(--text-primary) 50%,
+    var(--text-disabled) 65%,
+    var(--text-disabled) 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: ai-text-shimmer 2.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-shimmer-text {
+    animation: none;
+    background-image: none;
+    color: var(--text-muted);
+    -webkit-text-fill-color: var(--text-muted);
+  }
+}
+
+/* ── Smooth expand/collapse for chat workflow dropdowns ── */
+.chat-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.33, 1, 0.68, 1),
+    opacity 180ms ease;
+}
+
+.chat-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.chat-collapse > .chat-collapse-inner {
+  overflow: hidden;
+  min-width: 0;
 }
 
 /* ── Allotment Split View Theme ───────────────────────────── */

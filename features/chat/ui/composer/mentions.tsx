@@ -4,11 +4,14 @@ import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "r
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
+import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { formatMentionToken, type ChatMention } from "@/lib/chat-mentions";
 import { listDesignPreviewSessions } from "@/lib/design-preview-store";
 import { getTextareaCaretViewportRect } from "@/lib/textarea-caret";
+import { hostnameOf } from "@/lib/favicon";
+import { getPreviewCurrentUrl } from "@/features/preview/store";
 
 type CategoryId = "files" | "docs" | "terminals" | "chats" | "branch" | "browser" | "design" | null;
 
@@ -47,7 +50,7 @@ export function MentionPicker({
     onPick: (token: string) => void;
     onClose: () => void;
     anchorRef?: RefObject<HTMLTextAreaElement | null>;
-    /** Caret index used to place the menu next to the `@`. */
+    /** Index of the `@` that opened the menu (not the caret end of the query). */
     caretIndex?: number;
 }) {
     const { project_path } = useProjectState();
@@ -56,6 +59,7 @@ export function MentionPicker({
     const [activeCategory, setActiveCategory] = useState<CategoryId>(null);
     const [highlight, setHighlight] = useState(0);
     const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
+    const [menuEl, setMenuEl] = useState<HTMLDivElement | null>(null);
 
     useLayoutEffect(() => {
         if (!open) {
@@ -65,10 +69,12 @@ export function MentionPicker({
         const el = anchorRef?.current;
         const update = () => {
             if (!el) return;
-            const caret = typeof caretIndex === "number" ? caretIndex : el.selectionStart ?? 0;
-            const caretRect = getTextareaCaretViewportRect(el, caret);
+            // Anchor to the `@` character so the menu stays next to the mention, not the typing caret.
+            const atIndex = typeof caretIndex === "number" ? caretIndex : el.selectionStart ?? 0;
+            const caretRect = getTextareaCaretViewportRect(el, atIndex);
             const width = 280;
-            const menuHeight = 280;
+            const measured = menuEl?.offsetHeight;
+            const menuHeight = measured && measured > 0 ? measured : 240;
             let left = caretRect.left;
             let top = caretRect.top - menuHeight - 6;
             if (top < 8) {
@@ -86,7 +92,7 @@ export function MentionPicker({
             window.removeEventListener("scroll", update, true);
             el?.removeEventListener("scroll", update);
         };
-    }, [open, anchorRef, caretIndex, query]);
+    }, [open, anchorRef, caretIndex, query, activeCategory, menuEl, files.length, chats.length]);
 
     useEffect(() => {
         if (!open) {
@@ -196,7 +202,8 @@ export function MentionPicker({
                 .map((c) => ({
                     kind: "chat" as const,
                     path: c.id,
-                    label: c.title,
+                    id: c.id,
+                    label: c.title || "Chat",
                 }));
         }
         if (activeCategory === "design") {
@@ -211,7 +218,26 @@ export function MentionPicker({
             return [{ kind: "branch" as const, path: "main", label: "Diff with main" }];
         }
         if (activeCategory === "browser") {
-            return [{ kind: "browser" as const, path: "current", label: "Current page" }];
+            const raw = query.trim();
+            const host = hostnameOf(raw);
+            const currentUrl = getPreviewCurrentUrl();
+            const items: ChatMention[] = [
+                {
+                    kind: "browser" as const,
+                    path: currentUrl || "current",
+                    label: currentUrl
+                        ? `Current page (${hostnameOf(currentUrl) || currentUrl})`
+                        : "Current page",
+                },
+            ];
+            if (host && /\./.test(host)) {
+                items.unshift({
+                    kind: "browser",
+                    path: /^https?:\/\//i.test(raw) ? raw : `https://${host}`,
+                    label: host,
+                });
+            }
+            return items;
         }
         return [];
     }, [activeCategory, fileMentions, files, chats, designItems, query]);
@@ -260,6 +286,7 @@ export function MentionPicker({
 
     return createPortal(
         <div
+            ref={setMenuEl}
             className="fixed z-[200] max-h-72 overflow-hidden rounded-xl border border-border-subtle bg-surface-3 shadow-md"
             style={{ left: pos.left, top: pos.top, width: pos.width }}
         >
@@ -298,6 +325,8 @@ export function MentionPicker({
                         >
                             {item.kind === "file" || item.kind === "folder" || item.kind === "docs" ? (
                                 <FileIcon name={item.label} className="h-3.5 w-3.5 shrink-0" />
+                            ) : item.kind === "browser" && item.path && item.path !== "current" ? (
+                                <Favicon url={item.path} size={14} />
                             ) : (
                                 <Icon
                                     name={
@@ -322,9 +351,11 @@ export function MentionPicker({
                                 />
                             )}
                             <span className="min-w-0 truncate font-medium text-text-primary">
-                                {item.label}
+                                {item.kind === "browser" && item.path && item.path !== "current"
+                                    ? `Visit ${item.label}`
+                                    : item.label}
                             </span>
-                            {item.path && item.kind !== "design" ? (
+                            {item.path && item.kind !== "design" && item.kind !== "browser" && item.kind !== "chat" ? (
                                 <span className="ml-auto max-w-[45%] truncate text-xs text-text-muted">
                                     {pathDir(item.path) || item.path}
                                 </span>
