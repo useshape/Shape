@@ -15,9 +15,79 @@ export type SettingsNavGroup = {
     children: SettingsNavLeaf[];
 };
 
+/** Cursor-style flat sidebar categories (primary nav). */
+export type SettingsCategoryId =
+    | "account"
+    | "agents"
+    | "editor"
+    | "terminal"
+    | "git"
+    | "languages"
+    | "appearance"
+    | "application";
+
+export type SettingsCategory = {
+    id: SettingsCategoryId;
+    label: string;
+    icon: string;
+    /** Optional search keywords */
+    keywords?: string[];
+};
+
+export const SETTINGS_CATEGORIES: SettingsCategory[] = [
+    {
+        id: "account",
+        label: "Account",
+        icon: "person",
+        keywords: ["profile", "billing", "plan", "login"],
+    },
+    {
+        id: "agents",
+        label: "Agents",
+        icon: "auto_awesome",
+        keywords: ["ai", "models", "mcp", "rules", "context"],
+    },
+    {
+        id: "editor",
+        label: "Editor",
+        icon: "code",
+        keywords: ["font", "indent", "caret", "save", "files", "design"],
+    },
+    {
+        id: "terminal",
+        label: "Terminal",
+        icon: "terminal",
+        keywords: ["shell", "scrollback"],
+    },
+    {
+        id: "git",
+        label: "Git",
+        icon: "commit",
+        keywords: ["source", "control", "scm"],
+    },
+    {
+        id: "languages",
+        label: "Languages",
+        icon: "language",
+        keywords: ["lsp", "eslint", "prettier", "node", "python"],
+    },
+    {
+        id: "appearance",
+        label: "Appearance",
+        icon: "palette",
+        keywords: ["theme", "color"],
+    },
+    {
+        id: "application",
+        label: "Application",
+        icon: "settings",
+        keywords: ["updates", "notifications", "privacy", "telemetry", "developer", "reset"],
+    },
+];
+
 /**
- * VS Code-style tree: group headers are categories; leaves are sections.
- * Never reuse a group label as a leaf label (e.g. Account > Account).
+ * Legacy VS Code-style tree kept for deep-link target ids / IntersectionObserver.
+ * Primary UX uses SETTINGS_CATEGORIES.
  */
 export const SETTINGS_NAV: SettingsNavGroup[] = [
     {
@@ -79,4 +149,28 @@ export function allSettingsLeaves(): SettingsNavLeaf[] {
 
 export function findLeafByTarget(targetId: string): SettingsNavLeaf | undefined {
     return allSettingsLeaves().find((l) => l.targetId === targetId);
+}
+
+/** Map legacy leaf / group ids to a flat category. */
+export function categoryForLeafId(leafId: string): SettingsCategoryId {
+    if (leafId.startsWith("account")) return "account";
+    if (leafId.startsWith("ai") || leafId.startsWith("mcp")) return "agents";
+    if (leafId.startsWith("editor")) return "editor";
+    if (leafId === "terminal") return "terminal";
+    if (leafId === "git") return "git";
+    if (
+        leafId === "languages" ||
+        leafId === "node" ||
+        leafId === "python" ||
+        leafId === "tools-lint"
+    ) {
+        return "languages";
+    }
+    if (leafId === "appearance") return "appearance";
+    return "application";
+}
+
+export function categoryForTargetId(targetId: string): SettingsCategoryId | null {
+    const leaf = findLeafByTarget(targetId);
+    return leaf ? categoryForLeafId(leaf.id) : null;
 }

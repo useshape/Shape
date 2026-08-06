@@ -308,7 +308,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                                         id="shape-agent"
                                         className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-text-primary select-none"
                                     >
-                                        <Titlebar agent />
                                         <main className="min-h-0 flex-1 overflow-hidden bg-editor">
                                             {children}
                                         </main>
@@ -351,7 +350,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if (isSettings || isBranch || isStats) {
         const windowTitle = isBranch ? "Git" : isStats ? "Statistics" : "Settings";
         const body = (
-            <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-titlebar font-sans text-sm text-text-primary select-none">
+            <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
                 <Titlebar settings title={windowTitle} />
                 <main className="min-h-0 flex-1 overflow-hidden bg-editor">
                     {children}
@@ -399,7 +398,6 @@ function Content({ children }: { children: React.ReactNode }) {
             className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background select-none"
         >
             <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col">
-                <Titlebar />
                 <Main>{children}</Main>
                 {!zenMode && <Status />}
                 <LoginPromptDialog />

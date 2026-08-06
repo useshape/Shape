@@ -31,6 +31,8 @@ let state: PreviewState = {
 
 /** True while we are applying back/forward from our stack (skip re-recording). */
 let applyingStackNav = false;
+/** Expected URL while stack-navigating — ignore unrelated Resource Timing noise. */
+let stackNavTarget: string | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -206,6 +208,7 @@ export function previewBack() {
     const index = state.index - 1;
     const url = state.history[index]!;
     applyingStackNav = true;
+    stackNavTarget = url;
     setState({
         index,
         iframeSrc: url,
@@ -221,6 +224,7 @@ export function previewForward() {
     const index = state.index + 1;
     const url = state.history[index]!;
     applyingStackNav = true;
+    stackNavTarget = url;
     setState({
         index,
         iframeSrc: url,
@@ -233,13 +237,10 @@ export function previewForward() {
 
 export function endPreviewStackNav() {
     applyingStackNav = false;
+    stackNavTarget = null;
 }
 
 export function recordPreviewLocation(raw: string) {
-    if (applyingStackNav) {
-        applyingStackNav = false;
-        return;
-    }
     let url: string;
     try {
         url = normalizePreviewUrl(raw);
@@ -247,6 +248,19 @@ export function recordPreviewLocation(raw: string) {
         return;
     }
     if (!isLocalPreviewUrl(url)) return;
+
+    if (applyingStackNav) {
+        // Keep the flag until we land on the intended URL (or close enough).
+        // Spurious Resource Timing entries must not clear the guard early.
+        if (stackNavTarget && !previewUrlsEqual(url, stackNavTarget)) {
+            return;
+        }
+        applyingStackNav = false;
+        stackNavTarget = null;
+        setState({ urlBar: url, error: null });
+        return;
+    }
+
     if (state.index >= 0 && previewUrlsEqual(state.history[state.index]!, url)) {
         setState({ urlBar: url, error: null });
         return;
@@ -267,6 +281,7 @@ export function previewReload() {
     const url = getPreviewCurrentUrl();
     if (!url) return;
     applyingStackNav = true;
+    stackNavTarget = url;
     setState({
         iframeSrc: url,
         reloadKey: state.reloadKey + 1,

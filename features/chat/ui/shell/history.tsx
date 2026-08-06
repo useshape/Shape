@@ -26,7 +26,14 @@ function formatConversationDate(timestamp: number): string {
 }
 
 export function openChatHistoryMenu() {
-    window.dispatchEvent(new Event(CHAT_HISTORY_OPEN_EVENT));
+    window.dispatchEvent(
+        new CustomEvent("shape-command-palette", {
+            detail: {
+                filter: "agents",
+                placeholder: "Search agents, files, actions...",
+            },
+        }),
+    );
 }
 
 export function ChatHistoryMenu({

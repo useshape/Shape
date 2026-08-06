@@ -1,7 +1,4 @@
 @import "tailwindcss";
-@import "@fontsource/inter/400.css";
-@import "@fontsource/inter/500.css";
-@import "@fontsource/inter/600.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 
@@ -104,9 +101,9 @@
   --radius-3xl: 16px;
   --radius-full: 9999px;
 
-  /* Floating workbench panels */
-  --workbench-gap: 8px;
-  --workbench-panel-radius: var(--radius-xl);
+  /* Flush workbench columns — hairline borders run full height (no float gap). */
+  --workbench-gap: 0px;
+  --workbench-panel-radius: 0px;
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -122,8 +119,8 @@
   --titlebar-height: 34px;
   --statusbar-height: 30px;
 
-  /* ── Typography (11/12/13/14 scale; Inter — must be @imported above) ── */
-  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ── Typography (11/12/13/14; Geist Sans — same family as Conductor) ── */
+  --font-ui: var(--font-geist-sans), "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
@@ -147,11 +144,12 @@
   --line-height-base: 18px;
   --line-height-lg: 20px;
 
-  --conversation-text-font-size: var(--text-base);
+  --conversation-text-font-size: var(--text-md);
   --conversation-tool-font-size: var(--text-base);
   --conversation-tray-font-size: var(--text-base);
   --conversation-font-size: var(--conversation-text-font-size);
-  --conversation-line-height: 1.6;
+  /* Conductor-like body copy: roomy, not condensed */
+  --conversation-line-height: 1.7;
   --conversation-block-gap: 10px;
   --conversation-list-item-gap: 6px;
 
@@ -181,147 +179,148 @@
   --focus-border: transparent;
 }
 
-/* ── Purple theme (dark purple surfaces; leaves :root intact) ── */
+/* ── Umber (id: purple) — warm brownish-red charcoal ─────── */
 [data-theme="purple"] {
-  --surface-0: #16121c;
-  --surface-1: #1a1522;
-  --surface-2: #1e1828;
-  --surface-3: #2a2238;
+  --surface-0: #1a1514;
+  --surface-1: #1e1816;
+  --surface-2: #221c1a;
+  --surface-3: #2c2421;
 
-  --chrome: #120e18;
-  --sidebar: #1a1522;
-  --editor: #120e18;
-  --base: #efe8f8;
+  --chrome: #161211;
+  --sidebar: #1e1816;
+  --editor: #161211;
+  --base: #e8e0d8;
 
-  --panel-active: rgba(167, 139, 250, 0.12);
-  --panel-hover: rgba(255, 255, 255, 0.05);
-  --editor-secondary: #1a1522;
+  /* Neutral selection — no loud tint */
+  --panel-active: rgba(255, 255, 255, 0.07);
+  --panel-hover: rgba(255, 255, 255, 0.04);
+  --editor-secondary: #1e1816;
 
-  --text-secondary: #b5a8c9;
-  --text-muted: rgba(239, 232, 248, 0.45);
-  --text-disabled: rgba(239, 232, 248, 0.28);
-  --text-active: #ffffff;
+  --text-secondary: #a8998c;
+  --text-muted: rgba(232, 224, 216, 0.42);
+  --text-disabled: rgba(232, 224, 216, 0.26);
+  --text-active: #f5efe8;
 
-  --border: rgba(196, 181, 253, 0.12);
-  --border-subtle: rgba(196, 181, 253, 0.06);
-  --border-secondary: rgba(196, 181, 253, 0.18);
+  --border: rgba(232, 224, 216, 0.09);
+  --border-subtle: rgba(232, 224, 216, 0.05);
+  --border-secondary: rgba(232, 224, 216, 0.14);
 
-  --accent: #a78bfa;
-  --accent-hover: #c4b5fd;
-  --action-label: #120e18;
+  --accent: #c4a484;
+  --accent-hover: #d4b896;
+  --action-label: #1a1514;
   --brand: var(--accent);
   --focus: var(--accent);
 
-  --danger: #f87171;
-  --warn: #fbbf24;
-  --success: #4ade80;
-  --info: #93c5fd;
+  --danger: #d47878;
+  --warn: #d4a574;
+  --success: #7aab84;
+  --info: #a8998c;
 
-  --added: #73c991;
-  --modified: #e2c08d;
-  --removed: #e4676b;
-  --untracked: #73c991;
-  --git-conflict: #f97316;
+  --added: #7aab84;
+  --modified: #d4a574;
+  --removed: #d47878;
+  --untracked: #7aab84;
+  --git-conflict: #d4a574;
 
-  --button-secondary-hover: #342a45;
-  --scrollbar: rgba(196, 181, 253, 0.2);
-  --scrollbar-hover: rgba(196, 181, 253, 0.35);
+  --button-secondary-hover: #322926;
+  --scrollbar: rgba(232, 224, 216, 0.14);
+  --scrollbar-hover: rgba(232, 224, 216, 0.28);
   --overlay-scrim: transparent;
 }
 
-/* ── Graphite theme (Zed-style neutral charcoal, blue accent) ── */
+/* ── Graphite — deeper charcoal, calm neutrals (no blue wash) ── */
 [data-theme="graphite"] {
-  --surface-0: #111111;
-  --surface-1: #151515;
-  --surface-2: #191919;
-  --surface-3: #212121;
+  --surface-0: #0e0e0e;
+  --surface-1: #121212;
+  --surface-2: #161616;
+  --surface-3: #1e1e1e;
 
-  --chrome: #111111;
-  --sidebar: #151515;
-  --editor: #111111;
-  --base: #e4e4e7;
+  --chrome: #0c0c0c;
+  --sidebar: #121212;
+  --editor: #0c0c0c;
+  --base: #d4d4d4;
 
-  --panel-active: rgba(77, 128, 247, 0.12);
+  --panel-active: rgba(255, 255, 255, 0.08);
   --panel-hover: rgba(255, 255, 255, 0.04);
-  --editor-secondary: #191919;
+  --editor-secondary: #161616;
 
-  --text-secondary: #9a9a9e;
-  --text-muted: rgba(228, 228, 231, 0.45);
-  --text-disabled: rgba(228, 228, 231, 0.28);
-  --text-active: #ffffff;
+  --text-secondary: #8e8e8e;
+  --text-muted: rgba(212, 212, 212, 0.42);
+  --text-disabled: rgba(212, 212, 212, 0.26);
+  --text-active: #f0f0f0;
 
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.07);
   --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-secondary: rgba(255, 255, 255, 0.12);
+  --border-secondary: rgba(255, 255, 255, 0.11);
 
-  --accent: #4d80f7;
-  --accent-hover: #6a97f9;
-  --action-label: #ffffff;
+  --accent: #b0b0b0;
+  --accent-hover: #c8c8c8;
+  --action-label: #0c0c0c;
   --brand: var(--accent);
-  --focus: var(--accent);
+  --focus: rgba(255, 255, 255, 0.35);
 
-  --danger: #e5484d;
-  --warn: #f5a623;
-  --success: #4ade80;
-  --info: #4d80f7;
+  --danger: #c96b6b;
+  --warn: #c9a06a;
+  --success: #6fa87a;
+  --info: #8e8e8e;
 
-  --added: #73c991;
-  --modified: #e2c08d;
-  --removed: #e4676b;
-  --untracked: #73c991;
-  --git-conflict: #f97316;
+  --added: #6fa87a;
+  --modified: #c9a06a;
+  --removed: #c96b6b;
+  --untracked: #6fa87a;
+  --git-conflict: #c9a06a;
 
-  --button-secondary-hover: #2a2a2a;
-  --scrollbar: rgba(255, 255, 255, 0.15);
-  --scrollbar-hover: rgba(255, 255, 255, 0.25);
+  --button-secondary-hover: #262626;
+  --scrollbar: rgba(255, 255, 255, 0.12);
+  --scrollbar-hover: rgba(255, 255, 255, 0.22);
   --overlay-scrim: transparent;
 }
 
-/* ── One theme (One Dark — the Atom classic) ── */
+/* ── One — soft slate, muted teal (calm, not Atom-loud) ── */
 [data-theme="one"] {
-  --surface-0: #282c34;
-  --surface-1: #262a32;
-  --surface-2: #21252b;
-  --surface-3: #2c313a;
+  --surface-0: #1c1f24;
+  --surface-1: #20242a;
+  --surface-2: #23272e;
+  --surface-3: #2c3138;
 
-  --chrome: #282c34;
-  --sidebar: #21252b;
-  --editor: #282c34;
-  --base: #abb2bf;
+  --chrome: #181b20;
+  --sidebar: #20242a;
+  --editor: #181b20;
+  --base: #c5cad3;
 
-  --panel-active: rgba(97, 175, 239, 0.14);
+  --panel-active: rgba(255, 255, 255, 0.07);
   --panel-hover: rgba(255, 255, 255, 0.04);
-  --editor-secondary: #21252b;
+  --editor-secondary: #20242a;
 
-  --text-secondary: #828997;
-  --text-muted: rgba(171, 178, 191, 0.5);
-  --text-disabled: rgba(171, 178, 191, 0.3);
-  --text-active: #ffffff;
+  --text-secondary: #8b929e;
+  --text-muted: rgba(197, 202, 211, 0.42);
+  --text-disabled: rgba(197, 202, 211, 0.26);
+  --text-active: #e8ebf0;
 
-  --border: rgba(171, 178, 191, 0.12);
-  --border-subtle: rgba(171, 178, 191, 0.06);
-  --border-secondary: rgba(171, 178, 191, 0.18);
+  --border: rgba(197, 202, 211, 0.09);
+  --border-subtle: rgba(197, 202, 211, 0.05);
+  --border-secondary: rgba(197, 202, 211, 0.14);
 
-  --accent: #61afef;
-  --accent-hover: #7dc0f5;
-  --action-label: #1e2127;
+  --accent: #7aa2a8;
+  --accent-hover: #8eb4b9;
+  --action-label: #181b20;
   --brand: var(--accent);
   --focus: var(--accent);
 
-  --danger: #e06c75;
-  --warn: #e5c07b;
-  --success: #98c379;
-  --info: #56b6c2;
+  --danger: #c97a82;
+  --warn: #c9b07a;
+  --success: #7aab8a;
+  --info: #7aa2a8;
 
-  --added: #98c379;
-  --modified: #e5c07b;
-  --removed: #e06c75;
-  --untracked: #98c379;
-  --git-conflict: #e5a55d;
+  --added: #7aab8a;
+  --modified: #c9b07a;
+  --removed: #c97a82;
+  --untracked: #7aab8a;
+  --git-conflict: #c9b07a;
 
-  --button-secondary-hover: #333842;
-  --scrollbar: rgba(171, 178, 191, 0.2);
-  --scrollbar-hover: rgba(171, 178, 191, 0.35);
+  --button-secondary-hover: #343a44;
+  --scrollbar: rgba(197, 202, 211, 0.14);
+  --scrollbar-hover: rgba(197, 202, 211, 0.28);
   --overlay-scrim: transparent;
 }
 
@@ -618,48 +617,54 @@ body {
 .chat-markdown-body {
   font-family: var(--font-ui);
   font-weight: 400;
+  font-size: var(--conversation-font-size);
+  line-height: var(--conversation-line-height);
+  letter-spacing: -0.006em;
   color: var(--text-primary);
 }
 
 .chat-markdown strong,
 .chat-markdown-body strong {
-  font-weight: 500;
+  font-weight: 560;
 }
 
-/* ── Prose compact - tight markdown rendering ───────────── */
+/* ── Prose — comfortable markdown (Conductor density) ───── */
 .prose-compact p {
-  margin-top: 0.65em;
-  margin-bottom: 0.65em;
+  margin-top: 0.85em;
+  margin-bottom: 0.85em;
 }
 
 .prose-compact h1,
 .prose-compact h2,
 .prose-compact h3,
 .prose-compact h4 {
-  margin-top: 1em;
-  margin-bottom: 0.4em;
+  margin-top: 1.25em;
+  margin-bottom: 0.55em;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
 }
 
 .prose-compact ul,
 .prose-compact ol {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-  padding-left: 1.25em;
+  margin-top: 0.7em;
+  margin-bottom: 0.7em;
+  padding-left: 1.35em;
 }
 
 .prose-compact li {
-  margin-top: 0.2em;
-  margin-bottom: 0.2em;
+  margin-top: 0.35em;
+  margin-bottom: 0.35em;
+  line-height: var(--conversation-line-height);
 }
 
 .prose-compact blockquote {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
 }
 
 .prose-compact pre {
-  margin-top: 0.75em;
-  margin-bottom: 0.75em;
+  margin-top: 0.9em;
+  margin-bottom: 0.9em;
   background: var(--surface-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -886,11 +891,11 @@ body {
   overflow-block: clip;
 }
 
-/* ── Floating workbench panels (Modern UI chrome) ──────── */
+/* ── Sharp workbench panels (editor chrome) ─────────────── */
 .workbench-panel {
   height: 100%;
   width: 100%;
-  border-radius: var(--workbench-panel-radius);
+  border-radius: 0;
   overflow: hidden;
 }
 

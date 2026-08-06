@@ -10,10 +10,19 @@ export async function focusMainWindow(): Promise<void> {
 
     try {
         const main = await WebviewWindow.getByLabel("main");
-        if (main) {
+        if (!main) return;
+        const visible = await main.isVisible().catch(() => true);
+        if (!visible) {
             await main.show();
-            await main.setFocus();
         }
+        // Windows: unminimize + raise so an already-open IDE comes to the front.
+        try {
+            const minimized = await main.isMinimized();
+            if (minimized) await main.unminimize();
+        } catch {
+            /* older webview may lack isMinimized */
+        }
+        await main.setFocus();
     } catch (error) {
         const { notify } = await import("@/features/notifications");
         notify.error("Editor", error instanceof Error ? error.message : String(error));

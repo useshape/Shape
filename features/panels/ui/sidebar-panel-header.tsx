@@ -47,18 +47,26 @@ export function SidebarPanelHeader({
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <div className="flex h-8 shrink-0 cursor-default items-center justify-between gap-2 px-3 group">
-                    <FadeTruncate
-                        title={title}
-                        className="min-w-0 flex-1 text-sm font-normal text-text-primary"
-                    >
-                        {title}
-                    </FadeTruncate>
+                <div className="group relative flex h-titlebar shrink-0 cursor-default items-stretch">
+                    <div
+                        className="titlebar-drag-region absolute inset-0 z-0"
+                        data-tauri-drag-region
+                    />
+                    <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 px-3 pointer-events-none">
+                        <FadeTruncate
+                            title={title}
+                            className="min-w-0 flex-1 text-sm font-normal text-text-primary"
+                        >
+                            {title}
+                        </FadeTruncate>
+                    </div>
                     {actions ? (
-                        <div className="flex shrink-0 items-center gap-0.5">
+                        <div className="relative z-10 flex shrink-0 items-center gap-0.5 pr-2 pointer-events-auto">
                             {actions}
                         </div>
-                    ) : null}
+                    ) : (
+                        <div className="pointer-events-none relative z-0 min-w-0 flex-1" aria-hidden />
+                    )}
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent className="w-52">

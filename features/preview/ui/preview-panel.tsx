@@ -115,7 +115,10 @@ export default function PreviewPanel() {
 
     const onIframeLoad = useCallback(() => {
         const frame = iframeRef.current;
-        if (!frame) return;
+        if (!frame) {
+            endPreviewStackNav();
+            return;
+        }
         try {
             const href = frame.contentWindow?.location?.href;
             if (href && href !== "about:blank") {
@@ -147,7 +150,10 @@ export default function PreviewPanel() {
                         size="icon"
                         className="h-7 w-7 shrink-0 text-text-muted hover:text-text-primary"
                         disabled={!canBack}
-                        onClick={() => previewBack()}
+                        onClick={() => {
+                            loadStartedAt.current = performance.now();
+                            previewBack();
+                        }}
                     >
                         <Icon name="arrow_back" size={14} />
                     </Button>
@@ -159,7 +165,10 @@ export default function PreviewPanel() {
                         size="icon"
                         className="h-7 w-7 shrink-0 text-text-muted hover:text-text-primary"
                         disabled={!canForward}
-                        onClick={() => previewForward()}
+                        onClick={() => {
+                            loadStartedAt.current = performance.now();
+                            previewForward();
+                        }}
                     >
                         <Icon name="arrow_forward" size={14} />
                     </Button>
@@ -171,7 +180,10 @@ export default function PreviewPanel() {
                         size="icon"
                         className="h-7 w-7 shrink-0 text-text-muted hover:text-text-primary"
                         disabled={!currentUrl}
-                        onClick={() => previewReload()}
+                        onClick={() => {
+                            loadStartedAt.current = performance.now();
+                            previewReload();
+                        }}
                     >
                         <Icon name="refresh" size={14} />
                     </Button>
