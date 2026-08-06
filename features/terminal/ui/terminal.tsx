@@ -13,6 +13,9 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -23,9 +26,20 @@ import PreviewPanel from "@/features/preview/ui/preview-panel";
 import { Button } from "@/components/ui/button";
 import { getSettings, resolveDefaultTerminalShell } from "@/lib/settings";
 import { setLastDevUrl } from "@/features/preview/store";
+import { Panel } from "@/features/panels";
+import { useDiagnostics } from "@/features/diagnostics/store";
+import { Input } from "@/components/ui/input";
 
 type TerminalShell = TerminalShellProfile["id"] | "ai";
-type TerminalTab = { id: string; title: string; shell: TerminalShell; cwd: string; boundPtyId?: number; };
+type TerminalGroupId = "left" | "right";
+type TerminalTab = {
+    id: string;
+    title: string;
+    shell: TerminalShell;
+    cwd: string;
+    boundPtyId?: number;
+    group: TerminalGroupId;
+};
 
 const SHELL_DISPLAY_NAMES: Record<TerminalShell, string> = {
     powershell: "PowerShell",
@@ -53,19 +67,34 @@ const createTerminalTab = (
     cwd: string,
     id: string = createTabId(),
     boundPtyId?: number,
-): TerminalTab => ({ id, title, shell, cwd, boundPtyId });
+    group: TerminalGroupId = "left",
+): TerminalTab => ({ id, title, shell, cwd, boundPtyId, group });
 
 // ── GLOBAL STORE FOR PERSISTENCE ──
 class TerminalGlobalStore {
     tabs: TerminalTab[] = [];
     activeProjectTabs: Record<string, string | null> = {};
+    /** Per-cwd active tab in the right split pane (when split). */
+    activeSecondaryTabs: Record<string, string | null> = {};
+    focusedGroup: Record<string, TerminalGroupId> = {};
     instances = new Map<string, { term: XTermType; fitAddon: FitAddonType; ptyId: number; unlistenOutput: () => void }>();
     listeners = new Set<() => void>();
 
     subscribe(l: () => void): () => void { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
     notify() { this.listeners.forEach(l => l()); }
-    setTabs(u: (p: TerminalTab[]) => TerminalTab[]) { this.tabs = u(this.tabs); this.notify(); }
+    setTabs(u: (p: TerminalTab[]) => TerminalTab[]) {
+        this.tabs = u(this.tabs).map((t) => ({ ...t, group: t.group ?? "left" }));
+        this.notify();
+    }
     setActive(cwd: string, id: string | null) { this.activeProjectTabs = { ...this.activeProjectTabs, [cwd]: id }; this.notify(); }
+    setSecondaryActive(cwd: string, id: string | null) {
+        this.activeSecondaryTabs = { ...this.activeSecondaryTabs, [cwd]: id };
+        this.notify();
+    }
+    setFocusedGroup(cwd: string, group: TerminalGroupId) {
+        this.focusedGroup = { ...this.focusedGroup, [cwd]: group };
+        this.notify();
+    }
 
     async refitAll() {
         const { invoke } = await import("@tauri-apps/api/core");
@@ -357,11 +386,21 @@ export default function Terminal({
     terminalOnly?: boolean;
 }) {
     const { project_path } = useProjectState();
+    const { totals: diagnosticTotals } = useDiagnostics();
+    const problemCount = diagnosticTotals.errors + diagnosticTotals.warnings;
     const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>(globalTerminalStore.tabs);
     const [projectActiveTabs, setProjectActiveTabs] = useState<Record<string, string | null>>(globalTerminalStore.activeProjectTabs);
+    const [secondaryActiveTabs, setSecondaryActiveTabs] = useState<Record<string, string | null>>(globalTerminalStore.activeSecondaryTabs);
+    const [focusedGroups, setFocusedGroups] = useState<Record<string, TerminalGroupId>>(globalTerminalStore.focusedGroup);
+    const [panelFilter, setPanelFilter] = useState("");
     const safeCwd = project_path || "global";
     const currentTabs = terminalTabs.filter(t => t.cwd === safeCwd);
+    const leftTabs = currentTabs.filter((t) => (t.group ?? "left") === "left");
+    const rightTabs = currentTabs.filter((t) => t.group === "right");
+    const splitEnabled = rightTabs.length > 0;
     const activeTerminalId = projectActiveTabs[safeCwd] || null;
+    const secondaryTerminalId = secondaryActiveTabs[safeCwd] || null;
+    const focusedGroup = focusedGroups[safeCwd] || "left";
     const [activeView, setActiveView] = useState<"terminal" | "problems" | "tests" | "output" | "preview">("terminal");
     const [availableShells, setAvailableShells] = useState<TerminalShellProfile[]>([]);
     const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -443,9 +482,22 @@ export default function Terminal({
     useEffect(() => globalTerminalStore.subscribe(() => {
         setTerminalTabs([...globalTerminalStore.tabs]);
         setProjectActiveTabs({ ...globalTerminalStore.activeProjectTabs });
+        setSecondaryActiveTabs({ ...globalTerminalStore.activeSecondaryTabs });
+        setFocusedGroups({ ...globalTerminalStore.focusedGroup });
     }), []);
 
-    const setActiveTerminalId = useCallback((id: string | null) => globalTerminalStore.setActive(safeCwd, id), [safeCwd]);
+    const setActiveTerminalId = useCallback((id: string | null) => {
+        globalTerminalStore.setActive(safeCwd, id);
+        if (id) {
+            const tab = globalTerminalStore.tabs.find((t) => t.id === id);
+            if (tab?.group === "right") globalTerminalStore.setFocusedGroup(safeCwd, "right");
+            else globalTerminalStore.setFocusedGroup(safeCwd, "left");
+        }
+    }, [safeCwd]);
+    const setSecondaryTerminalId = useCallback(
+        (id: string | null) => globalTerminalStore.setSecondaryActive(safeCwd, id),
+        [safeCwd],
+    );
     const closingRef = useRef(false);
 
     useEffect(() => {
@@ -521,8 +573,11 @@ export default function Terminal({
 
     const closeTab = useCallback((id: string) => {
         globalTerminalStore.setTabs(prev => {
+            const closing = prev.find((t) => t.id === id);
             const next = prev.filter(t => t.id !== id);
             const projectTabs = next.filter(t => t.cwd === safeCwd);
+            const left = projectTabs.filter((t) => (t.group ?? "left") === "left");
+            const right = projectTabs.filter((t) => t.group === "right");
             const inst = globalTerminalStore.instances.get(id);
             if (inst) {
                 inst.unlistenOutput();
@@ -535,26 +590,54 @@ export default function Terminal({
             }
             if (projectTabs.length === 0) {
                 closingRef.current = true;
-                setTimeout(() => setActiveTerminalId(null), 0);
+                setTimeout(() => {
+                    setActiveTerminalId(null);
+                    setSecondaryTerminalId(null);
+                }, 0);
                 onClose?.();
                 setTimeout(() => closingRef.current = false, 500);
-            } else if (activeTerminalId === id || !projectTabs.some(t => t.id === activeTerminalId)) {
-                setTimeout(() => setActiveTerminalId(projectTabs[projectTabs.length - 1].id), 0);
+            } else {
+                if (closing?.group === "right") {
+                    if (right.length === 0) {
+                        setTimeout(() => setSecondaryTerminalId(null), 0);
+                    } else if (secondaryTerminalId === id) {
+                        setTimeout(() => setSecondaryTerminalId(right[right.length - 1].id), 0);
+                    }
+                } else if (activeTerminalId === id || !left.some(t => t.id === activeTerminalId)) {
+                    const fallback = left[left.length - 1] ?? projectTabs[projectTabs.length - 1];
+                    setTimeout(() => setActiveTerminalId(fallback.id), 0);
+                }
             }
             return next;
         });
-    }, [activeTerminalId, onClose, safeCwd, setActiveTerminalId]);
+        setTimeout(() => void globalTerminalStore.refitAll(), 50);
+    }, [activeTerminalId, secondaryTerminalId, onClose, safeCwd, setActiveTerminalId, setSecondaryTerminalId]);
 
-    const addTab = useCallback((shell: TerminalShell) => {
+    const addTab = useCallback((shell: TerminalShell, group: TerminalGroupId = "left") => {
         const id = createTabId();
         ensurePanelOpen();
         globalTerminalStore.setTabs(tabs => {
             const title = getNextTerminalName(tabs, shell, safeCwd);
-            return [...tabs, createTerminalTab(shell, title, safeCwd, id)];
+            return [...tabs, createTerminalTab(shell, title, safeCwd, id, undefined, group)];
         });
-        setActiveTerminalId(id);
+        if (group === "right") {
+            setSecondaryTerminalId(id);
+            globalTerminalStore.setFocusedGroup(safeCwd, "right");
+        } else {
+            setActiveTerminalId(id);
+            globalTerminalStore.setFocusedGroup(safeCwd, "left");
+        }
         setActiveView("terminal");
-    }, [safeCwd, setActiveTerminalId, ensurePanelOpen]);
+        setTimeout(() => void globalTerminalStore.refitAll(), 80);
+    }, [safeCwd, setActiveTerminalId, setSecondaryTerminalId, ensurePanelOpen]);
+
+    /** Split like the editor: open a new terminal in the right pane (reuse split if present). */
+    const splitTerminal = useCallback((shell?: TerminalShell) => {
+        const resolved = shell ?? resolveAvailableDefaultShell();
+        ensurePanelOpen();
+        setActiveView("terminal");
+        addTab(resolved, "right");
+    }, [addTab, ensurePanelOpen, resolveAvailableDefaultShell]);
 
     // Listen for titlebar menu terminal commands
     useEffect(() => {
@@ -565,8 +648,12 @@ export default function Terminal({
                 case "new":
                     addTab(resolveAvailableDefaultShell());
                     break;
+                case "split":
+                    splitTerminal();
+                    break;
                 case "close_tab":
-                    if (activeTerminalId) closeTab(activeTerminalId);
+                    if (focusedGroup === "right" && secondaryTerminalId) closeTab(secondaryTerminalId);
+                    else if (activeTerminalId) closeTab(activeTerminalId);
                     break;
                 case "close_all_tabs":
                     currentTabs.forEach((tab) => closeTab(tab.id));
@@ -631,7 +718,7 @@ export default function Terminal({
             window.removeEventListener("shape-terminal-run", handleTerminalRun as EventListener);
             window.removeEventListener("shape-terminal-view", handleTerminalView as EventListener);
         };
-    }, [addTab, closeTab, onClose, safeCwd, activeTerminalId, setActiveTerminalId, currentTabs, ensurePanelOpen, resolveAvailableDefaultShell]);
+    }, [addTab, closeTab, onClose, safeCwd, activeTerminalId, secondaryTerminalId, focusedGroup, setActiveTerminalId, currentTabs, ensurePanelOpen, resolveAvailableDefaultShell, splitTerminal]);
 
     useEffect(() => {
         if (!isOpen || activeView !== "terminal" || closingRef.current) return;
@@ -649,13 +736,18 @@ export default function Terminal({
             return;
         }
 
-        if (!activeTerminalId || !projectTabs.some(t => t.id === activeTerminalId)) {
-            setActiveTerminalId(projectTabs[projectTabs.length - 1].id);
+        const left = projectTabs.filter((t) => (t.group ?? "left") === "left");
+        const right = projectTabs.filter((t) => t.group === "right");
+        if (!activeTerminalId || !left.some(t => t.id === activeTerminalId)) {
+            if (left.length > 0) setActiveTerminalId(left[left.length - 1].id);
         }
-    }, [activeTerminalId, activeView, isOpen, safeCwd, terminalTabs, resolveAvailableDefaultShell, setActiveTerminalId]);
+        if (right.length > 0 && (!secondaryTerminalId || !right.some((t) => t.id === secondaryTerminalId))) {
+            setSecondaryTerminalId(right[right.length - 1].id);
+        }
+    }, [activeTerminalId, secondaryTerminalId, activeView, isOpen, safeCwd, terminalTabs, resolveAvailableDefaultShell, setActiveTerminalId, setSecondaryTerminalId]);
 
     useEffect(() => {
-        const pt = terminalTabs.filter(t => t.cwd === safeCwd);
+        const pt = terminalTabs.filter(t => t.cwd === safeCwd && (t.group ?? "left") === "left");
         if (pt.length > 0 && (!activeTerminalId || !pt.some(t => t.id === activeTerminalId))) {
             setTimeout(() => setActiveTerminalId(pt[pt.length - 1].id), 0);
         }
@@ -667,89 +759,243 @@ export default function Terminal({
         }
     }, []);
 
+    const clearActiveTerminal = useCallback(() => {
+        const id = focusedGroup === "right" ? secondaryTerminalId : activeTerminalId;
+        if (!id) return;
+        const inst = globalTerminalStore.instances.get(id);
+        if (inst) {
+            try {
+                inst.term.clear();
+            } catch {
+                /* ignore */
+            }
+        }
+    }, [focusedGroup, activeTerminalId, secondaryTerminalId]);
+
     const view = terminalOnly ? "terminal" : activeView;
+
+    const renderTerminalTabs = (tabs: TerminalTab[], activeId: string | null, onActivate: (id: string) => void) => (
+        <div
+            ref={tabs === (focusedGroup === "right" ? rightTabs : leftTabs) ? tabScrollRef : undefined}
+            onWheel={handleWheel}
+            className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto no-scrollbar"
+        >
+            {tabs.map((tab) => {
+                const isActive = activeId === tab.id;
+                return (
+                    <div
+                        key={tab.id}
+                        onClick={() => onActivate(tab.id)}
+                        className={cn(
+                            "group relative flex h-7 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md px-2 transition-colors duration-150 whitespace-nowrap",
+                            isActive
+                                ? "bg-surface-2 text-text-primary"
+                                : "text-text-muted hover:text-text-secondary",
+                        )}
+                    >
+                        <span className="max-w-[160px] truncate text-sm">{tab.title}</span>
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                closeTab(tab.id);
+                            }}
+                            className="shrink-0 rounded-md p-0.5 text-text-muted opacity-0 transition-opacity hover:bg-panel-active hover:text-text-primary group-hover:opacity-100"
+                        >
+                            <Icon name="close" size={12} />
+                        </button>
+                    </div>
+                );
+            })}
+        </div>
+    );
+
+    const renderTerminalPane = (tabs: TerminalTab[], activeId: string | null, group: TerminalGroupId) => (
+        <div
+            className="relative h-full min-h-0 min-w-0 overflow-hidden"
+            onMouseDown={() => globalTerminalStore.setFocusedGroup(safeCwd, group)}
+        >
+            {tabs.map((tab) => (
+                <div
+                    key={tab.id}
+                    className={cn(
+                        "absolute inset-0 overflow-hidden bg-transparent transition-opacity duration-150",
+                        tab.id === activeId ? "z-10 opacity-100" : "pointer-events-none z-0 opacity-0",
+                    )}
+                >
+                    <TerminalInstance
+                        tab={tab}
+                        isActive={view === "terminal" && tab.id === activeId}
+                    />
+                </div>
+            ))}
+        </div>
+    );
+
+    const shellMenu = (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-5 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                    title="New Terminal"
+                >
+                    <Icon name="expand_more" size={16} />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[220px]">
+                {availableShells.length === 0 ? (
+                    <DropdownMenuItem disabled>No terminals found</DropdownMenuItem>
+                ) : (
+                    availableShells.map((shell) => (
+                        <DropdownMenuItem key={shell.id} onClick={() => addTab(shell.id)}>
+                            {shell.label}
+                        </DropdownMenuItem>
+                    ))
+                )}
+                <DropdownMenuItem onClick={() => addTab("ai")}>Agent Terminal</DropdownMenuItem>
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>Split Terminal</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-[180px]">
+                        {availableShells.map((shell) => (
+                            <DropdownMenuItem key={`split-${shell.id}`} onClick={() => splitTerminal(shell.id)}>
+                                {shell.label}
+                            </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuItem onClick={() => splitTerminal()}>Default Profile</DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                    onClick={() =>
+                        window.dispatchEvent(new Event("shape-open-settings"))
+                    }
+                >
+                    Configure Terminal Settings
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-panel select-none font-sans" data-terminal-root="true">
-            {/* ── Row 1: view selectors (left) + X to hide (right) ── */}
             {!terminalOnly ? (
-            <div className="relative z-20 flex shrink-0 items-center gap-1 px-2 pb-1.5 pt-2 min-w-0">
-                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-                    {(["problems", "output", "tests", "preview", "terminal"] as const).map((viewId) => {
-                        const labels: Record<string, string> = {
-                            problems: "Problems",
-                            output: "Output",
-                            tests: "Tests",
-                            preview: "Preview",
-                            terminal: "Terminal",
-                        };
-                        return (
-                            <Button
-                                key={viewId}
-                                variant="ghost"
-                                size="sm"
-                                className={cn(
-                                    "h-7 px-2 text-sm",
-                                    activeView === viewId
-                                        ? "bg-surface-2 text-text-primary"
-                                        : "text-text-muted hover:text-text-secondary"
-                                )}
-                                onClick={() => setActiveView(viewId)}
-                            >
-                                {labels[viewId]}
-                            </Button>
-                        );
-                    })}
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1">
-                    {/* Hide panel (does NOT kill any terminal) */}
-                    <Button onClick={() => onClose?.()} variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary">
-                        <Icon name="close" size={14} />
-                    </Button>
-                </div>
-            </div>
-            ) : null}
-
-            {/* ── Row 2: terminal tabs — only visible when terminal view is active ── */}
-            {view === "terminal" && (
-                <div className={cn(
-                    "relative z-10 flex shrink-0 items-center gap-1 px-2 min-w-0",
-                    terminalOnly ? "pt-2 pb-1.5" : "pb-1.5",
-                )}>
-                    <div
-                        ref={tabScrollRef}
-                        onWheel={handleWheel}
-                        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar"
-                    >
-                        {currentTabs.map(tab => {
-                            const isActive = activeTerminalId === tab.id;
+                <div className="relative z-20 flex min-w-0 shrink-0 items-center gap-1 border-b border-border/60 px-2 py-1.5">
+                    <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+                        {(["problems", "output", "terminal", "tests", "preview"] as const).map((viewId) => {
+                            const labels: Record<string, string> = {
+                                problems: "Problems",
+                                output: "Output",
+                                tests: "Tests",
+                                preview: "Preview",
+                                terminal: "Terminal",
+                            };
+                            const active = activeView === viewId;
                             return (
-                                <div
-                                    key={tab.id}
-                                    onClick={() => setActiveTerminalId(tab.id)}
+                                <Button
+                                    key={viewId}
+                                    variant="ghost"
+                                    size="sm"
                                     className={cn(
-                                        "group relative flex h-7 shrink-0 cursor-pointer select-none items-center gap-2 px-2 transition-colors duration-200 whitespace-nowrap",
-                                        isActive
+                                        "h-7 gap-1.5 px-2 text-sm",
+                                        active
                                             ? "bg-surface-2 text-text-primary"
-                                            : "text-text-muted hover:text-text-secondary"
+                                            : "text-text-muted hover:text-text-secondary",
                                     )}
+                                    onClick={() => setActiveView(viewId)}
                                 >
-                                    <span className="text-sm truncate max-w-[180px]">{tab.title}</span>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            closeTab(tab.id);
-                                        }}
-                                        className="p-1 rounded-md hover:bg-panel-active text-text-muted hover:text-text-primary transition-opacity shrink-0 opacity-0 group-hover:opacity-100"
-                                    >
-                                        <Icon name="close" size={12} />
-                                    </button>
-                                </div>
+                                    {labels[viewId]}
+                                    {viewId === "problems" && problemCount > 0 ? (
+                                        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-medium text-white">
+                                            {problemCount > 99 ? "99+" : problemCount}
+                                        </span>
+                                    ) : null}
+                                </Button>
                             );
                         })}
                     </div>
+
+                    <div className="flex shrink-0 items-center gap-0.5">
+                        {(activeView === "output" || activeView === "problems") && (
+                            <div className="mr-1 flex h-7 w-[min(220px,28vw)] items-center gap-1.5 rounded-md border border-border bg-transparent px-2">
+                                <Icon name="search" size={12} className="shrink-0 text-text-muted" />
+                                <Input
+                                    value={panelFilter}
+                                    onChange={(e) => setPanelFilter(e.target.value)}
+                                    placeholder="Filter"
+                                    className="h-auto! bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+                                />
+                            </div>
+                        )}
+                        {activeView === "terminal" ? (
+                            <>
+                                <Tooltip content="Clear Terminal">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                                        onClick={clearActiveTerminal}
+                                    >
+                                        <Icon name="delete" size={14} />
+                                    </Button>
+                                </Tooltip>
+                                <Tooltip content="Split Terminal">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                                        onClick={() => splitTerminal()}
+                                    >
+                                        <Icon name="vertical_split" size={14} />
+                                    </Button>
+                                </Tooltip>
+                            </>
+                        ) : null}
+                        <Tooltip content="Hide Panel">
+                            <Button
+                                onClick={() => onClose?.()}
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                            >
+                                <Icon name="expand_less" size={14} />
+                            </Button>
+                        </Tooltip>
+                        <Button
+                            onClick={() => onClose?.()}
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                        >
+                            <Icon name="close" size={14} />
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
+
+            {view === "terminal" && (
+                <div
+                    className={cn(
+                        "relative z-10 flex min-w-0 shrink-0 items-center gap-1 px-2",
+                        terminalOnly ? "border-b border-border/60 pt-2 pb-1.5" : "pb-1.5 pt-1",
+                    )}
+                >
+                    {splitEnabled ? (
+                        <>
+                            {renderTerminalTabs(leftTabs, activeTerminalId, (id) => {
+                                setActiveTerminalId(id);
+                                globalTerminalStore.setFocusedGroup(safeCwd, "left");
+                            })}
+                            <div className="mx-1 h-4 w-px shrink-0 bg-border" />
+                            {renderTerminalTabs(rightTabs, secondaryTerminalId, (id) => {
+                                setSecondaryTerminalId(id);
+                                globalTerminalStore.setFocusedGroup(safeCwd, "right");
+                            })}
+                        </>
+                    ) : (
+                        renderTerminalTabs(leftTabs.length ? leftTabs : currentTabs, activeTerminalId, setActiveTerminalId)
+                    )}
 
                     <div className="flex shrink-0 items-center gap-0.5">
                         <Tooltip content="New Terminal">
@@ -757,43 +1003,19 @@ export default function Terminal({
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
-                                onClick={() => addTab(resolveAvailableDefaultShell())}
+                                onClick={() => addTab(resolveAvailableDefaultShell(), focusedGroup === "right" && splitEnabled ? "right" : "left")}
                             >
                                 <Icon name="add" size={16} />
                             </Button>
                         </Tooltip>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-5 shrink-0 rounded-md text-text-muted hover:text-text-primary"
-                                    title="Select Terminal"
-                                >
-                                    <Icon name="expand_more" size={16} />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                                {availableShells.length === 0 ? (
-                                    <DropdownMenuItem disabled>No terminals found</DropdownMenuItem>
-                                ) : (
-                                    availableShells.map((shell) => (
-                                        <DropdownMenuItem key={shell.id} onClick={() => addTab(shell.id)}>
-                                            New {shell.label}
-                                        </DropdownMenuItem>
-                                    ))
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => addTab("ai")}>New Agent Terminal</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        {shellMenu}
                     </div>
                 </div>
             )}
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 {view === "problems" ? (
-                    <Problems />
+                    <Problems search={panelFilter} />
                 ) : view === "output" ? (
                     <OutputPanel />
                 ) : view === "tests" ? (
@@ -801,15 +1023,35 @@ export default function Terminal({
                 ) : view === "preview" ? (
                     <PreviewPanel />
                 ) : null}
-                <div className={cn(
-                    "absolute inset-0 bg-transparent overflow-hidden",
-                    view !== "terminal" && "invisible pointer-events-none"
-                )}>
-                    {currentTabs.map(tab => (
-                        <div key={tab.id} className={cn("absolute inset-0 bg-transparent transition-opacity duration-150 overflow-hidden", tab.id === activeTerminalId ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none")}>
-                            <TerminalInstance tab={tab} isActive={view === "terminal" && tab.id === activeTerminalId} />
-                        </div>
-                    ))}
+                <div
+                    className={cn(
+                        "absolute inset-0 overflow-hidden bg-transparent",
+                        view !== "terminal" && "pointer-events-none invisible",
+                    )}
+                >
+                    {splitEnabled ? (
+                        <Panel
+                            direction="horizontal"
+                            storageKey="terminal-split"
+                            className="h-full"
+                            panes={[
+                                {
+                                    id: "term-left",
+                                    preferredSize: 50,
+                                    minSize: 20,
+                                    children: renderTerminalPane(leftTabs, activeTerminalId, "left"),
+                                },
+                                {
+                                    id: "term-right",
+                                    preferredSize: 50,
+                                    minSize: 20,
+                                    children: renderTerminalPane(rightTabs, secondaryTerminalId, "right"),
+                                },
+                            ]}
+                        />
+                    ) : (
+                        renderTerminalPane(leftTabs.length ? leftTabs : currentTabs, activeTerminalId, "left")
+                    )}
                 </div>
             </div>
         </div>

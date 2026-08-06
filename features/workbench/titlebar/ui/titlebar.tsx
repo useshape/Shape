@@ -175,7 +175,7 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
                     </div>
                 ) : null}
                 {!isCompact && showSearch ? (
-                    <div className="flex h-full min-w-0 max-w-[min(420px,36vw)] items-center px-1">
+                    <div className="flex h-full w-[min(280px,28vw)] min-w-0 shrink items-center px-1">
                         <CommandOmnibar />
                     </div>
                 ) : null}

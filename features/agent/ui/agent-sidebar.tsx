@@ -118,7 +118,7 @@ function WorkspaceRow({
 
 function SectionLabel({ children }: { children: ReactNode }) {
     return (
-        <div className="mb-1 px-2.5 text-2xs font-medium uppercase tracking-wide text-text-muted">
+        <div className="mb-1 px-2.5 text-2xs font-medium text-text-muted">
             {children}
         </div>
     );
@@ -249,7 +249,7 @@ export function AgentSidebar({
                         />
                         <div className="min-w-0 flex-1">
                             <div className="truncate text-sm text-text-primary">{displayName}</div>
-                            <div className="truncate text-2xs font-medium uppercase tracking-wide text-text-muted">
+                            <div className="truncate text-2xs font-medium text-text-muted">
                                 {plan}
                             </div>
                         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useProjectState } from "@/lib/backend";
 import { useKeyboardShortcuts } from "@/lib/ui/shortcuts";
 import { createMenuActionHandler } from "@/features/workbench/titlebar/menu-actions";
@@ -19,22 +19,22 @@ import { TitlebarUpdateButton } from "@/features/workbench/titlebar/ui/update-bu
 
 const LOGO_ASPECT_RATIO = 46 / 56;
 
+/** Activity-column top: logo centered in the activity rail. */
 export function WorkbenchActivityChrome() {
+    const logoH = 16;
+    const logoW = Math.round(logoH * LOGO_ASPECT_RATIO);
     return (
-        <div className="relative z-20 flex h-titlebar w-full shrink-0 items-stretch">
+        <div className="relative z-20 flex h-titlebar w-full shrink-0 items-center justify-center">
             <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
-            <div className="relative z-10 flex shrink-0 items-center justify-center px-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src="/logos/logo.svg"
-                    alt="Shape"
-                    width={14}
-                    height={Math.round(14 * LOGO_ASPECT_RATIO)}
-                    className="logo-invert pointer-events-none"
-                    draggable={false}
-                />
-            </div>
-            <div className="pointer-events-none relative z-0 min-w-0 flex-1" aria-hidden />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src="/logos/logo.svg"
+                alt="Shape"
+                width={logoW}
+                height={logoH}
+                className="relative z-10 logo-invert pointer-events-none block"
+                draggable={false}
+            />
         </div>
     );
 }
@@ -55,6 +55,8 @@ export function WorkbenchCenterChrome({
     const { isMaximized, minimize, toggleMaximize, close, closeWindow } = useWindowControls();
     const { repoHistory, clearHistory } = useRepoHistory(project_path);
     const { readLatestContent } = useEditorBuffer();
+    const spacerRef = useRef<HTMLDivElement>(null);
+    const [omnibarWidth, setOmnibarWidth] = useState(280);
 
     const handleMenuClick = useMemo(
         () =>
@@ -81,6 +83,23 @@ export function WorkbenchCenterChrome({
         return () => window.removeEventListener("save-all-request", onSaveAll);
     }, [handleMenuClick]);
 
+    // Measure pure free space in the center flex gap. Omnibar is absolutely
+    // positioned inside the spacer so it never steals width from the observer
+    // (avoids shrink↔hide oscillation).
+    useEffect(() => {
+        const el = spacerRef.current;
+        if (!el) return;
+        const measure = () => {
+            const free = el.clientWidth;
+            if (free < 152) setOmnibarWidth(0);
+            else setOmnibarWidth(Math.min(280, free - 16));
+        };
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
     return (
         <div className="relative z-20 flex h-titlebar w-full shrink-0 items-stretch bg-editor">
             <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
@@ -93,13 +112,19 @@ export function WorkbenchCenterChrome({
                     onClearHistory={clearHistory}
                 />
             </div>
-            <div className="pointer-events-none relative z-0 min-w-0 flex-1" aria-hidden />
-            <div className="relative z-10 flex shrink-0 items-stretch justify-end">
-                <div className="pointer-events-none flex items-center px-1">
-                    <div className="pointer-events-auto w-[min(280px,28vw)] min-w-0">
-                        <CommandOmnibar />
+            <div ref={spacerRef} className="relative z-0 min-w-0 flex-1">
+                {omnibarWidth > 0 ? (
+                    <div
+                        className="pointer-events-auto absolute inset-y-0 right-0 z-10 flex items-center px-1"
+                        style={{ width: omnibarWidth + 8 }}
+                    >
+                        <div className="w-full min-w-0" style={{ width: omnibarWidth }}>
+                            <CommandOmnibar />
+                        </div>
                     </div>
-                </div>
+                ) : null}
+            </div>
+            <div className="relative z-10 flex shrink-0 items-stretch justify-end">
                 <div className="action-toolbar-container hidden shrink-0 items-center gap-0.5 px-1 sm:flex">
                     <TitlebarUpdateButton />
                     <TitlebarLayoutControls />

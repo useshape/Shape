@@ -92,7 +92,7 @@ function DepSection({
     if (deps.length === 0) return null;
     return (
         <div className="mb-3">
-            <div className="text-xs font-medium text-text-muted uppercase tracking-wide px-2 py-1">{title}</div>
+            <div className="text-xs font-medium text-text-muted px-2 py-1">{title}</div>
             <div className="space-y-0.5">
                 {deps.map((dep) => (
                     <DepRow key={`${title}-${dep.name}`} dep={dep} projectPath={projectPath} pm={pm} onRefresh={onRefresh} />
@@ -184,7 +184,7 @@ export default function PackagesPanel() {
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle/30">
                 <div className="min-w-0">
-                    <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">Packages</span>
+                    <span className="text-xs font-medium text-text-secondary">Packages</span>
                     {info?.name && (
                         <div className="text-xs text-text-muted truncate">
                             {info.name} {info.version ? `v${info.version}` : ""} · {pm}
