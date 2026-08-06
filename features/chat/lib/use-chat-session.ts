@@ -893,7 +893,15 @@ export function useChatSession() {
         const remaining = openChatTabs.filter((tab) => tab.id !== tabId);
         if (remaining.length === 0) {
             setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
-            await handleNewChat();
+            setActiveChatTabId(NEW_CHAT_TAB_ID);
+            setMessages([]);
+            setConversationId(null);
+            setChatTitle("New Chat");
+            window.dispatchEvent(
+                new CustomEvent("shape-layout-toggle", {
+                    detail: { id: "secondary-sidebar", value: false },
+                }),
+            );
             return;
         }
         setOpenChatTabs(remaining);

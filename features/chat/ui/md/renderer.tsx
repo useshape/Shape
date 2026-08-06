@@ -749,7 +749,7 @@ export function MessageRenderer({
                 <div
                     key={`text-${index}`}
                     className={cn(
-                        "text-sm font-normal text-text-primary leading-[1.6] mb-0 w-full overflow-hidden prose-compact chat-markdown",
+                        "text-sm font-normal text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
                         isGenerating && isLastSegment && "animate-in fade-in duration-300",
                     )}
                 >

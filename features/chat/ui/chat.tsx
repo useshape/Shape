@@ -14,10 +14,15 @@ export default function Chat({
     className,
     onClose,
     sidebarSide = "right",
+    embedWindowControls,
+    columnChrome = false,
 }: {
     className?: string;
     onClose?: () => void;
     sidebarSide?: "left" | "right";
+    embedWindowControls?: React.ReactNode;
+    /** When true, tab bar is titlebar-height and flush (column chrome). */
+    columnChrome?: boolean;
 }) {
     const session = useChatSession();
 
@@ -64,9 +69,8 @@ export default function Chat({
                 onNewChat={() => void session.handleNewChat()}
                 onClosePanel={onClose}
                 sidebarSide={sidebarSide}
-                activeConversationId={session.conversationId}
-                projectPath={session.project_path}
-                onSelectConversation={(id) => void session.handleLoadConversation(id, { force: true })}
+                columnChrome={columnChrome}
+                embedWindowControls={embedWindowControls}
             />
 
             <div className="relative flex min-h-0 flex-1 flex-col">

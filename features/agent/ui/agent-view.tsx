@@ -13,15 +13,20 @@ import { AgentSidebar } from "./agent-sidebar";
 import { AgentRecentSessions } from "./agent-recent-sessions";
 import { AgentRightRail } from "./agent-right-rail";
 import { AgentComposerFooter } from "./agent-composer-footer";
+import { AgentChatSearch } from "./agent-chat-search";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { AiSettingsPanel } from "@/features/settings/ui/ai-settings";
 import { useSettings } from "@/lib/settings";
 import { AnimatedSecondarySidebarIcon, AnimatedSidebarIcon } from "@/features/activity-bar";
+import { WindowControls } from "@/features/workbench/titlebar/ui/window-controls";
+import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
+import { focusMainWindow } from "@/lib/open-agent-window";
 
 const PANEL_DEFAULT_WIDTH = 440;
 const PANEL_MIN_WIDTH = 300;
 const PANEL_MAX_WIDTH = 780;
-const SESSIONS_WIDTH = 220;
+const SESSIONS_WIDTH = 240;
+const CHROME_H = "h-titlebar";
 const CHROME_EASE = "duration-[220ms] ease-[var(--ease-out)]";
 
 function AgentChromeToggle({
@@ -79,9 +84,80 @@ function AgentAiSettingsOverlay() {
     );
 }
 
-function AgentChatColumn({ session }: { session: ReturnType<typeof useChatSession> }) {
-    const { sessionsOpen, toggleSessions, panelOpen, togglePanel, aiSettingsOpen } = useAgentLayout();
+function AgentCenterHeader({
+    title,
+    showSessionsToggle,
+    showWindowControls,
+}: {
+    title: string;
+    showSessionsToggle: boolean;
+    showWindowControls: boolean;
+}) {
+    const { toggleSessions, panelOpen, togglePanel } = useAgentLayout();
+    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+
+    return (
+        <div className={cn("relative z-20 flex shrink-0 items-stretch border-b border-border", CHROME_H)}>
+            <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
+            <div className="relative z-10 flex min-w-0 flex-1 items-center gap-1.5 px-2">
+                {showSessionsToggle ? (
+                    <AgentChromeToggle label="Toggle Sessions" onClick={toggleSessions}>
+                        <AnimatedSidebarIcon active={false} size={16} />
+                    </AgentChromeToggle>
+                ) : null}
+                <div className="min-w-0 truncate px-1 text-sm font-medium text-text-primary">
+                    {title}
+                </div>
+            </div>
+            <div className="relative z-10 flex shrink-0 items-stretch">
+                <div className="flex items-center gap-0.5 px-1">
+                    <button
+                        type="button"
+                        onClick={() => void focusMainWindow()}
+                        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-sm font-medium text-text-secondary transition-[color,background-color] duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary"
+                        title="Show IDE window"
+                        aria-label="Show IDE window"
+                    >
+                        IDE
+                        <Icon name="open_in_new" size={12} className="opacity-70" />
+                    </button>
+                    <div className="px-0.5">
+                        <AgentChatSearch />
+                    </div>
+                    <AgentChromeToggle label="Toggle Panel" active={panelOpen} onClick={togglePanel}>
+                        <AnimatedSecondarySidebarIcon active={panelOpen} size={16} />
+                    </AgentChromeToggle>
+                </div>
+                {showWindowControls ? (
+                    <WindowControls
+                        isMaximized={isMaximized}
+                        onMinimize={minimize}
+                        onToggleMaximize={() => void toggleMaximize()}
+                        onClose={close}
+                    />
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function AgentChatColumn({
+    session,
+    showSessionsToggle,
+    showWindowControls,
+}: {
+    session: ReturnType<typeof useChatSession>;
+    showSessionsToggle: boolean;
+    showWindowControls: boolean;
+}) {
+    const { aiSettingsOpen } = useAgentLayout();
     const isEmpty = session.messages.length === 0;
+
+    const title = useMemo(() => {
+        if (aiSettingsOpen) return "AI Settings";
+        const active = session.recentConvs.find((c) => c.id === session.conversationId);
+        return active?.title?.trim() || (isEmpty ? "New Chat" : "Agent");
+    }, [aiSettingsOpen, session.recentConvs, session.conversationId, isEmpty]);
 
     const taskItems = useMemo((): ComposerTaskItem[] => {
         if (!session.isLoading) return [];
@@ -115,32 +191,19 @@ function AgentChatColumn({ session }: { session: ReturnType<typeof useChatSessio
         session.messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     };
 
-    const chromeBar = (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex h-10 items-center justify-between px-2">
-            <div
-                className={cn(
-                    "pointer-events-auto transition-[opacity,transform] ",
-                    CHROME_EASE,
-                    sessionsOpen ? "pointer-events-none scale-95 opacity-0" : "scale-100 opacity-100",
-                )}
-            >
-                <AgentChromeToggle label="Toggle Sessions" active={false} onClick={toggleSessions}>
-                    <AnimatedSidebarIcon active={false} size={16} />
-                </AgentChromeToggle>
-            </div>
-            <div className="pointer-events-auto">
-                <AgentChromeToggle label="Toggle Panel" active={panelOpen} onClick={togglePanel}>
-                    <AnimatedSecondarySidebarIcon active={panelOpen} size={16} />
-                </AgentChromeToggle>
-            </div>
-        </div>
+    const header = (
+        <AgentCenterHeader
+            title={title}
+            showSessionsToggle={showSessionsToggle}
+            showWindowControls={showWindowControls}
+        />
     );
 
     if (aiSettingsOpen) {
         return (
-            <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-editor">
-                {chromeBar}
-                <div className="min-h-0 flex-1 pt-10">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden bg-editor">
+                {header}
+                <div className="min-h-0 flex-1">
                     <AgentAiSettingsOverlay />
                 </div>
             </div>
@@ -171,10 +234,10 @@ function AgentChatColumn({ session }: { session: ReturnType<typeof useChatSessio
     );
 
     return (
-        <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-editor">
-            {chromeBar}
+        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-editor">
+            {header}
             {isEmpty ? (
-                <div className="flex min-h-0 flex-1 animate-[agent-fade-in_200ms_var(--ease-out)] flex-col items-center px-6 pb-8 pt-10">
+                <div className="flex min-h-0 flex-1 animate-[agent-fade-in_200ms_var(--ease-out)] flex-col items-center px-6 pb-8 pt-6">
                     <div className="flex-1" />
                     <div className="flex w-full max-w-2xl flex-col items-center gap-6">
                         <ShapeLogo size={40} className="opacity-80" />
@@ -191,7 +254,7 @@ function AgentChatColumn({ session }: { session: ReturnType<typeof useChatSessio
                 </div>
             ) : (
                 <>
-                    <div className="relative flex min-h-0 flex-1 flex-col pt-10">
+                    <div className="relative flex min-h-0 flex-1 flex-col">
                         <div
                             className="pointer-events-none relative z-10 shrink-0 transition-opacity duration-[var(--transition-base)] ease-[var(--ease-out)]"
                             style={{
@@ -199,7 +262,7 @@ function AgentChatColumn({ session }: { session: ReturnType<typeof useChatSessio
                                 marginBottom: -30,
                                 opacity: session.scrolledFromTop ? 1 : 0,
                                 background:
-                                    "linear-gradient(to bottom, var(--color-background) 0%, transparent 100%)",
+                                    "linear-gradient(to bottom, var(--color-editor) 0%, transparent 100%)",
                             }}
                             aria-hidden
                         />
@@ -254,7 +317,7 @@ function AgentChatColumn({ session }: { session: ReturnType<typeof useChatSessio
                         <div
                             className="pointer-events-none absolute inset-x-0 bottom-full h-8"
                             style={{
-                                background: "linear-gradient(to top, var(--color-background) 0%, transparent 100%)",
+                                background: "linear-gradient(to top, var(--color-editor) 0%, transparent 100%)",
                             }}
                             aria-hidden
                         />
@@ -272,6 +335,7 @@ export function AgentView({ className }: { className?: string }) {
     const { sessionsOpen, panelOpen, panelTab, setPanelTab, setPanelOpen } = useAgentLayout();
     const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT_WIDTH);
     const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     useEffect(() => {
         const onJump = (e: Event) => {
@@ -325,16 +389,13 @@ export function AgentView({ className }: { className?: string }) {
         };
     }, []);
 
-    const sessionsShellWidth = sessionsOpen ? SESSIONS_WIDTH + 16 : 0; // include floating gutters roughly
-    const panelShellWidth = panelOpen ? panelWidth + 16 : 0;
+    const sessionsShellWidth = sessionsOpen ? SESSIONS_WIDTH : 0;
+    const panelShellWidth = panelOpen ? panelWidth + 4 : 0;
 
     return (
         <div className={cn("flex h-full w-full overflow-hidden bg-editor font-sans", className)}>
             <div
-                className={cn(
-                    "shrink-0 overflow-hidden transition-[width,opacity] ",
-                    CHROME_EASE,
-                )}
+                className={cn("shrink-0 overflow-hidden transition-[width,opacity] ", CHROME_EASE)}
                 style={{
                     width: sessionsShellWidth,
                     opacity: sessionsOpen ? 1 : 0,
@@ -343,12 +404,8 @@ export function AgentView({ className }: { className?: string }) {
                 aria-hidden={!sessionsOpen}
             >
                 <div
-                    className="floating-panel h-full"
-                    style={{
-                        width: SESSIONS_WIDTH,
-                        // Keep card geometry stable while the shell width animates.
-                        minWidth: SESSIONS_WIDTH,
-                    }}
+                    className="h-full border-r border-border bg-panel"
+                    style={{ width: SESSIONS_WIDTH, minWidth: SESSIONS_WIDTH }}
                 >
                     <AgentSidebar
                         conversations={session.recentConvs}
@@ -360,14 +417,15 @@ export function AgentView({ className }: { className?: string }) {
             </div>
 
             <div className="min-h-0 min-w-0 flex-1">
-                <AgentChatColumn session={session} />
+                <AgentChatColumn
+                    session={session}
+                    showSessionsToggle={!sessionsOpen}
+                    showWindowControls={!panelOpen}
+                />
             </div>
 
             <div
-                className={cn(
-                    "flex shrink-0 overflow-hidden transition-[width,opacity] ",
-                    CHROME_EASE,
-                )}
+                className={cn("flex shrink-0 overflow-hidden transition-[width,opacity] ", CHROME_EASE)}
                 style={{
                     width: panelShellWidth,
                     opacity: panelOpen ? 1 : 0,
@@ -390,6 +448,14 @@ export function AgentView({ className }: { className?: string }) {
                     onRejectAll={() => void session.handleRejectAll()}
                     onAcceptEdit={(id) => void session.handleAcceptEdit(id)}
                     onRejectEdit={(id) => void session.handleRejectEdit(id)}
+                    windowControls={
+                        <WindowControls
+                            isMaximized={isMaximized}
+                            onMinimize={minimize}
+                            onToggleMaximize={() => void toggleMaximize()}
+                            onClose={close}
+                        />
+                    }
                 />
             </div>
         </div>

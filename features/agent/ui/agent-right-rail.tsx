@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -9,8 +9,8 @@ import PreviewPanel from "@/features/preview/ui/preview-panel";
 import Terminal from "@/features/terminal/ui/terminal";
 import { AgentChangesPanel, type AgentChangeEdit } from "./agent-changes-panel";
 
-const TABS: { id: AgentPanelTab; label: string }[] = [
-    { id: "changes", label: "Changes" },
+const TABS: { id: AgentPanelTab; label: string; countKey?: "changes" }[] = [
+    { id: "changes", label: "Changes", countKey: "changes" },
     { id: "preview", label: "Preview" },
     { id: "terminal", label: "Terminal" },
 ];
@@ -26,6 +26,7 @@ export function AgentRightRail({
     onRejectAll,
     onAcceptEdit,
     onRejectEdit,
+    windowControls,
 }: {
     width: number;
     tab: AgentPanelTab;
@@ -37,6 +38,7 @@ export function AgentRightRail({
     onRejectAll: () => void;
     onAcceptEdit: (id: string) => void;
     onRejectEdit: (id: string) => void;
+    windowControls?: ReactNode;
 }) {
     const changeCount = edits.length;
 
@@ -46,21 +48,22 @@ export function AgentRightRail({
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="Resize panel"
-                className="w-1 shrink-0 cursor-col-resize self-stretch hover:bg-border-strong/40"
+                className="w-px shrink-0 cursor-col-resize self-stretch bg-transparent hover:bg-border-strong/50"
                 onMouseDown={(e) => {
                     e.preventDefault();
                     onResizeStart(e.clientX);
                 }}
             />
             <aside
-                className="floating-panel ml-0 flex min-h-0 shrink-0 flex-col"
+                className="flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-border bg-panel"
                 style={{ width }}
             >
-                <div className="flex h-9 shrink-0 items-center gap-1 px-2">
+                <div className="relative z-20 flex h-titlebar shrink-0 items-stretch border-b border-border">
+                    <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
                     <div
                         role="tablist"
                         aria-label="Agent panel"
-                        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
+                        className="relative z-10 flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden pl-2"
                     >
                         {TABS.map((t) => {
                             const active = tab === t.id;
@@ -72,30 +75,43 @@ export function AgentRightRail({
                                     aria-selected={active}
                                     onClick={() => onTabChange(t.id)}
                                     className={cn(
-                                        "inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-[12px] transition-colors",
+                                        "relative inline-flex h-full shrink-0 items-center px-2.5 text-xs transition-colors",
                                         active
-                                            ? "bg-surface-2 text-text-primary"
-                                            : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
+                                            ? "text-text-primary"
+                                            : "text-text-muted hover:text-text-secondary",
                                     )}
                                 >
                                     {t.label}
-                                    {t.id === "changes" && changeCount > 0 ? (
-                                        <span className="ml-1.5 tabular-nums text-text-muted">{changeCount}</span>
+                                    {t.countKey === "changes" && changeCount > 0 ? (
+                                        <span className="ml-1.5 tabular-nums text-text-muted">
+                                            ({changeCount})
+                                        </span>
+                                    ) : null}
+                                    {active ? (
+                                        <span
+                                            aria-hidden
+                                            className="absolute inset-x-1.5 bottom-0 h-px bg-text-primary/70"
+                                        />
                                     ) : null}
                                 </button>
                             );
                         })}
                     </div>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0 text-text-muted hover:text-text-primary"
-                        title="Close panel"
-                        onClick={onClose}
-                    >
-                        <Icon name="close" size={14} />
-                    </Button>
+                    <div className="relative z-10 flex shrink-0 items-stretch">
+                        <div className="flex items-center pr-0.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-text-muted hover:text-text-primary"
+                                title="Close panel"
+                                onClick={onClose}
+                            >
+                                <Icon name="close" size={14} />
+                            </Button>
+                        </div>
+                        {windowControls}
+                    </div>
                 </div>
 
                 <div className="relative min-h-0 flex-1 overflow-hidden">
