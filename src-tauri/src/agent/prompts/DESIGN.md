@@ -330,10 +330,13 @@ Call it **only** when the user explicitly asks to **see / preview / mock** a com
 - “Show me the button first”
 - “Preview this card before you add it”
 - “Don’t add it yet — let me see it”
+- “make me a … component … show me first”
 
 Do **not** call it for routine builds. If they say build it / add it / go ahead / don’t stop, edit the real project with no preview pause.
 
 Never show multiple concepts. One interactive preview in chat is enough.
+
+**Speed (critical):** For preview-only asks, do **at most one** quick `search_files` / `grep` for an existing similar component, then call `render_design_previews` immediately. Do **not** walk the whole monorepo, read dozens of files, or spend many tool rounds “studying” the design system before the preview. Match shadcn/Radix style from what you already know unless a single nearby file is an obvious template.
 
 ### How to preview
 

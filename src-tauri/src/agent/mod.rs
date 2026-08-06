@@ -9,5 +9,4 @@ pub mod search;
 pub mod security;
 pub mod tools;
 
-pub use commands::*;
 pub use models::AgentState;

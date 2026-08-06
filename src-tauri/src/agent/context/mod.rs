@@ -1,5 +1,7 @@
+mod breakdown;
 mod repo_map;
 
+pub use breakdown::build_context_breakdown;
 pub use repo_map::DEFAULT_REPO_MAP_TOKENS;
 
 use crate::agent::context::repo_map::{build_repo_map, format_repo_map_section, RepoMapInput};
@@ -32,12 +34,6 @@ impl Default for ContextOptions {
     }
 }
 
-pub async fn build_context(
-    app_state: &tauri::State<'_, AppState>,
-) -> Result<(String, Option<String>, Option<String>), AppError> {
-    build_context_with_options(app_state, ContextOptions::default()).await
-}
-
 pub async fn build_context_with_options(
     app_state: &tauri::State<'_, AppState>,
     opts: ContextOptions,
@@ -56,7 +52,9 @@ pub async fn build_context_with_options(
     context_string.push_str("=== RUNTIME ENVIRONMENT ===\n");
     #[cfg(target_os = "windows")]
     {
-        context_string.push_str("OS: Windows | Shell: PowerShell\n");
+        context_string.push_str(
+            "OS: Windows | Shell: PowerShell\nShell rules: chain commands with `;` — never `&&` (PowerShell treats `&&` as a parse error in many versions). Prefer Shape file/search tools over shell for reading files.\n",
+        );
     }
     #[cfg(target_os = "macos")]
     {

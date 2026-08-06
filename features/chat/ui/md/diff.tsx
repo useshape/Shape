@@ -196,8 +196,8 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
     return (
         <div className={cn(
             "w-full flex flex-col rounded-md border overflow-hidden my-2 transition-all duration-300",
-            status === "accepted" ? "border-green-500/30 bg-green-500/2" :
-                status === "rejected" ? "border-red-500/20 bg-red-500/1 opacity-60" :
+            status === "accepted" ? "border-success/30 bg-success/5" :
+                status === "rejected" ? "border-error/20 bg-error/5 opacity-60" :
                     "border-border-subtle bg-panel/40"
         )}>
             <div className="flex items-center justify-between px-2 py-1.5">
@@ -216,22 +216,16 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
 
                 <div className="flex items-center gap-2">
                     {isGenerating && (
-                        <div className="flex items-center gap-2 mr-2">
-                            <div className="w-2.5 h-2.5 border-[1.5px] border-accent border-t-transparent rounded-full animate-spin" />
-                            <span className="text-xs text-accent font-medium animate-pulse">Oz is typing...</span>
-                        </div>
+                        <span className="ai-shimmer-text text-xs font-medium mr-2">Generating…</span>
                     )}
                     {status === "error" && !isGenerating && (
-                        <span className="text-xs text-error font-bold tracking-wider mr-1 uppercase">Failed</span>
+                        <span className="text-xs text-error font-regular mr-1">Failed</span>
                     )}
                     {status === "applying" && (
-                        <div className="flex items-center gap-2 mr-2">
-                            <div className="w-2.5 h-2.5 border-[1.5px] border-accent border-t-transparent rounded-full animate-spin" />
-                            <span className="text-2xs text-accent font-medium">Applying...</span>
-                        </div>
+                        <span className="ai-shimmer-text text-2xs font-medium mr-2">Applying…</span>
                     )}
-                    {status === "accepted" && <span className="text-2xs text-success font-bold tracking-wider mr-1 uppercase">Applied</span>}
-                    {status === "rejected" && <span className="text-2xs text-error font-bold tracking-wider mr-1 uppercase">Discarded</span>}
+                    {status === "accepted" && <span className="text-2xs text-success font-regular mr-1">Applied</span>}
+                    {status === "rejected" && <span className="text-2xs text-error font-regular mr-1">Discarded</span>}
                     <button
                         className="px-1.5 py-0.5 rounded-md text-xs font-medium bg-accent text-accent-fg hover:bg-accent-hover transition-colors disabled:opacity-50"
                         onClick={handleApply}
@@ -255,7 +249,7 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
                 </div>
             </div>
 
-            <div className="grid grid-cols-[1fr_1fr_0.7fr] gap-0 border-b border-border-subtle/30 text-2xs font-semibold text-text-muted uppercase tracking-widest">
+            <div className="grid grid-cols-[1fr_1fr_0.7fr] gap-0 border-b border-border-subtle/30 text-2xs font-regular text-text-muted">
                 <div className="px-3 py-1.5 border-r border-border-subtle/30">Before</div>
                 <div className="px-3 py-1.5 border-r border-border-subtle/30">After</div>
                 <div className="px-3 py-1.5">Notes</div>
@@ -264,8 +258,8 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
             <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
                 {rows.map((row) => {
                     const selectedRow = row.type === 'equal' ? true : !!selected[row.id];
-                    const leftBg = row.type === 'remove' ? (selectedRow ? "bg-red-500/12" : "bg-red-500/5") : "bg-transparent";
-                    const rightBg = row.type === 'add' ? (selectedRow ? "bg-green-500/12" : "bg-green-500/5") : "bg-transparent";
+                    const leftBg = row.type === 'remove' ? (selectedRow ? "bg-error/12" : "bg-error/5") : "bg-transparent";
+                    const rightBg = row.type === 'add' ? (selectedRow ? "bg-success/12" : "bg-success/5") : "bg-transparent";
                     const note = row.type === 'add'
                         ? (selectedRow ? "Added" : "Skipped add")
                         : row.type === 'remove'

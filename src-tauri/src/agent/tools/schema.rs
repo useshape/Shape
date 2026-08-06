@@ -11,8 +11,52 @@
 
 use serde_json::{json, Value};
 
+use crate::agent::model_router::ModelFamily;
+
 /// Return the full tool set as a JSON array ready to drop into a chat completion request.
+#[allow(dead_code)]
 pub fn all_tools() -> Vec<Value> {
+    all_tools_for_family(ModelFamily::Other)
+}
+
+fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
+    let mut tools = vec![
+        read_file(),
+        list_dir(),
+        search_codebase(),
+        search_files(),
+        grep(),
+        web_search(),
+        visit_url(),
+        create_directory(),
+        create_file(),
+    ];
+    if family.uses_apply_patch() {
+        tools.push(apply_patch());
+    } else {
+        tools.push(edit_file());
+    }
+    tools.extend([
+        delete_file(),
+        rename_file(),
+        run_terminal(),
+        git_status(),
+        git_fetch(),
+        git_log(),
+        git_stage(),
+        git_commit(),
+        list_terminals(),
+        read_terminal(),
+        write_to_terminal(),
+        wait(),
+        read_lints(),
+        update_todos(),
+        finish(),
+    ]);
+    tools
+}
+
+fn ask_tools() -> Vec<Value> {
     vec![
         read_file(),
         list_dir(),
@@ -20,75 +64,46 @@ pub fn all_tools() -> Vec<Value> {
         search_files(),
         grep(),
         web_search(),
-        create_directory(),
-        create_file(),
-        edit_file(),
-        delete_file(),
-        rename_file(),
-        run_terminal(),
-        git_status(),
-        git_fetch(),
-        git_log(),
-        git_diff(),
-        git_branches(),
-        git_stage(),
-        git_commit(),
-        list_terminals(),
-        read_terminal(),
-        write_to_terminal(),
-        wait(),
-        save_plan(),
-        update_todos(),
+        visit_url(),
+        read_lints(),
         finish(),
     ]
 }
 
 /// Return tools appropriate for the active chat mode (reduces token overhead).
+/// Unknown modes fail closed to Ask (read-only).
+#[allow(dead_code)]
 pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
-    if mode.eq_ignore_ascii_case("visual") || mode.eq_ignore_ascii_case("design") {
-        let mut tools = all_tools();
-        tools.push(render_design_previews());
-        tools.extend(extra);
-        return tools;
-    }
+    tools_for_mode_and_family(mode, ModelFamily::Other, extra)
+}
 
-    let base = if mode.eq_ignore_ascii_case("plan") {
-        vec![
-            read_file(),
-            list_dir(),
-            search_codebase(),
-            search_files(),
-            grep(),
-            web_search(),
-            git_status(),
-            git_log(),
-            git_diff(),
-            git_branches(),
-            save_plan(),
-            finish(),
-        ]
-    } else if mode.eq_ignore_ascii_case("ask") {
-        vec![
-            read_file(),
-            list_dir(),
-            search_codebase(),
-            search_files(),
-            grep(),
-            web_search(),
-            git_status(),
-            git_log(),
-            git_diff(),
-            git_branches(),
-            finish(),
-        ]
-    } else {
-        all_tools()
-    };
-    let mut tools = base;
-    if !mode.eq_ignore_ascii_case("ask") && !mode.eq_ignore_ascii_case("plan") {
-        tools.extend(extra);
+/// Mode + model-family tool selection (Cursor-style per-model tool shapes).
+pub fn tools_for_mode_and_family(
+    mode: &str,
+    family: ModelFamily,
+    extra: Vec<Value>,
+) -> Vec<Value> {
+    match mode.to_ascii_lowercase().as_str() {
+        "plan" => {
+            let mut tools = ask_tools();
+            tools.insert(tools.len().saturating_sub(1), save_plan());
+            tools
+        }
+        "ask" => ask_tools(),
+        "visual" | "design" => {
+            let mut tools = all_tools_for_family(family);
+            tools.push(render_design_previews());
+            tools.extend(extra);
+            tools
+        }
+        "code" | "review" | "agent" => {
+            let mut tools = all_tools_for_family(family);
+            tools.extend(extra);
+            tools
+        }
+        // Fail closed: unknown mode strings get read-only Ask tools.
+        _ => ask_tools(),
     }
-    tools
 }
 
 /// Build a tool descriptor. Kept as a small helper so the per-tool definitions stay terse.
@@ -169,11 +184,16 @@ fn search_codebase() -> Value {
 fn grep() -> Value {
     tool(
         "grep",
-        "Search file contents with ripgrep. The query is a case-insensitive regex (alternations like `foo|bar` work); invalid regex falls back to a literal search. Returns every matching line unless noted as truncated. For finding files by name, use search_files instead.",
+        "Search file contents with ripgrep. Prefer a narrow path or glob so results stay small (cost). Query is a case-insensitive regex; invalid regex falls back to literal. For finding files by name, use search_files instead.",
         json!({
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Regex or literal text to search for in file contents. Use alternation (a|b|c) to check several name variants in one call."}
+                "query": {"type": "string", "description": "Regex or literal text to search for in file contents. Use alternation (a|b|c) to check several name variants in one call."},
+                "path": {"type": "string", "description": "Optional project-relative file or directory to limit the search (strongly preferred for large repos)."},
+                "glob": {"type": "string", "description": "Optional ripgrep glob, e.g. '*.ts' or '**/*.{tsx,ts}'."},
+                "context": {"type": "integer", "description": "Lines of context before/after each match (0–3, default 0). Keep low to save tokens."},
+                "case_sensitive": {"type": "boolean", "description": "If true, disable ignore-case (default false)."},
+                "head_limit": {"type": "integer", "description": "Max matching lines to return (default 80, max 200)."}
             },
             "required": ["query"],
             "additionalProperties": false
@@ -230,7 +250,7 @@ fn create_file() -> Value {
 fn edit_file() -> Value {
     tool(
         "edit_file",
-        "Apply a targeted edit to an existing file. The `code_edit` argument MUST use the SEARCH/REPLACE block format. On success the result may include SYNTAX ERRORS from a parse of the merged file — fix those with another edit_file before finish. Blocked in Ask mode.",
+        "Apply a targeted edit to an existing file. The `code_edit` argument MUST use the SEARCH/REPLACE block format. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish. Blocked in Ask mode.",
         json!({
             "type": "object",
             "properties": {
@@ -239,6 +259,39 @@ fn edit_file() -> Value {
                 "code_edit": {"type": "string", "description": "The edit formatted as one or more SEARCH/REPLACE blocks. Example:\n<<<<<<< SEARCH\n[exact existing code]\n=======\n[new code]\n>>>>>>> REPLACE"}
             },
             "required": ["target_file", "instructions", "code_edit"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn apply_patch() -> Value {
+    tool(
+        "apply_patch",
+        "Apply a Codex-style multi-file patch. Pass the entire patch as `input` (not JSON-wrapped hunks). Format:\n*** Begin Patch\n*** Update File: path\n@@\n context\n-old\n+new\n*** Add File: path\n+line\n*** Delete File: path\n*** End Patch\nAlways include Begin and End markers. Prefer this over shell edits. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish. Blocked in Ask mode.",
+        json!({
+            "type": "object",
+            "properties": {
+                "input": {"type": "string", "description": "Full apply_patch document including Begin/End markers."}
+            },
+            "required": ["input"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn read_lints() -> Value {
+    tool(
+        "read_lints",
+        "Read current IDE/linter diagnostics for one or more files (or recently open files if paths omitted). Call after substantive edits to catch errors you introduced.",
+        json!({
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Project-relative paths to check. Omit to read diagnostics for open files."
+                }
+            },
             "additionalProperties": false
         }),
     )
@@ -278,12 +331,11 @@ fn rename_file() -> Value {
 fn run_terminal() -> Value {
     tool(
         "run_terminal",
-        "Run a shell command in the project directory. On Windows uses PowerShell; on macOS/Linux uses bash/sh. Prefer file/search tools for inspection — use this for build, test, install, scaffolding, and other shell workflows. For scaffolding tools always pass non-interactive flags (--yes, -y). Slow commands automatically run in a background terminal — then use wait + read_terminal to poll. Pass background:true to force background mode. NEVER use cat/type/ls/dir for file inspection. Some commands require user approval. Blocked in Ask and Plan modes.",
+        "Run a shell command in the project directory. On Windows uses PowerShell; on macOS/Linux uses bash/sh. Prefer file/search tools for inspection — use this for build, test, install, scaffolding, and other shell workflows. For scaffolding tools always pass non-interactive flags (--yes, -y). Commands that finish quickly return their full output and exit code directly. Commands still running after ~25s keep running and return a background session_id — then call `wait` with that session_id (it returns as soon as the command finishes). Dev servers/watchers background immediately and run until stopped. Some commands require user approval; approval may take as long as the user needs, and a rejected command must NOT be retried. NEVER use cat/type/ls/dir for file inspection. Blocked in Ask and Plan modes.",
         json!({
             "type": "object",
             "properties": {
-                "command": {"type": "string", "description": "The shell command to execute."},
-                "background": {"type": "boolean", "description": "When true, run in a background terminal session and return immediately with a session_id. Use with wait + read_terminal to poll long commands."}
+                "command": {"type": "string", "description": "The shell command to execute."}
             },
             "required": ["command"],
             "additionalProperties": false
@@ -318,50 +370,11 @@ fn git_fetch() -> Value {
 fn git_log() -> Value {
     tool(
         "git_log",
-        "Show recent commit history. Read-only. Prefer this over running `git log` in the terminal.",
+        "Show recent commit history. Read-only.",
         json!({
             "type": "object",
             "properties": {
                 "limit": {"type": "integer", "description": "Number of commits to show (default 10, max 50)."}
-            },
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn git_diff() -> Value {
-    tool(
-        "git_diff",
-        "Show the working-tree and/or staged diff for the project (or a single file). Read-only. Prefer this over `git diff` in the terminal so results render with structured UI.",
-        json!({
-            "type": "object",
-            "properties": {
-                "scope": {
-                    "type": "string",
-                    "enum": ["all", "staged"],
-                    "description": "Which changes to include. Default: all (staged + unstaged worktree)."
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Optional project-relative file path to diff a single file."
-                }
-            },
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn git_branches() -> Value {
-    tool(
-        "git_branches",
-        "List local (and optionally remote) branches with the current branch marked. Read-only.",
-        json!({
-            "type": "object",
-            "properties": {
-                "include_remote": {
-                    "type": "boolean",
-                    "description": "Include remote-tracking branches. Default false."
-                }
             },
             "additionalProperties": false
         }),
@@ -413,11 +426,11 @@ fn list_terminals() -> Value {
 fn read_terminal() -> Value {
     tool(
         "read_terminal",
-        "Read recent output from a background terminal session started by run_terminal. Use after wait when polling long commands (installs, builds, scaffolding).",
+        "Read recent output and status from a terminal session. Reports running state, exit code when finished, and flags output that looks like an interactive prompt waiting for input. For waiting on completion prefer `wait` with session_id — it returns the same status the moment the command finishes.",
         json!({
             "type": "object",
             "properties": {
-                "session_id": {"type": "integer", "description": "PTY session ID from run_terminal or list_terminals."},
+                "session_id": {"type": "integer", "description": "Session ID from run_terminal or list_terminals."},
                 "tail_chars": {"type": "integer", "description": "How many trailing characters of output to return (default 8000, max 50000)."}
             },
             "required": ["session_id"],
@@ -429,11 +442,12 @@ fn read_terminal() -> Value {
 fn wait() -> Value {
     tool(
         "wait",
-        "Pause for a number of seconds before checking a long-running command again. Use between read_terminal polls for installs, builds, or scaffolding. Respects user stop.",
+        "Wait for a background terminal session to finish. With session_id, returns IMMEDIATELY when the session exits (with exit code and output) — one call rides until completion, no repeated polling needed. Give `seconds` as the max you are willing to wait (e.g. 120–180 for installs/builds). If it returns with the session still running, call wait again or continue other work. Without session_id, plain sleep. Respects user stop.",
         json!({
             "type": "object",
             "properties": {
-                "seconds": {"type": "integer", "description": "Seconds to wait (1–180, default 10)."},
+                "seconds": {"type": "integer", "description": "Max seconds to wait (1–180, default 10). With session_id, returns as soon as the command finishes — a generous value costs nothing."},
+                "session_id": {"type": "integer", "description": "Terminal session to wait on (from run_terminal). Strongly preferred over blind sleeping."},
                 "reason": {"type": "string", "description": "Short note on why you are waiting (shown in UI)."}
             },
             "required": ["seconds"],
@@ -477,7 +491,9 @@ fn save_plan() -> Value {
 fn update_todos() -> Value {
     tool(
         "update_todos",
-        "Create or update the live todo checklist shown in chat (Cursor-style plan progress). Pass the full merged list every call. Use when building a plan in Code mode: seed todos from the plan, set exactly one item in_progress, mark completed as you finish. Not available in Ask/Plan.",
+        "Optional live checklist for LONG multi-step implementation only (e.g. building from a saved plan, or 5+ distinct workstreams). \
+Skip for ordinary Code/Visual work: single features, UI polish, shadcn installs, refactors of a few files — just do the work. \
+When used: 3–6 short items max, exactly one in_progress, pass the full merged list every call. Not available in Ask/Plan.",
         json!({
             "type": "object",
             "properties": {
@@ -485,6 +501,7 @@ fn update_todos() -> Value {
                 "todos": {
                     "type": "array",
                     "minItems": 1,
+                    "maxItems": 8,
                     "items": {
                         "type": "object",
                         "properties": {
@@ -510,7 +527,7 @@ fn update_todos() -> Value {
 fn finish() -> Value {
     tool(
         "finish",
-        "Signal that the turn is complete. Call when there are no more tool actions. `summary` is the user-visible reply: lead with the answer, be concrete, no \"Would you like me to…\". Plain conversational prose.",
+        "Optional: end the turn with a user-visible summary. Prefer this when you want a clean stop after tools. You may also end by replying in plain prose with no further tool calls — that also completes the turn. `summary` is the user-facing reply when using this tool.",
         json!({
             "type": "object",
             "properties": {
@@ -524,7 +541,7 @@ fn finish() -> Value {
 fn render_design_previews() -> Value {
     tool(
         "render_design_previews",
-        "Show ONE interactive component preview in chat (Visual mode). Call ONLY when the user asks to see / preview / mock a component before adding it. Do NOT call for routine builds — if they say build it / add it / don't stop, edit the project directly. Exactly one concept. Prefer jsx with function App(). Use the project's UI kit when present; otherwise Radix-style primitives + Tailwind. No remote images. No multi-option galleries.",
+        "Show ONE interactive component preview in chat (Visual mode). Call ONLY when the user asks to see / preview / mock a component before adding it. Do NOT call for routine builds — if they say build it / add it / don't stop, edit the project directly. Exactly one concept. Prefer jsx with function App(). Use the project's UI kit when present; otherwise Radix-style primitives + Tailwind. No remote images. No multi-option galleries. The preview frame is full-width and centers #root — keep the component in normal document flow (no full-bleed absolute positioning that clips). Leave room for menus/popovers. Prefer width≈640 height≈360. After the preview renders, call finish immediately with a short note; do not keep calling tools.",
         json!({
             "type": "object",
             "properties": {
@@ -536,12 +553,12 @@ fn render_design_previews() -> Value {
                         "type": "object",
                         "properties": {
                             "id": {"type": "string"},
-                            "name": {"type": "string", "description": "Short component name (e.g. PrimaryButton)."},
-                            "style": {"type": "string", "description": "One-line note (library / intent)."},
-                            "jsx": {"type": "string", "description": "React source defining App (function App() { return (...); }). No export/import. Tailwind className only."},
+                            "name": {"type": "string", "description": "Internal component name (not shown in chat)."},
+                            "style": {"type": "string", "description": "Internal note (not shown in chat)."},
+                            "jsx": {"type": "string", "description": "React source defining App (function App() { return (...); }). No export/import. Tailwind className only. Keep the component centered; avoid position:fixed/absolute that pins to the iframe corner."},
                             "html": {"type": "string", "description": "Legacy fallback: raw body HTML only (prefer jsx)."},
-                            "width": {"type": "integer", "description": "Viewport width (default 640)."},
-                            "height": {"type": "integer", "description": "Viewport height (default 360)."}
+                            "width": {"type": "integer", "description": "Logical viewport width (default 640)."},
+                            "height": {"type": "integer", "description": "Preview card height (default 360)."}
                         },
                         "required": ["id", "name", "style"],
                         "additionalProperties": false
@@ -553,3 +570,65 @@ fn render_design_previews() -> Value {
         }),
     )
 }
+
+fn visit_url() -> Value {
+    tool(
+        "visit_url",
+        "Open a public webpage and extract its text, structure, and styling cues (colors, fonts, theme). Use when the user pastes a URL, asks you to recreate/reference a site, or @-mentions a browser/site. Prefer this over web_search when you need the actual page contents.",
+        json!({
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Full URL (https://…) or bare hostname (shape.com)."}
+            },
+            "required": ["url"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::model_router::ModelFamily;
+
+    fn tool_names(tools: &[Value]) -> Vec<String> {
+        tools
+            .iter()
+            .filter_map(|t| {
+                t.get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn openai_family_gets_apply_patch_not_edit_file() {
+        let tools = tools_for_mode_and_family("code", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"apply_patch".to_string()));
+        assert!(!names.contains(&"edit_file".to_string()));
+        assert!(names.contains(&"read_lints".to_string()));
+    }
+
+    #[test]
+    fn deepseek_family_gets_edit_file_not_apply_patch() {
+        let tools = tools_for_mode_and_family("code", ModelFamily::DeepSeek, vec![]);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"edit_file".to_string()));
+        assert!(!names.contains(&"apply_patch".to_string()));
+        assert!(names.contains(&"read_lints".to_string()));
+    }
+
+    #[test]
+    fn ask_mode_is_read_only() {
+        let tools = tools_for_mode_and_family("ask", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(!names.contains(&"edit_file".to_string()));
+        assert!(!names.contains(&"apply_patch".to_string()));
+        assert!(!names.contains(&"run_terminal".to_string()));
+        assert!(names.contains(&"read_lints".to_string()));
+    }
+}
+

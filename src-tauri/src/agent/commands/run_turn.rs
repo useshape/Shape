@@ -12,9 +12,23 @@ use crate::commands::pty::PtyState;
 use crate::core::error::AppError;
 
 pub const MAX_TOOL_LOOPS: usize = 16;
+/// Code/Review can go a bit longer; Visual stays tight so preview requests don't thrash.
+pub const MAX_TOOL_LOOPS_CODE: usize = 20;
+pub const MAX_TOOL_LOOPS_VISUAL: usize = 10;
+
+pub fn max_loops_for_mode(mode: &str) -> usize {
+    match mode.to_ascii_lowercase().as_str() {
+        "visual" | "design" => MAX_TOOL_LOOPS_VISUAL,
+        "code" | "agent" | "review" => MAX_TOOL_LOOPS_CODE,
+        _ => MAX_TOOL_LOOPS,
+    }
+}
 /// Soft cap per file; a successful read_file on that path resets the counter so
 /// iterative fix-ups can continue instead of dead-ending after three edits.
 const MAX_EDITS_PER_FILE_PER_TURN: usize = 6;
+/// After this many consecutive failed edits on one file without a re-read, block
+/// further edit_file calls until the model reads the file again.
+const MAX_CONSECUTIVE_EDIT_FAILURES: usize = 3;
 // Low bar on purpose: forced synthesis is a rescue path for turns that end with
 // literally nothing to show, not a quality gate. The old 80-char bar triggered
 // an extra hidden model call after turns that had already answered briefly.
@@ -25,7 +39,39 @@ const NUDGE_CONCISE_USER_REPLY: &str = "Stop calling tools. Give the user a shor
 Plain prose; bullets only if listing distinct items. No section headers, no soft closes.";
 
 const NUDGE_CONTINUE_OR_FINISH: &str = "Continue the task. If you still need to read or edit files, \
-call the appropriate tools now. If the work is done, call finish with a short summary for the user.";
+call the appropriate tools now. If the work is done, reply to the user in plain prose (finish is optional).";
+
+const NUDGE_REASONING_ONLY: &str = "You thought but did not call any tools or reply to the user. \
+Call the tools you need now (read/search/etc), or give a short answer. Do not only think again.";
+
+const NUDGE_PLAN_REASONING_ONLY: &str = "You thought but did not research or save a plan. \
+Use read/search tools now, then call save_plan when ready. Do not only think again.";
+
+const NUDGE_ASK_REASONING_ONLY: &str = "You thought but did not call tools or answer. \
+Read or search what you need, then answer the user. Do not only think again.";
+
+const NUDGE_START_EDITING: &str = "You've done a lot of read-only exploration. Prefer making progress now: \
+edit/create the files the user asked for, call render_design_previews if they want a preview, \
+or answer in plain prose. You may still read a specific file you need — avoid broad search/list loops.";
+
+/// After this many consecutive read-only rounds, nudge once toward editing.
+/// Code tasks routinely need many reads; keep Visual tight (preview thrash).
+fn readonly_nudge_after(mode: &str) -> usize {
+    match mode.to_ascii_lowercase().as_str() {
+        "visual" | "design" => 5,
+        "ask" | "plan" => 10,
+        _ => 12, // code / agent / review
+    }
+}
+
+/// Hard-stop only after extended read-only thrash (safety valve; max loops still apply).
+fn readonly_hard_stop_after(mode: &str) -> usize {
+    match mode.to_ascii_lowercase().as_str() {
+        "visual" | "design" => 10,
+        "ask" | "plan" => 16,
+        _ => 20,
+    }
+}
 
 /// Read-only tools are deterministic within a turn (until a file is written), so an
 /// identical repeated call is always a reasoning loop, never new information.
@@ -36,7 +82,9 @@ const DEDUPED_READONLY_TOOLS: &[&str] = &[
     "search_files",
     "search_codebase",
     "web_search",
+    "visit_url",
     "list_terminals",
+    "read_lints",
 ];
 
 /// Cap how many times the agent can call `wait` in one turn (stops sleep loops).
@@ -49,7 +97,7 @@ fn duplicate_call_key(name: &str, arguments: &str) -> String {
 fn duplicate_call_message(name: &str) -> String {
     format!(
         "DUPLICATE CALL BLOCKED: you already called {} with these exact arguments this turn and the result has not changed. \
-         Do not repeat it. Use the earlier result, try a different tool or different arguments, or finish with your answer.",
+         Do not repeat it. Use the earlier result, try a different tool or different arguments, or answer the user.",
         name
     )
 }
@@ -245,6 +293,9 @@ pub struct AgentTurnOutcome {
     /// When the model stream died mid-turn (e.g. provider 403), we keep the
     /// partial tool transcript but surface this to the UI as `chat_complete.error`.
     pub interrupt_error: Option<String>,
+    /// True when any tool wrote/deleted files this turn (drives the post-turn
+    /// incremental index refresh).
+    pub wrote_files: bool,
 }
 
 fn emit_turn_chat_token(config: &AgentTurnConfig<'_>, chunk: impl Into<String>) {
@@ -264,14 +315,21 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut total_output_tokens = 0usize;
     let mut read_paths: HashSet<String> = HashSet::new();
     let mut edit_counts: HashMap<String, usize> = HashMap::new();
+    let mut edit_fail_counts: HashMap<String, usize> = HashMap::new();
+    let mut needs_reread: HashSet<String> = HashSet::new();
+    let mut file_cache: HashMap<String, String> = HashMap::new();
     let mut executed_readonly_calls: HashSet<String> = HashSet::new();
     let mut wait_calls = 0usize;
     let mut final_full_response = String::new();
     let mut finished_signal: Option<String> = None;
     let mut ended_with_text_completion = false;
     let mut interrupt_error: Option<String> = None;
+    let mut wrote_files = false;
     let mut empty_response_retried = false;
     let mut incomplete_text_nudged = false;
+    let mut reasoning_only_nudged = false;
+    let mut consecutive_readonly_rounds = 0usize;
+    let mut explore_nudge_sent = false;
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
@@ -392,8 +450,39 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             break;
         }
 
-        // Reasoning-only stop (no content, no tools) — nothing left to do this loop.
+        // Reasoning-only stop (think tokens, no content, no tools). Common in Plan/Ask
+        // when the model "thinks" then exits — nudge once so the turn continues.
         if outcome.content.trim().is_empty() && outcome.tool_calls.is_empty() {
+            if outcome.had_reasoning
+                && !reasoning_only_nudged
+                && !config.cancel.is_cancelled()
+                && loop_count < config.max_loops
+            {
+                reasoning_only_nudged = true;
+                let nudge = if config.mode.eq_ignore_ascii_case("plan") {
+                    NUDGE_PLAN_REASONING_ONLY
+                } else if config.mode.eq_ignore_ascii_case("ask") {
+                    NUDGE_ASK_REASONING_ONLY
+                } else {
+                    NUDGE_REASONING_ONLY
+                };
+                logging::info(
+                    "chat",
+                    &format!(
+                        "Reasoning-only stop in {} mode — nudging model to continue",
+                        config.mode
+                    ),
+                );
+                config.api_messages.push(json!({
+                    "role": "user",
+                    "content": nudge,
+                }));
+                streaming::emit_chat_status(
+                    &config.app_handle,
+                    json!({ "phase": "model", "label": "Continuing" }),
+                );
+                continue;
+            }
             break;
         }
 
@@ -401,6 +490,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             "role": "assistant",
             "content": if outcome.content.is_empty() { Value::Null } else { Value::String(outcome.content.clone()) },
         });
+        if let Some(reasoning) = &outcome.reasoning {
+            if !reasoning.is_empty() {
+                assistant_msg["reasoning"] = Value::String(reasoning.clone());
+                // DeepSeek-compatible routes expect reasoning_content on tool-call turns.
+                assistant_msg["reasoning_content"] = Value::String(reasoning.clone());
+            }
+        }
+        if let Some(details) = &outcome.reasoning_details {
+            assistant_msg["reasoning_details"] = details.clone();
+        }
         if !outcome.tool_calls.is_empty() {
             let calls: Vec<Value> = outcome
                 .tool_calls
@@ -459,6 +558,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             if config.cancel.is_cancelled() {
                 break 'outer;
             }
+
             streaming::emit_chat_status(
                 &config.app_handle,
                 json!({ "phase": "tool", "tool": tool_calls[0].name }),
@@ -533,17 +633,46 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     &call.name,
                     &tool_outcome.tool_result,
                 );
-                if let Some(SideEffect::FileRead { path, .. }) = tool_outcome.side_effect {
+                if let Some(SideEffect::FileRead { path, content }) = tool_outcome.side_effect {
                     let abs = resolve_abs(&path, config.project_path);
                     read_paths.insert(abs.clone());
+                    file_cache.insert(abs.clone(), content);
                     edit_counts.remove(&abs);
+                    edit_fail_counts.remove(&abs);
+                    needs_reread.remove(&abs);
                 }
             }
 
             super::messages::clear_old_tool_results(config.api_messages);
+
+            // Count this parallel read-only batch as one explore round.
+            consecutive_readonly_rounds += 1;
+            let hard_stop = readonly_hard_stop_after(config.mode);
+            if consecutive_readonly_rounds >= hard_stop {
+                logging::warn(
+                    "chat",
+                    &format!(
+                        "Read-only thrash after {} rounds — hard-stopping turn",
+                        consecutive_readonly_rounds
+                    ),
+                );
+                final_full_response.push_str(
+                    "\n<tool_result>\n[chat] Stopped after too many search/read loops. Ask me to continue with a narrower request.\n</tool_result>\n",
+                );
+                break 'outer;
+            }
+            if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {
+                explore_nudge_sent = true;
+                logging::info("chat", "Read-only thrash — nudging model toward editing");
+                config.api_messages.push(json!({
+                    "role": "user",
+                    "content": NUDGE_START_EDITING,
+                }));
+            }
             continue;
         }
 
+        let mut round_had_write = false;
         for call in tool_calls {
             if config.cancel.is_cancelled() {
                 break 'outer;
@@ -569,6 +698,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     push_tool_result(config.api_messages, &call.id, &call.name, &msg);
                     continue;
                 }
+            } else {
+                round_had_write = true;
             }
 
             if call.name == "wait" {
@@ -593,6 +724,19 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         .to_string();
                     if !target.is_empty() {
                         let abs = resolve_abs(&target, config.project_path);
+                        if needs_reread.contains(&abs) {
+                            let fails = edit_fail_counts.get(&abs).copied().unwrap_or(0);
+                            let hint_msg = format!(
+                                "BLOCKED: edit_file on '{}' failed {} time(s) this turn. \
+                                 Call read_file on it now (required), then retry with a unique SEARCH block from the latest content.",
+                                target, fails.max(1)
+                            );
+                            push_tool_result(config.api_messages, &call.id, &call.name, &hint_msg);
+                            let ui = format!("\n<tool_result>\n[edit_file] {}\n</tool_result>\n", hint_msg);
+                            emit_turn_chat_token(&config, ui.clone());
+                            final_full_response.push_str(&ui);
+                            continue;
+                        }
                         let count = edit_counts.entry(abs.clone()).or_insert(0);
                         *count += 1;
                         if *count > MAX_EDITS_PER_FILE_PER_TURN {
@@ -613,6 +757,41 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                                 "Hint: you have not read '{}' this turn. Call read_file first if the edit fails.",
                                 target
                             ));
+                        }
+                    }
+                }
+            }
+
+            // Serve unchanged full-file reads from the turn cache when possible.
+            if call.name == "read_file" {
+                if let Ok(args_val) = serde_json::from_str::<Value>(&call.arguments) {
+                    let path = args_val.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                    let has_range = args_val.get("start_line").is_some()
+                        || args_val.get("end_line").is_some();
+                    if !path.is_empty() && !has_range {
+                        let abs = resolve_abs(path, config.project_path);
+                        if !needs_reread.contains(&abs) {
+                            if let Some(cached) = file_cache.get(&abs) {
+                                let display = if cached.chars().count() > 30_000 {
+                                    let head: String = cached.chars().take(30_000).collect();
+                                    format!(
+                                        "{}\n\n[truncated — file longer than 30,000 chars; call read_file again with start_line/end_line to see more]\n\
+                                         [served from turn cache]",
+                                        head
+                                    )
+                                } else {
+                                    format!("{}\n\n[served from turn cache — content unchanged since last read/write]", cached)
+                                };
+                                let ui = format!("\n<cat>{}</cat>\n", path);
+                                upsert_terminal_ui_chunk(&mut final_full_response, &ui);
+                                emit_turn_chat_token(&config, ui.clone());
+                                track_stream_chunk(&config, &ui, None);
+                                push_tool_result(config.api_messages, &call.id, &call.name, &display);
+                                read_paths.insert(abs.clone());
+                                edit_counts.remove(&abs);
+                                edit_fail_counts.remove(&abs);
+                                continue;
+                            }
                         }
                     }
                 }
@@ -653,21 +832,67 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
             push_tool_result(config.api_messages, &call.id, &call.name, &content);
 
+            // Track failed edits so we force a re-read before the next attempt.
+            if call.name == "edit_file"
+                && (content.starts_with("ERROR:") || content.starts_with("BLOCKED:"))
+            {
+                if let Ok(args_val) = serde_json::from_str::<Value>(&call.arguments) {
+                    let target = args_val
+                        .get("target_file")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if !target.is_empty() {
+                        let abs = resolve_abs(target, config.project_path);
+                        let fails = edit_fail_counts.entry(abs.clone()).or_insert(0);
+                        *fails += 1;
+                        file_cache.remove(&abs);
+                        if *fails >= MAX_CONSECUTIVE_EDIT_FAILURES {
+                            needs_reread.insert(abs);
+                        } else {
+                            // Even one failure: require re-read before the next edit.
+                            needs_reread.insert(abs);
+                        }
+                    }
+                }
+            }
+
             if let Some(effect) = tool_outcome.side_effect {
                 match effect {
-                    SideEffect::FileRead { path, .. } => {
+                    SideEffect::FileRead { path, content: file_content } => {
                         let abs = resolve_abs(&path, config.project_path);
                         read_paths.insert(abs.clone());
+                        file_cache.insert(abs.clone(), file_content);
                         // Re-reading unlocks another edit budget for this file.
                         edit_counts.remove(&abs);
+                        edit_fail_counts.remove(&abs);
+                        needs_reread.remove(&abs);
                     }
-                    SideEffect::FileWritten { path, .. } => {
-                        read_paths.insert(resolve_abs(&path, config.project_path));
+                    SideEffect::FileWritten { path, content: file_content } => {
+                        wrote_files = true;
+                        let abs = resolve_abs(&path, config.project_path);
+                        read_paths.insert(abs.clone());
+                        file_cache.insert(abs.clone(), file_content);
+                        edit_fail_counts.remove(&abs);
+                        needs_reread.remove(&abs);
+                    }
+                    SideEffect::FilesWritten { files } => {
+                        wrote_files = true;
+                        for (path, file_content) in files {
+                            let abs = resolve_abs(&path, config.project_path);
+                            read_paths.insert(abs.clone());
+                            file_cache.insert(abs.clone(), file_content);
+                            edit_fail_counts.remove(&abs);
+                            needs_reread.remove(&abs);
+                        }
                     }
                     SideEffect::FileDeleted { path } => {
+                        wrote_files = true;
                         let abs = resolve_abs(&path, config.project_path);
                         read_paths.remove(&abs);
                         edit_counts.remove(&abs);
+                        edit_fail_counts.remove(&abs);
+                        needs_reread.remove(&abs);
+                        file_cache.remove(&abs);
                     }
                     SideEffect::Finished { summary } => {
                         finished_signal = Some(summary.unwrap_or_default());
@@ -678,6 +903,34 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
         if finished_signal.is_some() {
             break;
+        }
+
+        if round_had_write {
+            consecutive_readonly_rounds = 0;
+        } else {
+            consecutive_readonly_rounds += 1;
+            let hard_stop = readonly_hard_stop_after(config.mode);
+            if consecutive_readonly_rounds >= hard_stop {
+                logging::warn(
+                    "chat",
+                    &format!(
+                        "Read-only thrash after {} rounds — hard-stopping turn",
+                        consecutive_readonly_rounds
+                    ),
+                );
+                final_full_response.push_str(
+                    "\n<tool_result>\n[chat] Stopped after too many search/read loops. Ask me to continue with a narrower request.\n</tool_result>\n",
+                );
+                break;
+            }
+            if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {
+                explore_nudge_sent = true;
+                logging::info("chat", "Read-only thrash — nudging model toward editing");
+                config.api_messages.push(json!({
+                    "role": "user",
+                    "content": NUDGE_START_EDITING,
+                }));
+            }
         }
 
         super::messages::clear_old_tool_results(config.api_messages);
@@ -716,6 +969,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         response_text: final_full_response,
         loop_count,
         interrupt_error,
+        wrote_files,
     })
 }
 
@@ -758,10 +1012,14 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
         upsert_tagged_block(accumulated, chunk, "<todos", "</todos>");
         return;
     }
-    if !chunk.contains("<terminal_command") {
+    let tag = if chunk.contains("<terminal_command") {
+        ("<terminal_command", "</terminal_command>")
+    } else if chunk.contains("<edit_pending") {
+        ("<edit_pending", "</edit_pending>")
+    } else {
         accumulated.push_str(chunk);
         return;
-    }
+    };
 
     let Some(id) = extract_xml_attr(chunk, "id") else {
         accumulated.push_str(chunk);
@@ -774,17 +1032,17 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
         return;
     };
 
-    let Some(block_start) = accumulated[..marker_pos].rfind("<terminal_command") else {
+    let Some(block_start) = accumulated[..marker_pos].rfind(tag.0) else {
         accumulated.push_str(chunk);
         return;
     };
 
-    let Some(rel_end) = accumulated[block_start..].find("</terminal_command>") else {
+    let Some(rel_end) = accumulated[block_start..].find(tag.1) else {
         accumulated.push_str(chunk);
         return;
     };
 
-    let block_end = block_start + rel_end + "</terminal_command>".len();
+    let block_end = block_start + rel_end + tag.1.len();
     accumulated.replace_range(block_start..block_end, chunk);
 }
 

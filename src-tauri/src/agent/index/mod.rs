@@ -138,6 +138,10 @@ impl IndexManager {
         )
     }
 
+    pub fn set_api_context(&mut self, ctx: ApiContext) {
+        self.remote.set_context(ctx);
+    }
+
     pub fn index_project_with_progress<F>(&mut self, mut on_progress: F) -> std::io::Result<IndexStatus>
     where
         F: FnMut(IndexProgress),
@@ -448,13 +452,38 @@ impl IndexState {
         turn_id: Option<String>,
         conversation_id: Option<String>,
     ) {
-        if let Ok(mut guard) = self.inner.api_context.lock() {
+        let token_changed = {
+            let Ok(mut guard) = self.inner.api_context.lock() else {
+                return;
+            };
+            let changed = guard.token != token;
             guard.token = token;
             guard.turn_id = turn_id;
             guard.conversation_id = conversation_id;
-        }
+            changed
+        };
+        // Turn/conversation ids are per-request metadata; update the loaded
+        // manager in place. Only a token change (sign-in/out) invalidates the
+        // in-memory index — dropping it every turn forced a disk reload of
+        // index.bin on each search.
         if let Ok(mut current) = self.inner.current.lock() {
-            *current = None;
+            if token_changed {
+                *current = None;
+            } else if let Some(manager) = current.as_mut() {
+                manager.set_api_context(self.inner.api_context());
+            }
+        }
+    }
+
+    /// Enable/disable semantic embeddings for codebase search. Persisted by the
+    /// frontend settings store and pushed here on startup and on change.
+    pub fn set_embeddings_enabled(&self, enabled: bool) {
+        let changed = self.inner.embeddings_enabled.swap(enabled, Ordering::SeqCst) != enabled;
+        if changed {
+            // Force a reload so the manager picks up the new mode lazily.
+            if let Ok(mut current) = self.inner.current.lock() {
+                *current = None;
+            }
         }
     }
 

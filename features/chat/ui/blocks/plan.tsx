@@ -42,8 +42,8 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
 
     return (
         <div className={cn(
-            "w-full flex flex-col rounded-lg border overflow-hidden my-2",
-            "border-border-subtle bg-panel/60",
+            "w-full flex flex-col rounded-xl border overflow-hidden my-2",
+            "border-border bg-panel",
         )}>
             <div className="flex items-center justify-between px-2.5 py-2 gap-2">
                 <div className="flex items-center gap-2 min-w-0">

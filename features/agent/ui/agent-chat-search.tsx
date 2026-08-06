@@ -114,7 +114,7 @@ export function AgentChatSearch() {
     };
 
     return (
-        <div ref={containerRef} className="relative w-[min(420px,36vw)] max-w-full">
+        <div ref={containerRef} className="relative w-[min(220px,28vw)] max-w-full">
             <div
                 className={cn(
                     "command-center flex h-[26px] w-full items-center gap-2 rounded-lg border px-2 transition-colors",

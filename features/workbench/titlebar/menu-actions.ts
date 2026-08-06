@@ -226,6 +226,12 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 );
                 window.dispatchEvent(new Event("shape-open-output"));
                 break;
+            case "Preview":
+                window.dispatchEvent(
+                    new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),
+                );
+                window.dispatchEvent(new Event("shape-open-preview"));
+                break;
             case "Terminal":
                 window.dispatchEvent(
                     new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),

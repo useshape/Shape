@@ -1,6 +1,8 @@
 /**
- * Color theme registry. Shape is a dark-only product - every theme here is a
- * dark theme, differentiated by surface tone and accent color. No light mode.
+ * Color theme registry. Shape is a dark-only product — every theme here is a
+ * dark theme, differentiated by surface tone and accent. No light mode.
+ *
+ * Theme ids are stable for settings migration; labels/styles may evolve.
  */
 
 export type ColorThemeId = "dark" | "graphite" | "one" | "purple";
@@ -28,20 +30,20 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeDefinition> = {
     graphite: {
         id: "graphite",
         label: "Graphite",
-        description: "Zed-style charcoal with a cool blue accent.",
-        swatch: { background: "#111111", surface: "#191919", accent: "#4d80f7" },
+        description: "Deeper charcoal with calm neutral selection.",
+        swatch: { background: "#0e0e0e", surface: "#161616", accent: "#a8a8a8" },
     },
     one: {
         id: "one",
         label: "One",
-        description: "One Dark - the Atom classic.",
-        swatch: { background: "#282c34", surface: "#21252b", accent: "#61afef" },
+        description: "Soft slate surfaces, muted teal accent.",
+        swatch: { background: "#1c1f24", surface: "#23272e", accent: "#7aa2a8" },
     },
     purple: {
         id: "purple",
-        label: "Purple",
-        description: "Deep purple surfaces, violet accent.",
-        swatch: { background: "#16121c", surface: "#1e1828", accent: "#a78bfa" },
+        label: "Umber",
+        description: "Warm brownish-red charcoal, soft clay accent.",
+        swatch: { background: "#1a1514", surface: "#221c1a", accent: "#c4a484" },
     },
 };
 

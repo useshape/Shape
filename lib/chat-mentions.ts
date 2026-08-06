@@ -1,5 +1,8 @@
 import { commands } from "@/lib/backend/commands";
 import { listDesignPreviewSessions } from "@/lib/design-preview-store";
+import { hostnameOf } from "@/lib/favicon";
+import { lookupMentionToken, registerMentionToken } from "@/lib/mention-registry";
+import { getPreviewCurrentUrl } from "@/features/preview/store";
 
 export type MentionKind =
     | "file"
@@ -17,9 +20,17 @@ export type ChatMention = {
     kind: MentionKind;
     path?: string;
     label: string;
-    /** Design concept id when kind === "design" */
+    /** Design concept id when kind === "design"; chat id when kind === "chat" */
     id?: string;
 };
+
+/** Resolve `@browser:current` to the Preview panel URL when available. */
+export function resolveBrowserMentionPath(path: string | undefined): string | null {
+    if (!path || path === "current") {
+        return getPreviewCurrentUrl();
+    }
+    return path;
+}
 
 /** Explicit typed tokens + bare paths / design names (no spaces). */
 const MENTION_PATTERN =
@@ -29,33 +40,104 @@ function normalizeDesignKey(value: string): string {
     return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
 }
 
-export function formatMentionToken(mention: ChatMention): string {
-    if (mention.kind === "codebase") return "@codebase";
-    if (mention.kind === "selection") return "@selection";
-    if (mention.kind === "design") {
-        const label = (mention.label || mention.id || "design").trim();
-        return `@${label.replace(/\s+/g, "-")}`;
-    }
-    if (mention.kind === "folder") {
-        const path = mention.path ?? mention.label;
-        return `@${path.endsWith("/") ? path : `${path}/`}`;
-    }
-    if (mention.kind === "file" || mention.kind === "docs") {
-        return `@${mention.path ?? mention.label}`;
-    }
-    return `@${mention.kind}:${mention.path ?? mention.label}`;
+/** Slug for typed mention tokens (no spaces; overlay must match textarea). */
+export function slugifyMentionLabel(value: string): string {
+    return value
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-zA-Z0-9._/-]+/g, "")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") || "item";
 }
 
-/** Friendly label for chips / overlays (basename, design name, etc.). */
+function unslugMentionLabel(value: string): string {
+    return value.replace(/-/g, " ").trim() || value;
+}
+
+function pathBasename(path: string): string {
+    const norm = path.replace(/\\/g, "/").replace(/\/+$/, "");
+    const parts = norm.split("/").filter(Boolean);
+    return parts[parts.length - 1] || path;
+}
+
+/** Short chip label for composer / messages (basename, not full path). */
 export function mentionDisplayLabel(mention: ChatMention): string {
     if (mention.kind === "codebase") return "Codebase";
     if (mention.kind === "selection") return "Selection";
     if (mention.kind === "design") return mention.label || mention.id || "Design";
-    if (mention.path) {
-        const base = mention.path.replace(/\\/g, "/").split("/").pop();
-        return base || mention.label;
+    if (mention.kind === "chat") {
+        if (mention.label && mention.label !== mention.path && mention.label !== mention.id) {
+            return mention.label;
+        }
+        const raw = mention.path || mention.id || mention.label || "Chat";
+        if (/^[0-9a-f-]{8,}$/i.test(raw) || /^\d+$/.test(raw)) {
+            return mention.label && !/^[0-9a-f-]{8,}$/i.test(mention.label)
+                ? mention.label
+                : "Chat";
+        }
+        return unslugMentionLabel(raw);
     }
+    if (mention.kind === "browser") {
+        const resolved = resolveBrowserMentionPath(mention.path) || mention.path || mention.label || "";
+        if (!resolved || resolved === "current") return "Current page";
+        return hostnameOf(resolved) || mention.label || "Browser";
+    }
+    if (mention.kind === "terminal") {
+        return mention.label && mention.label !== mention.path
+            ? mention.label
+            : unslugMentionLabel(mention.path || "Terminal");
+    }
+    if (mention.kind === "branch") {
+        return mention.label && mention.label !== mention.path
+            ? mention.label
+            : unslugMentionLabel(mention.path || "Branch");
+    }
+    if (mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs") {
+        if (mention.label && !mention.label.includes("/")) return mention.label;
+        if (mention.path) return pathBasename(mention.path);
+        return mention.label;
+    }
+    if (mention.path) return pathBasename(mention.path);
     return mention.label;
+}
+
+/**
+ * Insert short tokens into the composer (`@favicon.ico`) and register the full
+ * path so send-time resolution still works.
+ */
+export function formatMentionToken(mention: ChatMention): string {
+    let token: string;
+    if (mention.kind === "codebase") token = "@codebase";
+    else if (mention.kind === "selection") token = "@selection";
+    else if (mention.kind === "design") {
+        const label = (mention.label || mention.id || "design").trim();
+        token = `@${label.replace(/\s+/g, "-")}`;
+    } else if (mention.kind === "folder") {
+        const base = pathBasename(mention.path ?? mention.label);
+        token = `@${base.endsWith("/") ? base : `${base}/`}`;
+    } else if (mention.kind === "file" || mention.kind === "docs") {
+        const base = pathBasename(mention.path ?? mention.label);
+        token = `@${base}`;
+    } else if (mention.kind === "chat") {
+        token = `@chat:${slugifyMentionLabel(mention.label || "Chat")}`;
+    } else if (mention.kind === "terminal") {
+        token = `@terminal:${slugifyMentionLabel(mention.label || "Terminal")}`;
+    } else if (mention.kind === "branch") {
+        token = `@branch:${slugifyMentionLabel(mention.label || mention.path || "main")}`;
+    } else if (mention.kind === "browser") {
+        const resolved = resolveBrowserMentionPath(mention.path) || mention.path || "";
+        const host =
+            hostnameOf(resolved) ||
+            (resolved === "current" || !resolved ? "current" : slugifyMentionLabel(mention.label || "page"));
+        token = `@browser:${host}`;
+    } else {
+        token = `@${mention.kind}:${mention.path ?? mention.label}`;
+    }
+    registerMentionToken(token, {
+        ...mention,
+        label: mentionDisplayLabel(mention),
+    });
+    return token;
 }
 
 function resolveDesignMention(token: string): ChatMention | null {
@@ -78,11 +160,31 @@ function resolveDesignMention(token: string): ChatMention | null {
     return null;
 }
 
+function labelForTypedMention(kind: MentionKind, path: string): string {
+    if (kind === "chat") return unslugMentionLabel(path);
+    if (kind === "browser") return hostnameOf(path) || path;
+    if (kind === "terminal") return unslugMentionLabel(path);
+    if (kind === "branch") return unslugMentionLabel(path);
+    return path;
+}
+
 export function parseMentionTokens(text: string): ChatMention[] {
     const mentions: ChatMention[] = [];
     let match: RegExpExecArray | null;
     const re = new RegExp(MENTION_PATTERN.source, "g");
     while ((match = re.exec(text)) !== null) {
+        const rawToken = match[0];
+        const registered = lookupMentionToken(rawToken);
+        if (registered?.kind) {
+            mentions.push({
+                kind: registered.kind as MentionKind,
+                path: registered.path,
+                label: registered.label,
+                id: registered.id,
+            });
+            continue;
+        }
+
         if (match[3]) {
             const kind = match[3] as MentionKind;
             mentions.push({
@@ -110,7 +212,8 @@ export function parseMentionTokens(text: string): ChatMention[] {
             mentions.push({
                 kind,
                 path,
-                label: path,
+                id: kind === "chat" ? path : undefined,
+                label: labelForTypedMention(kind, path),
             });
             continue;
         }
@@ -125,10 +228,13 @@ export function parseMentionTokens(text: string): ChatMention[] {
             continue;
         }
 
+        // Basename-only token: keep label short; path may be resolved via registry above.
+        const isFolder = bare.endsWith("/");
+        const clean = bare.replace(/\/$/, "") || bare;
         mentions.push({
-            kind: bare.endsWith("/") ? "folder" : "file",
-            path: bare.replace(/\/$/, "") || bare,
-            label: bare.replace(/\/$/, "") || bare,
+            kind: isFolder ? "folder" : "file",
+            path: clean,
+            label: pathBasename(clean),
         });
     }
     return mentions;
@@ -156,6 +262,33 @@ export function mentionRanges(
 
 export function stripMentionTokens(text: string): string {
     return text.replace(MENTION_PATTERN, "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Collapse long `@path/to/file` tokens to `@file` while registering the full path
+ * for send-time resolution. Safe to run on every keystroke.
+ */
+export function shortenMentionTokensInText(text: string): string {
+    const re = new RegExp(MENTION_PATTERN.source, "g");
+    return text.replace(re, (token) => {
+        const parsed = parseMentionTokens(token)[0];
+        if (!parsed) return token;
+        if (
+            parsed.kind !== "file" &&
+            parsed.kind !== "docs" &&
+            parsed.kind !== "folder"
+        ) {
+            return token;
+        }
+        const fullPath = (parsed.path || token.replace(/^@/, "")).replace(/\/$/, "");
+        if (!fullPath.includes("/")) return token;
+        const short = formatMentionToken({
+            ...parsed,
+            path: parsed.kind === "folder" ? `${fullPath}/` : fullPath,
+            label: pathBasename(fullPath),
+        });
+        return short;
+    });
 }
 
 export type SelectionSnapshot = {
@@ -309,7 +442,23 @@ async function readMentionContext(
         mention.kind === "browser"
     ) {
         const path = mention.path ?? mention.label;
-        return `<mention_context type="${mention.kind}" path="${escapeXmlAttr(path)}">${escapeXmlAttr(path)}</mention_context>`;
+        const label = mentionDisplayLabel(mention);
+        if (mention.kind === "browser") {
+            const resolved = resolveBrowserMentionPath(path);
+            if (resolved) {
+                const isLocal =
+                    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?/i.test(resolved);
+                return `<mention_context type="browser" path="${escapeXmlAttr(resolved)}" label="${escapeXmlAttr(hostnameOf(resolved) || resolved)}">The user referenced the ${isLocal ? "local preview page" : "website"} ${escapeXmlAttr(hostnameOf(resolved) || resolved)} (${escapeXmlAttr(resolved)}). ${isLocal ? "This is the URL currently open in the Shape Preview panel." : "Use the visit_url tool to fetch its content and styling if you need to recreate or reference it."}</mention_context>`;
+            }
+            if (path && path !== "current") {
+                return `<mention_context type="browser" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced the website ${escapeXmlAttr(label)} (${escapeXmlAttr(path)}). Use the visit_url tool to fetch its content and styling if you need to recreate or reference it.</mention_context>`;
+            }
+            return `<mention_context type="browser" path="current" label="Current page">The user referenced the Preview panel current page, but no local preview URL is loaded yet. Ask them for the localhost URL or open Preview.</mention_context>`;
+        }
+        if (mention.kind === "chat") {
+            return `<mention_context type="chat" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced a past chat titled "${escapeXmlAttr(label)}".</mention_context>`;
+        }
+        return `<mention_context type="${mention.kind}" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">${escapeXmlAttr(label)}</mention_context>`;
     }
 
     if (!projectPath) return null;
@@ -333,7 +482,7 @@ async function readMentionContext(
 
     try {
         const content = await commands.readFile(fullPath);
-        const trimmed = content.length > 8000 ? `${content.slice(0, 8000)}\n…(truncated)` : content;
+        const trimmed = content.length > 4000 ? `${content.slice(0, 4000)}\n…(truncated)` : content;
         return `<mention_context type="file" path="${mention.path}">\n${trimmed}\n</mention_context>`;
     } catch {
         return null;

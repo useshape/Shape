@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tokio::process::Child as TokioChild;
-use tokio::sync::Mutex as TokioMutex;
+use std::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use crate::commands::preview_render::DesignAgentOptions;
@@ -14,10 +12,58 @@ pub struct DesignPreviewState {
     pub sandbox_session_id: Option<String>,
 }
 
-#[derive(Debug)]
-pub enum ActiveTerminal {
-    Subprocess(Arc<TokioMutex<Option<TokioChild>>>),
-    Pty(u32),
+/// How the agent handles command execution approval for the current turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AutoRunMode {
+    /// Every command asks for approval.
+    Ask,
+    /// Safe-listed commands run; everything else asks (default).
+    #[default]
+    Auto,
+    /// Everything runs except hard-blocked commands (and protected classes).
+    Always,
+}
+
+impl AutoRunMode {
+    pub fn from_setting(value: Option<&str>) -> Self {
+        match value.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            Some("ask") | Some("ask_every_time") => Self::Ask,
+            Some("always") | Some("run_everything") | Some("yolo") => Self::Always,
+            _ => Self::Auto,
+        }
+    }
+}
+
+/// Per-turn execution policy, set from user settings when the turn starts.
+#[derive(Debug, Clone)]
+pub struct TurnPolicy {
+    pub auto_run_mode: AutoRunMode,
+    /// When true, file edits/creations are staged and need user approval
+    /// before they are written to disk.
+    pub require_edit_approval: bool,
+    /// Destructive git commands (reset/clean/restore…) always ask, even in
+    /// "run everything" mode.
+    pub protect_destructive_git: bool,
+}
+
+impl Default for TurnPolicy {
+    fn default() -> Self {
+        Self {
+            auto_run_mode: AutoRunMode::Auto,
+            require_edit_approval: false,
+            protect_destructive_git: true,
+        }
+    }
+}
+
+/// A file edit staged for user approval (content is held by the waiting tool
+/// call; this is the bookkeeping the UI needs to resolve it).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingEdit {
+    pub id: String,
+    pub path: String,
+    pub is_new_file: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -61,6 +107,12 @@ pub struct PendingCommand {
     pub command: String,
     pub safety: String,
     pub reason: String,
+    /// When set, approval runs this internal action instead of a shell command.
+    /// e.g. `"git_commit"` with `payload` = commit message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -108,12 +160,19 @@ pub struct AgentState {
     pub conversations: Mutex<HashMap<String, Vec<Conversation>>>,
     pub current_conversation_id: Mutex<Option<String>>,
     pub cancellation_token: Mutex<CancellationToken>,
-    /// In-flight agent terminal (subprocess or PTY session) for stop/cancel.
-    pub active_terminal: Mutex<Option<ActiveTerminal>>,
-    /// Terminal commands awaiting user approval
+    /// In-flight agent terminal session ids for stop/cancel (supports concurrent background jobs).
+    pub active_terminals: Mutex<std::collections::HashSet<u32>>,
+    /// Terminal commands awaiting user approval.
     pub pending_commands: Mutex<HashMap<String, PendingCommand>>,
-    /// Approved command results waiting to be fed back to the AI
-    pub command_results: Mutex<HashMap<String, String>>,
+    /// User decisions for pending commands: id -> approved. The waiting tool
+    /// call consumes the decision and (on approval) executes the command.
+    pub command_decisions: Mutex<HashMap<String, bool>>,
+    /// File edits awaiting user approval.
+    pub pending_edits: Mutex<HashMap<String, PendingEdit>>,
+    /// User decisions for pending edits: id -> approved.
+    pub edit_decisions: Mutex<HashMap<String, bool>>,
+    /// Execution policy for the active turn (auto-run mode, edit approval).
+    pub turn_policy: Mutex<TurnPolicy>,
     /// Accumulates input/output tokens for the active user turn.
     pub turn_meter: Mutex<(usize, usize)>,
     /// Compressed summary of older chat turns when history grows long.
@@ -145,9 +204,12 @@ impl AgentState {
             conversations: Mutex::new(HashMap::new()),
             current_conversation_id: Mutex::new(None),
             cancellation_token: Mutex::new(CancellationToken::new()),
-            active_terminal: Mutex::new(None),
+            active_terminals: Mutex::new(std::collections::HashSet::new()),
             pending_commands: Mutex::new(HashMap::new()),
-            command_results: Mutex::new(HashMap::new()),
+            command_decisions: Mutex::new(HashMap::new()),
+            pending_edits: Mutex::new(HashMap::new()),
+            edit_decisions: Mutex::new(HashMap::new()),
+            turn_policy: Mutex::new(TurnPolicy::default()),
             turn_meter: Mutex::new((0, 0)),
             history_summary: Mutex::new(None),
             in_flight: Mutex::new(None),
@@ -489,41 +551,73 @@ impl AgentState {
         result
     }
 
-    pub fn register_subprocess(&self, child: Arc<TokioMutex<Option<TokioChild>>>) {
-        if let Ok(mut slot) = self.active_terminal.lock() {
-            *slot = Some(ActiveTerminal::Subprocess(child));
-        }
-    }
-
-    pub fn register_pty(&self, id: u32) {
-        if let Ok(mut slot) = self.active_terminal.lock() {
-            *slot = Some(ActiveTerminal::Pty(id));
+    pub fn register_session(&self, id: u32) {
+        if let Ok(mut set) = self.active_terminals.lock() {
+            set.insert(id);
         }
     }
 
     pub fn clear_active_terminal(&self) {
-        if let Ok(mut slot) = self.active_terminal.lock() {
-            *slot = None;
+        // Prefer unregister_session(id). Kept for Stop/cancel fallbacks that
+        // need to drop every tracked agent session at once.
+        if let Ok(mut set) = self.active_terminals.lock() {
+            set.clear();
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn has_active_terminals(&self) -> bool {
+        self.active_terminals
+            .lock()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)
+    }
+
+    pub fn unregister_session(&self, id: u32) {
+        if let Ok(mut set) = self.active_terminals.lock() {
+            set.remove(&id);
         }
     }
 
     pub async fn kill_active_terminal(&self, pty_state: &crate::commands::pty::PtyState) {
-        let taken = self
-            .active_terminal
+        let ids: Vec<u32> = self
+            .active_terminals
             .lock()
             .ok()
-            .and_then(|mut guard| guard.take());
-        if let Some(active) = taken {
-            match active {
-                ActiveTerminal::Subprocess(child_slot) => {
-                    if let Some(mut child) = child_slot.lock().await.take() {
-                        let _ = child.kill().await;
-                    }
-                }
-                ActiveTerminal::Pty(id) => {
-                    let _ = crate::commands::pty::kill_session(pty_state, id).await;
-                }
-            }
+            .map(|mut guard| guard.drain().collect())
+            .unwrap_or_default();
+        for id in ids {
+            let _ = crate::commands::pty::kill_session(pty_state, id).await;
+        }
+    }
+
+    pub fn set_turn_policy(&self, policy: TurnPolicy) {
+        if let Ok(mut guard) = self.turn_policy.lock() {
+            *guard = policy;
+        }
+    }
+
+    pub fn turn_policy(&self) -> TurnPolicy {
+        self.turn_policy
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_default()
+    }
+
+    /// Clear approval bookkeeping from a previous turn so stale decisions can
+    /// never resolve a new pending item.
+    pub fn clear_pending_approvals(&self) {
+        if let Ok(mut g) = self.pending_commands.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.command_decisions.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.pending_edits.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.edit_decisions.lock() {
+            g.clear();
         }
     }
 
