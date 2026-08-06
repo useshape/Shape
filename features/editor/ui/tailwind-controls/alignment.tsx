@@ -89,7 +89,7 @@ export function Alignment({ currentClasses, onApply, onClose }: AlignmentProps) 
                 </div>
 
                 <div className="space-y-1">
-                    <div className="text-[10px] text-text-muted uppercase tracking-wide">Direction</div>
+                    <div className="text-[10px] text-text-muted ">Direction</div>
                     <div className="flex gap-1">
                         <PickBtn
                             label="flex-row"
@@ -119,7 +119,7 @@ export function Alignment({ currentClasses, onApply, onClose }: AlignmentProps) 
                 </div>
 
                 <div className="space-y-1">
-                    <div className="text-[10px] text-text-muted uppercase tracking-wide">
+                    <div className="text-[10px] text-text-muted ">
                         Justify ({row ? "main" : "cross"})
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -145,7 +145,7 @@ export function Alignment({ currentClasses, onApply, onClose }: AlignmentProps) 
                 </div>
 
                 <div className="space-y-1">
-                    <div className="text-[10px] text-text-muted uppercase tracking-wide">
+                    <div className="text-[10px] text-text-muted ">
                         Align ({row ? "cross" : "main"})
                     </div>
                     <div className="flex flex-wrap gap-1">

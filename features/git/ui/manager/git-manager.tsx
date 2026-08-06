@@ -351,7 +351,7 @@ function ManagerShell() {
     return (
         <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden select-none bg-editor text-text-primary">
             <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                <aside className="flex w-64 shrink-0 flex-col">
+                <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
                     <div className="p-2">
                         <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
                             <Icon name="search" size={14} className="shrink-0 text-text-muted" />
@@ -379,7 +379,7 @@ function ManagerShell() {
                                             active={activeLeafId === leaf.id || section === leaf.id}
                                             onClick={() => select(leaf.id)}
                                         >
-                                            <span className="-mx-2.5 truncate text-sm font-regular">
+                                            <span className="truncate text-sm font-regular">
                                                 {leaf.label}
                                             </span>
                                         </NavLeafButton>

@@ -42,6 +42,8 @@ interface CommandPaletteOpenDetail {
     filter?: string;
     placeholder?: string;
     recent?: boolean;
+    /** Bias results toward this file when opened from the titlebar omnibar. */
+    activeFile?: string;
     actions?: EditorAction[];
 }
 
@@ -105,7 +107,7 @@ function shortcut(label: string) {
     return getShortcutForLabel(label) ?? "";
 }
 
-/** Monaco actions that open built-in widgets/overlays — handled by Shape UI instead. */
+/** Monaco actions that open built-in widgets/overlays — Shape provides its own UI. */
 const MONACO_UI_ACTION_IDS = new Set([
     "editor.action.quickCommand",
     "editor.action.gotoLine",
@@ -117,8 +119,6 @@ const MONACO_UI_ACTION_IDS = new Set([
     "editor.action.referenceSearch.trigger",
     "editor.action.showReferences",
     "editor.action.peekLocations",
-    "editor.action.rename",
-    "editor.action.quickFix",
     "editor.action.peekDefinition",
     "editor.action.peekDeclaration",
     "editor.action.peekTypeDefinition",
@@ -132,33 +132,6 @@ const MONACO_UI_ACTION_IDS = new Set([
     "editor.action.triggerParameterHints",
     "editor.action.showHover",
     "editor.action.showContextMenu",
-    "editor.action.inlayHints.toggle",
-    "editor.action.formatDocument",
-    "editor.action.formatSelection",
-    "editor.action.organizeImports",
-    "editor.action.revealDefinition",
-    "editor.action.marker.next",
-    "editor.action.marker.prev",
-    "editor.foldAll",
-    "editor.unfoldAll",
-    "editor.action.commentLine",
-    "editor.action.blockComment",
-    "editor.action.trimTrailingWhitespace",
-    "editor.action.indentLines",
-    "editor.action.outdentLines",
-    "editor.action.copyLinesDownAction",
-    "editor.action.moveLinesUpAction",
-    "editor.action.moveLinesDownAction",
-    "editor.action.selectAll",
-    "editor.action.selectHighlights",
-    "editor.action.sortLinesAscending",
-    "editor.action.sortLinesDescending",
-    "editor.action.transformToUppercase",
-    "editor.action.transformToLowercase",
-    "editor.action.transformToTitlecase",
-    "editor.action.joinLines",
-    "editor.action.insertCursorAbove",
-    "editor.action.insertCursorBelow",
 ]);
 
 function isMonacoUiAction(actionId: string, label: string): boolean {
@@ -227,6 +200,7 @@ export function CommandPalette() {
     const [filterTab, setFilterTab] = useState<PaletteFilter>("all");
     const [recentFiles, setRecentFiles] = useState(false);
     const [placeholder, setPlaceholder] = useState("Search agents, files, actions...");
+    const [activeFileBias, setActiveFileBias] = useState<string | null>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -240,6 +214,7 @@ export function CommandPalette() {
             const requestedFilter = (detail?.filter || "") as PaletteFilter | "";
             setMode(openMode);
             setRecentFiles(Boolean(detail?.recent));
+            setActiveFileBias(detail?.activeFile || null);
 
             if (requestedFilter && PALETTE_FILTERS.some((f) => f.id === requestedFilter)) {
                 setFilterTab(requestedFilter);
@@ -318,6 +293,7 @@ export function CommandPalette() {
             setMode("");
             setFilterTab("all");
             setRecentFiles(false);
+            setActiveFileBias(null);
             setActions([]);
             setAgentActions([]);
             setFileActions([]);
@@ -434,10 +410,73 @@ export function CommandPalette() {
     const actionCommands = useMemo(() => {
         if (!browse) return actions;
         // getMonacoActions() already merges app + editor commands
-        return actions.map((a) => ({ ...a, section: a.section || "Skills & Commands" }));
+        return actions.map((a) => ({ ...a, section: a.section || "Commands" }));
     }, [browse, actions]);
 
     const settingsCommands = useMemo(() => getSettingsPaletteActions(), []);
+
+    const currentFileActions = useMemo((): EditorAction[] => {
+        if (!browse || !activeFileBias) return [];
+        const name = activeFileBias.split(/[\\/]/).pop() || activeFileBias;
+        const path = activeFileBias;
+        return [
+            {
+                id: `current-file:open:${path}`,
+                label: name,
+                shortcut: "",
+                meta: path.replace(/\\/g, "/"),
+                section: "Current File",
+                icon: name,
+                run: () => {
+                    void import("@/lib/backend").then(({ commands }) => commands.setActiveFile(path));
+                },
+            },
+            {
+                id: "current-file:find",
+                label: "Find in Current File",
+                shortcut: shortcut("Find"),
+                meta: name,
+                section: "Current File",
+                run: () => window.dispatchEvent(new Event("open-in-file-search")),
+            },
+            {
+                id: "current-file:goto-symbol",
+                label: "Go to Symbol in Editor…",
+                shortcut: shortcut("Go to Symbol in Editor..."),
+                meta: name,
+                section: "Current File",
+                run: () =>
+                    window.dispatchEvent(
+                        new CustomEvent("shape-command-palette", { detail: { mode: "editor_symbols" } }),
+                    ),
+            },
+            {
+                id: "current-file:goto-line",
+                label: "Go to Line/Column…",
+                shortcut: shortcut("Go to Line/Column..."),
+                meta: name,
+                section: "Current File",
+                run: () =>
+                    window.dispatchEvent(
+                        new CustomEvent("shape-command-palette", {
+                            detail: { mode: "goto_line", placeholder: "Line : Column" },
+                        }),
+                    ),
+            },
+            {
+                id: "current-file:reveal",
+                label: "Reveal in Explorer",
+                shortcut: "",
+                meta: name,
+                section: "Current File",
+                run: () => {
+                    window.dispatchEvent(
+                        new CustomEvent("shape-reveal-in-explorer", { detail: { path } }),
+                    );
+                },
+            },
+        ];
+    }, [browse, activeFileBias]);
 
     const filtered = useMemo(() => {
         if (!browse) {
@@ -455,11 +494,22 @@ export function CommandPalette() {
 
         let pool: EditorAction[] = [];
         if (filterTab === "all") {
-            pool = [...agentActions.slice(0, 8), ...fileActions.slice(0, 8), ...actionCommands.slice(0, 24), ...settingsCommands.slice(0, 8)];
+            // When opened from titlebar with an active file, surface Current File first.
+            const fileSlice = fileActions.slice(0, activeFileBias ? 6 : 8);
+            const actionSlice = query.trim()
+                ? actionCommands
+                : actionCommands.slice(0, 48);
+            pool = [
+                ...currentFileActions,
+                ...agentActions.slice(0, 8),
+                ...fileSlice,
+                ...actionSlice,
+                ...settingsCommands.slice(0, 8),
+            ];
         } else if (filterTab === "agents") {
             pool = agentActions;
         } else if (filterTab === "files") {
-            pool = fileActions;
+            pool = activeFileBias ? [...currentFileActions, ...fileActions] : fileActions;
         } else if (filterTab === "actions") {
             pool = actionCommands;
         } else if (filterTab === "settings") {
@@ -475,12 +525,25 @@ export function CommandPalette() {
                     fuzzyScore(q, action.label),
                     fuzzyScore(q, action.meta || "") * 0.7,
                     fuzzyScore(q, action.id) * 0.5,
+                    // Boost current-file section when searching from omnibar
+                    action.section === "Current File" ? 30 : 0,
                 ),
             }))
             .filter((entry) => entry.score > 0)
             .sort((a, b) => b.score - a.score)
             .map((entry) => entry.action);
-    }, [browse, actions, filterTab, agentActions, fileActions, actionCommands, settingsCommands, query]);
+    }, [
+        browse,
+        actions,
+        filterTab,
+        agentActions,
+        fileActions,
+        actionCommands,
+        settingsCommands,
+        currentFileActions,
+        activeFileBias,
+        query,
+    ]);
 
     useEffect(() => {
         setSelectedIndex(0);
@@ -619,7 +682,7 @@ export function CommandPalette() {
                             return (
                                 <React.Fragment key={action.id}>
                                     {showHeader ? (
-                                        <div className="px-3 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-text-muted">
+                                        <div className="px-3 pb-1 pt-2 text-2xs font-medium text-text-muted">
                                             {section}
                                         </div>
                                     ) : null}
@@ -989,6 +1052,15 @@ function getAppCommands(): EditorAction[] {
             run: () => {
                 window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
                 window.dispatchEvent(new CustomEvent("shape-terminal-shortcut", { detail: { action: "new" } }));
+            },
+        },
+        {
+            id: "app.view.splitTerminal",
+            label: "Terminal: Split Terminal",
+            shortcut: "",
+            run: () => {
+                window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
+                window.dispatchEvent(new CustomEvent("shape-terminal-shortcut", { detail: { action: "split" } }));
             },
         },
         {

@@ -28,7 +28,7 @@ export function SettingSection({
     return (
         <div id={id} className="mb-8 last:mb-0 scroll-mt-3">
             <div className="mb-2.5">
-                <h2 className="text-xs font-medium uppercase tracking-wide text-text-muted">{title}</h2>
+                <h2 className="text-xs font-medium text-text-muted">{title}</h2>
                 {description && <p className="mt-1 text-sm text-text-muted">{description}</p>}
             </div>
             <div className="flex flex-col overflow-hidden rounded-xl bg-panel divide-y divide-border-subtle">

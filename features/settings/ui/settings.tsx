@@ -1079,7 +1079,7 @@ export function SettingsView() {
     return (
         <div className="flex h-full w-full min-w-0 overflow-hidden bg-editor select-none">
             <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
-                <div className="flex shrink-0 flex-col gap-2 p-3 pt-2">
+                <div className="flex shrink-0 flex-col gap-2 p-2 pt-2">
                     <button
                         type="button"
                         onClick={() => closeWindow()}
@@ -1088,7 +1088,7 @@ export function SettingsView() {
                         <Icon name="arrow_back" size={16} />
                         Back
                     </button>
-                    <div className="flex h-9 items-center gap-2 rounded-lg border border-border-subtle bg-surface-1 px-3">
+                    <div className="flex h-9 items-center gap-2 rounded-lg border border-border bg-transparent px-3">
                         <Icon name="search" size={14} className="shrink-0 text-text-muted" />
                         <Input
                             placeholder="Search settings"

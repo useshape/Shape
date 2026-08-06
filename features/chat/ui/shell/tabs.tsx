@@ -68,68 +68,72 @@ export function ChatTabBar({
 
                     <div
                         className={cn(
-                            "relative z-10 flex min-w-0 shrink items-center gap-0.5 overflow-hidden",
+                            "relative z-10 flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden",
                             columnChrome ? "pl-2" : "pl-2",
                         )}
                     >
-                        <div className="chat-tab-scroll flex min-w-0 items-center gap-0.5 overflow-x-auto no-scrollbar">
-                            {tabs.map((tab) => {
-                                const active = tab.id === activeTabId;
-                                return (
-                                    <div
-                                        key={tab.id}
-                                        className={cn(
-                                            "group relative flex h-7 max-w-[180px] shrink-0 items-center gap-1 px-2 text-sm transition-colors",
-                                            columnChrome ? "rounded-sm" : "rounded-md",
-                                            active
-                                                ? "bg-surface-3 text-text-primary"
-                                                : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
-                                        )}
-                                    >
-                                        <button
-                                            type="button"
-                                            className="min-w-0 truncate text-left"
-                                            onClick={() => onSelectTab(tab.id)}
-                                        >
-                                            {tab.title}
-                                        </button>
-                                        <button
-                                            type="button"
+                        <div className="relative min-w-0 flex-1">
+                            <div className="chat-tab-scroll flex min-w-0 items-center gap-0.5 overflow-x-auto no-scrollbar">
+                                {tabs.map((tab) => {
+                                    const active = tab.id === activeTabId;
+                                    return (
+                                        <div
+                                            key={tab.id}
                                             className={cn(
-                                                "flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted hover:bg-panel-hover hover:text-text-primary",
-                                                tabs.length > 1
-                                                    ? "invisible group-hover:visible"
-                                                    : "opacity-60 group-hover:opacity-100",
+                                                "group relative flex h-7 max-w-[180px] shrink-0 items-center gap-1 px-2 text-sm transition-colors",
+                                                columnChrome ? "rounded-sm" : "rounded-md",
+                                                active
+                                                    ? "bg-surface-3 text-text-primary"
+                                                    : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
                                             )}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                closeTab(tab.id);
-                                            }}
-                                            aria-label={
-                                                tabs.length <= 1
-                                                    ? "Close chat panel"
-                                                    : `Close ${tab.title}`
-                                            }
                                         >
-                                            <Icon name="close" size={12} />
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                            <Tooltip content="New Chat">
-                                <button
-                                    type="button"
-                                    onClick={onNewChat}
-                                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
-                                    aria-label="New Chat"
-                                >
-                                    <Icon name="add" size={14} />
-                                </button>
-                            </Tooltip>
+                                            <button
+                                                type="button"
+                                                className="min-w-0 truncate text-left"
+                                                onClick={() => onSelectTab(tab.id)}
+                                            >
+                                                {tab.title}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    "flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted hover:bg-panel-hover hover:text-text-primary",
+                                                    tabs.length > 1
+                                                        ? "invisible group-hover:visible"
+                                                        : "opacity-60 group-hover:opacity-100",
+                                                )}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    closeTab(tab.id);
+                                                }}
+                                                aria-label={
+                                                    tabs.length <= 1
+                                                        ? "Close chat panel"
+                                                        : `Close ${tab.title}`
+                                                }
+                                            >
+                                                <Icon name="close" size={12} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                                <Tooltip content="New Chat">
+                                    <button
+                                        type="button"
+                                        onClick={onNewChat}
+                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
+                                        aria-label="New Chat"
+                                    >
+                                        <Icon name="add" size={14} />
+                                    </button>
+                                </Tooltip>
+                            </div>
+                            <div
+                                className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-10 bg-linear-to-l from-panel to-transparent"
+                                aria-hidden
+                            />
                         </div>
                     </div>
-
-                    <div className="pointer-events-none relative z-0 min-w-0 flex-1" aria-hidden />
 
                     <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1">
                         <Tooltip content="Open Agent window">
