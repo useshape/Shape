@@ -58,12 +58,15 @@ export function AgentRightRail({
                 className="flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-border bg-panel"
                 style={{ width }}
             >
-                <div className="relative z-20 flex h-titlebar shrink-0 items-stretch border-b border-border">
-                    <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
+                <div
+                    className="relative z-20 flex h-titlebar shrink-0 items-stretch border-b border-border"
+                    data-tauri-drag-region
+                >
                     <div
                         role="tablist"
                         aria-label="Agent panel"
-                        className="relative z-10 flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden pl-2"
+                        className="relative z-10 flex min-w-0 items-center gap-0.5 overflow-hidden pl-2"
+                        data-no-drag
                     >
                         {TABS.map((t) => {
                             const active = tab === t.id;
@@ -97,7 +100,8 @@ export function AgentRightRail({
                             );
                         })}
                     </div>
-                    <div className="relative z-10 flex shrink-0 items-stretch">
+                    <div className="min-w-0 flex-1" data-tauri-drag-region aria-hidden />
+                    <div className="relative z-10 flex shrink-0 items-stretch" data-no-drag>
                         <div className="flex items-center pr-0.5">
                             <Button
                                 type="button"

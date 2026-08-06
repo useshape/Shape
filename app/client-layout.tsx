@@ -351,10 +351,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
 
     if (isSettings || isBranch || isStats) {
-        const windowTitle = isBranch ? "Git" : isStats ? "Statistics" : "Settings";
         const body = (
             <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
-                <Titlebar settings title={windowTitle} />
                 <main className="min-h-0 flex-1 overflow-hidden bg-editor">
                     {children}
                 </main>

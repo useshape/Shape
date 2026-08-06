@@ -81,18 +81,7 @@ export function EditorLayout({
     const isResizingRef = useRef(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    const leftPaneIndex = sidebarsFlipped ? 2 : 0;
-    const rightPaneIndex = sidebarsFlipped ? 0 : 2;
     const rightIsTrailing = !sidebarsFlipped;
-
-    const handleVisibleChange = useCallback(
-        (index: number, visible: boolean) => {
-            if (!project_path) return;
-            if (index === leftPaneIndex) setLeftOpen(visible);
-            else if (index === rightPaneIndex) setRightOpen(visible);
-        },
-        [project_path, setLeftOpen, setRightOpen, leftPaneIndex, rightPaneIndex],
-    );
 
     const startResizing = useCallback((e: React.MouseEvent) => {
         isResizingRef.current = true;
@@ -162,117 +151,178 @@ export function EditorLayout({
         />
     );
 
-    /** Window controls belong on the trailing (rightmost) column. */
-    const showCenterWindowControls = sidebarsFlipped
-        ? !leftOpen
-        : !rightOpen;
+    /** Window controls on the shared chrome when the trailing chat column is closed. */
+    const showMainWindowControls = sidebarsFlipped ? !leftOpen : !rightOpen;
 
-    const leftSidebarPane = project_path
-        ? {
-              id: "left-sidebar",
-              visible: leftOpen,
-              preferredSize: 280,
-              minSize: 220,
-              maxSize: 560,
-              snap: true,
-              children: (
-                  <ColumnShell
-                      border={sidebarsFlipped ? "l" : "r"}
-                      className={sidebarsFlipped && leftOpen ? "relative" : undefined}
-                  >
-                      {sidebarsFlipped && leftOpen ? (
-                          <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex h-titlebar justify-end">
-                              <div className="pointer-events-auto flex items-stretch">
-                                  {windowControls}
-                              </div>
-                          </div>
-                      ) : null}
-                      {renderLeftPanel(activeTab)}
-                  </ColumnShell>
-              ),
-          }
-        : null;
+    const centerBody = (
+        <div ref={containerRef} className="relative flex h-full min-h-0 flex-col bg-editor">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-editor">
+                <main className="flex h-full min-h-0 flex-col overflow-hidden bg-editor">
+                    {children}
+                </main>
+            </div>
 
-    const rightSidebarPane = project_path
-        ? {
-              id: "right-sidebar",
-              visible: rightOpen,
-              preferredSize: 340,
-              minSize: 280,
-              maxSize: 800,
-              snap: true,
-              children: (
-                  <ColumnShell border={rightIsTrailing ? "l" : "r"}>
-                      <Chat
-                          onClose={() => setRightOpen(false)}
-                          sidebarSide={sidebarsFlipped ? "left" : "right"}
-                          embedWindowControls={
-                              rightIsTrailing && rightOpen ? windowControls : undefined
-                          }
-                          columnChrome
-                      />
-                  </ColumnShell>
-              ),
-          }
-        : null;
-
-    const centerPane = {
-        id: "center",
-        minSize: 200,
-        flexible: true,
-        children: (
-            <div ref={containerRef} className="relative flex h-full min-h-0 flex-col bg-editor">
-                <WorkbenchCenterChrome showWindowControls={showCenterWindowControls} />
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-editor">
-                    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-editor">
-                        {children}
-                    </main>
-                </div>
-
-                {terminalOpen ? (
-                    <>
-                        <div
-                            className="relative z-50 h-px w-full shrink-0 cursor-row-resize border-t border-border bg-transparent"
-                            onMouseDown={startResizing}
-                        >
-                            <div className="absolute inset-x-0 -top-1.5 h-4 w-full" />
-                        </div>
-                        <div
-                            style={{ height: `${terminalHeight}px` }}
-                            className="shrink-0 overflow-hidden bg-panel"
-                        >
-                            <Terminal onClose={() => setTerminalOpen(false)} isOpen={terminalOpen} />
-                        </div>
-                    </>
-                ) : (
+            {terminalOpen ? (
+                <>
                     <div
-                        className="absolute inset-x-0 bottom-0 z-50 h-2 cursor-row-resize"
+                        className="relative z-50 h-px w-full shrink-0 cursor-row-resize border-t border-border bg-transparent"
                         onMouseDown={startResizing}
+                    >
+                        <div className="absolute inset-x-0 -top-1.5 h-4 w-full" />
+                    </div>
+                    <div
+                        style={{ height: `${terminalHeight}px` }}
+                        className="shrink-0 overflow-hidden bg-panel"
+                    >
+                        <Terminal onClose={() => setTerminalOpen(false)} isOpen={terminalOpen} />
+                    </div>
+                </>
+            ) : (
+                <div
+                    className="absolute inset-x-0 bottom-0 z-50 h-2 cursor-row-resize"
+                    onMouseDown={startResizing}
+                />
+            )}
+        </div>
+    );
+
+    /**
+     * File/Edit/View chrome spans primary sidebar + editor (below activity bar),
+     * and stops before the secondary (chat) column.
+     */
+    const mainWorkbench = (
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-editor">
+            <WorkbenchCenterChrome showWindowControls={showMainWindowControls} />
+            <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                {project_path ? (
+                    <Panel
+                        panes={
+                            sidebarsFlipped
+                                ? [
+                                      {
+                                          id: "center",
+                                          minSize: 200,
+                                          flexible: true,
+                                          children: centerBody,
+                                      },
+                                      {
+                                          id: "left-sidebar",
+                                          visible: leftOpen,
+                                          preferredSize: 280,
+                                          minSize: 220,
+                                          maxSize: 560,
+                                          snap: true,
+                                          children: (
+                                              <ColumnShell border="l">
+                                                  {renderLeftPanel(activeTab)}
+                                              </ColumnShell>
+                                          ),
+                                      },
+                                  ]
+                                : [
+                                      {
+                                          id: "left-sidebar",
+                                          visible: leftOpen,
+                                          preferredSize: 280,
+                                          minSize: 220,
+                                          maxSize: 560,
+                                          snap: true,
+                                          children: (
+                                              <ColumnShell border="r">
+                                                  {renderLeftPanel(activeTab)}
+                                              </ColumnShell>
+                                          ),
+                                      },
+                                      {
+                                          id: "center",
+                                          minSize: 200,
+                                          flexible: true,
+                                          children: centerBody,
+                                      },
+                                  ]
+                        }
+                        direction="horizontal"
+                        paneGap="0px"
+                        storageKey={sidebarsFlipped ? "editor-main-flipped" : "editor-main"}
+                        hideSeparator
+                        onVisibleChange={(index, visible) => {
+                            const leftIndex = sidebarsFlipped ? 1 : 0;
+                            if (index === leftIndex) setLeftOpen(visible);
+                        }}
                     />
+                ) : (
+                    centerBody
                 )}
             </div>
+        </div>
+    );
+
+    if (!project_path) {
+        return mainWorkbench;
+    }
+
+    const rightSidebarPane = {
+        id: "right-sidebar",
+        visible: rightOpen,
+        preferredSize: 340,
+        minSize: 280,
+        maxSize: 800,
+        snap: true,
+        children: (
+            <ColumnShell border={rightIsTrailing ? "l" : "r"}>
+                <Chat
+                    onClose={() => setRightOpen(false)}
+                    sidebarSide={sidebarsFlipped ? "left" : "right"}
+                    embedWindowControls={
+                        rightIsTrailing && rightOpen ? windowControls : undefined
+                    }
+                    columnChrome
+                />
+            </ColumnShell>
         ),
     };
 
-    const panes = [];
     if (sidebarsFlipped) {
-        if (rightSidebarPane) panes.push(rightSidebarPane);
-        panes.push(centerPane);
-        if (leftSidebarPane) panes.push(leftSidebarPane);
-    } else {
-        if (leftSidebarPane) panes.push(leftSidebarPane);
-        panes.push(centerPane);
-        if (rightSidebarPane) panes.push(rightSidebarPane);
+        return (
+            <Panel
+                panes={[
+                    rightSidebarPane,
+                    {
+                        id: "main-workbench",
+                        minSize: 320,
+                        flexible: true,
+                        children: mainWorkbench,
+                    },
+                ]}
+                direction="horizontal"
+                paneGap="0px"
+                storageKey="editor-layout-flipped-outer"
+                hideSeparator
+                onVisibleChange={(index, visible) => {
+                    if (index === 0) setRightOpen(visible);
+                }}
+            />
+        );
     }
 
     return (
         <Panel
-            panes={panes}
+            panes={[
+                {
+                    id: "main-workbench",
+                    minSize: 320,
+                    flexible: true,
+                    children: mainWorkbench,
+                },
+                rightSidebarPane,
+            ]}
             direction="horizontal"
             paneGap="0px"
-            onVisibleChange={handleVisibleChange}
-            storageKey={sidebarsFlipped ? "editor-layout-flipped" : "editor-layout"}
+            storageKey="editor-layout-outer"
             hideSeparator
+            onVisibleChange={(index, visible) => {
+                if (index === 1) setRightOpen(visible);
+            }}
         />
     );
 }

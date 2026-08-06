@@ -159,11 +159,10 @@ export function AgentSidebar({
 
     return (
         <aside className="flex h-full w-full min-h-0 flex-col bg-panel">
-            <div className="relative z-20 flex h-titlebar shrink-0 items-stretch">
-                <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
-                <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 px-3">
+            <div className="relative z-20 flex h-titlebar shrink-0 items-stretch border-b border-border" data-tauri-drag-region>
+                <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 px-3 pointer-events-none">
                     <ShapeLogo size={16} className="logo-invert opacity-90" />
-                    <span className="truncate text-sm font-medium tracking-tight text-text-primary">
+                    <span className="truncate text-sm font-medium text-text-primary">
                         Shape
                     </span>
                 </div>

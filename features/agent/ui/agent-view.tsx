@@ -97,19 +97,22 @@ function AgentCenterHeader({
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
-        <div className={cn("relative z-20 flex shrink-0 items-stretch border-b border-border", CHROME_H)}>
-            <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
-            <div className="relative z-10 flex min-w-0 flex-1 items-center gap-1.5 px-2">
+        <div
+            className={cn("relative z-20 flex shrink-0 items-stretch border-b border-border", CHROME_H)}
+            data-tauri-drag-region
+        >
+            <div className="relative z-10 flex min-w-0 items-center gap-1.5 px-2" data-no-drag>
                 {showSessionsToggle ? (
                     <AgentChromeToggle label="Toggle Sessions" onClick={toggleSessions}>
                         <AnimatedSidebarIcon active={false} size={16} />
                     </AgentChromeToggle>
                 ) : null}
-                <div className="min-w-0 truncate px-1 text-sm font-medium text-text-primary">
+                <div className="min-w-0 truncate px-1 text-sm font-medium text-text-primary pointer-events-none">
                     {title}
                 </div>
             </div>
-            <div className="relative z-10 flex shrink-0 items-stretch">
+            <div className="min-w-0 flex-1" data-tauri-drag-region aria-hidden />
+            <div className="relative z-10 flex shrink-0 items-stretch" data-no-drag>
                 <div className="flex items-center gap-0.5 px-1">
                     <button
                         type="button"
