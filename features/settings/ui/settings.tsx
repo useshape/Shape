@@ -52,6 +52,7 @@ import { useRouter } from "next/navigation";
 import { ShapeAccountAvatar } from "@/features/workbench/titlebar/ui/account-avatar";
 import { loginShape, useShapeAuth } from "@/lib/shape-auth/store";
 import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
+import { StandaloneWindowShell } from "@/features/workbench/ui/workbench-chrome";
 import type { ShapeTier } from "@/lib/shape-auth/types";
 import {
     AlertDialog,
@@ -1077,102 +1078,114 @@ export function SettingsView() {
     const plan = tierLabel(auth.tier);
 
     return (
-        <div className="flex h-full w-full min-w-0 overflow-hidden bg-editor select-none">
-            <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
-                <div className="flex shrink-0 flex-col gap-2 p-2 pt-2">
+        <>
+            <StandaloneWindowShell
+                windowTitle="Settings"
+                contentTitle={activeMeta?.label}
+                sidebarHeader={
                     <button
                         type="button"
                         onClick={() => closeWindow()}
-                        className="inline-flex h-8 w-fit items-center gap-1.5 rounded-md px-2 text-sm text-text-secondary transition-colors hover:bg-panel-hover hover:text-text-primary"
+                        className="inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary transition-colors hover:bg-panel-hover hover:text-text-primary"
                     >
                         <Icon name="arrow_back" size={16} />
                         Back
                     </button>
-                    <div className="flex h-9 items-center gap-2 rounded-lg border border-border bg-transparent px-3">
-                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                        <Input
-                            placeholder="Search settings"
-                            value={query}
-                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                            onChange={(e) => setQuery(e.target.value)}
-                        />
+                }
+                sidebar={
+                    <>
+                        <div className="shrink-0 p-2">
+                            <div className="flex h-9 items-center gap-2 rounded-lg border border-border bg-transparent px-3">
+                                <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                                <Input
+                                    placeholder="Search settings"
+                                    value={query}
+                                    className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                                    onChange={(e) => setQuery(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2 no-scrollbar">
+                            {filteredCategories.map((cat) => {
+                                const active = cat.id === activeCategory;
+                                return (
+                                    <button
+                                        key={cat.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setActiveCategory(cat.id);
+                                            setSubView(null);
+                                        }}
+                                        className={cn(
+                                            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                                            active
+                                                ? "bg-panel-active text-text-primary"
+                                                : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                        )}
+                                    >
+                                        <Icon
+                                            name={cat.icon}
+                                            size={16}
+                                            className={cn(
+                                                "shrink-0",
+                                                active ? "text-text-primary" : "text-text-muted",
+                                            )}
+                                        />
+                                        <span className="truncate">{cat.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+
+                        <div className="shrink-0 border-t border-border px-2 py-2">
+                            {auth.loggedIn ? (
+                                <div className="flex items-center gap-2 rounded-lg px-1.5 py-1.5">
+                                    <ShapeAccountAvatar
+                                        userId={auth.userId}
+                                        name={auth.name}
+                                        email={auth.email}
+                                        offline={Boolean(auth.offline)}
+                                        size={28}
+                                        className="shrink-0"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="truncate text-sm text-text-primary">
+                                            {displayName}
+                                        </div>
+                                        <div className="truncate text-2xs text-text-muted">
+                                            {plan} Plan
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        aria-label="Account"
+                                        title="Account"
+                                        onClick={() => setActiveCategory("account")}
+                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
+                                    >
+                                        <Icon name="settings" size={16} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => void loginShape()}
+                                    className="flex w-full items-center justify-center rounded-md px-2 py-2 text-sm text-text-secondary transition-colors hover:bg-panel-hover hover:text-text-primary"
+                                >
+                                    Sign in
+                                </button>
+                            )}
+                        </div>
+                    </>
+                }
+            >
+                <div className="h-full overflow-y-auto no-scrollbar">
+                    <div className="mx-auto w-full max-w-3xl px-8 py-8 pb-24">
+                        <div className="space-y-2">{categoryContent}</div>
                     </div>
                 </div>
-
-                <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2 no-scrollbar">
-                    {filteredCategories.map((cat) => {
-                        const active = cat.id === activeCategory;
-                        return (
-                            <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => {
-                                    setActiveCategory(cat.id);
-                                    setSubView(null);
-                                }}
-                                className={cn(
-                                    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                                    active
-                                        ? "bg-panel-active text-text-primary"
-                                        : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
-                                )}
-                            >
-                                <Icon
-                                    name={cat.icon}
-                                    size={16}
-                                    className={cn("shrink-0", active ? "text-text-primary" : "text-text-muted")}
-                                />
-                                <span className="truncate">{cat.label}</span>
-                            </button>
-                        );
-                    })}
-                </nav>
-
-                <div className="shrink-0 border-t border-border px-2 py-2">
-                    {auth.loggedIn ? (
-                        <div className="flex items-center gap-2 rounded-lg px-1.5 py-1.5">
-                            <ShapeAccountAvatar
-                                userId={auth.userId}
-                                name={auth.name}
-                                email={auth.email}
-                                offline={Boolean(auth.offline)}
-                                size={28}
-                                className="shrink-0"
-                            />
-                            <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm text-text-primary">{displayName}</div>
-                                <div className="truncate text-2xs text-text-muted">{plan} Plan</div>
-                            </div>
-                            <button
-                                type="button"
-                                aria-label="Account"
-                                title="Account"
-                                onClick={() => setActiveCategory("account")}
-                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
-                            >
-                                <Icon name="settings" size={16} />
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={() => void loginShape()}
-                            className="flex w-full items-center justify-center rounded-md px-2 py-2 text-sm text-text-secondary transition-colors hover:bg-panel-hover hover:text-text-primary"
-                        >
-                            Sign in
-                        </button>
-                    )}
-                </div>
-            </aside>
-
-            <section className="min-w-0 flex-1 overflow-y-auto no-scrollbar">
-                <div className="mx-auto w-full max-w-3xl px-8 py-8 pb-24">
-                    <h1 className="mb-6 text-2xl font-semibold tracking-tight text-text-primary">
-                        {activeMeta?.label ?? "Settings"}
-                    </h1>
-                    <div className="space-y-2">{categoryContent}</div>
-                </div>
-            </section>
+            </StandaloneWindowShell>
 
             <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
                 <AlertDialogContent>
@@ -1203,7 +1216,7 @@ export function SettingsView() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+        </>
     );
 }
 

@@ -117,10 +117,10 @@
 
   --chrome-height: 28px;
   --titlebar-height: 34px;
-  --statusbar-height: 30px;
+  --statusbar-height: 23px;
 
-  /* ── Typography (11/12/13/14; Geist Sans — same family as Conductor) ── */
-  --font-ui: var(--font-geist-sans), "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ── Typography (11/12/13/14; Inter) ── */
+  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
@@ -726,6 +726,24 @@ body {
 .resizing-vertical {
   cursor: row-resize !important;
   user-select: none !important;
+}
+
+/* Window chrome: entire title strip drags; controls opt out. */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+[data-no-drag],
+[data-tauri-drag-region] button,
+[data-tauri-drag-region] a,
+[data-tauri-drag-region] input,
+[data-tauri-drag-region] textarea,
+[data-tauri-drag-region] select,
+[data-tauri-drag-region] [role="button"],
+[data-tauri-drag-region] [role="menuitem"],
+[data-tauri-drag-region] [data-radix-collection-item] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 /* Never disable pointer-events on the whole tree - that permanently kills

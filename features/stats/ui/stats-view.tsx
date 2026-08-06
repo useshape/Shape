@@ -10,6 +10,7 @@ import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-
 import { commands, useProjectState } from "@/lib/backend";
 import type { EventCounters, ProjectStatsSnapshot } from "@/lib/backend/types";
 import { notify } from "@/features/notifications";
+import { StandaloneWindowShell } from "@/features/workbench/ui/workbench-chrome";
 
 const LANG_COLORS: Record<string, string> = {
     TypeScript: "#3178c6",
@@ -278,10 +279,12 @@ export function StatsView() {
 
     if (!project_path) {
         return (
-            <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-                <Icon name="folder" size={28} className="text-text-muted" />
-                <p className="text-sm text-text-secondary">Open a project to see statistics.</p>
-            </div>
+            <StandaloneWindowShell windowTitle="Statistics" sidebar={<div className="p-3 text-sm text-text-muted">No project</div>}>
+                <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                    <Icon name="folder" size={28} className="text-text-muted" />
+                    <p className="text-sm text-text-secondary">Open a project to see statistics.</p>
+                </div>
+            </StandaloneWindowShell>
         );
     }
 
@@ -301,66 +304,69 @@ export function StatsView() {
         events.aiTodoUpdates;
 
     return (
-        <div className="flex h-full w-full min-w-0 overflow-hidden select-none bg-editor">
-            <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
-                <div className="p-2">
-                    <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                        <Input
-                            placeholder="Search statistics"
-                            value={query}
-                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                            onChange={(e) => setQuery(e.target.value)}
-                        />
+        <StandaloneWindowShell
+            windowTitle="Statistics"
+            sidebar={
+                <>
+                    <div className="shrink-0 p-2">
+                        <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
+                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                            <Input
+                                placeholder="Search statistics"
+                                value={query}
+                                className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                                onChange={(e) => setQuery(e.target.value)}
+                            />
+                        </div>
                     </div>
-                </div>
-                <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-                    {filteredNav.map((group) => {
-                        const open = expandedGroups.has(group.id) || !!query.trim();
-                        return (
-                            <CollapsibleNavGroup
-                                key={group.id}
-                                label={group.label}
-                                open={open}
-                                onToggle={() => toggleGroup(group.id)}
-                            >
-                                {group.children.map((leaf) => (
-                                    <NavLeafButton
-                                        key={leaf.id}
-                                        active={activeLeafId === leaf.id}
-                                        onClick={() => {
-                                            setActiveLeafId(leaf.id);
-                                            scrollToTarget(leaf.targetId);
-                                        }}
-                                    >
-                                        <span className="truncate text-sm font-regular">
-                                            {leaf.label}
-                                        </span>
-                                    </NavLeafButton>
-                                ))}
-                            </CollapsibleNavGroup>
-                        );
-                    })}
-                </nav>
-                <div className="relative p-2">
-                    <div
-                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-panel to-transparent"
-                        aria-hidden
-                    />
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start text-sm"
-                        disabled={scanning}
-                        onClick={() => void load(true)}
-                    >
-                        {scanning ? "Scanning…" : "Rescan"}
-                    </Button>
-                </div>
-            </aside>
-
-            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto">
+                    <nav className="no-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+                        {filteredNav.map((group) => {
+                            const open = expandedGroups.has(group.id) || !!query.trim();
+                            return (
+                                <CollapsibleNavGroup
+                                    key={group.id}
+                                    label={group.label}
+                                    open={open}
+                                    onToggle={() => toggleGroup(group.id)}
+                                >
+                                    {group.children.map((leaf) => (
+                                        <NavLeafButton
+                                            key={leaf.id}
+                                            active={activeLeafId === leaf.id}
+                                            onClick={() => {
+                                                setActiveLeafId(leaf.id);
+                                                scrollToTarget(leaf.targetId);
+                                            }}
+                                        >
+                                            <span className="truncate text-sm font-regular">
+                                                {leaf.label}
+                                            </span>
+                                        </NavLeafButton>
+                                    ))}
+                                </CollapsibleNavGroup>
+                            );
+                        })}
+                    </nav>
+                    <div className="relative shrink-0 p-2">
+                        <div
+                            className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-panel to-transparent"
+                            aria-hidden
+                        />
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-sm"
+                            disabled={scanning}
+                            onClick={() => void load(true)}
+                        >
+                            {scanning ? "Scanning…" : "Rescan"}
+                        </Button>
+                    </div>
+                </>
+            }
+        >
+            <div className="no-scrollbar h-full overflow-y-auto">
                 <div className="w-full space-y-10 p-6 pb-24">
                     {loading && !stats ? (
                         <p className="text-sm text-text-muted">Loading…</p>
@@ -682,7 +688,7 @@ export function StatsView() {
                         </>
                     )}
                 </div>
-            </section>
-        </div>
+            </div>
+        </StandaloneWindowShell>
     );
 }

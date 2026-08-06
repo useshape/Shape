@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useProjectState } from "@/lib/backend";
 import { useKeyboardShortcuts } from "@/lib/ui/shortcuts";
 import { createMenuActionHandler } from "@/features/workbench/titlebar/menu-actions";
@@ -19,20 +19,22 @@ import { TitlebarUpdateButton } from "@/features/workbench/titlebar/ui/update-bu
 
 const LOGO_ASPECT_RATIO = 46 / 56;
 
-/** Activity-column top: logo centered in the activity rail. */
+/** Activity-column top: logo centered in the activity rail (fully draggable). */
 export function WorkbenchActivityChrome() {
     const logoH = 16;
     const logoW = Math.round(logoH * LOGO_ASPECT_RATIO);
     return (
-        <div className="relative z-20 flex h-titlebar w-full shrink-0 items-center justify-center">
-            <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
+        <div
+            className="relative z-20 flex h-titlebar w-full shrink-0 items-center justify-center"
+            data-tauri-drag-region
+        >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
                 src="/logos/logo.svg"
                 alt="Shape"
                 width={logoW}
                 height={logoH}
-                className="relative z-10 logo-invert pointer-events-none block"
+                className="pointer-events-none relative z-10 block logo-invert"
                 draggable={false}
             />
         </div>
@@ -40,8 +42,8 @@ export function WorkbenchActivityChrome() {
 }
 
 /**
- * Center-column top chrome: app menu + omnibar + layout toggles.
- * Window controls sit here when the right rail is closed.
+ * Shared top chrome over primary sidebar + editor (File/Edit/View…).
+ * The whole strip is a drag region; interactive controls opt out via CSS.
  */
 export function WorkbenchCenterChrome({
     showWindowControls,
@@ -83,9 +85,6 @@ export function WorkbenchCenterChrome({
         return () => window.removeEventListener("save-all-request", onSaveAll);
     }, [handleMenuClick]);
 
-    // Measure pure free space in the center flex gap. Omnibar is absolutely
-    // positioned inside the spacer so it never steals width from the observer
-    // (avoids shrink↔hide oscillation).
     useEffect(() => {
         const el = spacerRef.current;
         if (!el) return;
@@ -101,9 +100,11 @@ export function WorkbenchCenterChrome({
     }, []);
 
     return (
-        <div className="relative z-20 flex h-titlebar w-full shrink-0 items-stretch bg-editor">
-            <div className="titlebar-drag-region absolute inset-0 z-0" data-tauri-drag-region />
-            <div className="relative z-10 flex shrink-0 items-center gap-0.5 pl-1">
+        <div
+            className="relative z-20 flex h-titlebar w-full shrink-0 items-stretch border-b border-border bg-panel"
+            data-tauri-drag-region
+        >
+            <div className="relative z-10 flex shrink-0 items-center gap-0.5 pl-1" data-no-drag>
                 <TitlebarSidebarToggle />
                 <TitlebarMenubar
                     windowWidth={windowWidth}
@@ -112,11 +113,13 @@ export function WorkbenchCenterChrome({
                     onClearHistory={clearHistory}
                 />
             </div>
-            <div ref={spacerRef} className="relative z-0 min-w-0 flex-1">
+            {/* Free space stays a drag region (attribute inherited from parent). */}
+            <div ref={spacerRef} className="relative z-0 min-w-0 flex-1" data-tauri-drag-region>
                 {omnibarWidth > 0 ? (
                     <div
-                        className="pointer-events-auto absolute inset-y-0 right-0 z-10 flex items-center px-1"
+                        className="absolute inset-y-0 right-0 z-10 flex items-center px-1"
                         style={{ width: omnibarWidth + 8 }}
+                        data-no-drag
                     >
                         <div className="w-full min-w-0" style={{ width: omnibarWidth }}>
                             <CommandOmnibar />
@@ -124,7 +127,7 @@ export function WorkbenchCenterChrome({
                     </div>
                 ) : null}
             </div>
-            <div className="relative z-10 flex shrink-0 items-stretch justify-end">
+            <div className="relative z-10 flex shrink-0 items-stretch justify-end" data-no-drag>
                 <div className="action-toolbar-container hidden shrink-0 items-center gap-0.5 px-1 sm:flex">
                     <TitlebarUpdateButton />
                     <TitlebarLayoutControls />
@@ -139,6 +142,79 @@ export function WorkbenchCenterChrome({
                     />
                 ) : null}
             </div>
+        </div>
+    );
+}
+
+/**
+ * Full-height column shell for Settings / Git / Stats.
+ * Left chrome shows the window name; right chrome is drag + optional toolbar.
+ */
+export function StandaloneWindowShell({
+    windowTitle,
+    contentTitle,
+    sidebar,
+    toolbar,
+    sidebarHeader,
+    children,
+}: {
+    /** Name of the window — shown in the left column top chrome. */
+    windowTitle: string;
+    /** Optional section title in the content column (omit to avoid duplicating panel headers). */
+    contentTitle?: string;
+    sidebar: ReactNode;
+    toolbar?: ReactNode;
+    sidebarHeader?: ReactNode;
+    children: ReactNode;
+}) {
+    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+
+    return (
+        <div className="flex h-full w-full min-w-0 overflow-hidden bg-editor select-none">
+            <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
+                <div
+                    className="relative z-20 flex h-titlebar w-full shrink-0 items-center gap-2 border-b border-border px-3"
+                    data-tauri-drag-region
+                >
+                    <span className="min-w-0 truncate text-sm text-text-primary pointer-events-none">
+                        {windowTitle}
+                    </span>
+                    {sidebarHeader ? (
+                        <div className="ml-auto flex shrink-0 items-center" data-no-drag>
+                            {sidebarHeader}
+                        </div>
+                    ) : null}
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{sidebar}</div>
+            </aside>
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-editor">
+                <div
+                    className="relative z-20 flex h-titlebar w-full shrink-0 items-stretch border-b border-border"
+                    data-tauri-drag-region
+                >
+                    {contentTitle ? (
+                        <div className="relative z-10 flex min-w-0 flex-1 items-center px-3 text-sm text-text-primary pointer-events-none">
+                            {contentTitle}
+                        </div>
+                    ) : (
+                        <div className="min-w-0 flex-1" data-tauri-drag-region />
+                    )}
+                    {toolbar ? (
+                        <div className="relative z-10 flex shrink-0 items-center gap-1 px-1" data-no-drag>
+                            {toolbar}
+                        </div>
+                    ) : null}
+                    <div className="relative z-10 flex shrink-0 items-stretch" data-no-drag>
+                        <WindowControls
+                            isMaximized={isMaximized}
+                            onMinimize={minimize}
+                            onToggleMaximize={() => void toggleMaximize()}
+                            onClose={close}
+                        />
+                    </div>
+                </div>
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
+            </section>
         </div>
     );
 }
