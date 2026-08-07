@@ -1,7 +1,5 @@
 //! Generate commit message command + helpers.
-use super::logging;
 use super::streaming;
-use super::titles::{sanitize_generated_title, short_fallback_title};
 use crate::agent::model_router;
 use crate::agent::models::{AgentState, ChatMessage};
 use crate::agent::prompts;

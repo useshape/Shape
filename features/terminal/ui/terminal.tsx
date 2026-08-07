@@ -22,13 +22,17 @@ import { Tooltip } from "@/components/ui/tooltip";
 import Problems from "@/features/diagnostics/ui/problems";
 import OutputPanel from "@/features/output/ui/output";
 import TestPanel from "@/features/testing/ui/test-panel";
-import PreviewPanel from "@/features/preview/ui/preview-panel";
 import { Button } from "@/components/ui/button";
 import { getSettings, resolveDefaultTerminalShell } from "@/lib/settings";
 import { setLastDevUrl } from "@/features/preview/store";
-import { Panel } from "@/features/panels";
 import { useDiagnostics } from "@/features/diagnostics/store";
 import { Input } from "@/components/ui/input";
+import {
+    WORKBENCH_TAB_ACTION_BUTTON_CLASS,
+    WORKBENCH_TAB_BAR_CLASS,
+    WORKBENCH_TAB_CLOSE_BUTTON_CLASS,
+    workbenchTabItemClass,
+} from "@/features/editor/ui/tabs/workbench-tab-styles";
 
 type TerminalShell = TerminalShellProfile["id"] | "ai";
 type TerminalGroupId = "left" | "right";
@@ -382,7 +386,7 @@ export default function Terminal({
 }: {
     onClose?: () => void;
     isOpen?: boolean;
-    /** Hide Problems/Output/Tests/Preview chrome — terminal tabs only (agent rail). */
+    /** Hide Problems/Output/Tests chrome — terminal tabs only. */
     terminalOnly?: boolean;
 }) {
     const { project_path } = useProjectState();
@@ -401,9 +405,11 @@ export default function Terminal({
     const activeTerminalId = projectActiveTabs[safeCwd] || null;
     const secondaryTerminalId = secondaryActiveTabs[safeCwd] || null;
     const focusedGroup = focusedGroups[safeCwd] || "left";
-    const [activeView, setActiveView] = useState<"terminal" | "problems" | "tests" | "output" | "preview">("terminal");
+    const [activeView, setActiveView] = useState<"terminal" | "problems" | "tests" | "output">("terminal");
     const [availableShells, setAvailableShells] = useState<TerminalShellProfile[]>([]);
     const tabScrollRef = useRef<HTMLDivElement>(null);
+    const [splitRatio, setSplitRatio] = useState(0.5);
+    const splitDragging = useRef(false);
 
     useEffect(() => {
         if (!project_path) return;
@@ -438,17 +444,16 @@ export default function Terminal({
             setActiveView("output");
             window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
         };
-        const handleOpenPreview = () => {
-            setActiveView("preview");
-            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
+        const handleOpenBrowser = () => {
+            void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
         };
         window.addEventListener("shape-open-problems", handleOpenProblems);
         window.addEventListener("shape-open-output", handleOpenOutput);
-        window.addEventListener("shape-open-preview", handleOpenPreview);
+        window.addEventListener("shape-open-preview", handleOpenBrowser);
         return () => {
             window.removeEventListener("shape-open-problems", handleOpenProblems);
             window.removeEventListener("shape-open-output", handleOpenOutput);
-            window.removeEventListener("shape-open-preview", handleOpenPreview);
+            window.removeEventListener("shape-open-preview", handleOpenBrowser);
         };
     }, []);
 
@@ -708,7 +713,7 @@ export default function Terminal({
         window.addEventListener("shape-terminal-run", handleTerminalRun as EventListener);
         const handleTerminalView = (e: Event) => {
             const view = (e as CustomEvent<string>).detail;
-            if (view === "output" || view === "problems" || view === "tests" || view === "terminal" || view === "preview") {
+            if (view === "output" || view === "problems" || view === "tests" || view === "terminal") {
                 setActiveView(view);
             }
         };
@@ -774,63 +779,29 @@ export default function Terminal({
 
     const view = terminalOnly ? "terminal" : activeView;
 
-    const renderTerminalTabs = (tabs: TerminalTab[], activeId: string | null, onActivate: (id: string) => void) => (
-        <div
-            ref={tabs === (focusedGroup === "right" ? rightTabs : leftTabs) ? tabScrollRef : undefined}
-            onWheel={handleWheel}
-            className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto no-scrollbar"
-        >
-            {tabs.map((tab) => {
-                const isActive = activeId === tab.id;
-                return (
-                    <div
-                        key={tab.id}
-                        onClick={() => onActivate(tab.id)}
-                        className={cn(
-                            "group relative flex h-7 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md px-2 transition-colors duration-150 whitespace-nowrap",
-                            isActive
-                                ? "bg-surface-2 text-text-primary"
-                                : "text-text-muted hover:text-text-secondary",
-                        )}
-                    >
-                        <span className="max-w-[160px] truncate text-sm">{tab.title}</span>
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                closeTab(tab.id);
-                            }}
-                            className="shrink-0 rounded-md p-0.5 text-text-muted opacity-0 transition-opacity hover:bg-panel-active hover:text-text-primary group-hover:opacity-100"
-                        >
-                            <Icon name="close" size={12} />
-                        </button>
-                    </div>
-                );
-            })}
-        </div>
-    );
-
-    const renderTerminalPane = (tabs: TerminalTab[], activeId: string | null, group: TerminalGroupId) => (
-        <div
-            className="relative h-full min-h-0 min-w-0 overflow-hidden"
-            onMouseDown={() => globalTerminalStore.setFocusedGroup(safeCwd, group)}
-        >
-            {tabs.map((tab) => (
-                <div
-                    key={tab.id}
-                    className={cn(
-                        "absolute inset-0 overflow-hidden bg-transparent transition-opacity duration-150",
-                        tab.id === activeId ? "z-10 opacity-100" : "pointer-events-none z-0 opacity-0",
-                    )}
-                >
-                    <TerminalInstance
-                        tab={tab}
-                        isActive={view === "terminal" && tab.id === activeId}
-                    />
-                </div>
-            ))}
-        </div>
-    );
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!splitDragging.current) return;
+            const root = document.getElementById("terminal-split-root");
+            if (!root) return;
+            const rect = root.getBoundingClientRect();
+            const next = Math.min(0.75, Math.max(0.25, (e.clientX - rect.left) / rect.width));
+            setSplitRatio(next);
+        };
+        const onUp = () => {
+            if (!splitDragging.current) return;
+            splitDragging.current = false;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            void globalTerminalStore.refitAll();
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+        return () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        };
+    }, []);
 
     const shellMenu = (
         <DropdownMenu>
@@ -838,8 +809,8 @@ export default function Terminal({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-5 shrink-0 rounded-md text-text-muted hover:text-text-primary"
-                    title="New Terminal"
+                    className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
+                    title="Terminal profiles"
                 >
                     <Icon name="expand_more" size={16} />
                 </Button>
@@ -878,40 +849,139 @@ export default function Terminal({
         </DropdownMenu>
     );
 
+    const renderTerminalTabs = (
+        tabs: TerminalTab[],
+        activeId: string | null,
+        onActivate: (id: string) => void,
+        scrollRef?: React.RefObject<HTMLDivElement | null>,
+    ) => (
+        <div
+            ref={scrollRef}
+            onWheel={handleWheel}
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar"
+        >
+            {tabs.map((tab) => {
+                const isActive = activeId === tab.id;
+                return (
+                    <div
+                        key={tab.id}
+                        onClick={() => onActivate(tab.id)}
+                        className={workbenchTabItemClass(isActive)}
+                    >
+                        <span className="max-w-[160px] truncate text-sm">{tab.title}</span>
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                closeTab(tab.id);
+                            }}
+                            className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
+                            aria-label={`Close ${tab.title}`}
+                        >
+                            <Icon name="close" size={12} />
+                        </button>
+                    </div>
+                );
+            })}
+        </div>
+    );
+
+    const renderGroupChrome = (
+        tabs: TerminalTab[],
+        activeId: string | null,
+        group: TerminalGroupId,
+        onActivate: (id: string) => void,
+        showShellMenu: boolean,
+    ) => (
+        <div className={cn(WORKBENCH_TAB_BAR_CLASS, "bg-panel px-2")}>
+            {renderTerminalTabs(
+                tabs,
+                activeId,
+                onActivate,
+                group === "left" ? tabScrollRef : undefined,
+            )}
+            <div className="flex shrink-0 items-center gap-0.5">
+                <Tooltip content="New Terminal">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
+                        onClick={() => addTab(resolveAvailableDefaultShell(), group)}
+                    >
+                        <Icon name="add" size={16} />
+                    </Button>
+                </Tooltip>
+                {showShellMenu ? shellMenu : null}
+            </div>
+        </div>
+    );
+
+    const renderTerminalPane = (
+        tabs: TerminalTab[],
+        activeId: string | null,
+        group: TerminalGroupId,
+        onActivate: (id: string) => void,
+        showShellMenu: boolean,
+    ) => (
+        <div
+            className={cn(
+                "flex h-full min-h-0 min-w-0 flex-col overflow-hidden",
+                splitEnabled && focusedGroup === group && "ring-1 ring-inset ring-accent/20",
+            )}
+            onMouseDown={() => globalTerminalStore.setFocusedGroup(safeCwd, group)}
+        >
+            {renderGroupChrome(tabs, activeId, group, onActivate, showShellMenu)}
+            <div className="relative min-h-0 flex-1 overflow-hidden">
+                {tabs.map((tab) => (
+                    <div
+                        key={tab.id}
+                        className={cn(
+                            "absolute inset-0 overflow-hidden bg-transparent",
+                            tab.id === activeId ? "z-10" : "pointer-events-none z-0 invisible",
+                        )}
+                    >
+                        <TerminalInstance
+                            tab={tab}
+                            isActive={view === "terminal" && tab.id === activeId}
+                        />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-panel select-none font-sans" data-terminal-root="true">
             {!terminalOnly ? (
-                <div className="relative z-20 flex min-w-0 shrink-0 items-center gap-1 border-b border-border/60 px-2 py-1.5">
+                <div className="relative z-20 flex h-9 min-w-0 shrink-0 items-center gap-1 border-b border-border-subtle px-2">
                     <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
-                        {(["problems", "output", "terminal", "tests", "preview"] as const).map((viewId) => {
+                        {(["problems", "output", "terminal", "tests"] as const).map((viewId) => {
                             const labels: Record<string, string> = {
                                 problems: "Problems",
                                 output: "Output",
                                 tests: "Tests",
-                                preview: "Preview",
                                 terminal: "Terminal",
                             };
                             const active = activeView === viewId;
                             return (
-                                <Button
+                                <button
                                     key={viewId}
-                                    variant="ghost"
-                                    size="sm"
+                                    type="button"
                                     className={cn(
-                                        "h-7 gap-1.5 px-2 text-sm",
+                                        "h-7 rounded-md px-2.5 text-sm transition-colors",
                                         active
-                                            ? "bg-surface-2 text-text-primary"
-                                            : "text-text-muted hover:text-text-secondary",
+                                            ? "bg-surface-3 text-text-primary"
+                                            : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
                                     )}
                                     onClick={() => setActiveView(viewId)}
                                 >
                                     {labels[viewId]}
                                     {viewId === "problems" && problemCount > 0 ? (
-                                        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-medium text-white">
+                                        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-medium text-white">
                                             {problemCount > 99 ? "99+" : problemCount}
                                         </span>
                                     ) : null}
-                                </Button>
+                                </button>
                             );
                         })}
                     </div>
@@ -919,7 +989,7 @@ export default function Terminal({
                     <div className="flex shrink-0 items-center gap-0.5">
                         {(activeView === "output" || activeView === "problems") && (
                             <div className="mr-1 flex h-7 w-[min(220px,28vw)] items-center gap-1.5 rounded-md border border-border bg-transparent px-2">
-                                <Icon name="search" size={12} className="shrink-0 text-text-muted" />
+                                <Icon name="search" size={14} className="shrink-0 text-text-muted" />
                                 <Input
                                     value={panelFilter}
                                     onChange={(e) => setPanelFilter(e.target.value)}
@@ -934,20 +1004,20 @@ export default function Terminal({
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                                        className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={clearActiveTerminal}
                                     >
-                                        <Icon name="delete" size={14} />
+                                        <Icon name="delete" size={16} />
                                     </Button>
                                 </Tooltip>
                                 <Tooltip content="Split Terminal">
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                                        className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={() => splitTerminal()}
                                     >
-                                        <Icon name="vertical_split" size={14} />
+                                        <Icon name="vertical_split" size={16} />
                                     </Button>
                                 </Tooltip>
                             </>
@@ -957,61 +1027,22 @@ export default function Terminal({
                                 onClick={() => onClose?.()}
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                                className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                             >
-                                <Icon name="expand_less" size={14} />
+                                <Icon name="expand_less" size={16} />
                             </Button>
                         </Tooltip>
                         <Button
                             onClick={() => onClose?.()}
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
+                            className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                         >
-                            <Icon name="close" size={14} />
+                            <Icon name="close" size={16} />
                         </Button>
                     </div>
                 </div>
             ) : null}
-
-            {view === "terminal" && (
-                <div
-                    className={cn(
-                        "relative z-10 flex min-w-0 shrink-0 items-center gap-1 px-2",
-                        terminalOnly ? "border-b border-border/60 pt-2 pb-1.5" : "pb-1.5 pt-1",
-                    )}
-                >
-                    {splitEnabled ? (
-                        <>
-                            {renderTerminalTabs(leftTabs, activeTerminalId, (id) => {
-                                setActiveTerminalId(id);
-                                globalTerminalStore.setFocusedGroup(safeCwd, "left");
-                            })}
-                            <div className="mx-1 h-4 w-px shrink-0 bg-border" />
-                            {renderTerminalTabs(rightTabs, secondaryTerminalId, (id) => {
-                                setSecondaryTerminalId(id);
-                                globalTerminalStore.setFocusedGroup(safeCwd, "right");
-                            })}
-                        </>
-                    ) : (
-                        renderTerminalTabs(leftTabs.length ? leftTabs : currentTabs, activeTerminalId, setActiveTerminalId)
-                    )}
-
-                    <div className="flex shrink-0 items-center gap-0.5">
-                        <Tooltip content="New Terminal">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0 rounded-md text-text-muted hover:text-text-primary"
-                                onClick={() => addTab(resolveAvailableDefaultShell(), focusedGroup === "right" && splitEnabled ? "right" : "left")}
-                            >
-                                <Icon name="add" size={16} />
-                            </Button>
-                        </Tooltip>
-                        {shellMenu}
-                    </div>
-                </div>
-            )}
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 {view === "problems" ? (
@@ -1020,8 +1051,6 @@ export default function Terminal({
                     <OutputPanel />
                 ) : view === "tests" ? (
                     <TestPanel />
-                ) : view === "preview" ? (
-                    <PreviewPanel />
                 ) : null}
                 <div
                     className={cn(
@@ -1030,27 +1059,48 @@ export default function Terminal({
                     )}
                 >
                     {splitEnabled ? (
-                        <Panel
-                            direction="horizontal"
-                            storageKey="terminal-split"
-                            className="h-full"
-                            panes={[
-                                {
-                                    id: "term-left",
-                                    preferredSize: 50,
-                                    minSize: 20,
-                                    children: renderTerminalPane(leftTabs, activeTerminalId, "left"),
-                                },
-                                {
-                                    id: "term-right",
-                                    preferredSize: 50,
-                                    minSize: 20,
-                                    children: renderTerminalPane(rightTabs, secondaryTerminalId, "right"),
-                                },
-                            ]}
-                        />
+                        <div id="terminal-split-root" className="flex h-full w-full min-w-0 overflow-hidden">
+                            <div className="min-w-0 overflow-hidden" style={{ flex: splitRatio }}>
+                                {renderTerminalPane(
+                                    leftTabs,
+                                    activeTerminalId,
+                                    "left",
+                                    (id) => {
+                                        setActiveTerminalId(id);
+                                        globalTerminalStore.setFocusedGroup(safeCwd, "left");
+                                    },
+                                    focusedGroup === "left",
+                                )}
+                            </div>
+                            <div
+                                className="w-1 shrink-0 cursor-col-resize bg-border-subtle/40 hover:bg-accent/40 transition-colors"
+                                onMouseDown={() => {
+                                    splitDragging.current = true;
+                                    document.body.style.cursor = "col-resize";
+                                    document.body.style.userSelect = "none";
+                                }}
+                            />
+                            <div className="min-w-0 overflow-hidden" style={{ flex: 1 - splitRatio }}>
+                                {renderTerminalPane(
+                                    rightTabs,
+                                    secondaryTerminalId,
+                                    "right",
+                                    (id) => {
+                                        setSecondaryTerminalId(id);
+                                        globalTerminalStore.setFocusedGroup(safeCwd, "right");
+                                    },
+                                    focusedGroup === "right",
+                                )}
+                            </div>
+                        </div>
                     ) : (
-                        renderTerminalPane(leftTabs.length ? leftTabs : currentTabs, activeTerminalId, "left")
+                        renderTerminalPane(
+                            leftTabs.length ? leftTabs : currentTabs,
+                            activeTerminalId,
+                            "left",
+                            setActiveTerminalId,
+                            true,
+                        )
                     )}
                 </div>
             </div>

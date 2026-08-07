@@ -231,7 +231,7 @@ export function McpLibraryView({ onBack }: { onBack: () => void }) {
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="shrink-0 gap-1 text-text-muted">
                                     {categoryFilter}
-                                    <Icon name="expand_more" size={14} className="opacity-60" />
+                                    <Icon name="expand_more" size={14} className="text-text-muted" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-40">

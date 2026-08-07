@@ -455,8 +455,9 @@ pub(super) fn design_gate_blocks_tool(name: &str, ctx: &ToolCtx<'_>) -> bool {
     )
 }
 
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{validate_plan_todos_section, validate_update_todos_in_progress};
 
     #[test]
     fn plan_todos_requires_heading_and_checkbox() {

@@ -94,7 +94,7 @@ export function SettingSelect<T extends string>({
                     className={cn("min-w-[180px] justify-between gap-2 font-normal", className)}
                 >
                     <span className="truncate">{label}</span>
-                    <Icon name="expand_more" className="size-icon-sm shrink-0 opacity-60" />
+                    <Icon name="expand_more" className="size-icon-sm shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[180px] max-h-[280px] overflow-y-auto custom-scrollbar">
@@ -284,7 +284,7 @@ export function SettingMultiSelect({
                     className={cn("min-w-[200px] max-w-[280px] justify-between gap-2 font-normal", className)}
                 >
                     <span className="truncate">{summary}</span>
-                    <Icon name="expand_more" className="size-icon-sm shrink-0 opacity-60" />
+                    <Icon name="expand_more" className="size-icon-sm shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[200px] max-h-[280px] overflow-y-auto custom-scrollbar">

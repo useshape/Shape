@@ -158,7 +158,7 @@ export function GraphDetailPanel({
     if (!selection || !log) {
         return (
             <div className="workbench-panel flex h-full flex-col items-center justify-center gap-2 border border-border-subtle bg-editor px-6 text-center text-sm text-text-muted">
-                <Icon name="commit" size={18} className="opacity-40" />
+                <Icon name="commit" size={18} className="text-text-muted" />
                 <p>Select a commit</p>
             </div>
         );

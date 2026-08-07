@@ -91,7 +91,7 @@ export default function Status() {
     };
 
     return (
-        <div className="status-bar relative flex h-statusbar w-full select-none items-center border-t border-border bg-panel text-text-muted text-xs font-light font-sans px-1 shrink-0">
+        <div className="status-bar relative flex h-statusbar w-full select-none items-center bg-background text-text-muted text-xs font-light font-sans px-1 shrink-0">
             <div className="relative z-30 flex items-center h-full min-w-0 space-x-0.5">
                 <GitStatusButton />
 

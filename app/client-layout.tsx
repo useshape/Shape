@@ -17,7 +17,6 @@ import { initGitHubAuth } from "@/lib/github-auth/store";
 import { LoginPromptDialog } from "@/features/workbench/ui/login-prompt-dialog";
 import { WorkspaceTrustHost } from "@/features/workbench/ui/workspace-trust-dialog";
 import { UpdateBootstrap } from "@/features/workbench/update-bootstrap";
-import { AgentLayoutProvider } from "@/features/agent/lib/agent-layout-context";
 import { InlineEditHost } from "@/features/editor/ui/inline-edit/inline-edit-host";
 import { DesignPreviewCaptureHost } from "@/features/chat/ui/design-capture";
 import { ProjectStatsActivityTracker } from "@/features/stats/ui/activity-tracker";
@@ -51,7 +50,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const isBranch = pathMatches(pathname, "/branch") || pathMatches(pathname, "/git");
     const isStats = pathMatches(pathname, "/stats");
     const isPopout = pathMatches(pathname, "/popout");
-    const isAgent = pathMatches(pathname, "/agent");
 
     useEffect(() => {
         // Kick vscode-api init immediately (module load order beats Monaco).
@@ -140,7 +138,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }, []);
 
     useEffect(() => {
-        if (isOnboarding || isSettings || isBranch || isStats || isPopout || isAgent) return;
+        if (isOnboarding || isSettings || isBranch || isStats || isPopout) return;
         let unlisten: (() => void) | undefined;
         let cancelled = false;
 
@@ -153,39 +151,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
                 unlisten = await win.onCloseRequested(async (event) => {
                     const { getProjectSnapshot, commands } = await import("@/lib/backend");
-                    const { WebviewWindow } = await import("@/lib/tauri/client-api");
-                    const agent = await WebviewWindow.getByLabel("agent");
-                    if (agent) {
-                        // Keep process alive for the Agent window — hide editor instead of quitting.
-                        event.preventDefault();
-                        const dirty = getProjectSnapshot().open_files.filter((f) => f.is_dirty);
-                        if (dirty.length > 0) {
-                            const save = await confirm(
-                                dirty.length === 1
-                                    ? `Save changes to ${dirty[0].name || dirty[0].path} before closing?`
-                                    : `Save changes to ${dirty.length} files before closing?`,
-                                {
-                                    title: "Unsaved changes",
-                                    kind: "warning",
-                                    okLabel: "Save",
-                                    cancelLabel: "Don't save",
-                                },
-                            );
-                            if (save) {
-                                window.dispatchEvent(new Event("save-all-request"));
-                                await new Promise((r) => setTimeout(r, 400));
-                            } else {
-                                const { clearDirtyBuffer } = await import("@/lib/dirty-buffers");
-                                for (const f of dirty) {
-                                    clearDirtyBuffer(f.path);
-                                    void commands.markFileDirty(f.path, false);
-                                }
-                            }
-                        }
-                        if (!cancelled) await win.hide();
-                        return;
-                    }
-
                     const dirty = getProjectSnapshot().open_files.filter((f) => f.is_dirty);
                     if (dirty.length === 0) return;
 
@@ -224,7 +189,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             cancelled = true;
             unlisten?.();
         };
-    }, [isOnboarding, isSettings, isBranch, isStats, isPopout, isAgent]);
+    }, [isOnboarding, isSettings, isBranch, isStats, isPopout]);
 
     // Block the native WebView context menu without breaking Radix menus.
     // Must be bubble phase: Radix opens on the target first; capture+preventDefault
@@ -270,15 +235,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         await onboarding.close();
                     }
 
-                    const { initSettings, getSettings } = await import("@/lib/settings");
+                    const { initSettings } = await import("@/lib/settings");
                     await initSettings();
-                    const { openAgentWindow } = await import("@/lib/open-agent-window");
-                    const startWithAgent = getSettings().privacy.startupWithAgentView;
-                    if (startWithAgent) {
-                        await openAgentWindow({ hideMain: true });
-                    } else {
-                        await currentWindow.show();
-                    }
+                    await currentWindow.show();
                 }
             } catch (e) {
                 console.error("Failed to manage window flow:", e);
@@ -294,33 +253,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     {children}
                 </main>
             </div>
-        );
-    }
-
-    if (isAgent) {
-        return (
-            <LoadingProvider>
-                <NotificationProvider>
-                    <SuppressNativeTooltips />
-                    <GlobalContextMenu>
-                        <EditorViewProvider>
-                            <AgentLayoutProvider>
-                                <ChatStreamProvider>
-                                    <div
-                                        id="shape-agent"
-                                        className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-text-primary select-none"
-                                    >
-                                        <main className="min-h-0 flex-1 overflow-hidden bg-editor">
-                                            {children}
-                                        </main>
-                                        <CommandPaletteBridge />
-                                    </div>
-                                </ChatStreamProvider>
-                            </AgentLayoutProvider>
-                        </EditorViewProvider>
-                    </GlobalContextMenu>
-                </NotificationProvider>
-            </LoadingProvider>
         );
     }
 
@@ -351,8 +283,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
 
     if (isSettings || isBranch || isStats) {
+        const windowTitle = isBranch ? "Git" : isStats ? "Statistics" : "Settings";
         const body = (
             <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
+                <Titlebar settings title={windowTitle} />
                 <main className="min-h-0 flex-1 overflow-hidden bg-editor">
                     {children}
                 </main>
@@ -401,6 +335,7 @@ function Content({ children }: { children: React.ReactNode }) {
             className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background select-none"
         >
             <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col">
+                <Titlebar />
                 <Main>{children}</Main>
                 {!zenMode && <Status />}
                 <LoginPromptDialog />

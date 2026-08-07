@@ -269,6 +269,7 @@ fn parse_blocks<'a>(edit_text: &'a str) -> Vec<EditBlock<'a>> {
 }
 
 /// Returns true when the edit text contains SEARCH markers but no complete blocks.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn has_incomplete_search_blocks(edit_text: &str) -> bool {
     let text = edit_text.replace("\r\n", "\n");
     if !text.lines().any(|l| l.starts_with("<<<<<<< SEARCH")) {

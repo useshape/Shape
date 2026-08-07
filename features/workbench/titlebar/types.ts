@@ -2,7 +2,6 @@ export type TitlebarProps = {
     onboarding?: boolean;
     settings?: boolean;
     focus?: boolean;
-    agent?: boolean;
     title?: string;
     onBack?: () => void;
 };

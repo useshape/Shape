@@ -135,6 +135,39 @@ async function checkFrameAllowed(url: string): Promise<string | null> {
     }
 }
 
+/** Probe loopback reachability so we never mount an iframe that shows the OS/Edge error page. */
+async function probePreviewReachable(url: string): Promise<boolean> {
+    const tryOnce = async (method: "HEAD" | "GET", mode: RequestMode) => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 2500);
+        try {
+            await fetch(url, { method, mode, cache: "no-store", signal: controller.signal });
+            return true;
+        } catch {
+            return false;
+        } finally {
+            window.clearTimeout(timer);
+        }
+    };
+
+    // CORS may fail on local apps even when the server is up — treat opaque/no-cors success as reachable.
+    if (await tryOnce("HEAD", "no-cors")) return true;
+    if (await tryOnce("GET", "no-cors")) return true;
+    // Some servers reject HEAD; a CORS GET that returns anything (incl. 4xx) still means the host is up.
+    try {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 2500);
+        try {
+            await fetch(url, { method: "GET", mode: "cors", cache: "no-store", signal: controller.signal });
+            return true;
+        } finally {
+            window.clearTimeout(timer);
+        }
+    } catch {
+        return false;
+    }
+}
+
 export function getPreviewCurrentUrl(): string | null {
     if (state.index < 0 || state.index >= state.history.length) return null;
     return state.history[state.index] ?? null;
@@ -183,23 +216,43 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
     try {
         url = normalizePreviewUrl(raw);
     } catch {
-        setState({ error: "Enter a valid localhost URL (e.g. http://localhost:3000)." });
+        setState({
+            error: "Enter a valid localhost URL (e.g. http://localhost:3000).",
+            iframeSrc: null,
+            loading: false,
+        });
         return;
     }
     if (!isLocalPreviewUrl(url)) {
         setState({
             error: "Preview only loads local sites (localhost / 127.0.0.1).",
             urlBar: raw.trim() || state.urlBar,
+            iframeSrc: null,
+            loading: false,
         });
         return;
     }
 
-    setState({ loading: true, error: null, urlBar: url });
+    // Clear the iframe first so a previous Edge/WebView error page never stays visible.
+    setState({ loading: true, error: null, urlBar: url, iframeSrc: null });
+
+    const reachable = await probePreviewReachable(url);
+    if (!reachable) {
+        setState({
+            loading: false,
+            iframeSrc: null,
+            error: "Nothing is listening at this address. Start your dev server, then try again.",
+            urlBar: url,
+            history: state.history,
+            index: state.index,
+        });
+        return;
+    }
+
     const blockMsg = await checkFrameAllowed(url);
-    // Soft warning — still navigate so back/forward history stays usable.
     commitNavigation(url, { replace: opts?.replace, reload: true });
     if (blockMsg) {
-        setState({ error: blockMsg });
+        setState({ error: blockMsg, iframeSrc: null });
     }
 }
 
@@ -211,12 +264,30 @@ export function previewBack() {
     stackNavTarget = url;
     setState({
         index,
-        iframeSrc: url,
-        reloadKey: state.reloadKey + 1,
+        iframeSrc: null,
         urlBar: url,
         error: null,
-        loading: false,
+        loading: true,
     });
+    void (async () => {
+        const reachable = await probePreviewReachable(url);
+        if (!reachable) {
+            applyingStackNav = false;
+            stackNavTarget = null;
+            setState({
+                loading: false,
+                iframeSrc: null,
+                error: "Nothing is listening at this address. Start your dev server, then try again.",
+            });
+            return;
+        }
+        setState({
+            iframeSrc: url,
+            reloadKey: state.reloadKey + 1,
+            loading: false,
+            error: null,
+        });
+    })();
 }
 
 export function previewForward() {
@@ -227,12 +298,30 @@ export function previewForward() {
     stackNavTarget = url;
     setState({
         index,
-        iframeSrc: url,
-        reloadKey: state.reloadKey + 1,
+        iframeSrc: null,
         urlBar: url,
         error: null,
-        loading: false,
+        loading: true,
     });
+    void (async () => {
+        const reachable = await probePreviewReachable(url);
+        if (!reachable) {
+            applyingStackNav = false;
+            stackNavTarget = null;
+            setState({
+                loading: false,
+                iframeSrc: null,
+                error: "Nothing is listening at this address. Start your dev server, then try again.",
+            });
+            return;
+        }
+        setState({
+            iframeSrc: url,
+            reloadKey: state.reloadKey + 1,
+            loading: false,
+            error: null,
+        });
+    })();
 }
 
 export function endPreviewStackNav() {
@@ -283,11 +372,30 @@ export function previewReload() {
     applyingStackNav = true;
     stackNavTarget = url;
     setState({
-        iframeSrc: url,
-        reloadKey: state.reloadKey + 1,
+        iframeSrc: null,
         error: null,
         urlBar: url,
+        loading: true,
     });
+    void (async () => {
+        const reachable = await probePreviewReachable(url);
+        if (!reachable) {
+            applyingStackNav = false;
+            stackNavTarget = null;
+            setState({
+                loading: false,
+                iframeSrc: null,
+                error: "Nothing is listening at this address. Start your dev server, then try again.",
+            });
+            return;
+        }
+        setState({
+            iframeSrc: url,
+            reloadKey: state.reloadKey + 1,
+            loading: false,
+            error: null,
+        });
+    })();
 }
 
 export function setPreviewUrlBar(value: string) {
@@ -314,24 +422,21 @@ export function seedPreviewFromDevUrl(devUrl: string | null | undefined) {
     try {
         const url = normalizePreviewUrl(devUrl);
         if (!isLocalPreviewUrl(url)) return;
+        // Prefill the bar only — never auto-load a dead URL into an iframe (shows OS error page).
         setState({ urlBar: url });
-        void navigatePreview(url);
     } catch {
         /* ignore */
     }
 }
 
-/** Ensure at least the default local URL is loaded so history / back work. */
+/** Prefill URL bar; do not auto-navigate (avoids Edge/WebView error page on open). */
 export function ensurePreviewLoaded() {
-    if (state.iframeSrc || state.history.length > 0) return;
-    void navigatePreview(state.urlBar || DEFAULT_URL);
+    if (state.urlBar) return;
+    setState({ urlBar: DEFAULT_URL });
 }
 
 export function openPreviewPanel(url?: string) {
-    window.dispatchEvent(
-        new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),
-    );
-    window.dispatchEvent(new Event("shape-open-preview"));
+    void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
     if (url) {
         void navigatePreview(url);
     } else {

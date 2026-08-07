@@ -2,32 +2,15 @@
 
 import { useEffect, useState } from "react";
 import type { Window } from "@tauri-apps/api/window";
-import { WebviewWindow } from "@/lib/tauri/client-api";
-
-async function agentWindowOpen(): Promise<boolean> {
-    try {
-        const agent = await WebviewWindow.getByLabel("agent");
-        return Boolean(agent);
-    } catch {
-        return false;
-    }
-}
 
 /**
  * Close behavior:
- * - Main + agent still open → hide main (agent keeps running alone).
- * - Main alone → quit the app.
- * - Agent while main is hidden → close agent and quit.
- * - Agent while main is visible → close agent only.
+ * - Main → close secondary windows, then quit the app.
  * - Other secondary windows → close that window only.
  */
 async function closeAppOrWindow(appWindow: Window) {
     try {
         if (appWindow.label === "main") {
-            if (await agentWindowOpen()) {
-                await appWindow.hide();
-                return;
-            }
             const { getAllWindows } = await import("@tauri-apps/api/window");
             const windows = await getAllWindows();
             await Promise.all(
@@ -37,26 +20,6 @@ async function closeAppOrWindow(appWindow: Window) {
             );
             const { exit } = await import("@tauri-apps/plugin-process");
             await exit(0);
-            return;
-        }
-
-        if (appWindow.label === "agent") {
-            const main = await WebviewWindow.getByLabel("main");
-            await appWindow.close();
-            if (!main) {
-                const { exit } = await import("@tauri-apps/plugin-process");
-                await exit(0);
-                return;
-            }
-            try {
-                const mainVisible = await main.isVisible();
-                if (mainVisible) return;
-                await main.close().catch(() => undefined);
-                const { exit } = await import("@tauri-apps/plugin-process");
-                await exit(0);
-            } catch {
-                /* ignore */
-            }
             return;
         }
     } catch {

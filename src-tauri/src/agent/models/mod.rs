@@ -557,6 +557,7 @@ impl AgentState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn clear_active_terminal(&self) {
         // Prefer unregister_session(id). Kept for Stop/cancel fallbacks that
         // need to drop every tracked agent session at once.

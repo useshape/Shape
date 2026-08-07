@@ -20,6 +20,8 @@ import { isSettingsTab } from "@/lib/settings-tab";
 import { SettingsView } from "@/features/settings/ui/settings";
 import { DesignPreviewView } from "@/features/chat/ui/blocks/preview";
 import { parseDesignPreviewTabPath } from "@/lib/design-preview-tab";
+import { isBrowserTab } from "@/lib/browser-tab";
+import { BrowserView } from "@/features/preview/ui/browser-view";
 import FileViewer from "@/features/editor/ui/main/editor";
 import type { EditorGroupId } from "@/core/providers/editor";
 import {
@@ -35,6 +37,7 @@ import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
 function renderEditorContent(path: string, group: EditorGroupId) {
     const designPreviewId = parseDesignPreviewTabPath(path);
     if (designPreviewId) return <DesignPreviewView sessionId={designPreviewId} />;
+    if (isBrowserTab(path)) return <BrowserView />;
     if (isSettingsTab(path)) return <SettingsView />;
     return <FileViewer path={path} group={group} />;
 }

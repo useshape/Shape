@@ -30,7 +30,9 @@ import { statusProgress } from "@/lib/status-progress";
 import { getSettings, useSettings } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
 import { Tooltip } from "@/components/ui/tooltip";
-import { FadeTruncate } from "@/components/ui/fade-truncate";
+import {
+    SidebarPanelHeaderFrame,
+} from "@/features/panels";
 import {
     AlertDialog,
     AlertDialogBody,
@@ -803,13 +805,12 @@ export default function Source({
 
     const sourceChrome = (
         <>
-            <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-3">
-                <FadeTruncate className="min-w-0 flex-1 text-sm font-regular" title="Source Control">
-                    Source Control
-                </FadeTruncate>
-
-                {isGitRepo && (
-                    <div className="flex shrink-0 items-center gap-0.5">
+            <SidebarPanelHeaderFrame
+                title="Source Control"
+                className={embedded ? "bg-editor" : undefined}
+                actions={
+                    isGitRepo ? (
+                        <div className="flex shrink-0 items-center gap-0.5">
                         <Tooltip content="Refresh Repository">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={() => void refresh()}>
                                 <Icon name="refresh" size={16} />
@@ -905,9 +906,10 @@ export default function Source({
                                 </DropdownMenu>
                             </span>
                         </Tooltip>
-                    </div>
-                )}
-            </div>
+                        </div>
+                    ) : undefined
+                }
+            />
 
             {changes.some((c) => c.status === "C") && gitRepo ? (
                 <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--git-conflict)]/40 bg-[color:var(--git-conflict)]/10 px-2 py-1.5 text-xs text-text-primary">
@@ -1258,7 +1260,7 @@ export default function Source({
                                     <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
                                         {!diffFile ? (
                                             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-                                                <Icon name="draft" size={18} className="opacity-40" />
+                                                <Icon name="description" size={18} className="text-text-muted" />
                                                 <p>Select a file to view changes</p>
                                             </div>
                                         ) : (
