@@ -23,14 +23,15 @@ describe("theme registry", () => {
     it("recognizes valid theme ids", () => {
         expect(isColorThemeId("graphite")).toBe(true);
         expect(isColorThemeId("one")).toBe(true);
+        expect(isColorThemeId("light")).toBe(false);
         expect(isColorThemeId("nonexistent")).toBe(false);
     });
 
-    it("migrates unknown or removed themes (e.g. light) to dark", () => {
-        expect(normalizeColorTheme("light")).toBe("dark");
+    it("migrates unknown themes to dark", () => {
         expect(normalizeColorTheme("solarized")).toBe("dark");
         expect(normalizeColorTheme("nord")).toBe("dark");
         expect(normalizeColorTheme("ember")).toBe("dark");
+        expect(normalizeColorTheme("light")).toBe("dark");
         expect(normalizeColorTheme(undefined)).toBe("dark");
     });
 
@@ -47,6 +48,11 @@ describe("applyAppearanceSettings", () => {
         expect(document.documentElement.dataset.theme).toBeUndefined();
     });
 
+    it("migrates removed light theme to dark", () => {
+        applyAppearanceSettings(withColorTheme("light"));
+        expect(document.documentElement.dataset.theme).toBeUndefined();
+    });
+
     it("sets data-theme for graphite", () => {
         applyAppearanceSettings(withColorTheme("graphite"));
         expect(document.documentElement.dataset.theme).toBe("graphite");
@@ -60,12 +66,5 @@ describe("applyAppearanceSettings", () => {
     it("sets data-theme for purple", () => {
         applyAppearanceSettings(withColorTheme("purple"));
         expect(document.documentElement.dataset.theme).toBe("purple");
-    });
-
-    it("migrates a removed light theme to dark and clears data-theme", () => {
-        applyAppearanceSettings(withColorTheme("graphite"));
-        expect(document.documentElement.dataset.theme).toBe("graphite");
-        applyAppearanceSettings(withColorTheme("light"));
-        expect(document.documentElement.dataset.theme).toBeUndefined();
     });
 });

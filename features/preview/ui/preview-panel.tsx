@@ -259,7 +259,7 @@ export default function PreviewPanel() {
                     />
                 ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-                        <Icon name="public" size={28} className="opacity-50" />
+                        <Icon name="public" size={28} className="text-text-muted" />
                         <p>Preview local sites here (localhost only).</p>
                         <p className="text-xs">
                             Enter a URL and press Go, or open Preview after your dev server starts.

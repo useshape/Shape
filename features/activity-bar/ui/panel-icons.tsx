@@ -15,7 +15,8 @@ export function AnimatedSidebarIcon({ active, size = 16 }: { active?: boolean; s
             viewBox="0 0 24 24"
             width={size}
             height={size}
-            className={cn(root, active && "is-active")}
+            className={cn(root, "shape-icon", active && "is-active")}
+            style={{ shapeRendering: "geometricPrecision" }}
         >
             <defs>
                 <style>{`
@@ -24,9 +25,10 @@ export function AnimatedSidebarIcon({ active, size = 16 }: { active?: boolean; s
           .${root} .divider-line {
             fill: none;
             stroke: currentColor;
-            stroke-width: 2;
+            stroke-width: 1.75;
             stroke-linecap: round;
             stroke-linejoin: round;
+            vector-effect: non-scaling-stroke;
           }
           .${root} .solid-sidebar {
             fill: currentColor;
@@ -67,8 +69,8 @@ export function AnimatedSecondarySidebarIcon({
             viewBox="0 0 24 24"
             width={size}
             height={size}
-            className={cn(root, active && "is-active")}
-            style={{ transform: "scaleX(-1)" }}
+            className={cn(root, "shape-icon", active && "is-active")}
+            style={{ transform: "scaleX(-1)", shapeRendering: "geometricPrecision" }}
         >
             <defs>
                 <style>{`
@@ -77,9 +79,10 @@ export function AnimatedSecondarySidebarIcon({
           .${root} .divider-line {
             fill: none;
             stroke: currentColor;
-            stroke-width: 2;
+            stroke-width: 1.75;
             stroke-linecap: round;
             stroke-linejoin: round;
+            vector-effect: non-scaling-stroke;
           }
           .${root} .solid-sidebar {
             fill: currentColor;
@@ -114,7 +117,8 @@ export function AnimatedPanelIcon({ active, size = 16 }: { active?: boolean; siz
             viewBox="0 0 24 24"
             width={size}
             height={size}
-            className={cn(root, active && "is-active")}
+            className={cn(root, "shape-icon", active && "is-active")}
+            style={{ shapeRendering: "geometricPrecision" }}
         >
             <defs>
                 <style>{`
@@ -123,9 +127,10 @@ export function AnimatedPanelIcon({ active, size = 16 }: { active?: boolean; siz
           .${root} .divider-line {
             fill: none;
             stroke: currentColor;
-            stroke-width: 2;
+            stroke-width: 1.75;
             stroke-linecap: round;
             stroke-linejoin: round;
+            vector-effect: non-scaling-stroke;
           }
           .${root} .solid-panel {
             fill: currentColor;

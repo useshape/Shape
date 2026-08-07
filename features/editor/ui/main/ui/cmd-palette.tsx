@@ -1029,11 +1029,10 @@ function getAppCommands(): EditorAction[] {
         },
         {
             id: "app.view.preview",
-            label: "View: Show Preview",
+            label: "View: Show Browser",
             shortcut: "",
             run: () => {
-                window.dispatchEvent(new Event("shape-open-preview"));
-                window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
+                void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
             },
         },
         {

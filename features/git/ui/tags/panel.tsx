@@ -194,7 +194,7 @@ export function LocalTags() {
                                         type="button"
                                         className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-panel-hover"
                                     >
-                                        <Icon name="history" size={14} className="mt-0.5 shrink-0 opacity-70" />
+                                        <Icon name="history" size={14} className="mt-0.5 shrink-0 text-text-muted" />
                                         <span className="min-w-0 flex-1">
                                             <span className="block truncate text-sm text-text-primary">{tag.name}</span>
                                             <span className="block truncate text-xs text-text-muted">

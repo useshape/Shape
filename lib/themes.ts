@@ -1,6 +1,6 @@
 /**
- * Color theme registry. Shape is a dark-only product — every theme here is a
- * dark theme, differentiated by surface tone and accent. No light mode.
+ * Color theme registry. Shape ships dark defaults; optional accent themes
+ * override tokens via `data-theme`.
  *
  * Theme ids are stable for settings migration; labels/styles may evolve.
  */
@@ -58,7 +58,7 @@ export function isColorThemeId(value: unknown): value is ColorThemeId {
     return typeof value === "string" && value in COLOR_THEMES;
 }
 
-/** Migrate unknown/removed values (e.g. the old "light" theme) to dark. */
+/** Migrate unknown/removed values (including legacy `"light"`) to dark. */
 export function normalizeColorTheme(value: unknown): ColorThemeId {
     return isColorThemeId(value) ? value : "dark";
 }

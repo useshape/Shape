@@ -23,9 +23,6 @@ import { LoadingBar } from "@/components/ui/loading";
 import { useLoading } from "@/features/loading/context";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import { GitManagerShellSkeleton } from "@/features/git/ui/shared/skeletons";
-import { StandaloneWindowShell } from "@/features/workbench/ui/workbench-chrome";
-import { TitlebarSearch } from "./titlebar-search";
-import "@/features/git/ui/shared/motion.css";
 
 export type { GitSectionId } from "@/features/git/types";
 
@@ -351,59 +348,55 @@ function ManagerShell() {
     );
 
     return (
-        <div className="relative h-full w-full min-w-0 overflow-hidden select-none text-text-primary">
-            <StandaloneWindowShell
-                windowTitle="Git"
-                toolbar={<TitlebarSearch />}
-                sidebar={
-                    <>
-                        <div className="shrink-0 p-2">
-                            <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                                <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                                <Input
-                                    placeholder="Search git"
-                                    value={query}
-                                    className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                                    onChange={(e) => setQuery(e.target.value)}
-                                />
-                            </div>
+        <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden select-none bg-editor text-text-primary">
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <aside className="flex w-64 shrink-0 flex-col bg-background">
+                    <div className="p-2">
+                        <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
+                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                            <Input
+                                placeholder="Search git"
+                                value={query}
+                                className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                                onChange={(e) => setQuery(e.target.value)}
+                            />
                         </div>
-                        <nav className="no-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-                            {filteredNav.map((group) => {
-                                const open = expandedGroups.has(group.id) || !!query.trim();
-                                return (
-                                    <CollapsibleNavGroup
-                                        key={group.id}
-                                        label={group.label}
-                                        open={open}
-                                        onToggle={() => toggleGroup(group.id)}
-                                    >
-                                        {group.children.map((leaf) => (
-                                            <NavLeafButton
-                                                key={leaf.id}
-                                                active={activeLeafId === leaf.id || section === leaf.id}
-                                                onClick={() => select(leaf.id)}
-                                            >
-                                                <span className="truncate text-sm font-regular">
-                                                    {leaf.label}
-                                                </span>
-                                            </NavLeafButton>
-                                        ))}
-                                    </CollapsibleNavGroup>
-                                );
-                            })}
-                        </nav>
-                    </>
-                }
-            >
-                <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
+                    </div>
+                    <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+                        {filteredNav.map((group) => {
+                            const open = expandedGroups.has(group.id) || !!query.trim();
+                            return (
+                                <CollapsibleNavGroup
+                                    key={group.id}
+                                    label={group.label}
+                                    open={open}
+                                    onToggle={() => toggleGroup(group.id)}
+                                >
+                                    {group.children.map((leaf) => (
+                                        <NavLeafButton
+                                            key={leaf.id}
+                                            active={activeLeafId === leaf.id || section === leaf.id}
+                                            onClick={() => select(leaf.id)}
+                                        >
+                                            <span className="truncate text-sm font-regular">
+                                                {leaf.label}
+                                            </span>
+                                        </NavLeafButton>
+                                    ))}
+                                </CollapsibleNavGroup>
+                            );
+                        })}
+                    </nav>
+                </aside>
+
+                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                     {/* Keep-alive panes use `hidden` (not `invisible`) so Monaco/diff
                         overlays cannot paint over other sections when inactive. */}
                     {visited.has("source") ? (
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "source" ? "git-pane-enter z-10" : "hidden",
+                                section === "source" ? "z-10" : "hidden",
                             )}
                             aria-hidden={section !== "source"}
                         >
@@ -414,7 +407,7 @@ function ManagerShell() {
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "graph" ? "git-pane-enter z-10" : "hidden",
+                                section === "graph" ? "z-10" : "hidden",
                             )}
                             aria-hidden={section !== "graph"}
                         >
@@ -425,7 +418,7 @@ function ManagerShell() {
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "branches" ? "git-pane-enter z-10" : "hidden",
+                                section === "branches" ? "z-10" : "hidden",
                             )}
                             aria-hidden={section !== "branches"}
                         >
@@ -436,7 +429,7 @@ function ManagerShell() {
                         <div
                             className={cn(
                                 "absolute inset-0 min-h-0 min-w-0",
-                                section === "tags" ? "git-pane-enter z-10" : "hidden",
+                                section === "tags" ? "z-10" : "hidden",
                             )}
                             aria-hidden={section !== "tags"}
                         >
@@ -446,7 +439,7 @@ function ManagerShell() {
                     {isActionsSection(section) ? (
                         <div
                             key={`actions-${section}`}
-                            className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter"
+                            className="absolute inset-0 z-10 min-h-0 min-w-0"
                         >
                             <ActionsConsole focus={section} />
                         </div>
@@ -454,7 +447,7 @@ function ManagerShell() {
                     {section === "releases" ? (
                         <div
                             key="releases"
-                            className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter"
+                            className="absolute inset-0 z-10 min-h-0 min-w-0"
                         >
                             <ReleasesPage />
                         </div>
@@ -467,14 +460,14 @@ function ManagerShell() {
                     section !== "releases" ? (
                         <div
                             key={section}
-                            className="absolute inset-0 z-10 min-h-0 min-w-0 git-pane-enter"
+                            className="absolute inset-0 z-10 min-h-0 min-w-0"
                         >
                             <GitHubSection section={section} />
                         </div>
                     ) : null}
-                </div>
-            </StandaloneWindowShell>
-            <LoadingBar className="pointer-events-none absolute inset-x-0 bottom-0 z-50" />
+                </section>
+            </div>
+            <LoadingBar className="absolute inset-x-0 bottom-0 z-50 pointer-events-none" />
         </div>
     );
 }

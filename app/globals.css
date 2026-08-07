@@ -3,6 +3,8 @@
 @import "@fontsource/ibm-plex-mono/500.css";
 
 :root {
+  color-scheme: dark;
+
   /* ── Surface ladder ────────────────────────────────────── */
   --surface-0: #1A1A1A;
   --surface-1: #1b1b1b;
@@ -10,8 +12,8 @@
   --surface-3: #242424;
 
   /* ── Role surfaces (Modern UI–style) ───────────────────── */
-  --chrome: #161616;
-  --sidebar: #1a1a1a;
+  --chrome: #141414;
+  --sidebar: #1b1b1b;
   --editor: #161616;
   --base: #ededee;
 
@@ -30,14 +32,15 @@
 
   /* ── Text ──────────────────────────────────────────────── */
   --text-primary: var(--base);
-  --text-secondary: #a1a1a6;
-  --text-muted: #ffffff73;
-  --text-disabled: #ffffff48;
+  --text-secondary: #b4b4b9;
+  /* Opaque greys — alpha on muted made Lucide stroke joins look broken */
+  --text-muted: #8e8e94;
+  --text-disabled: #55555a;
   --text-active: #ffffff;
 
   /* ── Borders / stroke ──────────────────────────────────── */
-  --border: rgba(255, 255, 255, 0.068);
-  --border-subtle: rgba(255, 255, 255, 0.034);
+  --border: rgba(255, 255, 255, 0.075);
+  --border-subtle: rgba(255, 255, 255, 0.014);
   --border-secondary: rgba(255, 255, 255, 0.1);
   --stroke: 1px;
 
@@ -87,8 +90,8 @@
   --button-secondary-fg: var(--text-primary);
   --button-secondary-hover: var(--surface-3);
 
-  --scrollbar: rgba(255, 255, 255, 0.15);
-  --scrollbar-hover: rgba(255, 255, 255, 0.25);
+  --scrollbar: rgba(255, 255, 255, 0.1);
+  --scrollbar-hover: rgba(255, 255, 255, 0.18);
 
   /* ── Geometry ──────────────────────────────────────────── */
   --radius-none: 0px;
@@ -101,9 +104,9 @@
   --radius-3xl: 16px;
   --radius-full: 9999px;
 
-  /* Flush workbench columns — hairline borders run full height (no float gap). */
-  --workbench-gap: 0px;
-  --workbench-panel-radius: 0px;
+  /* Floating workbench panels (Git Manager, graph splits, etc.). */
+  --workbench-gap: 8px;
+  --workbench-panel-radius: var(--radius-xl);
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -115,9 +118,9 @@
   --icon-md: 16px;
   --icon-lg: 20px;
 
-  --chrome-height: 28px;
+  --chrome-height: 30px;
   --titlebar-height: 34px;
-  --statusbar-height: 23px;
+  --statusbar-height: 33px;
 
   /* ── Typography (11/12/13/14; Inter) ── */
   --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -172,6 +175,13 @@
 
   --overlay-scrim: transparent;
 
+  /* Soft accent pills (composer / settings) */
+  --pill-bg: color-mix(in srgb, var(--accent) 16%, transparent);
+  --pill-bg-hover: color-mix(in srgb, var(--accent) 24%, transparent);
+  --pill-fg: var(--accent);
+  --pill-muted-bg: var(--surface-3);
+  --pill-muted-fg: var(--text-secondary);
+
   /* Allotment split view */
   --sash-size: 4px;
   --sash-hover-size: 4px;
@@ -197,7 +207,7 @@
   --editor-secondary: #1e1816;
 
   --text-secondary: #a8998c;
-  --text-muted: rgba(232, 224, 216, 0.42);
+  --text-muted: #8a827a;
   --text-disabled: rgba(232, 224, 216, 0.26);
   --text-active: #f5efe8;
 
@@ -245,7 +255,7 @@
   --editor-secondary: #161616;
 
   --text-secondary: #8e8e8e;
-  --text-muted: rgba(212, 212, 212, 0.42);
+  --text-muted: #8a8a8a;
   --text-disabled: rgba(212, 212, 212, 0.26);
   --text-active: #f0f0f0;
 
@@ -293,7 +303,7 @@
   --editor-secondary: #20242a;
 
   --text-secondary: #8b929e;
-  --text-muted: rgba(197, 202, 211, 0.42);
+  --text-muted: #7d848e;
   --text-disabled: rgba(197, 202, 211, 0.26);
   --text-active: #e8ebf0;
 
@@ -483,14 +493,14 @@ html {
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  text-rendering: geometricPrecision;
   font-synthesis: none;
   font-synthesis-weight: none;
   font-synthesis-style: none;
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
-  letter-spacing: -0.011em;
+  letter-spacing: -0.006em;
 }
 
 body {
@@ -500,11 +510,11 @@ body {
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  text-rendering: geometricPrecision;
   font-synthesis: none;
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
-  letter-spacing: -0.011em;
+  letter-spacing: -0.006em;
 }
 
 /* Monaco editor surface — dark background, no default light border */
@@ -538,9 +548,24 @@ body {
   font-feature-settings: normal;
 }
 
-/* ── Scrollbar hide ─────────────────────────────────────── */
+/* ── Icons: mute via opaque color tokens, never alpha/opacity on glyphs ─ */
+.shape-icon {
+  color: inherit;
+  opacity: 1 !important;
+  shape-rendering: geometricPrecision;
+}
+
+/* Parent opacity makes Lucide stroke joins look broken — mute with color instead */
+button:disabled .shape-icon,
+[aria-disabled="true"] .shape-icon {
+  opacity: 1 !important;
+}
+
+/* ── Scrollbars: thin, no arrows, no layout gutter jump ─ */
 .no-scrollbar::-webkit-scrollbar {
-  display: none;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .no-scrollbar {
@@ -548,64 +573,57 @@ body {
   scrollbar-width: none;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 9999px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-hover);
-}
-
-/* Global scrollbar styling (native overflow areas) */
-*:not(.no-scrollbar) {
+* {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
 }
 
-*:not(.no-scrollbar)::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+*::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
 }
 
-*:not(.no-scrollbar)::-webkit-scrollbar-track {
-  background: transparent;
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:start:decrement,
+*::-webkit-scrollbar-button:end:increment,
+*::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:vertical:start:decrement,
+*::-webkit-scrollbar-button:vertical:end:increment,
+*::-webkit-scrollbar-button:horizontal:start:decrement,
+*::-webkit-scrollbar-button:horizontal:end:increment {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
 
-*:not(.no-scrollbar)::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 9999px;
+*::-webkit-scrollbar-corner {
+  background: transparent !important;
 }
 
-*:not(.no-scrollbar)::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-hover);
+*::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar) !important;
+  border-radius: 9999px !important;
+  border: 1px solid transparent !important;
+  background-clip: padding-box !important;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-hover) !important;
+}
+
+.no-scrollbar,
+.no-scrollbar * {
+  scrollbar-width: none !important;
 }
 
 .xterm-viewport::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.xterm-viewport::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.xterm-viewport::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 9999px;
-}
-
-.xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-hover);
+  width: 6px !important;
+  height: 6px !important;
 }
 
 /* ── Chat markdown (no tailwind typography plugin) ─────── */
@@ -905,11 +923,11 @@ body {
   overflow-block: clip;
 }
 
-/* ── Sharp workbench panels (editor chrome) ─────────────── */
+/* ── Floating workbench panels ───────────────────────────── */
 .workbench-panel {
   height: 100%;
   width: 100%;
-  border-radius: 0;
+  border-radius: var(--workbench-panel-radius);
   overflow: hidden;
 }
 
@@ -921,17 +939,6 @@ body {
   border-radius: var(--workbench-panel-radius);
   background: var(--panel);
   overflow: hidden;
-}
-
-@keyframes agent-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* Long user messages: visually shorten with bottom fade (content still intact). */

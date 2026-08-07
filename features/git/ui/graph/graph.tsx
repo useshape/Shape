@@ -15,7 +15,9 @@ import {
 import { notify } from "@/features/notifications";
 import { computeGraphRowLayout, computeVisibleRange, GRAPH_LOG_SOFT_CAP, GRAPH_OVERSCAN_PX, rowTop } from "@/lib/git/graph-virtual";
 import { Tooltip } from "@/components/ui/tooltip";
-import { FadeTruncate } from "@/components/ui/fade-truncate";
+import {
+    SidebarPanelHeaderFrame,
+} from "@/features/panels";
 import { useLoading } from "@/features/loading/context";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { useGitRepos } from "@/lib/git/repos";
@@ -818,18 +820,18 @@ export default function Graph({
 
     const graphChrome = (
         <>
-            <div className="relative z-10 flex h-9 shrink-0 items-center justify-between gap-2 px-3">
-                <div className="min-w-0 flex-1 flex items-center gap-2">
-                    <FadeTruncate className="min-w-0 text-sm font-regular" title="Graph">
-                        Graph
-                    </FadeTruncate>
-                    {hasActiveFilter && (
-                        <span className="text-xs text-text-muted tabular-nums shrink-0">
+            <SidebarPanelHeaderFrame
+                title="Graph"
+                className={rich ? "bg-editor" : undefined}
+                titleExtra={
+                    hasActiveFilter ? (
+                        <span className="shrink-0 text-xs tabular-nums text-text-muted">
                             {matchCount}/{gitLogs.length}
                         </span>
-                    )}
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
+                    ) : null
+                }
+                actions={
+                    <>
                     <Tooltip content="Go to HEAD (H)">
                         <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
                             <Icon name="my_location" size={16} />
@@ -883,8 +885,9 @@ export default function Graph({
                         </Button>
                     </Tooltip>
                     {!rich && project_path ? <GitManagerTrigger /> : null}
-                </div>
-            </div>
+                    </>
+                }
+            />
 
             {rich ? (
                 <div className="relative z-20 shrink-0 px-3 pb-2 pt-1 space-y-2">

@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { OutlineResponse, OutlineSymbol, commands, useProjectState } from "@/lib/backend";
 import { getSymbolIconPath } from "@/lib/ui/icons/symbols";
+import { SidebarPanelHeader } from "@/features/panels";
 
 const OUTLINE_ROW_HEIGHT = 24;
 
@@ -231,13 +232,11 @@ export default function OutlinePanel() {
     }
 
     return (
-        <div className="flex w-full h-full min-h-0 flex-col">
-            <div className="h-9 flex items-center justify-between px-3 shrink-0">
-                <span>Outline</span>
-            </div>
+        <div className="flex h-full min-h-0 w-full flex-col">
+            <SidebarPanelHeader title="Outline" side="left" panelId="outline" />
             <div
                 ref={scrollRef}
-                className="py-1 flex-1 flex flex-col overflow-y-auto custom-scrollbar"
+                className="custom-scrollbar flex flex-1 flex-col overflow-y-auto py-1"
                 onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
             >
                 {rows.length === 0 ? (

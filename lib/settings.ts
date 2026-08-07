@@ -153,8 +153,6 @@ export interface ShapeSettings {
         showLoginPromptOnLaunch: boolean;
         /** Show the welcome page when the main window opens with no editor. */
         showWelcomeOnStartup: boolean;
-        /** Open the Agent window on launch and keep the editor window hidden until needed. */
-        startupWithAgentView: boolean;
     };
     notifications: {
         /** Master switch for OS/desktop notifications. On by default. */
@@ -291,7 +289,6 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         telemetryEnabled: false,
         showLoginPromptOnLaunch: true,
         showWelcomeOnStartup: true,
-        startupWithAgentView: false,
     },
     notifications: {
         desktopEnabled: true,
@@ -615,6 +612,7 @@ export function applyAppearanceSettings(settings: ShapeSettings) {
     } else {
         document.documentElement.dataset.theme = theme;
     }
+    document.documentElement.style.colorScheme = "dark";
 
     // Re-apply Monaco colors from CSS vars after theme tokens settle.
     if (typeof window !== "undefined") {

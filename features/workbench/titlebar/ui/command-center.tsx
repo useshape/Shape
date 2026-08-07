@@ -11,6 +11,7 @@ import { useProjectState } from "@/lib/backend";
  */
 export function CommandOmnibar({ className }: { className?: string }) {
     const { active_file } = useProjectState();
+    const fileName = active_file ? active_file.split(/[\\/]/).pop() : null;
 
     return (
         <div className={cn("relative w-full min-w-0", className)}>
@@ -30,16 +31,21 @@ export function CommandOmnibar({ className }: { className?: string }) {
                     );
                 }}
                 className={cn(
-                    "command-center flex h-[26px] w-full min-w-0 items-center gap-2 rounded-md border border-border px-2.5",
-                    "bg-transparent text-left transition-colors hover:bg-panel-hover",
+                    "command-center flex h-[26px] w-full min-w-0 items-center gap-2 rounded-md bg-transparent border border-border px-2.5",
+                    "text-left transition-colors hover:bg-panel-hover",
                 )}
                 aria-label="Open command palette"
             >
-                <Icon name="search" size={13} className="shrink-0 text-text-muted" />
-                <span className="min-w-0 flex-1 truncate text-xs leading-none text-text-muted">
-                    {active_file
-                        ? `Search ${active_file.split(/[\\/]/).pop()}…`
-                        : "Search agents, files, actions…"}
+                <Icon name="search" size={14} className="shrink-0 text-text-secondary" />
+                <span className="min-w-0 flex-1 truncate text-xs leading-[16px] text-text-secondary">
+                    {fileName ? (
+                        <>
+                            Open command palette in{" "}
+                            <span className="text-text-primary">{fileName}</span>
+                        </>
+                    ) : (
+                        "Search agents, files, actions…"
+                    )}
                 </span>
             </button>
         </div>

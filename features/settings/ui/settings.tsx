@@ -18,7 +18,6 @@ import { listen, WebviewWindow } from "@/lib/tauri/client-api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import {
     SettingRow,
     SettingSection,
@@ -44,16 +43,8 @@ import { normalizeColorTheme } from "@/lib/themes";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { Icon } from "@/components/ui/icon";
-import {
-    SETTINGS_CATEGORIES,
-    type SettingsCategoryId,
-} from "./settings-nav";
+import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
 import { useRouter } from "next/navigation";
-import { ShapeAccountAvatar } from "@/features/workbench/titlebar/ui/account-avatar";
-import { loginShape, useShapeAuth } from "@/lib/shape-auth/store";
-import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
-import { StandaloneWindowShell } from "@/features/workbench/ui/workbench-chrome";
-import type { ShapeTier } from "@/lib/shape-auth/types";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -703,15 +694,6 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
             </SettingSection>
             <SettingSection title="Startup">
                 <SettingRow
-                    title="Start with Agent view"
-                    description="Open the Agent window on launch. The editor stays available but hidden until you open it."
-                >
-                    <SettingSwitch
-                        checked={p.startupWithAgentView}
-                        onChange={(v) => updateSettingSection("privacy", { startupWithAgentView: v })}
-                    />
-                </SettingRow>
-                <SettingRow
                     title="Show welcome page on startup"
                     description="Prefer the welcome screen when Shape opens with no project."
                 >
@@ -867,115 +849,86 @@ function ToolsSettings({ settings }: { settings: ShapeSettings }) {
     );
 }
 
-function AppearanceSettings({ settings }: { settings: ShapeSettings }) {
-    return (
-        <SettingSection id="settings-appearance" title="Theme">
-            <div className="px-3.5 py-3.5">
-                <ThemePicker
-                    value={normalizeColorTheme(settings.appearance?.colorTheme)}
-                    onChange={(colorTheme) => updateSettingSection("appearance", { colorTheme })}
-                    className="grid-cols-2 sm:grid-cols-4"
-                />
-            </div>
-        </SettingSection>
-    );
-}
-
-function ApplicationSettings({
-    settings,
-    onResetClick,
-}: {
-    settings: ShapeSettings;
-    onResetClick: () => void;
-}) {
-    return (
-        <>
-            <PrivacySettings settings={settings} />
-            <DeveloperSettings settings={settings} />
-            <SettingSection id="settings-reset" title="Reset">
-                <SettingRow
-                    title="Reset all settings"
-                    description="Restore editor, agent, and application preferences to defaults. Account and project files are not affected."
-                >
-                    <Button size="sm" variant="secondary" onClick={onResetClick}>
-                        Reset to Defaults
-                    </Button>
-                </SettingRow>
-            </SettingSection>
-        </>
-    );
-}
-
 function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
-            <AppearanceSettings settings={settings} />
+            <SettingSection id="settings-appearance" title="Appearance">
+                <div className="px-3.5 py-3.5">
+                    <ThemePicker
+                        value={normalizeColorTheme(settings.appearance?.colorTheme)}
+                        onChange={(colorTheme) => updateSettingSection("appearance", { colorTheme })}
+                        className="grid-cols-2 sm:grid-cols-3"
+                    />
+                </div>
+            </SettingSection>
             <DeveloperSettings settings={settings} />
             <PrivacySettings settings={settings} />
         </>
     );
-}
-
-function tierLabel(tier: ShapeTier): string {
-    switch (tier) {
-        case "plus":
-            return "Plus";
-        case "pro":
-            return "Pro";
-        case "max":
-            return "Max";
-        case "team":
-            return "Team";
-        default:
-            return "Free";
-    }
 }
 
 export function SettingsView() {
     const settings = useSettings();
     const searchParams = useSearchParams();
     const router = useRouter();
-    const auth = useShapeAuth();
-    const { closeWindow } = useWindowControls();
     const [query, setQuery] = useState("");
-    const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>("account");
+    const [activeLeafId, setActiveLeafId] = useState("account-profile");
     const [subView, setSubView] = useState<"mcp-library" | null>(null);
     const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
-
-    const resolveCategoryFromDeepLink = useCallback(
-        (category?: string | null, section?: string | null): SettingsCategoryId => {
-            if (section === "rules" || section === "memories") return "agents";
-            switch (category) {
-                case "account":
-                case "general":
-                    return "account";
-                case "ai":
-                    return "agents";
-                case "editor":
-                    return "editor";
-                case "terminal":
-                    return "terminal";
-                case "git":
-                    return "git";
-                case "languages":
-                case "tools":
-                    return "languages";
-                case "advanced":
-                case "appearance":
-                    return category === "appearance" ? "appearance" : "application";
-                default:
-                    return "account";
-            }
-        },
-        [],
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+        () => new Set(SETTINGS_NAV.map((g) => g.id)),
     );
+    const scrollingToRef = React.useRef<string | null>(null);
+
+    const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
+        if (section === "rules") return "settings-ai-rules";
+        // Legacy deep link: "memories" (System Instructions) merged into Rules.
+        if (section === "memories") return "settings-ai-rules";
+        switch (category) {
+            case "account":
+            case "general":
+                return "settings-account";
+            case "ai":
+            case "agents":
+                return "settings-ai-models";
+            case "editor":
+                return "settings-editor-font";
+            case "terminal":
+                return "settings-terminal";
+            case "git":
+                return "settings-git";
+            case "languages":
+                return "settings-languages";
+            case "tools":
+                return "settings-tools-lint";
+            case "appearance":
+            case "advanced":
+            case "application":
+                return "settings-appearance";
+            default:
+                return null;
+        }
+    }, []);
+
+    const scrollToTarget = useCallback((targetId: string) => {
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        scrollingToRef.current = targetId;
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        const leaf = allSettingsLeaves().find((l) => l.targetId === targetId);
+        if (leaf) setActiveLeafId(leaf.id);
+        window.setTimeout(() => {
+            if (scrollingToRef.current === targetId) scrollingToRef.current = null;
+        }, 600);
+    }, []);
 
     const applyNavigation = useCallback(
         (category?: string | null, section?: string | null) => {
-            setActiveCategory(resolveCategoryFromDeepLink(category, section));
-            setSubView(null);
+            const target = resolveTargetFromDeepLink(category, section);
+            if (!target) return;
+            window.setTimeout(() => scrollToTarget(target), 80);
         },
-        [resolveCategoryFromDeepLink],
+        [resolveTargetFromDeepLink, scrollToTarget],
     );
 
     useEffect(() => {
@@ -1013,179 +966,168 @@ export function SettingsView() {
         };
     }, [applyNavigation, router]);
 
-    const filteredCategories = useMemo(() => {
+    useEffect(() => {
+        const targets = allSettingsLeaves()
+            .map((l) => l.targetId)
+            .filter((id): id is string => !!id);
+        const elements = targets
+            .map((id) => document.getElementById(id))
+            .filter((el): el is HTMLElement => !!el);
+        if (elements.length === 0) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (scrollingToRef.current) return;
+                const visible = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                const first = visible[0];
+                if (!first?.target.id) return;
+                const leaf = allSettingsLeaves().find((l) => l.targetId === first.target.id);
+                if (leaf) setActiveLeafId(leaf.id);
+            },
+            { root: null, rootMargin: "-20% 0px -65% 0px", threshold: 0 },
+        );
+        for (const el of elements) observer.observe(el);
+        return () => observer.disconnect();
+    }, [settings]);
+
+    const filteredNav = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return SETTINGS_CATEGORIES;
-        return SETTINGS_CATEGORIES.filter((cat) => {
-            if (cat.label.toLowerCase().includes(q)) return true;
-            return (cat.keywords ?? []).some((k) => k.includes(q));
-        });
+        if (!q) return SETTINGS_NAV;
+        return SETTINGS_NAV.map((group) => ({
+            ...group,
+            children: group.children.filter(
+                (leaf) =>
+                    leaf.label.toLowerCase().includes(q) ||
+                    group.label.toLowerCase().includes(q),
+            ),
+        })).filter((group) => group.children.length > 0);
     }, [query]);
 
     useEffect(() => {
         if (!query.trim()) return;
-        if (filteredCategories.length === 0) return;
-        if (!filteredCategories.some((c) => c.id === activeCategory)) {
-            setActiveCategory(filteredCategories[0]!.id);
-        }
-    }, [query, filteredCategories, activeCategory]);
+        setExpandedGroups(new Set(filteredNav.map((g) => g.id)));
+    }, [query, filteredNav]);
 
-    const activeMeta = SETTINGS_CATEGORIES.find((c) => c.id === activeCategory);
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(groupId)) next.delete(groupId);
+            else next.add(groupId);
+            return next;
+        });
+    };
 
-    const categoryContent = (() => {
-        switch (activeCategory) {
-            case "account":
-                return <AccountSettingsPanel />;
-            case "agents":
-                return (
-                    <AiSettings
-                        settings={settings}
-                        onOpenMcpLibrary={() => setSubView("mcp-library")}
-                    />
-                );
-            case "editor":
-                return <EditorSettings settings={settings} />;
-            case "terminal":
-                return <TerminalSettings settings={settings} />;
-            case "git":
-                return <GitSettings settings={settings} />;
-            case "languages":
-                return (
-                    <>
-                        <LspSettings settings={settings} />
-                        <ToolsSettings settings={settings} />
-                    </>
-                );
-            case "appearance":
-                return <AppearanceSettings settings={settings} />;
-            case "application":
-                return (
-                    <ApplicationSettings
-                        settings={settings}
-                        onResetClick={() => setResetConfirmOpen(true)}
-                    />
-                );
-            default:
-                return null;
+    const onLeafClick = (leaf: SettingsNavLeaf) => {
+        if (leaf.view) {
+            setActiveLeafId(leaf.id);
+            setSubView(leaf.view);
+            return;
         }
-    })();
+        if (leaf.href) {
+            router.push(leaf.href);
+            return;
+        }
+        setSubView(null);
+        if (leaf.targetId) {
+            setActiveLeafId(leaf.id);
+            scrollToTarget(leaf.targetId);
+        }
+    };
 
     if (subView === "mcp-library") {
         return <McpLibraryView onBack={() => setSubView(null)} />;
     }
 
-    const displayName = auth.name?.trim() || auth.email?.trim() || "Account";
-    const plan = tierLabel(auth.tier);
-
     return (
-        <>
-            <StandaloneWindowShell
-                windowTitle="Settings"
-                contentTitle={activeMeta?.label}
-                sidebarHeader={
-                    <button
-                        type="button"
-                        onClick={() => closeWindow()}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary transition-colors hover:bg-panel-hover hover:text-text-primary"
-                    >
-                        <Icon name="arrow_back" size={16} />
-                        Back
-                    </button>
-                }
-                sidebar={
-                    <>
-                        <div className="shrink-0 p-2">
-                            <div className="flex h-9 items-center gap-2 rounded-lg border border-border bg-transparent px-3">
-                                <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                                <Input
-                                    placeholder="Search settings"
-                                    value={query}
-                                    className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                                    onChange={(e) => setQuery(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2 no-scrollbar">
-                            {filteredCategories.map((cat) => {
-                                const active = cat.id === activeCategory;
-                                return (
-                                    <button
-                                        key={cat.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setActiveCategory(cat.id);
-                                            setSubView(null);
-                                        }}
-                                        className={cn(
-                                            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                                            active
-                                                ? "bg-panel-active text-text-primary"
-                                                : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
-                                        )}
-                                    >
-                                        <Icon
-                                            name={cat.icon}
-                                            size={16}
-                                            className={cn(
-                                                "shrink-0",
-                                                active ? "text-text-primary" : "text-text-muted",
-                                            )}
-                                        />
-                                        <span className="truncate">{cat.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </nav>
-
-                        <div className="shrink-0 border-t border-border px-2 py-2">
-                            {auth.loggedIn ? (
-                                <div className="flex items-center gap-2 rounded-lg px-1.5 py-1.5">
-                                    <ShapeAccountAvatar
-                                        userId={auth.userId}
-                                        name={auth.name}
-                                        email={auth.email}
-                                        offline={Boolean(auth.offline)}
-                                        size={28}
-                                        className="shrink-0"
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate text-sm text-text-primary">
-                                            {displayName}
-                                        </div>
-                                        <div className="truncate text-2xs text-text-muted">
-                                            {plan} Plan
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        aria-label="Account"
-                                        title="Account"
-                                        onClick={() => setActiveCategory("account")}
-                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
-                                    >
-                                        <Icon name="settings" size={16} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => void loginShape()}
-                                    className="flex w-full items-center justify-center rounded-md px-2 py-2 text-sm text-text-secondary transition-colors hover:bg-panel-hover hover:text-text-primary"
-                                >
-                                    Sign in
-                                </button>
-                            )}
-                        </div>
-                    </>
-                }
-            >
-                <div className="h-full overflow-y-auto no-scrollbar">
-                    <div className="mx-auto w-full max-w-3xl px-8 py-8 pb-24">
-                        <div className="space-y-2">{categoryContent}</div>
+        <div className="flex h-full w-full min-w-0 overflow-hidden bg-editor select-none">
+            <aside className="flex w-64 shrink-0 flex-col border-r border-border-subtle bg-panel">
+                <div className="p-3 pb-2">
+                    <div className="flex h-9 items-center rounded-xl border border-border-subtle bg-surface-2 px-3">
+                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                        <Input
+                            placeholder="Search settings"
+                            value={query}
+                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                            onChange={(e) => setQuery(e.target.value)}
+                        />
                     </div>
                 </div>
-            </StandaloneWindowShell>
+                <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+                    {filteredNav.map((group) => {
+                        const open = expandedGroups.has(group.id) || !!query.trim();
+                        return (
+                            <div key={group.id} className="space-y-0.5">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleGroup(group.id)}
+                                    className="flex w-full items-center gap-1 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover hover:text-text-secondary"
+                                >
+                                    {group.label}
+                                </button>
+                                {open && (
+                                    <div className="space-y-0.5">
+                                        {group.children.map((leaf) => (
+                                            <Button
+                                                key={leaf.id}
+                                                variant="ghost"
+                                                type="button"
+                                                onClick={() => onLeafClick(leaf)}
+                                                className={cn(
+                                                    "h-8 w-full justify-start rounded-lg px-2.5",
+                                                    activeLeafId === leaf.id
+                                                        ? "bg-[var(--pill-bg)] text-[var(--pill-fg)] hover:bg-[var(--pill-bg-hover)] hover:text-[var(--pill-fg)]"
+                                                        : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                                )}
+                                            >
+                                                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-regular">
+                                                    {leaf.label}
+                                                    {leaf.href ? (
+                                                        <Icon name="chevron_right" size={14} className="shrink-0 text-text-muted" />
+                                                    ) : null}
+                                                </span>
+                                            </Button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </nav>
+                <div className="relative p-3 pt-1">
+                    <div
+                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-panel to-transparent"
+                        aria-hidden
+                    />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start rounded-lg text-sm"
+                        onClick={() => setResetConfirmOpen(true)}
+                    >
+                        Reset to Defaults
+                    </Button>
+                </div>
+            </aside>
+            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto">
+                <div className="w-full space-y-2 p-6 pb-24">
+                    <AccountSettingsPanel />
+                    <AiSettings
+                        settings={settings}
+                        onOpenMcpLibrary={() => {
+                            setActiveLeafId("mcp-library");
+                            setSubView("mcp-library");
+                        }}
+                    />
+                    <EditorSettings settings={settings} />
+                    <TerminalSettings settings={settings} />
+                    <GitSettings settings={settings} />
+                    <LspSettings settings={settings} />
+                    <ToolsSettings settings={settings} />
+                    <AdvancedSettings settings={settings} />
+                </div>
+            </section>
 
             <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
                 <AlertDialogContent>
@@ -1216,7 +1158,6 @@ export function SettingsView() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </>
+        </div>
     );
 }
-

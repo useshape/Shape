@@ -2,14 +2,12 @@
 
 import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
-import { SidebarPanelActionButton } from "@/features/panels";
 import {
     ContextMenu,
     ContextMenuContent,
     ContextMenuTrigger,
 } from "@/components/ui/context";
 import { SidebarSwitchPanelMenuItems } from "@/features/panels";
-import { openAgentWindow } from "@/lib/open-agent-window";
 import { cn } from "@/lib/utils";
 import { ChatMoreMenu } from "./more";
 import type { ReactNode } from "react";
@@ -29,7 +27,6 @@ export function ChatTabBar({
     onNewChat,
     onClosePanel: _onClosePanel,
     sidebarSide = "right",
-    columnChrome = false,
     embedWindowControls,
 }: {
     tabs: ChatTab[];
@@ -42,7 +39,6 @@ export function ChatTabBar({
     projectPath?: string | null;
     onClosePanel?: () => void;
     sidebarSide?: "left" | "right";
-    columnChrome?: boolean;
     embedWindowControls?: ReactNode;
 }) {
     void _onClosePanel;
@@ -53,15 +49,9 @@ export function ChatTabBar({
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <header
-                    className={cn(
-                        "chat-tab-bar relative flex shrink-0 items-stretch border-b border-border bg-panel",
-                        columnChrome ? "h-titlebar" : "h-[36px]",
-                    )}
-                    {...(columnChrome ? { "data-tauri-drag-region": true } : {})}
-                >
-                    <div className="relative z-10 flex min-w-0 items-center gap-0.5 overflow-hidden pl-2" data-no-drag>
-                        <div className="relative min-w-0 max-w-full">
+                <header className="chat-tab-bar relative flex h-[36px] shrink-0 items-stretch bg-panel">
+                    <div className="relative z-10 flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden pl-2">
+                        <div className="relative min-w-0 flex-1">
                             <div className="chat-tab-scroll flex min-w-0 items-center gap-0.5 overflow-x-auto no-scrollbar">
                                 {tabs.map((tab) => {
                                     const active = tab.id === activeTabId;
@@ -69,8 +59,7 @@ export function ChatTabBar({
                                         <div
                                             key={tab.id}
                                             className={cn(
-                                                "group relative flex h-7 max-w-[180px] shrink-0 items-center gap-1 px-2 text-sm transition-colors",
-                                                columnChrome ? "rounded-sm" : "rounded-md",
+                                                "group relative flex h-8 max-w-[180px] shrink-0 items-center gap-1 rounded-md px-3 text-sm transition-colors",
                                                 active
                                                     ? "bg-surface-3 text-text-primary"
                                                     : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
@@ -89,7 +78,7 @@ export function ChatTabBar({
                                                     "flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted hover:bg-panel-hover hover:text-text-primary",
                                                     tabs.length > 1
                                                         ? "invisible group-hover:visible"
-                                                        : "opacity-60 group-hover:opacity-100",
+                                                        : "text-text-muted",
                                                 )}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -117,25 +106,19 @@ export function ChatTabBar({
                                     </button>
                                 </Tooltip>
                             </div>
+                            <div
+                                className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-10 bg-linear-to-l from-panel to-transparent"
+                                aria-hidden
+                            />
                         </div>
                     </div>
 
-                    <div className="min-w-0 flex-1" data-tauri-drag-region={columnChrome || undefined} aria-hidden />
-
-                    <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
-                        <Tooltip content="Open Agent window">
-                            <SidebarPanelActionButton
-                                onClick={() => void openAgentWindow()}
-                                className="h-6 w-6"
-                            >
-                                <Icon name="agents" size={14} />
-                            </SidebarPanelActionButton>
-                        </Tooltip>
+                    <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1">
                         <ChatMoreMenu />
                     </div>
 
                     {embedWindowControls ? (
-                        <div className="relative z-10 flex shrink-0 items-stretch" data-no-drag>
+                        <div className="relative z-10 flex shrink-0 items-stretch">
                             {embedWindowControls}
                         </div>
                     ) : null}

@@ -24,6 +24,8 @@ import { restrictToHorizontalAxis, restrictToFirstScrollableAncestor } from '@dn
 import { getIconPath } from "@/lib/ui/icons/files";
 import { isSettingsTab } from "@/lib/settings-tab";
 import { isDesignPreviewTab, parseDesignPreviewTabPath } from "@/lib/design-preview-tab";
+import { isBrowserTab } from "@/lib/browser-tab";
+import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
 import React, { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useEditorView, ViewMode } from "@/core/providers/editor";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -126,6 +128,7 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
     const { toggleViewMode, getViewMode } = useEditorView();
     const isSettingsVirtual = isSettingsTab(file.path);
     const isDesignPreviewVirtual = isDesignPreviewTab(file.path);
+    const isBrowserVirtual = isBrowserTab(file.path);
     // Use path for ext derivation — it handles diff: prefixes and display-name suffixes
     const ext = getFileExtension(file.path || file.name);
     const isFont = isFontExtension(ext);
@@ -133,6 +136,7 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
     const isMarkdown =
         !isSettingsVirtual &&
         !isDesignPreviewVirtual &&
+        !isBrowserVirtual &&
         file.name.toLowerCase().endsWith(".md");
     const hasViewToggle = isMarkdown || isFont;
     const defaultMode = isImage || isFont ? "preview" : "raw";
@@ -217,6 +221,8 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
             <div className="relative w-4 h-4 shrink-0 flex items-center justify-center">
                 {isDesignPreviewVirtual ? (
                     <Icon name="auto_awesome" size={14} className="text-text-muted" />
+                ) : isBrowserVirtual ? (
+                    <ChromeBrowserIcon size={14} className="text-text-muted" />
                 ) : isSettingsVirtual ? (
                     <Icon name="settings" size={14} className="text-accent" />
                 ) : (

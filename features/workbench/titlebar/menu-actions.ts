@@ -227,10 +227,7 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 window.dispatchEvent(new Event("shape-open-output"));
                 break;
             case "Preview":
-                window.dispatchEvent(
-                    new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),
-                );
-                window.dispatchEvent(new Event("shape-open-preview"));
+                void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
                 break;
             case "Terminal":
                 window.dispatchEvent(
