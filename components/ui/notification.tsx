@@ -8,6 +8,9 @@ import { notificationStore, useNotifications, type Notification } from "@/featur
 import { errorDocsUrl } from "@/lib/errors/catalog";
 import { commands } from "@/lib/backend";
 
+const TOAST_AUTO_HIDE_MS = 5500;
+const TOAST_EXIT_MS = 160;
+
 const typeIcons: Record<Notification["type"], string> = {
     info: "info",
     success: "check_circle",
@@ -22,64 +25,87 @@ const typeIconColor: Record<Notification["type"], string> = {
     error: "text-error",
 };
 
+function openNotificationTarget(notification: Notification) {
+    if (notification.code != null) {
+        void commands.openUrlExternal(errorDocsUrl(notification.code));
+        return;
+    }
+    if (notification.type === "error" || notification.type === "warning") {
+        window.dispatchEvent(new Event("shape-open-problems"));
+    }
+}
+
 function ToastCard({ notification }: { notification: Notification }) {
-    const autoHideMs = notification.autoHide === false ? null : 8000;
+    const [leaving, setLeaving] = React.useState(false);
+    const leavingRef = React.useRef(false);
+    const autoHideMs = notification.autoHide === false ? null : TOAST_AUTO_HIDE_MS;
+
+    const dismiss = React.useCallback(() => {
+        if (leavingRef.current) return;
+        leavingRef.current = true;
+        setLeaving(true);
+        window.setTimeout(() => {
+            notificationStore.dismissToast(notification.id);
+        }, TOAST_EXIT_MS);
+    }, [notification.id]);
 
     React.useEffect(() => {
         if (!autoHideMs) return;
-        const timer = window.setTimeout(() => {
-            notificationStore.dismissToast(notification.id);
-        }, autoHideMs);
+        const timer = window.setTimeout(dismiss, autoHideMs);
         return () => window.clearTimeout(timer);
-    }, [autoHideMs, notification.id]);
+    }, [autoHideMs, dismiss]);
 
-    const docsUrl = notification.code != null ? errorDocsUrl(notification.code) : null;
+    const line =
+        notification.code != null
+            ? `${notification.message} · Error ${notification.code}`
+            : notification.message;
+    const title = [notification.message, notification.description].filter(Boolean).join("\n");
+    const clickable =
+        notification.code != null ||
+        notification.type === "error" ||
+        notification.type === "warning";
 
     return (
         <div
             className={cn(
-                "pointer-events-auto flex w-full max-w-[380px] items-start gap-2.5 rounded-2xl border border-border bg-panel px-3 py-2.5 shadow-lg",
-                "animate-in fade-in slide-in-from-bottom-2 duration-200",
+                "shape-toast pointer-events-auto flex h-8 w-full max-w-[360px] items-center gap-2 rounded-lg border border-border bg-panel px-2.5 shadow-lg",
+                clickable && "cursor-pointer hover:bg-panel-hover",
             )}
+            data-leaving={leaving ? "true" : undefined}
             role="status"
             aria-live="polite"
+            title={title}
+            onClick={clickable ? () => openNotificationTarget(notification) : undefined}
+            onKeyDown={
+                clickable
+                    ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              openNotificationTarget(notification);
+                          }
+                      }
+                    : undefined
+            }
+            tabIndex={clickable ? 0 : undefined}
         >
             <Icon
                 name={typeIcons[notification.type]}
-                size={16}
-                className={cn("mt-0.5 shrink-0", typeIconColor[notification.type])}
+                size={14}
+                className={cn("shrink-0", typeIconColor[notification.type])}
             />
-            <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="text-sm font-medium leading-snug text-text-primary">
-                    {notification.message}
-                </div>
-                {notification.description ? (
-                    <div className="whitespace-pre-wrap text-xs leading-relaxed text-text-secondary">
-                        {notification.description}
-                    </div>
-                ) : null}
-                {notification.code != null ? (
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-0.5 text-xs text-text-muted">
-                        <span className="font-mono">Error {notification.code}</span>
-                        {docsUrl ? (
-                            <button
-                                type="button"
-                                className="text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
-                                onClick={() => void commands.openUrlExternal(docsUrl)}
-                            >
-                                Learn more
-                            </button>
-                        ) : null}
-                    </div>
-                ) : null}
+            <div className="min-w-0 flex-1 truncate text-xs font-medium text-text-primary">
+                {line}
             </div>
             <button
                 type="button"
-                onClick={() => notificationStore.dismissToast(notification.id)}
-                className="shrink-0 rounded p-0.5 text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    dismiss();
+                }}
+                className="shrink-0 rounded p-0.5 text-text-muted transition-colors hover:bg-panel-active hover:text-text-primary"
                 aria-label="Dismiss notification"
             >
-                <Icon name="close" size={14} />
+                <Icon name="close" size={12} />
             </button>
         </div>
     );
@@ -98,7 +124,7 @@ function NotificationToasts() {
     if (!mounted || toasts.length === 0) return null;
 
     return createPortal(
-        <div className="pointer-events-none fixed bottom-10 right-4 z-notification flex w-full max-w-[400px] flex-col gap-2 outline-none">
+        <div className="pointer-events-none fixed bottom-10 right-4 z-notification flex w-full max-w-[360px] flex-col gap-1.5 outline-none">
             {toasts.map((notification) => (
                 <ToastCard key={notification.id} notification={notification} />
             ))}

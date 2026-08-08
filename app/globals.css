@@ -8,13 +8,13 @@
   /* ── Surface ladder ────────────────────────────────────── */
   --surface-0: #1A1A1A;
   --surface-1: #1b1b1b;
-  --surface-2: #1a1a1a;
-  --surface-3: #242424;
+  --surface-2: #1f1f1f;
+  --surface-3: #282828;
 
-  /* ── Role surfaces (Modern UI–style) ───────────────────── */
-  --chrome: #141414;
-  --sidebar: #1b1b1b;
-  --editor: #161616;
+  /* ── Role surfaces ─────────────────────────────────────── */
+  --chrome: #191919;
+  --sidebar: #1f1f1f;
+  --editor: #191919;
   --base: #ededee;
 
   /* Compat aliases for existing class names */
@@ -40,7 +40,7 @@
 
   /* ── Borders / stroke ──────────────────────────────────── */
   --border: rgba(255, 255, 255, 0.075);
-  --border-subtle: rgba(255, 255, 255, 0.014);
+  --border-subtle: rgba(255, 255, 255, 0.048);
   --border-secondary: rgba(255, 255, 255, 0.1);
   --stroke: 1px;
 
@@ -123,7 +123,7 @@
   --statusbar-height: 33px;
 
   /* ── Typography (11/12/13/14; Inter) ── */
-  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: var(--font-inter), Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
@@ -189,153 +189,13 @@
   --focus-border: transparent;
 }
 
-/* ── Umber (id: purple) — warm brownish-red charcoal ─────── */
-[data-theme="purple"] {
-  --surface-0: #1a1514;
-  --surface-1: #1e1816;
-  --surface-2: #221c1a;
-  --surface-3: #2c2421;
-
-  --chrome: #161211;
-  --sidebar: #1e1816;
-  --editor: #161211;
-  --base: #e8e0d8;
-
-  /* Neutral selection — no loud tint */
-  --panel-active: rgba(255, 255, 255, 0.07);
-  --panel-hover: rgba(255, 255, 255, 0.04);
-  --editor-secondary: #1e1816;
-
-  --text-secondary: #a8998c;
-  --text-muted: #8a827a;
-  --text-disabled: rgba(232, 224, 216, 0.26);
-  --text-active: #f5efe8;
-
-  --border: rgba(232, 224, 216, 0.09);
-  --border-subtle: rgba(232, 224, 216, 0.05);
-  --border-secondary: rgba(232, 224, 216, 0.14);
-
-  --accent: #c4a484;
-  --accent-hover: #d4b896;
-  --action-label: #1a1514;
-  --brand: var(--accent);
-  --focus: var(--accent);
-
-  --danger: #d47878;
-  --warn: #d4a574;
-  --success: #7aab84;
-  --info: #a8998c;
-
-  --added: #7aab84;
-  --modified: #d4a574;
-  --removed: #d47878;
-  --untracked: #7aab84;
-  --git-conflict: #d4a574;
-
-  --button-secondary-hover: #322926;
-  --scrollbar: rgba(232, 224, 216, 0.14);
-  --scrollbar-hover: rgba(232, 224, 216, 0.28);
-  --overlay-scrim: transparent;
-}
-
-/* ── Graphite — deeper charcoal, calm neutrals (no blue wash) ── */
-[data-theme="graphite"] {
-  --surface-0: #0e0e0e;
-  --surface-1: #121212;
-  --surface-2: #161616;
-  --surface-3: #1e1e1e;
-
-  --chrome: #0c0c0c;
-  --sidebar: #121212;
-  --editor: #0c0c0c;
-  --base: #d4d4d4;
-
-  --panel-active: rgba(255, 255, 255, 0.08);
-  --panel-hover: rgba(255, 255, 255, 0.04);
-  --editor-secondary: #161616;
-
-  --text-secondary: #8e8e8e;
-  --text-muted: #8a8a8a;
-  --text-disabled: rgba(212, 212, 212, 0.26);
-  --text-active: #f0f0f0;
-
-  --border: rgba(255, 255, 255, 0.07);
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-secondary: rgba(255, 255, 255, 0.11);
-
-  --accent: #b0b0b0;
-  --accent-hover: #c8c8c8;
-  --action-label: #0c0c0c;
-  --brand: var(--accent);
-  --focus: rgba(255, 255, 255, 0.35);
-
-  --danger: #c96b6b;
-  --warn: #c9a06a;
-  --success: #6fa87a;
-  --info: #8e8e8e;
-
-  --added: #6fa87a;
-  --modified: #c9a06a;
-  --removed: #c96b6b;
-  --untracked: #6fa87a;
-  --git-conflict: #c9a06a;
-
-  --button-secondary-hover: #262626;
-  --scrollbar: rgba(255, 255, 255, 0.12);
-  --scrollbar-hover: rgba(255, 255, 255, 0.22);
-  --overlay-scrim: transparent;
-}
-
-/* ── One — soft slate, muted teal (calm, not Atom-loud) ── */
-[data-theme="one"] {
-  --surface-0: #1c1f24;
-  --surface-1: #20242a;
-  --surface-2: #23272e;
-  --surface-3: #2c3138;
-
-  --chrome: #181b20;
-  --sidebar: #20242a;
-  --editor: #181b20;
-  --base: #c5cad3;
-
-  --panel-active: rgba(255, 255, 255, 0.07);
-  --panel-hover: rgba(255, 255, 255, 0.04);
-  --editor-secondary: #20242a;
-
-  --text-secondary: #8b929e;
-  --text-muted: #7d848e;
-  --text-disabled: rgba(197, 202, 211, 0.26);
-  --text-active: #e8ebf0;
-
-  --border: rgba(197, 202, 211, 0.09);
-  --border-subtle: rgba(197, 202, 211, 0.05);
-  --border-secondary: rgba(197, 202, 211, 0.14);
-
-  --accent: #7aa2a8;
-  --accent-hover: #8eb4b9;
-  --action-label: #181b20;
-  --brand: var(--accent);
-  --focus: var(--accent);
-
-  --danger: #c97a82;
-  --warn: #c9b07a;
-  --success: #7aab8a;
-  --info: #7aa2a8;
-
-  --added: #7aab8a;
-  --modified: #c9b07a;
-  --removed: #c97a82;
-  --untracked: #7aab8a;
-  --git-conflict: #c9b07a;
-
-  --button-secondary-hover: #343a44;
-  --scrollbar: rgba(197, 202, 211, 0.14);
-  --scrollbar-hover: rgba(197, 202, 211, 0.28);
-  --overlay-scrim: transparent;
-}
-
+/* White product mark: keep light on dark; invert on light chrome. */
 .logo-invert {
   filter: brightness(1);
+}
+
+[data-theme="light"] .logo-invert {
+  filter: invert(1) brightness(0.15);
 }
 
 @theme inline {
@@ -531,6 +391,19 @@ body {
 .monaco-diff-editor .monaco-editor .overflow-guard,
 .monaco-diff-editor .overflow-guard {
   border: none !important;
+}
+
+/* Kill Monaco's inherited vs-dark blue focus outline */
+.monaco-editor,
+.monaco-editor:focus,
+.monaco-editor.focused,
+.monaco-editor .overflow-guard,
+.monaco-editor .monaco-scrollable-element,
+.shape-editor-surface .monaco-editor,
+.shape-editor-surface .monaco-editor:focus,
+.shape-editor-surface .monaco-editor.focused {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .shape-editor-surface > section,
@@ -841,6 +714,39 @@ button:disabled .shape-icon,
   animation: shape-popover-out 75ms cubic-bezier(0.7, 0, 0.84, 0);
 }
 
+/* Toast notifications */
+@keyframes shape-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shape-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.shape-toast {
+  animation: shape-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+.shape-toast[data-leaving="true"] {
+  animation: shape-toast-out 160ms cubic-bezier(0.7, 0, 0.84, 0) both;
+  pointer-events: none;
+}
+
 /* Modals / command palette: pop-in without clobbering translate centering */
 @keyframes shape-modal-in {
   from {
@@ -1144,4 +1050,21 @@ button:disabled .shape-icon,
 
 .graph-diff-panel .monaco-editor .cursors-layer > .cursor {
   display: none !important;
+}
+
+/* ── Tab appear (chat / editor / terminal) ───────────────── */
+@keyframes shape-tab-appear {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.workbench-tab-item,
+.chat-tab-item {
+  animation: shape-tab-appear 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }

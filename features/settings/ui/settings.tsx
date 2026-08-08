@@ -36,10 +36,7 @@ import {
     MAX_CONTEXT_PRESETS,
 } from "./setting-controls";
 import { AiSettingsPanel } from "./ai-settings";
-import { McpLibraryView } from "./mcp/library";
 import { AccountSettingsPanel } from "./account-settings";
-import { ThemePicker } from "./theme-picker";
-import { normalizeColorTheme } from "@/lib/themes";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { Icon } from "@/components/ui/icon";
@@ -404,12 +401,10 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
 
 function AiSettings({
     settings,
-    onOpenMcpLibrary,
 }: {
     settings: ShapeSettings;
-    onOpenMcpLibrary?: () => void;
 }) {
-    return <AiSettingsPanel settings={settings} onOpenMcpLibrary={onOpenMcpLibrary} />;
+    return <AiSettingsPanel settings={settings} />;
 }
 
 function LintSettings({ settings }: { settings: ShapeSettings }) {
@@ -852,15 +847,6 @@ function ToolsSettings({ settings }: { settings: ShapeSettings }) {
 function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
-            <SettingSection id="settings-appearance" title="Appearance">
-                <div className="px-3.5 py-3.5">
-                    <ThemePicker
-                        value={normalizeColorTheme(settings.appearance?.colorTheme)}
-                        onChange={(colorTheme) => updateSettingSection("appearance", { colorTheme })}
-                        className="grid-cols-2 sm:grid-cols-3"
-                    />
-                </div>
-            </SettingSection>
             <DeveloperSettings settings={settings} />
             <PrivacySettings settings={settings} />
         </>
@@ -873,7 +859,6 @@ export function SettingsView() {
     const router = useRouter();
     const [query, setQuery] = useState("");
     const [activeLeafId, setActiveLeafId] = useState("account-profile");
-    const [subView, setSubView] = useState<"mcp-library" | null>(null);
     const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
         () => new Set(SETTINGS_NAV.map((g) => g.id)),
@@ -904,7 +889,7 @@ export function SettingsView() {
             case "appearance":
             case "advanced":
             case "application":
-                return "settings-appearance";
+                return "settings-developer";
             default:
                 return null;
         }
@@ -1020,31 +1005,21 @@ export function SettingsView() {
     };
 
     const onLeafClick = (leaf: SettingsNavLeaf) => {
-        if (leaf.view) {
-            setActiveLeafId(leaf.id);
-            setSubView(leaf.view);
-            return;
-        }
         if (leaf.href) {
             router.push(leaf.href);
             return;
         }
-        setSubView(null);
         if (leaf.targetId) {
             setActiveLeafId(leaf.id);
             scrollToTarget(leaf.targetId);
         }
     };
 
-    if (subView === "mcp-library") {
-        return <McpLibraryView onBack={() => setSubView(null)} />;
-    }
-
     return (
-        <div className="flex h-full w-full min-w-0 overflow-hidden bg-editor select-none">
-            <aside className="flex w-64 shrink-0 flex-col border-r border-border-subtle bg-panel">
+        <div className="flex h-full w-full min-w-0 overflow-hidden bg-background select-none">
+            <aside className="flex w-64 shrink-0 flex-col bg-background">
                 <div className="p-3 pb-2">
-                    <div className="flex h-9 items-center rounded-xl border border-border-subtle bg-surface-2 px-3">
+                    <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
                         <Icon name="search" size={14} className="shrink-0 text-text-muted" />
                         <Input
                             placeholder="Search settings"
@@ -1062,7 +1037,7 @@ export function SettingsView() {
                                 <button
                                     type="button"
                                     onClick={() => toggleGroup(group.id)}
-                                    className="flex w-full items-center gap-1 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover hover:text-text-secondary"
+                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
                                 >
                                     {group.label}
                                 </button>
@@ -1075,10 +1050,10 @@ export function SettingsView() {
                                                 type="button"
                                                 onClick={() => onLeafClick(leaf)}
                                                 className={cn(
-                                                    "h-8 w-full justify-start rounded-lg px-2.5",
+                                                    "h-8 w-full justify-start rounded-md px-2.5",
                                                     activeLeafId === leaf.id
-                                                        ? "bg-[var(--pill-bg)] text-[var(--pill-fg)] hover:bg-[var(--pill-bg-hover)] hover:text-[var(--pill-fg)]"
-                                                        : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                                        ? "bg-panel-hover text-text-primary hover:bg-panel-hover hover:text-text-primary"
+                                                        : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
                                                 )}
                                             >
                                                 <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-regular">
@@ -1097,29 +1072,23 @@ export function SettingsView() {
                 </nav>
                 <div className="relative p-3 pt-1">
                     <div
-                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-panel to-transparent"
+                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-background to-transparent"
                         aria-hidden
                     />
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="w-full justify-start rounded-lg text-sm"
+                        className="w-full justify-start rounded-md text-sm"
                         onClick={() => setResetConfirmOpen(true)}
                     >
                         Reset to Defaults
                     </Button>
                 </div>
             </aside>
-            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto">
+            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-tr-xl bg-panel">
                 <div className="w-full space-y-2 p-6 pb-24">
                     <AccountSettingsPanel />
-                    <AiSettings
-                        settings={settings}
-                        onOpenMcpLibrary={() => {
-                            setActiveLeafId("mcp-library");
-                            setSubView("mcp-library");
-                        }}
-                    />
+                    <AiSettings settings={settings} />
                     <EditorSettings settings={settings} />
                     <TerminalSettings settings={settings} />
                     <GitSettings settings={settings} />

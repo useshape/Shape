@@ -10,7 +10,7 @@ const variantClasses: Record<ButtonVariant, string> = {
     default: "bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-accent/50 disabled:text-accent-fg",
     secondary: "bg-button-secondary-bg text-button-secondary-fg hover:bg-button-secondary-hover",
     ghost: "bg-transparent text-text-secondary hover:bg-panel-hover hover:text-text-primary",
-    outline: "border border-border-subtle bg-transparent text-text-primary hover:bg-panel-hover",
+    outline: "border border-border bg-transparent text-text-primary hover:bg-panel-hover",
     destructive: "bg-error text-white hover:bg-error/90 disabled:bg-error/50 disabled:text-white",
 };
 
@@ -19,7 +19,8 @@ const sizeClasses: Record<ButtonSize, string> = {
     sm: "h-chrome px-md text-sm",
     md: "h-8 px-lg text-sm",
     lg: "h-10 px-xl text-base",
-    icon: "h-chrome w-chrome p-0",
+    /** Compact square control (`p-1` = 4px). Avoid `max-h/w-full` on children — with larger padding that collapses them. */
+    icon: "size-6 shrink-0 overflow-visible p-4",
 };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

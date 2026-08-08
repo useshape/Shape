@@ -121,24 +121,16 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
 
             <div className="pointer-events-none min-w-0 flex-1" aria-hidden />
 
-            <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center">
-                {settings && title === "Git" ? (
-                    <div className="flex h-full items-center px-1">
-                        <TitlebarSearch />
-                    </div>
-                ) : null}
-                {!isCompact && showSearch ? (
-                    <div className="flex h-full w-[min(280px,28vw)] min-w-0 shrink items-center px-1">
-                        <CommandOmnibar />
-                    </div>
-                ) : null}
-                {!isCompact && !isFocus && (
-                    <div className="action-toolbar-container hidden items-center gap-0.5 px-1 sm:flex">
+            <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1">
+                {settings && title === "Git" ? <TitlebarSearch /> : null}
+                {!isCompact && !isFocus ? (
+                    <>
+                        {showSearch ? <CommandOmnibar /> : null}
                         <TitlebarUpdateButton />
                         <TitlebarLayoutControls />
                         <AccountMenu />
-                    </div>
-                )}
+                    </>
+                ) : null}
                 <WindowControls
                     isMaximized={isMaximized}
                     onMinimize={minimize}

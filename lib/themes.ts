@@ -1,11 +1,9 @@
 /**
- * Color theme registry. Shape ships dark defaults; optional accent themes
- * override tokens via `data-theme`.
- *
- * Theme ids are stable for settings migration; labels/styles may evolve.
+ * Color theme registry. Shape ships Dark only — tokens live on `:root`.
+ * Theme ids stay for settings migration; unknown values normalize to dark.
  */
 
-export type ColorThemeId = "dark" | "graphite" | "one" | "purple";
+export type ColorThemeId = "dark";
 
 export interface ColorThemeDefinition {
     id: ColorThemeId;
@@ -27,38 +25,22 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeDefinition> = {
         description: "Neutral charcoal. The default.",
         swatch: { background: "#141414", surface: "#1a1a1a", accent: "#3946ff" },
     },
-    graphite: {
-        id: "graphite",
-        label: "Graphite",
-        description: "Deeper charcoal with calm neutral selection.",
-        swatch: { background: "#0e0e0e", surface: "#161616", accent: "#a8a8a8" },
-    },
-    one: {
-        id: "one",
-        label: "One",
-        description: "Soft slate surfaces, muted teal accent.",
-        swatch: { background: "#1c1f24", surface: "#23272e", accent: "#7aa2a8" },
-    },
-    purple: {
-        id: "purple",
-        label: "Umber",
-        description: "Warm brownish-red charcoal, soft clay accent.",
-        swatch: { background: "#1a1514", surface: "#221c1a", accent: "#c4a484" },
-    },
 };
 
-export const COLOR_THEME_ORDER: ColorThemeId[] = [
-    "dark",
-    "graphite",
-    "one",
-    "purple",
-];
+export const COLOR_THEME_ORDER: ColorThemeId[] = ["dark"];
 
 export function isColorThemeId(value: unknown): value is ColorThemeId {
     return typeof value === "string" && value in COLOR_THEMES;
 }
 
-/** Migrate unknown/removed values (including legacy `"light"`) to dark. */
-export function normalizeColorTheme(value: unknown): ColorThemeId {
-    return isColorThemeId(value) ? value : "dark";
+/** True for themes that use a dark color scheme (editor chrome + Monaco). */
+export function isDarkColorTheme(_theme: ColorThemeId): boolean {
+    return true;
+}
+
+/**
+ * Migrate unknown/removed values (light, graphite, one, purple/Umber, etc.) to dark.
+ */
+export function normalizeColorTheme(_value: unknown): ColorThemeId {
+    return "dark";
 }

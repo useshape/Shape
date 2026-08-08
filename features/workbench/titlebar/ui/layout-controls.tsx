@@ -45,7 +45,7 @@ export function TitlebarLayoutControls() {
     const { layoutState, toggleLayout } = useLayoutState();
 
     return (
-        <div className="flex items-center gap-0.5 px-1">
+        <>
             <TitlebarLayoutButton
                 label="Toggle Terminal"
                 active={layoutState.panelOpen}
@@ -60,7 +60,7 @@ export function TitlebarLayoutControls() {
             >
                 <AnimatedSecondarySidebarIcon active={layoutState.secondarySidebarOpen} size={ICON_SIZE} />
             </TitlebarLayoutButton>
-        </div>
+        </>
     );
 }
 

@@ -1,20 +1,20 @@
 "use client";
 
 import { Icon } from "@/components/ui/icon";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useProjectState } from "@/lib/backend";
+import { titlebarIconButtonClass } from "./layout-controls";
 
 /**
- * Titlebar omnibar — opens the command palette.
+ * Titlebar search — icon button that opens the command palette.
  * When a file is active, opens with an in-file search bias (Current file section).
- * Width/visibility is owned by the parent chrome (shrink → hide).
  */
 export function CommandOmnibar({ className }: { className?: string }) {
     const { active_file } = useProjectState();
-    const fileName = active_file ? active_file.split(/[\\/]/).pop() : null;
 
     return (
-        <div className={cn("relative w-full min-w-0", className)}>
+        <Tooltip content="Search" side="bottom">
             <button
                 type="button"
                 onClick={() => {
@@ -30,25 +30,12 @@ export function CommandOmnibar({ className }: { className?: string }) {
                         }),
                     );
                 }}
-                className={cn(
-                    "command-center flex h-[26px] w-full min-w-0 items-center gap-2 rounded-md bg-transparent border border-border px-2.5",
-                    "text-left transition-colors hover:bg-panel-hover",
-                )}
+                className={cn("command-center", titlebarIconButtonClass, className)}
                 aria-label="Open command palette"
             >
-                <Icon name="search" size={14} className="shrink-0 text-text-secondary" />
-                <span className="min-w-0 flex-1 truncate text-xs leading-[16px] text-text-secondary">
-                    {fileName ? (
-                        <>
-                            Open command palette in{" "}
-                            <span className="text-text-primary">{fileName}</span>
-                        </>
-                    ) : (
-                        "Search agents, files, actions…"
-                    )}
-                </span>
+                <Icon name="search" size={16} />
             </button>
-        </div>
+        </Tooltip>
     );
 }
 

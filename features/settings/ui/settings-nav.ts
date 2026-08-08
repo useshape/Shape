@@ -5,8 +5,6 @@ export type SettingsNavLeaf = {
     targetId?: string;
     /** Navigate to a separate settings sub-page instead of scrolling */
     href?: string;
-    /** Open an in-place settings sub-view (works in both the settings window and the editor tab) */
-    view?: "mcp-library";
 };
 
 export type SettingsNavGroup = {
@@ -33,7 +31,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
             { id: "ai-rules", label: "Rules", targetId: "settings-ai-rules" },
             { id: "ai-context", label: "Context", targetId: "settings-ai-context" },
             { id: "mcp", label: "MCP", targetId: "settings-ai-mcp" },
-            { id: "mcp-library", label: "MCP Library", view: "mcp-library" },
         ],
     },
     {
@@ -64,7 +61,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         id: "application",
         label: "Application",
         children: [
-            { id: "appearance", label: "Appearance", targetId: "settings-appearance" },
             { id: "updates", label: "Updates", targetId: "settings-updates" },
             { id: "notifications", label: "Notifications", targetId: "settings-notifications" },
             { id: "privacy", label: "Privacy & telemetry", targetId: "settings-privacy" },
@@ -72,6 +68,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         ],
     },
 ];
+
 
 export function allSettingsLeaves(): SettingsNavLeaf[] {
     return SETTINGS_NAV.flatMap((g) => g.children);
@@ -89,7 +86,6 @@ export type SettingsCategoryId =
     | "terminal"
     | "git"
     | "languages"
-    | "appearance"
     | "application";
 
 export type SettingsCategory = {
@@ -135,12 +131,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         label: "Languages",
         icon: "language",
         keywords: ["lsp", "eslint", "prettier", "node", "python"],
-    },
-    {
-        id: "appearance",
-        label: "Appearance",
-        icon: "palette",
-        keywords: ["theme", "color"],
     },
     {
         id: "application",

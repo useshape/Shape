@@ -22,7 +22,7 @@ export const WORKBENCH_TAB_ACTIONS_CLASS =
 
 export function workbenchTabItemClass(active: boolean, dragging?: boolean) {
     return cn(
-        "workbench-tab-item group relative box-border flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors",
+        "workbench-tab-item group relative box-border bg-panel-hover/60 flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors",
         active
             ? "is-active min-w-[72px] bg-surface-3 text-text-primary"
             : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",

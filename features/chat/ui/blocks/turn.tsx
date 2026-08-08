@@ -17,7 +17,11 @@ import {
     groupWorkflowRows,
     isRenderableWorkflowBlock,
     parseGitStagePath,
+    getWorkflowActionConfig,
 } from "./workflow";
+import { Favicon } from "@/components/ui/favicon";
+import { parseWebResults } from "../md/renderer";
+import { GeneratingIndicator } from "./generating";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "< 1s";
@@ -554,12 +558,66 @@ function StepRow({ block }: { block: Chunk }) {
         );
     }
 
-    if (block.type === "search" || block.type === "search_result" || block.type === "web_search") {
+    if (block.type === "search" || block.type === "search_result") {
         const q = (block.query || block.content || "").trim();
         return (
             <div className="py-0.5 text-sm text-text-muted truncate">
                 Searched <span className="text-text-secondary">{q}</span>
             </div>
+        );
+    }
+
+    if (block.type === "web_search" || block.type === "web_result") {
+        const q = (block.query || "").trim();
+        const hits = parseWebResults(block.content || "");
+        const favicons = hits
+            .map((h) => h.url)
+            .filter(Boolean)
+            .filter((url, i, arr) => arr.indexOf(url) === i)
+            .slice(0, 5);
+        return (
+            <div className="flex items-center gap-1.5 py-0.5 text-sm text-text-muted min-w-0">
+                <span className="shrink-0">
+                    {block.isGenerating ? "Searching" : "Searched"}
+                </span>
+                {q ? (
+                    <span className="text-text-secondary truncate min-w-0">
+                        {q.length > 48 ? `${q.slice(0, 48)}…` : q}
+                    </span>
+                ) : null}
+                {favicons.length > 0 ? (
+                    <span className="inline-flex items-center -space-x-1 shrink-0 pl-0.5">
+                        {favicons.map((url) => (
+                            <span
+                                key={url}
+                                className="inline-flex size-4 items-center justify-center rounded-full border border-border-subtle bg-panel overflow-hidden"
+                            >
+                                <Favicon url={url} size={12} />
+                            </span>
+                        ))}
+                    </span>
+                ) : null}
+            </div>
+        );
+    }
+
+    if (block.type === "web_visit") {
+        const host = block.visitHost || block.visitTitle || block.content || "";
+        const url = block.visitUrl || block.visitHost || "";
+        return (
+            <button
+                type="button"
+                onClick={() => {
+                    if (block.visitUrl) void commands.openUrlExternal(block.visitUrl);
+                }}
+                className="flex items-center gap-1.5 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors w-fit max-w-full text-left"
+            >
+                {url ? <Favicon url={url} size={14} /> : null}
+                <span>
+                    {block.isGenerating ? "Visiting" : "Visited"}{" "}
+                    <span className="text-text-secondary">{host}</span>
+                </span>
+            </button>
         );
     }
 
@@ -676,15 +734,46 @@ function GitStageStep({ count }: { count: number }) {
     return <div className="py-0.5 text-sm text-text-muted">Staged {count} files</div>;
 }
 
+function liveActivityLabel(blocks: Chunk[], activityLabel?: string | null): string {
+    if (activityLabel?.trim()) return activityLabel.trim();
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        const block = blocks[i];
+        const config = getWorkflowActionConfig(block, true);
+        if (!config) continue;
+        if (block.type === "think" || block.type === "thought") {
+            return block.isGenerating ? "Thinking" : "Thought";
+        }
+        if (block.type === "edit" || block.type === "edit_pending") {
+            const name = block.file?.split(/[\\/]/).pop() || "file";
+            return `${config.label} ${name}`;
+        }
+        if (block.type === "web_visit") {
+            return `${config.label} ${block.visitHost || block.visitTitle || ""}`.trim();
+        }
+        if (config.query) {
+            const q = String(config.query);
+            return `${config.label} ${q.length > 40 ? `${q.slice(0, 40)}…` : q}`;
+        }
+        if (config.file) {
+            const name = config.file.split(/[\\/]/).pop() || config.file;
+            return `${config.label} ${name}`;
+        }
+        return config.label;
+    }
+    return "Working";
+}
+
 export function TurnWorkflowSummary({
     blocks,
     isActive,
     durationMs,
+    activityLabel,
     children,
 }: {
     blocks: Chunk[];
     isActive?: boolean;
     durationMs?: number;
+    activityLabel?: string | null;
     children?: React.ReactNode;
 }) {
     const visible = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
@@ -693,7 +782,9 @@ export function TurnWorkflowSummary({
             (b.type === "terminal_command" || b.type === "edit_pending")
             && b.commandStatus === "pending",
     );
-    const [open, setOpen] = useState(!!isActive || hasPendingApproval);
+    // Start collapsed while streaming so the live status line can show current work;
+    // open when an approval needs attention.
+    const [open, setOpen] = useState(hasPendingApproval);
     const [stepsOpen, setStepsOpen] = useState(hasPendingApproval);
     const [prevActive, setPrevActive] = useState(isActive);
     const [prevPending, setPrevPending] = useState(hasPendingApproval);
@@ -703,8 +794,6 @@ export function TurnWorkflowSummary({
         if (!isActive && !hasPendingApproval) {
             setOpen(false);
             setStepsOpen(false);
-        } else if (isActive) {
-            setOpen(true);
         }
     }
 
@@ -731,6 +820,7 @@ export function TurnWorkflowSummary({
         const cmd = (b.command || b.content || "").trim();
         return isLintCommand(cmd) && lintStatusFromOutput(b.content || "") === "clean";
     });
+    const showClosedLiveStatus = !!isActive && !open;
 
     const pendingApprovalRows = (
         <div className="flex flex-col gap-1 my-1">
@@ -802,7 +892,7 @@ export function TurnWorkflowSummary({
                         </button>
                     ) : null}
 
-                    <Collapse open={stepsOpen}>
+                    <Collapse open={stepsOpen || !!isActive}>
                         <div className="flex flex-col gap-0.5 pl-3">
                             {(() => {
                                 let skippedLeadThought = false;
@@ -833,8 +923,7 @@ export function TurnWorkflowSummary({
                         </div>
                     </Collapse>
 
-                    {!stepsOpen && hasPendingApproval ? (
-                        // Steps collapsed but approval still needed - keep the bar reachable.
+                    {!stepsOpen && !isActive && hasPendingApproval ? (
                         <div className="pl-3">{pendingApprovalRows}</div>
                     ) : null}
                 </div>
@@ -843,6 +932,10 @@ export function TurnWorkflowSummary({
             {!open && hasPendingApproval ? pendingApprovalRows : null}
 
             {children}
+
+            {showClosedLiveStatus ? (
+                <GeneratingIndicator label={liveActivityLabel(visible, activityLabel)} />
+            ) : null}
         </div>
     );
 }

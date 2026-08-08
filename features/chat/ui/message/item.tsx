@@ -27,6 +27,7 @@ import { mentionRanges, mentionDisplayLabel } from "@/lib/chat-mentions";
 import { openProjectFile } from "@/lib/open-project-file";
 import { Favicon } from "@/components/ui/favicon";
 import { WebSourcesMenu } from "../blocks/search";
+import { Button } from "@/components/ui/button";
 
 type ChatMessageItemProps = {
     role: string;
@@ -236,7 +237,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                         }
                     } : undefined}
                     className={cn(
-                        "relative z-10 w-full rounded-xl border border-border bg-panel px-2.5 py-2",
+                        "relative z-10 w-full rounded-[11px] bg-surface-3 px-2.5 py-2",
                         "text-sm text-text-primary group select-text",
                         isLong && "cursor-pointer",
                     )}
@@ -324,21 +325,15 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             {!isGenerating && (
                 <div className="flex items-center gap-0.5 mt-1.5 select-none">
                     <Tooltip content="Redo" side="bottom">
-                        <button
-                            onClick={() => onRedo?.(index)}
-                            className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-md hover:bg-panel-hover"
-                        >
-                            <Icon name="refresh" size={14} />
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={() => onRedo?.(index)}>
+                            <Icon name="refresh" size={16} />
+                        </Button>
                     </Tooltip>
 
                     <Tooltip content="Copy Message" side="bottom">
-                        <button
-                            onClick={handleCopy}
-                            className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-md hover:bg-panel-hover"
-                        >
-                            <Icon name="content_copy" size={14} />
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={handleCopy}>
+                            <Icon name="content_copy" size={16} />
+                        </Button>
                     </Tooltip>
 
                     {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
@@ -346,12 +341,12 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                     {role === "assistant" && (stats || model) && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <button className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-md hover:bg-panel-hover">
-                                <Icon name="more_horiz" size={14} />
-                            </button>
+                            <Button variant="ghost" size="icon">
+                                <Icon name="more_horiz" size={16} />
+                            </Button>
                         </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-52">
-                                <div className="flex flex-col gap-1.5 text-xs">
+                                <div className="flex flex-col gap-1.5 text-sm">
                                     <div className="flex items-center justify-between gap-4">
                                         <span className="text-text-muted">Model</span>
                                         <span className="font-medium text-text-primary truncate">

@@ -173,10 +173,10 @@ export function GraphDetailPanel({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 shrink-0 p-0"
+                            className="shrink-0"
                             onClick={onClearFile}
                         >
-                            <Icon name="arrow_back" size={15} />
+                            <Icon name="arrow_back" size={14} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -199,10 +199,10 @@ export function GraphDetailPanel({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-6 w-6 shrink-0 p-0"
+                                className="shrink-0"
                                 onClick={() => setSideBySide((v) => !v)}
                             >
-                                <Icon name={sideBySide ? "split_horizontal" : "vertical_split"} size={15} />
+                                <Icon name={sideBySide ? "split_horizontal" : "vertical_split"} size={14} />
                             </Button>
                         </Tooltip>
                     </>
@@ -256,10 +256,10 @@ export function GraphDetailPanel({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 shrink-0 p-0"
+                    className="shrink-0"
                     onClick={onClose}
                 >
-                    <Icon name="close" size={15} />
+                    <Icon name="close" size={14} />
                 </Button>
             </div>
 
