@@ -64,7 +64,7 @@ export const notificationStore = {
         options?: NotifyOptions,
     ) => {
         const id = Math.random().toString(36).substring(2, 9);
-        const autoHide = options?.autoHide ?? (type === "info" || type === "success");
+        const autoHide = options?.autoHide ?? true;
         const notification: Notification = {
             id,
             type,
@@ -77,7 +77,7 @@ export const notificationStore = {
 
         const pruned = pruneExpired();
         const notifications = [...pruned.notifications, notification].slice(-MAX_HISTORY);
-        // Always show as a toast. autoHide only controls dismiss timing (errors stay until closed).
+        // Always show as a toast. autoHide defaults on; callers can pass autoHide: false to stick.
         const toastIds = [...pruned.toastIds, id].slice(-MAX_TOASTS);
 
         state = { notifications, toastIds, lastViewedAt: pruned.lastViewedAt };
@@ -154,7 +154,6 @@ export function notifyGitError(raw: unknown, fallbackTitle = "Git Error") {
     const { title, message, hint } = formatCommandError(raw, fallbackTitle);
     const description = hint ? `${message}\n${hint}` : message;
     notificationStore.add(title, "error", description, {
-        autoHide: false,
         code: 4100,
     });
 }
@@ -163,12 +162,12 @@ export const notify = {
     info: (message: string, description?: string, options?: NotifyOptions) =>
         notificationStore.add(message, "info", description, options),
     warn: (message: string, description?: string, options?: NotifyOptions) =>
-        notificationStore.add(message, "warning", description, { autoHide: false, ...options }),
+        notificationStore.add(message, "warning", description, options),
     /** Alias for warn — callers often use notify.warning. */
     warning: (message: string, description?: string, options?: NotifyOptions) =>
-        notificationStore.add(message, "warning", description, { autoHide: false, ...options }),
+        notificationStore.add(message, "warning", description, options),
     error: (message: string, description?: string, options?: NotifyOptions) =>
-        notificationStore.add(message, "error", description, { autoHide: false, ...options }),
+        notificationStore.add(message, "error", description, options),
     success: (message: string, description?: string, options?: NotifyOptions) =>
         notificationStore.add(message, "success", description, options),
     gitError: notifyGitError,

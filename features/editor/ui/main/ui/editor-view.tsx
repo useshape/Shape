@@ -64,7 +64,7 @@ import { getMonacoLanguage, getLspServersForProject } from "../../../lsp/languag
 import { LspClientManager } from "../../../lsp/lsp-client";
 import { resolveLspLaunch, readTypescriptVersion } from "../../../lsp/resolve-launch";
 import { updateDiagnosticsFromMonaco } from "@/features/diagnostics/store";
-import { getSettings, getMonacoOptionsFromSettings, updateSettingSection, isLspLanguageEnabled } from "@/lib/settings";
+import { getSettings, getMonacoOptionsFromSettings, updateSettingSection, isLspLanguageEnabled, useSettings } from "@/lib/settings";
 import { isWorkspaceTrusted } from "@/lib/workspace-trust";
 import { registerMonacoEditor } from "@/lib/editor/monaco-registry";
 import { bindMonacoNativeUiToShape } from "@/lib/editor/suppress-monaco-native-ui";
@@ -81,7 +81,7 @@ import {
 } from "../../color-picker/tailwind-utils";
 import { ColorPickerPortal, isLayoutSwatchTarget, isSwatchTarget, type PickerAnchor } from "../../color-picker/portal";
 import { BEZIER_REGEX } from "../../bezier-picker/ui/bezier-utils";
-import { defineShapeMonacoThemes, getMonacoEditorOptions } from "@/lib/ui/monaco-theme";
+import { defineShapeMonacoThemes, getMonacoEditorOptions, shapeMonacoThemeFromColorTheme } from "@/lib/ui/monaco-theme";
 import { registerEmmetForMonaco } from "../hooks/use-emmet";
 import { attachBlameProvider } from "../../blame/blame-provider";
 import { attachConflictResolver } from "../../conflict/conflict-resolver";
@@ -389,6 +389,8 @@ export const CodeEditorView = memo(function CodeEditorView({
 }: CodeEditorViewProps) {
     const canShowDiff = !!diffState && diffState.original !== diffState.replacement;
     const [reviewDiffMounted, setReviewDiffMounted] = useState(canShowDiff);
+    const settings = useSettings();
+    const monacoTheme = shapeMonacoThemeFromColorTheme(settings.appearance?.colorTheme);
 
     useEffect(() => {
         if (canShowDiff) {
@@ -1525,7 +1527,7 @@ export const CodeEditorView = memo(function CodeEditorView({
                         language={getLanguage(path)}
                         value={content}
                         loading={null}
-                        theme="shape-dark"
+                        theme={monacoTheme}
                         beforeMount={(monaco) => {
                             defineShapeMonacoThemes(monaco);
                             // Configure TypeScript defaults for better TSX support

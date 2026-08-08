@@ -301,8 +301,8 @@ export function StatsView() {
         events.aiTodoUpdates;
 
     return (
-        <div className="flex h-full w-full min-w-0 overflow-hidden select-none bg-editor">
-            <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
+        <div className="flex h-full w-full min-w-0 overflow-hidden select-none bg-background">
+            <aside className="flex w-64 shrink-0 flex-col bg-background">
                 <div className="p-2">
                     <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
                         <Icon name="search" size={14} className="shrink-0 text-text-muted" />
@@ -344,7 +344,7 @@ export function StatsView() {
                 </nav>
                 <div className="relative p-2">
                     <div
-                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-panel to-transparent"
+                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-background to-transparent"
                         aria-hidden
                     />
                     <Button
@@ -360,7 +360,7 @@ export function StatsView() {
                 </div>
             </aside>
 
-            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto">
+            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-tr-xl bg-panel">
                 <div className="w-full space-y-10 p-6 pb-24">
                     {loading && !stats ? (
                         <p className="text-sm text-text-muted">Loading…</p>

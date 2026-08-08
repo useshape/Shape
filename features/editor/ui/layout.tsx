@@ -122,7 +122,7 @@ export function EditorLayout({
         maxSize: 600,
         snap: true,
         children: (
-            <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-panel border border-border-subtle">
+            <div className="workbench-panel flex h-full min-h-0 flex-col bg-panel border border-border-subtle overflow-hidden">
                 {renderLeftPanel(activeTab)}
             </div>
         ),

@@ -149,7 +149,7 @@ export default function Home() {
         notifyWorkspaceOpened(path);
     }, []);
 
-    const handleOpenProject = useCallback(async (path: string) => {
+    const handleOpenProject = useCallback(async (path: string): Promise<boolean> => {
         const normalized = path.trim().replace(/[\\/]+$/, "");
         clearExtraWorkspaceFolders();
         const isWeb = await isWebProject(normalized);
@@ -159,10 +159,11 @@ export default function Home() {
         if (isWeb || isIgnored) {
             commands.setProjectPath(normalized);
             emitWorkspaceOpened(normalized);
-        } else {
-            setPendingPath(normalized);
-            setWarningOpen(true);
+            return true;
         }
+        setPendingPath(normalized);
+        setWarningOpen(true);
+        return false;
     }, [emitWorkspaceOpened]);
 
     // Restore last project on cold start of the main window only.

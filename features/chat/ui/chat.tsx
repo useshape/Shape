@@ -59,10 +59,7 @@ export default function Chat({
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden bg-panel font-sans", className)}>
             <ChatTabBar
-                tabs={session.openChatTabs}
-                activeTabId={session.activeChatTabId}
-                onSelectTab={(tabId) => void session.handleSelectChatTab(tabId)}
-                onCloseTab={(tabId) => void session.handleCloseChatTab(tabId)}
+                title={session.chatTitle}
                 onNewChat={() => void session.handleNewChat()}
                 onClosePanel={onClose}
                 sidebarSide={sidebarSide}

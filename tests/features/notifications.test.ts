@@ -66,10 +66,12 @@ describe("notifications", () => {
         expect(snapshot.notifications[0]?.type).toBe("error");
         expect(snapshot.notifications[1]?.type).toBe("success");
         expect(snapshot.notifications[2]?.type).toBe("warning");
-        // Errors must still appear as toasts (sticky until dismissed).
+        // Errors must still appear as toasts (auto-hide like the rest).
         expect(snapshot.toastIds).toContain(snapshot.notifications[0]?.id);
         expect(snapshot.toastIds).toContain(snapshot.notifications[1]?.id);
         expect(snapshot.toastIds).toContain(snapshot.notifications[2]?.id);
+        expect(snapshot.notifications[0]?.autoHide).not.toBe(false);
+        expect(snapshot.notifications[2]?.autoHide).not.toBe(false);
     });
 
     it("stores numeric error codes on notifications", () => {

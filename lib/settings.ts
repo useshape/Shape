@@ -171,7 +171,7 @@ export interface ShapeSettings {
         channel: UpdateChannel;
     };
     appearance: {
-        /** Color theme. Dark is default (:root). All others use data-theme. */
+        /** Color theme. Dark-only — stored for migration; always normalized to dark. */
         colorTheme: ColorThemeSetting;
     };
 }
@@ -606,13 +606,10 @@ export function applyAppearanceSettings(settings: ShapeSettings) {
     document.documentElement.style.setProperty("--editor-font-size", `${settings.editor.fontSize}px`);
     document.documentElement.style.setProperty("--font-mono", settings.editor.fontFamily);
 
-    const theme = normalizeColorTheme(settings.appearance?.colorTheme);
-    if (theme === "dark") {
-        delete document.documentElement.dataset.theme;
-    } else {
-        document.documentElement.dataset.theme = theme;
-    }
+    // Dark is the only theme — clear any leftover data-theme from older builds.
+    delete document.documentElement.dataset.theme;
     document.documentElement.style.colorScheme = "dark";
+    document.documentElement.classList.add("dark");
 
     // Re-apply Monaco colors from CSS vars after theme tokens settle.
     if (typeof window !== "undefined") {

@@ -8,7 +8,7 @@ export function SonarLogo({ className = "w-4 h-4" }: { className?: string }) {
         <img
             src="/logos/logo.svg"
             alt="Shape"
-            className={cn("w-full h-full object-contain", className)}
+            className={cn("logo-invert w-full h-full object-contain", className)}
             draggable={false}
         />
     );

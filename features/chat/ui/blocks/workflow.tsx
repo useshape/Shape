@@ -436,13 +436,22 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 content: block.content,
             };
         case "web_search":
-        case "web_result":
+        case "web_result": {
+            const hits = (block.content || "")
+                .split("---")
+                .map((part) => {
+                    const urlMatch = part.match(/URL:\s*(.+)/);
+                    return urlMatch?.[1]?.trim() || "";
+                })
+                .filter(Boolean);
             return {
-                label: block.type === "web_result" ? "Searched web" : "Searching web",
-                query: block.query || block.content,
+                label: block.type === "web_result" || !block.isGenerating ? "Searched web" : "Searching web",
+                query: block.query,
                 expandable: !!block.content,
                 content: block.content,
+                resultUrls: hits.slice(0, 5),
             };
+        }
         case "web_visit":
             return {
                 label: block.isGenerating ? "Visiting" : "Visited",
@@ -840,6 +849,19 @@ function ActionItem({
 
                 {"faviconUrl" in config && config.faviconUrl ? (
                     <Favicon url={String(config.faviconUrl)} size={14} />
+                ) : null}
+
+                {"resultUrls" in config && Array.isArray(config.resultUrls) && config.resultUrls.length > 0 ? (
+                    <span className="inline-flex items-center -space-x-1 shrink-0">
+                        {config.resultUrls.map((url: string) => (
+                            <span
+                                key={url}
+                                className="inline-flex size-4 items-center justify-center rounded-full border border-border-subtle bg-panel overflow-hidden"
+                            >
+                                <Favicon url={url} size={12} />
+                            </span>
+                        ))}
+                    </span>
                 ) : null}
 
                 {config.query && (

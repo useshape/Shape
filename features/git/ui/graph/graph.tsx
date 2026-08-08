@@ -833,12 +833,12 @@ export default function Graph({
                 actions={
                     <>
                     <Tooltip content="Go to HEAD (H)">
-                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
-                            <Icon name="my_location" size={16} />
+                        <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
+                            <Icon name="my_location" size={14} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fetch From All Remotes">
-                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={async () => {
+                        <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={async () => {
                             if (!gitRepo) return;
                             startLoading();
                             try {
@@ -848,11 +848,11 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon name="sync" size={16} />
+                            <Icon name="sync" size={14} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
-                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={async () => {
+                        <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={async () => {
                             if (!gitRepo) return;
                             startLoading();
                             try {
@@ -862,11 +862,11 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon name="cloud_download" size={16} />
+                            <Icon name="cloud_download" size={14} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
-                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={async () => {
+                        <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={async () => {
                             if (!gitRepo) return;
                             startLoading();
                             try {
@@ -876,12 +876,12 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon name="cloud_upload" size={16} />
+                            <Icon name="cloud_upload" size={14} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Refresh Graph">
-                        <Button variant="ghost" size="icon" className="w-6 h-6 p-0 text-text-primary hover:bg-panel-hover" onClick={() => void refresh()}>
-                            <Icon name="refresh" size={16} />
+                        <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={() => void refresh()}>
+                            <Icon name="refresh" size={14} />
                         </Button>
                     </Tooltip>
                     {!rich && project_path ? <GitManagerTrigger /> : null}

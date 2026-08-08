@@ -10,61 +10,45 @@ function withColorTheme(colorTheme: unknown): ShapeSettings {
 }
 
 describe("theme registry", () => {
-    it("registers dark, graphite, one, and purple (Umber)", () => {
-        expect(Object.keys(COLOR_THEMES).sort()).toEqual([
-            "dark",
-            "graphite",
-            "one",
-            "purple",
-        ]);
-        expect(COLOR_THEMES.purple.label).toBe("Umber");
+    it("registers dark only", () => {
+        expect(Object.keys(COLOR_THEMES)).toEqual(["dark"]);
+        expect(COLOR_THEMES.dark.label).toBe("Dark");
     });
 
     it("recognizes valid theme ids", () => {
-        expect(isColorThemeId("graphite")).toBe(true);
-        expect(isColorThemeId("one")).toBe(true);
+        expect(isColorThemeId("dark")).toBe(true);
         expect(isColorThemeId("light")).toBe(false);
-        expect(isColorThemeId("nonexistent")).toBe(false);
+        expect(isColorThemeId("graphite")).toBe(false);
     });
 
-    it("migrates unknown themes to dark", () => {
+    it("migrates unknown, light, and removed themes to dark", () => {
+        expect(normalizeColorTheme("light")).toBe("dark");
         expect(normalizeColorTheme("solarized")).toBe("dark");
         expect(normalizeColorTheme("nord")).toBe("dark");
-        expect(normalizeColorTheme("ember")).toBe("dark");
-        expect(normalizeColorTheme("light")).toBe("dark");
+        expect(normalizeColorTheme("graphite")).toBe("dark");
         expect(normalizeColorTheme(undefined)).toBe("dark");
-    });
-
-    it("keeps known themes unchanged", () => {
-        expect(normalizeColorTheme("purple")).toBe("purple");
-        expect(normalizeColorTheme("graphite")).toBe("graphite");
-        expect(normalizeColorTheme("one")).toBe("one");
+        expect(normalizeColorTheme("dark")).toBe("dark");
     });
 });
 
 describe("applyAppearanceSettings", () => {
-    it("clears data-theme for the default dark theme", () => {
+    it("always applies dark root theme", () => {
         applyAppearanceSettings(withColorTheme("dark"));
         expect(document.documentElement.dataset.theme).toBeUndefined();
+        expect(document.documentElement.style.colorScheme).toBe("dark");
+        expect(document.documentElement.classList.contains("dark")).toBe(true);
     });
 
-    it("migrates removed light theme to dark", () => {
+    it("forces dark even when settings still say light", () => {
         applyAppearanceSettings(withColorTheme("light"));
         expect(document.documentElement.dataset.theme).toBeUndefined();
+        expect(document.documentElement.style.colorScheme).toBe("dark");
+        expect(document.documentElement.classList.contains("dark")).toBe(true);
     });
 
-    it("sets data-theme for graphite", () => {
+    it("migrates removed accent themes to dark", () => {
         applyAppearanceSettings(withColorTheme("graphite"));
-        expect(document.documentElement.dataset.theme).toBe("graphite");
-    });
-
-    it("sets data-theme for one", () => {
-        applyAppearanceSettings(withColorTheme("one"));
-        expect(document.documentElement.dataset.theme).toBe("one");
-    });
-
-    it("sets data-theme for purple", () => {
-        applyAppearanceSettings(withColorTheme("purple"));
-        expect(document.documentElement.dataset.theme).toBe("purple");
+        expect(document.documentElement.dataset.theme).toBeUndefined();
+        expect(document.documentElement.style.colorScheme).toBe("dark");
     });
 });

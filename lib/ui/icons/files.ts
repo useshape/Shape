@@ -12,17 +12,58 @@ const ICONIFY = iconsData as {
 
 const dataUrlCache = new Map<string, string>();
 
-function iconDataUrl(iconId: string): string {
-    const cached = dataUrlCache.get(iconId);
+/** Pale greys designed for dark chrome — rewrite for light themes when no -light icon exists. */
+const LIGHT_FILL_REWRITES: Array<[RegExp, string]> = [
+    [/fill="#c5c5c5"/gi, 'fill="#6b6b6b"'],
+    [/fill="#c6c6c6"/gi, 'fill="#6b6b6b"'],
+    [/fill="#cccccc"/gi, 'fill="#6b6b6b"'],
+    [/fill="#d4d4d4"/gi, 'fill="#6b6b6b"'],
+    [/fill="#e0e0e0"/gi, 'fill="#6b6b6b"'],
+    [/fill="#e5e5e5"/gi, 'fill="#6b6b6b"'],
+    [/fill="#f0f0f0"/gi, 'fill="#6b6b6b"'],
+];
+
+/** Prefer vscode-icons `*-light-*` variants on light chrome when present. */
+function resolveThemedIconId(iconId: string, light: boolean): string {
+    if (!light) return iconId;
+    if (iconId.startsWith("file-type-") && !iconId.startsWith("file-type-light-")) {
+        const candidate = `file-type-light-${iconId.slice("file-type-".length)}`;
+        if (ICONIFY.icons[candidate]) return candidate;
+    }
+    if (iconId.startsWith("folder-type-") && !iconId.startsWith("folder-type-light-")) {
+        const candidate = `folder-type-light-${iconId.slice("folder-type-".length)}`;
+        if (ICONIFY.icons[candidate]) return candidate;
+    }
+    return iconId;
+}
+
+function rewriteBodyForLight(body: string): string {
+    let next = body;
+    for (const [re, replacement] of LIGHT_FILL_REWRITES) {
+        next = next.replace(re, replacement);
+    }
+    return next;
+}
+
+function iconDataUrl(iconId: string, light = false): string {
+    const themedId = resolveThemedIconId(iconId, light);
+    const cacheKey = `${light ? "L" : "D"}:${themedId}`;
+    const cached = dataUrlCache.get(cacheKey);
     if (cached) return cached;
 
-    const icon = ICONIFY.icons[iconId] ?? ICONIFY.icons["default-file"];
+    const icon = ICONIFY.icons[themedId] ?? ICONIFY.icons[iconId] ?? ICONIFY.icons["default-file"];
     const width = icon.width ?? ICONIFY.width ?? 32;
     const height = icon.height ?? ICONIFY.height ?? 32;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${icon.body}</svg>`;
+    const body = light && themedId === iconId ? rewriteBodyForLight(icon.body) : icon.body;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${body}</svg>`;
     const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    dataUrlCache.set(iconId, url);
+    dataUrlCache.set(cacheKey, url);
     return url;
+}
+
+/** Current document is on the light color theme. Always false — Shape is dark-only. */
+export function isDocumentLightTheme(): boolean {
+    return false;
 }
 
 const FILE_NAME_ICONS: Record<string, string> = {
@@ -314,12 +355,13 @@ function resolveFolderIconId(name: string, isOpen: boolean): string {
 /** @deprecated Kept for callers that still pass a type id; maps to VS Code default. */
 export const VALID_FILE_TYPES = new Set(["default-file"]);
 
-export function getIconPathForType(_type: string): string {
-    return iconDataUrl("default-file");
+export function getIconPathForType(_type: string, light = isDocumentLightTheme()): string {
+    return iconDataUrl("default-file", light);
 }
 
-export const getIconPath = (name: string) => iconDataUrl(resolveFileIconId(name));
+export const getIconPath = (name: string, light = isDocumentLightTheme()) =>
+    iconDataUrl(resolveFileIconId(name), light);
 
-export function getFolderIconPath(name: string, isOpen = false): string {
-    return iconDataUrl(resolveFolderIconId(name, isOpen));
+export function getFolderIconPath(name: string, isOpen = false, light = isDocumentLightTheme()): string {
+    return iconDataUrl(resolveFolderIconId(name, isOpen), light);
 }

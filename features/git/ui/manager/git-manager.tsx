@@ -348,7 +348,7 @@ function ManagerShell() {
     );
 
     return (
-        <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden select-none bg-editor text-text-primary">
+        <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden select-none bg-background text-text-primary">
             <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 <aside className="flex w-64 shrink-0 flex-col bg-background">
                     <div className="p-2">
@@ -389,7 +389,7 @@ function ManagerShell() {
                     </nav>
                 </aside>
 
-                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-tr-xl bg-panel">
                     {/* Keep-alive panes use `hidden` (not `invisible`) so Monaco/diff
                         overlays cannot paint over other sections when inactive. */}
                     {visited.has("source") ? (

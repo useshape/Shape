@@ -597,7 +597,7 @@ function mergeAdjacentTextChunks(chunks: Chunk[]): Chunk[] {
 
 export type WebSearchResultItem = { title: string; url: string; snippet: string };
 
-function parseWebResults(blockContent: string): WebSearchResultItem[] {
+export function parseWebResults(blockContent: string): WebSearchResultItem[] {
     const results: WebSearchResultItem[] = [];
     const blocks = blockContent.split('---').filter(Boolean);
     blocks.forEach(block => {
@@ -720,10 +720,11 @@ export function MessageRenderer({
     );
     const showStatusLine =
         !!isGenerating
+        && workflowBlocks.length === 0
         && (
             hasPendingApproval
             || !!activityLabel?.trim()
-            || (!proseIsStreaming && workflowBlocks.length === 0)
+            || !proseIsStreaming
         );
 
     const lastWorkflowBlock = workflowBlocks[workflowBlocks.length - 1];
@@ -872,6 +873,7 @@ export function MessageRenderer({
                     blocks={workflowBlocks}
                     isActive={isGenerating}
                     durationMs={durationMs}
+                    activityLabel={activityLabel}
                 >
                     {answerContent}
                 </TurnWorkflowSummary>

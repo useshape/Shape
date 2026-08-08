@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DiffEditor, loader } from "@monaco-editor/react";
-import { defineShapeMonacoThemes, getMonacoEditorOptions } from "@/lib/ui/monaco-theme";
+import { defineShapeMonacoThemes, getMonacoEditorOptions, shapeMonacoThemeFromColorTheme } from "@/lib/ui/monaco-theme";
 import { bindDiffEditorNativeUiToShape } from "@/lib/editor/suppress-monaco-native-ui";
 import { getMonacoLanguage } from "@/features/editor/lsp/languages";
+import { useSettings } from "@/lib/settings";
 
 /** Bootstrap Monaco for Git Manager windows (main editor never loads there). */
 export function useGitManagerMonaco(): boolean {
@@ -76,6 +77,8 @@ export function ManagerDiffEditor({
     const monacoReady = useGitManagerMonaco();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const diffRef = useRef<any>(null);
+    const settings = useSettings();
+    const monacoTheme = shapeMonacoThemeFromColorTheme(settings.appearance?.colorTheme);
 
     useEffect(() => {
         try {
@@ -103,14 +106,14 @@ export function ManagerDiffEditor({
                 original={original}
                 modified={modified}
                 language={getMonacoLanguage(path)}
-                theme="shape-dark"
+                theme={monacoTheme}
                 loading={<div className="h-full w-full bg-editor" />}
                 beforeMount={(monaco) => defineShapeMonacoThemes(monaco)}
                 onMount={(editor, monaco) => {
                     try {
                         diffRef.current = editor;
                         defineShapeMonacoThemes(monaco);
-                        monaco.editor.setTheme("shape-dark");
+                        monaco.editor.setTheme(monacoTheme);
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const diff = editor as any;
                         const opts = {

@@ -118,10 +118,8 @@ function applyIndexStatus(
 
 export function AiSettingsPanel({
     settings,
-    onOpenMcpLibrary,
 }: {
     settings: ShapeSettings;
-    onOpenMcpLibrary?: () => void;
 }) {
     const a = settings.ai;
     useShapeCatalog();
@@ -500,19 +498,16 @@ export function AiSettingsPanel({
                     <div className="flex flex-col items-center gap-3 px-3.5 py-8 text-center">
                         <div className="text-sm font-medium text-text-primary">No MCP Tools</div>
                         <p className="text-sm text-text-muted max-w-sm">
-                            Add a server from the library, or configure{" "}
+                            Configure servers in{" "}
                             <span className="text-text-secondary">mcp.json</span>
                         </p>
-                        <Button variant="outline" size="sm" onClick={() => onOpenMcpLibrary?.()}>
-                            Browse Library
+                        <Button variant="outline" size="sm" onClick={() => void openMcpConfig()}>
+                            Edit mcp.json
                         </Button>
                     </div>
                 )}
                 {mcpStatus.length > 0 ? (
                     <div className="flex flex-wrap gap-2 px-3.5 py-2.5">
-                        <Button variant="secondary" size="sm" onClick={() => onOpenMcpLibrary?.()}>
-                            Browse Library
-                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => void openMcpConfig()}>
                             Edit mcp.json
                         </Button>
