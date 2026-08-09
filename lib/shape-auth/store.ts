@@ -20,7 +20,8 @@ const REDIRECT_URI = "shape://auth/callback";
 const LOGIN_TIMEOUT_MS = 90 * 1000;
 const LOGIN_POLL_BASE_MS = 1000;
 const LOGIN_POLL_MAX_MS = 8000;
-const REVALIDATE_INTERVAL_MS = 5 * 60 * 1000;
+/** How often the IDE refreshes /api/account while signed in. Keep high to reduce Vercel Fluid CPU. */
+const REVALIDATE_INTERVAL_MS = 30 * 60 * 1000;
 
 type PendingOAuth = {
   state: string;
