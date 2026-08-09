@@ -530,13 +530,10 @@ export default function Explorer({ className }: { className?: string }) {
                                         className="h-[20px] flex items-center pr-2 text-text-primary text-sm whitespace-nowrap w-full"
                                         style={{ paddingLeft: `8px` }}
                                     >
-                                        <div className="w-4 flex items-center justify-center shrink-0">
-                                            <span className="w-3" />
-                                        </div>
                                         <FileIcon
                                             name={pendingCreate.type === "folder" ? "folder" : rootCreateName || "untitled.txt"}
                                             isDir={pendingCreate.type === "folder"}
-                                            className="mr-1.5"
+                                            className="mr-1.5 !h-5 !w-5"
                                         />
                                         <input
                                             autoFocus

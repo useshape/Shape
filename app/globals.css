@@ -10,6 +10,7 @@
   --surface-1: #1b1b1b;
   --surface-2: #1f1f1f;
   --surface-3: #282828;
+  --surface-4: #333333;
 
   /* ── Role surfaces ─────────────────────────────────────── */
   --chrome: #191919;
@@ -133,13 +134,13 @@
   --font-smoothing: antialiased;
   --font-smoothing-moz: grayscale;
 
-  --text-2xs: 11px;
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 14px;
-  --text-xl: 16px;
+  --text-2xs: 12px;
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 17px;
   --text-2xl: 18px;
 
   --line-height-xs: 14px;
@@ -203,6 +204,7 @@
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
 
   --color-chrome: var(--chrome);
   --color-sidebar: var(--sidebar);

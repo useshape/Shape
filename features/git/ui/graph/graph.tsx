@@ -821,7 +821,7 @@ export default function Graph({
     const graphChrome = (
         <>
             <SidebarPanelHeaderFrame
-                title="Graph"
+                title="Git Graph"
                 className={rich ? "bg-editor" : undefined}
                 titleExtra={
                     hasActiveFilter ? (

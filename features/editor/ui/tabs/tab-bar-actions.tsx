@@ -58,7 +58,7 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                         className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
                         onClick={runPython}
                     >
-                        <Icon name="play_arrow" size={14} filled />
+                        <Icon name="play_arrow" size={16} filled />
                     </button>
                 </Tooltip>
             ) : null}
@@ -73,7 +73,7 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                 >
                     <Icon
                         name={settings.editor.compactTabs ? "list_alt" : "view_compact"}
-                        size={14}
+                        size={16}
                     />
                 </button>
             </Tooltip>
@@ -85,12 +85,12 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                     disabled={!canSplit}
                     className={cn(
                         WORKBENCH_TAB_ACTION_BUTTON_CLASS,
-                        !canSplit && "opacity-30 cursor-not-allowed",
+                        !canSplit && "cursor-not-allowed",
                         splitEnabled && "text-accent",
                     )}
                     onClick={toggleSplit}
                 >
-                    <Icon name="vertical_split" size={14} />
+                    <Icon name="vertical_split" size={16} />
                 </button>
             </Tooltip>
 
@@ -101,7 +101,7 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                         className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
                         title="Editor Actions"
                     >
-                        <Icon name="more_horiz" size={14} />
+                        <Icon name="more_horiz" size={16} />
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side="bottom">
