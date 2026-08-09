@@ -332,22 +332,28 @@ export const FileEntry = memo(({
                             }
                         }}
                     >
-                        <div className="w-4 flex items-center justify-center shrink-0">
+                        <span className="relative mr-1.5 flex size-5 shrink-0 items-center justify-center">
                             {node.is_dir ? (
-                                <Icon
-                                    name="chevron_right"
-                                    size={15}
-                                    className={cn("transition-transform duration-150 text-text-muted", open && "rotate-90")}
-                                />
+                                <>
+                                    <FileIcon
+                                        name={node.name}
+                                        isDir
+                                        isOpen={open}
+                                        className="!h-5 !w-5 group-hover:hidden"
+                                    />
+                                    <Icon
+                                        name="chevron_right"
+                                        size={18}
+                                        className={cn(
+                                            "hidden text-text-muted transition-transform duration-150 group-hover:block",
+                                            open && "rotate-90",
+                                        )}
+                                    />
+                                </>
                             ) : (
-                                <span className="w-3" />
+                                <FileIcon name={node.name} className="!h-5 !w-5" />
                             )}
-                        </div>
-                        {node.is_dir ? (
-                            <FileIcon name={node.name} isDir isOpen={open} className="mr-1" />
-                        ) : (
-                            <FileIcon name={node.name} className="mr-1" />
-                        )}
+                        </span>
                         {ctx.pendingRename === node.path ? (
                             <input
                                 autoFocus
@@ -598,13 +604,10 @@ export const FileEntry = memo(({
                             className="h-[22px] flex items-center px-2 text-text-primary text-xs whitespace-nowrap w-full"
                             style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
                         >
-                            <div className="w-4 flex items-center justify-center shrink-0">
-                                <span className="w-3" />
-                            </div>
                             <FileIcon
                                 name={ctx.pendingCreate.type === "folder" ? "folder" : createName || "untitled.txt"}
                                 isDir={ctx.pendingCreate.type === "folder"}
-                                className="mr-1.5"
+                                className="mr-1.5 !h-5 !w-5"
                             />
                             <input
                                 autoFocus
@@ -640,7 +643,7 @@ export const FileEntry = memo(({
                         <button
                             type="button"
                             className="h-[22px] w-full text-left px-2 text-text-muted hover:text-text-primary hover:bg-panel-hover transition-colors text-xs"
-                            style={{ paddingLeft: `${(depth + 1) * 12 + 32}px` }}
+                            style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}
                             onClick={() => setVisibleCount((v) => v + BATCH_SIZE)}
                         >
                             Load more...

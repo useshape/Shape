@@ -1134,7 +1134,7 @@ export default function Source({
                                             <ShapeLogo size={12} />
                                             {commitSuggestionStatus === "loading"
                                                 ? "Generating…"
-                                                : "Commit message"}
+                                                : "Generate"}
                                         </Button>
                                         <GitAiAction
                                             label="Explain staged"
@@ -1391,9 +1391,8 @@ export default function Source({
                             </div>
                             <div className="flex w-full items-center justify-between gap-1 px-2">
                                 <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
-                                    className="h-chrome gap-1.5 px-md"
                                     disabled={
                                         commitSuggestionStatus === "loading"
                                         || changes.filter((c) => c.staged).length === 0
@@ -1403,12 +1402,11 @@ export default function Source({
                                     <ShapeLogo size={12} />
                                     {commitSuggestionStatus === "loading"
                                         ? "Generating…"
-                                        : "Commit message"}
+                                        : "Generate"}
                                 </Button>
                                 <Button
                                     variant="default"
                                     size="sm"
-                                    className="h-7 px-3 text-xs font-medium"
                                     onClick={() =>
                                         void handleCommit(false, { promptSyncAfter: true })
                                     }
