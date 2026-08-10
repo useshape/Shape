@@ -16,6 +16,12 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 import { commands } from "@/lib/backend/commands";
 import { useSettings, updateSettingSection, type AutoRunModeSetting } from "@/lib/settings";
 import type { Chunk } from "../md/renderer";
@@ -211,8 +217,8 @@ export function CommandApprovalCard({
     }, [isProcessing, onRun]);
 
     return (
-        <div className="my-1 overflow-hidden rounded-lg border border-border-subtle bg-panel">
-            <div className="flex items-center gap-2 px-3 pt-2">
+        <div className="my-1 overflow-hidden rounded-xl bg-transparent border border-border">
+            <div className="flex items-center gap-2 px-3 pt-2 pb-2">
                 {isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
@@ -227,31 +233,50 @@ export function CommandApprovalCard({
                     </Tooltip>
                 ) : null}
             </div>
-            <div className="px-3 py-1.5">
-                <div className="max-h-[96px] overflow-y-auto custom-scrollbar rounded-md bg-background/60 px-2.5 py-1.5 font-mono text-xs text-text-primary whitespace-pre-wrap break-words">
+            <div>
+                <div className="max-h-[96px] pt-2 px-3 min-h-[64px] border-t border-border overflow-y-auto custom-scrollbar font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
                     <span className="select-none text-text-disabled">$ </span>
                     {command}
                 </div>
             </div>
-            <div className="flex items-center justify-between gap-2 border-t border-border-subtle px-2.5 py-1.5">
-                <Tooltip content="Approval mode for future agent commands" side="top">
-                    <select
-                        value={settings.ai.autoRunMode}
-                        disabled={isProcessing}
-                        onChange={(e) =>
-                            updateSettingSection("ai", {
-                                autoRunMode: e.target.value as AutoRunModeSetting,
-                            })
-                        }
-                        className="h-6 rounded-md border border-border-subtle bg-transparent px-1.5 text-xs text-text-muted outline-none hover:text-text-secondary focus:border-border"
-                    >
-                        {AUTO_RUN_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
-                </Tooltip>
+            <div className="flex items-center justify-between gap-2 px-2 py-2">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild disabled={isProcessing}>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            disabled={isProcessing}
+                            aria-label="Approval mode for future agent commands"
+                        >
+                            {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
+                                ?? "Ask every time"}
+                            <Icon name="expand_more" size={14} className="opacity-70" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                        {AUTO_RUN_OPTIONS.map((opt) => {
+                            const selected = settings.ai.autoRunMode === opt.value;
+                            return (
+                                <DropdownMenuItem
+                                    key={opt.value}
+                                    onClick={() =>
+                                        updateSettingSection("ai", { autoRunMode: opt.value })
+                                    }
+                                    className={cn(
+                                        "flex w-full cursor-pointer items-center",
+                                        selected && "bg-panel-hover",
+                                    )}
+                                >
+                                    <span className="flex-1 text-sm text-text-primary">{opt.label}</span>
+                                    {selected ? (
+                                        <Icon name="check" size={16} className="text-text-primary" />
+                                    ) : null}
+                                </DropdownMenuItem>
+                            );
+                        })}
+                    </DropdownMenuContent>
+                </DropdownMenu>
                 <div className="flex shrink-0 items-center gap-1.5">
                     <Button type="button" variant="ghost" size="xs" disabled={isProcessing} onClick={onSkip}>
                         Skip
@@ -259,10 +284,7 @@ export function CommandApprovalCard({
                     <Button type="button" variant="default" size="xs" disabled={isProcessing} onClick={onRun}>
                         Run
                         <span className="ml-1.5 inline-flex items-center gap-0.5">
-                            <kbd className="inline-flex min-w-[1.1rem] items-center justify-center rounded bg-background px-1 py-px font-sans text-xs leading-none text-text-foreground">
-                                {mod}
-                            </kbd>
-                            <kbd className="inline-flex min-w-[1.1rem] items-center justify-center rounded bg-background px-1 py-px font-sans text-xs leading-none text-text-foreground">
+                            <kbd className="inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
                                 ↵
                             </kbd>
                         </span>
@@ -354,18 +376,17 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     if (effectiveStatus === "rejected" || effectiveStatus === "blocked") {
         const label = effectiveStatus === "rejected" ? "Rejected command" : "Blocked command";
         return (
-            <div className="my-1 flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-panel/60 px-2.5 py-1.5">
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <Icon name="terminal" size={13} className="shrink-0 text-text-disabled" />
-                    <span className="shrink-0 text-xs text-text-muted">{label}:</span>
-                    <span className="truncate font-mono text-[11px] text-text-disabled line-through">
+            <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
+                <div className="flex items-center gap-2 px-3 py-2">
+                    <Icon name="block" size={13} className="shrink-0 text-text-muted" />
+                    <span className="truncate text-xs text-text-muted">{label}</span>
+                </div>
+                <div className="border-t border-border px-3 py-2">
+                    <span className="font-mono text-sm text-text-disabled line-through whitespace-pre-wrap break-words">
+                        <span className="select-none">$ </span>
                         {command}
                     </span>
                 </div>
-                <span className="flex shrink-0 items-center gap-1 text-xs text-text-disabled">
-                    <Icon name="block" size={12} />
-                    {effectiveStatus === "rejected" ? "Rejected" : "Blocked"}
-                </span>
             </div>
         );
     }
@@ -373,20 +394,27 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     if (effectiveStatus === "running" || effectiveStatus === "background") {
         const liveText = stream.output || stripTerminalChunkOutput(block);
         return (
-            <div className="py-0.5">
-                <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                    <div className="h-2.5 w-2.5 shrink-0 animate-spin rounded-full border-[1.5px] border-text-muted border-t-transparent" />
-                    <span>
-                        {effectiveStatus === "background" ? "Running in background" : "Running"}{" "}
-                        <span className="font-mono text-[11px] text-text-secondary">{command}</span>
+            <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
+                <div className="flex items-center gap-2 px-3 py-2">
+                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
+                    <span className="truncate text-xs text-text-muted">
+                        {effectiveStatus === "background" ? "Running in background" : "Running command"}
                     </span>
                 </div>
-                {stream.waitingForInput ? (
-                    <div className="my-1 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-                        Waiting for input — the agent can answer with write_to_terminal, or stop the turn.
+                <div className="border-t border-border px-3 py-2">
+                    <div className="font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
+                        <span className="select-none text-text-disabled">$ </span>
+                        {command}
                     </div>
-                ) : null}
-                <LiveTerminalOutput text={liveText} />
+                    {stream.waitingForInput ? (
+                        <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+                            Waiting for input — the agent can answer with write_to_terminal, or stop the turn.
+                        </div>
+                    ) : null}
+                    <div className="mt-2">
+                        <LiveTerminalOutput text={liveText} />
+                    </div>
+                </div>
             </div>
         );
     }
@@ -396,38 +424,52 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     const failed = effectiveStatus === "failed" || (typeof exitCode === "number" && exitCode !== 0);
     const cancelled = effectiveStatus === "cancelled";
     const hasOutput = staticOutput.trim().length > 0;
+    const statusLabel = cancelled
+        ? "Cancelled command"
+        : failed
+          ? "Failed command"
+          : "Ran command";
 
     return (
-        <div className="py-0.5">
+        <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
             <button
                 type="button"
                 onClick={() => hasOutput && setOutputOpen((v) => !v)}
                 className={cn(
-                    "flex w-fit max-w-full items-center gap-1.5 text-left text-xs text-text-muted",
-                    hasOutput && "cursor-pointer hover:text-text-primary transition-colors",
+                    "flex w-full items-center gap-2 px-3 py-2 text-left",
+                    hasOutput && "cursor-pointer hover:bg-panel-hover/40 transition-colors",
                 )}
             >
-                <span className="truncate">
-                    {cancelled ? "Cancelled" : "Ran"}{" "}
-                    <span className="font-mono text-[11px] text-text-secondary">{command}</span>
-                </span>
-                {failed && !cancelled ? (
+                <Icon
+                    name={cancelled ? "cancel" : failed ? "error" : "terminal"}
+                    size={13}
+                    className="shrink-0 text-text-muted"
+                />
+                <span className="truncate text-xs text-text-muted">{statusLabel}</span>
+                {failed && !cancelled && typeof exitCode === "number" ? (
                     <span className="shrink-0 rounded bg-error/15 px-1 py-px text-[10px] font-medium text-error">
                         exit {exitCode}
                     </span>
                 ) : null}
                 {hasOutput ? (
                     <Icon
-                        name="chevron_right"
-                        size={12}
-                        className={cn(
-                            "shrink-0 opacity-50 transition-transform duration-200",
-                            outputOpen && "rotate-90",
-                        )}
+                        name={outputOpen ? "expand_less" : "expand_more"}
+                        size={14}
+                        className="ml-auto shrink-0 text-text-muted"
                     />
                 ) : null}
             </button>
-            {outputOpen && hasOutput ? <LiveTerminalOutput text={staticOutput} maxHeight={240} /> : null}
+            <div className="border-t border-border px-3 py-2">
+                <div className="font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
+                    <span className="select-none text-text-disabled">$ </span>
+                    {command}
+                </div>
+                {outputOpen && hasOutput ? (
+                    <div className="mt-2">
+                        <LiveTerminalOutput text={staticOutput} maxHeight={240} />
+                    </div>
+                ) : null}
+            </div>
         </div>
     );
 }

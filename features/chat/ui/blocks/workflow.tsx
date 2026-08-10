@@ -155,7 +155,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
 }
 
 function GitStatusBadge({ status }: { status: string }) {
-    const letter = status.trim().charAt(0).toUpperCase();
+    const letter = status.trim().charAt(0).toUpperCase() || "?";
     const color =
         letter === "A"
             ? "text-success"
@@ -165,185 +165,204 @@ function GitStatusBadge({ status }: { status: string }) {
                 ? "text-warning"
                 : "text-text-muted";
     return (
-        <span className={cn("w-3 text-center text-2xs font-mono shrink-0", color)}>{letter}</span>
+        <span
+            className={cn(
+                "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border font-mono text-[10px]",
+                color,
+            )}
+        >
+            {letter}
+        </span>
     );
 }
 
-function GitStageGroup({ paths }: { paths: string[] }) {
-    const [open, setOpen] = useState(false);
-    const preview = paths.slice(0, 4);
-    const rest = paths.length - preview.length;
-
+function GitCardShell({
+    icon,
+    title,
+    meta,
+    open,
+    onToggle,
+    children,
+}: {
+    icon: string;
+    title: string;
+    meta?: string;
+    open: boolean;
+    onToggle: () => void;
+    children: React.ReactNode;
+}) {
     return (
-        <div className="flex flex-col gap-1 py-0.5">
+        <div className="my-1 w-full overflow-hidden rounded-2xl border border-border bg-transparent">
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 w-fit text-left group"
+                onClick={onToggle}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left"
             >
-                <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
-                    Staged {paths.length} file{paths.length === 1 ? "" : "s"}
-                </span>
+                <Icon name={icon} size={13} className="shrink-0 text-text-muted" />
+                <span className="truncate text-sm text-text-muted">{title}</span>
+                {meta ? (
+                    <span className="min-w-0 truncate text-sm text-text-disabled">{meta}</span>
+                ) : null}
                 <Icon
                     name={open ? "expand_less" : "expand_more"}
-                    size={12}
-                    className="text-text-disabled shrink-0"
+                    size={14}
+                    className="ml-auto shrink-0 text-text-muted"
                 />
             </button>
-            <div className="flex flex-wrap items-center gap-1 pl-5">
-                {(open ? paths : preview).map((path) => (
-                    <FilePill key={path} path={path} />
-                ))}
-                {!open && rest > 0 ? (
-                    <span className="text-xs text-text-disabled">+{rest} more</span>
-                ) : null}
-            </div>
+            {open ? (
+                <div className="px-3 py-2.5">
+                    {children}
+                </div>
+            ) : null}
         </div>
+    );
+}
+
+export function GitStageGroup({ paths }: { paths: string[] }) {
+    const [open, setOpen] = useState(true);
+    const unique = [...new Set(paths.filter(Boolean))];
+
+    return (
+        <GitCardShell
+            icon="account_tree"
+            title="Staged files"
+            meta={`${unique.length} file${unique.length === 1 ? "" : "s"}`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-1.5">
+                {unique.map((path) => (
+                    <div key={path} className="flex min-w-0 items-center gap-2">
+                        <GitStatusBadge status="A" />
+                        <FilePill path={path} />
+                    </div>
+                ))}
+            </div>
+        </GitCardShell>
     );
 }
 
 function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(true);
     const staged = lines.filter((l) => l.area === "staged");
     const unstaged = lines.filter((l) => l.area === "unstaged");
-    const preview = lines.slice(0, 5);
-    const shown = open ? lines : preview;
 
     return (
-        <div className="flex flex-col gap-1 py-0.5">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 w-fit text-left group"
-            >
-                <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
-                    Git status
-                </span>
-                <span className="text-xs text-text-disabled">
-                    {staged.length} staged · {unstaged.length} unstaged
-                </span>
-                <Icon
-                    name={open ? "expand_less" : "expand_more"}
-                    size={12}
-                    className="text-text-disabled shrink-0"
-                />
-            </button>
-            <div className="flex flex-col gap-0.5 pl-5">
-                {shown.map((line) => (
-                    <div key={`${line.area}-${line.path}`} className="flex items-center gap-1.5 min-w-0">
-                        <GitStatusBadge status={line.status} />
-                        <FilePill path={line.path} />
+        <GitCardShell
+            icon="account_tree"
+            title="Git status"
+            meta={`${staged.length} staged · ${unstaged.length} unstaged`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-3">
+                {staged.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-sm text-text-disabled">Staged</span>
+                        {staged.map((line) => (
+                            <div key={`staged-${line.path}`} className="flex min-w-0 items-center gap-2">
+                                <GitStatusBadge status={line.status} />
+                                <FilePill path={line.path} />
+                            </div>
+                        ))}
                     </div>
-                ))}
-                {!open && lines.length > preview.length ? (
-                    <span className="text-xs text-text-disabled pl-4">
-                        +{lines.length - preview.length} more
-                    </span>
+                ) : null}
+                {unstaged.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-sm text-text-disabled">Unstaged</span>
+                        {unstaged.map((line) => (
+                            <div key={`unstaged-${line.path}`} className="flex min-w-0 items-center gap-2">
+                                <GitStatusBadge status={line.status} />
+                                <FilePill path={line.path} />
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+                {lines.length === 0 ? (
+                    <span className="text-sm text-text-muted">Clean working tree</span>
                 ) : null}
             </div>
-        </div>
+        </GitCardShell>
     );
 }
 
 function GitLogGroup({ lines }: { lines: GitLogLine[] }) {
-    const [open, setOpen] = useState(false);
-    const preview = lines.slice(0, 5);
-    const shown = open ? lines : preview;
+    const [open, setOpen] = useState(true);
 
     return (
-        <div className="flex flex-col gap-1 py-0.5">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 w-fit text-left group"
-            >
-                <Icon name="history" size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
-                    Git log
-                </span>
-                <span className="text-xs text-text-disabled">{lines.length} commits</span>
-                <Icon
-                    name={open ? "expand_less" : "expand_more"}
-                    size={12}
-                    className="text-text-disabled shrink-0"
-                />
-            </button>
-            <div className="flex flex-col gap-0.5 pl-5">
-                {shown.map((line) => (
-                    <div key={line.hash} className="flex items-baseline gap-2 min-w-0 text-xs">
-                        <span className="font-mono shrink-0 text-accent">{line.hash}</span>
-                        <span className="min-w-0 truncate text-text-secondary">{line.subject}</span>
-                        <span className="shrink-0 text-text-disabled">{line.author}</span>
+        <GitCardShell
+            icon="history"
+            title="Git log"
+            meta={`${lines.length} commit${lines.length === 1 ? "" : "s"}`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-2">
+                {lines.map((line) => (
+                    <div
+                        key={`${line.hash}-${line.subject}`}
+                        className="flex flex-col gap-0.5 rounded-lg bg-surface-3 px-2.5 py-2"
+                    >
+                        <div className="flex min-w-0 items-center gap-2">
+                            <span className="shrink-0 text-sm text-text-primary">{line.hash}</span>
+                            {line.author ? (
+                                <span className="shrink-0 text-sm text-text-disabled">{line.author}</span>
+                            ) : null}
+                            {line.date ? (
+                                <span className="ml-auto shrink-0 text-sm text-text-disabled">{line.date}</span>
+                            ) : null}
+                        </div>
+                        <span className="text-sm text-text-primary leading-snug">{line.subject}</span>
                     </div>
                 ))}
-                {!open && lines.length > preview.length ? (
-                    <span className="text-xs text-text-disabled pl-1">
-                        +{lines.length - preview.length} more
-                    </span>
-                ) : null}
             </div>
-        </div>
+        </GitCardShell>
     );
 }
 
 function GitBranchesGroup({ lines }: { lines: GitBranchLine[] }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(true);
     const current = lines.find((l) => l.current);
-    const preview = lines.slice(0, 8);
-    const shown = open ? lines : preview;
 
     return (
-        <div className="flex flex-col gap-1 py-0.5">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 w-fit text-left group"
-            >
-                <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
-                    Branches
-                </span>
-                <span className="text-xs text-text-disabled">
-                    {lines.length}
-                    {current ? ` · on ${current.name}` : ""}
-                </span>
-                <Icon
-                    name={open ? "expand_less" : "expand_more"}
-                    size={12}
-                    className="text-text-disabled shrink-0"
-                />
-            </button>
-            <div className="flex flex-col gap-0.5 pl-5">
-                {shown.map((line) => (
-                    <div key={line.name} className="flex items-center gap-1.5 min-w-0 text-xs">
+        <GitCardShell
+            icon="account_tree"
+            title="Branches"
+            meta={current ? `on ${current.name}` : `${lines.length}`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-1.5">
+                {lines.map((line) => (
+                    <div
+                        key={line.name}
+                        className={cn(
+                            "flex min-w-0 items-center gap-2 rounded-lg bg-surface-3 px-2 py-1.5",
+                            line.current && "border border-border-subtle bg-transparent",
+                        )}
+                    >
                         <span
                             className={cn(
-                                "w-3 shrink-0 text-center font-mono",
-                                line.current ? "text-success" : "text-transparent",
+                                "h-1.5 w-1.5 shrink-0 rounded-full",
+                                line.current ? "bg-success" : "bg-text-disabled/40",
                             )}
-                        >
-                            {line.current ? "●" : "·"}
-                        </span>
+                        />
                         <span
                             className={cn(
-                                "min-w-0 truncate font-mono",
+                                "min-w-0 truncate text-sm",
                                 line.current ? "text-text-primary" : "text-text-secondary",
                                 line.remote && "text-text-muted",
                             )}
                         >
                             {line.name}
                         </span>
+                        {line.current ? (
+                            <span className="ml-auto shrink-0 text-sm text-text-disabled">current</span>
+                        ) : null}
                     </div>
                 ))}
-                {!open && lines.length > preview.length ? (
-                    <span className="text-xs text-text-disabled pl-4">
-                        +{lines.length - preview.length} more
-                    </span>
-                ) : null}
             </div>
-        </div>
+        </GitCardShell>
     );
 }
 
@@ -356,39 +375,36 @@ function GitDiffGroup({
     scope?: string;
     body: string;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(true);
     const lineCount = body ? body.split("\n").filter(Boolean).length : 0;
-    const label = file
-        ? `Diff · ${file.split(/[/\\]/).pop()}`
+    const title = file
+        ? "Git diff"
         : scope === "staged"
           ? "Staged diff"
           : "Git diff";
+    const meta = file
+        ? `${file.split(/[/\\]/).pop()} · ${lineCount} lines`
+        : `${lineCount} lines`;
 
     return (
-        <div className="flex flex-col gap-1 py-0.5">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 w-fit text-left group"
-            >
-                <Icon name="code" size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
-                    {label}
-                </span>
+        <GitCardShell
+            icon="code"
+            title={title}
+            meta={meta}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-2">
                 {file ? <FilePill path={file} /> : null}
-                <span className="text-xs text-text-disabled">{lineCount} lines</span>
-                <Icon
-                    name={open ? "expand_less" : "expand_more"}
-                    size={12}
-                    className="text-text-disabled shrink-0"
-                />
-            </button>
-            {open && body.trim() ? (
-                <pre className="ml-5 max-h-64 overflow-auto rounded-md border border-border-subtle bg-editor px-2 py-1.5 font-mono text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap break-all">
-                    {body}
-                </pre>
-            ) : null}
-        </div>
+                {body.trim() ? (
+                    <pre className="max-h-64 overflow-auto rounded-lg bg-surface-3 px-2.5 py-2 text-sm leading-relaxed text-text-secondary whitespace-pre-wrap break-all custom-scrollbar">
+                        {body}
+                    </pre>
+                ) : (
+                    <span className="text-sm text-text-muted">No diff output</span>
+                )}
+            </div>
+        </GitCardShell>
     );
 }
 
@@ -726,7 +742,7 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
             onKeyDown={(e) => { if (e.key === "Enter") handleOpen(); }}
             className={cn(
                 "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm",
-                "border border-border-subtle bg-panel text-text-primary",
+                "bg-surface-3 text-text-primary",
                 "cursor-pointer hover:bg-panel-hover",
             )}
         >
@@ -736,7 +752,7 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
     );
 }
 
-function ActionItem({
+export function ActionItem({
     block,
     isFileEditResolved,
 }: {
@@ -856,7 +872,7 @@ function ActionItem({
                         {config.resultUrls.map((url: string) => (
                             <span
                                 key={url}
-                                className="inline-flex size-4 items-center justify-center rounded-full border border-border-subtle bg-panel overflow-hidden"
+                                className="inline-flex size-4 items-center justify-center rounded-md border border-border-subtle bg-panel overflow-hidden"
                             >
                                 <Favicon url={url} size={12} />
                             </span>

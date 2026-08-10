@@ -122,7 +122,7 @@ export function EditorLayout({
         maxSize: 600,
         snap: true,
         children: (
-            <div className="workbench-panel flex h-full min-h-0 flex-col bg-panel border border-border-subtle overflow-hidden">
+            <div className="workbench-panel flex h-full min-h-0 flex-col bg-panel overflow-hidden">
                 {renderLeftPanel(activeTab)}
             </div>
         ),
@@ -136,7 +136,7 @@ export function EditorLayout({
         maxSize: 800,
         snap: true,
         children: (
-            <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-panel border border-border-subtle">
+            <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-panel">
                 <Chat onClose={() => setRightOpen(false)} sidebarSide={sidebarsFlipped ? "left" : "right"} />
             </div>
         ),
@@ -169,7 +169,7 @@ export function EditorLayout({
                         </div>
                         <div
                             style={{ height: `${terminalHeight}px` }}
-                            className="workbench-panel shrink-0 overflow-hidden bg-panel border border-border-subtle"
+                            className="workbench-panel shrink-0 overflow-hidden bg-panel"
                         >
                             <Terminal onClose={() => setTerminalOpen(false)} isOpen={terminalOpen} />
                         </div>

@@ -11,7 +11,7 @@ import {
 } from '../blocks/workflow';
 import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
-import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
+import { PlanningBlock } from '../blocks/plan';
 import { DesignPreviewGallery, type DesignPreviewItem } from '../blocks/gallery';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { QuestionBlock } from '../blocks/question';
@@ -411,13 +411,81 @@ export function parseMessageContent(text: string): Chunk[] {
         const gtIndex = text.indexOf('>', firstMatch.index);
         let contentStartIndex: number;
         let endIndex: number;
+        // `<web_visit ... />` / `<plan_saved ... />` style tags must not swallow the rest of the message.
+        const isSelfClosing =
+            gtIndex !== -1
+            && gtIndex > firstMatch.index
+            && text[gtIndex - 1] === '/';
 
         if (gtIndex === -1) {
             contentStartIndex = text.length;
             endIndex = -1;
+        } else if (isSelfClosing) {
+            contentStartIndex = gtIndex + 1;
+            endIndex = -2; // sentinel: empty self-closing tag
         } else {
             contentStartIndex = gtIndex + 1;
             endIndex = text.indexOf(firstMatch.endTag, contentStartIndex);
+        }
+
+        if (endIndex === -2) {
+            const content = '';
+            const tagFull = text.slice(firstMatch.index, gtIndex + 1);
+            if (firstMatch.type === 'edit') {
+                chunks.push(parseEditBlock(tagFull, false));
+            } else if (firstMatch.type === 'edit_pending') {
+                chunks.push(parseEditPendingBlock(tagFull, false));
+            } else if (firstMatch.type === 'plan') {
+                chunks.push(parsePlanBlock(tagFull));
+            } else if (firstMatch.type === 'plan_saved') {
+                chunks.push(parsePlanSavedBlock(tagFull));
+            } else if (firstMatch.type === 'todos') {
+                pushOrReplaceTodos(parseTodosBlock(tagFull));
+            } else if (firstMatch.type === 'terminal_command') {
+                const statusMatch = tagFull.match(/status="([^"]+)"/);
+                const idMatch = tagFull.match(/id="([^"]+)"/);
+                const sessionMatch = tagFull.match(/session="(\d+)"/);
+                const exitMatch = tagFull.match(/exit="(-?\d+)"/);
+                chunks.push({
+                    type: 'terminal_command',
+                    content,
+                    command: '',
+                    commandId: idMatch ? idMatch[1] : undefined,
+                    commandStatus: statusMatch ? statusMatch[1] : 'completed',
+                    sessionId: sessionMatch ? Number(sessionMatch[1]) : undefined,
+                    exitCode: exitMatch ? Number(exitMatch[1]) : undefined,
+                });
+            } else if (firstMatch.type === 'git_operation') {
+                chunks.push(parseGitOperationBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'cat') {
+                chunks.push(parseCatBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'subagent_ref') {
+                chunks.push(parseSubagentRefBlock(tagFull, false));
+            } else if (firstMatch.type === 'design_previews') {
+                chunks.push(parseDesignPreviewsBlock(tagFull));
+            } else if (firstMatch.type === 'review_debate') {
+                chunks.push(parseReviewDebateBlock(tagFull));
+            } else if (firstMatch.type === 'question') {
+                chunks.push(parseQuestionBlock(tagFull));
+            } else if (firstMatch.type === 'run') {
+                chunks.push({ type: 'run', content, command: '' });
+            } else if (firstMatch.type === 'web_result' || firstMatch.type === 'search_result') {
+                const queryMatch = tagFull.match(/query="([^"]+)"/);
+                chunks.push({
+                    type: firstMatch.type as Chunk['type'],
+                    content,
+                    query: queryMatch ? queryMatch[1] : undefined,
+                });
+            } else if (firstMatch.type === 'web_visit') {
+                chunks.push(parseWebVisitBlock(tagFull, false));
+            } else {
+                chunks.push({
+                    type: firstMatch.type as Chunk['type'],
+                    content,
+                });
+            }
+            currentIndex = gtIndex + 1;
+            continue;
         }
 
         if (endIndex === -1) {
@@ -759,12 +827,15 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'plan_saved') {
+            const title = chunk.content || 'Implementation Plan';
             return (
-                <PlanSavedBlock
+                <div
                     key={`plan-saved-${index}`}
-                    title={chunk.content || 'Implementation Plan'}
-                    path={chunk.file || ''}
-                />
+                    className="py-0.5 text-sm text-text-muted"
+                >
+                    Saved plan{" "}
+                    <span className="text-text-secondary">{title}</span>
+                </div>
             );
         }
         if (chunk.type === 'plan') {

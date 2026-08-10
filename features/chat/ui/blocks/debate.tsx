@@ -78,18 +78,18 @@ export function ReviewDebatePanel({ content }: { content: string }) {
     if (!display?.trim()) return null;
 
     return (
-        <div className="my-3 w-full overflow-hidden rounded-xl border border-border-subtle bg-panel">
+        <div className="my-1 w-full overflow-hidden rounded-xl border border-border bg-transparent">
             <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left"
                 onClick={() => setOpen((v) => !v)}
             >
-                <Icon name="security" size={14} className="text-text-secondary" />
-                <span className="flex-1 text-sm font-medium text-text-primary">Adversarial review</span>
-                <Icon name={open ? "expand_less" : "chevron_right"} size={14} className="text-text-muted" />
+                <Icon name="security" size={13} className="shrink-0 text-text-muted" />
+                <span className="flex-1 truncate text-xs text-text-muted">Adversarial review</span>
+                <Icon name={open ? "expand_less" : "expand_more"} size={14} className="text-text-muted" />
             </button>
             {open ? (
-                <div className={cn("border-t border-border-subtle px-3 py-3 text-sm text-text-primary prose-compact chat-markdown")}>
+                <div className={cn("border-t border-border px-3 py-2.5 text-sm text-text-primary prose-compact chat-markdown")}>
                     <ChatMarkdown content={display} />
                 </div>
             ) : null}

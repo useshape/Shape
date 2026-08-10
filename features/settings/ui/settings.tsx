@@ -1085,7 +1085,7 @@ export function SettingsView() {
                     </Button>
                 </div>
             </aside>
-            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-tr-xl bg-panel">
+            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-tr-xl bg-background">
                 <div className="w-full space-y-2 p-6 pb-24">
                     <AccountSettingsPanel />
                     <AiSettings settings={settings} />

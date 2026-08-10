@@ -103,7 +103,6 @@ export default function Chat({
                             isLoading={session.isLoading}
                             activityLabel={session.activityLabel}
                             sendError={session.sendError}
-                            contextSummarized={session.contextSummarized}
                             onDismissError={() => session.setSendError(null)}
                             messagesEndRef={session.messagesEndRef}
                             onRedo={session.handleRedo}

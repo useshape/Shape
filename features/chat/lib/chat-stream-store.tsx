@@ -439,6 +439,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     return;
                 }
                 setContextSummarized(true);
+                setActivityLabel("Summarizing context");
             }),
         );
 

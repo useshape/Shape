@@ -95,7 +95,7 @@ function MentionRichText({ text }: { text: string }) {
                         : undefined
                 }
                 className={cn(
-                    "mx-0.5 inline-flex items-center gap-1 rounded-md border border-accent/30 bg-accent/15 px-1.5 py-0.5 text-sm font-medium text-accent align-middle",
+                    "mx-0.5 inline-flex items-center gap-1 rounded-lg bg-accent/50 px-1.5 py-0.5 text-xs font-medium text-text-primary align-middle",
                     openable && "cursor-pointer hover:bg-accent/25 transition-colors",
                 )}
             >
@@ -126,21 +126,6 @@ function selectNodeContents(el: HTMLElement | null) {
     const sel = window.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
-}
-
-function ContinueActionBar({
-    action,
-}: {
-    action: NonNullable<ReturnType<typeof parseShapeContinueAction>["action"]>;
-}) {
-    return (
-        <div className="relative z-0 -mt-4 mx-2 pt-5 flex items-center gap-2 rounded-b-xl border border-border-subtle bg-surface-3/50 px-2.5 py-1.5 text-sm text-text-secondary">
-            <Icon name="list_alt" size={14} className="shrink-0 text-text-muted" />
-            <span className="min-w-0 truncate">
-                Building plan · <span className="text-text-primary">{action.title}</span>
-            </span>
-        </div>
-    );
 }
 
 function ChatMessageItemInner({ role, content, isGenerating, activityLabel, roleLabel, stats, model, index = -1, onRedo, onRestore, isFileEditResolved }: ChatMessageItemProps) {
@@ -222,10 +207,11 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             <ContextMenu>
             <ContextMenuTrigger asChild>
             <div
-                className="flex flex-col w-full mb-4 relative select-text"
+                className="relative mb-4 flex w-full select-text justify-end pl-10"
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
+                <div className="flex max-w-full flex-col items-end gap-1">
                 <div
                     role={isLong ? "button" : undefined}
                     tabIndex={isLong ? 0 : undefined}
@@ -237,7 +223,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                         }
                     } : undefined}
                     className={cn(
-                        "relative z-10 w-full rounded-[11px] bg-surface-3 px-2.5 py-2",
+                        "relative z-10 w-fit max-w-full rounded-xl bg-surface-3 px-3 py-2",
                         "text-sm text-text-primary group select-text",
                         isLong && "cursor-pointer",
                     )}
@@ -285,7 +271,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                         </div>
                     </div>
                 </div>
-                {continueAction?.action ? <ContinueActionBar action={continueAction.action} /> : null}
+                </div>
             </div>
             </ContextMenuTrigger>
             <ContextMenuContent>

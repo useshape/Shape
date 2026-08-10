@@ -13,9 +13,9 @@
   --surface-4: #333333;
 
   /* ── Role surfaces ─────────────────────────────────────── */
-  --chrome: #191919;
-  --sidebar: #1f1f1f;
-  --editor: #191919;
+  --chrome: #151515;
+  --sidebar: #1d1d1d;
+  --editor: #151515;
   --base: #ededee;
 
   /* Compat aliases for existing class names */

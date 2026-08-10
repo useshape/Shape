@@ -360,7 +360,7 @@ export function StatsView() {
                 </div>
             </aside>
 
-            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-tr-xl bg-panel">
+            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-tr-xl bg-background">
                 <div className="w-full space-y-10 p-6 pb-24">
                     {loading && !stats ? (
                         <p className="text-sm text-text-muted">Loading…</p>

@@ -146,7 +146,7 @@ function GitManagerIntro({ children }: { children: React.ReactNode }) {
 
     if (!ready) {
         return (
-            <div className="flex h-full items-center justify-center bg-editor">
+            <div className="flex h-full items-center justify-center bg-background">
                 <Image
                     src="/logos/logo.svg"
                     alt="Shape"
@@ -175,7 +175,7 @@ function GitManagerEmpty({ reason }: { reason: GitEmptyReason }) {
               : "This repository has no commits yet.";
 
     return (
-        <div className="flex h-full flex-col items-center justify-center gap-3 bg-editor px-6 text-center">
+        <div className="flex h-full flex-col items-center justify-center gap-3 bg-background px-6 text-center">
             <ShapeLogo size={32} />
             <div>
                 <p className="text-base font-medium text-text-primary">Project is empty</p>
@@ -389,7 +389,7 @@ function ManagerShell() {
                     </nav>
                 </aside>
 
-                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-tr-xl bg-panel">
+                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-tr-xl bg-background">
                     {/* Keep-alive panes use `hidden` (not `invisible`) so Monaco/diff
                         overlays cannot paint over other sections when inactive. */}
                     {visited.has("source") ? (
