@@ -25,6 +25,7 @@ import {
     ComposerTasksStrip,
     type ComposerTaskItem,
 } from "./activity";
+import { ComposerAttachments, isImageFile } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
 import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText } from "@/lib/chat-mentions";
 import { FileIcon } from "@/components/ui/file-icon";
@@ -198,11 +199,6 @@ const CODE_EXTENSIONS = new Set([
 function getFileExtension(name: string): string {
     const parts = name.split('.');
     return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
-}
-
-function isImageFile(file: File): boolean {
-    if (file.type.startsWith('image/')) return true;
-    return IMAGE_EXTENSIONS.has(getFileExtension(file.name));
 }
 
 function isCodeFile(file: File): boolean {
@@ -448,8 +444,8 @@ export function ChatInput({
     const inputPanel = (
                 <div
                     className={cn(
-                        "relative flex w-full flex-col border border-border-subtle bg-surface-3 transition-colors focus-within:border-border",
-                        "rounded-2xl",
+                        "relative flex w-full flex-col bg-surface-3 transition-colors focus-within:border-border",
+                        "rounded-xl",
                         needsSignIn && "opacity-50 cursor-not-allowed pointer-events-none",
                         hasComposerChrome && "rounded-t-none",
                     )}
@@ -465,50 +461,14 @@ export function ChatInput({
                     caretIndex={mentionCaret}
                 />
                 <div className="flex min-h-0 flex-col overflow-hidden rounded-[inherit]">
-                {uploadedFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
-                        {uploadedFiles.map((file, i) => {
-                            const isImg = isImageFile(file);
-                            const objectUrl = isImg ? URL.createObjectURL(file) : null;
-                            return (
-                                <div
-                                    key={`${file.name}-${i}`}
-                                    className="group/item relative inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-border-subtle bg-panel px-1.5 py-1"
-                                >
-                                    {isImg && objectUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={objectUrl}
-                                            alt=""
-                                            className="size-6 shrink-0 rounded object-cover"
-                                        />
-                                    ) : (
-                                        <Icon
-                                            name={isCodeFile(file) ? "code" : "insert_drive_file"}
-                                            size={14}
-                                            className="shrink-0 text-text-muted"
-                                        />
-                                    )}
-                                    <span className="min-w-0 truncate text-sm text-text-secondary">
-                                        {file.name}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        aria-label={`Remove ${file.name}`}
-                                        onClick={() =>
-                                            setUploadedFiles((prev: File[]) =>
-                                                prev.filter((_, idx) => idx !== i),
-                                            )
-                                        }
-                                        className="flex size-5 shrink-0 items-center justify-center rounded text-text-muted opacity-70 hover:bg-panel-hover hover:text-text-primary group-hover/item:opacity-100"
-                                    >
-                                        <Icon name="close" size={12} />
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                <ComposerAttachments
+                    files={uploadedFiles}
+                    onRemove={(index) =>
+                        setUploadedFiles((prev: File[]) =>
+                            prev.filter((_, idx) => idx !== index),
+                        )
+                    }
+                />
 
                 <div className="relative px-4 py-3">
                     <div
@@ -532,7 +492,7 @@ export function ChatInput({
                                 nodes.push(
                                     <span
                                         key={`m-${i}`}
-                                        className="relative inline rounded-[3px] bg-accent/30 text-accent"
+                                        className="relative inline rounded-lg bg-accent/50 text-xs text-text-primary p-1"
                                     >
                                         <span className="pointer-events-none absolute left-[2px] top-1/2 z-[1] -translate-y-1/2 opacity-95">
                                             {mention.kind === "file" ||

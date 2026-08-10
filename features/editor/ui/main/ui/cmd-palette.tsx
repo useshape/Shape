@@ -621,7 +621,7 @@ export function CommandPalette() {
                 )}>
                     <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
                     <Dialog.Description className="sr-only">Search agents, files, and actions</Dialog.Description>
-                    <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border-subtle px-3">
+                    <div className="flex h-11 shrink-0 items-center gap-2 px-3">
                         <Icon name="search" size={15} className="shrink-0 text-text-muted" />
                         <input
                             ref={inputRef}

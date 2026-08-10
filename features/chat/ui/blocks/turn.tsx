@@ -14,6 +14,8 @@ import { commands } from "@/lib/backend/commands";
 import { Collapse } from "./collapse";
 import { TerminalCommandStep } from "./terminal-live";
 import {
+    ActionItem,
+    GitStageGroup,
     groupWorkflowRows,
     isRenderableWorkflowBlock,
     parseGitStagePath,
@@ -425,19 +427,20 @@ function EditApprovalRow({ block }: { block: Chunk }) {
     }
 
     return (
-        <div className="my-1 overflow-hidden rounded-lg border border-border-subtle bg-panel">
+        <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
             <button
                 type="button"
                 onClick={() => setDiffOpen((v) => !v)}
-                className="flex w-full items-center gap-2 px-3 pt-2 text-left"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left"
             >
                 {isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
                     <Icon name="edit" size={13} className="shrink-0 text-text-muted" />
                 )}
+                <span className="truncate text-xs text-text-muted">Edit file</span>
                 <span className="truncate text-sm text-text-primary">{fileName(file)}</span>
-                <span className="flex shrink-0 items-center gap-1 text-sm">
+                <span className="flex shrink-0 items-center gap-1 text-xs">
                     <span className="text-success">+{add}</span>
                     <span className="text-error">-{del}</span>
                 </span>
@@ -450,16 +453,16 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                     )}
                 />
             </button>
-            <div className="px-3">
-                <Collapse open={diffOpen}>
+            <Collapse open={diffOpen}>
+                <div className="border-t border-border px-3 py-2">
                     <WorkflowEditPreview
                         file={file}
                         original={block.original || ""}
                         replacement={block.replacement || ""}
                     />
-                </Collapse>
-            </div>
-            <div className="flex items-center justify-end gap-1.5 border-t border-border-subtle px-2.5 py-1.5">
+                </div>
+            </Collapse>
+            <div className="flex items-center justify-end gap-1.5 px-2 py-2">
                 <Button
                     type="button"
                     variant="ghost"
@@ -477,7 +480,7 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                     onClick={() => resolve(true)}
                 >
                     Accept
-                    <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded bg-background px-1 py-px font-sans text-xs leading-none text-text-foreground">
+                    <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
                         ↵
                     </kbd>
                 </Button>
@@ -713,25 +716,8 @@ function StepRow({ block }: { block: Chunk }) {
         );
     }
 
-    if (block.type === "git_operation" && block.gitOp === "status") {
-        return <div className="py-0.5 text-sm text-text-muted">Git status</div>;
-    }
-    if (block.type === "git_operation" && block.gitOp === "log") {
-        return <div className="py-0.5 text-xs text-text-disabled">Git log</div>;
-    }
-    if (block.type === "git_operation" && block.gitOp === "diff") {
-        return <div className="py-0.5 text-xs text-text-disabled">Git diff</div>;
-    }
-    if (block.type === "git_operation" && block.gitOp === "branches") {
-        return <div className="py-0.5 text-xs text-text-disabled">Branches</div>;
-    }
-
-    return null;
-}
-
-function GitStageStep({ count }: { count: number }) {
-    if (count === 0) return null;
-    return <div className="py-0.5 text-sm text-text-muted">Staged {count} files</div>;
+    // ls, rename_chat, rich git groups, and anything else ActionItem knows.
+    return <ActionItem block={block} />;
 }
 
 function liveActivityLabel(blocks: Chunk[], activityLabel?: string | null): string {
@@ -898,7 +884,7 @@ export function TurnWorkflowSummary({
                                 let skippedLeadThought = false;
                                 return rows.map((row, i) => {
                                     if (row.kind === "git_stage_group") {
-                                        return <GitStageStep key={`stage-${i}`} count={row.paths.length} />;
+                                        return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
                                     }
                                     if (row.kind === "block") {
                                         const isThought =

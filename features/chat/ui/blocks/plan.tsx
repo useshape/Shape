@@ -41,32 +41,31 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
           : displaySteps.filter((s) => s.status === "done").slice(-2);
 
     return (
-        <div className={cn(
-            "w-full flex flex-col rounded-xl border overflow-hidden my-2",
-            "border-border bg-panel",
-        )}>
-            <div className="flex items-center justify-between px-2.5 py-2 gap-2">
+        <div className="my-1 w-full overflow-hidden rounded-xl border border-border bg-transparent">
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
                 <div className="flex items-center gap-2 min-w-0">
-                    <Icon name="checklist" size={14} className="text-text-muted shrink-0" />
-                    <span className="text-xs font-medium text-text-primary tabular-nums whitespace-nowrap">
-                        {completedCount} of {totalCount} Done
+                    <Icon name="checklist" size={13} className="text-text-muted shrink-0" />
+                    <span className="text-xs text-text-muted tabular-nums whitespace-nowrap">
+                        {completedCount} of {totalCount} done
                     </span>
                 </div>
                 {totalCount > 1 ? (
-                    <button
+                    <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => setIsOpen((open) => !open)}
-                        className="text-xs text-text-muted hover:text-text-primary transition-colors shrink-0"
+                        className="h-6 shrink-0 text-xs text-text-muted"
                     >
                         {isOpen ? "Hide" : "View all"}
-                    </button>
+                    </Button>
                 ) : null}
             </div>
 
             {visibleSteps.length > 0 ? (
-                <div className="px-2.5 pb-2 flex flex-col gap-1 border-t border-border-subtle/60">
+                <div className="flex flex-col gap-1.5 border-t border-border px-3 py-2.5">
                     {visibleSteps.map((step, i) => (
-                        <div key={`${step.label}-${i}`} className="flex items-start gap-2 py-0.5">
+                        <div key={`${step.label}-${i}`} className="flex items-start gap-2">
                             {step.status === "done" ? (
                                 <Icon name="check_circle" size={14} className="text-success shrink-0 mt-0.5" />
                             ) : step.status === "active" ? (
@@ -79,7 +78,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                                 <Icon name="radio_button_unchecked" size={14} className="text-text-disabled shrink-0 mt-0.5" />
                             )}
                             <span className={cn(
-                                "text-xs leading-snug",
+                                "text-sm leading-snug",
                                 step.status === "done" && "text-text-muted line-through",
                                 step.status === "active" && "text-text-primary",
                                 step.status === "pending" && "text-text-muted",

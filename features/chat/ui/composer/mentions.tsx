@@ -287,13 +287,13 @@ export function MentionPicker({
     return createPortal(
         <div
             ref={setMenuEl}
-            className="fixed z-[200] max-h-72 overflow-hidden rounded-xl border border-border-subtle bg-surface-3 shadow-md"
+            className="fixed z-[200] max-h-72 max-w-70 overflow-hidden rounded-xl border border-border bg-surface-3 shadow-lg/30"
             style={{ left: pos.left, top: pos.top, width: pos.width }}
         >
             {activeCategory ? (
                 <button
                     type="button"
-                    className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-xs text-text-muted hover:text-text-primary"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-text-muted hover:text-text-primary"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setActiveCategory(null)}
                 >
@@ -302,7 +302,7 @@ export function MentionPicker({
                 </button>
             ) : null}
 
-            <div className="max-h-64 overflow-y-auto py-1">
+            <div className="max-h-64 overflow-y-auto py-1 px-1">
                 {rootItems.length === 0 && !showCategories ? (
                     <div className="px-3 py-2 text-sm text-text-muted">No matches</div>
                 ) : (
@@ -311,7 +311,7 @@ export function MentionPicker({
                             key={`${item.kind}-${item.id ?? item.path ?? item.label}-${idx}`}
                             type="button"
                             className={cn(
-                                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
+                                "flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs",
                                 idx === highlight
                                     ? "bg-panel-hover text-text-primary"
                                     : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
@@ -366,12 +366,12 @@ export function MentionPicker({
 
                 {showCategories ? (
                     <>
-                        <div className="my-1 border-t border-border-subtle/70" />
+                        <div className="my-1" />
                         {CATEGORIES.map((cat) => (
                             <button
                                 key={cat.id}
                                 type="button"
-                                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                                className="flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => setActiveCategory(cat.id)}
                             >
