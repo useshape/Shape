@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { commands } from "@/lib/backend";
 
 export type PreviewState = {
     /** Full history stack of navigated URLs. */
@@ -137,6 +138,12 @@ async function checkFrameAllowed(url: string): Promise<string | null> {
 
 /** Probe loopback reachability so we never mount an iframe that shows the OS/Edge error page. */
 async function probePreviewReachable(url: string): Promise<boolean> {
+    try {
+        if (await commands.probePreviewUrl(url)) return true;
+    } catch {
+        /* web / command missing — fall through to fetch */
+    }
+
     const tryOnce = async (method: "HEAD" | "GET", mode: RequestMode) => {
         const controller = new AbortController();
         const timer = window.setTimeout(() => controller.abort(), 2500);

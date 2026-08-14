@@ -110,6 +110,8 @@ fn looks_like_incomplete_work(content: &str) -> bool {
         "let me ",
         "i'll ",
         "i will ",
+        "i am going to",
+        "i'm going to",
         "try again",
         "edit again",
         "need to read",
@@ -122,8 +124,35 @@ fn looks_like_incomplete_work(content: &str) -> bool {
         "next i ",
         "i can try",
         "let's ",
+        "installing",
+        "next i'll",
+        "i'll install",
+        "i'll add",
+        "i'll update",
+        "i'll rebuild",
+        "continuing",
+        "working on",
+        "still need",
+        "hang on",
+        "one sec",
+        "give me a moment",
     ];
     MARKERS.iter().any(|m| lower.contains(m))
+}
+
+fn tool_result_looks_failed(result: &str) -> bool {
+    let lower = result.to_lowercase();
+    if lower.contains("exit code 0") || lower.contains("exit=0") {
+        return false;
+    }
+    lower.contains("exit code ")
+        || lower.contains("exit=")
+        || lower.contains("error spawning")
+        || lower.contains("command failed")
+        || lower.contains("failed command")
+        || lower.contains("syntax errors")
+        || lower.contains("eperm:")
+        || lower.contains("enoent")
 }
 
 const PROMPT_SYNTHESIS_USER: &str = "Write a short answer for the user from the tool results below. \
@@ -330,6 +359,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut reasoning_only_nudged = false;
     let mut consecutive_readonly_rounds = 0usize;
     let mut explore_nudge_sent = false;
+    let mut last_round_failed = false;
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
@@ -523,11 +553,13 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             let content = outcome.content.trim();
             // Models often narrate the next tool step as prose ("Let me try the edit
             // again") and stop. Nudge once so the turn does not die mid-task.
-            if !content.is_empty()
+            if !incomplete_text_nudged
                 && loop_count > 1
-                && !incomplete_text_nudged
-                && looks_like_incomplete_work(content)
                 && !config.cancel.is_cancelled()
+                && (
+                    looks_like_incomplete_work(content)
+                    || (last_round_failed && content.chars().count() < 280)
+                )
             {
                 incomplete_text_nudged = true;
                 logging::info(
@@ -536,7 +568,11 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 );
                 config.api_messages.push(json!({
                     "role": "user",
-                    "content": NUDGE_CONTINUE_OR_FINISH,
+                    "content": if last_round_failed {
+                        "The last command failed. Do not stop. Read the error, adjust, and continue the task (or explain the blocker if you are genuinely stuck)."
+                    } else {
+                        NUDGE_CONTINUE_OR_FINISH
+                    },
                 }));
                 continue;
             }
@@ -545,6 +581,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         }
 
         let tool_calls = outcome.tool_calls;
+        let mut round_failed = false;
 
         // A multi-call batch of read-only tools has no ordering dependencies, so
         // execute it concurrently instead of one call at a time. This is where
@@ -633,6 +670,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     &call.name,
                     &tool_outcome.tool_result,
                 );
+                if tool_result_looks_failed(&tool_outcome.tool_result) {
+                    round_failed = true;
+                }
                 if let Some(SideEffect::FileRead { path, content }) = tool_outcome.side_effect {
                     let abs = resolve_abs(&path, config.project_path);
                     read_paths.insert(abs.clone());
@@ -669,6 +709,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     "content": NUDGE_START_EDITING,
                 }));
             }
+            last_round_failed = round_failed;
             continue;
         }
 
@@ -832,6 +873,10 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
             push_tool_result(config.api_messages, &call.id, &call.name, &content);
 
+            if tool_result_looks_failed(&content) {
+                round_failed = true;
+            }
+
             // Track failed edits so we force a re-read before the next attempt.
             if call.name == "edit_file"
                 && (content.starts_with("ERROR:") || content.starts_with("BLOCKED:"))
@@ -901,7 +946,19 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
         }
 
+        last_round_failed = round_failed;
+
         if finished_signal.is_some() {
+            if last_round_failed && !incomplete_text_nudged && !config.cancel.is_cancelled() {
+                incomplete_text_nudged = true;
+                finished_signal = None;
+                logging::info("chat", "finish after a failed tool — nudging model to recover");
+                config.api_messages.push(json!({
+                    "role": "user",
+                    "content": "The last command failed. Do not finish yet. Recover from the error or explain the blocker, then continue the task.",
+                }));
+                continue;
+            }
             break;
         }
 

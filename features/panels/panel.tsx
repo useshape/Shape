@@ -152,6 +152,7 @@ export function Panel({
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         document.body.removeAttribute("data-resizing");
+        window.dispatchEvent(new Event("shape-terminal-refit"));
     }, []);
 
     const onPointerMove = useCallback((e: PointerEvent) => {

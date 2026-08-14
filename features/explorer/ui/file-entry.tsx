@@ -180,8 +180,12 @@ export const FileEntry = memo(({
                 <ContextMenuTrigger>
                     <div
                         ref={rowRef}
-                        draggable={!isGit}
+                        draggable={!isGit && ctx.pendingRename !== node.path}
                         onDragStart={(e) => {
+                            if (ctx.pendingRename === node.path) {
+                                e.preventDefault();
+                                return;
+                            }
                             setIsDragging(true);
                             e.dataTransfer.setData("text/plain", node.path);
                             e.dataTransfer.setData("application/x-shape-path", node.path);
@@ -253,7 +257,8 @@ export const FileEntry = memo(({
                             } catch { }
                         }}
                         className={cn(
-                            "h-[20px] flex items-center px-2 rounded-md hover:bg-panel-hover cursor-pointer text-text-primary group text-[14px] font-medium whitespace-nowrap w-full outline-none transition-colors tracking-tight duration-75 select-none",
+                            "h-[20px] flex items-center px-2 rounded-md hover:bg-panel-hover cursor-pointer text-text-primary group text-[14px] font-medium whitespace-nowrap w-full outline-none transition-colors tracking-tight duration-75",
+                            ctx.pendingRename !== node.path && "select-none",
                             isGit && "opacity-40 grayscale cursor-not-allowed pointer-events-none",
                             isDragging && "opacity-50",
                             isSelected && (isActive ? "bg-panel-active text-white" : "bg-panel-hover"),
@@ -357,10 +362,16 @@ export const FileEntry = memo(({
                         {ctx.pendingRename === node.path ? (
                             <input
                                 autoFocus
+                                draggable={false}
                                 value={renameName}
                                 onChange={(e) => setRenameName(e.target.value)}
                                 onBlur={() => ctx.submitRename(renameName, node.path)}
                                 onClick={(e) => e.stopPropagation()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onDragStart={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
                                 onKeyDown={(e) => {
                                     e.stopPropagation();
                                     if (e.key === "Enter") {
@@ -370,7 +381,7 @@ export const FileEntry = memo(({
                                         ctx.setPendingRename(null);
                                     }
                                 }}
-                                className="h-[18px] flex-1 bg-panel border border-border-subtle rounded px-1 text-sm outline-none focus:border-accent w-full min-w-0"
+                                className="h-[18px] flex-1 bg-panel border border-border-subtle rounded px-1 text-sm outline-none focus:border-accent w-full min-w-0 select-text"
                             />
                         ) : (
                             <span

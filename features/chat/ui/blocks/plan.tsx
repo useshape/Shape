@@ -23,7 +23,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
     /** When false, freeze "active" steps so they don't spin after the turn ends. */
     isGenerating?: boolean;
 }) {
-    const [isOpen, setIsOpen] = React.useState(totalCount <= 4);
+    const [isOpen, setIsOpen] = React.useState(totalCount <= 5);
     const displaySteps = React.useMemo(
         () =>
             steps.map((step) =>
@@ -196,7 +196,7 @@ export function PlanSavedBlock({ title, path }: { title: string; path: string })
                 <button
                     type="button"
                     onClick={() => { void handleOpen(); }}
-                    className="text-sm text-accent hover:underline text-left w-fit"
+                    className="text-sm text-accent-text hover:text-accent-text-hover hover:underline text-left w-fit"
                 >
                     Read detailed plan
                 </button>

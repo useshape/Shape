@@ -482,7 +482,7 @@ export function ColorPicker({ color, onChange, onClose, layoutWidth }: ColorPick
         <div
             className={cn(
                 "flex flex-col select-none rounded-xl border border-border-subtle bg-panel-secondary shadow-md text-text-primary font-sans overflow-hidden pb-2",
-                isCompact ? "w-full max-w-[480px]" : "w-[480px]",
+                isCompact ? "w-[360px] max-w-[360px]" : "w-[480px]",
             )}
             onMouseDown={stop}
             onClick={stop}
@@ -551,14 +551,14 @@ export function ColorPicker({ color, onChange, onClose, layoutWidth }: ColorPick
                 className={cn(
                     "flex gap-3 p-1.5",
                     isPaletteTab ? "flex-col" : isCompact ? "flex-col" : "flex-row items-stretch",
-                    isPaletteTab ? "min-h-0" : isCompact ? "min-h-0" : "h-[200px]",
+                    isPaletteTab ? "min-h-0" : "h-[200px] min-h-[200px]",
                 )}
             >
                 {/* Left: Canvas or Palette */}
                 <div
                     className={cn(
                         "min-w-0 flex",
-                        isPaletteTab ? "w-full" : "h-full min-h-[160px] flex-1",
+                        isPaletteTab ? "w-full" : "h-[200px] min-h-[200px] w-full flex-1",
                     )}
                 >
                     {activeTab === "Tailwind" ? (

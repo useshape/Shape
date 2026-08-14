@@ -6,11 +6,10 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
-import { Favicon } from "@/components/ui/favicon";
 import { openProjectFile } from "@/lib/open-project-file";
-import { commands } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
+import { ChatLinkChip } from "./link-chip";
 
 function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: boolean; isLast?: boolean }) {
     const nested = options?.nested;
@@ -115,38 +114,9 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
             <strong className="font-medium text-text-primary">{children}</strong>
         ),
         hr: () => null,
-        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
-            const isLocalFile = href && !href.startsWith("http") && !href.startsWith("mailto:") && !href.startsWith("#");
-            if (isLocalFile) {
-                const name = href.split(/[\\/]/).pop() || href;
-                return (
-                    <span
-                        className="inline-flex items-center gap-1.5 text-sm bg-panel hover:bg-panel-hover px-2 py-0.5 rounded border border-border-subtle text-text-primary cursor-pointer transition-colors mx-0.5 align-middle font-sans"
-                        title={href}
-                        onClick={() => {
-                            void openProjectFile(href, name);
-                        }}
-                    >
-                        <FileIcon name={name} className="w-3.5 h-3.5" />
-                        {children || name}
-                    </span>
-                );
-            }
-            return (
-                <a
-                    href={href}
-                    className="inline-flex items-center gap-1.5 text-accent underline hover:text-accent/80 transition-colors font-normal font-sans cursor-pointer mx-0.5 align-middle"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (href) void commands.openUrlExternal(href);
-                    }}
-                >
-                    {href && /^https?:\/\//i.test(href) ? <Favicon url={href} size={12} /> : null}
-                    <span>{children}</span>
-                </a>
-            );
-        },
+        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+            <ChatLinkChip href={href}>{children}</ChatLinkChip>
+        ),
         blockquote: ({ children }: { children?: React.ReactNode }) => (
             <blockquote className="border-l-2 border-accent/50 pl-3 py-0.5 my-1 text-text-muted italic bg-panel/30 rounded-r font-normal font-sans">
                 {children}

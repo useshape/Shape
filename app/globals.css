@@ -53,6 +53,10 @@
   --focus: var(--accent);
   --accent-fg: var(--action-label);
   --border-focus: var(--focus);
+  /* Readable on dark surfaces — never use --accent (too deep) as body text */
+  --accent-text: #9eb0ff;
+  --accent-text-hover: #c4ceff;
+  --accent-text-bg: color-mix(in srgb, var(--accent-text) 16%, transparent);
 
   /* ── Status ────────────────────────────────────────────── */
   --success: #4ade80;
@@ -177,9 +181,9 @@
   --overlay-scrim: transparent;
 
   /* Soft accent pills (composer / settings) */
-  --pill-bg: color-mix(in srgb, var(--accent) 16%, transparent);
-  --pill-bg-hover: color-mix(in srgb, var(--accent) 24%, transparent);
-  --pill-fg: var(--accent);
+  --pill-bg: color-mix(in srgb, var(--accent-text) 16%, transparent);
+  --pill-bg-hover: color-mix(in srgb, var(--accent-text) 24%, transparent);
+  --pill-fg: var(--accent-text);
   --pill-muted-bg: var(--surface-3);
   --pill-muted-fg: var(--text-secondary);
 
@@ -239,6 +243,9 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
+  --color-accent-text: var(--accent-text);
+  --color-accent-text-hover: var(--accent-text-hover);
+  --color-accent-text-bg: var(--accent-text-bg);
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -501,6 +508,12 @@ button:disabled .shape-icon,
   height: 6px !important;
 }
 
+body.resizing-vertical .xterm,
+body[data-resizing] .xterm {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* ── Chat markdown (no tailwind typography plugin) ─────── */
 .chat-markdown,
 .chat-markdown-body {
@@ -515,6 +528,38 @@ button:disabled .shape-icon,
 .chat-markdown strong,
 .chat-markdown-body strong {
   font-weight: 560;
+}
+
+.chat-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  margin: 0 0.15rem;
+  padding: 0.1rem 0.4rem 0.1rem 0.2rem;
+  vertical-align: middle;
+  border-radius: 0.375rem;
+  background: var(--accent-text-bg);
+  color: var(--accent-text);
+  text-decoration: none;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.chat-link-chip:hover {
+  color: var(--accent-text-hover);
+  background: color-mix(in srgb, var(--accent-text) 24%, transparent);
+}
+.chat-link-chip .chat-link-favicon,
+.chat-link-favicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 0.25rem;
+  background: var(--surface-3);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 /* ── Prose — comfortable markdown (Conductor density) ───── */
@@ -587,7 +632,7 @@ button:disabled .shape-icon,
 }
 
 .prose-themed a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ── Code block surface ─────────────────────────────────── */
@@ -861,6 +906,27 @@ button:disabled .shape-icon,
 .chat-stream-fade-in {
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+}
+
+/* ── Pixel grid loader (LoadingState) ── */
+@keyframes pixel-on {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  40%,
+  60% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes pixel-on {
+    0%,
+    100% {
+      opacity: 0.2;
+    }
+  }
 }
 
 /* ── AI status shimmer: animated gradient sweeping through the text ── */

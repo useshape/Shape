@@ -491,9 +491,10 @@ fn save_plan() -> Value {
 fn update_todos() -> Value {
     tool(
         "update_todos",
-        "Optional live checklist for LONG multi-step implementation only (e.g. building from a saved plan, or 5+ distinct workstreams). \
+        "Optional live checklist for LONG multi-step implementation only (e.g. building from a saved plan). \
 Skip for ordinary Code/Visual work: single features, UI polish, shadcn installs, refactors of a few files — just do the work. \
-When used: 3–6 short items max, exactly one in_progress, pass the full merged list every call. Not available in Ask/Plan.",
+When used: 3–5 high-level items (never 8+ granular file-by-file steps). Labels like \"Rebuild homepage\" not \"Add Inter font import to index.css\". \
+Exactly one in_progress, pass the full merged list every call. Not available in Ask/Plan.",
         json!({
             "type": "object",
             "properties": {
@@ -501,7 +502,7 @@ When used: 3–6 short items max, exactly one in_progress, pass the full merged 
                 "todos": {
                     "type": "array",
                     "minItems": 1,
-                    "maxItems": 8,
+                    "maxItems": 5,
                     "items": {
                         "type": "object",
                         "properties": {

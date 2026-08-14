@@ -94,7 +94,7 @@ export default function Chat({
                         sel?.removeAllRanges();
                         sel?.addRange(range);
                     }}
-                    className="relative z-0 flex min-h-0 flex-1 flex-col overflow-y-auto px-3 no-scrollbar select-text"
+                    className="relative z-0 flex min-h-0 flex-1 flex-col overflow-y-auto px-3 custom-scrollbar select-text"
                 >
                     <div className="flex min-h-full w-full min-w-0 flex-col pb-8 pt-1">
                         <ChatMessageList

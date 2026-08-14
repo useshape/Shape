@@ -24,6 +24,7 @@ import {
 import { Favicon } from "@/components/ui/favicon";
 import { parseWebResults } from "../md/renderer";
 import { GeneratingIndicator } from "./generating";
+import { LoadingState } from "./loading-state";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "< 1s";
@@ -233,26 +234,35 @@ function ThoughtStep({
 
     return (
         <div className="py-0.5">
-            <button
-                type="button"
-                onClick={() => expandable && setOpen((v) => !v)}
-                className={cn(
-                    "flex items-center gap-1 text-sm transition-colors",
-                    expandable ? "text-text-muted hover:text-text-primary cursor-pointer" : "text-text-muted cursor-default",
-                )}
-            >
-                <span>
-                    <ThoughtHeading content={trimmed} isActive={isActive} />
-                </span>
-                {expandable ? (
-                    <Icon
-                        name="chevron_right"
-                        size={12}
-                        className={cn("opacity-0 transition-transform duration-200", open && "rotate-90 opacity-50")}
-                    />
-                ) : null}
-            </button>
-            {expandable ? (
+            {isActive ? (
+                <LoadingState label="Thinking" variant="Drive" />
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => expandable && setOpen((v) => !v)}
+                    className={cn(
+                        "flex items-center gap-1 text-sm transition-colors",
+                        expandable
+                            ? "text-text-muted hover:text-text-primary cursor-pointer"
+                            : "text-text-muted cursor-default",
+                    )}
+                >
+                    <span>
+                        <ThoughtHeading content={trimmed} isActive={false} />
+                    </span>
+                    {expandable ? (
+                        <Icon
+                            name="chevron_right"
+                            size={12}
+                            className={cn(
+                                "opacity-0 transition-transform duration-200",
+                                open && "rotate-90 opacity-50",
+                            )}
+                        />
+                    ) : null}
+                </button>
+            )}
+            {expandable && !isActive ? (
                 <Collapse open={open || !!showBody}>
                     <div className="mt-1 text-xs leading-relaxed text-text-muted max-w-full whitespace-pre-wrap">
                         {trimmed}
@@ -615,7 +625,11 @@ function StepRow({ block }: { block: Chunk }) {
                 }}
                 className="flex items-center gap-1.5 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors w-fit max-w-full text-left"
             >
-                {url ? <Favicon url={url} size={14} /> : null}
+                {url ? (
+                    <span className="chat-link-favicon">
+                        <Favicon url={url} size={12} />
+                    </span>
+                ) : null}
                 <span>
                     {block.isGenerating ? "Visiting" : "Visited"}{" "}
                     <span className="text-text-secondary">{host}</span>

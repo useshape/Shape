@@ -492,7 +492,7 @@ export function ChatInput({
                                 nodes.push(
                                     <span
                                         key={`m-${i}`}
-                                        className="relative inline rounded-lg bg-accent/50 text-xs text-text-primary p-1"
+                                        className="relative inline rounded-lg bg-accent-text-bg text-xs text-accent-text p-1"
                                     >
                                         <span className="pointer-events-none absolute left-[2px] top-1/2 z-[1] -translate-y-1/2 opacity-95">
                                             {mention.kind === "file" ||

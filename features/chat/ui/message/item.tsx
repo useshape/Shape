@@ -19,7 +19,7 @@ import {
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     formatMessageUsageLine,
-    formatModelLabel,
+    formatMessageModelLabel,
     type MessageUsageStats,
 } from "@/lib/usage-display";
 import { parseShapeContinueAction } from "@/lib/shape-continue-action";
@@ -95,14 +95,18 @@ function MentionRichText({ text }: { text: string }) {
                         : undefined
                 }
                 className={cn(
-                    "mx-0.5 inline-flex items-center gap-1 rounded-lg bg-accent/50 px-1.5 py-0.5 text-xs font-medium text-text-primary align-middle",
-                    openable && "cursor-pointer hover:bg-accent/25 transition-colors",
+                    "mx-0.5 inline-flex items-center gap-1 rounded-lg bg-accent-text-bg px-1.5 py-0.5 text-xs font-medium text-accent-text align-middle",
+                    openable && "cursor-pointer hover:bg-accent-text/20 transition-colors",
                 )}
             >
                 {mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs" ? (
-                    <FileIcon name={label} className="h-3 w-3 shrink-0" />
+                    <span className="chat-link-favicon">
+                        <FileIcon name={label} className="h-3 w-3 shrink-0" />
+                    </span>
                 ) : mention.kind === "browser" ? (
-                    <Favicon url={mention.path || label} size={12} />
+                    <span className="chat-link-favicon">
+                        <Favicon url={mention.path || label} size={12} />
+                    </span>
                 ) : null}
                 <span>@{label}</span>
             </span>,
@@ -336,7 +340,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                                     <div className="flex items-center justify-between gap-4">
                                         <span className="text-text-muted">Model</span>
                                         <span className="font-medium text-text-primary truncate">
-                                            {formatModelLabel(model)}
+                                            {formatMessageModelLabel(model, stats)}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between gap-4">

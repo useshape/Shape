@@ -289,6 +289,8 @@ export function getMonacoEditorOptions(overrides: Record<string, unknown> = {}) 
         padding: { top: 12 },
         cursorSmoothCaretAnimation: "on" as const,
         semanticHighlighting: { enabled: false },
+        links: true,
+        multiCursorModifier: "alt" as const,
         lightbulb: {
             enabled: "off" as unknown as import("monaco-editor").editor.ShowLightbulbIconMode,
         },

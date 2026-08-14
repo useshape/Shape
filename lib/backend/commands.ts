@@ -487,6 +487,13 @@ export const commands = {
         invokeCommand<void>("cleanup_design_sandbox", {
             sessionId: sessionId ?? null,
         }),
+    startDesignProxy: (targetUrl: string, bridgeScript: string) =>
+        invokeCommand<{ port: number; src: string }>("start_design_proxy", {
+            targetUrl,
+            bridgeScript,
+        }),
+    stopDesignProxy: () => invokeCommand<void>("stop_design_proxy"),
+    probePreviewUrl: (url: string) => invokeCommand<boolean>("probe_preview_url", { url }),
     stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
     getChatHistory: () => invokeCommand<ChatMessage[]>("get_chat_history"),
     getChatGenerationState: () =>
