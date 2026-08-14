@@ -208,8 +208,9 @@ export default function PreviewPanel() {
                         type="submit"
                         variant="ghost"
                         size="sm"
-                        className="h-7 shrink-0 px-2 text-xs text-text-muted hover:text-text-primary"
+                        className="sr-only"
                         disabled={loading}
+                        tabIndex={-1}
                     >
                         Go
                     </Button>

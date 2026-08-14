@@ -9,6 +9,7 @@ pub mod lint;
 pub mod packages;
 pub mod python;
 pub mod design_sandbox;
+pub mod design_proxy;
 pub mod preview_render;
 pub mod outline;
 pub mod pty;

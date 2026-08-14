@@ -22,15 +22,33 @@ interface ColorPickerPortalProps {
     range?: { getStartPosition: () => { lineNumber: number; column: number } } | null;
     color: string;
     layoutWidth?: number;
+    placement?: "bottom" | "left";
     onChange: (color: string) => void;
     onClose: () => void;
 }
 
-function clampPosition(anchor: PickerAnchor, width: number, height: number): PickerAnchor {
+function clampPosition(
+    anchor: PickerAnchor,
+    width: number,
+    height: number,
+    placement: "bottom" | "left" = "bottom",
+): PickerAnchor {
     const pad = 8;
-    const gap = 10;
-    let left = anchor.x;
-    let top = anchor.y + gap;
+    const gap = 8;
+    let left: number;
+    let top: number;
+
+    if (placement === "left") {
+        left = anchor.x - width - gap;
+        top = anchor.y;
+        if (left < pad) left = Math.min(anchor.x + gap, window.innerWidth - width - pad);
+        left = Math.max(pad, Math.min(left, window.innerWidth - width - pad));
+        top = Math.max(pad, Math.min(top, window.innerHeight - height - pad));
+        return { x: left, y: top };
+    }
+
+    left = anchor.x;
+    top = anchor.y + gap;
 
     if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
     left = Math.max(pad, left);
@@ -66,12 +84,15 @@ export function ColorPickerPortal({
     range,
     color,
     layoutWidth,
+    placement = "bottom",
     onChange,
     onClose,
 }: ColorPickerPortalProps) {
     const rootRef = useRef<HTMLDivElement>(null);
     const openedAtRef = useRef(Date.now());
     const [position, setPosition] = useState<PickerAnchor>(() => resolveAnchor(anchor, editor, range));
+    const compact = (layoutWidth ?? 480) < 440;
+    const pickerWidth = compact ? 360 : 480;
 
     useLayoutEffect(() => {
         openedAtRef.current = Date.now();
@@ -81,9 +102,22 @@ export function ColorPickerPortal({
             setPosition(base);
             return;
         }
-        const { width, height } = el.getBoundingClientRect();
-        setPosition(clampPosition(base, width || 480, height || 320));
-    }, [anchor, editor, range, color]);
+        const measured = el.getBoundingClientRect();
+        // Compact / left placement must never use a viewport-wide measurement —
+        // `w-full` in a body portal used to become 100vw and clamp to the top-left.
+        const width = placement === "left" || compact ? pickerWidth : (measured.width || pickerWidth);
+        const height = measured.height > 8 ? measured.height : 320;
+        setPosition(clampPosition(base, width, height, placement));
+        requestAnimationFrame(() => {
+            const node = rootRef.current;
+            if (!node) return;
+            const next = node.getBoundingClientRect();
+            const h = next.height > 8 ? next.height : height;
+            setPosition(clampPosition(base, width, h, placement));
+        });
+        // Reposition only when the anchor/placement changes — not on every color tick.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [anchor.x, anchor.y, editor, range, placement, pickerWidth, compact]);
 
     useEffect(() => {
         if (!editor || !range) return;
@@ -92,7 +126,7 @@ export function ColorPickerPortal({
             const el = rootRef.current;
             if (!el) return;
             const { width, height } = el.getBoundingClientRect();
-            setPosition(clampPosition(base, width || 480, height || 320));
+            setPosition(clampPosition(base, width || pickerWidth, height || 320, placement));
         };
         const scrollSub = editor.onDidScrollChange(update);
         const layoutSub = editor.onDidLayoutChange(update);
@@ -126,7 +160,7 @@ export function ColorPickerPortal({
             ref={rootRef}
             id="shape-color-picker-widget"
             className="shape-color-picker-widget fixed z-modal"
-            style={{ top: position.y, left: position.x }}
+            style={{ top: position.y, left: position.x, width: compact ? pickerWidth : undefined }}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
         >

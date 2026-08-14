@@ -357,14 +357,29 @@ pub async fn delete_path(path: String) -> Result<(), AppError> {
 }
 
 pub async fn trash_path(path: String) -> Result<(), AppError> {
-    tokio::task::spawn_blocking(move || {
-        trash::delete(&path).map_err(|e| AppError::Message(format!("Trash error: {}", e)))?;
-        Ok::<(), AppError>(())
+    let for_trash = path.clone();
+    let trash_err = tokio::task::spawn_blocking(move || {
+        trash::delete(&for_trash).map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))??;
-    clear_cache();
-    Ok(())
+    .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))?;
+
+    if trash_err.is_ok() {
+        clear_cache();
+        return Ok(());
+    }
+
+    // Recycle Bin on Windows often rejects large folders (node_modules) or locked dirs.
+    let p = PathBuf::from(&path);
+    if p.is_dir() {
+        delete_path(path).await?;
+        return Ok(());
+    }
+
+    Err(AppError::Message(format!(
+        "Couldn't move to Recycle Bin: {}",
+        trash_err.err().unwrap_or_else(|| "unknown error".into())
+    )))
 }
 
 pub async fn rename_path(

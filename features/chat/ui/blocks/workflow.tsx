@@ -739,6 +739,9 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
             role="button"
             tabIndex={0}
             onClick={handleOpen}
+            onAuxClick={(e) => {
+                if (e.button === 1) handleOpen();
+            }}
             onKeyDown={(e) => { if (e.key === "Enter") handleOpen(); }}
             className={cn(
                 "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm",

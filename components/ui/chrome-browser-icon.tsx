@@ -1,8 +1,9 @@
 "use client";
 
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 
-/** Chrome-style browser mark for the activity bar / tabs. */
+/** Official Chrome product geometry from google.com/chrome/static/images/chrome-logo.svg, currentColor only. */
 export function ChromeBrowserIcon({
     className,
     size = 16,
@@ -10,34 +11,36 @@ export function ChromeBrowserIcon({
     className?: string;
     size?: number;
 }) {
+    const uid = useId().replace(/:/g, "");
     return (
         <svg
             xmlns="http://www.w3.org/2000/svg"
             width={size}
             height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            className={cn("shape-icon shrink-0 text-current", className)}
+            viewBox="0 0 48 48"
+            className={cn("shape-icon shrink-0", className)}
             aria-hidden
         >
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.75" />
-            <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.75" />
-            <path
-                d="M12 2a10 10 0 0 1 8.66 5H12V2Z"
-                fill="currentColor"
-                fillOpacity="0.22"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinejoin="round"
-            />
-            <path
-                d="M3.34 7A10 10 0 0 0 12 22V12H3.34Z"
-                fill="currentColor"
-                fillOpacity="0.12"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinejoin="round"
-            />
+            <mask id={`${uid}-ring`}>
+                <rect width="48" height="48" fill="white" />
+                <circle cx="24" cy="24" r="12" fill="black" />
+                <circle cx="24" cy="24" r="9.5" fill="white" />
+            </mask>
+            <g mask={`url(#${uid}-ring)`}>
+                <path
+                    fill="currentColor"
+                    d="M24 12h20.781a23.994 23.994 0 0 0-41.564.003L13.608 30l.009-.002A11.985 11.985 0 0 1 24 12Z"
+                />
+                <path
+                    fill="currentColor"
+                    d="M34.391 30.003 24.001 48A23.994 23.994 0 0 0 44.78 12.003H23.999l-.003.009a11.985 11.985 0 0 1 10.395 17.991Z"
+                />
+                <path
+                    fill="currentColor"
+                    d="M13.609 30.003 3.218 12.006A23.994 23.994 0 0 0 24.003 48L34.393 30.003l-.007-.007a11.985 11.985 0 0 1-20.777.007Z"
+                />
+                <circle cx="24" cy="24" r="9.5" fill="currentColor" />
+            </g>
         </svg>
     );
 }

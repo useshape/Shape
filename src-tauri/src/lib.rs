@@ -83,6 +83,7 @@ pub fn run() {
         .manage(LspState::new())
         .manage(crate::core::workspace_trust::WorkspaceTrustState::new())
         .manage(commands::preview_render::PreviewCaptureState::default())
+        .manage(commands::design_proxy::DesignProxyState::default())
         .setup(|app| {
             #[cfg(desktop)]
             {
@@ -156,6 +157,9 @@ pub fn run() {
             commands::desktop_notification::show_desktop_notification,
             commands::preview_render::capture_html_preview,
             commands::preview_render::cleanup_design_sandbox,
+            commands::design_proxy::start_design_proxy,
+            commands::design_proxy::stop_design_proxy,
+            commands::design_proxy::probe_preview_url,
             // project stats
             commands::stats::get_project_stats,
             commands::stats::scan_project_loc,

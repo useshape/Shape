@@ -73,7 +73,7 @@ export function ColorCanvas({ hsva, hueColor, sPct, vPct, onDrag }: ColorCanvasP
     });
 
     return (
-        <div className="flex gap-2 h-full w-full items-stretch">
+        <div className="flex h-[180px] min-h-[180px] w-full items-stretch gap-2">
             {/* Saturation-Value 2D Canvas — takes all remaining width */}
             <div
                 ref={svRef}

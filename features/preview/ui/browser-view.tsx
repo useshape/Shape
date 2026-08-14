@@ -20,6 +20,28 @@ import {
     setPreviewUrlBar,
     usePreviewStore,
 } from "@/features/preview/store";
+import { DESIGN_BRIDGE_SCRIPT } from "@/features/preview/design-mode/bridge-script";
+import {
+    setDesignBridgeApi,
+    setDesignInspect,
+    setDesignLayers,
+    setDesignModeEnabled,
+    setDesignPending,
+    setDesignProxySrc,
+    setDesignReady,
+    setDesignSelected,
+    useDesignModeStore,
+    getDesignModeState,
+} from "@/features/preview/design-mode/store";
+import {
+    getHistorySession,
+    historyKey,
+    historyRedo,
+    historyUndo,
+    persistHistoryNow,
+    restoreHistory,
+} from "@/features/preview/design-mode/history";
+import type { DesignBridgeApi, DesignLayerNode, DesignSelectedElement } from "@/features/preview/design-mode/types";
 
 function BrowserEmptyState({
     title,
@@ -50,12 +72,22 @@ function BrowserEmptyState({
     );
 }
 
+function postToFrame(frame: HTMLIFrameElement | null, msg: Record<string, unknown>) {
+    try {
+        frame?.contentWindow?.postMessage({ source: "shape-design-host", ...msg }, "*");
+    } catch {
+        /* ignore */
+    }
+}
+
 /** Editor-hosted simple browser (activity bar → shape://browser). */
 export function BrowserView() {
     const { history, index, urlBar, iframeSrc, reloadKey, error, loading } = usePreviewStore();
+    const design = useDesignModeStore();
     const [frameFailed, setFrameFailed] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const replayOnceRef = useRef(false);
     const canBack = index > 0;
     const canForward = index >= 0 && index < history.length - 1;
     const currentUrl = getPreviewCurrentUrl();
@@ -83,6 +115,211 @@ export function BrowserView() {
         if (!url) return;
         void commands.openUrlExternal(url);
     }, [currentUrl, urlBar]);
+
+    const frameSrc = design.proxySrc || iframeSrc;
+
+    useEffect(() => {
+        const target = iframeSrc;
+        if (!target || !isLocalPreviewUrl(target)) {
+            setDesignProxySrc(null);
+            void commands.stopDesignProxy();
+            return;
+        }
+        let cancelled = false;
+        void commands
+            .startDesignProxy(target, design.enabled ? DESIGN_BRIDGE_SCRIPT : "")
+            .then((info) => {
+                if (!cancelled) setDesignProxySrc(info.src);
+            })
+            .catch(() => {
+                if (!cancelled) setDesignProxySrc(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [iframeSrc, design.enabled]);
+
+    useEffect(() => {
+        return () => {
+            void commands.stopDesignProxy();
+        };
+    }, []);
+
+    const replayPending = useCallback((frame: HTMLIFrameElement | null) => {
+        const session = getHistorySession();
+        const pending = session?.pending?.length ? session.pending : getDesignModeState().pending;
+        for (const edit of pending) {
+            if (edit.styles && Object.keys(edit.styles).length) {
+                postToFrame(frame, {
+                    type: "shape-design-style",
+                    id: edit.id,
+                    selector: edit.selector,
+                    styles: edit.styles,
+                });
+            }
+            if (edit.text != null) {
+                postToFrame(frame, {
+                    type: "shape-design-content",
+                    id: edit.id,
+                    selector: edit.selector,
+                    text: edit.text,
+                });
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        const onMessage = (event: MessageEvent) => {
+            const data = event.data;
+            if (!data || data.source !== "shape-design") return;
+            if (data.type === "shape-design-ready") {
+                setDesignReady(true);
+                postToFrame(iframeRef.current, { type: "shape-design-enable", inspect: design.inspect });
+                if (replayOnceRef.current) {
+                    replayOnceRef.current = false;
+                    window.setTimeout(() => replayPending(iframeRef.current), 40);
+                }
+            }
+            if (data.type === "shape-design-tree" && Array.isArray(data.nodes)) {
+                setDesignLayers(data.nodes as DesignLayerNode[]);
+            }
+            if (data.type === "shape-design-selected") {
+                setDesignSelected((data.element as DesignSelectedElement | null) ?? null);
+            }
+            if (data.type === "shape-design-network") {
+                window.dispatchEvent(new CustomEvent("shape-design-network", { detail: data }));
+            }
+        };
+        window.addEventListener("message", onMessage);
+        return () => window.removeEventListener("message", onMessage);
+    }, [design.inspect, replayPending]);
+
+    const exitDesignMode = useCallback(() => {
+        postToFrame(iframeRef.current, { type: "shape-design-disable" });
+        void persistHistoryNow();
+        setDesignModeEnabled(false);
+    }, []);
+
+    const toggleDesignMode = useCallback(async () => {
+        if (design.enabled) {
+            exitDesignMode();
+            return;
+        }
+        const target = currentUrl || iframeSrc || urlBar.trim() || "http://localhost:3000";
+        if (!isLocalPreviewUrl(target) && !target.startsWith("http://127.0.0.1")) {
+            return;
+        }
+        window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar", value: true } }));
+        window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "secondary-sidebar", value: true } }));
+        setDesignModeEnabled(true);
+        try {
+            const session = await restoreHistory(historyKey(target));
+            if (session.pending.length) {
+                setDesignPending(
+                    session.pending.map((p) => ({
+                        id: p.id,
+                        selector: p.selector,
+                        label: p.label,
+                        styles: p.styles,
+                        text: p.text,
+                    })),
+                );
+            }
+            replayOnceRef.current = getDesignModeState().pending.length > 0;
+        } catch (err) {
+            console.error("[design-mode] failed to start", err);
+            setDesignModeEnabled(false);
+        }
+    }, [currentUrl, design.enabled, exitDesignMode, iframeSrc, urlBar]);
+
+    useEffect(() => {
+        const onExit = () => {
+            if (!getDesignModeState().enabled) return;
+            exitDesignMode();
+        };
+        window.addEventListener("shape-design-exit", onExit);
+        return () => window.removeEventListener("shape-design-exit", onExit);
+    }, [exitDesignMode]);
+
+    const selectLayer = useCallback((id: string) => {
+        postToFrame(iframeRef.current, { type: "shape-design-select", id });
+    }, []);
+
+    useEffect(() => {
+        if (!design.enabled) return;
+        const typing = (el: EventTarget | null) => {
+            if (!(el instanceof HTMLElement)) return false;
+            const tag = el.tagName;
+            return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+        };
+        const applyEntry = (entry: ReturnType<typeof historyUndo>, side: "before" | "after") => {
+            if (!entry) return;
+            const styles = side === "before" ? entry.before : entry.after;
+            if (Object.keys(styles).length) {
+                postToFrame(iframeRef.current, {
+                    type: "shape-design-style",
+                    id: entry.id,
+                    selector: entry.selector,
+                    styles,
+                });
+            }
+            const text = side === "before" ? entry.textBefore : entry.textAfter;
+            if (text != null) {
+                postToFrame(iframeRef.current, {
+                    type: "shape-design-content",
+                    id: entry.id,
+                    selector: entry.selector,
+                    text,
+                });
+            }
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
+                e.preventDefault();
+                const next = !design.inspect;
+                setDesignInspect(next);
+                postToFrame(iframeRef.current, { type: "shape-design-inspect", enabled: next });
+            }
+            if (e.key === "Escape") {
+                setDesignSelected(null);
+                postToFrame(iframeRef.current, { type: "shape-design-select", id: "" });
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !typing(e.target)) {
+                e.preventDefault();
+                if (e.shiftKey) applyEntry(historyRedo(), "after");
+                else applyEntry(historyUndo(), "before");
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y" && !typing(e.target)) {
+                e.preventDefault();
+                applyEntry(historyRedo(), "after");
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [design.enabled, design.inspect]);
+
+    useEffect(() => {
+        const api: DesignBridgeApi = {
+            select: selectLayer,
+            style: (id: string, styles: Record<string, string>, selector?: string) =>
+                postToFrame(iframeRef.current, { type: "shape-design-style", id, styles, selector }),
+            content: (id: string, text: string, selector?: string) =>
+                postToFrame(iframeRef.current, { type: "shape-design-content", id, text, selector }),
+            undo: () => postToFrame(iframeRef.current, { type: "shape-design-undo" }),
+            redo: () => postToFrame(iframeRef.current, { type: "shape-design-redo" }),
+            reset: () => postToFrame(iframeRef.current, { type: "shape-design-reset" }),
+            inspect: (enabled: boolean) => {
+                setDesignInspect(enabled);
+                postToFrame(iframeRef.current, { type: "shape-design-inspect", enabled });
+            },
+            pause: (enabled: boolean) =>
+                postToFrame(iframeRef.current, { type: "shape-design-pause", enabled }),
+            pseudo: (id: string, pseudo: string, enabled: boolean, selector?: string) =>
+                postToFrame(iframeRef.current, { type: "shape-design-pseudo", id, selector, pseudo, enabled }),
+        };
+        setDesignBridgeApi(api);
+        return () => setDesignBridgeApi(null);
+    }, [selectLayer]);
 
     const showEmpty = !iframeSrc && !error && !frameFailed && !loading;
     const showError = Boolean(error) || frameFailed;
@@ -142,9 +379,9 @@ export function BrowserView() {
                     </Button>
                 </Tooltip>
 
-                <form onSubmit={onSubmit} className="flex min-w-0 flex-1 items-center gap-1">
+                <form onSubmit={onSubmit} className="flex min-w-0 flex-1 items-center">
                     <div className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border-subtle bg-surface-1 px-2">
-                        <ChromeBrowserIcon size={16} className="shrink-0 text-text-muted" />
+                        <ChromeBrowserIcon size={14} className="shrink-0" />
                         <input
                             ref={inputRef}
                             type="text"
@@ -160,16 +397,43 @@ export function BrowserView() {
                             aria-label="Browser URL"
                         />
                     </div>
-                    <Button
-                        type="submit"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 shrink-0 px-2 text-xs text-text-muted hover:text-text-primary"
-                        disabled={loading}
-                    >
-                        Go
-                    </Button>
                 </form>
+
+                <Tooltip content={design.enabled ? "Exit design mode" : "Design mode"}>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                            "h-7 w-7",
+                            design.enabled ? "text-accent-text bg-accent-text-bg" : "text-text-muted hover:text-text-primary",
+                        )}
+                        disabled={!iframeSrc && !urlBar.trim()}
+                        onClick={() => void toggleDesignMode()}
+                    >
+                        <Icon name="palette" size={16} />
+                    </Button>
+                </Tooltip>
+                {design.enabled ? (
+                    <Tooltip content={design.inspect ? "Click to select (Ctrl+I to interact)" : "Interacting with page"}>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                                "h-7 w-7",
+                                design.inspect ? "text-accent-text" : "text-text-muted hover:text-text-primary",
+                            )}
+                            onClick={() => {
+                                const next = !design.inspect;
+                                setDesignInspect(next);
+                                postToFrame(iframeRef.current, { type: "shape-design-inspect", enabled: next });
+                            }}
+                        >
+                            <Icon name={design.inspect ? "colorize" : "visibility"} size={16} />
+                        </Button>
+                    </Tooltip>
+                ) : null}
 
                 <Tooltip content="Open externally">
                     <Button
@@ -186,12 +450,12 @@ export function BrowserView() {
             </div>
 
             <div className="relative min-h-0 flex-1 overflow-hidden bg-editor">
-                {iframeSrc ? (
+                {frameSrc ? (
                     <iframe
-                        key={`${iframeSrc}::${reloadKey}`}
+                        key={`${frameSrc}::${reloadKey}`}
                         ref={iframeRef}
                         title="Browser"
-                        src={iframeSrc}
+                        src={frameSrc}
                         className={cn(
                             "absolute inset-0 h-full w-full border-0 bg-editor",
                             coverFrame && "invisible",
@@ -199,6 +463,9 @@ export function BrowserView() {
                         onLoad={() => {
                             const frame = iframeRef.current;
                             if (!frame) return;
+                            if (design.enabled) {
+                                postToFrame(frame, { type: "shape-design-enable", inspect: design.inspect });
+                            }
                             try {
                                 const href = frame.contentWindow?.location?.href ?? "";
                                 if (

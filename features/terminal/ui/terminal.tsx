@@ -74,6 +74,12 @@ const createTerminalTab = (
     group: TerminalGroupId = "left",
 ): TerminalTab => ({ id, title, shell, cwd, boundPtyId, group });
 
+function isLayoutResizing() {
+    return document.body.classList.contains("resizing-vertical") || document.body.hasAttribute("data-resizing");
+}
+
+const lastPtySize = new Map<number, { cols: number; rows: number }>();
+
 // ── GLOBAL STORE FOR PERSISTENCE ──
 class TerminalGlobalStore {
     tabs: TerminalTab[] = [];
@@ -101,15 +107,18 @@ class TerminalGlobalStore {
     }
 
     async refitAll() {
+        if (isLayoutResizing()) return;
         const { invoke } = await import("@tauri-apps/api/core");
         for (const [, inst] of this.instances) {
             try {
                 inst.fitAddon.fit();
                 const cols = inst.term.cols;
                 const rows = inst.term.rows;
-                if (inst.ptyId > 0 && cols >= 20 && rows >= 4) {
-                    await invoke("pty_resize", { id: inst.ptyId, rows, cols });
-                }
+                if (inst.ptyId <= 0 || cols < 20 || rows < 4) continue;
+                const prev = lastPtySize.get(inst.ptyId);
+                if (prev && prev.cols === cols && prev.rows === rows) continue;
+                lastPtySize.set(inst.ptyId, { cols, rows });
+                await invoke("pty_resize", { id: inst.ptyId, rows, cols });
             } catch {
                 // ignore fit/resize failures during layout transitions
             }
@@ -280,6 +289,7 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                         cols: Math.max(20, term.cols || 80)
                     });
                     ptyId = spawnedId;
+                    lastPtySize.set(ptyId, { cols: Math.max(20, term.cols || 80), rows: Math.max(4, term.rows || 24) });
                 } else {
                     // Agent-spawned sessions start at a fixed size; sync to the visible xterm.
                     try {
@@ -287,6 +297,7 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                         const cols = Math.max(20, term.cols || 80);
                         const rows = Math.max(4, term.rows || 24);
                         await invoke("pty_resize", { id: ptyId, rows, cols });
+                        lastPtySize.set(ptyId, { cols, rows });
                     } catch { /* ignore */ }
                     if (tab.shell === "ai") {
                         term.write(`\r\n\x1b[38;2;120;120;120m$ Agent command (session ${ptyId})\x1b[0m\r\n`);
@@ -295,9 +306,14 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
 
                 term.onData(data => { if (ptyId !== undefined) invoke("pty_write", { id: ptyId, data }).catch(() => { }); });
                 term.onResize(size => {
-                    if (ptyId !== undefined && size.cols >= 20 && size.rows >= 4) {
-                        invoke("pty_resize", { id: ptyId, rows: size.rows, cols: size.cols }).catch(() => { });
-                    }
+                    // ConPTY reprints the viewport on pty_resize. Doing that while the
+                    // pane is still being dragged wraps/duplicates the buffer.
+                    if (isLayoutResizing()) return;
+                    if (ptyId === undefined || size.cols < 20 || size.rows < 4) return;
+                    const prev = lastPtySize.get(ptyId);
+                    if (prev && prev.cols === size.cols && prev.rows === size.rows) return;
+                    lastPtySize.set(ptyId, { cols: size.cols, rows: size.rows });
+                    invoke("pty_resize", { id: ptyId, rows: size.rows, cols: size.cols }).catch(() => { });
                 });
 
                 const updateTheme = () => {
@@ -332,18 +348,35 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
         };
 
         init();
-        const resObs = new ResizeObserver(() => {
-            if (fitAddonRef.current && terminalRef.current) {
-                requestAnimationFrame(() => {
-                    try { fitAddonRef.current?.fit(); } catch { }
-                });
+        let fitTimer: ReturnType<typeof setTimeout> | undefined;
+        const scheduleFit = (immediate = false) => {
+            if (isLayoutResizing()) return;
+            const run = () => {
+                if (isLayoutResizing()) return;
+                try {
+                    fitAddonRef.current?.fit();
+                } catch { /* ignore */ }
+            };
+            if (immediate) {
+                run();
+                return;
             }
+            if (fitTimer) clearTimeout(fitTimer);
+            fitTimer = setTimeout(run, 200);
+        };
+        const resObs = new ResizeObserver(() => {
+            if (isLayoutResizing()) return;
+            scheduleFit(false);
         });
         resObs.observe(terminalRef.current);
+        const onRefit = () => scheduleFit(true);
+        window.addEventListener("shape-terminal-refit", onRefit);
 
         return () => {
             isMounted = false;
+            if (fitTimer) clearTimeout(fitTimer);
             resObs.disconnect();
+            window.removeEventListener("shape-terminal-refit", onRefit);
             if (term?.element?.parentNode) term.element.parentNode.removeChild(term.element);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -366,6 +399,7 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
     useEffect(() => {
         if (isActive && fitAddonRef.current && xtermRef.current) {
             const raf = requestAnimationFrame(() => {
+                if (isLayoutResizing()) return;
                 if (fitAddonRef.current && xtermRef.current) {
                     fitAddonRef.current.fit();
                     xtermRef.current.focus();
@@ -458,11 +492,13 @@ export default function Terminal({
     }, []);
 
     useEffect(() => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const refit = () => {
-            const run = () => { void globalTerminalStore.refitAll(); };
-            requestAnimationFrame(run);
-            window.setTimeout(run, 100);
-            window.setTimeout(run, 300);
+            if (isLayoutResizing()) return;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+                if (!isLayoutResizing()) void globalTerminalStore.refitAll();
+            }, 200);
         };
         const onVisibility = () => {
             if (document.visibilityState === "visible") refit();
@@ -478,6 +514,7 @@ export default function Terminal({
             });
         }
         return () => {
+            if (timer) clearTimeout(timer);
             document.removeEventListener("visibilitychange", onVisibility);
             window.removeEventListener("focus", refit);
             unlistenResize?.();
@@ -793,6 +830,7 @@ export default function Terminal({
             splitDragging.current = false;
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
+            document.body.removeAttribute("data-resizing");
             void globalTerminalStore.refitAll();
         };
         window.addEventListener("mousemove", onMove);
@@ -1076,6 +1114,7 @@ export default function Terminal({
                                 className="w-1 shrink-0 cursor-col-resize bg-border-subtle/40 hover:bg-accent/40 transition-colors"
                                 onMouseDown={() => {
                                     splitDragging.current = true;
+                                    document.body.setAttribute("data-resizing", "true");
                                     document.body.style.cursor = "col-resize";
                                     document.body.style.userSelect = "none";
                                 }}

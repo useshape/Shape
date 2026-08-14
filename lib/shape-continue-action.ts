@@ -37,7 +37,7 @@ export function buildPlanBuildMessage(path: string, title?: string): string {
         "",
         `Build the plan at ${path}. Follow it step by step.`,
         "",
-        "First read the plan file. Then call update_todos with the full checklist derived from the plan's ## Todos checkboxes (or numbered implementation steps).",
+        "First read the plan file. Then call update_todos with 3–5 high-level checklist items derived from the plan (not a file-by-file dump).",
         "Keep exactly one todo in_progress while working. Call update_todos again whenever you complete a step or switch active work. Mark all todos completed before calling finish.",
     ].join("\n");
 }

@@ -89,6 +89,12 @@ pub(super) fn tool_update_todos(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome 
         Some(arr) if !arr.is_empty() => arr,
         _ => return error_outcome("update_todos", "todos must be a non-empty array."),
     };
+    if todos.len() > 5 {
+        return error_outcome(
+            "update_todos",
+            "Too many todos. Keep 3–5 high-level items (not a file-by-file dump). Merge related steps.",
+        );
+    }
     let title = args
         .get("title")
         .and_then(|v| v.as_str())

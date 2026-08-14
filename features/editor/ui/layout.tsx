@@ -11,6 +11,10 @@ import OutlinePanel from "@/features/outline/ui/outline";
 import Graph from "@/features/git/ui/graph/graph";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
+import { getDesignBridge, subscribeDesignBridge, useDesignModeStore } from "@/features/preview/design-mode/store";
+import { DesignLayersPanel } from "@/features/preview/ui/design-layers";
+import { DesignInspectorPanel } from "@/features/preview/ui/design-inspector";
+import type { DesignBridgeApi } from "@/features/preview/design-mode/types";
 
 function renderLeftPanel(activeTab: string) {
     switch (activeTab) {
@@ -20,6 +24,49 @@ function renderLeftPanel(activeTab: string) {
         case "outline": return <OutlinePanel />;
         default: return <Explorer />;
     }
+}
+
+function KeepAliveSwap({
+    design,
+    rest,
+    designOn,
+}: {
+    design: React.ReactNode;
+    rest: React.ReactNode;
+    designOn: boolean;
+}) {
+    return (
+        <div className="relative h-full min-h-0 w-full overflow-hidden">
+            <div
+                className={cn(
+                    "absolute inset-0 flex min-h-0 flex-col overflow-hidden",
+                    designOn ? "hidden" : "flex",
+                )}
+                aria-hidden={designOn}
+            >
+                {rest}
+            </div>
+            <div
+                className={cn(
+                    "absolute inset-0 flex min-h-0 flex-col overflow-hidden",
+                    designOn ? "flex" : "hidden",
+                )}
+                aria-hidden={!designOn}
+            >
+                {design}
+            </div>
+        </div>
+    );
+}
+
+function useDesignBridgeApi(): DesignBridgeApi | null {
+    const [api, setApi] = useState<DesignBridgeApi | null>(null);
+    useEffect(() => {
+        const sync = () => setApi(getDesignBridge());
+        sync();
+        return subscribeDesignBridge(sync);
+    }, []);
+    return api;
 }
 
 export function EditorLayout({
@@ -44,6 +91,8 @@ export function EditorLayout({
     setTerminalOpen: (v: boolean) => void;
 }) {
     const { project_path } = useProjectState();
+    const design = useDesignModeStore();
+    const bridge = useDesignBridgeApi();
 
     const [terminalHeight, setTerminalHeight] = useState(280);
     const isResizingRef = useRef(false);
@@ -61,6 +110,7 @@ export function EditorLayout({
     const startResizing = useCallback((e: React.MouseEvent) => {
         isResizingRef.current = true;
         document.body.classList.add("resizing-vertical");
+        document.body.setAttribute("data-resizing", "true");
         document.body.style.userSelect = "none";
         e.preventDefault();
     }, []);
@@ -68,7 +118,9 @@ export function EditorLayout({
     const stopResizing = useCallback(() => {
         isResizingRef.current = false;
         document.body.classList.remove("resizing-vertical");
+        document.body.removeAttribute("data-resizing");
         document.body.style.userSelect = "";
+        window.dispatchEvent(new Event("shape-terminal-refit"));
     }, []);
 
     const resize = useCallback((e: MouseEvent) => {
@@ -114,6 +166,13 @@ export function EditorLayout({
         };
     }, [resize, stopResizing]);
 
+    const layersPanel = (
+        <DesignLayersPanel onSelectId={(id) => bridge?.select(id)} />
+    );
+    const inspectorPanel = <DesignInspectorPanel bridge={bridge} />;
+    const designLeft = sidebarsFlipped ? inspectorPanel : layersPanel;
+    const designRight = sidebarsFlipped ? layersPanel : inspectorPanel;
+
     const leftSidebarPane = project_path ? {
         id: "left-sidebar",
         visible: leftOpen,
@@ -123,7 +182,11 @@ export function EditorLayout({
         snap: true,
         children: (
             <div className="workbench-panel flex h-full min-h-0 flex-col bg-panel overflow-hidden">
-                {renderLeftPanel(activeTab)}
+                <KeepAliveSwap
+                    designOn={design.enabled}
+                    rest={renderLeftPanel(activeTab)}
+                    design={designLeft}
+                />
             </div>
         ),
     } : null;
@@ -137,7 +200,11 @@ export function EditorLayout({
         snap: true,
         children: (
             <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-                <Chat onClose={() => setRightOpen(false)} sidebarSide={sidebarsFlipped ? "left" : "right"} />
+                <KeepAliveSwap
+                    designOn={design.enabled}
+                    rest={<Chat onClose={() => setRightOpen(false)} sidebarSide={sidebarsFlipped ? "left" : "right"} />}
+                    design={designRight}
+                />
             </div>
         ),
     } : null;
