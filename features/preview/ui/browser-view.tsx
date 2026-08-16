@@ -192,13 +192,7 @@ export function BrowserView() {
                     return;
                 }
                 void (async () => {
-                    let origin: string | undefined;
-                    try {
-                        origin = iframeSrc ? new URL(iframeSrc).origin : undefined;
-                    } catch {
-                        origin = undefined;
-                    }
-                    const source = await enrichSourceIdentity(origin, raw.source);
+                    const source = enrichSourceIdentity(raw.source);
                     if (seq !== selectSeq.current) return;
                     const next = {
                         ...raw,
@@ -253,6 +247,10 @@ export function BrowserView() {
                     session.pending.map((p) => ({
                         id: p.id,
                         selector: p.selector,
+                        className: p.className,
+                        tag: p.tag,
+                        locateText: p.locateText,
+                        source: p.source,
                         label: p.label,
                         styles: p.styles,
                         text: p.text,

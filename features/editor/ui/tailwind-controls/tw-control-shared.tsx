@@ -3,8 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { getSettings } from "@/lib/settings";
 import type { PaddingSides } from "./lib/spacing";
 
@@ -53,25 +53,35 @@ export function ToggleBtn({
     active,
     onClick,
     children,
+    className,
 }: {
     label: string;
     active: boolean;
     onClick: () => void;
     children: React.ReactNode;
+    className?: string;
 }) {
     return (
         <Tooltip content={label} side="top" delayDuration={400}>
-            <button
+            <Button
                 type="button"
+                variant={active ? "secondary" : "ghost"}
+                size="icon"
+                aria-label={label}
                 onClick={onClick}
-                className={cn(
-                    "flex items-center justify-center h-7 flex-1 rounded-lg transition-colors cursor-pointer",
-                    active ? "bg-panel-active text-text-primary" : "text-text-muted hover:bg-panel-hover",
-                )}
+                className={className}
             >
                 {children}
-            </button>
+            </Button>
         </Tooltip>
+    );
+}
+
+export function RadiusGlyph() {
+    return (
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+            <rect x="1.5" y="1.5" width="9" height="9" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        </svg>
     );
 }
 
@@ -181,13 +191,10 @@ export function PxInput({
     }, []);
 
     return (
-        <div
-            ref={wrapRef}
-            className="flex h-7 min-w-0 flex-1 items-center rounded-lg bg-panel-hover focus-within:ring-1 focus-within:ring-accent/50"
-        >
+        <div ref={wrapRef} className="flex min-w-0 flex-1 items-center gap-1">
             <span
                 title={`${title} — drag to adjust`}
-                className="flex h-full w-5 shrink-0 cursor-ew-resize touch-none select-none items-center justify-center text-text-muted"
+                className="flex size-6 shrink-0 cursor-ew-resize touch-none select-none items-center justify-center rounded-md bg-input-bg text-text-muted"
                 onPointerDown={onGlyphPointerDown}
                 onPointerMove={onGlyphPointerMove}
                 onPointerUp={onGlyphPointerUp}
@@ -195,33 +202,30 @@ export function PxInput({
             >
                 {glyph}
             </span>
-            <div className="min-w-0 flex-1">
-                <Tooltip content={title} side="top" delayDuration={600}>
-                    <input
-                        type="text"
-                        inputMode="numeric"
-                        aria-label={title}
-                        value={text}
-                        onChange={(e) =>
-                            setText(e.target.value.replace(min < 0 ? /[^\d-]/g : /[^\d]/g, ""))
+            <Tooltip content={title} side="top" delayDuration={600}>
+                <Input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label={title}
+                    value={text}
+                    onChange={(e) =>
+                        setText(e.target.value.replace(min < 0 ? /[^\d-]/g : /[^\d]/g, ""))
+                    }
+                    onBlur={commit}
+                    onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === "Enter") {
+                            commit();
+                            (e.target as HTMLInputElement).blur();
                         }
-                        onBlur={commit}
-                        onKeyDown={(e) => {
-                            e.stopPropagation();
-                            if (e.key === "Enter") {
-                                commit();
-                                (e.target as HTMLInputElement).blur();
-                            }
-                            if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                                e.preventDefault();
-                                const step = e.shiftKey ? 1 : 4;
-                                nudge(e.key === "ArrowUp" ? step : -step);
-                            }
-                        }}
-                        className="h-full w-full min-w-0 bg-transparent pr-1.5 text-xs tabular-nums text-text-primary outline-none"
-                    />
-                </Tooltip>
-            </div>
+                        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                            e.preventDefault();
+                            const step = e.shiftKey ? 1 : 4;
+                            nudge(e.key === "ArrowUp" ? step : -step);
+                        }
+                    }}
+                />
+            </Tooltip>
         </div>
     );
 }

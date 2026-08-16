@@ -4,8 +4,10 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Textarea } from "@/components/ui/textarea";
-import { SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
-import { PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
+import { ScrollArea } from "@/components/ui/scroll";
+import { Checkmark } from "@/components/ui/checkmark";
+import { SidebarPanelActionButton, SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
+import { PxInput, RadiusGlyph, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import { useProjectState } from "@/lib/backend";
 import {
     clearDesignPending,
@@ -24,6 +26,7 @@ import {
 import { commitDesignEdits, revertLastDesignCommit, subscribeDesignRevert, designRevertDepth } from "../design-mode/commit";
 import { designLog } from "../design-mode/log";
 import { isResolvedSource } from "../design-mode/source-identity";
+import { pendingEditHasWork } from "../design-mode/apply-to-source";
 import type { DesignComputedStyles } from "../design-mode/types";
 import {
     firstFontFamily,
@@ -114,6 +117,44 @@ function TextAlignJustify() {
     );
 }
 
+function DesignTextField({
+    id,
+    value,
+    onLive,
+    onCommit,
+}: {
+    id: string;
+    value: string;
+    onLive: (next: string) => void;
+    onCommit: (next: string) => void;
+}) {
+    const [draft, setDraft] = React.useState(value);
+    const focused = React.useRef(false);
+    React.useEffect(() => {
+        if (!focused.current) setDraft(value);
+    }, [id, value]);
+    return (
+        <Textarea
+            value={draft}
+            rows={2}
+            placeholder="Content"
+            className="min-h-10 resize-y bg-panel-hover text-xs"
+            onFocus={() => {
+                focused.current = true;
+            }}
+            onChange={(e) => {
+                const next = e.target.value;
+                setDraft(next);
+                onLive(next);
+            }}
+            onBlur={() => {
+                focused.current = false;
+                onCommit(draft);
+            }}
+        />
+    );
+}
+
 function fontSelectValue(family: string): string {
     const first = firstFontFamily(family).toLowerCase();
     const match = FONT_OPTIONS.find((o) => firstFontFamily(o.value).toLowerCase() === first);
@@ -159,7 +200,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
         }
         if (Object.keys(clean).length) bridge.style(selected.id, clean, selected.selector);
         if (text != null) bridge.content(selected.id, text, selected.selector);
-        if (!isResolvedSource(selected.source)) return;
+        if (!Object.keys(clean).length && text == null) return;
         upsertDesignPending({
             id: selected.id,
             tag: selected.tag,
@@ -169,14 +210,17 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
             source: selected.source,
             label: selected.label,
             styles,
-            text: text ?? selected.text,
             inspect: selected.inspect,
+            ...(text != null ? { text } : {}),
         });
         setHistoryPending(
             getDesignModeState().pending.map((p) => ({
                 id: p.id,
                 selector: p.selector,
                 className: p.className,
+                tag: p.tag,
+                locateText: p.locateText,
+                source: p.source,
                 label: p.label,
                 styles: Object.fromEntries(
                     Object.entries(p.styles).filter(([, v]) => v != null),
@@ -189,15 +233,8 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
     const apply = async () => {
         const edits = getDesignModeState().pending;
         if (!edits.length || !project_path) {
-            const msg = !project_path ? "Open a project to apply." : "Nothing to apply.";
-            void import("@/features/notifications").then(({ notify }) => notify.warn("Apply", msg));
-            return;
-        }
-        const unresolved = edits.filter((e) => !isResolvedSource(e.source));
-        if (unresolved.length) {
-            void import("@/features/notifications").then(({ notify }) =>
-                notify.warn("Apply", `${unresolved.length} element(s) have no source identity.`),
-            );
+            const msg = !project_path ? "Open a project to write these edits to source." : "Nothing to apply.";
+            void import("@/features/notifications").then(({ notify }) => notify.warn(msg));
             return;
         }
         setApplying(true);
@@ -216,9 +253,13 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                 else notify.error("Apply failed", msg);
             }
             if (result.appliedIds.length) {
-                const remain = edits.filter((e) => !result.appliedIds.includes(e.id));
+                const remain = edits.filter(
+                    (e) => !result.appliedIds.includes(e.id) && pendingEditHasWork(e),
+                );
                 if (remain.length) setDesignPending(remain);
                 else clearDesignPending();
+            } else {
+                setDesignPending(edits.filter(pendingEditHasWork));
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Couldn't patch source.";
@@ -285,44 +326,26 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                 title="Design"
                 actions={
                     <div className="flex items-center gap-0.5">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => applyHistory(historyUndo(), "before")}
-                            title="Undo"
-                        >
+                        <SidebarPanelActionButton title="Undo" onClick={() => applyHistory(historyUndo(), "before")}>
                             <Icon name="undo" size={14} />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => applyHistory(historyRedo(), "after")}
-                            title="Redo"
-                        >
+                        </SidebarPanelActionButton>
+                        <SidebarPanelActionButton title="Redo" onClick={() => applyHistory(historyRedo(), "after")}>
                             <Icon name="redo" size={14} />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
+                        </SidebarPanelActionButton>
+                        <SidebarPanelActionButton
+                            title="Reset"
                             onClick={() => {
                                 bridge?.reset();
                                 clearDesignPending();
                                 clearHistory();
                             }}
-                            title="Reset"
                         >
                             <Icon name="refresh" size={14} />
-                        </Button>
+                        </SidebarPanelActionButton>
                     </div>
                 }
             />
-            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
+            <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
                 {!selected || !s ? (
                     <p className="px-3 py-4 text-xs leading-relaxed text-text-muted">
                         Click an element in the preview to inspect it.
@@ -331,7 +354,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                     <>
                         {!isResolvedSource(selected.source) ? (
                             <p className="border-b border-border-subtle px-3 py-2 text-xs leading-relaxed text-text-muted">
-                                No source identity — preview only. Apply is disabled for this node.
+                                No source mapping for this node. Apply can only patch the mapped file.
                             </p>
                         ) : null}
                         <Section title="Position">
@@ -403,17 +426,13 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                 </IconBtn>
                             </div>
                             {!autoLayout ? (
-                                <button
-                                    type="button"
-                                    className="flex h-7 w-full items-center justify-center rounded-md bg-panel-hover text-xs text-text-primary hover:bg-panel-active"
-                                    onClick={() => patch({ display: "flex", flexDirection: "row" })}
-                                >
+                                <Button type="button" variant="secondary" size="xs" className="w-full" onClick={() => patch({ display: "flex", flexDirection: "row" })}>
                                     Wrap in flex
-                                </button>
+                                </Button>
                             ) : (
                                 <div className="flex flex-col gap-1.5">
                                     <div className="flex items-center gap-1.5">
-                                        <div className="flex rounded-md bg-panel-hover p-0.5">
+                                        <div className="flex items-center gap-1">
                                             <ToggleBtn
                                                 label="Horizontal"
                                                 active={direction === "row"}
@@ -462,11 +481,9 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                 </div>
                             )}
                             <label className="flex items-center gap-2 text-xs text-text-secondary">
-                                <input
-                                    type="checkbox"
+                                <Checkmark
                                     checked={overflow === "hidden"}
-                                    onChange={(e) => patch({ overflow: e.target.checked ? "hidden" : "visible" })}
-                                    className="accent-accent"
+                                    onCheckedChange={(v) => patch({ overflow: v === true ? "hidden" : "visible" })}
                                 />
                                 Clip content
                             </label>
@@ -482,7 +499,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     onCommit={(n) => patch({ opacity: String(Math.max(0, Math.min(100, n)) / 100) })}
                                 />
                                 <PxInput
-                                    glyph={<Glyph>R</Glyph>}
+                                    glyph={<RadiusGlyph />}
                                     title="Corner radius"
                                     value={parsePx(s.borderRadius) ?? 0}
                                     onCommit={(n) => patch({ borderRadius: px(n) })}
@@ -617,28 +634,27 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     />
                                 </MicroLabel>
                             </div>
-                            <div className="flex rounded-md bg-panel-hover p-0.5">
-                                <ToggleBtn label="Left" active={textAlign === "left"} onClick={() => patch({ textAlign: "left" })}>
+                            <div className="flex gap-1">
+                                <ToggleBtn className="flex-1" label="Left" active={textAlign === "left"} onClick={() => patch({ textAlign: "left" })}>
                                     <TextAlignLeft />
                                 </ToggleBtn>
-                                <ToggleBtn label="Center" active={textAlign === "center"} onClick={() => patch({ textAlign: "center" })}>
+                                <ToggleBtn className="flex-1" label="Center" active={textAlign === "center"} onClick={() => patch({ textAlign: "center" })}>
                                     <TextAlignCenter />
                                 </ToggleBtn>
-                                <ToggleBtn label="Right" active={textAlign === "right"} onClick={() => patch({ textAlign: "right" })}>
+                                <ToggleBtn className="flex-1" label="Right" active={textAlign === "right"} onClick={() => patch({ textAlign: "right" })}>
                                     <TextAlignRight />
                                 </ToggleBtn>
-                                <ToggleBtn label="Justify" active={textAlign === "justify"} onClick={() => patch({ textAlign: "justify" })}>
+                                <ToggleBtn className="flex-1" label="Justify" active={textAlign === "justify"} onClick={() => patch({ textAlign: "justify" })}>
                                     <TextAlignJustify />
                                 </ToggleBtn>
                             </div>
                             <ColorRow cssValue={s.color} onChange={(c) => patch({ color: c })} />
                             {selected.text ? (
-                                <Textarea
+                                <DesignTextField
+                                    id={selected.id}
                                     value={selected.text}
-                                    onChange={(e) => patch({}, e.target.value)}
-                                    rows={2}
-                                    placeholder="Content"
-                                    className="min-h-10 resize-y bg-panel-hover text-xs"
+                                    onLive={(next) => bridge?.content(selected.id, next, selected.selector)}
+                                    onCommit={(next) => patch({}, next)}
                                 />
                             ) : null}
                         </Section>
@@ -747,18 +763,17 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                             }}
                         />
                         <SelectionColors
-                            colors={[s.color, s.backgroundColor, s.borderColor].filter((c) => c && !isTransparentColor(c))}
+                            colors={[...new Set([s.color, s.backgroundColor, s.borderColor].filter((c) => c && !isTransparentColor(c)))]}
                             onPick={(c) => patch({ color: c })}
                         />
                     </>
                 )}
-            </div>
+            </ScrollArea>
             <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border-subtle px-3 py-2">
                 <Button
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="h-7 px-3 text-xs"
                     disabled={revertDepth === 0}
                     onBlur={() => setConfirmRevert(false)}
                     onClick={() => void revert()}
@@ -768,7 +783,6 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                 <Button
                     type="button"
                     size="sm"
-                    className="h-7 px-3 text-xs"
                     onClick={() => void apply()}
                     disabled={applying || pending.length === 0}
                 >

@@ -2,9 +2,17 @@ import { commands } from "@/lib/backend";
 import type { SearchOptions } from "@/lib/backend/types";
 import { parseToRgba, rgbaToHex } from "@/features/editor/ui/color-picker/ui/color-utils";
 import { patchCssClass, patchCustomProperty, validateCssSource } from "./apply-css";
-import { canParseJsx, jsxClassExpressionKind, jsxHasNestedTextOnly, locateJsxElement, validateJsxSource } from "./apply-jsx";
+import {
+    canParseJsx,
+    jsxClassExpressionKind,
+    jsxHasNestedTextOnly,
+    locateJsxByHint,
+    locateJsxElement,
+    locateJsxFromSearchLine,
+    validateJsxSource,
+} from "./apply-jsx";
 import { designLog } from "./log";
-import { isBundledGeneratedPath, isResolvedSource } from "./source-identity";
+import { enrichSourceIdentity, isBundledGeneratedPath } from "./source-identity";
 import type { DesignPendingEdit, DesignSourceLoc } from "./types";
 
 const SEARCH_CODE: SearchOptions = {
@@ -47,6 +55,23 @@ export type ApplyEditsResult = {
     appliedIds: string[];
     reverts: { path: string; previous: string }[];
 };
+
+export function pendingEditHasWork(edit: DesignPendingEdit): boolean {
+    const hasStyles = Object.values(edit.styles).some((v) => v != null && String(v).trim() !== "");
+    const hasText = edit.text != null && edit.text !== "";
+    const hasClass = !!edit.classToggles && Object.keys(edit.classToggles).length > 0;
+    return hasStyles || hasText || hasClass;
+}
+
+let applyEpoch = 0;
+
+export function abortDesignApply() {
+    applyEpoch += 1;
+}
+
+function applyWasAborted(epoch: number) {
+    return epoch !== applyEpoch;
+}
 
 function rgbToHex(value: string): string | null {
     const raw = value.trim();
@@ -855,73 +880,6 @@ async function patchCssFile(
     return { ok: true, path: cssPath };
 }
 
-async function findBySearch(
-    projectPath: string,
-    edit: DesignPendingEdit,
-): Promise<{ path: string; content: string; line?: number } | null> {
-    const needles = classSearchNeedles(edit.className || "");
-    const rawText = (edit.locateText || edit.text || "").replace(/\s+/g, " ").trim();
-    if (rawText.length >= 8 && !/^\d+$/.test(rawText)) {
-        const cut = rawText.slice(0, 48);
-        const at = cut.lastIndexOf(" ");
-        needles.push(at > 16 ? cut.slice(0, at) : cut);
-    }
-
-    const pickBest = async (hits: { path: string; matches: { line_number: number; line_text: string }[] }[]) => {
-        const ranked: { path: string; line: number; score: number }[] = [];
-        for (const hit of hits) {
-            if (!hit.path.toLowerCase().startsWith(projectPath.toLowerCase())) continue;
-            for (const m of hit.matches) {
-                const score = scoreSourceLine(m.line_text, edit);
-                if (score < MIN_LOCATE_SCORE) continue;
-                ranked.push({ path: hit.path, line: m.line_number, score });
-            }
-        }
-        ranked.sort((a, b) => b.score - a.score);
-        const best = ranked[0];
-        const second = ranked[1];
-        if (!best) return null;
-        if (second && best.score - second.score < 3) return null;
-        const content = await readLatest(best.path);
-        if (content == null) return null;
-        return { path: best.path, content, line: best.line };
-    };
-
-    for (const needle of needles) {
-        try {
-            const hits = await commands.searchContent(needle, SEARCH_CODE);
-            const chosen = await pickBest(hits);
-            if (chosen) return chosen;
-        } catch {
-            /* next needle */
-        }
-    }
-    return null;
-}
-
-async function findComponentFile(
-    projectPath: string,
-    name: string,
-): Promise<{ path: string; content: string; line?: number } | null> {
-    if (!/^[A-Z][A-Za-z0-9$]+$/.test(name)) return null;
-    const needles = [`function ${name}`, `const ${name}`, `export default function ${name}`, `export function ${name}`];
-    for (const needle of needles) {
-        try {
-            const hits = await commands.searchContent(needle, SEARCH_CODE);
-            const inProject = hits.filter((h) => h.path.toLowerCase().startsWith(projectPath.toLowerCase()));
-            if (inProject.length !== 1) continue;
-            const hit = inProject[0]!;
-            const content = await readLatest(hit.path);
-            if (content == null) continue;
-            designLog("INFO", "located component file", { name, path: hit.path.split(/[/\\]/).pop(), line: hit.matches[0]?.line_number });
-            return { path: hit.path, content, line: hit.matches[0]?.line_number };
-        } catch {
-            /* next */
-        }
-    }
-    return null;
-}
-
 function componentRootLine(content: string, name?: string): number | undefined {
     if (!name) return undefined;
     const re = new RegExp(`(?:export\\s+)?(?:default\\s+)?(?:function|const|class)\\s+${name}\\b`, "m");
@@ -1018,13 +976,25 @@ function locateHit(
     tag: string,
     edit: DesignPendingEdit,
 ): { hit: OpeningTagHit } | { error: string } {
-    if (!isResolvedSource(edit.source)) {
-        return { error: "Element has no source identity." };
-    }
+    const authoredLine = edit.source?.mapped === false ? undefined : edit.source?.lineNumber;
+    const hint = {
+        className: edit.className,
+        tag,
+        locateText: edit.locateText || edit.text,
+        lineNumber: authoredLine,
+    };
     if (canParseJsx(path)) {
-        const located = locateJsxElement(current, path, edit.source);
-        if (!located.ok) return { error: located.error };
-        return { hit: toOpeningHit(located.hit) };
+        if (authoredLine) {
+            const byLoc = locateJsxElement(current, path, { lineNumber: authoredLine, columnNumber: edit.source?.columnNumber });
+            if (byLoc.ok) return { hit: toOpeningHit(byLoc.hit) };
+        }
+        const byHint = locateJsxByHint(current, path, hint);
+        if (byHint.ok) return { hit: toOpeningHit(byHint.hit) };
+        if (authoredLine) {
+            const fromLine = locateJsxFromSearchLine(current, path, authoredLine);
+            if (fromLine.ok) return { hit: toOpeningHit(fromLine.hit) };
+        }
+        return { error: byHint.error };
     }
     const hit = pickBestOpening(current, tag, edit);
     if (!hit) {
@@ -1033,6 +1003,32 @@ function locateHit(
         };
     }
     return { hit };
+}
+
+async function resolveCandidateFiles(
+    projectPath: string,
+    edit: DesignPendingEdit,
+    knownFiles: Map<string, string>,
+): Promise<{ path: string; content: string; line?: number }[]> {
+    const out: { path: string; content: string; line?: number }[] = [];
+    const seen = new Set<string>();
+    const add = (item: { path: string; content: string; line?: number } | null) => {
+        if (!item) return;
+        const key = item.path.replace(/\\/g, "/").toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(item);
+    };
+
+    const identity = edit.source;
+    if (identity && !isBundledGeneratedPath(identity.fileName)) {
+        const file = await readFirst(resolveSourcePath(projectPath, identity));
+        add(file ? { ...file, line: identity.mapped === false ? undefined : identity.lineNumber } : null);
+    }
+    for (const [path, content] of knownFiles) {
+        add({ path, content });
+    }
+    return out;
 }
 
 async function applyOne(
@@ -1044,36 +1040,52 @@ async function applyOne(
 ): Promise<{ paths: string[] } | { error: string }> {
     const { plain, variables } = splitVarAndPlain(edit);
     const tag = (edit.tag || edit.label.split(/[.#]/)[0] || "div").toLowerCase();
+    edit = { ...edit, source: enrichSourceIdentity(edit.source) };
 
-    if (!isResolvedSource(edit.source) || !edit.source) {
-        designLog("ERROR", "unresolved identity", {
+    const candidates = await resolveCandidateFiles(projectPath, edit, writes);
+    if (!candidates.length) {
+        designLog("ERROR", "no candidate file", {
             tag,
             label: edit.label,
+            className: edit.className,
             source: edit.source ?? null,
         });
-        return { error: "Element has no source identity." };
+        return { error: `Couldn't find <${tag}> in the project source.` };
     }
-    const identity = edit.source;
 
-    const located = await readFirst(resolveSourcePath(projectPath, identity));
-    if (located) designLog("INFO", "identity file", { path: located.path.split(/[/\\]/).pop(), line: identity.lineNumber, column: identity.columnNumber, mapped: identity.mapped ?? false });
-    if (!located) {
-        designLog("ERROR", "identity file missing", { fileName: identity.fileName, line: identity.lineNumber });
-        return { error: `Couldn't read source for ${identity.fileName.split(/[/\\]/).pop()}:${identity.lineNumber}.` };
+    let located: { path: string; content: string; line?: number } | null = null;
+    let hit: OpeningTagHit | null = null;
+    let lastLocate = "";
+    for (const cand of candidates) {
+        const content = writes.get(cand.path) ?? cand.content;
+        const scoped =
+            scope === "component" && edit.source?.componentName
+                ? {
+                      ...edit,
+                      source: {
+                          ...edit.source,
+                          lineNumber: componentRootLine(content, edit.source.componentName) ?? edit.source.lineNumber,
+                      },
+                  }
+                : edit;
+        const locatedHit = locateHit(content, cand.path, tag, scoped);
+        if ("error" in locatedHit) {
+            lastLocate = locatedHit.error;
+            designLog("WARN", "locate missed", { path: cand.path.split(/[/\\]/).pop(), error: locatedHit.error });
+            continue;
+        }
+        located = { ...cand, content };
+        hit = locatedHit.hit;
+        break;
+    }
+    if (!located || !hit) {
+        designLog("ERROR", "locate failed", { tag, errors: lastLocate, files: candidates.map((c) => c.path.split(/[/\\]/).pop()) });
+        return { error: lastLocate || `Couldn't find <${tag}> in the project source.` };
     }
 
     const current = writes.get(located.path) ?? located.content;
     const html = isHtmlLike(located.path);
-    const scopedEdit =
-        scope === "component" && edit.source?.componentName
-            ? { ...edit, source: { ...edit.source, lineNumber: componentRootLine(current, edit.source.componentName) ?? edit.source.lineNumber } }
-            : edit;
-    const locatedHit = locateHit(current, located.path, tag, scopedEdit);
-    if ("error" in locatedHit) {
-        designLog("WARN", "locate failed", { tag, path: located.path, error: locatedHit.error, keys: Object.keys(plain) });
-        return locatedHit;
-    }
-    const hit = locatedHit.hit;
+    const scopedEdit = edit;
     const useTailwind = tailwind || looksLikeTailwind(edit.className || "", hit.text);
     const moduleBind = cssModuleBinding(hit.text);
     const hashedLocals = (edit.className || "")
@@ -1314,20 +1326,17 @@ export async function applyEditsToProject(
     edits: DesignPendingEdit[],
     scope: "element" | "component",
 ): Promise<ApplyEditsResult> {
+    const epoch = applyEpoch;
     const errors: string[] = [];
     const plannedIds: string[] = [];
     const writes = new Map<string, string>();
     const originals = new Map<string, string>();
     const tailwind = await projectUsesTailwind(projectPath);
-
-    const blocked = edits.filter((edit) => !isResolvedSource(edit.source));
-    if (blocked.length) {
-        const messages = blocked.map(
-            (edit) => `${edit.label}: element has no source identity.`,
-        );
-        designLog("ERROR", "apply batch blocked; unresolved identity", { errors: messages });
-        return { files: [], errors: messages, appliedIds: [], reverts: [] };
+    if (applyWasAborted(epoch)) {
+        return { files: [], errors: ["Apply cancelled."], appliedIds: [], reverts: [] };
     }
+
+    const work = edits.filter(pendingEditHasWork);
 
     const remember = async (path: string) => {
         if (originals.has(path)) return;
@@ -1335,13 +1344,9 @@ export async function applyEditsToProject(
         if (current != null) originals.set(path, current);
     };
 
-    for (const edit of edits) {
-        const hasStyles = Object.values(edit.styles).some((v) => v != null && String(v).trim() !== "");
-        const hasText = edit.text != null && edit.text !== "";
-        const hasClass = edit.classToggles && Object.keys(edit.classToggles).length > 0;
-        if (!hasStyles && !hasText && !hasClass) {
-            errors.push(`${edit.label}: nothing to apply.`);
-            continue;
+    for (const edit of work) {
+        if (applyWasAborted(epoch)) {
+            return { files: [], errors: ["Apply cancelled."], appliedIds: [], reverts: [] };
         }
         const before = new Map(writes);
         const result = await applyOne(projectPath, edit, scope, tailwind, writes);

@@ -761,36 +761,24 @@ body[data-resizing] .xterm {
   animation: shape-popover-out 75ms cubic-bezier(0.7, 0, 0.84, 0);
 }
 
-/* Toast notifications */
-@keyframes shape-toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes shape-toast-out {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
+/* Toast notifications — CSS transitions so stack moves stay interruptible (Sonner/shadcn). */
 .shape-toast {
-  animation: shape-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  opacity: 0;
+  transform: translate3d(0, 14px, 0) scale(0.9);
+  transition:
+    transform 400ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
   will-change: opacity, transform;
 }
 
+.shape-toast[data-mounted="true"] {
+  opacity: var(--toast-opacity, 1);
+  transform: translate3d(0, var(--toast-y, 0px), 0) scale(var(--toast-scale, 1));
+}
+
 .shape-toast[data-leaving="true"] {
-  animation: shape-toast-out 160ms cubic-bezier(0.7, 0, 0.84, 0) both;
+  opacity: 0;
+  transform: translate3d(0, 18px, 0) scale(0.9);
   pointer-events: none;
 }
 

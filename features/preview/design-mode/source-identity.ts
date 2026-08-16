@@ -1,7 +1,6 @@
-import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import type { DesignSourceLoc } from "./types";
 
-const mapCache = new Map<string, TraceMap | null>();
+const INTERNAL = /^(exports|jsx-runtime|jsx-dev-runtime|jsx-dev-runtime\.development|index)\.(jsx|js|tsx|ts)$/i;
 
 export function isBundledGeneratedPath(fileName: string): boolean {
     const n = fileName.replace(/\\/g, "/").toLowerCase();
@@ -16,12 +15,18 @@ export function isBundledGeneratedPath(fileName: string): boolean {
 
 export function isProjectSourcePath(fileName: string): boolean {
     if (!fileName || isBundledGeneratedPath(fileName)) return false;
-    const n = fileName.replace(/\\/g, "/").split("?")[0];
-    return /\.(tsx|jsx|vue|svelte|html)$/i.test(n);
+    const n = normalizeOriginalSourcePath(fileName);
+    const base = n.split("/").pop() || n;
+    if (INTERNAL.test(base)) return false;
+    if (!/\.(tsx|jsx|vue|svelte|html)$/i.test(n)) return false;
+    if (!n.includes("/")) {
+        return /^(app|page|layout|index|main)\.(tsx|jsx|html)$/i.test(base);
+    }
+    return /^(src|app|pages|components|lib)\//i.test(n) || n.split("/").length >= 2;
 }
 
 export function isResolvedSource(loc?: DesignSourceLoc | null): boolean {
-    return !!loc && loc.lineNumber > 0 && isProjectSourcePath(loc.fileName);
+    return !!loc && isProjectSourcePath(loc.fileName);
 }
 
 export function normalizeOriginalSourcePath(fileName: string): string {
@@ -35,6 +40,9 @@ export function normalizeOriginalSourcePath(fileName: string): string {
     name = name.replace(/^webpack:\/\/[^/]+\//, "");
     name = name.replace(/^webpack-internal:\/\/\//, "");
     name = name.replace(/^file:\/\//, "");
+    name = name.replace(/^\/@fs\//, "");
+    name = name.split("?")[0] ?? name;
+    name = name.replace(/^\(+/, "");
     name = name.replace(/^\([^)]+\)\//, "");
     name = name.replace(/^\.\//, "");
     const src = name.toLowerCase().lastIndexOf("/src/");
@@ -44,71 +52,37 @@ export function normalizeOriginalSourcePath(fileName: string): string {
     return name.replace(/^\/+/, "");
 }
 
-export async function mapGeneratedToOriginal(
-    origin: string,
-    generated: { fileName: string; lineNumber: number; columnNumber?: number },
-): Promise<DesignSourceLoc | null> {
-    if (!generated.fileName || generated.lineNumber < 1) return null;
-    let scriptUrl = generated.fileName;
-    if (!/^https?:\/\//i.test(scriptUrl)) {
-        try {
-            scriptUrl = new URL(scriptUrl, origin).href;
-        } catch {
-            return null;
-        }
-    }
-    const tracer = await loadTraceMap(scriptUrl);
-    if (!tracer) return null;
-    const pos = originalPositionFor(tracer, {
-        line: generated.lineNumber,
-        column: Math.max(0, (generated.columnNumber ?? 1) - 1),
-    });
-    if (!pos.source || pos.line == null || pos.line < 1) return null;
-    const fileName = normalizeOriginalSourcePath(pos.source);
-    if (!isProjectSourcePath(fileName)) return null;
-    return {
-        fileName,
-        lineNumber: pos.line,
-        columnNumber: (pos.column ?? 0) + 1,
-        generated,
-        mapped: true,
-        nodeId: `${fileName}:${pos.line}:${(pos.column ?? 0) + 1}`,
-    };
+/** Turbopack: app_page_tsx_1s_43kl._.js → app/page.tsx */
+export function pathFromGeneratedChunk(fileName: string): string | null {
+    const base = fileName.replace(/\\/g, "/").split("/").pop() || fileName;
+    const m = base.match(/^(.+)_(tsx|jsx|ts|js)(?:_[a-z0-9._]+)?\.js$/i);
+    if (!m) return null;
+    const decoded = m[1]!
+        .replace(/__/g, "\0")
+        .split("_")
+        .map((p) => p.replace(/\0/g, "_"))
+        .join("/");
+    const path = `${decoded}.${m[2]!.toLowerCase()}`;
+    return isProjectSourcePath(path) ? path : null;
 }
 
-export async function enrichSourceIdentity(
-    origin: string | undefined,
-    loc: DesignSourceLoc | undefined,
-): Promise<DesignSourceLoc | undefined> {
-    if (isResolvedSource(loc)) return loc;
-    if (!origin || !loc?.generated) return loc;
-    const mapped = await mapGeneratedToOriginal(origin, loc.generated);
-    if (!mapped) return loc;
-    return {
-        ...mapped,
-        componentName: loc.componentName,
-        nodeId: mapped.nodeId,
+export function enrichSourceIdentity(loc: DesignSourceLoc | undefined): DesignSourceLoc | undefined {
+    if (!loc) return loc;
+    const fileName = normalizeOriginalSourcePath(loc.fileName);
+    const chunk = pathFromGeneratedChunk(loc.generated?.fileName || loc.fileName);
+    const chosen =
+        chunk && (!fileName.includes("/") || chunk.split("/").length > fileName.split("/").length)
+            ? chunk
+            : fileName;
+    const next: DesignSourceLoc = {
+        ...loc,
+        fileName: chosen || fileName,
     };
-}
-
-async function loadTraceMap(scriptUrl: string): Promise<TraceMap | null> {
-    if (mapCache.has(scriptUrl)) return mapCache.get(scriptUrl) ?? null;
-    try {
-        const res = await fetch(scriptUrl);
-        const js = res.ok ? await res.text() : "";
-        const hint = js.match(/\/\/[#@]\s*sourceMappingURL=(\S+)/);
-        const mapUrl = hint ? new URL(hint[1]!, scriptUrl).href : `${scriptUrl.split("?")[0]}.map`;
-        const mapRes = await fetch(mapUrl);
-        if (!mapRes.ok) {
-            mapCache.set(scriptUrl, null);
-            return null;
-        }
-        const json: unknown = await mapRes.json();
-        const tracer = new TraceMap(json as ConstructorParameters<typeof TraceMap>[0]);
-        mapCache.set(scriptUrl, tracer);
-        return tracer;
-    } catch {
-        mapCache.set(scriptUrl, null);
-        return null;
-    }
+    if (isResolvedSource(next)) return next;
+    if (!chunk) return next;
+    return {
+        ...next,
+        fileName: chunk,
+        nodeId: `${chunk}:${next.lineNumber}:${next.columnNumber ?? 1}`,
+    };
 }

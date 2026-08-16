@@ -90,6 +90,7 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 break;
             }
             case "Close Folder":
+                window.dispatchEvent(new Event("shape-design-exit"));
                 await commands.closeAllFiles();
                 const { saveLastProject } = await import("@/lib/last-project");
                 saveLastProject(null);

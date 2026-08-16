@@ -40,6 +40,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(new Event("save-all-request"));
             return true;
         case "Close Folder":
+            window.dispatchEvent(new Event("shape-design-exit"));
             void import("@/lib/last-project").then(({ saveLastProject }) => saveLastProject(null));
             void commands.setProjectPath(null);
             return true;

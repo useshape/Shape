@@ -7,6 +7,7 @@ import type {
     DesignPendingEdit,
     DesignSelectedElement,
 } from "./types";
+import { abortDesignApply } from "./commit";
 
 export type DesignModeTool = "select" | "draw";
 
@@ -60,6 +61,7 @@ export function useDesignModeStore() {
 
 export function setDesignModeEnabled(enabled: boolean) {
     if (!enabled) {
+        abortDesignApply();
         setState({
             enabled: false,
             ready: false,
