@@ -76,8 +76,8 @@ export function CompactTabBar({
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-end p-1.5">
             <div
                 className={cn(
-                    "pointer-events-auto flex max-w-[min(100%,420px)] items-center gap-0.5 pr-2",
-                    "rounded-lg bg-panel shadow-sm",
+                    "pointer-events-auto flex max-w-[min(100%,420px)] items-center gap-0.5",
+                    "rounded-lg border border-border-subtle bg-panel shadow-sm",
                 )}
             >
                 <DropdownMenu>
