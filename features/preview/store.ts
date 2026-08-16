@@ -106,70 +106,10 @@ export function previewUrlsEqual(a: string, b: string): boolean {
     }
 }
 
-function framesBlockedByHeaders(res: Response): string | null {
-    const xfo = (res.headers.get("x-frame-options") || "").toLowerCase();
-    if (xfo.includes("deny") || xfo.includes("sameorigin")) {
-        return "This site blocks embedding (X-Frame-Options). Open it in your browser instead.";
-    }
-    const csp = res.headers.get("content-security-policy") || "";
-    const frameAncestors = csp.match(/frame-ancestors\s+([^;]+)/i);
-    if (frameAncestors) {
-        const value = frameAncestors[1].trim().toLowerCase();
-        if (value === "'none'" || value === "none") {
-            return "This site blocks embedding (CSP frame-ancestors). Open it in your browser instead.";
-        }
-    }
-    return null;
-}
-
-async function checkFrameAllowed(url: string): Promise<string | null> {
-    try {
-        const res = await fetch(url, { method: "HEAD", mode: "cors", cache: "no-store" });
-        return framesBlockedByHeaders(res);
-    } catch {
-        try {
-            const res = await fetch(url, { method: "GET", mode: "cors", cache: "no-store" });
-            return framesBlockedByHeaders(res);
-        } catch {
-            return null;
-        }
-    }
-}
-
-/** Probe loopback reachability so we never mount an iframe that shows the OS/Edge error page. */
+/** TCP probe only. Fetch to a closed port ignores AbortController in WebView2 and sits ~30s. */
 async function probePreviewReachable(url: string): Promise<boolean> {
     try {
-        if (await commands.probePreviewUrl(url)) return true;
-    } catch {
-        /* web / command missing — fall through to fetch */
-    }
-
-    const tryOnce = async (method: "HEAD" | "GET", mode: RequestMode) => {
-        const controller = new AbortController();
-        const timer = window.setTimeout(() => controller.abort(), 2500);
-        try {
-            await fetch(url, { method, mode, cache: "no-store", signal: controller.signal });
-            return true;
-        } catch {
-            return false;
-        } finally {
-            window.clearTimeout(timer);
-        }
-    };
-
-    // CORS may fail on local apps even when the server is up — treat opaque/no-cors success as reachable.
-    if (await tryOnce("HEAD", "no-cors")) return true;
-    if (await tryOnce("GET", "no-cors")) return true;
-    // Some servers reject HEAD; a CORS GET that returns anything (incl. 4xx) still means the host is up.
-    try {
-        const controller = new AbortController();
-        const timer = window.setTimeout(() => controller.abort(), 2500);
-        try {
-            await fetch(url, { method: "GET", mode: "cors", cache: "no-store", signal: controller.signal });
-            return true;
-        } finally {
-            window.clearTimeout(timer);
-        }
+        return await commands.probePreviewUrl(url);
     } catch {
         return false;
     }
@@ -224,7 +164,7 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
         url = normalizePreviewUrl(raw);
     } catch {
         setState({
-            error: "Enter a valid localhost URL (e.g. http://localhost:3000).",
+            error: "ERR_INVALID_URL",
             iframeSrc: null,
             loading: false,
         });
@@ -232,7 +172,7 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
     }
     if (!isLocalPreviewUrl(url)) {
         setState({
-            error: "Preview only loads local sites (localhost / 127.0.0.1).",
+            error: "ERR_CONNECTION_REFUSED",
             urlBar: raw.trim() || state.urlBar,
             iframeSrc: null,
             loading: false,
@@ -240,15 +180,14 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
         return;
     }
 
-    // Clear the iframe first so a previous Edge/WebView error page never stays visible.
-    setState({ loading: true, error: null, urlBar: url, iframeSrc: null });
+    setState({ loading: true, urlBar: url, iframeSrc: null });
 
     const reachable = await probePreviewReachable(url);
     if (!reachable) {
         setState({
             loading: false,
             iframeSrc: null,
-            error: "Nothing is listening at this address. Start your dev server, then try again.",
+            error: "ERR_CONNECTION_REFUSED",
             urlBar: url,
             history: state.history,
             index: state.index,
@@ -256,11 +195,7 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
         return;
     }
 
-    const blockMsg = await checkFrameAllowed(url);
     commitNavigation(url, { replace: opts?.replace, reload: true });
-    if (blockMsg) {
-        setState({ error: blockMsg, iframeSrc: null });
-    }
 }
 
 export function previewBack() {
@@ -271,30 +206,16 @@ export function previewBack() {
     stackNavTarget = url;
     setState({
         index,
-        iframeSrc: null,
+        iframeSrc: url,
         urlBar: url,
+        reloadKey: state.reloadKey + 1,
+        loading: false,
         error: null,
-        loading: true,
     });
-    void (async () => {
-        const reachable = await probePreviewReachable(url);
-        if (!reachable) {
-            applyingStackNav = false;
-            stackNavTarget = null;
-            setState({
-                loading: false,
-                iframeSrc: null,
-                error: "Nothing is listening at this address. Start your dev server, then try again.",
-            });
-            return;
-        }
-        setState({
-            iframeSrc: url,
-            reloadKey: state.reloadKey + 1,
-            loading: false,
-            error: null,
-        });
-    })();
+    window.setTimeout(() => {
+        applyingStackNav = false;
+        stackNavTarget = null;
+    }, 400);
 }
 
 export function previewForward() {
@@ -305,30 +226,16 @@ export function previewForward() {
     stackNavTarget = url;
     setState({
         index,
-        iframeSrc: null,
+        iframeSrc: url,
         urlBar: url,
+        reloadKey: state.reloadKey + 1,
+        loading: false,
         error: null,
-        loading: true,
     });
-    void (async () => {
-        const reachable = await probePreviewReachable(url);
-        if (!reachable) {
-            applyingStackNav = false;
-            stackNavTarget = null;
-            setState({
-                loading: false,
-                iframeSrc: null,
-                error: "Nothing is listening at this address. Start your dev server, then try again.",
-            });
-            return;
-        }
-        setState({
-            iframeSrc: url,
-            reloadKey: state.reloadKey + 1,
-            loading: false,
-            error: null,
-        });
-    })();
+    window.setTimeout(() => {
+        applyingStackNav = false;
+        stackNavTarget = null;
+    }, 400);
 }
 
 export function endPreviewStackNav() {
@@ -367,7 +274,6 @@ export function recordPreviewLocation(raw: string) {
         history,
         index: history.length - 1,
         urlBar: url,
-        iframeSrc: url,
         error: null,
         loading: false,
     });
@@ -380,7 +286,6 @@ export function previewReload() {
     stackNavTarget = url;
     setState({
         iframeSrc: null,
-        error: null,
         urlBar: url,
         loading: true,
     });
@@ -392,7 +297,7 @@ export function previewReload() {
             setState({
                 loading: false,
                 iframeSrc: null,
-                error: "Nothing is listening at this address. Start your dev server, then try again.",
+                error: "ERR_CONNECTION_REFUSED",
             });
             return;
         }

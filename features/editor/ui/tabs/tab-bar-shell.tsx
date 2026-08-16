@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useRef, type ReactNode, type WheelEvent } from "react";
 import {
     DndContext,
     closestCenter,
@@ -42,7 +42,7 @@ export function TabBarShell({ itemIds, onDragEnd, children, actions, dndId, hide
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
     );
 
-    const handleWheel = useCallback((e: React.WheelEvent) => {
+    const handleWheel = useCallback((e: WheelEvent) => {
         if (scrollContainerRef.current) {
             scrollContainerRef.current.scrollLeft += e.deltaY;
         }

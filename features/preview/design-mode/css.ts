@@ -84,6 +84,33 @@ export function isGradient(value: string | undefined): boolean {
     return !!value && /gradient\(/i.test(value);
 }
 
+export function parseLinearGradient(value: string | undefined): { angle: number; stops: { pos: number; color: string }[] } | null {
+    if (!value || !/linear-gradient\(/i.test(value)) return null;
+    const inner = value.replace(/^.*linear-gradient\(/i, "").replace(/\)\s*$/, "");
+    const parts = inner.split(/,(?![^(]*\))/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length < 2) return null;
+    let angle = 180;
+    let rest = parts;
+    const first = parts[0]!;
+    const deg = first.match(/^(-?\d+(?:\.\d+)?)deg$/i);
+    if (deg) {
+        angle = Number(deg[1]);
+        rest = parts.slice(1);
+    }
+    const stops = rest.map((part, i) => {
+        const m = part.match(/^(.*?)(?:\s+(\d+(?:\.\d+)?)%)?$/);
+        const color = (m?.[1] || part).trim();
+        const pos = m?.[2] != null ? Number(m[2]) : Math.round((i / Math.max(1, rest.length - 1)) * 100);
+        return { pos, color };
+    });
+    return { angle, stops };
+}
+
+export function formatLinearGradient(angle: number, stops: { pos: number; color: string }[]): string {
+    const body = stops.map((s) => `${s.color} ${s.pos}%`).join(", ");
+    return `linear-gradient(${angle}deg, ${body})`;
+}
+
 export function isTransparentColor(value: string | undefined): boolean {
     if (!value) return true;
     const v = value.trim().toLowerCase();

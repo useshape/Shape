@@ -140,7 +140,7 @@
 
   --text-2xs: 12px;
   --text-xs: 13px;
-  --text-sm: 14px;
+  --text-sm: 13px;
   --text-base: 14px;
   --text-md: 15px;
   --text-lg: 16px;
@@ -152,7 +152,7 @@
   --line-height-base: 18px;
   --line-height-lg: 20px;
 
-  --conversation-text-font-size: var(--text-md);
+  --conversation-text-font-size: var(--text-sm);
   --conversation-tool-font-size: var(--text-base);
   --conversation-tray-font-size: var(--text-base);
   --conversation-font-size: var(--conversation-text-font-size);

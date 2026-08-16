@@ -302,7 +302,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             onKeyDown={handleKeyDown}
         >
             <div ref={bodyRef} className="w-full min-w-0 select-text overflow-hidden">
-                <div className="w-full min-w-0 wrap-break-word chat-markdown max-w-none prose-compact select-text">
+                <div className="w-full min-w-0 wrap-break-word chat-markdown max-w-none prose-compact text-sm select-text">
                     <MessageRenderer
                         content={content}
                         isGenerating={isGenerating}

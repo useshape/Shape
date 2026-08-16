@@ -38,25 +38,27 @@ fn inject_bridge(html: &str, script: &str) -> String {
     if html.contains(INJECT_MARK) {
         return html.to_string();
     }
+    // Run after window load so React/Vite can hydrate and play intro animations
+    // before we attach inspectors. Inject at </body> so we don't block <head> scripts.
     let tag = format!(
-        "{INJECT_MARK}<script>{script}</script>"
+        "{INJECT_MARK}<script>(function(){{function boot(){{{script}\n}}if(document.readyState==='complete')boot();else window.addEventListener('load',boot);}})();</script>"
     );
-    if let Some(idx) = html.to_ascii_lowercase().find("</head>") {
+    let lower = html.to_ascii_lowercase();
+    if let Some(idx) = lower.rfind("</body>") {
         let mut out = String::with_capacity(html.len() + tag.len());
         out.push_str(&html[..idx]);
         out.push_str(&tag);
         out.push_str(&html[idx..]);
         return out;
     }
-    if let Some(idx) = html.to_ascii_lowercase().find("<head>") {
-        let end = idx + 6;
+    if let Some(idx) = lower.rfind("</html>") {
         let mut out = String::with_capacity(html.len() + tag.len());
-        out.push_str(&html[..end]);
+        out.push_str(&html[..idx]);
         out.push_str(&tag);
-        out.push_str(&html[end..]);
+        out.push_str(&html[idx..]);
         return out;
     }
-    format!("{tag}{html}")
+    format!("{html}{tag}")
 }
 
 fn host_header(parsed: &url::Url) -> String {
@@ -98,19 +100,21 @@ fn origin_of(parsed: &url::Url) -> String {
     )
 }
 
+fn proxy_src(listen_port: u16, parsed: &url::Url) -> String {
+    // Listener is bound to 127.0.0.1 — using "localhost" here can hit ::1 on Windows
+    // and show the OS "refused to connect" page.
+    let mut out = format!("http://127.0.0.1:{listen_port}{}", parsed.path());
+    if let Some(q) = parsed.query() {
+        out.push('?');
+        out.push_str(q);
+    }
+    out
+}
+
 fn rewrite_location(value: &str, listen_port: u16, target: &url::Url) -> String {
     if let Ok(u) = url::Url::parse(value) {
         if u.host_str() == target.host_str() && u.port_or_known_default() == target.port_or_known_default() {
-            let mut out = format!(
-                "http://127.0.0.1:{}{}",
-                listen_port,
-                u.path()
-            );
-            if let Some(q) = u.query() {
-                out.push('?');
-                out.push_str(q);
-            }
-            return out;
+            return proxy_src(listen_port, &u);
         }
     }
     value.to_string()
@@ -246,13 +250,10 @@ pub async fn start_design_proxy(
         let guard = state.inner.lock().await;
         if let Some(running) = guard.as_ref() {
             if running.target == origin_of(&parsed) && running.inject == inject {
-                let path = parsed.path();
-                let src = if let Some(q) = parsed.query() {
-                    format!("http://127.0.0.1:{}{}?{}", running.port, path, q)
-                } else {
-                    format!("http://127.0.0.1:{}{}", running.port, path)
-                };
-                return Ok(DesignProxyInfo { port: running.port, src });
+                return Ok(DesignProxyInfo {
+                    port: running.port,
+                    src: proxy_src(running.port, &parsed),
+                });
             }
         }
     }
@@ -287,12 +288,7 @@ pub async fn start_design_proxy(
         }
     });
 
-    let path = parsed.path();
-    let src = if let Some(q) = parsed.query() {
-        format!("http://127.0.0.1:{port}{path}?{q}")
-    } else {
-        format!("http://127.0.0.1:{port}{path}")
-    };
+    let src = proxy_src(port, &parsed);
 
     *state.inner.lock().await = Some(RunningProxy {
         port,
@@ -324,18 +320,17 @@ pub async fn probe_preview_url(url: String) -> Result<bool, AppError> {
         .map_err(|e| AppError::Message(format!("Invalid preview URL: {e}")))?;
     let host = parsed.host_str().unwrap_or("localhost");
     let port = parsed.port_or_known_default().unwrap_or(80);
+    // IPv4 only — [::1] on Windows can stall far past the connect timeout.
     let mut candidates = vec![format!("{host}:{port}")];
     let lower = host.to_ascii_lowercase();
     if lower == "localhost" {
         candidates.push(format!("127.0.0.1:{port}"));
-        candidates.push(format!("[::1]:{port}"));
     } else if lower == "127.0.0.1" {
         candidates.push(format!("localhost:{port}"));
-        candidates.push(format!("[::1]:{port}"));
     }
     for addr in candidates {
         let connect = TcpStream::connect(addr);
-        match tokio::time::timeout(std::time::Duration::from_millis(1200), connect).await {
+        match tokio::time::timeout(std::time::Duration::from_millis(400), connect).await {
             Ok(Ok(_stream)) => return Ok(true),
             _ => continue,
         }

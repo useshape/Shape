@@ -8,11 +8,15 @@ import type {
     DesignSelectedElement,
 } from "./types";
 
+export type DesignModeTool = "select" | "draw";
+
 export type DesignModeState = {
     enabled: boolean;
     inspect: boolean;
+    tool: DesignModeTool;
     layers: DesignLayerNode[];
     selected: DesignSelectedElement | null;
+    selection: DesignSelectedElement[];
     pending: DesignPendingEdit[];
     proxySrc: string | null;
     ready: boolean;
@@ -23,8 +27,10 @@ const listeners = new Set<() => void>();
 let state: DesignModeState = {
     enabled: false,
     inspect: true,
+    tool: "select",
     layers: [],
     selected: null,
+    selection: [],
     pending: [],
     proxySrc: null,
     ready: false,
@@ -82,8 +88,26 @@ export function setDesignLayers(layers: DesignLayerNode[]) {
     setState({ layers });
 }
 
-export function setDesignSelected(selected: DesignSelectedElement | null) {
-    setState({ selected });
+export function setDesignSelected(selected: DesignSelectedElement | null, additive = false) {
+    if (!selected) {
+        setState({ selected: null, selection: [] });
+        return;
+    }
+    if (additive) {
+        const without = state.selection.filter((s) => s.id !== selected.id);
+        const selection = [...without, selected];
+        setState({ selected, selection });
+        return;
+    }
+    setState({ selected, selection: [selected] });
+}
+
+export function setDesignSelection(selection: DesignSelectedElement[]) {
+    setState({ selection, selected: selection[selection.length - 1] ?? null });
+}
+
+export function setDesignTool(tool: DesignModeTool) {
+    setState({ tool });
 }
 
 export function upsertDesignPending(edit: DesignPendingEdit) {
@@ -97,10 +121,15 @@ export function upsertDesignPending(edit: DesignPendingEdit) {
                         tag: edit.tag || p.tag,
                         selector: edit.selector || p.selector,
                         className: edit.className || p.className,
+                        locateText: edit.locateText || p.locateText,
                         source: edit.source || p.source,
                         label: edit.label || p.label,
                         styles: { ...p.styles, ...edit.styles },
                         text: edit.text ?? p.text,
+                        inspect: edit.inspect || p.inspect,
+                        classToggles: edit.classToggles
+                            ? { ...p.classToggles, ...edit.classToggles }
+                            : p.classToggles,
                     }
                   : p,
           )
@@ -117,7 +146,7 @@ export function clearDesignPending() {
 }
 
 export function serializeDesignEdits(): string {
-    if (state.pending.length === 0 && !state.selected) return "";
+    if (state.pending.length === 0 && !state.selected && state.selection.length === 0) return "";
     const lines = [
         "Apply these visual design-mode edits to the source of the page currently in the Browser preview.",
         "Map each element from its tag/class/text to the React/HTML/CSS that produced it, then update that source (prefer Tailwind classes when the project uses Tailwind).",
@@ -125,9 +154,12 @@ export function serializeDesignEdits(): string {
     ];
     const items = state.pending.length
         ? state.pending
-        : state.selected
-          ? [{ id: state.selected.id, label: state.selected.label, styles: {}, text: state.selected.text }]
-          : [];
+        : (state.selection.length ? state.selection : state.selected ? [state.selected] : []).map((el) => ({
+              id: el.id,
+              label: el.label,
+              styles: {},
+              text: el.text,
+          }));
     for (const edit of items) {
         const sel = edit.selector ? `, ${edit.selector}` : "";
         lines.push(`- ${edit.label} (id ${edit.id}${sel})`);
@@ -137,6 +169,20 @@ export function serializeDesignEdits(): string {
         if (styleBits.length) lines.push(`  styles: ${styleBits.join("; ")}`);
         if (edit.text != null && edit.text !== "") lines.push(`  text: ${JSON.stringify(edit.text)}`);
     }
+    return lines.join("\n");
+}
+
+export function formatSelectionForChat(): string {
+    const items = state.selection.length ? state.selection : state.selected ? [state.selected] : [];
+    if (!items.length) return "";
+    const lines = ["Update these UI elements in the running preview:"];
+    for (const el of items) {
+        const loc = el.source ? ` (${el.source.fileName.split(/[/\\\\]/).pop()}:${el.source.lineNumber})` : "";
+        lines.push(`- <${el.tag}> ${el.label}${loc}`);
+        if (el.selector) lines.push(`  selector: ${el.selector}`);
+        if (el.className) lines.push(`  class: ${el.className}`);
+    }
+    lines.push("", "Describe the visual change.");
     return lines.join("\n");
 }
 

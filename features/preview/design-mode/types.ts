@@ -2,7 +2,116 @@ export type DesignLayerNode = {
     id: string;
     tag: string;
     label: string;
+    hidden?: boolean;
+    interactive?: boolean;
     children: DesignLayerNode[];
+};
+
+export type DesignStyleOriginKind =
+    | "inline"
+    | "class"
+    | "module"
+    | "stylesheet"
+    | "utility"
+    | "variable"
+    | "inherited"
+    | "computed";
+
+export type DesignStyleOrigin = {
+    kind: DesignStyleOriginKind;
+    label: string;
+    selector?: string;
+    href?: string;
+    media?: string;
+    layer?: string;
+    className?: string;
+};
+
+export type DesignPropertyInspect = {
+    property: string;
+    computed: string;
+    authored: string;
+    source: DesignStyleOrigin;
+    inherited: boolean;
+    overridden: boolean;
+    inactive: boolean;
+};
+
+export type DesignMatchedRule = {
+    selector: string;
+    href: string;
+    media: string;
+    layer: string;
+};
+
+export type DesignInspectClass = {
+    name: string;
+    enabled: boolean;
+    kind: "utility" | "module" | "class";
+};
+
+export type DesignInspectIssue = {
+    id: string;
+    severity: "info" | "warn";
+    title: string;
+    detail: string;
+};
+
+export type DesignInspect = {
+    box: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+        marginTop: string;
+        marginRight: string;
+        marginBottom: string;
+        marginLeft: string;
+        paddingTop: string;
+        paddingRight: string;
+        paddingBottom: string;
+        paddingLeft: string;
+        borderTop: string;
+        borderRight: string;
+        borderBottom: string;
+        borderLeft: string;
+    };
+    layout: {
+        display: string;
+        position: string;
+        flexDirection: string;
+        flexWrap: string;
+        justifyContent: string;
+        alignItems: string;
+        gap: string;
+        columnGap: string;
+        rowGap: string;
+        gridTemplateColumns: string;
+        gridTemplateRows: string;
+        isFlex: boolean;
+        isGrid: boolean;
+    };
+    accessibility: {
+        role: string;
+        name: string;
+        focusable: boolean;
+        alt?: string | null;
+        contrast: number | null;
+    };
+    responsive: {
+        width: number;
+        height: number;
+        dpr: number;
+        breakpoint: string;
+    };
+    origins: Record<string, DesignPropertyInspect>;
+    matched: DesignMatchedRule[];
+    classes: DesignInspectClass[];
+    issues: DesignInspectIssue[];
+    states: {
+        paused: boolean;
+        emulateFocus: boolean;
+    };
 };
 
 export type DesignComputedStyles = {
@@ -53,11 +162,20 @@ export type DesignComputedStyles = {
     backdropFilter: string;
 };
 
+export type DesignGeneratedLoc = {
+    fileName: string;
+    lineNumber: number;
+    columnNumber?: number;
+};
+
 export type DesignSourceLoc = {
     fileName: string;
     lineNumber: number;
     columnNumber?: number;
     componentName?: string;
+    nodeId?: string;
+    generated?: DesignGeneratedLoc;
+    mapped?: boolean;
 };
 
 export type DesignSelectedElement = {
@@ -66,9 +184,12 @@ export type DesignSelectedElement = {
     label: string;
     text: string;
     className: string;
+    locateText?: string;
     selector?: string;
     source?: DesignSourceLoc;
+    editable?: boolean;
     styles: DesignComputedStyles;
+    inspect?: DesignInspect;
 };
 
 export type DesignPendingEdit = {
@@ -76,10 +197,13 @@ export type DesignPendingEdit = {
     tag?: string;
     selector?: string;
     className?: string;
+    locateText?: string;
     source?: DesignSourceLoc;
     label: string;
     styles: Partial<Record<keyof DesignComputedStyles, string>>;
     text?: string;
+    inspect?: DesignInspect;
+    classToggles?: Record<string, boolean>;
 };
 
 export type DesignBridgeApi = {
@@ -90,8 +214,11 @@ export type DesignBridgeApi = {
     redo: () => void;
     reset: () => void;
     inspect: (enabled: boolean) => void;
-    pause?: (enabled: boolean) => void;
+    pause?: (enabled: boolean, resumeAfterEdit?: boolean) => void;
     pseudo?: (id: string, pseudo: string, enabled: boolean, selector?: string) => void;
+    classToggle?: (id: string, className: string, enabled: boolean, selector?: string) => void;
+    watch?: (id: string, enabled: boolean, selector?: string) => void;
+    emulateFocus?: (enabled: boolean) => void;
 };
 
 export const DESIGN_STYLE_KEYS: (keyof DesignComputedStyles)[] = [

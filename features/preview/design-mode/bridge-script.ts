@@ -8,6 +8,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
   var SKIP = { SCRIPT:1, STYLE:1, LINK:1, META:1, TITLE:1, NOSCRIPT:1, BR:1 };
   var enabled = false;
   var inspect = true;
+  var tool = "select";
   var hoverId = null;
   var selectedId = null;
   var overlay = null;
@@ -16,6 +17,11 @@ export const DESIGN_BRIDGE_SCRIPT = `
   var undoStack = [];
   var redoStack = [];
   var origInline = {};
+  var paused = false;
+  var resumeAfterEdit = false;
+  var emulateFocus = false;
+  var watchId = null;
+  var watchSnap = null;
 
   function post(msg) {
     try { parent.postMessage(Object.assign({ source: "shape-design" }, msg), "*"); } catch (e) {}
@@ -92,7 +98,10 @@ export const DESIGN_BRIDGE_SCRIPT = `
     }
     var childAcc = [];
     for (var i = 0; i < el.children.length; i++) walk(el.children[i], childAcc);
-    acc.push({ id: id, tag: tag.toLowerCase(), label: label, children: childAcc });
+    var cs = getComputedStyle(el);
+    var hidden = cs.display === "none" || cs.visibility === "hidden" || parseFloat(cs.opacity) === 0;
+    var interactive = /^(A|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(tag) || el.tabIndex >= 0;
+    acc.push({ id: id, tag: tag.toLowerCase(), label: label, hidden: hidden, interactive: interactive, children: childAcc });
     return acc;
   }
 
@@ -213,70 +222,330 @@ export const DESIGN_BRIDGE_SCRIPT = `
     return target;
   }
 
-  function reactSource(el) {
-    var key = null;
-    for (var k in el) {
-      if (k.indexOf("__reactFiber") === 0 || k.indexOf("__reactInternalInstance") === 0) { key = k; break; }
+  function stackPayload(stack) {
+    if (!stack) return null;
+    var text = typeof stack === "string" ? stack : (stack && stack.stack);
+    if (!text) return null;
+    var generated = null;
+    var original = null;
+    var lines = String(text).split("\\n");
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (!line) continue;
+      if (/node_modules[\\/\\\\]|react-dom|jsx-dev-runtime|jsx-runtime|webpack\\/runtime/i.test(line)) continue;
+      var m = line.match(/((?:https?:\\/\\/|file:\\/\\/|webpack-internal:\\/\\/\\/|\\/)?[^\\s)]+\\.(?:tsx|jsx|ts|js|vue|svelte))(?::(\\d+))?(?::(\\d+))?/i);
+      if (!m) continue;
+      var file = m[1];
+      try { file = decodeURIComponent(file.split("?")[0]); } catch (e) { file = file.split("?")[0]; }
+      var loc = { fileName: file, lineNumber: m[2] ? +m[2] : 1, columnNumber: m[3] ? +m[3] : 1 };
+      var isOrig = /\\.(tsx|jsx|vue|svelte)$/i.test(file) && !/_next\\/static|\\/chunks\\//i.test(file);
+      var isGen = /_next\\/static|\\/chunks\\/|\\.he5\\./i.test(file);
+      if (isOrig && !original) original = loc;
+      if (isGen && !generated) generated = loc;
     }
-    if (!key) return null;
-    var fiber = el[key];
-    var hops = 0;
-    while (fiber && hops < 50) {
-      var src = fiber._debugSource || (fiber._debugOwner && fiber._debugOwner._debugSource);
-      if (!src && fiber._debugInfo && fiber._debugInfo.length) {
-        for (var i = fiber._debugInfo.length - 1; i >= 0; i--) {
-          var info = fiber._debugInfo[i];
-          if (info && info.fileName) { src = info; break; }
-        }
+    if (!original && !generated) return null;
+    return { original: original, generated: generated };
+  }
+
+  function ownerName(fiber) {
+    if (!fiber) return "";
+    var o = fiber._debugOwner;
+    if (typeof o === "function") return o.displayName || o.name || "";
+    if (o && typeof o === "object") {
+      if (typeof o.type === "function") return o.type.displayName || o.type.name || "";
+      if (o.name) return String(o.name);
+      if (o.displayName) return String(o.displayName);
+    }
+    var t = fiber.type;
+    if (typeof t === "function") return t.displayName || t.name || "";
+    if (t && t.displayName) return t.displayName;
+    return "";
+  }
+
+  function sourceFromFiber(fiber) {
+    if (!fiber) return null;
+    var name = ownerName(fiber);
+    var src = fiber._debugSource;
+    if (!src && fiber._debugInfo && fiber._debugInfo.length) {
+      for (var i = fiber._debugInfo.length - 1; i >= 0; i--) {
+        var info = fiber._debugInfo[i];
+        if (info && (info.fileName || info.file)) { src = info; break; }
       }
-      var type = fiber.type || (fiber._debugOwner && fiber._debugOwner.type);
-      var name = type && (type.displayName || type.name);
-      if (src && src.fileName) {
-        return {
-          fileName: String(src.fileName),
-          lineNumber: src.lineNumber || 1,
-          columnNumber: src.columnNumber || 1,
-          componentName: name || ""
-        };
-      }
-      fiber = fiber._debugOwner || fiber.return;
-      hops++;
+    }
+    var payload = stackPayload(fiber._debugStack) || stackPayload(fiber._debugTask);
+    var fileName = "";
+    var lineNumber = 0;
+    var columnNumber = 1;
+    if (src && (src.fileName || src.file) && /\\.(tsx|jsx|vue|svelte)$/i.test(String(src.fileName || src.file))) {
+      fileName = String(src.fileName || src.file);
+      lineNumber = src.lineNumber || src.line || 1;
+      columnNumber = src.columnNumber || src.column || 1;
+    } else if (payload && payload.original) {
+      fileName = payload.original.fileName;
+      lineNumber = payload.original.lineNumber;
+      columnNumber = payload.original.columnNumber;
+    }
+    var generated = payload && payload.generated ? payload.generated : null;
+    if (!fileName && generated) {
+      fileName = generated.fileName;
+      lineNumber = generated.lineNumber;
+      columnNumber = generated.columnNumber;
+    }
+    if (!fileName && !generated) return null;
+    return {
+      fileName: fileName,
+      lineNumber: lineNumber,
+      columnNumber: columnNumber,
+      componentName: name,
+      generated: generated || undefined,
+      nodeId: (fileName || (generated && generated.fileName) || "") + ":" + lineNumber + ":" + columnNumber
+    };
+  }
+
+  function reactFiber(el) {
+    if (!el) return null;
+    for (var k in el) {
+      if (k.indexOf("__reactFiber") === 0 || k.indexOf("__reactInternalInstance") === 0) return el[k];
+    }
+    var names = Object.getOwnPropertyNames(el);
+    for (var i = 0; i < names.length; i++) {
+      if (names[i].indexOf("__reactFiber") === 0 || names[i].indexOf("__reactInternalInstance") === 0) return el[names[i]];
     }
     return null;
   }
 
-  function emitSelected(el) {
-    if (!el) { post({ type: "shape-design-selected", element: null }); return; }
+  function reactSource(el) {
+    var fiber = reactFiber(el);
+    if (!fiber) return null;
+    return sourceFromFiber(fiber);
+  }
+
+  function camelToKebab(k) {
+    return k.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+  }
+  function breakpointName(w) {
+    if (w < 640) return "base";
+    if (w < 768) return "sm";
+    if (w < 1024) return "md";
+    if (w < 1280) return "lg";
+    if (w < 1536) return "xl";
+    return "2xl";
+  }
+  function parseRgb(s) {
+    var m = String(s).match(/rgba?\\(\\s*([\\d.]+)\\s*[, ]\\s*([\\d.]+)\\s*[, ]\\s*([\\d.]+)/);
+    if (!m) return null;
+    return [+m[1], +m[2], +m[3]];
+  }
+  function lum(r, g, b) {
+    var a = [r, g, b].map(function (v) {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+  }
+
+  function collectInspect(el) {
+    var cs = getComputedStyle(el);
+    var rect = el.getBoundingClientRect();
+    var parentCs = el.parentElement ? getComputedStyle(el.parentElement) : null;
+    var rules = [];
+    function walkSheet(sheet, media, layer) {
+      var list;
+      try { list = sheet.cssRules; } catch (e) { return; }
+      if (!list) return;
+      for (var i = 0; i < list.length; i++) {
+        var rule = list[i];
+        var type = rule.type;
+        if (type === 4) {
+          walkSheet(rule, (media ? media + " and " : "") + (rule.conditionText || (rule.media && rule.media.mediaText) || ""), layer);
+        } else if (type === 12 || (rule.cssRules && type !== 1)) {
+          var nextLayer = layer;
+          if (rule.name === "layer" || (rule.constructor && String(rule.constructor.name).indexOf("Layer") >= 0)) nextLayer = rule.name || layer;
+          walkSheet(rule, media, nextLayer);
+        } else if (rule.selectorText && rule.style) {
+          try {
+            if (el.matches(rule.selectorText)) {
+              var href = "";
+              try { href = sheet.href || ""; } catch (e2) {}
+              var file = href ? href.split("/").pop().split("?")[0] : "(inline)";
+              var decls = [];
+              for (var j = 0; j < rule.style.length; j++) {
+                var p = rule.style[j];
+                decls.push({ property: p, authored: rule.style.getPropertyValue(p), important: rule.style.getPropertyPriority(p) === "important" });
+              }
+              var win = "";
+              var cls = (typeof el.className === "string" ? el.className : "").split(/\\s+/);
+              for (var ci = 0; ci < cls.length; ci++) {
+                if (!cls[ci]) continue;
+                var esc = cls[ci].replace(/:/g, "\\\\:");
+                if (rule.selectorText.indexOf("." + esc) >= 0 || rule.selectorText.indexOf("." + cls[ci]) >= 0) { win = cls[ci]; break; }
+              }
+              rules.push({ selector: rule.selectorText, href: file, media: media || "", layer: layer || "", decls: decls, className: win });
+            }
+          } catch (e3) {}
+        }
+      }
+    }
+    for (var s = 0; s < document.styleSheets.length; s++) walkSheet(document.styleSheets[s], "", "");
+
+    var computedStyles = readStyles(el);
+    var origins = {};
+    var inheritKeys = { color: 1, fontFamily: 1, fontSize: 1, fontWeight: 1, lineHeight: 1, letterSpacing: 1, textAlign: 1 };
+    Object.keys(computedStyles).forEach(function (key) {
+      var prop = camelToKebab(key);
+      var computedVal = cs.getPropertyValue(prop) || computedStyles[key];
+      var authored = el.style.getPropertyValue(prop);
+      var source = authored ? { kind: "inline", label: "inline style" } : { kind: "computed", label: "computed" };
+      var inherited = false;
+      var overridden = false;
+      var inactive = false;
+      var seen = false;
+      if (!authored) {
+        for (var r = 0; r < rules.length; r++) {
+          var rule = rules[r];
+          for (var d = 0; d < rule.decls.length; d++) {
+            if (rule.decls[d].property === prop && rule.decls[d].authored) {
+              if (seen) overridden = true;
+              seen = true;
+              authored = rule.decls[d].authored;
+              var kind = /\\.module\\.css/.test(rule.href) ? "module" : (rule.className && (rule.className.indexOf(":") >= 0 || /^(sm|md|lg|xl|2xl|hover|focus|dark)/.test(rule.className)) ? "utility" : "stylesheet");
+              source = { kind: kind, label: rule.selector + " — " + rule.href, selector: rule.selector, href: rule.href, media: rule.media, layer: rule.layer, className: rule.className };
+            }
+          }
+        }
+      }
+      if (!authored && parentCs && inheritKeys[key]) {
+        var pval = parentCs.getPropertyValue(prop);
+        if (pval && pval === computedVal) {
+          inherited = true;
+          authored = computedVal;
+          source = { kind: "inherited", label: "inherited from parent" };
+        }
+      }
+      if (authored && authored.indexOf("var(") === 0) source = Object.assign({}, source, { kind: "variable", label: authored + " — " + (source.label || "") });
+      var display = cs.display;
+      if ((key === "flexDirection" || key === "justifyContent" || key === "alignItems" || key === "flexWrap") && display.indexOf("flex") < 0) inactive = true;
+      if ((key === "gap" || key === "columnGap" || key === "rowGap") && display.indexOf("flex") < 0 && display.indexOf("grid") < 0) inactive = true;
+      origins[key] = { property: prop, computed: computedVal, authored: authored || computedVal, source: source, inherited: inherited, overridden: overridden, inactive: inactive };
+    });
+
+    var issues = [];
+    if (rect.width < 0.5 || rect.height < 0.5) issues.push({ id: "zero-size", severity: "warn", title: "Zero-size element", detail: Math.round(rect.width) + "×" + Math.round(rect.height) });
+    if (cs.display === "none") issues.push({ id: "hidden", severity: "warn", title: "Hidden", detail: "display: none" });
+    else if (cs.visibility === "hidden") issues.push({ id: "hidden", severity: "warn", title: "Hidden", detail: "visibility: hidden" });
+    else if (parseFloat(cs.opacity) === 0) issues.push({ id: "hidden", severity: "warn", title: "Hidden", detail: "opacity: 0" });
+    if (cs.pointerEvents === "none") issues.push({ id: "pointer-events", severity: "info", title: "Pointer events disabled", detail: "pointer-events: none" });
+    if (rect.bottom < 0 || rect.top > innerHeight || rect.right < 0 || rect.left > innerWidth) issues.push({ id: "offscreen", severity: "info", title: "Outside viewport", detail: "" });
+    if ((cs.overflow === "hidden" || cs.overflow === "clip") && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) {
+      issues.push({ id: "overflow", severity: "info", title: "Content is clipped", detail: "overflow: " + cs.overflow });
+    }
+    Object.keys(origins).forEach(function (k) {
+      if (origins[k].inherited) issues.push({ id: "inherited-" + k, severity: "info", title: camelToKebab(k) + " is inherited", detail: origins[k].source.label });
+      if (origins[k].inactive) issues.push({ id: "inactive-" + k, severity: "info", title: camelToKebab(k) + " is inactive", detail: "Not used with display: " + cs.display });
+      if (origins[k].overridden) issues.push({ id: "overridden-" + k, severity: "info", title: camelToKebab(k) + " was overridden", detail: origins[k].source.label });
+    });
+
+    var role = el.getAttribute("role") || "";
+    if (!role) {
+      if (el.tagName === "BUTTON") role = "button";
+      else if (el.tagName === "A") role = "link";
+      else if (el.tagName === "IMG") role = "img";
+      else if (el.tagName === "INPUT") role = el.getAttribute("type") || "textbox";
+      else role = el.tagName.toLowerCase();
+    }
+    var name = el.getAttribute("aria-label") || el.getAttribute("alt") || (el.innerText || "").trim().slice(0, 80);
+    var focusable = el.tabIndex >= 0 || /^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(el.tagName);
+    if ((role === "button" || role === "link") && !name) issues.push({ id: "a11y-name", severity: "warn", title: "Missing accessible name", detail: "" });
+    if (el.tagName === "IMG" && el.getAttribute("alt") == null && el.getAttribute("role") !== "presentation") {
+      issues.push({ id: "a11y-alt", severity: "warn", title: "Image missing alt text", detail: "" });
+    }
+    var fg = parseRgb(cs.color);
+    var bg = parseRgb(cs.backgroundColor);
+    var contrast = null;
+    if (fg && bg && (bg[0] + bg[1] + bg[2] > 0 || parseFloat(cs.opacity) < 1)) {
+      var L1 = lum(fg[0], fg[1], fg[2]);
+      var L2 = lum(bg[0], bg[1], bg[2]);
+      contrast = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+      if (contrast < 4.5 && (el.innerText || "").trim()) issues.push({ id: "contrast", severity: "warn", title: "Low contrast", detail: contrast.toFixed(2) + ":1" });
+    }
+
+    var classes = (typeof el.className === "string" ? el.className : "").split(/\\s+/).filter(Boolean).map(function (c) {
+      var kind = /__/.test(c) ? "module" : (/:/.test(c) || /^(flex|grid|hidden|block|inline|text-|bg-|p-|m-|w-|h-|rounded|items-|justify-)/.test(c) ? "utility" : "class");
+      return { name: c, enabled: true, kind: kind };
+    });
+
+    return {
+      box: {
+        width: rect.width, height: rect.height, x: rect.x, y: rect.y,
+        marginTop: cs.marginTop, marginRight: cs.marginRight, marginBottom: cs.marginBottom, marginLeft: cs.marginLeft,
+        paddingTop: cs.paddingTop, paddingRight: cs.paddingRight, paddingBottom: cs.paddingBottom, paddingLeft: cs.paddingLeft,
+        borderTop: cs.borderTopWidth, borderRight: cs.borderRightWidth, borderBottom: cs.borderBottomWidth, borderLeft: cs.borderLeftWidth
+      },
+      layout: {
+        display: cs.display, position: cs.position, flexDirection: cs.flexDirection, flexWrap: cs.flexWrap,
+        justifyContent: cs.justifyContent, alignItems: cs.alignItems, gap: cs.gap, columnGap: cs.columnGap, rowGap: cs.rowGap,
+        gridTemplateColumns: cs.gridTemplateColumns, gridTemplateRows: cs.gridTemplateRows,
+        isFlex: cs.display.indexOf("flex") >= 0, isGrid: cs.display.indexOf("grid") >= 0
+      },
+      accessibility: { role: role, name: name || "(none)", focusable: focusable, alt: el.tagName === "IMG" ? el.getAttribute("alt") : undefined, contrast: contrast },
+      responsive: { width: innerWidth, height: innerHeight, dpr: window.devicePixelRatio || 1, breakpoint: breakpointName(innerWidth) },
+      origins: origins,
+      matched: rules.slice(-16).map(function (r) { return { selector: r.selector, href: r.href, media: r.media, layer: r.layer }; }),
+      classes: classes,
+      issues: issues,
+      states: { paused: paused, emulateFocus: emulateFocus }
+    };
+  }
+
+  function elementPayload(el) {
     var id = idFor(el);
     if (!el.getAttribute(ATTR)) el.setAttribute(ATTR, id);
-    selectedId = id;
+    var src = reactSource(el);
+    var inspect = collectInspect(el);
+    if (!src || !src.lineNumber || /_next\\/static|\\/chunks\\//i.test(src.fileName || "")) {
+      inspect.issues.unshift({ id: "no-source", severity: "warn", title: "No source identity", detail: "This node does not map to a project file. Preview-only." });
+    }
+    return {
+      id: id,
+      tag: el.tagName.toLowerCase(),
+      label: el.tagName.toLowerCase() + (el.id ? "#" + el.id : ""),
+      text: (el.childElementCount === 0 ? (el.textContent || "") : "").trim().slice(0, 4000),
+      className: typeof el.className === "string" ? el.className : "",
+      selector: cssPath(el),
+      locateText: (el.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 160),
+      source: src,
+      editable: !!(src && src.fileName && src.lineNumber && /\\.(tsx|jsx|vue|svelte)$/i.test(src.fileName) && !/_next\\/static|\\/chunks\\//i.test(src.fileName)),
+      styles: readStyles(el),
+      inspect: inspect
+    };
+  }
+
+  function emitSelected(el, additive) {
+    if (!el) { post({ type: "shape-design-selected", element: null, additive: false }); return; }
+    var payload = elementPayload(el);
+    selectedId = payload.id;
     paintOverlay(el, true);
-    post({
-      type: "shape-design-selected",
-      element: {
-        id: id,
-        tag: el.tagName.toLowerCase(),
-        label: el.tagName.toLowerCase() + (el.id ? "#" + el.id : ""),
-        text: (el.childElementCount === 0 ? (el.textContent || "") : "").trim().slice(0, 4000),
-        className: typeof el.className === "string" ? el.className : "",
-        selector: cssPath(el),
-        source: reactSource(el),
-        styles: readStyles(el)
-      }
-    });
+    post({ type: "shape-design-selected", element: payload, additive: !!additive });
   }
 
   function pick(e) {
     if (!enabled || !inspect) return;
+    if (e.button != null && e.button !== 0) return;
     var el = e.target;
+    try {
+      var stack = document.elementsFromPoint(e.clientX, e.clientY);
+      for (var i = 0; i < stack.length; i++) {
+        if (stack[i].id === "shape-design-overlay") continue;
+        el = stack[i];
+        break;
+      }
+    } catch (err) {}
     if (!el || el.id === "shape-design-overlay") return;
     while (el && SKIP[el.tagName]) el = el.parentElement;
-    if (!el || el === document.documentElement || el === document.body) {
-      if (el === document.body) { /* allow body */ } else return;
-    }
+    if (!el || el.nodeType !== 1) return;
     e.preventDefault();
     e.stopPropagation();
-    emitSelected(el);
+    emitSelected(el, !!(e.metaKey || e.ctrlKey));
   }
 
   function onMove(e) {
@@ -291,7 +560,6 @@ export const DESIGN_BRIDGE_SCRIPT = `
   }
 
   function sendTree() {
-    liveById = {};
     var roots = walk(document.body, []);
     post({ type: "shape-design-tree", nodes: [{ id: "root", tag: "html", label: "Root", children: roots }] });
   }
@@ -302,11 +570,13 @@ export const DESIGN_BRIDGE_SCRIPT = `
     if (data.type === "shape-design-enable") {
       enabled = true;
       inspect = data.inspect !== false;
+      if (data.tool) tool = data.tool;
       ensureOverlay();
       hookNetwork();
       sendTree();
       if (selectedId) emitSelected(byId(selectedId));
     }
+    if (data.type === "shape-design-tool") tool = data.tool === "draw" ? "draw" : "select";
     if (data.type === "shape-design-disable") {
       enabled = false;
       overlay && (overlay.style.display = "none");
@@ -324,6 +594,12 @@ export const DESIGN_BRIDGE_SCRIPT = `
       redoStack = [];
       applyStyles(target, data.styles || {});
       pending[tid] = Object.assign(pending[tid] || {}, data.styles || {});
+      if (resumeAfterEdit && paused) {
+        paused = false;
+        document.documentElement.classList.remove("shape-paused");
+        document.documentElement.style.removeProperty("pointer-events");
+        post({ type: "shape-design-paused", enabled: false });
+      }
       emitSelected(target);
     }
     if (data.type === "shape-design-content") {
@@ -368,22 +644,52 @@ export const DESIGN_BRIDGE_SCRIPT = `
     if (data.type === "shape-design-request-tree") sendTree();
     if (data.type === "shape-design-pause") {
       paused = !!data.enabled;
+      if (data.resumeAfterEdit != null) resumeAfterEdit = !!data.resumeAfterEdit;
       document.documentElement.classList.toggle("shape-paused", paused);
       if (paused) {
         document.documentElement.style.setProperty("pointer-events", "none");
       } else {
         document.documentElement.style.removeProperty("pointer-events");
       }
+      post({ type: "shape-design-paused", enabled: paused });
+    }
+    if (data.type === "shape-design-emulate-focus") {
+      emulateFocus = !!data.enabled;
+      if (emulateFocus) document.documentElement.setAttribute("data-shape-emulate-focus", "");
+      else document.documentElement.removeAttribute("data-shape-emulate-focus");
+      ensureForceSheet();
+      if (selectedId) emitSelected(byId(selectedId));
+    }
+    if (data.type === "shape-design-class") {
+      var clsEl = resolveTarget(data) || byId(selectedId);
+      if (clsEl && data.className) {
+        clsEl.classList.toggle(String(data.className), !!data.enabled);
+        emitSelected(clsEl);
+      }
+    }
+    if (data.type === "shape-design-watch") {
+      watchId = data.enabled ? (data.id || selectedId) : null;
+      var wEl = watchId ? byId(watchId) : null;
+      watchSnap = wEl ? { className: wEl.className, style: wEl.getAttribute("style") || "", text: wEl.textContent || "", w: wEl.getBoundingClientRect().width, h: wEl.getBoundingClientRect().height } : null;
     }
     if (data.type === "shape-design-pseudo" && data.pseudo) {
       forcePseudo(resolveTarget(data) || byId(selectedId), data.pseudo, !!data.enabled);
     }
   });
 
-  var paused = false;
   var treeTimer = null;
   var mo = new MutationObserver(function () {
     if (!enabled || paused) return;
+    if (watchId) {
+      var w = byId(watchId);
+      if (w && watchSnap) {
+        var next = { className: w.className, style: w.getAttribute("style") || "", text: w.textContent || "", w: w.getBoundingClientRect().width, h: w.getBoundingClientRect().height };
+        if (next.className !== watchSnap.className || next.style !== watchSnap.style || next.text !== watchSnap.text || Math.abs(next.w - watchSnap.w) > 0.5 || Math.abs(next.h - watchSnap.h) > 0.5) {
+          watchSnap = next;
+          post({ type: "shape-design-watch-hit", id: watchId, change: next });
+        }
+      }
+    }
     if (treeTimer) clearTimeout(treeTimer);
     treeTimer = setTimeout(function () {
       sendTree();
@@ -444,38 +750,55 @@ export const DESIGN_BRIDGE_SCRIPT = `
 
   function forcePseudo(el, pseudo, on) {
     if (!el) return;
-    var key = "data-shape-" + pseudo;
-    if (on) el.setAttribute(key, "1");
-    else el.removeAttribute(key);
-    var style = document.getElementById("shape-pseudo-style");
-    if (!style) {
-      style = document.createElement("style");
-      style.id = "shape-pseudo-style";
-      document.head.appendChild(style);
-    }
-    var id = el.getAttribute(ATTR);
-    var chunks = [];
-    for (var i = 0; i < document.styleSheets.length; i++) {
-      var sheet = document.styleSheets[i];
-      var rules;
-      try { rules = sheet.cssRules; } catch (e) { continue; }
-      if (!rules) continue;
-      for (var j = 0; j < rules.length; j++) {
-        var r = rules[j];
-        if (!r.selectorText || r.selectorText.indexOf(":" + pseudo) < 0) continue;
-        var plain = r.selectorText.replace(new RegExp(":" + pseudo + "\\\\b", "g"), "");
-        try {
-          if (el.matches(plain.split(",")[0].trim()) || el.matches(r.selectorText)) {
-            chunks.push('[data-shape-id="' + id + '"] { ' + r.style.cssText + " }");
-          }
-        } catch (e) {}
-      }
-    }
-    style.textContent = on ? chunks.join("\\n") : "";
+    ensureForceSheet();
+    var name = String(pseudo || "").replace(/^:/, "");
+    if (!name) return;
+    if (on) el.setAttribute("data-shape-" + name, "");
+    else el.removeAttribute("data-shape-" + name);
   }
 
-  document.addEventListener("click", pick, true);
-  document.addEventListener("mousedown", function (e) {
+  var forceSheetEl = null;
+  function collectForceRules(rule, acc) {
+    try {
+      if (!rule) return;
+      if (rule.selectorText) {
+        var sel = rule.selectorText;
+        var repl = sel
+          .replace(/:focus-visible\\b/g, "[data-shape-focus-visible]")
+          .replace(/:focus-within\\b/g, "[data-shape-focus-within]")
+          .replace(/:hover\\b/g, "[data-shape-hover]")
+          .replace(/:focus\\b/g, "[data-shape-focus]")
+          .replace(/:active\\b/g, "[data-shape-active]")
+          .replace(/:target\\b/g, "[data-shape-target]");
+        if (repl !== sel) acc.push(repl + "{" + (rule.style ? rule.style.cssText : "") + "}");
+      }
+      var kids = rule.cssRules || rule.rules;
+      if (kids) {
+        for (var i = 0; i < kids.length; i++) collectForceRules(kids[i], acc);
+      }
+    } catch (e) {}
+  }
+  function ensureForceSheet() {
+    if (forceSheetEl && forceSheetEl.parentNode) return;
+    forceSheetEl = document.getElementById("shape-force-pseudo");
+    if (!forceSheetEl) {
+      forceSheetEl = document.createElement("style");
+      forceSheetEl.id = "shape-force-pseudo";
+      (document.head || document.documentElement).appendChild(forceSheetEl);
+    }
+    var acc = [];
+    for (var s = 0; s < document.styleSheets.length; s++) {
+      try {
+        var rules = document.styleSheets[s].cssRules;
+        if (!rules) continue;
+        for (var i = 0; i < rules.length; i++) collectForceRules(rules[i], acc);
+      } catch (e) {}
+    }
+    forceSheetEl.textContent = acc.join("\\n");
+  }
+
+  document.addEventListener("pointerdown", pick, true);
+  document.addEventListener("click", function (e) {
     if (enabled && inspect) { e.preventDefault(); e.stopPropagation(); }
   }, true);
   document.addEventListener("mousemove", onMove, true);
@@ -487,5 +810,31 @@ export const DESIGN_BRIDGE_SCRIPT = `
   });
 
   post({ type: "shape-design-ready" });
+  var readyPulse = 0;
+  var readyTimer = setInterval(function () {
+    if (enabled || ++readyPulse > 20) { clearInterval(readyTimer); return; }
+    post({ type: "shape-design-ready" });
+  }, 300);
+
+  function reportLocation() {
+    try { post({ type: "shape-preview-location", href: String(location.href || "") }); } catch (e) {}
+  }
+  try {
+    var hist = window.history;
+    var wrapHist = function (name) {
+      var orig = hist[name];
+      if (typeof orig !== "function") return;
+      hist[name] = function () {
+        var ret = orig.apply(this, arguments);
+        reportLocation();
+        return ret;
+      };
+    };
+    wrapHist("pushState");
+    wrapHist("replaceState");
+  } catch (e) {}
+  window.addEventListener("popstate", reportLocation);
+  window.addEventListener("hashchange", reportLocation);
+  reportLocation();
 })();
 `;

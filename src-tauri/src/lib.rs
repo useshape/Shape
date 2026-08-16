@@ -160,6 +160,8 @@ pub fn run() {
             commands::design_proxy::start_design_proxy,
             commands::design_proxy::stop_design_proxy,
             commands::design_proxy::probe_preview_url,
+            commands::design_bridge::register_design_bridge,
+            commands::design_bridge::design_mode_log,
             // project stats
             commands::stats::get_project_stats,
             commands::stats::scan_project_loc,

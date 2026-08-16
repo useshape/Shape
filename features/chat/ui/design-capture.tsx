@@ -81,7 +81,11 @@ export function DesignPreviewCaptureHost() {
         entry.settled = true;
         clearTimeout(entry.timeoutId);
         activeRef.current.delete(requestId);
-        entry.iframe.remove();
+        try {
+            entry.iframe.remove();
+        } catch {
+            /* WebView2 logs PostMessage/invalid handle if the iframe HWND is already gone */
+        }
         void emit("design-preview-capture-result", {
             requestId,
             pngPath: result.pngPath ?? null,

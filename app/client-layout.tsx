@@ -58,6 +58,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         void import("@/features/editor/lsp/lsp-client").then(({ LspClientManager }) => {
             void LspClientManager.warmupServices();
         });
+        void import("@/features/preview/design-mode/bridge-script").then(({ DESIGN_BRIDGE_SCRIPT }) => {
+            void import("@/lib/backend").then(({ commands }) => {
+                void commands.registerDesignBridge(DESIGN_BRIDGE_SCRIPT).catch(() => {});
+            });
+        });
 
         const bootstrap = async () => {
             void initSettings();
@@ -70,32 +75,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 initTelemetry();
                 void captureTelemetry("ide_launched");
             });
-
-            // Only the main workbench reload should reap orphaned PTY/LSP state.
-            void import("@/lib/backend").then(({ commands }) => {
-                void import("@tauri-apps/api/core").then(({ invoke }) => {
-                    invoke("pty_kill_all").catch(() => { });
-                });
-                // The Rust backend outlives a webview reload (only the frontend
-                // remounts), so a turn started before the reload may still be
-                // actively streaming. Only force-stop when nothing is generating —
-                // otherwise let it keep running; ChatStreamProvider resyncs
-                // isLoading/messages from get_chat_history + get_chat_generation_state
-                // on mount and will pick the stream back up.
-                commands
-                    .getChatGenerationState()
-                    .then((genState) => {
-                        if (genState.isGenerating) return;
-                        // Avoid hammering stop during a remount storm while a prior
-                        // stop is still settling.
-                        if (genState.activityLabel?.toLowerCase().includes("stop")) return;
-                        commands.stopChatMessage().catch(() => { });
-                    })
-                    .catch(() => {
-                        // Don't stop blindly on probe failure — that caused stop spam
-                        // when the webview remounted faster than IPC recovered.
-                    });
-            });
+            // Do not stop chat, kill PTYs, or abort preview captures on mount.
+            // The Rust backend outlives a webview reload; ChatStreamProvider
+            // resyncs an in-flight turn. Calling stop/pty_kill_all here caused
+            // a launch loop on Windows (invalid window handle → reload → stop).
             void import("@/features/terminal/ui/terminal").then(({ reapOrphanedTerminalSessions }) => {
                 reapOrphanedTerminalSessions();
             });
