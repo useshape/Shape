@@ -1,3 +1,5 @@
+import type { DesignSourceLoc } from "./types";
+
 export const MAX_UNDO = 250;
 export const COALESCE_MS = 400;
 
@@ -27,6 +29,9 @@ export type HistorySession = {
         id: string;
         selector?: string;
         className?: string;
+        tag?: string;
+        locateText?: string;
+        source?: DesignSourceLoc;
         label: string;
         styles: Record<string, string>;
         text?: string;

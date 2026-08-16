@@ -235,16 +235,109 @@ export const DESIGN_BRIDGE_SCRIPT = `
       if (/node_modules[\\/\\\\]|react-dom|jsx-dev-runtime|jsx-runtime|webpack\\/runtime/i.test(line)) continue;
       var m = line.match(/((?:https?:\\/\\/|file:\\/\\/|webpack-internal:\\/\\/\\/|\\/)?[^\\s)]+\\.(?:tsx|jsx|ts|js|vue|svelte))(?::(\\d+))?(?::(\\d+))?/i);
       if (!m) continue;
-      var file = m[1];
+      var file = m[1].replace(/^\\(+/, "");
       try { file = decodeURIComponent(file.split("?")[0]); } catch (e) { file = file.split("?")[0]; }
       var loc = { fileName: file, lineNumber: m[2] ? +m[2] : 1, columnNumber: m[3] ? +m[3] : 1 };
-      var isOrig = /\\.(tsx|jsx|vue|svelte)$/i.test(file) && !/_next\\/static|\\/chunks\\//i.test(file);
-      var isGen = /_next\\/static|\\/chunks\\/|\\.he5\\./i.test(file);
+      var isOrig = /\\.(tsx|jsx|vue|svelte)$/i.test(file) && !/_next\\/static|\\/chunks\\/|node_modules/i.test(file) && file.indexOf("/") >= 0 && !/exports\\.jsx$/i.test(file);
+      var isGen = /_next\\/static|\\/chunks\\/|\\.he5\\./i.test(file) && !/node_modules/i.test(file);
       if (isOrig && !original) original = loc;
       if (isGen && !generated) generated = loc;
     }
     if (!original && !generated) return null;
     return { original: original, generated: generated };
+  }
+
+  var VLQ = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  function decodeVlq(str) {
+    var out = [];
+    var i = 0;
+    while (i < str.length) {
+      var shift = 0, value = 0, digit;
+      do {
+        digit = VLQ.indexOf(str.charAt(i++));
+        if (digit < 0) return out;
+        value += (digit & 31) << shift;
+        shift += 5;
+      } while (digit & 32);
+      out.push(value & 1 ? -(value >> 1) : value >> 1);
+    }
+    return out;
+  }
+  function isProjectSrc(file) {
+    if (!file) return false;
+    var n = String(file).replace(/\\\\/g, "/").split("?")[0];
+    if (/node_modules|_next\\/static|\\/chunks\\/|exports\\.jsx$/i.test(n)) return false;
+    if (!/\\.(tsx|jsx|vue|svelte|html)$/i.test(n)) return false;
+    return n.indexOf("/") >= 0 || /^(src|app|pages|components)\\//i.test(n);
+  }
+  function isPrimitivePath(file) {
+    return /\\/(ui|components\\/ui|node_modules)\\//i.test(String(file || ""));
+  }
+  function fromChunkName(file) {
+    var base = String(file).replace(/\\\\/g, "/").split("/").pop() || "";
+    var m = base.match(/^(.+)_(tsx|jsx|ts|js)(?:_[a-z0-9._]+)?\\.js$/i);
+    if (!m) return null;
+    var decoded = m[1].replace(/__/g, "\\0").split("_").map(function (p) { return p.replace(/\\0/g, "_"); }).join("/");
+    var path = decoded + "." + m[2].toLowerCase();
+    return isProjectSrc(path) || /^(src|app|pages)\\//i.test(path) ? path : null;
+  }
+  function cleanScriptUrl(file) {
+    var f = String(file || "").replace(/^[(\\s]+/, "").replace(/[)\\s]+$/, "").split("?")[0];
+    if (!f || /node_modules/i.test(f)) return "";
+    if (/^https?:\\/\\//i.test(f)) return f;
+    if (f.charAt(0) === "/") return location.origin + f;
+    return "";
+  }
+  function originalFromMap(map, genLine, genCol) {
+    var lines = String(map.mappings || "").split(";");
+    var row = lines[genLine - 1];
+    if (!row) return null;
+    var segs = row.split(",");
+    var gCol = 0, src = 0, oLine = 0, oCol = 0;
+    var bestProj = null, bestAny = null;
+    for (var i = 0; i < segs.length; i++) {
+      if (!segs[i]) continue;
+      var v = decodeVlq(segs[i]);
+      gCol += v[0] || 0;
+      if (v.length < 4) continue;
+      src += v[1]; oLine += v[2]; oCol += v[3];
+      var source = (map.sources && map.sources[src]) || "";
+      var cand = { source: source, line: oLine + 1, column: oCol + 1, dist: Math.abs(gCol - genCol) };
+      if (!bestAny || cand.dist < bestAny.dist) bestAny = cand;
+      if (isProjectSrc(source) && (!bestProj || cand.dist < bestProj.dist)) bestProj = cand;
+    }
+    return bestProj || (bestAny && isProjectSrc(bestAny.source) ? bestAny : null);
+  }
+  function resolveIdentity(src, cb) {
+    if (!src) return cb(null);
+    if (isProjectSrc(src.fileName) && src.lineNumber > 0) return cb(src);
+    var gen = src.generated;
+    var chunk = fromChunkName((gen && gen.fileName) || src.fileName);
+    function finish(mapped) {
+      if (mapped) return cb(mapped);
+      if (chunk) return cb({ fileName: chunk, lineNumber: src.lineNumber > 1 ? src.lineNumber : 1, columnNumber: src.columnNumber || 1, componentName: src.componentName, generated: gen, mapped: false });
+      cb(src);
+    }
+    var url = gen ? cleanScriptUrl(gen.fileName) : "";
+    if (!url) return finish(null);
+    fetch(url).then(function (r) { return r.ok ? r.text() : ""; }).then(function (js) {
+      var hint = /sourceMappingURL=(\\S+)/.exec(js);
+      var mapUrl = hint ? new URL(hint[1], url).href : url.split("?")[0] + ".map";
+      return fetch(mapUrl).then(function (r) { return r.ok ? r.json() : null; });
+    }).then(function (map) {
+      if (!map) return finish(null);
+      var orig = originalFromMap(map, gen.lineNumber, gen.columnNumber || 0);
+      if (!orig) return finish(null);
+      var file = orig.source.replace(/^webpack:\\/\\/[^/]+\\//, "").replace(/^\\.\\//, "");
+      var srcIdx = file.toLowerCase().lastIndexOf("/src/");
+      if (srcIdx >= 0) file = file.slice(srcIdx + 1);
+      var appIdx = file.toLowerCase().lastIndexOf("/app/");
+      if (appIdx >= 0 && file.indexOf("src/") !== 0) file = file.slice(appIdx + 1);
+      file = file.replace(/^\\/+/, "");
+      if (!isProjectSrc(file) && chunk) file = chunk;
+      if (!isProjectSrc(file) && !chunk) return finish(null);
+      cb({ fileName: isProjectSrc(file) ? file : chunk, lineNumber: orig.line, columnNumber: orig.column, componentName: src.componentName, generated: gen, mapped: true });
+    }).catch(function () { finish(null); });
   }
 
   function ownerName(fiber) {
@@ -262,7 +355,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
     return "";
   }
 
-  function sourceFromFiber(fiber) {
+  function sourceFromFiberNode(fiber) {
     if (!fiber) return null;
     var name = ownerName(fiber);
     var src = fiber._debugSource;
@@ -270,18 +363,25 @@ export const DESIGN_BRIDGE_SCRIPT = `
       for (var i = fiber._debugInfo.length - 1; i >= 0; i--) {
         var info = fiber._debugInfo[i];
         if (info && (info.fileName || info.file)) { src = info; break; }
+        if (info && info.debugStack) {
+          var stacked = stackPayload(info.debugStack);
+          if (stacked && stacked.original) {
+            src = { fileName: stacked.original.fileName, lineNumber: stacked.original.lineNumber, columnNumber: stacked.original.columnNumber };
+            break;
+          }
+        }
       }
     }
     var payload = stackPayload(fiber._debugStack) || stackPayload(fiber._debugTask);
     var fileName = "";
     var lineNumber = 0;
     var columnNumber = 1;
-    if (src && (src.fileName || src.file) && /\\.(tsx|jsx|vue|svelte)$/i.test(String(src.fileName || src.file))) {
-      fileName = String(src.fileName || src.file);
+    if (src && (src.fileName || src.file) && /\\.(tsx|jsx|vue|svelte)$/i.test(String(src.fileName || src.file).split("?")[0])) {
+      fileName = String(src.fileName || src.file).split("?")[0];
       lineNumber = src.lineNumber || src.line || 1;
       columnNumber = src.columnNumber || src.column || 1;
     } else if (payload && payload.original) {
-      fileName = payload.original.fileName;
+      fileName = payload.original.fileName.split("?")[0];
       lineNumber = payload.original.lineNumber;
       columnNumber = payload.original.columnNumber;
     }
@@ -300,6 +400,32 @@ export const DESIGN_BRIDGE_SCRIPT = `
       generated: generated || undefined,
       nodeId: (fileName || (generated && generated.fileName) || "") + ":" + lineNumber + ":" + columnNumber
     };
+  }
+
+  function nextOwnerFiber(fiber) {
+    if (!fiber) return null;
+    var owner = fiber._debugOwner;
+    if (owner && typeof owner === "object" && (owner.return || owner.tag != null || owner.type)) return owner;
+    return fiber.return || null;
+  }
+
+  function sourceFromFiber(fiber) {
+    if (!fiber) return null;
+    var innermost = null;
+    var preferred = null;
+    var node = fiber;
+    for (var hops = 0; hops < 24 && node; hops++) {
+      var cand = sourceFromFiberNode(node);
+        if (cand) {
+          if (!innermost) innermost = cand;
+          if (isProjectSrc(cand.fileName)) {
+            if (!preferred) preferred = cand;
+            else if (isPrimitivePath(preferred.fileName) && !isPrimitivePath(cand.fileName)) preferred = cand;
+          }
+        }
+      node = nextOwnerFiber(node);
+    }
+    return preferred || innermost;
   }
 
   function reactFiber(el) {
@@ -503,7 +629,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
     var src = reactSource(el);
     var inspect = collectInspect(el);
     if (!src || !src.lineNumber || /_next\\/static|\\/chunks\\//i.test(src.fileName || "")) {
-      inspect.issues.unshift({ id: "no-source", severity: "warn", title: "No source identity", detail: "This node does not map to a project file. Preview-only." });
+      inspect.issues.unshift({ id: "no-source", severity: "warn", title: "No source identity", detail: "Could not map this node to a file yet. Apply will search by class and text." });
     }
     return {
       id: id,
@@ -525,7 +651,14 @@ export const DESIGN_BRIDGE_SCRIPT = `
     var payload = elementPayload(el);
     selectedId = payload.id;
     paintOverlay(el, true);
-    post({ type: "shape-design-selected", element: payload, additive: !!additive });
+    resolveIdentity(payload.source, function (src) {
+      payload.source = src;
+      payload.editable = !!(src && isProjectSrc(src.fileName) && src.lineNumber > 0) || !!(payload.className || payload.locateText);
+      if (payload.inspect && payload.editable) {
+        payload.inspect.issues = (payload.inspect.issues || []).filter(function (x) { return x.id !== "no-source"; });
+      }
+      post({ type: "shape-design-selected", element: payload, additive: !!additive });
+    });
   }
 
   function pick(e) {

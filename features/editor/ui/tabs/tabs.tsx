@@ -20,7 +20,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { restrictToHorizontalAxis, restrictToFirstScrollableAncestor } from '@dnd-kit/modifiers';
+import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
 import { getIconPath } from "@/lib/ui/icons/files";
 import { isSettingsTab } from "@/lib/settings-tab";
 import { isDesignPreviewTab, parseDesignPreviewTabPath } from "@/lib/design-preview-tab";
@@ -254,12 +254,14 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
             </div>
 
             <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
-                <span
-                    className="truncate whitespace-nowrap text-sm"
-                    style={getStatusStyle()}
-                >
-                    {displayName}
-                </span>
+                <Tooltip content={file.path}>
+                    <span
+                        className="truncate whitespace-nowrap text-sm"
+                        style={getStatusStyle()}
+                    >
+                        {displayName}
+                    </span>
+                </Tooltip>
                 {gitStatus?.status && (
                     <span
                         className="text-xs font-medium pt-0.5 shrink-0"
@@ -312,10 +314,8 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
 
     return (
         <ContextMenu>
-            <ContextMenuTrigger>
-                <Tooltip content={file.path}>
-                    {tabContent}
-                </Tooltip>
+            <ContextMenuTrigger asChild>
+                {tabContent}
             </ContextMenuTrigger>
             <ContextMenuContent className="w-56">
                 <ContextMenuItem onClick={() => onClose(file.path)} className="flex items-center gap-2">
@@ -554,26 +554,15 @@ export default function Tabs({
                     sensors={sensors}
                     collisionDetection={closestCenter}
                     onDragEnd={handleDragEnd}
-                    modifiers={[restrictToHorizontalAxis, restrictToFirstScrollableAncestor]}
+                    modifiers={[restrictToHorizontalAxis]}
                 >
                     <div className={WORKBENCH_TAB_ROW_CLASS}>
                         <div className={WORKBENCH_TAB_LIST_CLASS}>
-                        {sortedFiles.filter((f: FileInfo) => f.is_pinned).map((file: FileInfo) => (
-                            <SortableTab
-                                key={file.path}
-                                file={file}
-                                gitStatus={gitFiles.get(getRelPath(file.path))}
-                                isActive={groupActiveFile === file.path}
-                                onSelect={handleSelect}
-                                onClose={handleCloseFile}
-                                project_path={project_path}
-                            />
-                        ))}
                         <SortableContext
-                            items={sortedFiles.filter((f: FileInfo) => !f.is_pinned).map((f: FileInfo) => f.path)}
+                            items={sortedFiles.map((f: FileInfo) => f.path)}
                             strategy={horizontalListSortingStrategy}
                         >
-                            {sortedFiles.filter((f: FileInfo) => !f.is_pinned).map((file: FileInfo) => (
+                            {sortedFiles.map((file: FileInfo) => (
                                 <SortableTab
                                     key={file.path}
                                     file={file}

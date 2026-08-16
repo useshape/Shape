@@ -19,7 +19,7 @@ import {
     mergeClassTokens,
     cssModuleLocal,
 } from "@/features/preview/design-mode/apply-to-source";
-import { isBundledGeneratedPath, isProjectSourcePath, isResolvedSource, normalizeOriginalSourcePath } from "@/features/preview/design-mode/source-identity";
+import { isBundledGeneratedPath, isProjectSourcePath, isResolvedSource, normalizeOriginalSourcePath, pathFromGeneratedChunk, enrichSourceIdentity } from "@/features/preview/design-mode/source-identity";
 import { locateJsxByHint, locateJsxElement, locateJsxFromSearchLine } from "@/features/preview/design-mode/apply-jsx";
 import { patchCssClass } from "@/features/preview/design-mode/apply-css";
 import { formatLinearGradient, parseLinearGradient } from "@/features/preview/design-mode/css";
@@ -224,10 +224,20 @@ describe("apply edits to source", () => {
         expect(isBundledGeneratedPath("/_next/static/chunks/src_01u.he5._.js")).toBe(true);
         expect(isProjectSourcePath("/_next/static/chunks/src_01u.he5._.js")).toBe(false);
         expect(isResolvedSource({ fileName: "", lineNumber: 0, componentName: "Hero" })).toBe(false);
+        expect(isResolvedSource({ fileName: "exports.jsx", lineNumber: 1 })).toBe(false);
+        expect(pathFromGeneratedChunk("app_page_tsx_1s_43kl._.js")).toBe("app/page.tsx");
+        expect(enrichSourceIdentity({
+            fileName: "page.tsx",
+            lineNumber: 1353,
+            mapped: false,
+            generated: { fileName: "app_page_tsx_1s_43kl._.js", lineNumber: 1353, columnNumber: 231 },
+        })?.fileName).toBe("app/page.tsx");
         expect(isResolvedSource({ fileName: "src/components/view-animation.tsx", lineNumber: 41 })).toBe(true);
         expect(normalizeOriginalSourcePath("webpack://portfolio/./src/components/view-animation.tsx")).toBe(
             "src/components/view-animation.tsx",
         );
+        expect(normalizeOriginalSourcePath("http://localhost:5173/src/App.tsx?t=123")).toBe("src/App.tsx");
+        expect(isResolvedSource({ fileName: "http://localhost:5173/src/App.tsx", lineNumber: 12 })).toBe(true);
     });
 
     it("maps a cva string hit to the JSX that consumes it, and a Link override to that JSX", () => {
@@ -243,6 +253,15 @@ describe("apply edits to source", () => {
         const p = locateJsxByHint(about, "about.tsx", { className: "text-lg", tag: "p", locateText: "I'm Anirudh, a full-stack developer" });
         expect(p.ok).toBe(true);
         if (p.ok) expect(p.hit.tagName).toBe("p");
+
+        const wrongLine = locateJsxByHint(about, "about.tsx", {
+            className: "text-lg",
+            tag: "p",
+            locateText: "I'm Anirudh, a full-stack developer",
+            lineNumber: 1,
+        });
+        expect(wrongLine.ok).toBe(true);
+        if (wrongLine.ok) expect(wrongLine.hit.tagName).toBe("p");
     });
 
     it("patches a CSS class with PostCSS without flattening @media siblings", () => {

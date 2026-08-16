@@ -3,7 +3,9 @@
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search";
+import { ScrollArea } from "@/components/ui/scroll";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
 import type { DesignLayerNode } from "../design-mode/types";
@@ -50,7 +52,7 @@ function LayerRow({
                 type="button"
                 onClick={() => onSelect(node.id)}
                 className={cn(
-                    "flex h-7 w-full items-center gap-1 rounded-md py-0.5 pr-2 text-left text-xs",
+                    "flex h-chrome w-full items-center gap-1 rounded-md py-0.5 pr-2 text-left text-sm",
                     active ? "bg-accent-text-bg text-accent-text" : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
                     node.hidden && "opacity-50",
                 )}
@@ -63,7 +65,7 @@ function LayerRow({
                             e.stopPropagation();
                             onToggle(node.id);
                         }}
-                        className="flex h-4 w-4 shrink-0 items-center justify-center"
+                        className="flex size-4 shrink-0 items-center justify-center"
                     >
                         <Icon name="chevron_right" size={12} className={cn("opacity-60 transition-transform", open && "rotate-90")} />
                     </span>
@@ -115,7 +117,7 @@ export function DesignLayersPanel({
     const roots = layers.length ? layers : [];
     const selectedId = selected?.id ?? null;
     const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
-    const [tab, setTab] = React.useState<"layers" | "inspect">("layers");
+    const [tab, setTab] = React.useState("layers");
     const [paused, setPaused] = React.useState(false);
     const [resumeAfterEdit, setResumeAfterEdit] = React.useState(true);
     const [pseudo, setPseudo] = React.useState<Record<string, boolean>>({});
@@ -209,112 +211,82 @@ export function DesignLayersPanel({
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-            <SidebarPanelHeaderFrame
-                title={tab === "layers" ? "Layers" : "Inspect"}
-                actions={
-                    <button
-                        type="button"
-                        title={tab === "layers" ? "Inspect" : "Layers"}
-                        className={cn(
-                            "flex h-6 w-6 items-center justify-center rounded-md",
-                            tab === "inspect" ? "bg-panel-active text-text-primary" : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
-                        )}
-                        onClick={() => setTab((t) => (t === "layers" ? "inspect" : "layers"))}
-                    >
-                        <Icon name="bug_report" size={14} />
-                    </button>
-                }
-            />
-            {tab === "layers" ? (
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <div className="flex shrink-0 items-center gap-1 border-b border-border-subtle px-2 py-1.5">
-                        <Input
-                            value={layerQuery}
-                            onChange={(e) => setLayerQuery(e.target.value)}
-                            placeholder="Search layers"
-                            className="h-7 min-w-0 flex-1 text-xs"
-                        />
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            className={cn(visibleOnly && "bg-panel-active")}
-                            onClick={() => setVisibleOnly((v) => !v)}
-                        >
+            <SidebarPanelHeaderFrame title={tab === "layers" ? "Layers" : "Inspect"} />
+            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <TabsList variant="line">
+                    <TabsTrigger value="layers">Layers</TabsTrigger>
+                    <TabsTrigger value="inspect">Inspect</TabsTrigger>
+                </TabsList>
+                <TabsContent value="layers" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="flex shrink-0 items-center gap-1 border-b border-border-subtle px-sm py-1">
+                        <SearchInput icon="filter" value={layerQuery} onChange={(e) => setLayerQuery(e.target.value)} placeholder="Filter" />
+                        <Button type="button" variant={visibleOnly ? "secondary" : "ghost"} size="xs" onClick={() => setVisibleOnly((v) => !v)}>
                             Visible
                         </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            className={cn(interactiveOnly && "bg-panel-active")}
-                            onClick={() => setInteractiveOnly((v) => !v)}
-                        >
+                        <Button type="button" variant={interactiveOnly ? "secondary" : "ghost"} size="xs" onClick={() => setInteractiveOnly((v) => !v)}>
                             Interactive
                         </Button>
                     </div>
-                    <div
-                        ref={treeRef}
-                        tabIndex={0}
-                        onKeyDown={onTreeKey}
-                        className="min-h-0 flex-1 overflow-y-auto px-1 py-1 custom-scrollbar outline-none"
-                    >
-                        {roots.length === 0 ? (
-                            <p className="px-3 py-4 text-xs text-text-muted">
-                                Click an element in the preview to inspect the page tree.
-                            </p>
-                        ) : layerQuery || visibleOnly || interactiveOnly ? (
-                            visible.map((node) => (
-                                <LayerRow
-                                    key={node.id}
-                                    node={{ ...node, children: [] }}
-                                    depth={layerDepth(roots, node.id) ?? 0}
-                                    selectedId={selectedId}
-                                    expanded={expanded}
-                                    onToggle={onToggle}
-                                    onSelect={(id) => onSelectId?.(id)}
-                                />
-                            ))
-                        ) : (
-                            roots.map((node) => (
-                                <LayerRow
-                                    key={node.id}
-                                    node={node}
-                                    depth={0}
-                                    selectedId={selectedId}
-                                    expanded={expanded}
-                                    onToggle={onToggle}
-                                    onSelect={(id) => onSelectId?.(id)}
-                                />
-                            ))
-                        )}
-                    </div>
-                </div>
-            ) : (
-                <DesignInspectPanel
-                    styleFilter={styleFilter}
-                    onStyleFilter={setStyleFilter}
-                    paused={paused}
-                    onPaused={(next) => {
-                        setPaused(next);
-                        bridge?.pause?.(next, resumeAfterEdit);
-                    }}
-                    resumeAfterEdit={resumeAfterEdit}
-                    onResumeAfterEdit={setResumeAfterEdit}
-                    pseudo={pseudo}
-                    onPseudo={togglePseudo}
-                    watching={watching}
-                    onWatch={(next) => {
-                        setWatching(next);
-                        if (selectedId) bridge?.watch?.(selectedId, next, selected?.selector);
-                    }}
-                    emulateFocus={emulateFocus}
-                    onEmulateFocus={(next) => {
-                        setEmulateFocus(next);
-                        bridge?.emulateFocus?.(next);
-                    }}
-                />
-            )}
+                    <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
+                        <div ref={treeRef} tabIndex={0} onKeyDown={onTreeKey} className="px-1 py-1 outline-none">
+                            {roots.length === 0 ? (
+                                <p className="px-3 py-4 text-sm text-text-muted">
+                                    Click an element in the preview to inspect the page tree.
+                                </p>
+                            ) : layerQuery || visibleOnly || interactiveOnly ? (
+                                visible.map((node) => (
+                                    <LayerRow
+                                        key={node.id}
+                                        node={{ ...node, children: [] }}
+                                        depth={layerDepth(roots, node.id) ?? 0}
+                                        selectedId={selectedId}
+                                        expanded={expanded}
+                                        onToggle={onToggle}
+                                        onSelect={(id) => onSelectId?.(id)}
+                                    />
+                                ))
+                            ) : (
+                                roots.map((node) => (
+                                    <LayerRow
+                                        key={node.id}
+                                        node={node}
+                                        depth={0}
+                                        selectedId={selectedId}
+                                        expanded={expanded}
+                                        onToggle={onToggle}
+                                        onSelect={(id) => onSelectId?.(id)}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    </ScrollArea>
+                </TabsContent>
+                <TabsContent value="inspect" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <DesignInspectPanel
+                        styleFilter={styleFilter}
+                        onStyleFilter={setStyleFilter}
+                        paused={paused}
+                        onPaused={(next) => {
+                            setPaused(next);
+                            bridge?.pause?.(next, resumeAfterEdit);
+                        }}
+                        resumeAfterEdit={resumeAfterEdit}
+                        onResumeAfterEdit={setResumeAfterEdit}
+                        pseudo={pseudo}
+                        onPseudo={togglePseudo}
+                        watching={watching}
+                        onWatch={(next) => {
+                            setWatching(next);
+                            if (selectedId) bridge?.watch?.(selectedId, next, selected?.selector);
+                        }}
+                        emulateFocus={emulateFocus}
+                        onEmulateFocus={(next) => {
+                            setEmulateFocus(next);
+                            bridge?.emulateFocus?.(next);
+                        }}
+                    />
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

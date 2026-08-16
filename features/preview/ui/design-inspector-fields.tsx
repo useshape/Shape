@@ -1,7 +1,9 @@
 "use client";
 
 import React from "react";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import {
     DropdownMenu,
@@ -11,6 +13,7 @@ import {
 } from "@/components/ui/dropdown";
 import { ColorPickerPortal, type PickerAnchor } from "@/features/editor/ui/color-picker/portal";
 import { PadGlyph, PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
+import { SidebarPanelActionButton } from "@/features/panels/ui/sidebar-panel-header";
 import { cn } from "@/lib/utils";
 import {
     colorParts,
@@ -51,14 +54,9 @@ export function AddHeader({
     return (
         <div className="flex h-8 items-center justify-between border-b border-border-subtle px-3">
             <span className="text-xs font-medium text-text-primary">{title}</span>
-            <button
-                type="button"
-                title={`Add ${title.toLowerCase()}`}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                onClick={onAdd}
-            >
+            <SidebarPanelActionButton title={`Add ${title.toLowerCase()}`} onClick={onAdd}>
                 <Icon name="add" size={14} />
-            </button>
+            </SidebarPanelActionButton>
         </div>
     );
 }
@@ -83,19 +81,13 @@ export function CompactSelect({
     return (
         <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    className={cn(
-                        "flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-md bg-panel-hover px-2 text-xs text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50",
-                        className,
-                    )}
-                >
+                <Button type="button" variant="secondary" size="xs" className={cn("w-full justify-between", className)}>
                     <span className="flex min-w-0 items-center gap-1.5">
                         {current?.icon}
                         <span className="truncate">{current?.label ?? value}</span>
                     </span>
                     <Icon name="expand_more" size={12} className="shrink-0 text-text-muted" />
-                </button>
+                </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[200px]">
                 {opts.map((opt) => (
@@ -139,17 +131,15 @@ export function IconBtn({
     children: React.ReactNode;
 }) {
     return (
-        <button
+        <Button
             type="button"
             title={title}
+            variant={active ? "secondary" : "ghost"}
+            size="icon"
             onClick={onClick}
-            className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-                active ? "bg-panel-active text-text-primary" : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
-            )}
         >
             {children}
-        </button>
+        </Button>
     );
 }
 
@@ -195,11 +185,12 @@ export function ColorRow({
 
     return (
         <>
-            <div className="flex items-center gap-0.5">
-                <button
+            <div className="flex items-center gap-1">
+                <Button
                     type="button"
                     title="Color"
-                    className="shape-swatch-design flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-panel-hover outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                    variant="secondary"
+                    size="icon"
                     onClick={(e) => {
                         const r = e.currentTarget.getBoundingClientRect();
                         setAnchor({ x: r.left, y: r.top });
@@ -208,7 +199,7 @@ export function ColorRow({
                     }}
                 >
                     <span
-                        className="h-4 w-4 rounded-[4px] border border-border-subtle"
+                        className="size-3.5 rounded-md border border-border-subtle"
                         style={
                             gradient
                                 ? { backgroundImage: display, backgroundSize: "cover" }
@@ -221,8 +212,8 @@ export function ColorRow({
                                   : { backgroundColor: swatch }
                         }
                     />
-                </button>
-                <input
+                </Button>
+                <Input
                     type="text"
                     spellCheck={false}
                     aria-label="Hex"
@@ -236,11 +227,10 @@ export function ColorRow({
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                     }}
                     disabled={gradient}
-                    className="h-7 min-w-0 flex-1 rounded-md bg-panel-hover px-1.5 text-xs tabular-nums text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50 disabled:text-text-muted"
                 />
-                <div className="w-[58px] shrink-0">
+                <div className="w-[68px] shrink-0">
                     <PxInput
-                        glyph={<span className="text-[9px]">%</span>}
+                        glyph={<span>%</span>}
                         title="Opacity"
                         value={parts.alphaPct}
                         max={100}
@@ -254,7 +244,7 @@ export function ColorRow({
                 </div>
                 {onToggleHidden ? (
                     <IconBtn title={hidden ? "Show" : "Hide"} active={hidden} onClick={onToggleHidden}>
-                        <Icon name={hidden ? "visibility_off" : "visibility"} size={13} />
+                        <Icon name={hidden ? "visibility_off" : "visibility"} size={16} />
                     </IconBtn>
                 ) : null}
                 {onRemove ? (
@@ -629,13 +619,9 @@ export function EffectsSection({
                 <span className="text-xs font-medium text-text-primary">Effects</span>
                 <DropdownMenu modal={false} open={menu} onOpenChange={setMenu}>
                     <DropdownMenuTrigger asChild>
-                        <button
-                            type="button"
-                            title="Add effect"
-                            className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                        >
+                        <SidebarPanelActionButton title="Add effect">
                             <Icon name="add" size={14} />
-                        </button>
+                        </SidebarPanelActionButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-[200px]">
                         {EFFECT_META.map((item) => (
@@ -748,21 +734,23 @@ export function SelectionColors({
     return (
         <Section title="Selection colors">
             <div className="flex flex-col gap-1">
-                {colors.slice(0, 8).map((c) => {
+                {colors.slice(0, 8).map((c, i) => {
                     const parts = colorParts(c);
                     return (
-                        <button
-                            key={c}
+                        <Button
+                            key={`${c}-${i}`}
                             type="button"
-                            className="flex h-8 items-center gap-2 rounded-md bg-panel-hover px-1.5 text-left"
+                            variant="secondary"
+                            size="xs"
+                            className="w-full justify-start"
                             onClick={() => onPick(c)}
                         >
                             <span
-                                className="h-4 w-4 shrink-0 rounded-[4px] border border-border-subtle"
+                                className="size-3.5 shrink-0 rounded-md border border-border"
                                 style={{ backgroundColor: c }}
                             />
-                            <span className="text-xs tabular-nums text-text-primary">{parts.hex}</span>
-                        </button>
+                            <span className="tabular-nums">{parts.hex}</span>
+                        </Button>
                     );
                 })}
             </div>

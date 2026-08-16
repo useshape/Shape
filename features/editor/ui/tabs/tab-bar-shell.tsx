@@ -15,7 +15,7 @@ import {
     sortableKeyboardCoordinates,
     horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { restrictToHorizontalAxis, restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import {
     WORKBENCH_TAB_ACTIONS_CLASS,
     WORKBENCH_TAB_BAR_CLASS,
@@ -61,7 +61,7 @@ export function TabBarShell({ itemIds, onDragEnd, children, actions, dndId, hide
                         sensors={sensors}
                         collisionDetection={closestCenter}
                         onDragEnd={onDragEnd}
-                        modifiers={[restrictToHorizontalAxis, restrictToFirstScrollableAncestor]}
+                        modifiers={[restrictToHorizontalAxis]}
                     >
                         <div className={WORKBENCH_TAB_ROW_CLASS}>
                             <div className={WORKBENCH_TAB_LIST_CLASS}>

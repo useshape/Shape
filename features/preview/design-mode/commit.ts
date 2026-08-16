@@ -1,4 +1,6 @@
 import { applyEditsToProject, revertSourceWrites } from "./apply-to-source";
+
+export { abortDesignApply } from "./apply-to-source";
 import { designLog } from "./log";
 import type { DesignPendingEdit } from "./types";
 
@@ -44,7 +46,9 @@ export async function commitDesignEdits(projectPath: string, edits: DesignPendin
             stack.push(result.reverts);
             emit();
         }
-        if (result.errors.length) {
+        if (result.errors.length && result.files.length) {
+            designLog("WARN", "apply partial", { errors: result.errors, files: result.files });
+        } else if (result.errors.length) {
             designLog("ERROR", "apply failed", { errors: result.errors, files: result.files });
         } else {
             designLog("INFO", "apply ok", { files: result.files.map((f) => f.split(/[/\\]/).pop()) });
