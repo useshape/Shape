@@ -468,6 +468,7 @@ export type DesignEffectKind =
     | "inner-shadow"
     | "layer-blur"
     | "background-blur"
+    | "glass"
     | "noise"
     | "texture";
 
@@ -478,6 +479,8 @@ export type DesignEffect = {
     blur: number;
     x?: number;
     y?: number;
+    spread?: number;
+    opacity?: number;
     color?: string;
 };
 
@@ -486,6 +489,7 @@ const EFFECT_META: { kind: DesignEffectKind; label: string }[] = [
     { kind: "drop-shadow", label: "Drop shadow" },
     { kind: "layer-blur", label: "Layer blur" },
     { kind: "background-blur", label: "Background blur" },
+    { kind: "glass", label: "Glass" },
     { kind: "noise", label: "Noise" },
     { kind: "texture", label: "Texture" },
 ];
@@ -525,6 +529,14 @@ function EffectIcon({ kind }: { kind: DesignEffectKind }) {
             </svg>
         );
     }
+    if (kind === "glass") {
+        return (
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+                <rect x="2.5" y="2.5" width="9" height="9" rx="1.5" fill="currentColor" opacity="0.12" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M4 8.5 8.5 4" stroke="currentColor" strokeWidth="1.1" opacity="0.7" />
+            </svg>
+        );
+    }
     if (kind === "noise") {
         return (
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
@@ -543,25 +555,44 @@ function EffectIcon({ kind }: { kind: DesignEffectKind }) {
     );
 }
 
+function withOpacity(color: string, opacity: number) {
+    const a = Math.max(0, Math.min(1, opacity));
+    if (/\/\s*[\d.]+\s*\)/.test(color)) return color.replace(/\/\s*[\d.]+\s*\)/, `/ ${a})`);
+    if (color.startsWith("#") && (color.length === 7 || color.length === 4)) {
+        const hex = Math.round(a * 255).toString(16).padStart(2, "0");
+        return `${color}${hex}`;
+    }
+    return `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, transparent)`;
+}
+
 export function effectsToStyles(effects: DesignEffect[]): Partial<Record<"boxShadow" | "filter" | "backdropFilter", string>> {
     const visible = effects.filter((e) => !e.hidden);
     const shadows = visible
         .filter((e) => e.kind === "drop-shadow" || e.kind === "inner-shadow")
         .map((e) => {
             const inset = e.kind === "inner-shadow" ? "inset " : "";
-            return `${inset}${e.x ?? 0}px ${e.y ?? 4}px ${e.blur}px ${e.color || "rgb(0 0 0 / 0.25)"}`;
+            const color = withOpacity(e.color || "rgb(0 0 0 / 0.25)", e.opacity ?? 0.25);
+            return `${inset}${e.x ?? 0}px ${e.y ?? 4}px ${e.blur}px ${e.spread ?? 0}px ${color}`;
         });
     const layerBlur = visible.find((e) => e.kind === "layer-blur");
     const noise = visible.find((e) => e.kind === "noise" || e.kind === "texture");
     const bgBlur = visible.find((e) => e.kind === "background-blur");
+    const glass = visible.find((e) => e.kind === "glass");
     const filters: string[] = [];
     if (layerBlur) filters.push(`blur(${layerBlur.blur}px)`);
     if (noise) filters.push(`url(#shape-noise)`);
     if (noise && !layerBlur) filters.push(`contrast(1.05)`);
+    const backdrop: string[] = [];
+    if (bgBlur) backdrop.push(`blur(${bgBlur.blur}px)`);
+    if (glass) {
+        backdrop.push(`blur(${glass.blur}px)`);
+        backdrop.push("saturate(180%)");
+        backdrop.push("brightness(1.08)");
+    }
     return {
         boxShadow: shadows.length ? shadows.join(", ") : "none",
         filter: filters.length ? filters.join(" ") : "none",
-        backdropFilter: bgBlur ? `blur(${bgBlur.blur}px)` : "none",
+        backdropFilter: backdrop.length ? backdrop.join(" ") : "none",
     };
 }
 
@@ -574,19 +605,24 @@ export function EffectsSection({
 }) {
     const [menu, setMenu] = React.useState(false);
     const add = (kind: DesignEffectKind) => {
+        const shadow = kind.includes("shadow");
         onChange([
             ...effects,
             {
                 id: `${kind}-${Date.now().toString(36)}`,
                 kind,
-                blur: kind.includes("blur") ? 8 : 16,
+                blur: kind === "glass" ? 20 : kind.includes("blur") ? 8 : 16,
                 x: 0,
-                y: kind.includes("shadow") ? 4 : 0,
+                y: shadow ? 4 : 0,
+                spread: 0,
+                opacity: shadow ? 0.25 : kind === "glass" ? 0.7 : 1,
                 color: "rgb(0 0 0 / 0.25)",
             },
         ]);
         setMenu(false);
     };
+    const patch = (id: string, next: Partial<DesignEffect>) =>
+        onChange(effects.map((e) => (e.id === id ? { ...e, ...next } : e)));
     return (
         <div className="border-b border-border-subtle">
             <div className="flex h-8 items-center justify-between px-3">
@@ -615,36 +651,88 @@ export function EffectsSection({
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
-            {effects.map((fx) => (
-                <div key={fx.id} className="flex items-center gap-1.5 px-3 pb-2">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-panel-hover text-text-muted">
-                        <EffectIcon kind={fx.kind} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
-                        {EFFECT_META.find((m) => m.kind === fx.kind)?.label}
-                    </span>
-                    <div className="w-[72px]">
-                        <PxInput
-                            glyph={<span className="text-[9px]">px</span>}
-                            title="Blur"
-                            value={fx.blur}
-                            onCommit={(n) =>
-                                onChange(effects.map((e) => (e.id === fx.id ? { ...e, blur: n } : e)))
-                            }
-                        />
+            {effects.map((fx) => {
+                const shadow = fx.kind === "drop-shadow" || fx.kind === "inner-shadow";
+                return (
+                    <div key={fx.id} className="flex flex-col gap-1.5 px-3 pb-3">
+                        <div className="flex items-center gap-1.5">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-panel-hover text-text-muted">
+                                <EffectIcon kind={fx.kind} />
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
+                                {EFFECT_META.find((m) => m.kind === fx.kind)?.label}
+                            </span>
+                            <IconBtn
+                                title={fx.hidden ? "Show" : "Hide"}
+                                active={fx.hidden}
+                                onClick={() => patch(fx.id, { hidden: !fx.hidden })}
+                            >
+                                <Icon name={fx.hidden ? "visibility_off" : "visibility"} size={13} />
+                            </IconBtn>
+                            <IconBtn title="Remove" onClick={() => onChange(effects.filter((e) => e.id !== fx.id))}>
+                                <Icon name="remove" size={13} />
+                            </IconBtn>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1">
+                            {shadow ? (
+                                <>
+                                    <PxInput
+                                        glyph={<span className="text-[9px]">X</span>}
+                                        title="X"
+                                        value={fx.x ?? 0}
+                                        onCommit={(n) => patch(fx.id, { x: n })}
+                                    />
+                                    <PxInput
+                                        glyph={<span className="text-[9px]">Y</span>}
+                                        title="Y"
+                                        value={fx.y ?? 0}
+                                        onCommit={(n) => patch(fx.id, { y: n })}
+                                    />
+                                </>
+                            ) : null}
+                            <PxInput
+                                glyph={<span className="text-[9px]">Bl</span>}
+                                title="Blur"
+                                value={fx.blur}
+                                onCommit={(n) => patch(fx.id, { blur: n })}
+                            />
+                            {shadow ? (
+                                <PxInput
+                                    glyph={<span className="text-[9px]">Sp</span>}
+                                    title="Spread"
+                                    value={fx.spread ?? 0}
+                                    onCommit={(n) => patch(fx.id, { spread: n })}
+                                />
+                            ) : (
+                                <PxInput
+                                    glyph={<span className="text-[9px]">%</span>}
+                                    title="Opacity"
+                                    value={Math.round((fx.opacity ?? 1) * 100)}
+                                    onCommit={(n) => patch(fx.id, { opacity: Math.max(0, Math.min(100, n)) / 100 })}
+                                />
+                            )}
+                        </div>
+                        {shadow ? (
+                            <div className="flex items-center gap-1">
+                                <div className="min-w-0 flex-1">
+                                    <ColorRow
+                                        cssValue={fx.color || "rgb(0 0 0 / 0.25)"}
+                                        onChange={(c) => patch(fx.id, { color: c })}
+                                    />
+                                </div>
+                                <div className="w-[64px]">
+                                    <PxInput
+                                        glyph={<span className="text-[9px]">%</span>}
+                                        title="Opacity"
+                                        value={Math.round((fx.opacity ?? 0.25) * 100)}
+                                        onCommit={(n) => patch(fx.id, { opacity: Math.max(0, Math.min(100, n)) / 100 })}
+                                    />
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
-                    <IconBtn
-                        title={fx.hidden ? "Show" : "Hide"}
-                        active={fx.hidden}
-                        onClick={() => onChange(effects.map((e) => (e.id === fx.id ? { ...e, hidden: !e.hidden } : e)))}
-                    >
-                        <Icon name={fx.hidden ? "visibility_off" : "visibility"} size={13} />
-                    </IconBtn>
-                    <IconBtn title="Remove" onClick={() => onChange(effects.filter((e) => e.id !== fx.id))}>
-                        <Icon name="remove" size={13} />
-                    </IconBtn>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }

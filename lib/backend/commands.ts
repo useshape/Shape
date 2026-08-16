@@ -494,6 +494,10 @@ export const commands = {
         }),
     stopDesignProxy: () => invokeCommand<void>("stop_design_proxy"),
     probePreviewUrl: (url: string) => invokeCommand<boolean>("probe_preview_url", { url }),
+    registerDesignBridge: (script: string) =>
+        invokeCommand<void>("register_design_bridge", { script }),
+    designModeLog: (level: string, message: string) =>
+        invokeCommand<void>("design_mode_log", { level, message }),
     stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
     getChatHistory: () => invokeCommand<ChatMessage[]>("get_chat_history"),
     getChatGenerationState: () =>

@@ -7,9 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
 import { PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import { useProjectState } from "@/lib/backend";
-import { applyEditsToProject } from "../design-mode/apply-to-source";
 import {
     clearDesignPending,
+    setDesignPending,
     upsertDesignPending,
     useDesignModeStore,
     getDesignModeState,
@@ -21,9 +21,13 @@ import {
     recordChange,
     setHistoryPending,
 } from "../design-mode/history";
+import { commitDesignEdits, revertLastDesignCommit, subscribeDesignRevert, designRevertDepth } from "../design-mode/commit";
+import { designLog } from "../design-mode/log";
+import { isResolvedSource } from "../design-mode/source-identity";
 import type { DesignComputedStyles } from "../design-mode/types";
 import {
     firstFontFamily,
+    formatLinearGradient,
     isFlexDisplay,
     isGridDisplay,
     isTransparentColor,
@@ -32,6 +36,7 @@ import {
     normalizeTextAlign,
     normalizeWeight,
     opacityPercent,
+    parseLinearGradient,
     parsePx,
     px,
 } from "../design-mode/css";
@@ -121,16 +126,15 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
     const [padIndependent, setPadIndependent] = React.useState(false);
     const [fillHidden, setFillHidden] = React.useState(false);
     const [lockRatio, setLockRatio] = React.useState(false);
-    const [scope, setScope] = React.useState<"element" | "component">("element");
     const [effects, setEffects] = React.useState<DesignEffect[]>([]);
-    const [applyError, setApplyError] = React.useState<string | null>(null);
     const [applying, setApplying] = React.useState(false);
+    const [confirmRevert, setConfirmRevert] = React.useState(false);
+    const revertDepth = React.useSyncExternalStore(subscribeDesignRevert, designRevertDepth, designRevertDepth);
 
     React.useEffect(() => {
         setFillHidden(false);
         setPadIndependent(false);
         setEffects([]);
-        setApplyError(null);
     }, [selected?.id]);
 
     const patch = (styles: Partial<DesignComputedStyles>, text?: string, silent = false) => {
@@ -155,15 +159,18 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
         }
         if (Object.keys(clean).length) bridge.style(selected.id, clean, selected.selector);
         if (text != null) bridge.content(selected.id, text, selected.selector);
+        if (!isResolvedSource(selected.source)) return;
         upsertDesignPending({
             id: selected.id,
             tag: selected.tag,
             selector: selected.selector,
             className: selected.className,
+            locateText: selected.locateText,
             source: selected.source,
             label: selected.label,
             styles,
-            text,
+            text: text ?? selected.text,
+            inspect: selected.inspect,
         });
         setHistoryPending(
             getDesignModeState().pending.map((p) => ({
@@ -179,6 +186,50 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
         );
     };
 
+    const apply = async () => {
+        const edits = getDesignModeState().pending;
+        if (!edits.length || !project_path) {
+            const msg = !project_path ? "Open a project to apply." : "Nothing to apply.";
+            void import("@/features/notifications").then(({ notify }) => notify.warn("Apply", msg));
+            return;
+        }
+        const unresolved = edits.filter((e) => !isResolvedSource(e.source));
+        if (unresolved.length) {
+            void import("@/features/notifications").then(({ notify }) =>
+                notify.warn("Apply", `${unresolved.length} element(s) have no source identity.`),
+            );
+            return;
+        }
+        setApplying(true);
+        try {
+            const result = await commitDesignEdits(project_path, edits);
+            const { notify } = await import("@/features/notifications");
+            if (result.appliedIds.length) {
+                notify.success(
+                    "Applied to source",
+                    result.files.map((f) => f.split(/[/\\]/).pop()).join(", "),
+                );
+            }
+            if (result.errors.length) {
+                const msg = result.errors.join(" ");
+                if (result.appliedIds.length) notify.warn("Some edits were not applied", msg);
+                else notify.error("Apply failed", msg);
+            }
+            if (result.appliedIds.length) {
+                const remain = edits.filter((e) => !result.appliedIds.includes(e.id));
+                if (remain.length) setDesignPending(remain);
+                else clearDesignPending();
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Couldn't patch source.";
+            const { notify } = await import("@/features/notifications");
+            notify.error("Apply failed", msg);
+            designLog("ERROR", "apply threw", { error: msg });
+        } finally {
+            setApplying(false);
+        }
+    };
+
     const applyHistory = (entry: ReturnType<typeof historyUndo>, side: "before" | "after") => {
         if (!entry || !bridge) return;
         const styles = side === "before" ? entry.before : entry.after;
@@ -187,27 +238,16 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
         if (text != null) bridge.content(entry.id, text, entry.selector);
     };
 
-    const apply = async () => {
-        const edits = getDesignModeState().pending;
-        if (!edits.length || !project_path) {
-            setApplyError(!project_path ? "Open a project to apply." : "Nothing to apply.");
+    const revert = async () => {
+        if (!confirmRevert) {
+            setConfirmRevert(true);
             return;
         }
-        setApplying(true);
-        setApplyError(null);
-        try {
-            const result = await applyEditsToProject(project_path, edits, scope);
-            if (result.errors.length && !result.files.length) {
-                setApplyError(result.errors.join(" "));
-                return;
-            }
-            if (result.errors.length) setApplyError(result.errors.join(" "));
-            clearDesignPending();
-            await clearHistory();
-        } catch (err) {
-            setApplyError(err instanceof Error ? err.message : "Couldn't patch source.");
-        } finally {
-            setApplying(false);
+        setConfirmRevert(false);
+        const result = await revertLastDesignCommit();
+        if (!result.ok) {
+            const { notify } = await import("@/features/notifications");
+            notify.error("Revert failed", result.error);
         }
     };
 
@@ -289,6 +329,11 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                     </p>
                 ) : (
                     <>
+                        {!isResolvedSource(selected.source) ? (
+                            <p className="border-b border-border-subtle px-3 py-2 text-xs leading-relaxed text-text-muted">
+                                No source identity — preview only. Apply is disabled for this node.
+                            </p>
+                        ) : null}
                         <Section title="Position">
                             <div className="flex gap-1">
                                 <PxInput
@@ -443,6 +488,82 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     onCommit={(n) => patch({ borderRadius: px(n) })}
                                 />
                             </div>
+                            {(() => {
+                                const parsed = parseLinearGradient(s.backgroundImage);
+                                const mode = parsed ? "linear" : "solid";
+                                return (
+                                    <>
+                                        <CompactSelect
+                                            value={mode}
+                                            options={[
+                                                { value: "solid", label: "Solid" },
+                                                { value: "linear", label: "Linear" },
+                                            ]}
+                                            onChange={(v) => {
+                                                if (v === "solid") {
+                                                    patch({ backgroundImage: "none" });
+                                                    return;
+                                                }
+                                                patch({
+                                                    backgroundImage: formatLinearGradient(90, [
+                                                        { pos: 0, color: s.backgroundColor || "#A3F0FF" },
+                                                        { pos: 100, color: "#FFFFFF" },
+                                                    ]),
+                                                    backgroundColor: "transparent",
+                                                });
+                                            }}
+                                        />
+                                        {parsed ? (
+                                            <div className="flex flex-col gap-1.5">
+                                                <PxInput
+                                                    glyph={<Glyph>°</Glyph>}
+                                                    title="Angle"
+                                                    value={parsed.angle}
+                                                    max={360}
+                                                    min={-360}
+                                                    onCommit={(n) =>
+                                                        patch({
+                                                            backgroundImage: formatLinearGradient(n, parsed.stops),
+                                                            backgroundColor: "transparent",
+                                                        })
+                                                    }
+                                                />
+                                                {parsed.stops.slice(0, 4).map((stop, i) => (
+                                                    <div key={`${stop.pos}-${i}`} className="flex items-center gap-1">
+                                                        <PxInput
+                                                            glyph={<Glyph>%</Glyph>}
+                                                            title="Stop"
+                                                            value={stop.pos}
+                                                            max={100}
+                                                            onCommit={(n) => {
+                                                                const stops = parsed.stops.map((st, j) =>
+                                                                    j === i ? { ...st, pos: n } : st,
+                                                                );
+                                                                patch({
+                                                                    backgroundImage: formatLinearGradient(parsed.angle, stops),
+                                                                    backgroundColor: "transparent",
+                                                                });
+                                                            }}
+                                                        />
+                                                        <ColorRow
+                                                            cssValue={stop.color}
+                                                            onChange={(c) => {
+                                                                const stops = parsed.stops.map((st, j) =>
+                                                                    j === i ? { ...st, color: c } : st,
+                                                                );
+                                                                patch({
+                                                                    backgroundImage: formatLinearGradient(parsed.angle, stops),
+                                                                    backgroundColor: "transparent",
+                                                                });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                    </>
+                                );
+                            })()}
                             <CompactSelect
                                 value={s.mixBlendMode || "normal"}
                                 options={[
@@ -632,36 +753,27 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                     </>
                 )}
             </div>
-            <div className="flex shrink-0 flex-col gap-2 border-t border-border-subtle px-3 py-2">
-                <div className="flex rounded-md bg-panel-hover p-0.5">
-                    <ToggleBtn label="This element" active={scope === "element"} onClick={() => setScope("element")}>
-                        <span className="px-1 text-[10px]">Element</span>
-                    </ToggleBtn>
-                    <ToggleBtn label="Component" active={scope === "component"} onClick={() => setScope("component")}>
-                        <span className="px-1 text-[10px]">Component</span>
-                    </ToggleBtn>
-                </div>
-                {applyError ? <p className="text-[10px] leading-snug text-text-muted">{applyError}</p> : (
-                    <p className="text-[10px] leading-snug text-text-muted">
-                        {scope === "component"
-                            ? "Apply writes classes on the component’s root tag."
-                            : "Apply writes classes on this element’s JSX tag."}
-                    </p>
-                )}
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-text-muted">
-                        {pending.length > 0 ? `${pending.length} pending` : "Live preview"}
-                    </span>
-                    <Button
-                        type="button"
-                        size="sm"
-                        className="h-7 px-3 text-xs"
-                        onClick={() => void apply()}
-                        disabled={applying || (!selected && pending.length === 0)}
-                    >
-                        {applying ? "Applying…" : "Apply"}
-                    </Button>
-                </div>
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border-subtle px-3 py-2">
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-3 text-xs"
+                    disabled={revertDepth === 0}
+                    onBlur={() => setConfirmRevert(false)}
+                    onClick={() => void revert()}
+                >
+                    {confirmRevert ? "Are you sure?" : "Revert"}
+                </Button>
+                <Button
+                    type="button"
+                    size="sm"
+                    className="h-7 px-3 text-xs"
+                    onClick={() => void apply()}
+                    disabled={applying || pending.length === 0}
+                >
+                    {applying ? "Applying…" : pending.length ? `Apply (${pending.length})` : "Apply"}
+                </Button>
             </div>
         </div>
     );

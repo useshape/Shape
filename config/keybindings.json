@@ -141,6 +141,10 @@
             "key": "Ctrl+L"
         },
         {
+            "label": "Toggle Design Mode",
+            "key": "Ctrl+Shift+D"
+        },
+        {
             "label": "Inline Edit",
             "key": "Ctrl+K"
         },

@@ -2,12 +2,14 @@
 
 import React from "react";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
-import { ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import type { DesignLayerNode } from "../design-mode/types";
-import { findLayerPath } from "../design-mode/tree";
+import { findLayerPath, flattenLayers } from "../design-mode/tree";
 import { getDesignBridge, useDesignModeStore } from "../design-mode/store";
+import { DesignInspectPanel } from "./design-inspect-panel";
 
 function layerIcon(tag: string): string {
     if (tag === "img" || tag === "svg") return "image";
@@ -50,6 +52,7 @@ function LayerRow({
                 className={cn(
                     "flex h-7 w-full items-center gap-1 rounded-md py-0.5 pr-2 text-left text-xs",
                     active ? "bg-accent-text-bg text-accent-text" : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                    node.hidden && "opacity-50",
                 )}
                 style={{ paddingLeft: 8 + depth * 12 }}
             >
@@ -62,11 +65,7 @@ function LayerRow({
                         }}
                         className="flex h-4 w-4 shrink-0 items-center justify-center"
                     >
-                        <Icon
-                            name="chevron_right"
-                            size={12}
-                            className={cn("opacity-60 transition-transform", open && "rotate-90")}
-                        />
+                        <Icon name="chevron_right" size={12} className={cn("opacity-60 transition-transform", open && "rotate-90")} />
                     </span>
                 ) : (
                     <span className="w-4 shrink-0" />
@@ -98,6 +97,15 @@ function collectIds(nodes: DesignLayerNode[], into: Set<string>, depth = 0) {
     }
 }
 
+function layerDepth(nodes: DesignLayerNode[], id: string, depth = 0): number | null {
+    for (const n of nodes) {
+        if (n.id === id) return depth;
+        const child = layerDepth(n.children, id, depth + 1);
+        if (child != null) return child;
+    }
+    return null;
+}
+
 export function DesignLayersPanel({
     onSelectId,
 }: {
@@ -109,18 +117,15 @@ export function DesignLayersPanel({
     const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
     const [tab, setTab] = React.useState<"layers" | "inspect">("layers");
     const [paused, setPaused] = React.useState(false);
+    const [resumeAfterEdit, setResumeAfterEdit] = React.useState(true);
     const [pseudo, setPseudo] = React.useState<Record<string, boolean>>({});
-    const [network, setNetwork] = React.useState<Array<{ method: string; url: string; status: number; ms: number }>>([]);
-
-    React.useEffect(() => {
-        const onNet = (e: Event) => {
-            const d = (e as CustomEvent).detail;
-            if (!d?.url) return;
-            setNetwork((prev) => [{ method: d.method || "GET", url: d.url, status: d.status ?? 0, ms: d.ms ?? 0 }, ...prev].slice(0, 80));
-        };
-        window.addEventListener("shape-design-network", onNet as EventListener);
-        return () => window.removeEventListener("shape-design-network", onNet as EventListener);
-    }, []);
+    const [styleFilter, setStyleFilter] = React.useState("");
+    const [layerQuery, setLayerQuery] = React.useState("");
+    const [visibleOnly, setVisibleOnly] = React.useState(false);
+    const [interactiveOnly, setInteractiveOnly] = React.useState(false);
+    const [watching, setWatching] = React.useState(false);
+    const [emulateFocus, setEmulateFocus] = React.useState(false);
+    const treeRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         setExpanded((prev) => {
@@ -172,6 +177,36 @@ export function DesignLayersPanel({
         if (selectedId) bridge?.pseudo?.(selectedId, name, next, selected?.selector);
     };
 
+    const visible = flattenLayers(roots, expanded, {
+        query: layerQuery,
+        visibleOnly,
+        interactiveOnly,
+    });
+
+    const onTreeKey = (e: React.KeyboardEvent) => {
+        if (!visible.length) return;
+        const idx = visible.findIndex((n) => n.id === selectedId);
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            const next = visible[Math.min(visible.length - 1, Math.max(0, idx) + 1)];
+            if (next) onSelectId?.(next.id);
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const next = visible[Math.max(0, (idx < 0 ? 0 : idx) - 1)];
+            if (next) onSelectId?.(next.id);
+        } else if (e.key === "ArrowRight" && selectedId) {
+            e.preventDefault();
+            setExpanded((prev) => new Set(prev).add(selectedId));
+        } else if (e.key === "ArrowLeft" && selectedId) {
+            e.preventDefault();
+            setExpanded((prev) => {
+                const next = new Set(prev);
+                next.delete(selectedId);
+                return next;
+            });
+        }
+    };
+
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
             <SidebarPanelHeaderFrame
@@ -179,7 +214,7 @@ export function DesignLayersPanel({
                 actions={
                     <button
                         type="button"
-                        title={tab === "layers" ? "Inspect tools" : "Layers"}
+                        title={tab === "layers" ? "Inspect" : "Layers"}
                         className={cn(
                             "flex h-6 w-6 items-center justify-center rounded-md",
                             tab === "inspect" ? "bg-panel-active text-text-primary" : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
@@ -191,71 +226,94 @@ export function DesignLayersPanel({
                 }
             />
             {tab === "layers" ? (
-                <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1 custom-scrollbar">
-                    {roots.length === 0 ? (
-                        <p className="px-3 py-4 text-xs text-text-muted">
-                            Click an element in the preview to inspect the page tree.
-                        </p>
-                    ) : (
-                        roots.map((node) => (
-                            <LayerRow
-                                key={node.id}
-                                node={node}
-                                depth={0}
-                                selectedId={selectedId}
-                                expanded={expanded}
-                                onToggle={onToggle}
-                                onSelect={(id) => onSelectId?.(id)}
-                            />
-                        ))
-                    )}
-                </div>
-            ) : (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <div className="flex flex-col gap-2 border-b border-border-subtle px-3 py-3">
-                        <div className="flex gap-1">
-                            <ToggleBtn
-                                label="Pause page"
-                                active={paused}
-                                onClick={() => {
-                                    const next = !paused;
-                                    setPaused(next);
-                                    bridge?.pause?.(next);
-                                }}
-                            >
-                                <Icon name={paused ? "play_arrow" : "pause"} size={14} />
-                            </ToggleBtn>
-                        </div>
-                        <div className="flex gap-1">
-                            {(["hover", "focus", "active"] as const).map((name) => (
-                                <ToggleBtn
-                                    key={name}
-                                    label={`:${name}`}
-                                    active={!!pseudo[name]}
-                                    onClick={() => togglePseudo(name)}
-                                >
-                                    <span className="px-1 text-[10px]">:{name}</span>
-                                </ToggleBtn>
-                            ))}
-                        </div>
+                    <div className="flex shrink-0 items-center gap-1 border-b border-border-subtle px-2 py-1.5">
+                        <Input
+                            value={layerQuery}
+                            onChange={(e) => setLayerQuery(e.target.value)}
+                            placeholder="Search layers"
+                            className="h-7 min-w-0 flex-1 text-xs"
+                        />
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className={cn(visibleOnly && "bg-panel-active")}
+                            onClick={() => setVisibleOnly((v) => !v)}
+                        >
+                            Visible
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className={cn(interactiveOnly && "bg-panel-active")}
+                            onClick={() => setInteractiveOnly((v) => !v)}
+                        >
+                            Interactive
+                        </Button>
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 custom-scrollbar">
-                        <p className="mb-2 px-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">Network</p>
-                        {network.length === 0 ? (
-                            <p className="px-1 text-xs text-text-muted">Requests from the preview will show up here.</p>
+                    <div
+                        ref={treeRef}
+                        tabIndex={0}
+                        onKeyDown={onTreeKey}
+                        className="min-h-0 flex-1 overflow-y-auto px-1 py-1 custom-scrollbar outline-none"
+                    >
+                        {roots.length === 0 ? (
+                            <p className="px-3 py-4 text-xs text-text-muted">
+                                Click an element in the preview to inspect the page tree.
+                            </p>
+                        ) : layerQuery || visibleOnly || interactiveOnly ? (
+                            visible.map((node) => (
+                                <LayerRow
+                                    key={node.id}
+                                    node={{ ...node, children: [] }}
+                                    depth={layerDepth(roots, node.id) ?? 0}
+                                    selectedId={selectedId}
+                                    expanded={expanded}
+                                    onToggle={onToggle}
+                                    onSelect={(id) => onSelectId?.(id)}
+                                />
+                            ))
                         ) : (
-                            network.map((row, i) => (
-                                <div key={`${row.url}-${i}`} className="flex items-start gap-2 rounded-md px-1 py-1 text-[11px]">
-                                    <span className="w-8 shrink-0 tabular-nums text-text-muted">{row.status || "—"}</span>
-                                    <span className="min-w-0 flex-1 truncate text-text-primary" title={row.url}>
-                                        {row.url.replace(/^https?:\/\/[^/]+/, "") || row.url}
-                                    </span>
-                                    <span className="shrink-0 tabular-nums text-text-muted">{row.ms}ms</span>
-                                </div>
+                            roots.map((node) => (
+                                <LayerRow
+                                    key={node.id}
+                                    node={node}
+                                    depth={0}
+                                    selectedId={selectedId}
+                                    expanded={expanded}
+                                    onToggle={onToggle}
+                                    onSelect={(id) => onSelectId?.(id)}
+                                />
                             ))
                         )}
                     </div>
                 </div>
+            ) : (
+                <DesignInspectPanel
+                    styleFilter={styleFilter}
+                    onStyleFilter={setStyleFilter}
+                    paused={paused}
+                    onPaused={(next) => {
+                        setPaused(next);
+                        bridge?.pause?.(next, resumeAfterEdit);
+                    }}
+                    resumeAfterEdit={resumeAfterEdit}
+                    onResumeAfterEdit={setResumeAfterEdit}
+                    pseudo={pseudo}
+                    onPseudo={togglePseudo}
+                    watching={watching}
+                    onWatch={(next) => {
+                        setWatching(next);
+                        if (selectedId) bridge?.watch?.(selectedId, next, selected?.selector);
+                    }}
+                    emulateFocus={emulateFocus}
+                    onEmulateFocus={(next) => {
+                        setEmulateFocus(next);
+                        bridge?.emulateFocus?.(next);
+                    }}
+                />
             )}
         </div>
     );

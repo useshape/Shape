@@ -46,15 +46,17 @@ export default function Chat({
         return items;
     }, [session.isLoading, session.messages]);
 
+    const sendRef = React.useRef(session.handleSendMessage);
+    sendRef.current = session.handleSendMessage;
     React.useEffect(() => {
         const onAnswer = (e: Event) => {
             const answer = (e as CustomEvent<{ answer?: string }>).detail?.answer;
             if (!answer?.trim()) return;
-            void session.handleSendMessage(answer);
+            void sendRef.current(answer);
         };
         window.addEventListener("shape-question-answer", onAnswer as EventListener);
         return () => window.removeEventListener("shape-question-answer", onAnswer as EventListener);
-    }, [session.handleSendMessage]);
+    }, []);
 
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden bg-panel font-sans", className)}>

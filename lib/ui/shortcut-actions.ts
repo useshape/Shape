@@ -78,6 +78,9 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
                 new CustomEvent("shape-layout-toggle", { detail: { id: "secondary-sidebar", value: true } }),
             );
             return true;
+        case "Toggle Design Mode":
+            window.dispatchEvent(new Event("shape-toggle-design-mode"));
+            return true;
         case "Go to Line/Column...":
             window.dispatchEvent(new CustomEvent("shape-command-palette", {
                 detail: { mode: "goto_line", placeholder: "Line : Column" },

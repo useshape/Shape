@@ -21,8 +21,15 @@ pub async fn stop_chat_message(
             .map_err(|e| AppError::Poison(e.to_string()))?;
         token.is_cancelled()
     };
+    let generating = state.generation_state().is_generating;
+    if !generating {
+        // Idle / launch remounts used to call stop and still abort captures +
+        // kill PTYs below, which tore down WebView2 frames and reloaded the UI.
+        return Ok(());
+    }
     if already_cancelled {
         logging::debug("chat", "Stop ignored — generation already stopping");
+        return Ok(());
     } else {
         logging::info("chat", "Stop requested by user");
         // Dismiss any approval cards still waiting on the user.

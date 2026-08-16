@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState, useEffect, useReducer } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useEditorView } from "@/core/providers/editor";
 import { useProjectState, commands } from "@/lib/backend";
 import { diffLines } from "diff";
@@ -17,7 +17,6 @@ import { PlanEditorHeader } from "./ui/plan-editor-header";
 import { DiagnosticsIndicator } from "./ui/diagnostics";
 import { ErrorView } from "./ui/error";
 import { ImageView } from "./ui/image";
-import type { ImageSessionActions } from "./ui/image";
 import { FontView } from "./ui/font";
 
 // Hooks — load Monaco workers before pulling in @monaco-editor/react (via editor-view/diff).
@@ -290,9 +289,6 @@ export default function FileViewer({ path, group = "left" }: { path: string; gro
     const { imageSrc, svgContent, error: imageLoadError } = useImageLoader(path, showImagePreview);
 
     const [zoom, setZoom] = useState(1);
-    const [showImageTools, setShowImageTools] = useState(false);
-    const imageSessionRef = useRef<ImageSessionActions | null>(null);
-    const [, bumpImageSession] = useReducer((n: number) => n + 1, 0);
     const handleWheel = (e: React.WheelEvent) => {
         if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
@@ -372,21 +368,6 @@ export default function FileViewer({ path, group = "left" }: { path: string; gro
             <div className="flex h-full min-h-0 w-full flex-col bg-editor overflow-hidden relative">
                 <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0 gap-1 bg-editor">
                     <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} isImage className="flex-1 min-w-0" />
-                    <div className="flex items-center gap-0.5 shrink-0">
-                        {imageSessionRef.current?.isDirty && showImageTools ? (
-                            <span className="text-sm text-text-muted mr-1">Unsaved</span>
-                        ) : null}
-                        <Tooltip content={showImageTools ? "Hide adjustments" : "Adjustments"}>
-                            <Button
-                                variant={showImageTools ? "secondary" : "ghost"}
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => setShowImageTools((v) => !v)}
-                            >
-                                <Icon name="tune" size={16} />
-                            </Button>
-                        </Tooltip>
-                    </div>
                 </div>
                 <div className="relative min-h-0 w-full flex-1 overflow-hidden">
                     <ImageView
@@ -398,9 +379,6 @@ export default function FileViewer({ path, group = "left" }: { path: string; gro
                         onZoomChange={setZoom}
                         containerRef={containerRef}
                         handleWheel={handleWheel}
-                        showTools={showImageTools}
-                        sessionRef={imageSessionRef}
-                        onSessionChange={bumpImageSession}
                     />
                 </div>
             </div>

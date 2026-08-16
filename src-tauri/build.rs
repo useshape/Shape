@@ -3,7 +3,8 @@ use std::env;
 fn main() {
     println!("cargo:rerun-if-changed=../preview-runtime/entry.ts");
     println!("cargo:rerun-if-changed=../scripts/build/preview.mjs");
-    println!("cargo:rerun-if-changed=preview-runtime/bundle.js");
+    // Do not watch the generated bundle — beforeDevCommand writes it on every
+    // `tauri dev` start and that would restart the native app in a loop.
     // Official release CI injects this so the binary can attest to Shape Cloud AI.
     // Maintainers also set it at runtime for `tauri:dev` (see docs).
     println!("cargo:rerun-if-env-changed=SHAPE_CLOUD_BUILD_SECRET");
