@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
-import { ApprovalBar } from "./approval";
+import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { diffLines } from "diff";
@@ -12,11 +12,12 @@ import { ChatMarkdown } from "../md/view";
 import { looksLikeProseMarkdown } from "../md/stream";
 import { openProjectFile } from "@/lib/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
+import { TerminalCommandStep } from "./terminal-live";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
-    "search", "grep", "status", "web_search", "web_result", "search_result",
+    "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
-    "think", "thought", "run", "tool_result", "edit", "terminal_command", "git_operation",
+    "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -61,6 +62,69 @@ export function parseGitStatusLines(content?: string): GitStatusLine[] {
     });
 }
 
+type GitLogLine = { hash: string; date: string; author: string; subject: string };
+
+export function parseGitLogLines(content?: string): GitLogLine[] {
+    if (!content?.trim()) return [];
+    return content.split("\n").flatMap((line) => {
+        const trimmed = line.trim();
+        // New structured form
+        const structured = trimmed.match(/^\[commit\]\s+([^|]+)\|([^|]*)\|([^|]*)\|(.*)$/);
+        if (structured) {
+            return [{
+                hash: structured[1].trim(),
+                date: structured[2].trim(),
+                author: structured[3].trim(),
+                subject: structured[4].trim(),
+            }];
+        }
+        // Legacy: `abc1234 2024-01-01 — subject (author)`
+        const legacy = trimmed.match(/^([0-9a-f]{7,40})\s+(\S+)\s+—\s+(.+?)\s+\(([^)]+)\)\s*$/i);
+        if (legacy) {
+            return [{
+                hash: legacy[1],
+                date: legacy[2],
+                subject: legacy[3].trim(),
+                author: legacy[4].trim(),
+            }];
+        }
+        return [];
+    });
+}
+
+type GitBranchLine = { name: string; current: boolean; remote: boolean };
+
+export function parseGitBranchLines(content?: string): GitBranchLine[] {
+    if (!content?.trim()) return [];
+    return content.split("\n").flatMap((line) => {
+        const trimmed = line.trim();
+        const match = trimmed.match(/^\[([* r!])\]\s+(.+)$/);
+        if (!match) return [];
+        const mark = match[1];
+        if (mark === "!") return [];
+        return [{
+            name: match[2].trim(),
+            current: mark === "*",
+            remote: mark === "r",
+        }];
+    });
+}
+
+export function parseGitDiffMeta(content?: string): { file?: string; scope?: string; body: string } {
+    if (!content?.trim()) return { body: "" };
+    const lines = content.split("\n");
+    const first = lines[0]?.trim() ?? "";
+    const fileMatch = first.match(/^\[file\]\s+(.+)$/);
+    if (fileMatch) {
+        return { file: fileMatch[1].trim(), body: lines.slice(1).join("\n") };
+    }
+    const scopeMatch = first.match(/^\[scope\]\s+(\w+)$/);
+    if (scopeMatch) {
+        return { scope: scopeMatch[1], body: lines.slice(1).join("\n") };
+    }
+    return { body: content };
+}
+
 type WorkflowRow =
     | { kind: "block"; block: Chunk }
     | { kind: "git_stage_group"; paths: string[] };
@@ -91,7 +155,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
 }
 
 function GitStatusBadge({ status }: { status: string }) {
-    const letter = status.trim().charAt(0).toUpperCase();
+    const letter = status.trim().charAt(0).toUpperCase() || "?";
     const color =
         letter === "A"
             ? "text-success"
@@ -101,85 +165,246 @@ function GitStatusBadge({ status }: { status: string }) {
                 ? "text-warning"
                 : "text-text-muted";
     return (
-        <span className={cn("w-3 text-center text-2xs font-mono shrink-0", color)}>{letter}</span>
+        <span
+            className={cn(
+                "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border font-mono text-[10px]",
+                color,
+            )}
+        >
+            {letter}
+        </span>
     );
 }
 
-function GitStageGroup({ paths }: { paths: string[] }) {
-    const [open, setOpen] = useState(false);
-    const preview = paths.slice(0, 4);
-    const rest = paths.length - preview.length;
-
+function GitCardShell({
+    icon,
+    title,
+    meta,
+    open,
+    onToggle,
+    children,
+}: {
+    icon: string;
+    title: string;
+    meta?: string;
+    open: boolean;
+    onToggle: () => void;
+    children: React.ReactNode;
+}) {
     return (
-        <div className="flex flex-col gap-1 py-0.5">
+        <div className="my-1 w-full overflow-hidden rounded-2xl border border-border bg-transparent">
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 w-fit text-left group"
+                onClick={onToggle}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left"
             >
-                <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
-                    Staged {paths.length} file{paths.length === 1 ? "" : "s"}
-                </span>
+                <Icon name={icon} size={13} className="shrink-0 text-text-muted" />
+                <span className="truncate text-sm text-text-muted">{title}</span>
+                {meta ? (
+                    <span className="min-w-0 truncate text-sm text-text-disabled">{meta}</span>
+                ) : null}
                 <Icon
                     name={open ? "expand_less" : "expand_more"}
-                    size={12}
-                    className="text-text-disabled shrink-0"
+                    size={14}
+                    className="ml-auto shrink-0 text-text-muted"
                 />
             </button>
-            <div className="flex flex-wrap items-center gap-1 pl-5">
-                {(open ? paths : preview).map((path) => (
-                    <FilePill key={path} path={path} />
-                ))}
-                {!open && rest > 0 ? (
-                    <span className="text-xs text-text-disabled">+{rest} more</span>
-                ) : null}
-            </div>
+            {open ? (
+                <div className="px-3 py-2.5">
+                    {children}
+                </div>
+            ) : null}
         </div>
+    );
+}
+
+export function GitStageGroup({ paths }: { paths: string[] }) {
+    const [open, setOpen] = useState(true);
+    const unique = [...new Set(paths.filter(Boolean))];
+
+    return (
+        <GitCardShell
+            icon="account_tree"
+            title="Staged files"
+            meta={`${unique.length} file${unique.length === 1 ? "" : "s"}`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-1.5">
+                {unique.map((path) => (
+                    <div key={path} className="flex min-w-0 items-center gap-2">
+                        <GitStatusBadge status="A" />
+                        <FilePill path={path} />
+                    </div>
+                ))}
+            </div>
+        </GitCardShell>
     );
 }
 
 function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(true);
     const staged = lines.filter((l) => l.area === "staged");
     const unstaged = lines.filter((l) => l.area === "unstaged");
-    const preview = lines.slice(0, 5);
-    const shown = open ? lines : preview;
 
     return (
-        <div className="flex flex-col gap-1 py-0.5">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 w-fit text-left group"
-            >
-                <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-muted group-hover:text-text-secondary transition-colors">
-                    Git status
-                </span>
-                <span className="text-xs text-text-disabled">
-                    {staged.length} staged · {unstaged.length} unstaged
-                </span>
-                <Icon
-                    name={open ? "expand_less" : "expand_more"}
-                    size={12}
-                    className="text-text-disabled shrink-0"
-                />
-            </button>
-            <div className="flex flex-col gap-0.5 pl-5">
-                {shown.map((line) => (
-                    <div key={`${line.area}-${line.path}`} className="flex items-center gap-1.5 min-w-0">
-                        <GitStatusBadge status={line.status} />
-                        <FilePill path={line.path} />
+        <GitCardShell
+            icon="account_tree"
+            title="Git status"
+            meta={`${staged.length} staged · ${unstaged.length} unstaged`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-3">
+                {staged.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-sm text-text-disabled">Staged</span>
+                        {staged.map((line) => (
+                            <div key={`staged-${line.path}`} className="flex min-w-0 items-center gap-2">
+                                <GitStatusBadge status={line.status} />
+                                <FilePill path={line.path} />
+                            </div>
+                        ))}
                     </div>
-                ))}
-                {!open && lines.length > preview.length ? (
-                    <span className="text-xs text-text-disabled pl-4">
-                        +{lines.length - preview.length} more
-                    </span>
+                ) : null}
+                {unstaged.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-sm text-text-disabled">Unstaged</span>
+                        {unstaged.map((line) => (
+                            <div key={`unstaged-${line.path}`} className="flex min-w-0 items-center gap-2">
+                                <GitStatusBadge status={line.status} />
+                                <FilePill path={line.path} />
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+                {lines.length === 0 ? (
+                    <span className="text-sm text-text-muted">Clean working tree</span>
                 ) : null}
             </div>
-        </div>
+        </GitCardShell>
+    );
+}
+
+function GitLogGroup({ lines }: { lines: GitLogLine[] }) {
+    const [open, setOpen] = useState(true);
+
+    return (
+        <GitCardShell
+            icon="history"
+            title="Git log"
+            meta={`${lines.length} commit${lines.length === 1 ? "" : "s"}`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-2">
+                {lines.map((line) => (
+                    <div
+                        key={`${line.hash}-${line.subject}`}
+                        className="flex flex-col gap-0.5 rounded-lg bg-surface-3 px-2.5 py-2"
+                    >
+                        <div className="flex min-w-0 items-center gap-2">
+                            <span className="shrink-0 text-sm text-text-primary">{line.hash}</span>
+                            {line.author ? (
+                                <span className="shrink-0 text-sm text-text-disabled">{line.author}</span>
+                            ) : null}
+                            {line.date ? (
+                                <span className="ml-auto shrink-0 text-sm text-text-disabled">{line.date}</span>
+                            ) : null}
+                        </div>
+                        <span className="text-sm text-text-primary leading-snug">{line.subject}</span>
+                    </div>
+                ))}
+            </div>
+        </GitCardShell>
+    );
+}
+
+function GitBranchesGroup({ lines }: { lines: GitBranchLine[] }) {
+    const [open, setOpen] = useState(true);
+    const current = lines.find((l) => l.current);
+
+    return (
+        <GitCardShell
+            icon="account_tree"
+            title="Branches"
+            meta={current ? `on ${current.name}` : `${lines.length}`}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-1.5">
+                {lines.map((line) => (
+                    <div
+                        key={line.name}
+                        className={cn(
+                            "flex min-w-0 items-center gap-2 rounded-lg bg-surface-3 px-2 py-1.5",
+                            line.current && "border border-border-subtle bg-transparent",
+                        )}
+                    >
+                        <span
+                            className={cn(
+                                "h-1.5 w-1.5 shrink-0 rounded-full",
+                                line.current ? "bg-success" : "bg-text-disabled/40",
+                            )}
+                        />
+                        <span
+                            className={cn(
+                                "min-w-0 truncate text-sm",
+                                line.current ? "text-text-primary" : "text-text-secondary",
+                                line.remote && "text-text-muted",
+                            )}
+                        >
+                            {line.name}
+                        </span>
+                        {line.current ? (
+                            <span className="ml-auto shrink-0 text-sm text-text-disabled">current</span>
+                        ) : null}
+                    </div>
+                ))}
+            </div>
+        </GitCardShell>
+    );
+}
+
+function GitDiffGroup({
+    file,
+    scope,
+    body,
+}: {
+    file?: string;
+    scope?: string;
+    body: string;
+}) {
+    const [open, setOpen] = useState(true);
+    const lineCount = body ? body.split("\n").filter(Boolean).length : 0;
+    const title = file
+        ? "Git diff"
+        : scope === "staged"
+          ? "Staged diff"
+          : "Git diff";
+    const meta = file
+        ? `${file.split(/[/\\]/).pop()} · ${lineCount} lines`
+        : `${lineCount} lines`;
+
+    return (
+        <GitCardShell
+            icon="code"
+            title={title}
+            meta={meta}
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+        >
+            <div className="flex flex-col gap-2">
+                {file ? <FilePill path={file} /> : null}
+                {body.trim() ? (
+                    <pre className="max-h-64 overflow-auto rounded-lg bg-surface-3 px-2.5 py-2 text-sm leading-relaxed text-text-secondary whitespace-pre-wrap break-all custom-scrollbar">
+                        {body}
+                    </pre>
+                ) : (
+                    <span className="text-sm text-text-muted">No diff output</span>
+                )}
+            </div>
+        </GitCardShell>
     );
 }
 
@@ -187,7 +412,7 @@ function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
 function computeGroupHeader(visible: Chunk[]) {
     const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
     const hasExplore = visible.some((b) =>
-        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result"].includes(b.type),
+        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit"].includes(b.type),
     );
     const hasEdit = visible.some((b) =>
         ["edit", "create_file", "mkdir", "delete_file", "rename_file"].includes(b.type),
@@ -227,12 +452,33 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 content: block.content,
             };
         case "web_search":
-        case "web_result":
+        case "web_result": {
+            const hits = (block.content || "")
+                .split("---")
+                .map((part) => {
+                    const urlMatch = part.match(/URL:\s*(.+)/);
+                    return urlMatch?.[1]?.trim() || "";
+                })
+                .filter(Boolean);
             return {
-                label: block.type === "web_result" ? "Searched web" : "Searching web",
-                query: block.query || block.content,
+                label: block.type === "web_result" || !block.isGenerating ? "Searched web" : "Searching web",
+                query: block.query,
                 expandable: !!block.content,
                 content: block.content,
+                resultUrls: hits.slice(0, 5),
+            };
+        }
+        case "web_visit":
+            return {
+                label: block.isGenerating ? "Visiting" : "Visited",
+                query: block.visitHost || block.visitTitle || block.content,
+                file: undefined,
+                expandable: false,
+                faviconUrl: block.visitUrl || block.visitHost,
+                onClick: () => {
+                    const href = block.visitUrl;
+                    if (href) void commands.openUrlExternal(href);
+                },
             };
         case "grep":
             return {
@@ -248,7 +494,7 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 expandable: false,
                 onClick: () => {
                     if (block.content) {
-                        window.dispatchEvent(new CustomEvent("shape-open-file", { detail: { path: block.content } }));
+                        void openProjectFile(block.content);
                     }
                 },
             };
@@ -298,6 +544,24 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 replacement: block.replacement,
             };
         }
+        case "edit_pending": {
+            const file = block.file || "";
+            const label =
+                block.commandStatus === "applied"
+                    ? "Edited"
+                    : block.commandStatus === "rejected"
+                        ? "Rejected edit"
+                        : block.commandStatus === "cancelled"
+                            ? "Cancelled edit"
+                            : "Proposed edit";
+            return {
+                label,
+                file,
+                expandable: false,
+                original: block.original,
+                replacement: block.replacement,
+            };
+        }
         case "terminal_command":
         case "run":
             return {
@@ -319,6 +583,9 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
             const status = block.gitStatus ?? "completed";
             const stagePath = op === "stage" ? parseGitStagePath(block.content) : null;
             const statusLines = op === "status" ? parseGitStatusLines(block.content) : [];
+            const logLines = op === "log" ? parseGitLogLines(block.content) : [];
+            const branchLines = op === "branches" ? parseGitBranchLines(block.content) : [];
+            const diffMeta = op === "diff" ? parseGitDiffMeta(block.content) : null;
             const label =
                 status === "running"
                     ? `${op}…`
@@ -332,25 +599,39 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                                     ? "Git status"
                                     : op === "log"
                                         ? "Git log"
-                                        : op === "stage"
-                                            ? "Staged"
-                                            : op === "commit"
-                                                ? "Committed"
-                                                : `Git ${op}`;
+                                        : op === "diff"
+                                            ? "Git diff"
+                                            : op === "branches"
+                                                ? "Branches"
+                                                : op === "stage"
+                                                    ? "Staged"
+                                                    : op === "commit"
+                                                        ? "Committed"
+                                                        : `Git ${op}`;
             return {
                 label,
-                file: stagePath ?? undefined,
+                file: stagePath ?? diffMeta?.file ?? undefined,
                 query:
-                    op === "stage" || op === "status"
+                    op === "stage" ||
+                    op === "status" ||
+                    op === "log" ||
+                    op === "branches" ||
+                    op === "diff"
                         ? undefined
                         : block.content?.trim() || undefined,
                 expandable:
                     op !== "stage" &&
                     op !== "status" &&
+                    op !== "log" &&
+                    op !== "branches" &&
+                    op !== "diff" &&
                     Boolean(block.content && block.content.length > 80),
                 content: block.content,
                 icon: status === "running" ? "sync" : "account_tree",
                 gitStatusLines: statusLines.length > 0 ? statusLines : undefined,
+                gitLogLines: logLines.length > 0 ? logLines : undefined,
+                gitBranchLines: branchLines.length > 0 ? branchLines : undefined,
+                gitDiffMeta: diffMeta?.body ? diffMeta : undefined,
             };
         }
         default:
@@ -418,7 +699,7 @@ export function AgentWorkflow({
     }
 
     const header = computeGroupHeader(visibleBlocks);
-    const showRows = isOpen || isActive;
+    const showRows = isOpen;
 
     return (
         <div className="flex flex-col w-full my-1 select-none">
@@ -458,10 +739,13 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
             role="button"
             tabIndex={0}
             onClick={handleOpen}
+            onAuxClick={(e) => {
+                if (e.button === 1) handleOpen();
+            }}
             onKeyDown={(e) => { if (e.key === "Enter") handleOpen(); }}
             className={cn(
-                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs",
-                "border border-border-subtle bg-panel text-text-primary",
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm",
+                "bg-surface-3 text-text-primary",
                 "cursor-pointer hover:bg-panel-hover",
             )}
         >
@@ -471,68 +755,7 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
     );
 }
 
-export function TerminalApprovalRow({ block }: { block: Chunk }) {
-    const [status, setStatus] = useState(block.commandStatus || "pending");
-    const [isProcessing, setIsProcessing] = useState(false);
-
-    // Stay in sync when stream updates the pending → completed XML.
-    useEffect(() => {
-        if (block.commandStatus) setStatus(block.commandStatus);
-    }, [block.commandStatus]);
-
-    const handleApprove = useCallback(async () => {
-        if (!block.commandId || isProcessing) return;
-        setIsProcessing(true);
-        // Demo showcase commands are local-only.
-        if (block.commandId.startsWith("demo-")) {
-            setStatus("completed");
-            setIsProcessing(false);
-            return;
-        }
-        try {
-            await commands.approveTerminalCommand(block.commandId);
-            // Keep pending UI until the stream replaces this block with a completed one.
-        } catch {
-            setStatus("error");
-            setIsProcessing(false);
-        }
-    }, [block.commandId, isProcessing]);
-
-    const handleReject = useCallback(async () => {
-        if (!block.commandId || isProcessing) return;
-        setIsProcessing(true);
-        if (block.commandId.startsWith("demo-")) {
-            setStatus("rejected");
-            setIsProcessing(false);
-            return;
-        }
-        try {
-            await commands.rejectTerminalCommand(block.commandId);
-            setStatus("rejected");
-        } catch {
-            setStatus("error");
-        } finally {
-            setIsProcessing(false);
-        }
-    }, [block.commandId, isProcessing]);
-
-    if (status !== "pending") return null;
-
-    const command = block.command || block.content || "command";
-
-    return (
-        <ApprovalBar
-            label="Approve command"
-            subject={command}
-            acceptLabel="Run"
-            isProcessing={isProcessing}
-            onAccept={() => { void handleApprove(); }}
-            onReject={() => { void handleReject(); }}
-        />
-    );
-}
-
-function ActionItem({
+export function ActionItem({
     block,
     isFileEditResolved,
 }: {
@@ -559,12 +782,43 @@ function ActionItem({
 
     if (!config) return null;
 
-    if (block.type === "terminal_command" && block.commandStatus === "pending") {
-        return <TerminalApprovalRow block={block} />;
+    if (block.type === "terminal_command") {
+        return <TerminalCommandStep block={block} />;
+    }
+
+    if (block.type === "edit_pending" && (block.commandStatus || "pending") === "pending") {
+        // Edit approval cards live in TurnWorkflowSummary; keep a compact
+        // fallback if this legacy AgentWorkflow path still renders one.
+        return (
+            <div className="py-0.5 text-xs text-text-muted">
+                Pending edit approval for{" "}
+                <span className="text-text-secondary">
+                    {(block.file || "").split(/[\\/]/).pop() || "file"}
+                </span>
+            </div>
+        );
     }
 
     if (block.type === "git_operation" && block.gitOp === "status" && config.gitStatusLines?.length) {
         return <GitStatusGroup lines={config.gitStatusLines} />;
+    }
+
+    if (block.type === "git_operation" && block.gitOp === "log" && config.gitLogLines?.length) {
+        return <GitLogGroup lines={config.gitLogLines} />;
+    }
+
+    if (block.type === "git_operation" && block.gitOp === "branches" && config.gitBranchLines?.length) {
+        return <GitBranchesGroup lines={config.gitBranchLines} />;
+    }
+
+    if (block.type === "git_operation" && block.gitOp === "diff" && config.gitDiffMeta) {
+        return (
+            <GitDiffGroup
+                file={config.gitDiffMeta.file}
+                scope={config.gitDiffMeta.scope}
+                body={config.gitDiffMeta.body}
+            />
+        );
     }
 
     if (block.type === "git_operation" && block.gitOp === "stage" && config.file) {
@@ -612,11 +866,30 @@ function ActionItem({
                     {isEdit && editResolved ? "Applied" : config.label}
                 </span>
 
+                {"faviconUrl" in config && config.faviconUrl ? (
+                    <Favicon url={String(config.faviconUrl)} size={14} />
+                ) : null}
+
+                {"resultUrls" in config && Array.isArray(config.resultUrls) && config.resultUrls.length > 0 ? (
+                    <span className="inline-flex items-center -space-x-1 shrink-0">
+                        {config.resultUrls.map((url: string) => (
+                            <span
+                                key={url}
+                                className="inline-flex size-4 items-center justify-center rounded-md border border-border-subtle bg-panel overflow-hidden"
+                            >
+                                <Favicon url={url} size={12} />
+                            </span>
+                        ))}
+                    </span>
+                ) : null}
+
                 {config.query && (
                     <span className="text-sm text-text-muted truncate max-w-[260px]">
                         {typeof config.query === "string" && config.query.length > 60
                             ? `"${config.query.slice(0, 60)}…"`
-                            : `"${config.query}"`}
+                            : block.type === "web_visit"
+                              ? String(config.query)
+                              : `"${config.query}"`}
                     </span>
                 )}
 

@@ -14,10 +14,12 @@ export default function Chat({
     className,
     onClose,
     sidebarSide = "right",
+    embedWindowControls,
 }: {
     className?: string;
     onClose?: () => void;
     sidebarSide?: "left" | "right";
+    embedWindowControls?: React.ReactNode;
 }) {
     const session = useChatSession();
 
@@ -44,44 +46,41 @@ export default function Chat({
         return items;
     }, [session.isLoading, session.messages]);
 
+    const sendRef = React.useRef(session.handleSendMessage);
+    sendRef.current = session.handleSendMessage;
     React.useEffect(() => {
         const onAnswer = (e: Event) => {
             const answer = (e as CustomEvent<{ answer?: string }>).detail?.answer;
             if (!answer?.trim()) return;
-            void session.handleSendMessage(answer);
+            void sendRef.current(answer);
         };
         window.addEventListener("shape-question-answer", onAnswer as EventListener);
         return () => window.removeEventListener("shape-question-answer", onAnswer as EventListener);
-    }, [session.handleSendMessage]);
+    }, []);
 
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden bg-panel font-sans", className)}>
             <ChatTabBar
-                tabs={session.openChatTabs}
-                activeTabId={session.activeChatTabId}
-                onSelectTab={(tabId) => void session.handleSelectChatTab(tabId)}
-                onCloseTab={(tabId) => void session.handleCloseChatTab(tabId)}
+                title={session.chatTitle}
                 onNewChat={() => void session.handleNewChat()}
                 onClosePanel={onClose}
                 sidebarSide={sidebarSide}
-                activeConversationId={session.conversationId}
-                projectPath={session.project_path}
-                onSelectConversation={(id) => void session.handleLoadConversation(id, { force: true })}
+                embedWindowControls={embedWindowControls}
             />
 
             <div className="relative flex min-h-0 flex-1 flex-col">
-                {/* Same technique as Graph: sit above the scroller, overlap with negative margin */}
-                <div
-                    className="pointer-events-none relative z-10 shrink-0 transition-opacity duration-200"
-                    style={{
-                        height: 30,
-                        marginBottom: -30,
-                        opacity: session.scrolledFromTop ? 1 : 0,
-                        background:
-                            "linear-gradient(to bottom, var(--color-panel) 0%, transparent 100%)",
-                    }}
-                    aria-hidden
-                />
+                {/* Twin of the composer fade — only when scrolled from top */}
+                <div className="pointer-events-none relative z-20 h-0 shrink-0 overflow-visible">
+                    <div
+                        className="absolute inset-x-0 top-0 h-10 transition-opacity duration-200"
+                        style={{
+                            opacity: session.scrolledFromTop ? 1 : 0,
+                            background:
+                                "linear-gradient(to bottom, var(--color-panel) 0%, var(--color-panel) 40%, transparent 100%)",
+                        }}
+                        aria-hidden
+                    />
+                </div>
                 <div
                     ref={session.scrollContainerRef}
                     onScroll={session.handleScroll}
@@ -97,7 +96,7 @@ export default function Chat({
                         sel?.removeAllRanges();
                         sel?.addRange(range);
                     }}
-                    className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 no-scrollbar select-text"
+                    className="relative z-0 flex min-h-0 flex-1 flex-col overflow-y-auto px-3 custom-scrollbar select-text"
                 >
                     <div className="flex min-h-full w-full min-w-0 flex-col pb-8 pt-1">
                         <ChatMessageList
@@ -106,7 +105,6 @@ export default function Chat({
                             isLoading={session.isLoading}
                             activityLabel={session.activityLabel}
                             sendError={session.sendError}
-                            contextSummarized={session.contextSummarized}
                             onDismissError={() => session.setSendError(null)}
                             messagesEndRef={session.messagesEndRef}
                             onRedo={session.handleRedo}
@@ -127,11 +125,10 @@ export default function Chat({
 
                 <div className="relative z-20 shrink-0">
                     <div
-                        className="pointer-events-none absolute inset-x-0 bottom-full z-10"
+                        className="pointer-events-none absolute inset-x-0 bottom-full h-10"
                         style={{
-                            height: 30,
                             background:
-                                "linear-gradient(to top, var(--color-panel) 0%, transparent 100%)",
+                                "linear-gradient(to top, var(--color-panel) 0%, var(--color-panel) 40%, transparent 100%)",
                         }}
                         aria-hidden
                     />

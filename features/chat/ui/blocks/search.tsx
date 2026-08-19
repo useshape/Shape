@@ -2,7 +2,9 @@
 
 import React from "react";
 import { Icon } from "@/components/ui/icon";
+import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
+import { hostnameOf } from "@/lib/favicon";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -47,15 +49,19 @@ export function WebSearchBlock({ query, results, isActive }: {
 
             {isOpen && (
                 <div className="flex flex-col gap-2 ml-2 mt-1 pb-2">
-                    {results.map((result, i) => (
-                        <div key={i} className="mx-2 p-2 rounded">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium text-text-primary truncate">{result.title}</span>
+                    {results.map((result, i) => {
+                        const host = hostnameOf(result.url);
+                        return (
+                            <div key={i} className="mx-2 p-2 rounded">
+                                <div className="flex items-center gap-2 mb-1">
+                                    {host ? <Favicon url={result.url} size={14} /> : null}
+                                    <span className="text-sm font-medium text-text-primary truncate">{result.title}</span>
+                                </div>
+                                <span className="text-sm text-text-muted block truncate mb-1">{result.url}</span>
+                                <span className="text-sm text-text-muted leading-relaxed">{result.snippet}</span>
                             </div>
-                            <span className="text-sm text-text-muted block truncate mb-1">{result.url}</span>
-                            <span className="text-sm text-text-muted leading-relaxed">{result.snippet}</span>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
@@ -82,15 +88,7 @@ export function WebSearchBlock({ query, results, isActive }: {
     );
 }
 
-function hostnameOf(url: string): string {
-    try {
-        return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-        return "";
-    }
-}
-
-/** Footer control: web icon + dropdown of searched sites with favicons. */
+/** Footer control: web icon + dropdown of searched/visited sites with favicons. */
 export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
     if (results.length === 0) return null;
 
@@ -107,8 +105,8 @@ export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
                     </button>
                 </DropdownMenuTrigger>
             </Tooltip>
-            <DropdownMenuContent align="start" className="w-72 p-1.5 max-h-64 overflow-y-auto">
-                <div className="px-2 py-1.5 text-[11px] font-medium text-text-muted tracking-wide">
+            <DropdownMenuContent align="start" className="w-72 max-h-64">
+                <div className="px-2 py-1 text-xs font-medium text-text-muted">
                     Sources
                 </div>
                 {results.map((result, i) => {
@@ -131,15 +129,7 @@ export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
                         >
                             <div className="mt-0.5 w-4 h-4 rounded-sm border border-border-subtle bg-panel flex items-center justify-center overflow-hidden shrink-0">
                                 {host ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={`https://www.google.com/s2/favicons?domain=${host}&sz=32`}
-                                        alt=""
-                                        className="w-3 h-3"
-                                        onError={(e) => {
-                                            (e.target as HTMLImageElement).style.display = "none";
-                                        }}
-                                    />
+                                    <Favicon url={result.url || host} size={12} />
                                 ) : (
                                     <Icon name="language" size={10} className="text-text-muted" />
                                 )}

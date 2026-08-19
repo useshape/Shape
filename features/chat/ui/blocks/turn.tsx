@@ -1,18 +1,30 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { diffLines } from "diff";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import type { Chunk } from "../md/renderer";
+import { openProjectFile } from "@/lib/open-project-file";
+import { commands } from "@/lib/backend/commands";
+import { Collapse } from "./collapse";
+import { TerminalCommandStep } from "./terminal-live";
 import {
+    ActionItem,
+    GitStageGroup,
     groupWorkflowRows,
     isRenderableWorkflowBlock,
     parseGitStagePath,
-    TerminalApprovalRow,
+    getWorkflowActionConfig,
 } from "./workflow";
+import { Favicon } from "@/components/ui/favicon";
+import { parseWebResults } from "../md/renderer";
+import { GeneratingIndicator } from "./generating";
+import { LoadingState } from "./loading-state";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "< 1s";
@@ -97,10 +109,19 @@ function computeTurnStats(blocks: Chunk[]) {
             case "search_result":
             case "web_search":
             case "web_result":
+            case "web_visit":
                 searches += 1;
                 break;
             case "edit":
                 if (block.file) {
+                    editedFiles.add(block.file);
+                    const { add, del } = editDelta(block);
+                    linesAdded += add;
+                    linesRemoved += del;
+                }
+                break;
+            case "edit_pending":
+                if (block.file && block.commandStatus === "applied") {
                     editedFiles.add(block.file);
                     const { add, del } = editDelta(block);
                     linesAdded += add;
@@ -174,21 +195,26 @@ function buildSummaryLabel(stats: ReturnType<typeof computeTurnStats>): string |
 function LineDelta({ add, del }: { add: number; del: number }) {
     if (add === 0 && del === 0) return null;
     return (
-        <span className="inline-flex items-center gap-1 font-mono text-[11px] shrink-0 tabular-nums">
+        <span className="inline-flex items-center gap-1 font-mono text-sm shrink-0 tabular-nums">
             {add > 0 ? <span className="text-success">+{add}</span> : null}
             {del > 0 ? <span className="text-error">-{del}</span> : null}
         </span>
     );
 }
 
-function thoughtHeading(content: string, isActive?: boolean): string {
+function ThoughtHeading({ content, isActive }: { content: string; isActive?: boolean }) {
     const trimmed = content.trim();
-    if (!trimmed) return isActive ? "Thinking" : "Thought briefly";
-    if (trimmed.length < 80 || trimmed.split(/\s+/).length < 15) {
-        return isActive ? "Thinking" : "Thought briefly";
+    if (!trimmed) return isActive ? <>Thinking</> : <>Thought briefly</>;
+    if (trimmed.length < 40) {
+        return isActive ? <>Thinking</> : <>Thought briefly</>;
     }
     const secs = estimateThoughtSeconds(trimmed);
-    return isActive ? "Thinking" : `Thought for ${secs}s`;
+    if (isActive) return <>Thinking</>;
+    return (
+        <>
+            Thought <span className="text-text-disabled">for {secs}s</span>
+        </>
+    );
 }
 
 function ThoughtStep({
@@ -204,32 +230,44 @@ function ThoughtStep({
     const trimmed = content.trim();
     if (!trimmed) return null;
 
-    const heading = thoughtHeading(trimmed, isActive);
     const expandable = trimmed.length >= 80;
 
     return (
         <div className="py-0.5">
-            <button
-                type="button"
-                onClick={() => expandable && setOpen((v) => !v)}
-                className={cn(
-                    "flex items-center gap-1 text-xs transition-colors",
-                    expandable ? "text-text-secondary hover:text-text-primary cursor-pointer" : "text-text-secondary cursor-default",
-                )}
-            >
-                <span>{heading}</span>
-                {expandable ? (
-                    <Icon
-                        name="chevron_right"
-                        size={12}
-                        className={cn("opacity-50 transition-transform", open && "rotate-90")}
-                    />
-                ) : null}
-            </button>
-            {(open || showBody) && expandable ? (
-                <div className="mt-1 text-xs leading-relaxed text-text-muted max-w-full whitespace-pre-wrap">
-                    {trimmed}
-                </div>
+            {isActive ? (
+                <LoadingState label="Thinking" variant="Drive" />
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => expandable && setOpen((v) => !v)}
+                    className={cn(
+                        "flex items-center gap-1 text-sm transition-colors",
+                        expandable
+                            ? "text-text-muted hover:text-text-primary cursor-pointer"
+                            : "text-text-muted cursor-default",
+                    )}
+                >
+                    <span>
+                        <ThoughtHeading content={trimmed} isActive={false} />
+                    </span>
+                    {expandable ? (
+                        <Icon
+                            name="chevron_right"
+                            size={12}
+                            className={cn(
+                                "opacity-0 transition-transform duration-200",
+                                open && "rotate-90 opacity-50",
+                            )}
+                        />
+                    ) : null}
+                </button>
+            )}
+            {expandable && !isActive ? (
+                <Collapse open={open || !!showBody}>
+                    <div className="mt-1 text-xs leading-relaxed text-text-muted max-w-full whitespace-pre-wrap">
+                        {trimmed}
+                    </div>
+                </Collapse>
             ) : null}
         </div>
     );
@@ -295,7 +333,7 @@ function WorkflowEditPreview({
 
     return (
         <div className="my-1.5 rounded-md border border-border-subtle overflow-hidden bg-panel/40 max-w-full">
-            <div className="max-h-[220px] overflow-y-auto custom-scrollbar text-[11px] font-mono">
+            <div className="max-h-[220px] overflow-y-auto custom-scrollbar text-sm font-mono">
                 {rows.map((row, i) => (
                     <div
                         key={`${row.type}-${i}`}
@@ -330,6 +368,178 @@ function WorkflowEditPreview({
     );
 }
 
+/**
+ * Approval card for a staged file edit (require-edit-approval mode):
+ * header with filename and +/− counts, expandable diff preview, Skip / Accept.
+ */
+function EditApprovalRow({ block }: { block: Chunk }) {
+    const [localStatus, setLocalStatus] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [diffOpen, setDiffOpen] = useState(true);
+    const { add, del } = editDelta(block);
+    const file = block.file || "";
+
+    const resolve = useCallback(
+        (approved: boolean) => {
+            if (!block.commandId || isProcessing) return;
+            setIsProcessing(true);
+            void commands
+                .resolveEditApproval(block.commandId, approved)
+                .then(() => setLocalStatus(approved ? "applied" : "rejected"))
+                .catch(() => { /* backend upsert corrects the card */ })
+                .finally(() => setIsProcessing(false));
+        },
+        [block.commandId, isProcessing],
+    );
+
+    // Backend resolution (or another window) flips the card instantly.
+    useEffect(() => {
+        if (!block.commandId) return;
+        let disposed = false;
+        const unlistenPromise = listen<{ id?: string; approved?: boolean }>(
+            "agent-edit-resolved",
+            (event) => {
+                if (disposed || event.payload?.id !== block.commandId) return;
+                setLocalStatus(event.payload?.approved ? "applied" : "rejected");
+            },
+        );
+        return () => {
+            disposed = true;
+            void unlistenPromise.then((unlisten) => unlisten()).catch(() => { /* ignore */ });
+        };
+    }, [block.commandId]);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (isProcessing) return;
+            const t = e.target as HTMLElement | null;
+            if (t?.closest("textarea, input, [contenteditable='true']")) return;
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                resolve(true);
+            }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [isProcessing, resolve]);
+
+    const status = localStatus ?? block.commandStatus ?? "pending";
+    if (status !== "pending") {
+        // Applied/rejected states render via the regular step rows once the
+        // upserted chunk arrives; show a minimal line meanwhile.
+        return (
+            <div className="py-0.5 text-xs text-text-muted">
+                {status === "applied" ? "Applying edit to " : "Rejected edit to "}
+                <span className="text-text-secondary">{fileName(file)}</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
+            <button
+                type="button"
+                onClick={() => setDiffOpen((v) => !v)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left"
+            >
+                {isProcessing ? (
+                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
+                ) : (
+                    <Icon name="edit" size={13} className="shrink-0 text-text-muted" />
+                )}
+                <span className="truncate text-xs text-text-muted">Edit file</span>
+                <span className="truncate text-sm text-text-primary">{fileName(file)}</span>
+                <span className="flex shrink-0 items-center gap-1 text-xs">
+                    <span className="text-success">+{add}</span>
+                    <span className="text-error">-{del}</span>
+                </span>
+                <Icon
+                    name="chevron_right"
+                    size={12}
+                    className={cn(
+                        "ml-auto shrink-0 opacity-50 transition-transform duration-200",
+                        diffOpen && "rotate-90",
+                    )}
+                />
+            </button>
+            <Collapse open={diffOpen}>
+                <div className="border-t border-border px-3 py-2">
+                    <WorkflowEditPreview
+                        file={file}
+                        original={block.original || ""}
+                        replacement={block.replacement || ""}
+                    />
+                </div>
+            </Collapse>
+            <div className="flex items-center justify-end gap-1.5 px-2 py-2">
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    disabled={isProcessing}
+                    onClick={() => resolve(false)}
+                >
+                    Skip
+                </Button>
+                <Button
+                    type="button"
+                    variant="default"
+                    size="xs"
+                    disabled={isProcessing}
+                    onClick={() => resolve(true)}
+                >
+                    Accept
+                    <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
+                        ↵
+                    </kbd>
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+/** Applied (previously gated) edit — same presentation as a normal edit row. */
+function StepRowAppliedEdit({ block }: { block: Chunk }) {
+    const [diffOpen, setDiffOpen] = useState(false);
+    const { add, del } = editDelta(block);
+    const hasDiff = add > 0 || del > 0;
+    const file = block.file || "";
+    return (
+        <div className="py-0.5">
+            <button
+                type="button"
+                onClick={() => hasDiff && setDiffOpen((v) => !v)}
+                className={cn(
+                    "flex items-center gap-1.5 text-sm text-text-muted w-fit max-w-full text-left",
+                    hasDiff && "hover:text-text-primary transition-colors",
+                )}
+            >
+                <span>
+                    Edited <span className="text-text-secondary">{fileName(file)}</span>
+                </span>
+                <LineDelta add={add} del={del} />
+                {hasDiff ? (
+                    <Icon
+                        name="chevron_right"
+                        size={12}
+                        className={cn("opacity-50 transition-transform duration-200 shrink-0", diffOpen && "rotate-90")}
+                    />
+                ) : null}
+            </button>
+            {hasDiff ? (
+                <Collapse open={diffOpen}>
+                    <WorkflowEditPreview
+                        file={file}
+                        original={block.original || ""}
+                        replacement={block.replacement || ""}
+                    />
+                </Collapse>
+            ) : null}
+        </div>
+    );
+}
+
 function StepRow({ block }: { block: Chunk }) {
     const [diffOpen, setDiffOpen] = useState(false);
 
@@ -341,28 +551,90 @@ function StepRow({ block }: { block: Chunk }) {
         const path = block.content || "";
         const range = lineRangeLabel(block.catStartLine, block.catEndLine);
         return (
-            <div className="py-0.5 text-xs text-text-disabled">
-                Read {fileName(path)}
-                {range ? <span className="text-text-muted"> {range}</span> : null}
-            </div>
+            <button
+                type="button"
+                onClick={() => path && void openProjectFile(path)}
+                className="py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors w-fit text-left cursor-pointer"
+            >
+                Read <span className="text-text-secondary">{fileName(path)}</span>
+                {range ? <span> {range}</span> : null}
+            </button>
         );
     }
 
     if (block.type === "grep") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-xs text-text-disabled truncate">
-                Grepped <span className="text-text-muted">{q}</span>
+            <div className="py-0.5 text-sm text-text-muted truncate">
+                Grepped <span className="text-text-secondary">{q}</span>
             </div>
         );
     }
 
-    if (block.type === "search" || block.type === "search_result" || block.type === "web_search") {
+    if (block.type === "search" || block.type === "search_result") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-xs text-text-disabled truncate">
-                Searched <span className="text-text-muted">{q}</span>
+            <div className="py-0.5 text-sm text-text-muted truncate">
+                Searched <span className="text-text-secondary">{q}</span>
             </div>
+        );
+    }
+
+    if (block.type === "web_search" || block.type === "web_result") {
+        const q = (block.query || "").trim();
+        const hits = parseWebResults(block.content || "");
+        const favicons = hits
+            .map((h) => h.url)
+            .filter(Boolean)
+            .filter((url, i, arr) => arr.indexOf(url) === i)
+            .slice(0, 5);
+        return (
+            <div className="flex items-center gap-1.5 py-0.5 text-sm text-text-muted min-w-0">
+                <span className="shrink-0">
+                    {block.isGenerating ? "Searching" : "Searched"}
+                </span>
+                {q ? (
+                    <span className="text-text-secondary truncate min-w-0">
+                        {q.length > 48 ? `${q.slice(0, 48)}…` : q}
+                    </span>
+                ) : null}
+                {favicons.length > 0 ? (
+                    <span className="inline-flex items-center -space-x-1 shrink-0 pl-0.5">
+                        {favicons.map((url) => (
+                            <span
+                                key={url}
+                                className="inline-flex size-4 items-center justify-center rounded-full border border-border-subtle bg-panel overflow-hidden"
+                            >
+                                <Favicon url={url} size={12} />
+                            </span>
+                        ))}
+                    </span>
+                ) : null}
+            </div>
+        );
+    }
+
+    if (block.type === "web_visit") {
+        const host = block.visitHost || block.visitTitle || block.content || "";
+        const url = block.visitUrl || block.visitHost || "";
+        return (
+            <button
+                type="button"
+                onClick={() => {
+                    if (block.visitUrl) void commands.openUrlExternal(block.visitUrl);
+                }}
+                className="flex items-center gap-1.5 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors w-fit max-w-full text-left"
+            >
+                {url ? (
+                    <span className="chat-link-favicon">
+                        <Favicon url={url} size={12} />
+                    </span>
+                ) : null}
+                <span>
+                    {block.isGenerating ? "Visiting" : "Visited"}{" "}
+                    <span className="text-text-secondary">{host}</span>
+                </span>
+            </button>
         );
     }
 
@@ -375,50 +647,66 @@ function StepRow({ block }: { block: Chunk }) {
                     type="button"
                     onClick={() => hasDiff && setDiffOpen((v) => !v)}
                     className={cn(
-                        "flex items-center gap-1.5 text-xs text-text-disabled w-fit max-w-full text-left",
-                        hasDiff && "hover:text-text-secondary transition-colors",
+                        "flex items-center gap-1.5 text-sm text-text-muted w-fit max-w-full text-left",
+                        hasDiff && "hover:text-text-primary transition-colors",
                     )}
                 >
                     <span>
-                        Edited {fileName(block.file)}
+                        Edited <span className="text-text-secondary">{fileName(block.file)}</span>
                     </span>
                     <LineDelta add={add} del={del} />
                     {hasDiff ? (
                         <Icon
                             name="chevron_right"
                             size={12}
-                            className={cn("opacity-50 transition-transform shrink-0", diffOpen && "rotate-90")}
+                            className={cn("opacity-0 transition-transform duration-200 shrink-0", diffOpen && "rotate-90 opacity-50")}
                         />
                     ) : null}
                 </button>
-                {diffOpen && hasDiff ? (
-                    <WorkflowEditPreview
-                        file={block.file}
-                        original={block.original || ""}
-                        replacement={block.replacement || ""}
-                    />
+                {hasDiff ? (
+                    <Collapse open={diffOpen}>
+                        <WorkflowEditPreview
+                            file={block.file}
+                            original={block.original || ""}
+                            replacement={block.replacement || ""}
+                        />
+                    </Collapse>
                 ) : null}
             </div>
         );
     }
 
     if (block.type === "terminal_command" || block.type === "run") {
-        if (block.type === "terminal_command" && block.commandStatus === "pending") {
-            return <TerminalApprovalRow block={block} />;
-        }
         const cmd = (block.command || block.content || "").trim();
-        if (isLintCommand(cmd)) {
+        const finishedFine =
+            !block.commandStatus
+            || block.commandStatus === "completed"
+            || block.commandStatus === "background";
+        if (finishedFine && !block.isGenerating && isLintCommand(cmd)) {
             const status = lintStatusFromOutput(block.content || "");
             if (status === "clean") {
-                return <div className="py-0.5 text-xs text-text-disabled">No linter errors</div>;
+                return <div className="py-0.5 text-sm text-text-muted">No linter errors</div>;
             }
             if (status === "errors") {
-                return <div className="py-0.5 text-xs text-text-disabled">Linter errors found</div>;
+                return <div className="py-0.5 text-sm text-text-muted">Linter errors found</div>;
             }
         }
+        return <TerminalCommandStep block={block} />;
+    }
+
+    if (block.type === "edit_pending") {
+        const status = block.commandStatus || "pending";
+        if (status === "pending") {
+            return <EditApprovalRow block={block} />;
+        }
+        if (status === "applied" && block.file) {
+            // Applied edits render like a normal edit row (with the diff).
+            return <StepRowAppliedEdit block={block} />;
+        }
         return (
-            <div className="py-0.5 text-xs text-text-disabled truncate">
-                Ran <span className="font-mono text-[11px] text-text-muted">{cmd}</span>
+            <div className="py-0.5 text-sm text-text-muted">
+                {status === "cancelled" ? "Cancelled edit to " : "Rejected edit to "}
+                <span className="text-text-secondary">{block.file ? fileName(block.file) : "file"}</span>
             </div>
         );
     }
@@ -433,40 +721,70 @@ function StepRow({ block }: { block: Chunk }) {
                     ? "Deleted"
                     : "Renamed";
         return (
-            <div className="py-0.5 text-xs text-text-disabled">
-                {label} {block.content ? fileName(block.content) : ""}
+            <div className="py-0.5 text-sm text-text-muted">
+                {label}{" "}
+                <span className="text-text-secondary">
+                    {block.content ? fileName(block.content) : ""}
+                </span>
             </div>
         );
     }
 
-    if (block.type === "git_operation" && block.gitOp === "status") {
-        return <div className="py-0.5 text-xs text-text-disabled">Git status</div>;
-    }
-
-    return null;
+    // ls, rename_chat, rich git groups, and anything else ActionItem knows.
+    return <ActionItem block={block} />;
 }
 
-function GitStageStep({ count }: { count: number }) {
-    if (count === 0) return null;
-    return <div className="py-0.5 text-xs text-text-disabled">Staged {count} files</div>;
+function liveActivityLabel(blocks: Chunk[], activityLabel?: string | null): string {
+    if (activityLabel?.trim()) return activityLabel.trim();
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        const block = blocks[i];
+        const config = getWorkflowActionConfig(block, true);
+        if (!config) continue;
+        if (block.type === "think" || block.type === "thought") {
+            return block.isGenerating ? "Thinking" : "Thought";
+        }
+        if (block.type === "edit" || block.type === "edit_pending") {
+            const name = block.file?.split(/[\\/]/).pop() || "file";
+            return `${config.label} ${name}`;
+        }
+        if (block.type === "web_visit") {
+            return `${config.label} ${block.visitHost || block.visitTitle || ""}`.trim();
+        }
+        if (config.query) {
+            const q = String(config.query);
+            return `${config.label} ${q.length > 40 ? `${q.slice(0, 40)}…` : q}`;
+        }
+        if (config.file) {
+            const name = config.file.split(/[\\/]/).pop() || config.file;
+            return `${config.label} ${name}`;
+        }
+        return config.label;
+    }
+    return "Working";
 }
 
 export function TurnWorkflowSummary({
     blocks,
     isActive,
     durationMs,
+    activityLabel,
     children,
 }: {
     blocks: Chunk[];
     isActive?: boolean;
     durationMs?: number;
+    activityLabel?: string | null;
     children?: React.ReactNode;
 }) {
     const visible = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
     const hasPendingApproval = visible.some(
-        (b) => b.type === "terminal_command" && b.commandStatus === "pending",
+        (b) =>
+            (b.type === "terminal_command" || b.type === "edit_pending")
+            && b.commandStatus === "pending",
     );
-    const [open, setOpen] = useState(!!isActive || hasPendingApproval);
+    // Start collapsed while streaming so the live status line can show current work;
+    // open when an approval needs attention.
+    const [open, setOpen] = useState(hasPendingApproval);
     const [stepsOpen, setStepsOpen] = useState(hasPendingApproval);
     const [prevActive, setPrevActive] = useState(isActive);
     const [prevPending, setPrevPending] = useState(hasPendingApproval);
@@ -476,8 +794,6 @@ export function TurnWorkflowSummary({
         if (!isActive && !hasPendingApproval) {
             setOpen(false);
             setStepsOpen(false);
-        } else if (isActive) {
-            setOpen(true);
         }
     }
 
@@ -504,25 +820,57 @@ export function TurnWorkflowSummary({
         const cmd = (b.command || b.content || "").trim();
         return isLintCommand(cmd) && lintStatusFromOutput(b.content || "") === "clean";
     });
+    const showClosedLiveStatus = !!isActive && !open;
+
+    const pendingApprovalRows = (
+        <div className="flex flex-col gap-1 my-1">
+            {visible
+                .filter(
+                    (b) =>
+                        (b.type === "terminal_command" || b.type === "edit_pending")
+                        && b.commandStatus === "pending",
+                )
+                .map((b, i) =>
+                    b.type === "edit_pending" ? (
+                        <EditApprovalRow key={b.commandId || `pending-edit-${i}`} block={b} />
+                    ) : (
+                        <TerminalCommandStep key={b.commandId || `pending-${i}`} block={b} />
+                    ),
+                )}
+        </div>
+    );
 
     return (
         <div className="mb-2 select-none">
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex w-fit max-w-full items-center gap-1 py-0.5 text-xs text-text-disabled hover:text-text-secondary transition-colors"
+                onClick={() => {
+                    setOpen((v) => {
+                        const next = !v;
+                        if (next) setStepsOpen(true);
+                        return next;
+                    });
+                }}
+                className="flex w-fit max-w-full items-center gap-1 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors"
             >
-                <span>{isActive ? "Working…" : `Worked for ${formatDuration(durationMs)}`}</span>
+                <span>
+                    {isActive ? (
+                        "Working…"
+                    ) : (
+                        <>
+                            Worked for{" "}
+                            <span className="text-text-secondary">{formatDuration(durationMs)}</span>
+                        </>
+                    )}
+                </span>
                 <Icon
-                    name={open ? "expand_more" : "chevron_right"}
+                    name="chevron_right"
                     size={14}
-                    className="shrink-0 opacity-60"
+                    className={cn("shrink-0 opacity-0 transition-transform duration-200", open && "rotate-90 opacity-50")}
                 />
             </button>
 
-            {!open ? children : null}
-
-            {open ? (
+            <Collapse open={open}>
                 <div className="mt-0.5 flex flex-col gap-0.5">
                     {leadThought?.content?.trim() ? (
                         <ThoughtStep content={leadThought.content} isActive={leadThought.isGenerating} />
@@ -533,27 +881,30 @@ export function TurnWorkflowSummary({
                             type="button"
                             title={summaryLabel}
                             onClick={() => setStepsOpen((v) => !v)}
-                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-xs text-text-disabled hover:text-text-secondary transition-colors"
+                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-sm text-text-muted hover:text-text-primary transition-colors"
                         >
                             <span className="min-w-0 truncate">{summaryLabel}</span>
                             {hasLintDelta ? (
                                 <LineDelta add={stats.linesAdded} del={stats.linesRemoved} />
                             ) : null}
                             <Icon
-                                name={stepsOpen ? "expand_more" : "chevron_right"}
+                                name="chevron_right"
                                 size={12}
-                                className="shrink-0 opacity-50"
+                                className={cn(
+                                    "shrink-0 opacity-0 transition-transform duration-200",
+                                    stepsOpen && "rotate-90 opacity-50",
+                                )}
                             />
                         </button>
                     ) : null}
 
-                    {stepsOpen ? (
+                    <Collapse open={stepsOpen}>
                         <div className="flex flex-col gap-0.5 pl-3">
                             {(() => {
                                 let skippedLeadThought = false;
                                 return rows.map((row, i) => {
                                     if (row.kind === "git_stage_group") {
-                                        return <GitStageStep key={`stage-${i}`} count={row.paths.length} />;
+                                        return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
                                     }
                                     if (row.kind === "block") {
                                         const isThought =
@@ -573,31 +924,23 @@ export function TurnWorkflowSummary({
                                 });
                             })()}
                             {showLintFooter && !lintShownInSteps ? (
-                                <div className="py-0.5 text-xs text-text-disabled">No linter errors</div>
+                                <div className="py-0.5 text-sm text-text-muted">No linter errors</div>
                             ) : null}
                         </div>
-                    ) : hasPendingApproval ? (
-                        // Steps collapsed but approval still needed - keep the bar reachable.
-                        <div className="flex flex-col gap-1 pl-3 my-1">
-                            {visible
-                                .filter((b) => b.type === "terminal_command" && b.commandStatus === "pending")
-                                .map((b, i) => (
-                                    <TerminalApprovalRow key={b.commandId || `pending-${i}`} block={b} />
-                                ))}
-                        </div>
-                    ) : null}
+                    </Collapse>
 
-                    {children}
+                    {!stepsOpen && !isActive && hasPendingApproval ? (
+                        <div className="pl-3">{pendingApprovalRows}</div>
+                    ) : null}
                 </div>
-            ) : hasPendingApproval ? (
-                <div className="flex flex-col gap-1 my-1">
-                    {visible
-                        .filter((b) => b.type === "terminal_command" && b.commandStatus === "pending")
-                        .map((b, i) => (
-                            <TerminalApprovalRow key={b.commandId || `pending-${i}`} block={b} />
-                        ))}
-                    {children}
-                </div>
+            </Collapse>
+
+            {!open && hasPendingApproval ? pendingApprovalRows : null}
+
+            {children}
+
+            {showClosedLiveStatus ? (
+                <GeneratingIndicator label={liveActivityLabel(visible, activityLabel)} />
             ) : null}
         </div>
     );

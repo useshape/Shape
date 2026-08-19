@@ -18,6 +18,8 @@
 /// edits and were the root cause of corrupted files in the agent's trace log.
 
 pub mod apply;
+pub mod apply_patch;
+pub mod sanity;
 pub mod speculative;
 pub mod syntax_check;
 
@@ -26,37 +28,99 @@ use reqwest::Client;
 use crate::core::error::AppError;
 use super::commands::logging;
 
-/// Outcome of a successful edit, returned to the agent's tool_result.
-pub struct EditOutcome {
+/// A merged edit that has NOT been written to disk yet. Produced by
+/// [`resolve_edit`]; written by [`write_resolved_edit`] (or discarded when the
+/// user rejects it in the edit-approval flow).
+pub struct ResolvedEdit {
     pub merged_content: String,
+    pub original_content: String,
     pub strategy: &'static str,
     pub original_lines: usize,
     pub merged_lines: usize,
+    pub is_new_file: bool,
 }
 
-/// Apply a speculative edit to a file.
+/// Write a previously resolved edit to disk.
+pub async fn write_resolved_edit(
+    app: &tauri::AppHandle,
+    path: &str,
+    resolved: &ResolvedEdit,
+) -> Result<(), AppError> {
+    save(app, path, &resolved.merged_content).await
+}
+
+fn finish_resolved(
+    merged: String,
+    original: String,
+    code_edit: &str,
+    strategy: &'static str,
+) -> Result<ResolvedEdit, AppError> {
+    sanity::validate_merged_edit(&merged, &original, code_edit, strategy)?;
+    let original_lines = original.lines().count();
+    let merged_lines = merged.lines().count();
+    Ok(ResolvedEdit {
+        merged_content: merged,
+        original_content: original,
+        strategy,
+        original_lines,
+        merged_lines,
+        is_new_file: false,
+    })
+}
+
+fn edit_error_with_excerpt(path: &str, reason: &str, original: &str, code_edit: &str) -> AppError {
+    let search_hint = extract_first_search_body(code_edit);
+    let excerpt = sanity::format_edit_error_excerpt(original, search_hint.as_deref());
+    let conflict_hint = if has_git_merge_conflict_markers(original) {
+        "\n\nThis file contains git merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`). \
+Remove all conflict markers and use `edit_file` with the entire corrected file as `code_edit` \
+(no SEARCH/REPLACE blocks), or include the full conflict region in one unique SEARCH block."
+    } else {
+        ""
+    };
+    AppError::Message(format!(
+        "Could not apply the edit to {}. Reason: {}.{}{}\n\n{}",
+        path, reason, conflict_hint, "", excerpt
+    ))
+}
+
+fn extract_first_search_body(code_edit: &str) -> Option<String> {
+    let lines: Vec<&str> = code_edit.lines().collect();
+    let mut i = 0;
+    while i < lines.len() {
+        if lines[i].starts_with("<<<<<<< SEARCH") {
+            i += 1;
+            let mut body = Vec::new();
+            while i < lines.len() && !lines[i].starts_with("=======") {
+                body.push(lines[i]);
+                i += 1;
+            }
+            return Some(body.join("\n"));
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Compute the merged content for an edit WITHOUT touching the disk.
 ///
-/// `path` must be the absolute, already-security-validated path. `code_edit` is the
-/// model's edit (possibly with `// ... existing code ...` markers). `instructions` is
-/// a one-line human-readable hint used by the fast-apply LLM.
-///
-/// Returns Ok(EditOutcome) on success (file saved). On failure, the error message
-/// includes the current file contents so the model can read its mistake and retry.
-pub async fn apply_edit(
-    path: String,
-    instructions: String,
-    code_edit: String,
-    app: tauri::AppHandle,
+/// This is the shared front half of the edit pipeline: the normal path writes
+/// the result immediately, while the edit-approval path shows it to the user
+/// first and only writes on approval.
+pub async fn resolve_edit(
+    path: &str,
+    instructions: &str,
+    code_edit: &str,
     client: &Client,
     api_key: &str,
-) -> Result<EditOutcome, AppError> {
+) -> Result<ResolvedEdit, AppError> {
     let code_edit = code_edit.replace("\r\n", "\n");
-    let is_new_file = !std::path::Path::new(&path).exists();
+    let is_new_file = !std::path::Path::new(path).exists();
 
     logging::info(
         "editing",
         &format!(
-            "apply_edit: path={}, is_new={}, edit_len={}",
+            "resolve_edit: path={}, is_new={}, edit_len={}",
             path,
             is_new_file,
             code_edit.len()
@@ -70,17 +134,18 @@ pub async fn apply_edit(
                     .to_string(),
             ));
         }
-        save(&app, &path, &code_edit).await?;
         let lines = code_edit.lines().count();
-        return Ok(EditOutcome {
+        return Ok(ResolvedEdit {
             merged_content: code_edit,
+            original_content: String::new(),
             strategy: "new_file",
             original_lines: 0,
             merged_lines: lines,
+            is_new_file: true,
         });
     }
 
-    let original = tokio::fs::read_to_string(&path)
+    let original = tokio::fs::read_to_string(path)
         .await
         .map_err(|e| {
             logging::error("editing", &format!("Failed to read {}: {}", path, e));
@@ -93,19 +158,17 @@ pub async fn apply_edit(
             logging::info(
                 "editing",
                 &format!(
-                    "merge conflict detected; applying direct full-file replacement ({} -> {} lines)",
+                    "merge conflict detected; using direct full-file replacement ({} -> {} lines)",
                     original.lines().count(),
                     code_edit.lines().count()
                 ),
             );
-            save(&app, &path, &code_edit).await?;
-            let merged_lines = code_edit.lines().count();
-            return Ok(EditOutcome {
-                merged_content: code_edit,
-                strategy: "merge_conflict_full_file",
-                original_lines: original.lines().count(),
-                merged_lines,
-            });
+            return finish_resolved(
+                code_edit.clone(),
+                original,
+                &code_edit,
+                "merge_conflict_full_file",
+            );
         }
     }
 
@@ -129,43 +192,17 @@ pub async fn apply_edit(
                     merged.lines().count()
                 ),
             );
-            save(&app, &path, &merged).await?;
-            let merged_lines = merged.lines().count();
-            return Ok(EditOutcome {
-                merged_content: merged,
-                strategy: "speculative",
-                original_lines,
-                merged_lines,
-            });
+            return finish_resolved(merged, original, &code_edit, "speculative");
         }
         Err(e) => {
             if !e.contains("No `<<<<<<< SEARCH` blocks found") {
                 logging::warn("editing", &format!("speculative resolver failed: {}", e));
-                let conflict_hint = if has_git_merge_conflict_markers(&original) {
-                    "\n\nThis file contains git merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`). \
-Remove all conflict markers and use `edit_file` with the entire corrected file as `code_edit` \
-(no SEARCH/REPLACE blocks), or include the full conflict region in one unique SEARCH block."
-                } else {
-                    ""
-                };
-                return Err(AppError::Message(format!(
-                    "Could not apply the edit to {}. Reason: {}.{}\n\nCurrent file content (so you can correct your next attempt):\n```\n{}\n```",
-                    path,
-                    e,
-                    conflict_hint,
-                    truncate_for_error(&original)
-                )));
+                return Err(edit_error_with_excerpt(path, &e, &original, &code_edit));
             }
         }
     }
 
     // 2) Robust full-file replacement path.
-    //
-    // Some tool-capable models ignore the marker instruction and send an entire file as
-    // `code_edit`. That should not require an extra LLM call and must not fail just
-    // because the speculative resolver declined. Treat it as a full replacement only
-    // when the edit is plausibly a whole file (roughly same size/line count as the
-    // original) and contains no ellipsis markers.
     if looks_like_full_file_replacement(&original, &code_edit) {
         logging::info(
             "editing",
@@ -175,37 +212,21 @@ Remove all conflict markers and use `edit_file` with the entire corrected file a
                 code_edit.lines().count()
             ),
         );
-        save(&app, &path, &code_edit).await?;
-        let merged_lines = code_edit.lines().count();
-        return Ok(EditOutcome {
-            merged_content: code_edit,
-            strategy: "full_file",
-            original_lines,
-            merged_lines,
-        });
+        return finish_resolved(code_edit.clone(), original, &code_edit, "full_file");
     }
 
     // 3) Fast-apply LLM fallback.
     logging::info("editing", "speculative resolver declined, falling back to fast-apply");
-    match apply::fast_apply(client, api_key, &original, &code_edit, &instructions).await {
-        Ok(merged) => {
-            save(&app, &path, &merged).await?;
-            let merged_lines = merged.lines().count();
-            Ok(EditOutcome {
-                merged_content: merged,
-                strategy: "fast_apply",
-                original_lines,
-                merged_lines,
-            })
-        }
+    match apply::fast_apply(client, api_key, &original, &code_edit, instructions).await {
+        Ok(merged) => finish_resolved(merged, original, &code_edit, "fast_apply"),
         Err(e) => {
             logging::error("editing", &format!("fast-apply failed: {}", e));
-            Err(AppError::Message(format!(
-                "Could not apply the edit to {}. Reason: {}.\n\nCurrent file content (so you can correct your next attempt):\n```\n{}\n```",
+            Err(edit_error_with_excerpt(
                 path,
-                e,
-                truncate_for_error(&original)
-            )))
+                &e.to_string(),
+                &original,
+                &code_edit,
+            ))
         }
     }
 }
@@ -254,13 +275,4 @@ async fn save(app: &tauri::AppHandle, path: &str, content: &str) -> Result<(), A
         content.to_string(),
     )
     .await
-}
-
-fn truncate_for_error(text: &str) -> String {
-    const LIMIT: usize = 6000;
-    if text.len() <= LIMIT {
-        return text.to_string();
-    }
-    let cut: String = text.chars().take(LIMIT).collect();
-    format!("{}\n... [file truncated for error message — {} chars total]", cut, text.len())
 }

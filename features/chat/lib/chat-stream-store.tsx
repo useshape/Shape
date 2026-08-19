@@ -21,10 +21,23 @@ const TOOL_LABELS: Record<string, string> = {
     save_plan: "Saving plan",
 };
 
+/** Explicit turn phase driven by Rust events — keeps chrome from lying. */
+export type TurnPhase =
+    | "idle"
+    | "thinking"
+    | "tool"
+    | "awaiting_approval"
+    | "running_command"
+    | "editing"
+    | "completed"
+    | "failed"
+    | "cancelled";
+
 export type ChatStreamState = {
     isLoading: boolean;
     messages: ChatMessage[];
     activityLabel: string | null;
+    turnPhase: TurnPhase;
     turnId: string | null;
     sendError: string | null;
     /** Older turns were folded into a model-facing summary (Cursor-style). */
@@ -43,6 +56,7 @@ const defaultState: ChatStreamState = {
     isLoading: false,
     messages: [],
     activityLabel: null,
+    turnPhase: "idle",
     turnId: null,
     sendError: null,
     contextSummarized: false,
@@ -50,10 +64,39 @@ const defaultState: ChatStreamState = {
 
 const ChatStreamContext = React.createContext<ChatStreamContextValue | null>(null);
 
+function phaseFromTool(tool: string | undefined): TurnPhase {
+    if (tool === "run_terminal") return "running_command";
+    if (tool === "edit_file" || tool === "create_file") return "editing";
+    return "tool";
+}
+
+function labelForPhase(phase: TurnPhase, tool?: string, label?: string): string | null {
+    if (label?.trim()) return label.trim();
+    switch (phase) {
+        case "thinking":
+            return "Thinking";
+        case "awaiting_approval":
+            return "Waiting for approval";
+        case "running_command":
+            return "Running command";
+        case "editing":
+            return "Editing file";
+        case "tool":
+            if (tool) {
+                const pretty = TOOL_LABELS[tool] ?? tool.replace(/_/g, " ");
+                return pretty.charAt(0).toUpperCase() + pretty.slice(1);
+            }
+            return "Working";
+        default:
+            return null;
+    }
+}
+
 export function ChatStreamProvider({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = React.useState(defaultState.isLoading);
     const [messages, setMessages] = React.useState<ChatMessage[]>(defaultState.messages);
     const [activityLabel, setActivityLabel] = React.useState<string | null>(null);
+    const [turnPhase, setTurnPhase] = React.useState<TurnPhase>("idle");
     const [turnId, setTurnId] = React.useState<string | null>(null);
     const [sendError, setSendError] = React.useState<string | null>(null);
     const [contextSummarized, setContextSummarized] = React.useState(false);
@@ -84,6 +127,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             turnIdRef.current = viewingThisTurn ? (gen.turnId ?? null) : null;
             setTurnId(viewingThisTurn ? (gen.turnId ?? null) : null);
             setActivityLabel(viewingThisTurn ? (gen.activityLabel ?? null) : null);
+            setTurnPhase(viewingThisTurn ? "thinking" : "idle");
         } catch (err) {
             console.error("Failed to sync chat stream:", err);
         }
@@ -140,6 +184,8 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 setIsLoading(true);
                 setSendError(null);
                 setTurnId(tid);
+                setTurnPhase("thinking");
+                setActivityLabel("Thinking");
             }),
         );
 
@@ -196,17 +242,24 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             }>("chat_complete", (event) => {
                 const { stats, model, error, conversationId, turnId: completeTurnId } =
                     event.payload ?? {};
+                if (!error && stats) {
+                    void import("@/lib/last-turn-usage").then(({ setLastTurnUsage }) => {
+                        setLastTurnUsage({
+                            tokens: stats.tokens ?? ((stats.inputTokens ?? 0) + (stats.outputTokens ?? 0)),
+                            creditsCharged: stats.creditsCharged ?? 0,
+                            usedAuto: stats.usedAuto,
+                        });
+                    });
+                }
                 const forThisView = acceptsStream({
                     conversationId,
                     turnId: completeTurnId,
                 });
                 if (!forThisView) {
-                    // Background chat finished - in-app toast; OS toast only when unfocused.
+                    // Background chat finished — OS when unfocused, in-app toast when focused. Never both.
                     if (!error) {
-                        void import("@/features/notifications").then(({ notify }) => {
-                            notify.info("Shape", "Generation finished");
-                        });
-                        if (document.hidden || !document.hasFocus()) {
+                        const background = document.hidden || !document.hasFocus();
+                        if (background) {
                             void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
                                 showDesktopNotification(
                                     "generationComplete",
@@ -214,12 +267,19 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                                     "Generation finished",
                                 ),
                             );
+                        } else {
+                            void import("@/features/notifications").then(({ notify }) => {
+                                notify.info("Shape", "Generation finished");
+                            });
                         }
                     }
                     return;
                 }
                 setIsLoading(false);
                 setActivityLabel(null);
+                setTurnPhase(
+                    error === "Cancelled" ? "cancelled" : error ? "failed" : "completed",
+                );
                 turnIdRef.current = null;
                 setTurnId(null);
                 // Keep streamConversationIdRef as the viewing conversation.
@@ -269,6 +329,20 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             }),
         );
 
+        // Approval alerts: OS notification only when unfocused. Focused window
+        // already has in-chat approval cards — no sticky in-app toasts.
+        const notifiedApprovalIds = new Set<string>();
+        const notifyApprovalOsOnly = (id: string | undefined, title: string, body: string) => {
+            const key = id?.trim() || `${title}:${body}`;
+            if (notifiedApprovalIds.has(key)) return;
+            notifiedApprovalIds.add(key);
+            if (document.hidden || !document.hasFocus()) {
+                void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
+                    showDesktopNotification("approvalRequired", title, body),
+                );
+            }
+        };
+
         register(
             listen<{
                 id?: string;
@@ -279,19 +353,50 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 const cmd = event.payload?.command?.trim() || "Command";
                 const reason = event.payload?.reason?.trim();
                 if (turnIdRef.current) {
+                    setTurnPhase("awaiting_approval");
                     setActivityLabel("Waiting for approval");
                 }
-                // Prefer in-app toast; OS toasts on Windows look like PowerShell and
-                // are reserved for when the app is in the background.
-                const body = reason ? `${cmd}: ${reason}` : cmd;
-                void import("@/features/notifications").then(({ notify }) => {
-                    notify.warning("Approval required", body);
-                });
-                if (document.hidden || !document.hasFocus()) {
-                    void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
-                        showDesktopNotification("approvalRequired", "Approval required", body),
-                    );
+                notifyApprovalOsOnly(
+                    event.payload?.id,
+                    "Approval required",
+                    reason ? `${cmd}: ${reason}` : cmd,
+                );
+            }),
+        );
+
+        register(
+            listen<{
+                id?: string;
+                file?: string;
+                reason?: string;
+            }>("agent-edit-pending", (event) => {
+                const file = event.payload?.file?.trim() || "file";
+                const reason = event.payload?.reason?.trim();
+                if (turnIdRef.current) {
+                    setTurnPhase("awaiting_approval");
+                    setActivityLabel("Waiting for edit approval");
                 }
+                notifyApprovalOsOnly(
+                    event.payload?.id,
+                    "Edit approval required",
+                    reason ? `${file}: ${reason}` : file,
+                );
+            }),
+        );
+
+        // Clear sticky approval labels once the user resolves the gate.
+        register(
+            listen<{ id?: string; approved?: boolean }>("agent-command-resolved", () => {
+                if (!turnIdRef.current) return;
+                setTurnPhase("running_command");
+                setActivityLabel("Running command");
+            }),
+        );
+        register(
+            listen<{ id?: string; approved?: boolean }>("agent-edit-resolved", () => {
+                if (!turnIdRef.current) return;
+                setTurnPhase("editing");
+                setActivityLabel("Editing file");
             }),
         );
 
@@ -301,18 +406,25 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 if (!turnIdRef.current) return;
                 const { phase, tool, label } = event.payload ?? {};
                 setIsLoading(true);
-                setActivityLabel((prev) => {
-                    if (prev === "Waiting for approval") {
-                        // Stay until the turn leaves the terminal tool phase.
-                        if (phase === "tool" && (!tool || tool === "run_terminal")) return prev;
-                    }
-                    if (label && label.trim()) return label.trim();
-                    if (phase === "tool" && tool) {
-                        const pretty = TOOL_LABELS[tool] ?? tool.replace(/_/g, " ");
-                        return pretty.charAt(0).toUpperCase() + pretty.slice(1);
-                    }
-                    return null;
-                });
+                if (phase === "approval") {
+                    setTurnPhase("awaiting_approval");
+                    setActivityLabel(label?.trim() || "Waiting for approval");
+                    return;
+                }
+                if (phase === "model") {
+                    setTurnPhase("thinking");
+                    setActivityLabel(label?.trim() || "Thinking");
+                    return;
+                }
+                if (phase === "tool") {
+                    const next = phaseFromTool(tool);
+                    setTurnPhase(next);
+                    setActivityLabel(labelForPhase(next, tool, label));
+                    return;
+                }
+                if (label && label.trim()) {
+                    setActivityLabel(label.trim());
+                }
             }),
         );
 
@@ -327,6 +439,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     return;
                 }
                 setContextSummarized(true);
+                setActivityLabel("Summarizing context");
             }),
         );
 
@@ -342,6 +455,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         isLoading,
         messages,
         activityLabel,
+        turnPhase,
         turnId,
         sendError,
         contextSummarized,

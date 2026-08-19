@@ -11,10 +11,15 @@ import {
 } from '../blocks/workflow';
 import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
-import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
+import { PlanningBlock } from '../blocks/plan';
 import { DesignPreviewGallery, type DesignPreviewItem } from '../blocks/gallery';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { QuestionBlock } from '../blocks/question';
+import { hostnameOf } from '@/lib/favicon';
+
+function hostnameFromUrl(url: string): string {
+    return hostnameOf(url);
+}
 
 const TERMINAL_STATUS_RANK: Record<string, number> = {
     pending: 1,
@@ -23,26 +28,40 @@ const TERMINAL_STATUS_RANK: Record<string, number> = {
     background: 3,
     rejected: 4,
     error: 4,
+    cancelled: 4,
+    failed: 5,
     completed: 5,
 };
 
-/** Keep one terminal_command block per id (or per command when pending). Prefer higher status. */
+/** Pending edit lifecycle rank: later states replace the pending card. */
+const EDIT_PENDING_STATUS_RANK: Record<string, number> = {
+    pending: 1,
+    cancelled: 2,
+    rejected: 3,
+    applied: 4,
+};
+
+/** Keep one terminal_command / edit_pending block per id (or per command when pending). Prefer higher status. */
 export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
     const skip = new Set<number>();
 
-    const rank = (chunk: Chunk) => TERMINAL_STATUS_RANK[chunk.commandStatus || ''] ?? 0;
+    const rank = (chunk: Chunk) =>
+        (chunk.type === 'edit_pending' ? EDIT_PENDING_STATUS_RANK : TERMINAL_STATUS_RANK)[
+            chunk.commandStatus || ''
+        ] ?? 0;
 
     const byId = new Map<string, number>();
     chunks.forEach((chunk, index) => {
-        if (chunk.type !== 'terminal_command' || !chunk.commandId) return;
-        const existing = byId.get(chunk.commandId);
+        if ((chunk.type !== 'terminal_command' && chunk.type !== 'edit_pending') || !chunk.commandId) return;
+        const key = `${chunk.type}:${chunk.commandId}`;
+        const existing = byId.get(key);
         if (existing === undefined) {
-            byId.set(chunk.commandId, index);
+            byId.set(key, index);
             return;
         }
         if (rank(chunk) >= rank(chunks[existing])) {
             skip.add(existing);
-            byId.set(chunk.commandId, index);
+            byId.set(key, index);
         } else {
             skip.add(index);
         }
@@ -67,7 +86,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question';
     content?: string;
     file?: string;
     query?: string;
@@ -78,6 +97,10 @@ export type Chunk = {
     commandId?: string;
     commandStatus?: string;
     commandReason?: string;
+    /** Terminal session id for live output correlation. */
+    sessionId?: number;
+    /** Exit code once a terminal command finished. */
+    exitCode?: number;
     gitOp?: string;
     gitStatus?: string;
     catStartLine?: number;
@@ -86,6 +109,9 @@ export type Chunk = {
     selectedConcept?: string;
     questionOptions?: string[];
     todos?: Array<{ id: string; label: string; status: "done" | "active" | "pending" | "cancelled" }>;
+    visitUrl?: string;
+    visitHost?: string;
+    visitTitle?: string;
 };
 
 export function parseMessageContent(text: string): Chunk[] {
@@ -93,23 +119,40 @@ export function parseMessageContent(text: string): Chunk[] {
     const chunks: Chunk[] = [];
     let currentIndex = 0;
 
+    const getInnerTagContent = (block: string, tag: string) => {
+        const startTag = `<${tag}>`;
+        const endTag = `</${tag}>`;
+        const start = block.indexOf(startTag);
+        if (start === -1) return undefined;
+        const end = block.indexOf(endTag, start);
+        if (end === -1) return block.slice(start + startTag.length).replace(/^\n|\n$/g, '');
+        return block.slice(start + startTag.length, end).replace(/^\n|\n$/g, '');
+    };
+
     const parseEditBlock = (block: string, isGenerating: boolean): Chunk => {
         const fileMatch = block.match(/<edit\s+file="([^"]*)"/);
         const file = fileMatch ? fileMatch[1] : undefined;
-        const getTagContent = (tag: string) => {
-            const startTag = `<${tag}>`;
-            const endTag = `</${tag}>`;
-            const start = block.indexOf(startTag);
-            if (start === -1) return undefined;
-            const end = block.indexOf(endTag, start);
-            if (end === -1) return block.slice(start + startTag.length).replace(/^\n|\n$/g, '');
-            return block.slice(start + startTag.length, end).replace(/^\n|\n$/g, '');
-        };
         return {
             type: 'edit',
             file,
-            original: getTagContent('original') || '',
-            replacement: getTagContent('replacement') || '',
+            original: getInnerTagContent(block, 'original') || '',
+            replacement: getInnerTagContent(block, 'replacement') || '',
+            isGenerating,
+        };
+    };
+
+    /** Edit staged for user approval (require-edit-approval mode). */
+    const parseEditPendingBlock = (block: string, isGenerating: boolean): Chunk => {
+        const idMatch = block.match(/\bid="([^"]*)"/);
+        const fileMatch = block.match(/\bfile="([^"]*)"/);
+        const statusMatch = block.match(/\bstatus="([^"]*)"/);
+        return {
+            type: 'edit_pending',
+            file: fileMatch ? fileMatch[1] : undefined,
+            commandId: idMatch ? idMatch[1] : undefined,
+            commandStatus: statusMatch ? statusMatch[1] : 'pending',
+            original: getInnerTagContent(block, 'original') || '',
+            replacement: getInnerTagContent(block, 'replacement') || '',
             isGenerating,
         };
     };
@@ -265,9 +308,26 @@ export function parseMessageContent(text: string): Chunk[] {
         };
     };
 
+    const parseWebVisitBlock = (tagFull: string, isGenerating: boolean): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        const url = get("url");
+        const host = get("host") || hostnameFromUrl(url);
+        const title = get("title") || host;
+        return {
+            type: "web_visit",
+            visitUrl: url,
+            visitHost: host,
+            visitTitle: title,
+            content: host,
+            isGenerating,
+        };
+    };
+
     while (currentIndex < text.length) {
         const searchTags = [
             { type: 'edit', start: '<edit', end: '</edit>' },
+            // Longer tag wins the same-index tie-break against '<edit'.
+            { type: 'edit_pending', start: '<edit_pending', end: '</edit_pending>' },
             { type: 'design_previews', start: '<design_previews', end: '</design_previews>' },
             { type: 'review_debate', start: '<review_debate', end: '</review_debate>' },
             { type: 'question', start: '<question', end: '</question>' },
@@ -283,6 +343,7 @@ export function parseMessageContent(text: string): Chunk[] {
             { type: 'plan_saved', start: '<plan_saved', end: '</plan_saved>' },
             { type: 'todos', start: '<todos', end: '</todos>' },
             { type: 'web_result', start: '<web_result', end: '</web_result>' },
+            { type: 'web_visit', start: '<web_visit', end: '</web_visit>' },
             { type: 'ls', start: '<ls', end: '</ls>' },
             { type: 'cat', start: '<cat', end: '</cat>' },
             { type: 'run', start: '<run', end: '</run>' },
@@ -350,13 +411,81 @@ export function parseMessageContent(text: string): Chunk[] {
         const gtIndex = text.indexOf('>', firstMatch.index);
         let contentStartIndex: number;
         let endIndex: number;
+        // `<web_visit ... />` / `<plan_saved ... />` style tags must not swallow the rest of the message.
+        const isSelfClosing =
+            gtIndex !== -1
+            && gtIndex > firstMatch.index
+            && text[gtIndex - 1] === '/';
 
         if (gtIndex === -1) {
             contentStartIndex = text.length;
             endIndex = -1;
+        } else if (isSelfClosing) {
+            contentStartIndex = gtIndex + 1;
+            endIndex = -2; // sentinel: empty self-closing tag
         } else {
             contentStartIndex = gtIndex + 1;
             endIndex = text.indexOf(firstMatch.endTag, contentStartIndex);
+        }
+
+        if (endIndex === -2) {
+            const content = '';
+            const tagFull = text.slice(firstMatch.index, gtIndex + 1);
+            if (firstMatch.type === 'edit') {
+                chunks.push(parseEditBlock(tagFull, false));
+            } else if (firstMatch.type === 'edit_pending') {
+                chunks.push(parseEditPendingBlock(tagFull, false));
+            } else if (firstMatch.type === 'plan') {
+                chunks.push(parsePlanBlock(tagFull));
+            } else if (firstMatch.type === 'plan_saved') {
+                chunks.push(parsePlanSavedBlock(tagFull));
+            } else if (firstMatch.type === 'todos') {
+                pushOrReplaceTodos(parseTodosBlock(tagFull));
+            } else if (firstMatch.type === 'terminal_command') {
+                const statusMatch = tagFull.match(/status="([^"]+)"/);
+                const idMatch = tagFull.match(/id="([^"]+)"/);
+                const sessionMatch = tagFull.match(/session="(\d+)"/);
+                const exitMatch = tagFull.match(/exit="(-?\d+)"/);
+                chunks.push({
+                    type: 'terminal_command',
+                    content,
+                    command: '',
+                    commandId: idMatch ? idMatch[1] : undefined,
+                    commandStatus: statusMatch ? statusMatch[1] : 'completed',
+                    sessionId: sessionMatch ? Number(sessionMatch[1]) : undefined,
+                    exitCode: exitMatch ? Number(exitMatch[1]) : undefined,
+                });
+            } else if (firstMatch.type === 'git_operation') {
+                chunks.push(parseGitOperationBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'cat') {
+                chunks.push(parseCatBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'subagent_ref') {
+                chunks.push(parseSubagentRefBlock(tagFull, false));
+            } else if (firstMatch.type === 'design_previews') {
+                chunks.push(parseDesignPreviewsBlock(tagFull));
+            } else if (firstMatch.type === 'review_debate') {
+                chunks.push(parseReviewDebateBlock(tagFull));
+            } else if (firstMatch.type === 'question') {
+                chunks.push(parseQuestionBlock(tagFull));
+            } else if (firstMatch.type === 'run') {
+                chunks.push({ type: 'run', content, command: '' });
+            } else if (firstMatch.type === 'web_result' || firstMatch.type === 'search_result') {
+                const queryMatch = tagFull.match(/query="([^"]+)"/);
+                chunks.push({
+                    type: firstMatch.type as Chunk['type'],
+                    content,
+                    query: queryMatch ? queryMatch[1] : undefined,
+                });
+            } else if (firstMatch.type === 'web_visit') {
+                chunks.push(parseWebVisitBlock(tagFull, false));
+            } else {
+                chunks.push({
+                    type: firstMatch.type as Chunk['type'],
+                    content,
+                });
+            }
+            currentIndex = gtIndex + 1;
+            continue;
         }
 
         if (endIndex === -1) {
@@ -364,6 +493,8 @@ export function parseMessageContent(text: string): Chunk[] {
             const fullTag = text.slice(firstMatch.index);
             if (firstMatch.type === 'edit') {
                 chunks.push(parseEditBlock(fullTag, true));
+            } else if (firstMatch.type === 'edit_pending') {
+                chunks.push(parseEditPendingBlock(fullTag, true));
             } else if (firstMatch.type === 'plan') {
                 chunks.push(parsePlanBlock(fullTag));
             } else if (firstMatch.type === 'plan_saved') {
@@ -374,6 +505,8 @@ export function parseMessageContent(text: string): Chunk[] {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 const statusMatch = tagFull.match(/status="([^"]+)"/);
                 const idMatch = tagFull.match(/id="([^"]+)"/);
+                const sessionMatch = tagFull.match(/session="(\d+)"/);
+                const exitMatch = tagFull.match(/exit="(-?\d+)"/);
                 const lines = content.split('\n').filter(Boolean);
                 const cmd = lines[0]?.trim() || '';
                 const reasonLine = lines.find(l => l.includes('Awaiting approval:') || l.includes('Blocked:'));
@@ -385,6 +518,8 @@ export function parseMessageContent(text: string): Chunk[] {
                     commandId: idMatch ? idMatch[1] : undefined,
                     commandStatus: statusMatch ? statusMatch[1] : 'pending',
                     commandReason: reason,
+                    sessionId: sessionMatch ? Number(sessionMatch[1]) : undefined,
+                    exitCode: exitMatch ? Number(exitMatch[1]) : undefined,
                     isGenerating: true,
                 });
             } else if (firstMatch.type === 'git_operation') {
@@ -418,6 +553,9 @@ export function parseMessageContent(text: string): Chunk[] {
                     query: queryMatch ? queryMatch[1] : undefined,
                     isGenerating: true
                 });
+            } else if (firstMatch.type === 'web_visit') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseWebVisitBlock(tagFull, true));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -432,6 +570,8 @@ export function parseMessageContent(text: string): Chunk[] {
             const fullBlock = text.slice(firstMatch.index, endIndex + firstMatch.endTag.length);
             if (firstMatch.type === 'edit') {
                 chunks.push(parseEditBlock(fullBlock, false));
+            } else if (firstMatch.type === 'edit_pending') {
+                chunks.push(parseEditPendingBlock(fullBlock, false));
             } else if (firstMatch.type === 'plan') {
                 chunks.push(parsePlanBlock(fullBlock));
             } else if (firstMatch.type === 'plan_saved') {
@@ -442,6 +582,8 @@ export function parseMessageContent(text: string): Chunk[] {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 const statusMatch = tagFull.match(/status="([^"]+)"/);
                 const idMatch = tagFull.match(/id="([^"]+)"/);
+                const sessionMatch = tagFull.match(/session="(\d+)"/);
+                const exitMatch = tagFull.match(/exit="(-?\d+)"/);
                 const lines = content.split('\n').filter(Boolean);
                 const cmd = lines[0]?.trim() || '';
                 const reasonLine = lines.find(l => l.includes('Awaiting approval:') || l.includes('Blocked:'));
@@ -453,6 +595,8 @@ export function parseMessageContent(text: string): Chunk[] {
                     commandId: idMatch ? idMatch[1] : undefined,
                     commandStatus: statusMatch ? statusMatch[1] : 'completed',
                     commandReason: reason,
+                    sessionId: sessionMatch ? Number(sessionMatch[1]) : undefined,
+                    exitCode: exitMatch ? Number(exitMatch[1]) : undefined,
                     isGenerating: false,
                 });
             } else if (firstMatch.type === 'git_operation') {
@@ -486,6 +630,9 @@ export function parseMessageContent(text: string): Chunk[] {
                     query: queryMatch ? queryMatch[1] : undefined,
                     isGenerating: false
                 });
+            } else if (firstMatch.type === 'web_visit') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseWebVisitBlock(tagFull, false));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -518,7 +665,7 @@ function mergeAdjacentTextChunks(chunks: Chunk[]): Chunk[] {
 
 export type WebSearchResultItem = { title: string; url: string; snippet: string };
 
-function parseWebResults(blockContent: string): WebSearchResultItem[] {
+export function parseWebResults(blockContent: string): WebSearchResultItem[] {
     const results: WebSearchResultItem[] = [];
     const blocks = blockContent.split('---').filter(Boolean);
     blocks.forEach(block => {
@@ -536,12 +683,24 @@ function parseWebResults(blockContent: string): WebSearchResultItem[] {
     return results;
 }
 
-/** Collect unique web search hit URLs from a message for the footer sources menu. */
+/** Collect unique web search/visit hit URLs from a message for the footer sources menu. */
 export function extractWebSearchResults(content: string): WebSearchResultItem[] {
     const chunks = parseMessageContent(content);
     const results: WebSearchResultItem[] = [];
     const seen = new Set<string>();
     for (const item of chunks) {
+        if (item.type === "web_visit") {
+            const url = item.visitUrl || "";
+            const key = url || item.visitHost || "";
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            results.push({
+                title: item.visitTitle || item.visitHost || "Visited",
+                url,
+                snippet: item.visitHost ? `Visited ${item.visitHost}` : "Visited page",
+            });
+            continue;
+        }
         if (item.type !== 'web_result' && item.type !== 'web_search') continue;
         if (item.type !== 'web_result') continue;
         for (const hit of parseWebResults(item.content || '')) {
@@ -623,14 +782,17 @@ export function MessageRenderer({
         && lastSegment.chunk.type === 'text'
         && !!lastSegment.chunk.content?.trim();
     const hasPendingApproval = workflowBlocks.some(
-        (b) => b.type === 'terminal_command' && b.commandStatus === 'pending',
+        (b) =>
+            (b.type === 'terminal_command' || b.type === 'edit_pending')
+            && b.commandStatus === 'pending',
     );
     const showStatusLine =
         !!isGenerating
+        && workflowBlocks.length === 0
         && (
             hasPendingApproval
             || !!activityLabel?.trim()
-            || (!proseIsStreaming && workflowBlocks.length === 0)
+            || !proseIsStreaming
         );
 
     const lastWorkflowBlock = workflowBlocks[workflowBlocks.length - 1];
@@ -656,7 +818,7 @@ export function MessageRenderer({
                 <div
                     key={`text-${index}`}
                     className={cn(
-                        "text-sm font-normal text-text-primary leading-[1.6] mb-0 w-full overflow-hidden prose-compact chat-markdown",
+                        "text-sm font-normal text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
                         isGenerating && isLastSegment && "animate-in fade-in duration-300",
                     )}
                 >
@@ -665,12 +827,15 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'plan_saved') {
+            const title = chunk.content || 'Implementation Plan';
             return (
-                <PlanSavedBlock
+                <div
                     key={`plan-saved-${index}`}
-                    title={chunk.content || 'Implementation Plan'}
-                    path={chunk.file || ''}
-                />
+                    className="py-0.5 text-sm text-text-muted"
+                >
+                    Saved plan{" "}
+                    <span className="text-text-secondary">{title}</span>
+                </div>
             );
         }
         if (chunk.type === 'plan') {
@@ -779,6 +944,7 @@ export function MessageRenderer({
                     blocks={workflowBlocks}
                     isActive={isGenerating}
                     durationMs={durationMs}
+                    activityLabel={activityLabel}
                 >
                     {answerContent}
                 </TurnWorkflowSummary>

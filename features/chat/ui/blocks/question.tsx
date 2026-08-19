@@ -4,6 +4,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Icon } from "@/components/ui/icon";
 
 export function QuestionBlock({ question, options, onAnswer }: {
     question: string;
@@ -22,89 +23,93 @@ export function QuestionBlock({ question, options, onAnswer }: {
     const isAnswered = answered !== null;
 
     return (
-        <div className="w-full flex flex-col gap-2 my-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="text-sm font-medium text-text-muted"> Question </div>
-            <div className="text-md font-medium text-text-primary leading-relaxed"> {question} </div>
+        <div className="sticky bottom-0 z-10 my-2 w-full overflow-hidden rounded-2xl border border-border bg-editor shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="px-3 py-3">
+                <div className="text-sm font-medium text-text-primary leading-relaxed">
+                    {question}
+                </div>
 
-            <div className="flex flex-col gap-1.5 mt-1">
-                {options.map((option, i) => {
-                    const isSelected = answered === option;
-                    return (
-                        <Button
-                            key={i}
-                            variant="secondary"
-                            size="sm"
-                            disabled={isAnswered}
-                            className={cn(
-                                "border border-border-subtle transition-all justify-start",
-                                isSelected ? "bg-accent/20 text-text-primary border-0 opacity-100" : "bg-panel hover:bg-panel-hover opacity-70",
-                                !isSelected && isAnswered && "opacity-40 grayscale-[0.5]"
+                <div className="mt-2 flex flex-col">
+                    {options.map((option, i) => {
+                        const isSelected = answered === option;
+                        return (
+                            <Button
+                                key={i}
+                                variant="ghost"
+                                size="sm"
+                                disabled={isAnswered}
+                                className={cn(
+                                    "group h-auto min-h-8 justify-start gap-2 rounded-lg border-0 px-2 py-1.5 text-left whitespace-normal",
+                                    isSelected
+                                        ? "bg-accent-text-bg text-text-primary"
+                                        : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                    !isSelected && isAnswered && "opacity-40",
+                                )}
+                                onClick={() => handleAnswer(option)}
+                            >
+                                <Icon name="arrow_forward" size={14} className="shrink-0 text-text-muted group-hover:text-text-primary" />
+                                {option}
+                            </Button>
+                        );
+                    })}
+
+                    {isOtherSelected || (isAnswered && answered !== "Skip" && !options.includes(answered)) ? (
+                        <div className="flex flex-col gap-1.5">
+                            {!isAnswered ? (
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        autoFocus
+                                        placeholder="Type your answer..."
+                                        value={customValue}
+                                        onChange={(e) => setCustomValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && customValue.trim()) {
+                                                handleAnswer(customValue);
+                                            }
+                                        }}
+                                        className="flex-1"
+                                    />
+                                    <Button
+                                        variant="default"
+                                        size="xs"
+                                        onClick={() => customValue.trim() && handleAnswer(customValue)}
+                                    >
+                                        Send
+                                    </Button>
+                                </div>
+                            ) : (
+                                !options.includes(answered) && answered !== "Skip" && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled
+                                        className="h-auto justify-start rounded-lg bg-accent-text-bg px-2.5 py-2 text-left text-text-primary"
+                                    >
+                                        {answered}
+                                    </Button>
+                                )
                             )}
-                            onClick={() => handleAnswer(option)}
+                        </div>
+                    ) : !isAnswered ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto justify-start gap-2 rounded-lg px-2 py-1.5 text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                            onClick={() => setIsOtherSelected(true)}
                         >
-                            {option}
+                            <Icon name="arrow_forward" size={14} />
+                            Other
                         </Button>
-                    );
-                })}
+                    ) : null}
+                </div>
+            </div>
 
-                {/* Other/Custom logic */}
-                {isOtherSelected || (isAnswered && answered !== "Skip" && !options.includes(answered)) ? (
-                    <div className="flex flex-col gap-1.5">
-                        {!isAnswered ? (
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    autoFocus
-                                    placeholder="Type your answer..."
-                                    value={customValue}
-                                    onChange={(e) => setCustomValue(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && customValue.trim()) {
-                                            handleAnswer(customValue);
-                                        }
-                                    }}
-                                    className="flex-1"
-                                />
-                                <Button
-                                    variant="default"
-                                    size="sm"
-                                    onClick={() => customValue.trim() && handleAnswer(customValue)}
-                                >
-                                    Send
-                                </Button>
-                            </div>
-                        ) : (
-                            !options.includes(answered) && answered !== "Skip" && (
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled
-                                    className="border-0 bg-accent text-text-primary rounded-md justify-start"
-                                >
-                                    {answered}
-                                </Button>
-                            )
-                        )}
-                    </div>
-                ) : !isAnswered && (
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        className="bg-panel hover:bg-panel-hover border border-border-subtle rounded-md transition-all justify-start"
-                        onClick={() => setIsOtherSelected(true)}
-                    >
-                        Other
-                    </Button>
-                )}
-
+            <div className="flex items-center justify-end gap-1.5 border-t border-border-subtle px-2 py-2">
                 <Button
                     variant="ghost"
-                    size="sm"
+                    size="xs"
                     disabled={isAnswered}
-                    className={cn(
-                        "justify-start transition-all",
-                        answered === "Skip" ? "bg-accent text-text-primary border-0 opacity-100" : "text-text-muted hover:text-text-primary hover:bg-panel-hover opacity-70",
-                        isAnswered && answered !== "Skip" && "opacity-30"
-                    )}
+                    className={cn(answered === "Skip" && "text-text-primary")}
                     onClick={() => handleAnswer("Skip")}
                 >
                     Skip

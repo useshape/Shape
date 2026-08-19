@@ -111,6 +111,12 @@ impl RemoteIndexClient {
         }
     }
 
+    /// Refresh billing/turn metadata without rebuilding the client (and without
+    /// invalidating the in-memory index that owns it).
+    pub fn set_context(&mut self, context: ApiContext) {
+        self.context = context;
+    }
+
     pub fn is_available(&self) -> bool {
         self.context
             .token

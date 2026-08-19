@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { LoadingState } from "./loading-state";
 
 function formatStatusLabel(label: string, elapsedSec: number): string {
     const base = label.replace(/…+$/, "").trim();
@@ -11,10 +12,17 @@ function formatStatusLabel(label: string, elapsedSec: number): string {
     return base;
 }
 
+function statusVariant(label: string): "Drive" | "Dots" | "Orbit" {
+    const lower = label.toLowerCase();
+    if (lower.includes("search") || lower.includes("web")) return "Dots";
+    if (lower.includes("command") || lower.includes("run") || lower.includes("test")) {
+        return "Orbit";
+    }
+    return "Drive";
+}
+
 /**
- * Single status line shown at the bottom of a streaming message. Shows the
- * real current activity (from backend chat_status events) or a generic
- * "Working" shimmer  -  never fake rotating labels.
+ * Live status line while streaming — pixel grid + shimmer label.
  */
 export function GeneratingIndicator({ label }: { label?: string }) {
     const [elapsedSec, setElapsedSec] = React.useState(0);
@@ -34,16 +42,12 @@ export function GeneratingIndicator({ label }: { label?: string }) {
         return () => window.clearInterval(id);
     }, [label]);
 
-    const display = label?.trim()
-        ? formatStatusLabel(label, elapsedSec)
-        : "Working";
+    const raw = label?.trim() || "Working";
+    const display = formatStatusLabel(raw, elapsedSec);
 
     return (
-        <div className="flex items-center gap-2 py-1.5 px-1 animate-in fade-in duration-300">
-            <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
-            <span className="text-sm font-medium tracking-tight text-text-muted whitespace-nowrap">
-                {display}
-            </span>
+        <div className="flex items-center py-1.5 px-1 animate-in fade-in duration-300">
+            <LoadingState label={display} variant={statusVariant(display)} />
         </div>
     );
 }

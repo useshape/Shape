@@ -25,9 +25,13 @@ import {
     ComposerTasksStrip,
     type ComposerTaskItem,
 } from "./activity";
+import { ComposerAttachments, isImageFile } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
-import { mentionRanges } from "@/lib/chat-mentions";
+import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText } from "@/lib/chat-mentions";
+import { FileIcon } from "@/components/ui/file-icon";
+import { Favicon } from "@/components/ui/favicon";
 import { resolveChatUsageDisplay } from "@/lib/usage-display";
+import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/last-turn-usage";
 import { UsageRing } from "./usage";
 import { getVisibleModels, type ModelInfo } from "@/lib/models";
 import {
@@ -130,7 +134,7 @@ const ModelItem = ({
 }) => {
     const unavailableTooltip =
         disabledReason ??
-        "Auto is available on Free. Direct model selection for this model is limited to paid plans. Upgrade or keep Auto selected.";
+        "Direct model selection for this model is limited to paid plans. Upgrade to use.";
 
     return (
         <Tooltip
@@ -197,11 +201,6 @@ function getFileExtension(name: string): string {
     return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
 }
 
-function isImageFile(file: File): boolean {
-    if (file.type.startsWith('image/')) return true;
-    return IMAGE_EXTENSIONS.has(getFileExtension(file.name));
-}
-
 function isCodeFile(file: File): boolean {
     return CODE_EXTENSIONS.has(getFileExtension(file.name));
 }
@@ -249,20 +248,46 @@ export function ChatInput({
     const [mentionCaret, setMentionCaret] = React.useState(0);
 
     const handleInputChangeWithMentions = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const val = e.target.value;
-        onInputChange(e);
-        const caret = e.target.selectionStart ?? val.length;
-        const before = val.slice(0, caret);
-        const atMatch = before.match(/@([\w./-]*)$/);
+        const raw = e.target.value;
+        const caretRaw = e.target.selectionStart ?? raw.length;
+        const shortened = shortenMentionTokensInText(raw);
+        const delta = raw.length - shortened.length;
+        const caret = Math.max(0, caretRaw - (delta > 0 && caretRaw > shortened.length ? delta : 0));
+        // If we collapsed a long path token, rewrite value + restore caret near the edit.
+        if (shortened !== raw) {
+            onInputChange({ target: { value: shortened } } as React.ChangeEvent<HTMLTextAreaElement>);
+            requestAnimationFrame(() => {
+                const el = textareaRef.current;
+                if (!el) return;
+                const pos = Math.min(caret, shortened.length);
+                el.setSelectionRange(pos, pos);
+            });
+        } else {
+            onInputChange(e);
+        }
+        const val = shortened;
+        const caretNow = shortened !== raw ? Math.min(caret, shortened.length) : caretRaw;
+        const before = val.slice(0, caretNow);
+        // Allow hostnames / paths after @ (sites, files). Anchor menu at the `@`, not caret end.
+        const atMatch = before.match(/@([\w./:-]*)$/);
         if (atMatch) {
+            const atStart = caretNow - atMatch[0].length;
             setMentionOpen(true);
             setMentionQuery(atMatch[1] ?? "");
-            setMentionCaret(caret);
+            setMentionCaret(atStart);
         } else {
             setMentionOpen(false);
             setMentionQuery("");
         }
     }, [onInputChange]);
+
+    // Collapse any long path mentions already in the composer (e.g. pasted / leftover).
+    React.useEffect(() => {
+        const shortened = shortenMentionTokensInText(inputValue);
+        if (shortened !== inputValue) {
+            onInputChange({ target: { value: shortened } } as React.ChangeEvent<HTMLTextAreaElement>);
+        }
+    }, [inputValue, onInputChange]);
 
     const insertMention = React.useCallback((token: string) => {
         const textarea = textareaRef.current;
@@ -369,9 +394,15 @@ export function ChatInput({
     const providerOrder = getCatalogProviderOrder();
     const needsSignIn = !shapeAuth.isLoading && !shapeAuth.loggedIn;
 
+    const lastTurnUsage = React.useSyncExternalStore(
+        subscribeLastTurnUsage,
+        getLastTurnUsage,
+        getLastTurnUsage,
+    );
+
     const usageDisplay = React.useMemo(
-        () => resolveChatUsageDisplay(selectedModel, shapeAuth),
-        [selectedModel, shapeAuth],
+        () => resolveChatUsageDisplay(selectedModel, shapeAuth, lastTurnUsage),
+        [selectedModel, shapeAuth, lastTurnUsage],
     );
 
     React.useEffect(() => {
@@ -413,9 +444,10 @@ export function ChatInput({
     const inputPanel = (
                 <div
                     className={cn(
-                        "relative w-full border border-border bg-surface-3 focus-within:border-border-secondary transition-colors flex flex-col",
-                        hasComposerChrome ? "rounded-xl" : "rounded-xl",
+                        "relative flex w-full flex-col bg-surface-3 transition-colors focus-within:border-border",
+                        "rounded-xl",
                         needsSignIn && "opacity-50 cursor-not-allowed pointer-events-none",
+                        hasComposerChrome && "rounded-t-none",
                     )}
                     onDrop={needsSignIn ? undefined : handleDrop}
                     onDragOver={needsSignIn ? undefined : handleDragOver}
@@ -428,55 +460,16 @@ export function ChatInput({
                     anchorRef={textareaRef}
                     caretIndex={mentionCaret}
                 />
-                {/* Clip attachments/chrome without clipping the @ mention menu above */}
                 <div className="flex min-h-0 flex-col overflow-hidden rounded-[inherit]">
-                {/* Attachment chips — Cursor-style filename pills */}
-                {uploadedFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
-                        {uploadedFiles.map((file, i) => {
-                            const isImg = isImageFile(file);
-                            const objectUrl = isImg ? URL.createObjectURL(file) : null;
-                            return (
-                                <div
-                                    key={`${file.name}-${i}`}
-                                    className="group/item relative inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-border-subtle bg-panel px-1.5 py-1"
-                                >
-                                    {isImg && objectUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={objectUrl}
-                                            alt=""
-                                            className="size-6 shrink-0 rounded object-cover"
-                                        />
-                                    ) : (
-                                        <Icon
-                                            name={isCodeFile(file) ? "code" : "insert_drive_file"}
-                                            size={14}
-                                            className="shrink-0 text-text-muted"
-                                        />
-                                    )}
-                                    <span className="min-w-0 truncate text-xs text-text-secondary">
-                                        {file.name}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        aria-label={`Remove ${file.name}`}
-                                        onClick={() =>
-                                            setUploadedFiles((prev: File[]) =>
-                                                prev.filter((_, idx) => idx !== i),
-                                            )
-                                        }
-                                        className="flex size-5 shrink-0 items-center justify-center rounded text-text-muted opacity-70 hover:bg-panel-hover hover:text-text-primary group-hover/item:opacity-100"
-                                    >
-                                        <Icon name="close" size={12} />
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                <ComposerAttachments
+                    files={uploadedFiles}
+                    onRemove={(index) =>
+                        setUploadedFiles((prev: File[]) =>
+                            prev.filter((_, idx) => idx !== index),
+                        )
+                    }
+                />
 
-                {/* Text Area with mention highlight overlay */}
                 <div className="relative px-4 py-3">
                     <div
                         aria-hidden
@@ -493,12 +486,43 @@ export function ChatInput({
                                 if (range.start > cursor) {
                                     nodes.push(inputValue.slice(cursor, range.start));
                                 }
+                                const raw = inputValue.slice(range.start, range.end);
+                                const { mention } = range;
+                                const label = mentionDisplayLabel(mention);
                                 nodes.push(
                                     <span
                                         key={`m-${i}`}
-                                        className="rounded-[3px] bg-accent/30 text-accent"
+                                        className="relative inline rounded-lg bg-accent-text-bg text-xs text-accent-text p-1"
                                     >
-                                        {inputValue.slice(range.start, range.end)}
+                                        <span className="pointer-events-none absolute left-[2px] top-1/2 z-[1] -translate-y-1/2 opacity-95">
+                                            {mention.kind === "file" ||
+                                            mention.kind === "folder" ||
+                                            mention.kind === "docs" ? (
+                                                <FileIcon name={label} className="h-3 w-3" />
+                                            ) : mention.kind === "browser" ? (
+                                                <Favicon url={mention.path || label} size={12} />
+                                            ) : (
+                                                <Icon
+                                                    name={
+                                                        mention.kind === "chat"
+                                                            ? "chat"
+                                                            : mention.kind === "design"
+                                                              ? "palette"
+                                                              : mention.kind === "terminal"
+                                                                ? "terminal"
+                                                                : mention.kind === "branch"
+                                                                  ? "account_tree"
+                                                                  : mention.kind === "codebase"
+                                                                    ? "search"
+                                                                    : mention.kind === "selection"
+                                                                      ? "code"
+                                                                      : "alternate_email"
+                                                    }
+                                                    size={12}
+                                                />
+                                            )}
+                                        </span>
+                                        {raw}
                                     </span>,
                                 );
                                 cursor = range.end;
@@ -520,18 +544,25 @@ export function ChatInput({
                                 onPaste={needsSignIn ? undefined : handlePaste}
                                 onSelect={(e) => {
                                     if (!mentionOpen) return;
-                                    setMentionCaret(e.currentTarget.selectionStart ?? 0);
+                                    const el = e.currentTarget;
+                                    const caret = el.selectionStart ?? 0;
+                                    const before = el.value.slice(0, caret);
+                                    const atMatch = before.match(/@([\w./:-]*)$/);
+                                    if (atMatch) {
+                                        setMentionCaret(caret - atMatch[0].length);
+                                        setMentionQuery(atMatch[1] ?? "");
+                                    } else {
+                                        setMentionOpen(false);
+                                    }
                                 }}
                                 readOnly={needsSignIn}
                                 placeholder={needsSignIn ? "Sign in to use the chat" : "Ask anything…"}
-                                className="relative z-[1] min-h-[28px] w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium leading-relaxed text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30"
-                                style={{ caretColor: "var(--text-primary, #e5e5e5)" }}
                                 rows={1}
+                                className="relative z-[1] min-h-7 w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium leading-relaxed text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30"
+                                style={{ caretColor: "var(--text-primary, #e5e5e5)" }}
                             />
                         </ContextMenuTrigger>
-                        <ContextMenuContent
-                            onCloseAutoFocus={(e) => e.preventDefault()}
-                        >
+                        <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
                             <ContextMenuItem
                                 disabled={needsSignIn}
                                 onClick={() => document.execCommand("cut")}
@@ -553,7 +584,6 @@ export function ChatInput({
                                         const end = el.selectionEnd;
                                         const next =
                                             inputValue.slice(0, start) + text + inputValue.slice(end);
-                                        // Prefer native paste path when possible
                                         el.focus();
                                         document.execCommand("insertText", false, text);
                                         if (el.value === inputValue) {
@@ -582,34 +612,34 @@ export function ChatInput({
                     </ContextMenu>
                 </div>
 
-                {/* Input Footer */}
                 <div className="flex items-center justify-between px-2 pb-2 pt-0">
-                    <div className="flex items-center gap-0.5 min-w-0">
-                        {/* Attachment Controls */}
-                        <div className="flex items-center">
-                            <input
-                                type="file"
-                                id="chat-media-upload"
-                                className="hidden"
-                                multiple
-                                accept={acceptString}
-                                onChange={handleFilteredFileUpload}
-                            />
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={needsSignIn}
-                                onClick={() => document.getElementById('chat-media-upload')?.click()}
-                                className="h-8 w-8 text-text-muted hover:text-text-primary"
-                            >
-                                <Icon name="add" size={16} />
-                            </Button>
-                        </div>
+                    <div className="flex min-w-0 items-center gap-0.5">
+                        <input
+                            type="file"
+                            id="chat-media-upload"
+                            className="hidden"
+                            multiple
+                            accept={acceptString}
+                            onChange={handleFilteredFileUpload}
+                        />
+                        <Button
+                            variant="ghost"
+                            disabled={needsSignIn}
+                            onClick={() => document.getElementById("chat-media-upload")?.click()}
+                            className="size-8 shrink-0 p-0 text-text-muted hover:text-text-primary"
+                            aria-label="Attach file"
+                        >
+                            <Icon name="add" size={16} />
+                        </Button>
 
-                        {/* Mode Selection */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild disabled={needsSignIn}>
-                                <Button variant="secondary" size="xs" disabled={needsSignIn} className="h-8 rounded-full bg-panel-hover px-2 font-medium text-text-muted hover:text-text-primary">
+                                <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    disabled={needsSignIn}
+                                    className="h-8 rounded-full bg-panel-hover px-2 font-medium text-text-muted hover:text-text-primary"
+                                >
                                     <span className="flex items-center gap-1.5">
                                         <Icon name={selectedModeInfo.icon} size={14} />
                                         {selectedMode}
@@ -622,11 +652,11 @@ export function ChatInput({
                                         key={mode.id}
                                         onClick={() => setSelectedMode(mode.id)}
                                         className={cn(
-                                            "flex items-center cursor-pointer w-full",
+                                            "flex w-full cursor-pointer items-center",
                                             selectedMode === mode.id && "bg-panel-hover",
                                         )}
                                     >
-                                        <div className="flex items-center gap-1.5 w-full">
+                                        <div className="flex w-full items-center gap-1.5">
                                             <Icon name={mode.icon} size={16} />
                                             <span className="flex-1 font-regular text-sm text-text-primary">
                                                 {mode.id}
@@ -640,19 +670,25 @@ export function ChatInput({
                             </DropdownMenuContent>
                         </DropdownMenu>
 
-                        {/* Model Selection - next to Ask */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild disabled={needsSignIn}>
-                                <Button variant="ghost" size="xs" disabled={needsSignIn} className="h-8 rounded-full px-2 font-medium text-text-muted hover:text-text-primary max-w-[140px]">
-                                    <div className="flex items-center gap-1.5 text-sm min-w-0">
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    disabled={needsSignIn}
+                                    className="h-8 max-w-[140px] rounded-full px-2 font-medium text-text-muted hover:text-text-primary"
+                                >
+                                    <div className="flex min-w-0 items-center gap-1.5 text-sm">
                                         {providerIcon(selectedModel, 14)}
-                                        <span className="truncate">{modelInfo.name === "auto" ? "Auto" : modelInfo.name}</span>
+                                        <span className="truncate">
+                                            {modelInfo.name === "auto" ? "Auto" : modelInfo.name}
+                                        </span>
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-55 overflow-hidden">
                                 <div className="relative">
-                                    <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
+                                    <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
                                         <ModelItem
                                             model={autoModel}
                                             isSelected={selectedModel === "auto"}
@@ -660,27 +696,27 @@ export function ChatInput({
                                         />
 
                                         {providerOrder.filter((p) => p !== "Auto").map((provider) => {
-                                            const providerModels = MODELS.filter(m => m.provider === provider);
+                                            const providerModels = MODELS.filter((m) => m.provider === provider);
                                             if (providerModels.length === 0) return null;
                                             return (
-                                            <div key={provider} className="">
-                                                <DropdownMenuLabel className="text-xs font-regular text-text-muted">
-                                                    {provider}
-                                                </DropdownMenuLabel>
-                                                {providerModels.map((m) => {
-                                                    const allowed = isCatalogModelAllowed(m.id);
-                                                    return (
-                                                    <ModelItem
-                                                        key={m.id}
-                                                        model={m}
-                                                        isSelected={selectedModel === m.id}
-                                                        onSelect={setSelectedModel}
-                                                        disabled={!allowed}
-                                                        disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
-                                                    />
-                                                    );
-                                                })}
-                                            </div>
+                                                <div key={provider}>
+                                                    <DropdownMenuLabel className="text-sm font-regular text-text-muted">
+                                                        {provider}
+                                                    </DropdownMenuLabel>
+                                                    {providerModels.map((m) => {
+                                                        const allowed = isCatalogModelAllowed(m.id);
+                                                        return (
+                                                            <ModelItem
+                                                                key={m.id}
+                                                                model={m}
+                                                                isSelected={selectedModel === m.id}
+                                                                onSelect={setSelectedModel}
+                                                                disabled={!allowed}
+                                                                disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
                                             );
                                         })}
                                     </div>
@@ -689,12 +725,19 @@ export function ChatInput({
                         </DropdownMenu>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex shrink-0 items-center gap-1.5">
                         {shapeAuth.loggedIn ? (
-                            <Tooltip content={usageDisplay.tooltip}>
+                            <Tooltip
+                                content={
+                                    <span className="whitespace-nowrap text-sm leading-4 text-text-primary">
+                                        {usageDisplay.tooltip}
+                                    </span>
+                                }
+                                className="rounded-xl bg-surface-3 px-2.5 py-1.5"
+                            >
                                 <button
                                     type="button"
-                                    className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:text-text-primary transition-colors"
+                                    className="flex size-7 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary"
                                     onClick={() =>
                                         void import("@/lib/open-settings").then(({ openSettingsWindow }) =>
                                             openSettingsWindow({ category: "general" }),
@@ -702,25 +745,24 @@ export function ChatInput({
                                     }
                                     aria-label={usageDisplay.tooltip}
                                 >
-                                    <UsageRing
-                                        percent={usageDisplay.percent}
-                                        size={14}
-                                    />
+                                    <UsageRing percent={usageDisplay.percent} size={14} />
                                 </button>
                             </Tooltip>
                         ) : null}
                         <button
+                            type="button"
                             onClick={isLoading ? onStopMessage : () => onSendMessage()}
                             disabled={needsSignIn || (!isLoading && !inputValue.trim() && uploadedFiles.length === 0)}
                             className={cn(
-                                "flex items-center justify-center w-7 h-7 rounded-full transition-all disabled:opacity-40",
+                                "flex size-7 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40",
                                 (inputValue.trim() || isLoading || uploadedFiles.length > 0)
                                     ? "bg-text-primary text-panel hover:opacity-90"
                                     : "bg-panel-hover text-text-muted",
                             )}
+                            aria-label={isLoading ? "Stop" : "Send"}
                         >
                             {isLoading ? (
-                                <div className="w-2.5 h-2.5 bg-current rounded-[2px] animate-pulse" />
+                                <div className="size-2.5 animate-pulse rounded-[2px] bg-current" />
                             ) : (
                                 <Icon name="arrow_upward" size={16} />
                             )}

@@ -86,15 +86,16 @@ pub fn build_messages_json(system_prompt: &str, history: &[ChatMessage], model: 
     msgs
 }
 
-const CLEARED_TOOL_RESULT: &str = "[cleared — re-call tool if needed]";
-const TRIMMED_TOOL_RESULT_SUFFIX: &str = "\n[truncated — re-call tool if you need the full output]";
+const CLEARED_TOOL_RESULT: &str = "[cleared to save context — re-call the tool only if you still need this]";
+const TRIMMED_TOOL_RESULT_SUFFIX: &str =
+    "\n[middle omitted to save context — re-read only the specific lines you still need]";
 
 /// Soft budget (~15k tokens): trim old tool results to a short excerpt.
 const TOOL_RESULT_SOFT_BUDGET: usize = 60_000;
 /// Hard budget (~25k tokens): clear old tool results entirely.
 const TOOL_RESULT_CHAR_BUDGET: usize = 100_000;
 /// Never touch results from the most recent tool rounds.
-const TOOL_RESULT_KEEP_ROUNDS: usize = 4;
+const TOOL_RESULT_KEEP_ROUNDS: usize = 3;
 const TOOL_RESULT_TRIM_CHARS: usize = 600;
 
 /// Strip verbose tool XML from prior assistant turns, then trim middle history
@@ -138,30 +139,38 @@ fn strip_tool_markup_for_api(content: &str) -> String {
 }
 
 /// Graduated tool-result pruning: trim first, then clear. Preserves recent rounds.
-pub fn clear_old_tool_results(api_messages: &mut [Value]) {
+///
+/// Returns true when a `read_file` result was pruned, which tells the caller its record
+/// of what the model has already seen is stale — otherwise the turn loop would block a
+/// re-read of content it just removed from the transcript.
+pub fn clear_old_tool_results(api_messages: &mut [Value]) -> bool {
     let content_len = |msg: &Value| {
         msg.get("content")
             .and_then(|c| c.as_str())
             .map(|s| s.len())
             .unwrap_or(0)
     };
+    let is_read = |msg: &Value| msg.get("name").and_then(|n| n.as_str()) == Some("read_file");
     let mut total: usize = api_messages.iter().map(content_len).sum();
     if total <= TOOL_RESULT_SOFT_BUDGET {
-        return;
+        return false;
     }
 
     let protected_from = protected_tool_round_index(api_messages);
     if protected_from == 0 {
-        return;
+        return false;
     }
+    let mut pruned_read = false;
 
-    // Phase 1: trim verbose old results to a short head+tail excerpt.
-    if total > TOOL_RESULT_SOFT_BUDGET {
+    // Phase 1: trim verbose old results to a short head+tail excerpt. File reads are the
+    // most expensive thing to reconstruct, so only touch them once everything else is trimmed.
+    for reads_now in [false, true] {
         for msg in api_messages.iter_mut().take(protected_from) {
             if total <= TOOL_RESULT_SOFT_BUDGET {
                 break;
             }
-            if msg.get("role").and_then(|r| r.as_str()) != Some("tool") {
+            if msg.get("role").and_then(|r| r.as_str()) != Some("tool") || is_read(msg) != reads_now
+            {
                 continue;
             }
             let Some(content) = msg.get("content").and_then(|c| c.as_str()) else {
@@ -179,13 +188,14 @@ pub fn clear_old_tool_results(api_messages: &mut [Value]) {
             if let Some(obj) = msg.as_object_mut() {
                 obj.insert("content".to_string(), Value::String(trimmed.clone()));
                 total = total.saturating_sub(len) + trimmed.len();
+                pruned_read |= reads_now;
             }
         }
     }
 
     // Phase 2: clear oldest results if still over the hard budget.
     if total <= TOOL_RESULT_CHAR_BUDGET {
-        return;
+        return pruned_read;
     }
     for msg in api_messages.iter_mut().take(protected_from) {
         if total <= TOOL_RESULT_CHAR_BUDGET {
@@ -193,15 +203,18 @@ pub fn clear_old_tool_results(api_messages: &mut [Value]) {
         }
         if msg.get("role").and_then(|r| r.as_str()) == Some("tool") {
             let len = content_len(msg);
+            let was_read = is_read(msg);
             if let Some(obj) = msg.as_object_mut() {
                 obj.insert(
                     "content".to_string(),
                     Value::String(CLEARED_TOOL_RESULT.to_string()),
                 );
                 total = total.saturating_sub(len) + CLEARED_TOOL_RESULT.len();
+                pruned_read |= was_read;
             }
         }
     }
+    pruned_read
 }
 
 fn protected_tool_round_index(api_messages: &[Value]) -> usize {
@@ -219,12 +232,12 @@ fn protected_tool_round_index(api_messages: &[Value]) -> usize {
     tool_round_starts[tool_round_starts.len() - TOOL_RESULT_KEEP_ROUNDS]
 }
 
-/// ~30k tokens — fold older turns into a running summary before the window fills.
-pub const HISTORY_CHAR_BUDGET: usize = 120_000;
+/// ~15k tokens — fold older turns before the window gets expensive on cheap models.
+pub const HISTORY_CHAR_BUDGET: usize = 60_000;
 /// Soft cap on API history chars before middle turns are head/tail trimmed.
-const API_HISTORY_SOFT_BUDGET: usize = 80_000;
-const KEEP_RECENT_MESSAGES: usize = 12;
-const MIDDLE_MESSAGE_MAX_CHARS: usize = 1_200;
+const API_HISTORY_SOFT_BUDGET: usize = 40_000;
+const KEEP_RECENT_MESSAGES: usize = 10;
+const MIDDLE_MESSAGE_MAX_CHARS: usize = 800;
 
 pub fn history_char_count(history: &[ChatMessage]) -> usize {
     history.iter().map(|m| m.content.len()).sum()

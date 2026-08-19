@@ -1,4 +1,4 @@
-mod client;
+pub(crate) mod client;
 mod credentials;
 mod http_client;
 mod oauth;
@@ -12,7 +12,7 @@ use http_client::HttpMcpClient;
 use oauth::get_token;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 enum ConnectedClient {
     Stdio(StdioClient),
@@ -43,7 +43,8 @@ impl ConnectedClient {
 }
 
 pub struct McpState {
-    clients: Mutex<HashMap<String, ConnectedClient>>,
+    /// Per-server locks so a long tool call does not block status/sync/schema.
+    clients: Mutex<HashMap<String, Arc<Mutex<ConnectedClient>>>>,
     configs: Mutex<Vec<McpServerConfig>>,
 }
 
@@ -120,7 +121,7 @@ impl McpState {
                         error: None,
                         auth: server.auth.clone(),
                     });
-                    clients.insert(server.id.clone(), client);
+                    clients.insert(server.id.clone(), Arc::new(Mutex::new(client)));
                 }
                 Err(e) if e == "NEEDS_AUTH" => {
                     statuses.push(McpStatusEntry {
@@ -169,12 +170,13 @@ impl McpState {
                     };
                 }
                 if let Some(client) = clients.get(&cfg.id) {
+                    let guard = client.lock().unwrap_or_else(|e| e.into_inner());
                     McpStatusEntry {
                         id: cfg.id.clone(),
                         name: cfg.name.clone(),
                         status: McpServerStatus::Connected,
-                        tool_count: client.tools().len(),
-                        error: client.last_error(),
+                        tool_count: guard.tools().len(),
+                        error: guard.last_error(),
                         auth: cfg.auth.clone(),
                     }
                 } else if cfg.transport == McpTransport::Http
@@ -205,10 +207,12 @@ impl McpState {
 
     pub fn all_tools(&self) -> Result<Vec<McpToolInfo>, String> {
         let clients = self.clients.lock().map_err(|e| e.to_string())?;
-        Ok(clients
-            .values()
-            .flat_map(|c| c.tools().iter().cloned())
-            .collect())
+        let mut out = Vec::new();
+        for client in clients.values() {
+            let guard = client.lock().map_err(|e| e.to_string())?;
+            out.extend(guard.tools().iter().cloned());
+        }
+        Ok(out)
     }
 
     pub fn tools_as_openai_schema(&self) -> Result<Vec<Value>, String> {
@@ -232,32 +236,44 @@ impl McpState {
         let args: Value = serde_json::from_str(args_json)
             .map_err(|e| format!("Invalid MCP tool arguments JSON: {}", e))?;
 
-        let mut clients = self.clients.lock().map_err(|e| e.to_string())?;
-
-        for client in clients.values_mut() {
-            let tool_name = client
-                .tools()
-                .iter()
-                .find(|t| t.qualified_name == qualified_name)
-                .map(|t| t.name.clone());
-            if let Some(name) = tool_name {
-                let result = client.call_tool(&name, args)?;
-                let text = result
-                    .content
-                    .into_iter()
-                    .filter_map(|c| match c {
-                        ToolContent::Text { text } => Some(text),
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                if result.is_error {
-                    return Err(text);
+        // Resolve the target client under the map lock, then drop it before the
+        // network/stdio round-trip so status/sync/schema are not blocked.
+        let target = {
+            let clients = self.clients.lock().map_err(|e| e.to_string())?;
+            let mut found = None;
+            for client in clients.values() {
+                let guard = client.lock().map_err(|e| e.to_string())?;
+                if let Some(name) = guard
+                    .tools()
+                    .iter()
+                    .find(|t| t.qualified_name == qualified_name)
+                    .map(|t| t.name.clone())
+                {
+                    found = Some((Arc::clone(client), name));
+                    break;
                 }
-                return Ok(text);
             }
-        }
+            found
+        };
 
-        Err(format!("Unknown MCP tool: {}", qualified_name))
+        let Some((client, name)) = target else {
+            return Err(format!("Unknown MCP tool: {}", qualified_name));
+        };
+
+        let mut guard = client.lock().map_err(|e| e.to_string())?;
+        let result = guard.call_tool(&name, args)?;
+        let text = result
+            .content
+            .into_iter()
+            .filter_map(|c| match c {
+                ToolContent::Text { text } => Some(text),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if result.is_error {
+            return Err(text);
+        }
+        Ok(text)
     }
 
     pub fn restart_server(&self, server_id: &str) -> Result<McpStatusEntry, String> {
@@ -293,7 +309,7 @@ impl McpState {
                     error: None,
                     auth: server.auth.clone(),
                 };
-                clients.insert(server.id, client);
+                clients.insert(server.id, Arc::new(Mutex::new(client)));
                 Ok(entry)
             }
             Err(e) if e == "NEEDS_AUTH" => Ok(McpStatusEntry {

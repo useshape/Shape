@@ -20,11 +20,18 @@ function normalize(p: string): string {
     return p.replace(/\\/g, "/").toLowerCase();
 }
 
+/** Exact path equality after normalize, or one path is a full path ending with `/` + the other. */
 function pathsMatch(a: string, b: string): boolean {
     const na = normalize(a);
     const nb = normalize(b);
     if (na === nb) return true;
-    return na.endsWith("/" + nb) || nb.endsWith("/" + na) || na.endsWith(nb) || nb.endsWith(na);
+    // Allow relative vs absolute when one ends with "/<other>" as a full segment.
+    // Do NOT use bare endsWith (collides a.ts vs data.ts).
+    return na.endsWith("/" + nb) || nb.endsWith("/" + na);
+}
+
+export function pathsEqual(a: string, b: string): boolean {
+    return pathsMatch(a, b);
 }
 
 /** Fingerprint for matching an accepted/rejected edit payload. */

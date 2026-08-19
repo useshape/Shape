@@ -54,6 +54,14 @@ export const LEAKED_TOOL_XML_TAGS = [
     "pre_dispatch_explanation",
 ] as const;
 
+/** Shape UI wrappers. Strip even when they contain markdown fences (edit_file excerpts). */
+const STRIP_ACROSS_FENCES = [
+    "tool_result",
+    "terminal_read",
+    "terminal_input",
+    "list_terminals",
+] as const;
+
 /** Apply `fn` only to prose outside fenced code blocks (preserve legitimate examples). */
 function mapOutsideCodeFences(text: string, fn: (prose: string) => string): string {
     const parts = text.split(/(```[\s\S]*?```)/g);
@@ -74,7 +82,13 @@ function mapOutsideCodeFences(text: string, fn: (prose: string) => string): stri
 export function stripLeakedToolMarkup(text: string): string {
     const fw = "\uFF5C"; // fullwidth ｜ used by DeepSeek DSML
 
-    let s = mapOutsideCodeFences(text, (prose) => {
+    let s = text;
+    for (const tag of STRIP_ACROSS_FENCES) {
+        const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        s = s.replace(new RegExp(`<${esc}\\b[^>]*>[\\s\\S]*?<\\/${esc}>`, "gi"), "");
+    }
+
+    s = mapOutsideCodeFences(s, (prose) => {
         let p = prose;
 
         for (const tag of LEAKED_TOOL_XML_TAGS) {
