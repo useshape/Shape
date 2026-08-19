@@ -180,6 +180,7 @@ export function serializeDesignEdits(): string {
         : (state.selection.length ? state.selection : state.selected ? [state.selected] : []).map((el) => ({
               id: el.id,
               label: el.label,
+              selector: el.selector,
               styles: {},
               text: el.text,
           }));
