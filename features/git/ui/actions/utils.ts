@@ -109,3 +109,188 @@ export async function resolveOwnerRepo(
         return null;
     }
 }
+
+/**
+ * `gh run view --log` lines are typically: JOB\tSTEP\tTIMESTAMP\tMESSAGE
+ * Filter to a single step when the user clicks a step in the jobs panel.
+ */
+export function filterJobLogByStep(
+    log: string,
+    stepName: string,
+): { filtered: string; matched: number } {
+    const needle = stepName.trim();
+    if (!needle || !log) return { filtered: log, matched: 0 };
+    const lines = log.split(/\r?\n/);
+    const matchedLines = lines.filter((line) => {
+        const parts = line.split("\t");
+        if (parts.length < 2) return false;
+        const step = parts[1]?.trim() ?? "";
+        return step === needle || step.endsWith(needle) || step.includes(needle);
+    });
+    return { filtered: matchedLines.join("\n"), matched: matchedLines.length };
+}
+
+export type WorkflowInputDef = {
+    name: string;
+    description?: string;
+    required: boolean;
+    default?: string;
+    type?: string;
+    options?: string[];
+};
+
+/**
+ * Parse `on.workflow_dispatch.inputs` from a workflow YAML string.
+ * Intentionally pragmatic (indent-based) — good enough for standard Actions YAML.
+ */
+export function parseWorkflowDispatch(yaml: string): {
+    canDispatch: boolean;
+    inputs: WorkflowInputDef[];
+} {
+    const lines = yaml.split(/\r?\n/);
+    let inOn = false;
+    let onIndent = -1;
+    let inDispatch = false;
+    let dispatchIndent = -1;
+    let inInputs = false;
+    let inputsIndent = -1;
+    let canDispatch = false;
+    const inputs: WorkflowInputDef[] = [];
+    let current: WorkflowInputDef | null = null;
+    let inOptions = false;
+    let optionsIndent = -1;
+
+    const indentOf = (line: string) => {
+        const m = line.match(/^(\s*)/);
+        return m ? m[1].length : 0;
+    };
+
+    const flush = () => {
+        if (current) {
+            inputs.push(current);
+            current = null;
+        }
+        inOptions = false;
+    };
+
+    for (const raw of lines) {
+        if (!raw.trim() || raw.trimStart().startsWith("#")) continue;
+        const ind = indentOf(raw);
+        const trimmed = raw.trim();
+
+        if (!inOn && /^on:\s*$/.test(trimmed)) {
+            inOn = true;
+            onIndent = ind;
+            continue;
+        }
+        if (inOn && !inDispatch && ind <= onIndent && !trimmed.startsWith("#")) {
+            // left the on: block
+            if (!/^workflow_dispatch/.test(trimmed)) {
+                inOn = false;
+            }
+        }
+
+        if (inOn && /^workflow_dispatch\s*:?\s*$/.test(trimmed)) {
+            canDispatch = true;
+            inDispatch = true;
+            dispatchIndent = ind;
+            continue;
+        }
+        if (inOn && /^workflow_dispatch\s*:\s*\[/.test(trimmed)) {
+            canDispatch = true;
+            continue;
+        }
+        // workflow_dispatch as list item under on:
+        if (inOn && /^-\s*workflow_dispatch\s*$/.test(trimmed)) {
+            canDispatch = true;
+            continue;
+        }
+
+        if (inDispatch && ind <= dispatchIndent && !trimmed.startsWith("inputs:")) {
+            flush();
+            inDispatch = false;
+            inInputs = false;
+        }
+
+        if (inDispatch && /^inputs:\s*$/.test(trimmed)) {
+            inInputs = true;
+            inputsIndent = ind;
+            continue;
+        }
+
+        if (!inInputs) continue;
+
+        if (ind <= inputsIndent) {
+            flush();
+            inInputs = false;
+            continue;
+        }
+
+        // New input key at inputsIndent+2-ish
+        const keyMatch = trimmed.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+        if (keyMatch && ind <= inputsIndent + 2 && !inOptions) {
+            // Could be a new input name (sibling of previous)
+            const key = keyMatch[1];
+            const rest = keyMatch[2].trim();
+            const metaKeys = new Set([
+                "description",
+                "required",
+                "default",
+                "type",
+                "options",
+            ]);
+            if (!metaKeys.has(key) && ind === inputsIndent + 2) {
+                flush();
+                current = {
+                    name: key,
+                    required: false,
+                    default: rest && rest !== "|" && rest !== ">" ? rest.replace(/^["']|["']$/g, "") : undefined,
+                };
+                continue;
+            }
+        }
+
+        if (!current) continue;
+
+        if (/^options:\s*$/.test(trimmed)) {
+            inOptions = true;
+            optionsIndent = ind;
+            current.options = [];
+            continue;
+        }
+
+        if (inOptions) {
+            if (ind <= optionsIndent) {
+                inOptions = false;
+            } else if (trimmed.startsWith("-")) {
+                const opt = trimmed.replace(/^-\s*/, "").replace(/^["']|["']$/g, "");
+                current.options = [...(current.options ?? []), opt];
+                continue;
+            }
+        }
+
+        const desc = trimmed.match(/^description:\s*(.*)$/);
+        if (desc) {
+            current.description = desc[1].replace(/^["']|["']$/g, "");
+            continue;
+        }
+        const req = trimmed.match(/^required:\s*(true|false)\s*$/i);
+        if (req) {
+            current.required = req[1].toLowerCase() === "true";
+            continue;
+        }
+        const def = trimmed.match(/^default:\s*(.*)$/);
+        if (def) {
+            current.default = def[1].replace(/^["']|["']$/g, "");
+            continue;
+        }
+        const typ = trimmed.match(/^type:\s*(.*)$/);
+        if (typ) {
+            current.type = typ[1].replace(/^["']|["']$/g, "");
+            continue;
+        }
+    }
+    flush();
+
+    return { canDispatch, inputs };
+}

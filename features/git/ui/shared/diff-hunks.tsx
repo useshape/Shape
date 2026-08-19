@@ -6,6 +6,7 @@ import { commands } from "@/lib/backend/commands";
 import type { GitHunk } from "@/lib/backend/types";
 import { notify } from "@/features/notifications";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 
 export type DiffHunkMode = "staged" | "unstaged";
 
@@ -158,45 +159,46 @@ export function DiffHunkToolbar({
 
   return (
     <div
-      className="absolute z-20 flex items-center gap-1 rounded-lg border border-border bg-panel p-1 shadow-sm"
+      className="absolute z-20 flex items-center gap-0.5 rounded-md border border-border-subtle bg-surface-3 p-1"
       style={{ top: pos.top, right: pos.right }}
     >
-      <span className="px-1.5 text-xs text-text-muted tabular-nums">
+      <span className="px-1.5 text-sm text-text-secondary tabular-nums">
         Hunk {activeHunkIndex + 1}/{hunks.length}
         {lineHint === "selection" ? " · lines" : ""}
       </span>
       {mode === "unstaged" && (
         <>
-          <button
+          <Button
             type="button"
+            size="xs"
             disabled={busy}
             title="Stage hunk (Ctrl+Y)"
             onClick={() => void run("stage")}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-success hover:text-text-primary disabled:opacity-40"
           >
             <Icon name="add" size={12} /> Stage
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="xs"
             disabled={busy}
             title="Restore hunk"
             onClick={() => void run("restore")}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
           >
             <Icon name="undo" size={12} /> Restore
-          </button>
+          </Button>
         </>
       )}
       {mode === "staged" && (
-        <button
+        <Button
           type="button"
+          size="xs"
+          variant="destructive"
           disabled={busy}
           title="Unstage hunk (Ctrl+Shift+Y)"
           onClick={() => void run("unstage")}
-          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
         >
           <Icon name="remove" size={12} /> Unstage
-        </button>
+        </Button>
       )}
     </div>
   );

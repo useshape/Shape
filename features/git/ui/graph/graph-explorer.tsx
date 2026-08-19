@@ -545,7 +545,6 @@ export function GraphExplorer() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
                             onClick={() => {
                                 zoomRef.current = Math.max(0.18, zoomRef.current - 0.1);
                                 setZoom(zoomRef.current);
@@ -559,7 +558,6 @@ export function GraphExplorer() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
                             onClick={() => {
                                 zoomRef.current = Math.min(1.8, zoomRef.current + 0.1);
                                 setZoom(zoomRef.current);
@@ -570,7 +568,7 @@ export function GraphExplorer() {
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fit">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={resetView}>
+                        <Button variant="ghost" size="icon" onClick={resetView}>
                             <Icon name="colorize" size={14} />
                         </Button>
                     </Tooltip>
@@ -578,11 +576,10 @@ export function GraphExplorer() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
                             disabled={loading}
                             onClick={() => void refresh()}
                         >
-                            <Icon name="refresh" size={16} />
+                            <Icon name="refresh" size={14} />
                         </Button>
                     </Tooltip>
                 </div>
@@ -715,8 +712,8 @@ export function GraphExplorer() {
                     </div>
 
                     {loading ? (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-editor/30 text-sm text-text-muted">
-                            Loading…
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-editor/40">
+                            <div className="h-8 w-40 animate-pulse rounded-lg bg-panel-hover/90" />
                         </div>
                     ) : null}
 

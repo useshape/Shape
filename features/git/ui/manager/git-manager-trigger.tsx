@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ShapeLogo } from "@/components/ui/shape-logo";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -13,23 +14,11 @@ export function GitManagerTrigger({ className }: { className?: string }) {
                 variant="ghost"
                 size="icon"
                 aria-label="Open Git Manager"
-                className={cn("h-6 w-6 hover:bg-panel-hover", className)}
+                className={cn("text-text-primary hover:bg-panel-hover", className)}
                 onClick={() => void import("@/lib/open-git-window").then(({ openGitWindow }) => openGitWindow())}
             >
-                <span
-                    aria-hidden
-                    className="block size-5 bg-current"
-                    style={{
-                        maskImage: "url(/logos/logo.svg)",
-                        WebkitMaskImage: "url(/logos/logo.svg)",
-                        maskSize: "contain",
-                        WebkitMaskSize: "contain",
-                        maskRepeat: "no-repeat",
-                        WebkitMaskRepeat: "no-repeat",
-                        maskPosition: "center",
-                        WebkitMaskPosition: "center",
-                    }}
-                />
+                {/* Never max-h/w-full here — padded icon buttons shrink that to 0 and the logo vanishes. */}
+                <ShapeLogo size={14} className="pointer-events-none" />
             </Button>
         </Tooltip>
     );

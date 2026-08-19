@@ -1,0 +1,22 @@
+/* Git Manager motion — list→detail overlays only. */
+
+@keyframes git-overlay-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.git-overlay-enter {
+  animation: git-overlay-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-overlay-enter {
+    animation: none;
+  }
+}
