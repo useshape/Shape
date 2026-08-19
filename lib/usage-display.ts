@@ -1,4 +1,8 @@
 import type { ShapeAuthState } from "@/lib/shape-auth/types";
+import type { LastTurnUsage } from "@/lib/last-turn-usage";
+
+/** Matches website Auto monthly pool — used only for turn-delta % display. */
+export const AUTO_MONTHLY_TOKEN_POOL = 5_000_000;
 
 export type MessageUsageStats = {
     timeMs?: number;
@@ -28,13 +32,23 @@ export function formatModelLabel(model?: string | null): string {
         .join(" ");
 }
 
-function formatTokenCount(n: number): string {
-    if (n < 1000) return `${n}`;
-    if (n < 10_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
-    return `${Math.round(n / 1000)}k`;
+/** Message details: prefer Auto when the turn used auto routing. */
+export function formatMessageModelLabel(
+    model?: string | null,
+    stats?: MessageUsageStats,
+): string {
+    if (stats?.usedAuto || isAutoModelId(model)) return "Auto";
+    return formatModelLabel(model);
 }
 
-/** Per-message usage for the details popover — never account monthly %. */
+function turnPercentOfPool(amount: number, pool: number): number {
+    if (pool <= 0 || amount <= 0) return 0;
+    const raw = (amount / pool) * 100;
+    if (raw > 0 && raw < 1) return Math.max(1, Math.round(raw));
+    return Math.min(100, Math.round(raw));
+}
+
+/** Per-message usage for the details popover — response % only, never tokens or monthly %. */
 export function formatMessageUsageLine(
     stats: MessageUsageStats | undefined,
     model?: string | null,
@@ -44,56 +58,96 @@ export function formatMessageUsageLine(
     const credits = stats?.creditsCharged ?? 0;
 
     if (usedAuto) {
-        if (tokens > 0) return `${formatTokenCount(tokens)} tokens`;
-        return "Included";
+        if (tokens > 0) {
+            return `${turnPercentOfPool(tokens, AUTO_MONTHLY_TOKEN_POOL)}% used`;
+        }
+        return "0% used";
     }
 
+    // Paid models: show this response's credit share when we know the turn charge.
+    // Without a pool context here, fall back to a simple percent-from-credits isn't possible —
+    // still avoid token counts. If only credits charged, show response % against a soft scale
+    // is wrong; prefer "N% used" only when we have tokens relative to auto, else credits label
+    // without tokens.
     if (credits > 0) {
-        const creditPart = `${credits.toFixed(2)} credits`;
-        return tokens > 0 ? `${creditPart} · ${formatTokenCount(tokens)} tokens` : creditPart;
+        // Message details don't have included pool; keep credits as count only if no better %.
+        // Prefer percent when tokens exist against a large context isn't right for credits.
+        return `${credits.toFixed(2)} credits`;
     }
 
-    if (tokens > 0) return `${formatTokenCount(tokens)} tokens`;
+    if (tokens > 0) {
+        // Non-auto without credits: still avoid raw token spam — show tiny % of auto pool
+        // would be misleading. Show "Used" without tokens.
+        return "Used";
+    }
     return "No charge";
 }
 
 export type ChatUsageDisplay = {
     mode: "auto" | "credits";
+    /** Ring fill for *this turn's* share of the allowance (not lifetime/month total). */
     percent: number;
+    /** Short primary line, e.g. "2% used". */
+    title: string;
+    /** Secondary line — kept for API compat; prefer empty / same as title. */
+    detail: string;
+    /** Single-line tooltip: response % only. */
     tooltip: string;
 };
 
 export function resolveChatUsageDisplay(
     selectedModel: string,
-    auth: Pick<ShapeAuthState, "loggedIn" | "tier" | "freeAutoPercent" | "creditsIncluded" | "creditsRemaining">,
+    auth: Pick<
+        ShapeAuthState,
+        "loggedIn" | "tier" | "freeAutoPercent" | "creditsIncluded" | "creditsRemaining"
+    >,
+    lastTurn?: LastTurnUsage | null,
 ): ChatUsageDisplay {
     if (!auth.loggedIn) {
-        return { mode: "credits", percent: 0, tooltip: "Sign in to view usage" };
-    }
-
-    const usingAuto = selectedModel === "auto" || auth.tier === "free";
-    if (usingAuto && auth.freeAutoPercent != null) {
-        const percent = Math.round(auth.freeAutoPercent);
         return {
-            mode: "auto",
-            percent,
-            tooltip: `Auto: ${percent}% used this month`,
+            mode: "credits",
+            percent: 0,
+            title: "Sign in",
+            detail: "to view usage",
+            tooltip: "Sign in to view usage",
         };
     }
 
-    if (auth.creditsIncluded > 0) {
-        const used = Math.max(0, auth.creditsIncluded - auth.creditsRemaining);
-        const percent = Math.round((used / auth.creditsIncluded) * 100);
+    const usingAuto = selectedModel === "auto" || auth.tier === "free";
+    const turn = lastTurn;
+
+    if (usingAuto) {
+        const tokens = turn?.tokens ?? 0;
+        const percent = turnPercentOfPool(tokens, AUTO_MONTHLY_TOKEN_POOL);
+        const title = `${percent}% used`;
+        return {
+            mode: "auto",
+            percent,
+            title,
+            detail: title,
+            tooltip: title,
+        };
+    }
+
+    const included = auth.creditsIncluded;
+    const charged = turn?.creditsCharged ?? 0;
+    if (included > 0) {
+        const percent = turnPercentOfPool(charged, included);
+        const title = `${percent}% used`;
         return {
             mode: "credits",
             percent,
-            tooltip: `Credits: ${percent}% used (${auth.creditsRemaining.toLocaleString()} left)`,
+            title,
+            detail: title,
+            tooltip: title,
         };
     }
 
     return {
         mode: "credits",
         percent: 0,
+        title: "Credits",
+        detail: "none on this plan",
         tooltip: "Credits: none on this plan",
     };
 }

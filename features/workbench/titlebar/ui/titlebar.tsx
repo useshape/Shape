@@ -11,10 +11,7 @@ import { useWindowControls } from "../hooks/use-window-controls";
 import { useRepoHistory } from "../hooks/use-repo-history";
 import { useEditorBuffer } from "../hooks/use-editor-buffer";
 import { TitlebarMenubar } from "../ui/app-menu";
-import { CommandCenterSearch } from "../ui/command-center";
-import { AgentChatSearch } from "@/features/agent/ui/agent-chat-search";
-import { AgentTitlebarNav } from "@/features/agent/ui/agent-titlebar-nav";
-import { AgentSessionsToggle } from "@/features/agent/ui/agent-titlebar-controls";
+import { CommandOmnibar } from "../ui/command-center";
 import { AccountMenu } from "../ui/account-menu";
 import { WindowControls } from "../ui/window-controls";
 import { TitlebarLayoutControls, TitlebarSidebarToggle } from "../ui/layout-controls";
@@ -25,29 +22,18 @@ import { TitlebarSearch } from "@/features/git/ui/manager/titlebar-search";
 // aspect-ratio warning (and the visual squish into a square icon).
 const LOGO_ASPECT_RATIO = 46 / 56;
 
-export default function Titlebar({ onboarding, settings, focus, agent, title, onBack }: TitlebarProps) {
+export default function Titlebar({ onboarding, settings, focus, title, onBack }: TitlebarProps) {
     useKeyboardShortcuts();
 
     const { active_file, project_path, open_files } = useProjectState();
     const isCompact = Boolean(onboarding || settings);
     const isFocus = Boolean(focus);
     const [windowWidth, setWindowWidth] = useState(1200);
-    const showSearch = agent ? windowWidth >= 640 : windowWidth >= 900;
+    const showSearch = windowWidth >= 900;
 
     const { isMaximized, minimize, toggleMaximize, close, closeWindow } = useWindowControls();
     const { repoHistory, clearHistory } = useRepoHistory(project_path);
     const { readLatestContent } = useEditorBuffer();
-
-    const projectLabel = useMemo(() => {
-        if (!project_path) return "Go to File";
-        return project_path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "Go to File";
-    }, [project_path]);
-
-    const searchLabel = active_file
-        ? `${projectLabel} - ${active_file.split(/[\\/]/).pop()}`
-        : project_path
-            ? projectLabel
-            : "Go to File";
 
     const handleMenuClick = useMemo(
         () =>
@@ -74,48 +60,8 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
         return () => window.removeEventListener("save-all-request", onSaveAll);
     }, [handleMenuClick]);
 
-    if (agent && !isCompact) {
-        return (
-            <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal text-text-primary">
-                <div className="titlebar-drag-region absolute left-0 top-0 z-0 h-full w-full" data-tauri-drag-region />
-
-                <div className="titlebar-left relative z-20 flex shrink-0 items-center">
-                    <div className="flex shrink-0 items-center">
-                        <div className="window-appicon flex h-full w-11 shrink-0 items-center justify-center">
-                            <Image
-                                src="/logos/logo.svg"
-                                alt="Logo"
-                                width={Math.round(16 * LOGO_ASPECT_RATIO)}
-                                height={16}
-                                className="logo-invert rounded-sm"
-                            />
-                        </div>
-                        <AgentSessionsToggle />
-                    </div>
-                    <AgentTitlebarNav />
-                </div>
-
-                <div className="pointer-events-none min-w-0 flex-1" aria-hidden />
-
-                <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center">
-                    {showSearch ? (
-                        <div className="flex h-full items-center px-1">
-                            <AgentChatSearch />
-                        </div>
-                    ) : null}
-                    <WindowControls
-                        isMaximized={isMaximized}
-                        onMinimize={minimize}
-                        onToggleMaximize={() => void toggleMaximize()}
-                        onClose={close}
-                    />
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal text-text-primary">
+        <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal leading-none text-text-primary">
             <div className="titlebar-drag-region absolute left-0 top-0 z-0 h-full w-full" data-tauri-drag-region />
 
             <div className="titlebar-left relative z-20 flex shrink-0 items-center">
@@ -142,16 +88,20 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
                             />
                         ) : null}
                     </>
-                ) : settings ? (
-                    <div className="flex items-center gap-2.5 px-3 py-1 text-sm text-text-primary">
-                        <Image
-                            src="/logos/logo.svg"
-                            alt="Logo"
-                            width={Math.round(18 * LOGO_ASPECT_RATIO)}
-                            height={18}
-                            className="logo-invert rounded-sm"
-                        />
-                        <span>{title || "Settings"}</span>
+                ) : isCompact ? (
+                    <div className="relative z-20 flex h-full shrink-0 items-center">
+                        <div className="window-appicon flex h-full w-11 shrink-0 items-center justify-center">
+                            <Image
+                                src="/logos/logo.svg"
+                                alt="Logo"
+                                width={Math.round(16 * LOGO_ASPECT_RATIO)}
+                                height={16}
+                                className="logo-invert rounded-sm"
+                            />
+                        </div>
+                        {title ? (
+                            <span className="pr-2 text-sm font-normal text-text-primary">{title}</span>
+                        ) : null}
                     </div>
                 ) : title ? (
                     <div className="flex items-center gap-1 px-4 text-sm font-normal text-text-primary">
@@ -171,24 +121,16 @@ export default function Titlebar({ onboarding, settings, focus, agent, title, on
 
             <div className="pointer-events-none min-w-0 flex-1" aria-hidden />
 
-            <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center">
-                {settings && title === "Git" ? (
-                    <div className="flex h-full items-center px-1">
-                        <TitlebarSearch />
-                    </div>
-                ) : null}
-                {!isCompact && showSearch ? (
-                    <div className="flex h-full items-center px-1">
-                        <CommandCenterSearch label={searchLabel} activeFile={active_file} />
-                    </div>
-                ) : null}
-                {!isCompact && !isFocus && (
-                    <div className="action-toolbar-container hidden items-center gap-0.5 px-1 sm:flex">
+            <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1">
+                {settings && title === "Git" ? <TitlebarSearch /> : null}
+                {!isCompact && !isFocus ? (
+                    <>
+                        {showSearch ? <CommandOmnibar /> : null}
                         <TitlebarUpdateButton />
                         <TitlebarLayoutControls />
                         <AccountMenu />
-                    </div>
-                )}
+                    </>
+                ) : null}
                 <WindowControls
                     isMaximized={isMaximized}
                     onMinimize={minimize}

@@ -12,7 +12,7 @@ import { useLayoutState } from "../hooks/use-layout-state";
 const ICON_SIZE = 16;
 
 const titlebarIconButtonClass =
-    "flex items-center justify-center w-7 h-7 shrink-0 rounded cursor-pointer transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] text-text-muted hover:bg-panel-hover hover:text-text-primary";
+    "flex items-center justify-center w-7 h-7 shrink-0 rounded cursor-pointer transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] text-text-secondary hover:bg-panel-hover hover:text-text-primary";
 
 function TitlebarLayoutButton({
     label,
@@ -45,7 +45,7 @@ export function TitlebarLayoutControls() {
     const { layoutState, toggleLayout } = useLayoutState();
 
     return (
-        <div className="flex items-center gap-0.5 px-1">
+        <>
             <TitlebarLayoutButton
                 label="Toggle Terminal"
                 active={layoutState.panelOpen}
@@ -60,7 +60,7 @@ export function TitlebarLayoutControls() {
             >
                 <AnimatedSecondarySidebarIcon active={layoutState.secondarySidebarOpen} size={ICON_SIZE} />
             </TitlebarLayoutButton>
-        </div>
+        </>
     );
 }
 

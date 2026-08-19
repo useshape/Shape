@@ -90,6 +90,7 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 break;
             }
             case "Close Folder":
+                window.dispatchEvent(new Event("shape-design-exit"));
                 await commands.closeAllFiles();
                 const { saveLastProject } = await import("@/lib/last-project");
                 saveLastProject(null);
@@ -225,6 +226,9 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                     new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),
                 );
                 window.dispatchEvent(new Event("shape-open-output"));
+                break;
+            case "Preview":
+                void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
                 break;
             case "Terminal":
                 window.dispatchEvent(

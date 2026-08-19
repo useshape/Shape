@@ -7,6 +7,13 @@ import { cn } from "@/lib/utils";
 import { notificationStore, useNotifications, type Notification } from "@/features/notifications";
 import { errorDocsUrl } from "@/lib/errors/catalog";
 import { commands } from "@/lib/backend";
+import { Button } from "./button";
+
+export const TOAST_AUTO_HIDE_MS = 5500;
+const TOAST_EXIT_MS = 380;
+/** Sit above the 33px status bar, horizontally centered. */
+export const TOAST_STACK_CLASS =
+    "pointer-events-none fixed inset-x-0 bottom-[calc(var(--statusbar-height)+12px)] z-notification flex justify-center px-4 outline-none";
 
 const typeIcons: Record<Notification["type"], string> = {
     info: "info",
@@ -22,72 +29,126 @@ const typeIconColor: Record<Notification["type"], string> = {
     error: "text-error",
 };
 
-function ToastCard({ notification }: { notification: Notification }) {
-    const autoHideMs = notification.autoHide === false ? null : 8000;
+function openNotificationTarget(notification: Notification) {
+    if (notification.code != null) {
+        void commands.openUrlExternal(errorDocsUrl(notification.code));
+        return;
+    }
+    if (notification.type === "error" || notification.type === "warning") {
+        window.dispatchEvent(new Event("shape-open-problems"));
+    }
+}
+
+function ToastCard({
+    notification,
+    stackIndex,
+    stackCount,
+    leaving,
+    onDismiss,
+}: {
+    notification: Notification;
+    stackIndex: number;
+    stackCount: number;
+    leaving: boolean;
+    onDismiss: () => void;
+}) {
+    const autoHideMs = notification.autoHide === false ? null : TOAST_AUTO_HIDE_MS;
+    const fromFront = stackCount - 1 - stackIndex;
+    const isFront = fromFront === 0;
+    const [entered, setEntered] = React.useState(false);
 
     React.useEffect(() => {
-        if (!autoHideMs) return;
-        const timer = window.setTimeout(() => {
-            notificationStore.dismissToast(notification.id);
-        }, autoHideMs);
-        return () => window.clearTimeout(timer);
-    }, [autoHideMs, notification.id]);
+        const frame = window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => setEntered(true));
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, []);
 
-    const docsUrl = notification.code != null ? errorDocsUrl(notification.code) : null;
+    React.useEffect(() => {
+        if (!autoHideMs || !isFront) return;
+        const timer = window.setTimeout(onDismiss, autoHideMs);
+        return () => window.clearTimeout(timer);
+    }, [autoHideMs, isFront, onDismiss]);
+
+    const clickable =
+        notification.code != null ||
+        notification.type === "error" ||
+        notification.type === "warning";
 
     return (
         <div
             className={cn(
-                "pointer-events-auto flex w-full max-w-[380px] items-start gap-2.5 rounded-2xl border border-border bg-panel px-3 py-2.5 shadow-lg",
-                "animate-in fade-in slide-in-from-bottom-2 duration-200",
+                "shape-toast pointer-events-auto absolute inset-x-0 bottom-0 min-h-[72px] w-full origin-bottom rounded-xl border border-border-subtle bg-surface-3 p-3 text-left",
+                clickable && "cursor-pointer",
             )}
+            data-mounted={entered ? "true" : undefined}
+            data-leaving={leaving && isFront ? "true" : undefined}
             role="status"
             aria-live="polite"
+            style={{
+                zIndex: stackIndex + 1,
+                pointerEvents: isFront ? "auto" : "none",
+                ["--toast-y" as string]: `${-fromFront * 10}px`,
+                ["--toast-scale" as string]: String(Math.max(0.85, 1 - fromFront * 0.06)),
+                ["--toast-opacity" as string]: fromFront > 2 ? "0" : "1",
+            }}
+            title={[notification.message, notification.description].filter(Boolean).join("\n")}
+            onClick={clickable ? () => openNotificationTarget(notification) : undefined}
+            onKeyDown={
+                clickable
+                    ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              openNotificationTarget(notification);
+                          }
+                      }
+                    : undefined
+            }
+            tabIndex={clickable ? 0 : undefined}
         >
-            <Icon
-                name={typeIcons[notification.type]}
-                size={16}
-                className={cn("mt-0.5 shrink-0", typeIconColor[notification.type])}
-            />
-            <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="text-sm font-medium leading-snug text-text-primary">
-                    {notification.message}
+            <div className="flex items-start gap-3">
+                <div
+                    className={cn(
+                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-4",
+                        typeIconColor[notification.type],
+                    )}
+                >
+                    <Icon name={typeIcons[notification.type]} size={16} />
                 </div>
-                {notification.description ? (
-                    <div className="whitespace-pre-wrap text-xs leading-relaxed text-text-secondary">
-                        {notification.description}
-                    </div>
-                ) : null}
-                {notification.code != null ? (
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-0.5 text-xs text-text-muted">
-                        <span className="font-mono">Error {notification.code}</span>
-                        {docsUrl ? (
-                            <button
-                                type="button"
-                                className="text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
-                                onClick={() => void commands.openUrlExternal(docsUrl)}
-                            >
-                                Learn more
-                            </button>
+                <div className="min-w-0 flex-1 pt-0.5">
+                    <div className="text-md font-medium leading-snug text-text-primary">
+                        {notification.message}
+                        {notification.code != null ? (
+                            <span className="ml-1 font-medium text-text-secondary">· Error {notification.code}</span>
                         ) : null}
                     </div>
-                ) : null}
+                    {notification.description ? (
+                        <div className="mt-0.5 line-clamp-3 text-sm leading-snug text-text-secondary">
+                            {notification.description}
+                        </div>
+                    ) : null}
+                </div>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDismiss();
+                    }}
+                    aria-label="Dismiss notification"
+                >
+                    <Icon name="close" size={14} />
+                </Button>
             </div>
-            <button
-                type="button"
-                onClick={() => notificationStore.dismissToast(notification.id)}
-                className="shrink-0 rounded p-0.5 text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
-                aria-label="Dismiss notification"
-            >
-                <Icon name="close" size={14} />
-            </button>
         </div>
     );
 }
 
-function NotificationToasts() {
+export function NotificationToasts() {
     const { notifications, toastIds } = useNotifications();
     const [mounted, setMounted] = React.useState(false);
+    const [leavingId, setLeavingId] = React.useState<string | null>(null);
 
     React.useEffect(() => setMounted(true), []);
 
@@ -95,13 +156,30 @@ function NotificationToasts() {
         .map((id) => notifications.find((n) => n.id === id))
         .filter((n): n is Notification => Boolean(n));
 
+    const dismiss = React.useCallback((id: string) => {
+        setLeavingId(id);
+        window.setTimeout(() => {
+            notificationStore.dismissToast(id);
+            setLeavingId((cur) => (cur === id ? null : cur));
+        }, TOAST_EXIT_MS);
+    }, []);
+
     if (!mounted || toasts.length === 0) return null;
 
     return createPortal(
-        <div className="pointer-events-none fixed bottom-10 right-4 z-notification flex w-full max-w-[400px] flex-col gap-2 outline-none">
-            {toasts.map((notification) => (
-                <ToastCard key={notification.id} notification={notification} />
-            ))}
+        <div className={TOAST_STACK_CLASS} data-toast-stack="">
+            <div className="relative w-full max-w-[380px]" style={{ height: 88 + Math.max(0, toasts.length - 1) * 8 }}>
+                {toasts.map((notification, index) => (
+                    <ToastCard
+                        key={notification.id}
+                        notification={notification}
+                        stackIndex={index}
+                        stackCount={toasts.length}
+                        leaving={leavingId === notification.id}
+                        onDismiss={() => dismiss(notification.id)}
+                    />
+                ))}
+            </div>
         </div>,
         document.body,
     );

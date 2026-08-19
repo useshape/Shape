@@ -17,13 +17,13 @@ import { initGitHubAuth } from "@/lib/github-auth/store";
 import { LoginPromptDialog } from "@/features/workbench/ui/login-prompt-dialog";
 import { WorkspaceTrustHost } from "@/features/workbench/ui/workspace-trust-dialog";
 import { UpdateBootstrap } from "@/features/workbench/update-bootstrap";
-import { AgentLayoutProvider } from "@/features/agent/lib/agent-layout-context";
 import { InlineEditHost } from "@/features/editor/ui/inline-edit/inline-edit-host";
 import { DesignPreviewCaptureHost } from "@/features/chat/ui/design-capture";
 import { ProjectStatsActivityTracker } from "@/features/stats/ui/activity-tracker";
 import { installBenignErrorFilters } from "@/lib/editor/benign-errors";
 import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
 import { FilterProvider } from "@/features/git/ui/manager/filter-context";
+import { SuppressNativeTooltips } from "@/components/ui/suppress-native-tooltips";
 
 function CommandPaletteBridge() {
     const CommandPalette = React.useMemo(
@@ -50,7 +50,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const isBranch = pathMatches(pathname, "/branch") || pathMatches(pathname, "/git");
     const isStats = pathMatches(pathname, "/stats");
     const isPopout = pathMatches(pathname, "/popout");
-    const isAgent = pathMatches(pathname, "/agent");
 
     useEffect(() => {
         // Kick vscode-api init immediately (module load order beats Monaco).
@@ -58,6 +57,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         // per-file LSP connect just await the same in-flight/completed promise.
         void import("@/features/editor/lsp/lsp-client").then(({ LspClientManager }) => {
             void LspClientManager.warmupServices();
+        });
+        void import("@/features/preview/design-mode/bridge-script").then(({ DESIGN_BRIDGE_SCRIPT }) => {
+            void import("@/lib/backend").then(({ commands }) => {
+                void commands.registerDesignBridge(DESIGN_BRIDGE_SCRIPT).catch(() => {});
+            });
         });
 
         const bootstrap = async () => {
@@ -71,32 +75,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 initTelemetry();
                 void captureTelemetry("ide_launched");
             });
-
-            // Only the main workbench reload should reap orphaned PTY/LSP state.
-            void import("@/lib/backend").then(({ commands }) => {
-                void import("@tauri-apps/api/core").then(({ invoke }) => {
-                    invoke("pty_kill_all").catch(() => { });
-                });
-                // The Rust backend outlives a webview reload (only the frontend
-                // remounts), so a turn started before the reload may still be
-                // actively streaming. Only force-stop when nothing is generating —
-                // otherwise let it keep running; ChatStreamProvider resyncs
-                // isLoading/messages from get_chat_history + get_chat_generation_state
-                // on mount and will pick the stream back up.
-                commands
-                    .getChatGenerationState()
-                    .then((genState) => {
-                        if (genState.isGenerating) return;
-                        // Avoid hammering stop during a remount storm while a prior
-                        // stop is still settling.
-                        if (genState.activityLabel?.toLowerCase().includes("stop")) return;
-                        commands.stopChatMessage().catch(() => { });
-                    })
-                    .catch(() => {
-                        // Don't stop blindly on probe failure — that caused stop spam
-                        // when the webview remounted faster than IPC recovered.
-                    });
-            });
+            // Do not stop chat, kill PTYs, or abort preview captures on mount.
+            // The Rust backend outlives a webview reload; ChatStreamProvider
+            // resyncs an in-flight turn. Calling stop/pty_kill_all here caused
+            // a launch loop on Windows (invalid window handle → reload → stop).
             void import("@/features/terminal/ui/terminal").then(({ reapOrphanedTerminalSessions }) => {
                 reapOrphanedTerminalSessions();
             });
@@ -139,7 +121,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }, []);
 
     useEffect(() => {
-        if (isOnboarding || isSettings || isBranch || isStats || isPopout || isAgent) return;
+        if (isOnboarding || isSettings || isBranch || isStats || isPopout) return;
         let unlisten: (() => void) | undefined;
         let cancelled = false;
 
@@ -190,7 +172,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             cancelled = true;
             unlisten?.();
         };
-    }, [isOnboarding, isSettings, isBranch, isStats, isPopout, isAgent]);
+    }, [isOnboarding, isSettings, isBranch, isStats, isPopout]);
 
     // Block the native WebView context menu without breaking Radix menus.
     // Must be bubble phase: Radix opens on the target first; capture+preventDefault
@@ -235,6 +217,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     if (onboarding) {
                         await onboarding.close();
                     }
+
+                    const { initSettings } = await import("@/lib/settings");
+                    await initSettings();
                     await currentWindow.show();
                 }
             } catch (e) {
@@ -254,37 +239,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         );
     }
 
-    if (isAgent) {
-        return (
-            <LoadingProvider>
-                <NotificationProvider>
-                    <GlobalContextMenu>
-                        <EditorViewProvider>
-                            <AgentLayoutProvider>
-                                <ChatStreamProvider>
-                                    <div
-                                        id="shape-agent"
-                                        className="flex h-screen w-full flex-col overflow-hidden bg-titlebar font-sans text-sm text-text-primary select-none"
-                                    >
-                                        <Titlebar agent />
-                                        <main className="min-h-0 flex-1 overflow-hidden bg-editor">
-                                            {children}
-                                        </main>
-                                        <CommandPaletteBridge />
-                                    </div>
-                                </ChatStreamProvider>
-                            </AgentLayoutProvider>
-                        </EditorViewProvider>
-                    </GlobalContextMenu>
-                </NotificationProvider>
-            </LoadingProvider>
-        );
-    }
-
     if (isPopout) {
         return (
             <LoadingProvider>
                 <NotificationProvider>
+                    <SuppressNativeTooltips />
                     <GlobalContextMenu>
                         <EditorViewProvider>
                             <EditorSplitProvider>
@@ -309,9 +268,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if (isSettings || isBranch || isStats) {
         const windowTitle = isBranch ? "Git" : isStats ? "Statistics" : "Settings";
         const body = (
-            <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-titlebar font-sans text-sm text-text-primary select-none">
+            <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
                 <Titlebar settings title={windowTitle} />
-                <main className="min-h-0 flex-1 overflow-hidden bg-editor">
+                <main className="min-h-0 flex-1 overflow-hidden bg-background">
                     {children}
                 </main>
             </div>
@@ -319,6 +278,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
             <LoadingProvider>
                 <NotificationProvider>
+                    <SuppressNativeTooltips />
                     <GlobalContextMenu>
                         {isBranch ? <FilterProvider>{body}</FilterProvider> : body}
                     </GlobalContextMenu>
@@ -329,8 +289,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     return (
         <LoadingProvider>
-            <NotificationProvider>
-                <LayoutProvider>
+                <NotificationProvider>
+                    <SuppressNativeTooltips />
+                    <LayoutProvider>
                     <GlobalContextMenu>
                         <EditorViewProvider>
                             <EditorSplitProvider>

@@ -7,8 +7,8 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   output: isProd ? "export" : undefined,
-  // Use root-absolute asset URLs so secondary windows (/agent/, /settings/, etc.)
-  // load CSS/JS from /_next/... instead of broken /agent/_next/... paths.
+  // Use root-absolute asset URLs so secondary windows (/settings/, /git/, etc.)
+  // load CSS/JS from /_next/... instead of broken nested /_next/... paths.
   trailingSlash: isProd ? true : undefined,
   images: {
     unoptimized: true,
@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   experimental: {
-    optimizePackageImports: ["@primer/octicons-react", "@tauri-apps/api"],
+    optimizePackageImports: ["lucide-react", "@tauri-apps/api"],
   },
 };
 

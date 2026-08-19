@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { getFolderIconPath, getIconPath } from "@/lib/ui/icons/files";
+import { getFolderIconPath, getIconPath, isDocumentLightTheme } from "@/lib/ui/icons/files";
 
 export function FileIcon({
     name,
@@ -15,18 +15,24 @@ export function FileIcon({
     isOpen?: boolean;
     className?: string;
 }) {
-    const [, setTick] = useState(0);
+    const [light, setLight] = useState(false);
 
     useEffect(() => {
-        const observer = new MutationObserver(() => setTick(t => t + 1));
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        const sync = () => setLight(isDocumentLightTheme());
+        sync();
+        const observer = new MutationObserver(sync);
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["class", "data-theme", "style"],
+        });
         return () => observer.disconnect();
     }, []);
 
     if (isDir) {
         return (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
-                src={getFolderIconPath(name, isOpen)}
+                src={getFolderIconPath(name, isOpen, light)}
                 alt=""
                 width={16}
                 height={16}
@@ -38,8 +44,9 @@ export function FileIcon({
     }
 
     return (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
-            src={getIconPath(name)}
+            src={getIconPath(name, light)}
             alt=""
             width={16}
             height={16}

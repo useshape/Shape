@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import type { Window } from "@tauri-apps/api/window";
 
+/**
+ * Close behavior:
+ * - Main → close secondary windows, then quit the app.
+ * - Other secondary windows → close that window only.
+ */
 async function closeAppOrWindow(appWindow: Window) {
     try {
         if (appWindow.label === "main") {

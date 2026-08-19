@@ -11,15 +11,23 @@ export function ShapeLogo({
     size?: number;
     className?: string;
 }) {
+    const height = Math.round(size * LOGO_ASPECT_RATIO);
     return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
             src="/logos/logo.svg"
             alt="Shape"
             width={size}
-            height={Math.round(size * LOGO_ASPECT_RATIO)}
-            style={{ width: size, height: "auto" }}
-            className={cn("shrink-0", className)}
+            height={height}
+            style={{
+                width: size,
+                height: "auto",
+                minWidth: size,
+                minHeight: height,
+                maxWidth: size,
+                maxHeight: height,
+            }}
+            className={cn("logo-invert shrink-0", className)}
             draggable={false}
         />
     );

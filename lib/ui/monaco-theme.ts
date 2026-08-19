@@ -28,22 +28,22 @@ let applyInFlight: Promise<void> | null = null;
 let applyQueued = false;
 
 /** Token colors shared across Monaco Monarch languages (incl. language suffixes). */
-function buildShapeThemeRules() {
-    const comment = "6e6e75";
-    const keyword = "f0883e";
-    const string = "4ade80";
-    const number = "f5a057";
-    const type = "6eb5ff";
-    const fn = "6eb5ff";
-    const variable = "ededee";
-    const constant = "f5a623";
-    const delimiter = "a1a1a6";
-    const operator = "a1a1a6";
-    const regexp = "c084fc";
-    const tag = "f0883e";
-    const attribute = "6eb5ff";
-    const meta = "a1a1a6";
-    const invalid = "e5484d";
+function buildShapeThemeRules(light: boolean) {
+    const comment = light ? "6a737d" : "6e6e75";
+    const keyword = light ? "cf222e" : "f0883e";
+    const string = light ? "0a3069" : "4ade80";
+    const number = light ? "0550ae" : "f5a057";
+    const type = light ? "0550ae" : "6eb5ff";
+    const fn = light ? "8250df" : "6eb5ff";
+    const variable = light ? "1f2328" : "ededee";
+    const constant = light ? "953800" : "f5a623";
+    const delimiter = light ? "656d76" : "a1a1a6";
+    const operator = light ? "656d76" : "a1a1a6";
+    const regexp = light ? "0a3069" : "c084fc";
+    const tag = light ? "116329" : "f0883e";
+    const attribute = light ? "0550ae" : "6eb5ff";
+    const meta = light ? "656d76" : "a1a1a6";
+    const invalid = light ? "cf222e" : "e5484d";
 
     const base = [
         { token: "", foreground: variable },
@@ -129,62 +129,82 @@ function buildShapeThemeRules() {
     return withSuffixes;
 }
 
+function isDocumentLightMonaco(): boolean {
+    return false;
+}
+
+export function getShapeMonacoThemeName(): "shape-light" | "shape-dark" {
+    return isDocumentLightMonaco() ? "shape-light" : "shape-dark";
+}
+
+/** Theme id from settings (prefer for React `theme` props so they update on toggle). */
+export function shapeMonacoThemeFromColorTheme(_colorTheme: unknown): "shape-light" | "shape-dark" {
+    return "shape-dark";
+}
+
 export function defineShapeMonacoThemes(monaco: any) {
     if (!monaco?.editor) return;
     lastMonaco = monaco;
 
-    // editor.foreground / editor.background are injected into ColorMap — opaque 6-digit only.
-    const editorBg = getMonacoOpaqueCssVar("--editor", "#141414");
-    const fg = getMonacoOpaqueCssVar("--text-primary", "#ededee");
-    const muted = getMonacoOpaqueCssVar("--text-muted", "#6e6e75");
-    const secondary = getMonacoOpaqueCssVar("--text-secondary", "#a1a1a6");
-    const accent = getMonacoOpaqueCssVar("--accent", "#3946ff");
-    const surface3 = getMonacoOpaqueCssVar("--surface-3", "#242424");
-    const border = getMonacoCssVar("--border-subtle", "#ffffff0b");
+    const light = isDocumentLightMonaco();
+    const themeName = light ? "shape-light" : "shape-dark";
 
-    const fingerprint = `${editorBg}|${fg}|${muted}|${secondary}|${accent}|${surface3}|${border}`;
+    // editor.foreground / editor.background are injected into ColorMap — opaque 6-digit only.
+    const editorBg = getMonacoOpaqueCssVar("--editor", light ? "#ffffff" : "#141414");
+    const fg = getMonacoOpaqueCssVar("--text-primary", light ? "#1c1c1e" : "#ededee");
+    const muted = getMonacoOpaqueCssVar("--text-muted", light ? "#7a7a82" : "#6e6e75");
+    const secondary = getMonacoOpaqueCssVar("--text-secondary", light ? "#5c5c63" : "#a1a1a6");
+    const accent = getMonacoOpaqueCssVar("--accent", "#3946ff");
+    const surface3 = getMonacoOpaqueCssVar("--surface-3", light ? "#ececee" : "#242424");
+    const border = getMonacoCssVar("--border-subtle", light ? "#0000000f" : "#ffffff0b");
+
+    const fingerprint = `${themeName}|${editorBg}|${fg}|${muted}|${secondary}|${accent}|${surface3}|${border}`;
     if (fingerprint === lastThemeFingerprint) {
         try {
-            monaco.editor.setTheme("shape-dark");
+            monaco.editor.setTheme(themeName);
         } catch {
             /* theme may not exist yet on this monaco instance */
         }
         return;
     }
 
-    const rules = buildShapeThemeRules();
+    const rules = buildShapeThemeRules(light);
 
     try {
-        monaco.editor.defineTheme("shape-dark", {
-            base: "vs-dark",
+        // Separate theme ids so flipping Monaco `base` (vs vs vs-dark) does not
+        // corrupt token colors under a reused theme name.
+        monaco.editor.defineTheme(themeName, {
+            base: light ? "vs" : "vs-dark",
             inherit: true,
             rules,
             colors: {
-                "editor.lineHighlightBackground": "#ffffff12",
+                "focusBorder": "#00000000",
+                "contrastBorder": "#00000000",
+                "editor.lineHighlightBackground": light ? "#00000008" : "#ffffff12",
                 "editor.lineHighlightBorder": "#00000000",
                 "editor.background": editorBg,
                 "editor.foreground": fg,
-                "editor.selectionBackground": "#ffffff18",
-                "editor.inactiveSelectionBackground": "#ffffff10",
+                "editor.selectionBackground": light ? "#3946ff28" : "#ffffff18",
+                "editor.inactiveSelectionBackground": light ? "#3946ff14" : "#ffffff10",
                 "editorCursor.foreground": accent,
                 "editorLineNumber.foreground": muted,
                 "editorLineNumber.activeForeground": secondary,
-                "editorIndentGuide.background": "#ffffff08",
-                "editorIndentGuide.activeBackground": "#ffffff14",
+                "editorIndentGuide.background": light ? "#0000000a" : "#ffffff08",
+                "editorIndentGuide.activeBackground": light ? "#00000014" : "#ffffff14",
                 "editorWidget.background": surface3,
                 "editorWidget.border": border,
                 "editorGutter.background": editorBg,
-                "diffEditor.insertedTextBackground": "#4ade8020",
-                "diffEditor.removedTextBackground": "#e5484d20",
+                "diffEditor.insertedTextBackground": light ? "#1a7f3720" : "#4ade8020",
+                "diffEditor.removedTextBackground": light ? "#cf222e20" : "#e5484d20",
             },
         });
-        monaco.editor.setTheme("shape-dark");
+        monaco.editor.setTheme(themeName);
         lastThemeFingerprint = fingerprint;
     } catch (err) {
-        console.warn("[Monaco] defineTheme failed, falling back to vs-dark:", err);
+        console.warn("[Monaco] defineTheme failed, falling back:", err);
         lastThemeFingerprint = "";
         try {
-            monaco.editor.setTheme("vs-dark");
+            monaco.editor.setTheme(light ? "vs" : "vs-dark");
         } catch {
             /* ignore */
         }
@@ -269,6 +289,8 @@ export function getMonacoEditorOptions(overrides: Record<string, unknown> = {}) 
         padding: { top: 12 },
         cursorSmoothCaretAnimation: "on" as const,
         semanticHighlighting: { enabled: false },
+        links: true,
+        multiCursorModifier: "alt" as const,
         lightbulb: {
             enabled: "off" as unknown as import("monaco-editor").editor.ShowLightbulbIconMode,
         },

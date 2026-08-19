@@ -46,7 +46,7 @@ export function CollapsibleSection({
         <section
             className={cn(
                 "border-t border-border-subtle first:border-t-0",
-                "flex flex-col overflow-hidden transition-[flex] duration-200 ease-in-out",
+                "flex flex-col overflow-hidden transition-[flex] duration-200 ease-[var(--ease-out)]",
                 isOpen ? (isFlex ? "flex-1 min-h-[40px]" : "shrink-0") : "shrink-0",
                 className
             )}
@@ -58,7 +58,7 @@ export function CollapsibleSection({
                 <div className="w-5 flex items-center justify-center transition-transform duration-100">
                     <Icon name="chevron_right" size={14}
                         
-                        className={cn("transition-transform duration-150 text-text-muted", isOpen && "rotate-90 text-text-primary")}
+                        className={cn("transition-transform duration-200 ease-[var(--ease-out)] text-text-muted", isOpen && "rotate-90 text-text-primary")}
                      />
                 </div>
                 <span className="ml-1 text-sm font-normal">{title}</span>
@@ -74,7 +74,7 @@ export function CollapsibleSection({
 
             <div
                 className={cn(
-                    "grid transition-[grid-template-rows,opacity] duration-200 ease-in-out flex-1 min-h-0",
+                    "grid transition-[grid-template-rows,opacity] duration-200 ease-[var(--ease-out)] flex-1 min-h-0",
                     isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
                 )}
             >

@@ -83,6 +83,7 @@ pub fn run() {
         .manage(LspState::new())
         .manage(crate::core::workspace_trust::WorkspaceTrustState::new())
         .manage(commands::preview_render::PreviewCaptureState::default())
+        .manage(commands::design_proxy::DesignProxyState::default())
         .setup(|app| {
             #[cfg(desktop)]
             {
@@ -98,6 +99,9 @@ pub fn run() {
 
             app.state::<commands::preview_render::PreviewCaptureState>()
                 .register_listener(app.handle());
+
+            #[cfg(windows)]
+            crate::core::windows_notifications::init();
 
             // Initialize menu
             adapters::shortcuts::setup_menu(app.handle())?;
@@ -150,8 +154,14 @@ pub fn run() {
             adapters::filesystem::save_color_to_history,
             adapters::filesystem::get_color_history,
             adapters::open::open_url_external,
+            commands::desktop_notification::show_desktop_notification,
             commands::preview_render::capture_html_preview,
             commands::preview_render::cleanup_design_sandbox,
+            commands::design_proxy::start_design_proxy,
+            commands::design_proxy::stop_design_proxy,
+            commands::design_proxy::probe_preview_url,
+            commands::design_bridge::register_design_bridge,
+            commands::design_bridge::design_mode_log,
             // project stats
             commands::stats::get_project_stats,
             commands::stats::scan_project_loc,
@@ -176,6 +186,9 @@ pub fn run() {
             adapters::github_auth::github_api_get,
             adapters::github_auth::github_api_request,
             adapters::github_auth::github_actions_logs,
+            adapters::github_auth::github_actions_download_artifact,
+            adapters::github_auth::github_actions_workflow_yaml,
+            adapters::github_auth::github_actions_workflow_dispatch,
             adapters::device_id::get_device_id,
             // python
             commands::python::discover_python_interpreters,
@@ -197,6 +210,7 @@ pub fn run() {
             adapters::git::git_delete_branch,
             adapters::git::git_switch_branch,
             adapters::git::git_commit,
+            adapters::git::git_commit_amend,
             adapters::git::git_diff,
             adapters::git::git_branches,
             adapters::git::git_init,
@@ -207,6 +221,7 @@ pub fn run() {
             adapters::git::git_remote_branches,
             adapters::git::git_rename_branch,
             adapters::git::git_current_branch,
+            adapters::git::git_log,
             adapters::git::git_log_stream_start,
             adapters::git::git_log_stream_next,
             adapters::git::git_log_stream_stop,
@@ -240,6 +255,11 @@ pub fn run() {
             adapters::git::git_stash_show,
             adapters::git::git_clone,
             adapters::git::git_list_tags,
+            adapters::git::git_reset,
+            adapters::git::git_create_tag,
+            adapters::git::git_delete_tag,
+            adapters::git::git_diff_name_status,
+            adapters::git::git_get_file_at_ref,
             adapters::git::git_merge_abort,
             adapters::git::git_rebase_abort,
             adapters::git::git_in_progress,
@@ -252,27 +272,34 @@ pub fn run() {
             // outline
             adapters::outline::get_outline,
             // agent
-            agent::send_chat_message,
-            agent::get_chat_history,
-            agent::get_chat_generation_state,
-            agent::clear_chat_history,
-            agent::new_chat,
-            agent::load_conversation,
-            agent::delete_conversation,
-            agent::stop_chat_message,
-            agent::get_chat_title,
-            agent::get_current_conversation_id,
-            agent::get_conversations,
-            agent::apply_file_edit,
-            agent::generate_commit_message,
-            agent::approve_terminal_command,
-            agent::reject_terminal_command,
-            agent::restore_checkpoint,
-            agent::get_turn_journal,
-            agent::get_open_turn_journals,
+            agent::commands::send_chat::send_chat_message,
+            agent::commands::conversation::get_chat_history,
+            agent::commands::conversation::get_chat_generation_state,
+            agent::commands::conversation::clear_chat_history,
+            agent::commands::conversation::new_chat,
+            agent::commands::conversation::load_conversation,
+            agent::commands::conversation::delete_conversation,
+            agent::commands::approvals::stop_chat_message,
+            agent::commands::conversation::get_chat_title,
+            agent::commands::conversation::get_current_conversation_id,
+            agent::commands::conversation::get_conversations,
+            agent::commands::approvals::apply_file_edit,
+            agent::commands::commit_message::generate_commit_message,
+            agent::commands::git_ai::summarize_pull_request,
+            agent::commands::git_ai::summarize_issue,
+            agent::commands::git_ai::summarize_release,
+            agent::commands::git_ai::explain_ci_log,
+            agent::commands::git_ai::explain_git_changes,
+            agent::commands::approvals::approve_terminal_command,
+            agent::commands::approvals::reject_terminal_command,
+            agent::commands::approvals::resolve_edit_approval,
+            agent::commands::conversation::restore_checkpoint,
+            agent::commands::conversation::get_turn_journal,
+            agent::commands::conversation::get_open_turn_journals,
             agent::commands::indexing::index_project,
             agent::commands::indexing::search_codebase,
             agent::commands::indexing::get_index_status,
+            agent::commands::indexing::set_index_embeddings,
             agent::commands::mcp_cmds::sync_mcp_servers,
             agent::commands::mcp_cmds::get_mcp_config_path,
             agent::commands::mcp_cmds::ensure_mcp_config,

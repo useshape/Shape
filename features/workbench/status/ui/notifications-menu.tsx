@@ -20,8 +20,13 @@ export function NotificationsMenu() {
     const { notifications } = useNotifications();
     const unreadCount = useUnreadNotificationCount();
 
+    // Drop expired entries when the menu opens so the list doesn't grow forever.
+    const handleOpenChange = (open: boolean) => {
+        if (open) notificationStore.markViewed();
+    };
+
     return (
-        <DropdownMenu onOpenChange={(open) => { if (open) notificationStore.markViewed(); }}>
+        <DropdownMenu onOpenChange={handleOpenChange}>
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="ghost"

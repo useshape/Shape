@@ -16,7 +16,7 @@ export function ThemeWorkbenchPreview({
 }) {
     return (
         <div
-            data-theme={theme === "dark" ? undefined : theme}
+            data-theme={theme}
             aria-hidden
             className={cn(
                 "relative h-20 w-full overflow-hidden rounded-lg border border-border-subtle bg-background",

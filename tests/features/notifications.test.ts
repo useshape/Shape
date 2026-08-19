@@ -30,10 +30,24 @@ describe("notifications", () => {
         vi.useRealTimers();
     });
 
-    it("removes notification by id", () => {
-        const id = notificationStore.add("Temp");
-        notificationStore.remove(id);
+    it("dismissToast removes from history so the bell menu does not retain forever", () => {
+        const id = notificationStore.add("Temp success", "success");
+        notificationStore.dismissToast(id);
         expect(notificationStore.getSnapshot().notifications).toHaveLength(0);
+        expect(notificationStore.getSnapshot().toastIds).toHaveLength(0);
+    });
+
+    it("prunes notifications older than the history TTL", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        notificationStore.clearAll();
+        notificationStore.add("Old", "info");
+        vi.setSystemTime(6 * 60 * 1000);
+        notificationStore.add("New", "info");
+        notificationStore.markViewed();
+        const messages = notificationStore.getSnapshot().notifications.map((n) => n.message);
+        expect(messages).toEqual(["New"]);
+        vi.useRealTimers();
     });
 
     it("limits toast ids to three", () => {
@@ -52,10 +66,12 @@ describe("notifications", () => {
         expect(snapshot.notifications[0]?.type).toBe("error");
         expect(snapshot.notifications[1]?.type).toBe("success");
         expect(snapshot.notifications[2]?.type).toBe("warning");
-        // Errors must still appear as toasts (sticky until dismissed).
+        // Errors must still appear as toasts (auto-hide like the rest).
         expect(snapshot.toastIds).toContain(snapshot.notifications[0]?.id);
         expect(snapshot.toastIds).toContain(snapshot.notifications[1]?.id);
         expect(snapshot.toastIds).toContain(snapshot.notifications[2]?.id);
+        expect(snapshot.notifications[0]?.autoHide).not.toBe(false);
+        expect(snapshot.notifications[2]?.autoHide).not.toBe(false);
     });
 
     it("stores numeric error codes on notifications", () => {
