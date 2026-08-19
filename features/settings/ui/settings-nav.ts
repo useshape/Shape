@@ -28,7 +28,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Agents",
         children: [
             { id: "ai-models", label: "Models", targetId: "settings-ai-models" },
-            { id: "ai-instructions", label: "Instructions", targetId: "settings-ai-memories" },
             { id: "ai-rules", label: "Rules", targetId: "settings-ai-rules" },
             { id: "ai-context", label: "Context", targetId: "settings-ai-context" },
             { id: "mcp", label: "MCP", targetId: "settings-ai-mcp" },
@@ -62,7 +61,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         id: "application",
         label: "Application",
         children: [
-            { id: "appearance", label: "Appearance", targetId: "settings-appearance" },
             { id: "updates", label: "Updates", targetId: "settings-updates" },
             { id: "notifications", label: "Notifications", targetId: "settings-notifications" },
             { id: "privacy", label: "Privacy & telemetry", targetId: "settings-privacy" },
@@ -71,6 +69,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     },
 ];
 
+
 export function allSettingsLeaves(): SettingsNavLeaf[] {
     return SETTINGS_NAV.flatMap((g) => g.children);
 }
@@ -78,3 +77,65 @@ export function allSettingsLeaves(): SettingsNavLeaf[] {
 export function findLeafByTarget(targetId: string): SettingsNavLeaf | undefined {
     return allSettingsLeaves().find((l) => l.targetId === targetId);
 }
+
+/** Flat category list for command palette deep-links (settings UI uses SETTINGS_NAV). */
+export type SettingsCategoryId =
+    | "account"
+    | "agents"
+    | "editor"
+    | "terminal"
+    | "git"
+    | "languages"
+    | "application";
+
+export type SettingsCategory = {
+    id: SettingsCategoryId;
+    label: string;
+    icon: string;
+    keywords?: string[];
+};
+
+export const SETTINGS_CATEGORIES: SettingsCategory[] = [
+    {
+        id: "account",
+        label: "Account",
+        icon: "person",
+        keywords: ["profile", "billing", "plan", "login"],
+    },
+    {
+        id: "agents",
+        label: "Agents",
+        icon: "auto_awesome",
+        keywords: ["ai", "models", "mcp", "rules", "context"],
+    },
+    {
+        id: "editor",
+        label: "Editor",
+        icon: "code",
+        keywords: ["font", "indent", "caret", "save", "files", "design"],
+    },
+    {
+        id: "terminal",
+        label: "Terminal",
+        icon: "terminal",
+        keywords: ["shell", "scrollback"],
+    },
+    {
+        id: "git",
+        label: "Git",
+        icon: "commit",
+        keywords: ["source", "control", "scm"],
+    },
+    {
+        id: "languages",
+        label: "Languages",
+        icon: "language",
+        keywords: ["lsp", "eslint", "prettier", "node", "python"],
+    },
+    {
+        id: "application",
+        label: "Application",
+        icon: "settings",
+        keywords: ["updates", "notifications", "privacy", "telemetry", "developer", "reset"],
+    },
+];

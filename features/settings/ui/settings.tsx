@@ -37,8 +37,6 @@ import {
 } from "./setting-controls";
 import { AiSettingsPanel } from "./ai-settings";
 import { AccountSettingsPanel } from "./account-settings";
-import { ThemePicker } from "./theme-picker";
-import { normalizeColorTheme } from "@/lib/themes";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { Icon } from "@/components/ui/icon";
@@ -401,7 +399,11 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
     );
 }
 
-function AiSettings({ settings }: { settings: ShapeSettings }) {
+function AiSettings({
+    settings,
+}: {
+    settings: ShapeSettings;
+}) {
     return <AiSettingsPanel settings={settings} />;
 }
 
@@ -845,15 +847,6 @@ function ToolsSettings({ settings }: { settings: ShapeSettings }) {
 function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
-            <SettingSection id="settings-appearance" title="Appearance">
-                <div className="px-3.5 py-3.5">
-                    <ThemePicker
-                        value={normalizeColorTheme(settings.appearance?.colorTheme)}
-                        onChange={(colorTheme) => updateSettingSection("appearance", { colorTheme })}
-                        className="grid-cols-2 sm:grid-cols-4"
-                    />
-                </div>
-            </SettingSection>
             <DeveloperSettings settings={settings} />
             <PrivacySettings settings={settings} />
         </>
@@ -874,12 +867,14 @@ export function SettingsView() {
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "rules") return "settings-ai-rules";
-        if (section === "memories") return "settings-ai-memories";
+        // Legacy deep link: "memories" (System Instructions) merged into Rules.
+        if (section === "memories") return "settings-ai-rules";
         switch (category) {
             case "account":
             case "general":
                 return "settings-account";
             case "ai":
+            case "agents":
                 return "settings-ai-models";
             case "editor":
                 return "settings-editor-font";
@@ -891,8 +886,10 @@ export function SettingsView() {
                 return "settings-languages";
             case "tools":
                 return "settings-tools-lint";
+            case "appearance":
             case "advanced":
-                return "settings-appearance";
+            case "application":
+                return "settings-developer";
             default:
                 return null;
         }
@@ -1019,11 +1016,11 @@ export function SettingsView() {
     };
 
     return (
-        <div className="flex h-full w-full min-w-0 overflow-hidden select-none">
-            <aside className="w-64 shrink-0 flex flex-col">
-                <div className="p-2">
-                    <div className="flex items-center h-9 border border-border rounded-lg bg-transparent px-3">
-                        <Icon name="search" size={14} className="text-text-muted shrink-0" />
+        <div className="flex h-full w-full min-w-0 overflow-hidden bg-background select-none">
+            <aside className="flex w-64 shrink-0 flex-col bg-background">
+                <div className="p-3 pb-2">
+                    <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
+                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
                         <Input
                             placeholder="Search settings"
                             value={query}
@@ -1032,18 +1029,16 @@ export function SettingsView() {
                         />
                     </div>
                 </div>
-                <nav className="flex-1 overflow-y-auto px-2 pb-2 space-y-1 no-scrollbar">
+                <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-2 pb-2">
                     {filteredNav.map((group) => {
                         const open = expandedGroups.has(group.id) || !!query.trim();
                         return (
-                            <div key={group.id}>
+                            <div key={group.id} className="space-y-0.5">
                                 <button
                                     type="button"
                                     onClick={() => toggleGroup(group.id)}
-                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm font-medium text-text-muted hover:text-text-primary hover:bg-panel-hover/40"
+                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
                                 >
-                                    
-      
                                     {group.label}
                                 </button>
                                 {open && (
@@ -1055,16 +1050,16 @@ export function SettingsView() {
                                                 type="button"
                                                 onClick={() => onLeafClick(leaf)}
                                                 className={cn(
-                                                    "w-full justify-start h-8",
+                                                    "h-8 w-full justify-start rounded-md px-2.5",
                                                     activeLeafId === leaf.id
-                                                        ? "bg-panel-hover text-text-primary"
-                                                        : "text-text-secondary hover:text-text-primary hover:bg-panel-hover/60",
+                                                        ? "bg-panel-hover text-text-primary hover:bg-panel-hover hover:text-text-primary"
+                                                        : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
                                                 )}
                                             >
-                                                <span className="text-sm font-regular -mx-2.5 truncate flex items-center gap-1">
+                                                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-regular">
                                                     {leaf.label}
                                                     {leaf.href ? (
-                                                        <Icon name="chevron_right" size={14} className="text-text-muted shrink-0" />
+                                                        <Icon name="chevron_right" size={14} className="shrink-0 text-text-muted" />
                                                     ) : null}
                                                 </span>
                                             </Button>
@@ -1075,31 +1070,33 @@ export function SettingsView() {
                         );
                     })}
                 </nav>
-                <div className="relative p-2">
+                <div className="relative p-3 pt-1">
                     <div
-                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-titlebar to-transparent"
+                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-background to-transparent"
                         aria-hidden
                     />
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="w-full text-sm justify-start"
+                        className="w-full justify-start rounded-md text-sm"
                         onClick={() => setResetConfirmOpen(true)}
                     >
                         Reset to Defaults
                     </Button>
                 </div>
             </aside>
-            <section className="flex-1 min-w-0 overflow-y-auto no-scrollbar">
-                <div className="w-full p-6 pb-24 space-y-2">
-                    <AccountSettingsPanel />
-                    <AiSettings settings={settings} />
-                    <EditorSettings settings={settings} />
-                    <TerminalSettings settings={settings} />
-                    <GitSettings settings={settings} />
-                    <LspSettings settings={settings} />
-                    <ToolsSettings settings={settings} />
-                    <AdvancedSettings settings={settings} />
+            <section className="min-w-0 flex-1 overflow-hidden bg-background p-2 pl-0">
+                <div className="h-full overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-sm">
+                    <div className="no-scrollbar mx-auto h-full w-full max-w-5xl space-y-2 overflow-y-auto p-6 pb-24 lg:p-8">
+                        <AccountSettingsPanel />
+                        <AiSettings settings={settings} />
+                        <EditorSettings settings={settings} />
+                        <TerminalSettings settings={settings} />
+                        <GitSettings settings={settings} />
+                        <LspSettings settings={settings} />
+                        <ToolsSettings settings={settings} />
+                        <AdvancedSettings settings={settings} />
+                    </div>
                 </div>
             </section>
 

@@ -8,16 +8,14 @@ import { Icon } from "@/components/ui/icon";
 import { Titlebar } from "@/features/workbench";
 import { loginShape, cancelLoginShape, useShapeAuth } from "@/lib/shape-auth/store";
 import { markOnboardingComplete } from "@/features/onboarding/config";
-import { updateSettingSection, useSettings } from "@/lib/settings";
-import { normalizeColorTheme, type ColorThemeId } from "@/lib/themes";
+import { updateSettingSection } from "@/lib/settings";
 import { applyTelemetryPreference } from "@/lib/telemetry";
-import { ThemePicker } from "@/features/settings/ui/theme-picker";
 
 type Phase = "intro" | "content";
 
-const CONTENT_STEPS = 3;
-const SECURITY_STEP = 1;
-const LOGIN_STEP = 2;
+const CONTENT_STEPS = 2;
+const SECURITY_STEP = 0;
+const LOGIN_STEP = 1;
 
 /** Keyboard return / enter key glyph. */
 function EnterKeyIcon({ size = 14, className }: { size?: number; className?: string }) {
@@ -48,8 +46,6 @@ export default function Onboarding() {
   const [telemetryEnabled, setTelemetryEnabled] = useState(false);
   const [securityAcknowledged, setSecurityAcknowledged] = useState(false);
   const shapeAuth = useShapeAuth();
-  const settings = useSettings();
-  const theme = normalizeColorTheme(settings.appearance?.colorTheme);
 
   const isSecurityStep = step === SECURITY_STEP;
   const isLoginStep = step === LOGIN_STEP;
@@ -82,10 +78,6 @@ export default function Onboarding() {
     setSecurityAcknowledged(true);
     updateSettingSection("privacy", { telemetryEnabled: enabled });
     void applyTelemetryPreference(enabled);
-  };
-
-  const onThemeChange = (next: ColorThemeId) => {
-    updateSettingSection("appearance", { colorTheme: next });
   };
 
   useEffect(() => {
@@ -179,10 +171,8 @@ export default function Onboarding() {
               onSignedIn={() => void finishOnboarding()}
               onSkip={() => void finishOnboarding()}
             />
-          ) : isSecurityStep ? (
-            <SecurityPanel checked={telemetryEnabled} onChange={onToggleTelemetry} />
           ) : (
-            <ThemeStepPanel value={theme} onChange={onThemeChange} />
+            <SecurityPanel checked={telemetryEnabled} onChange={onToggleTelemetry} />
           )}
 
           {!isLoginStep ? (
@@ -222,28 +212,6 @@ export default function Onboarding() {
             ))}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function ThemeStepPanel({
-  value,
-  onChange,
-}: {
-  value: ColorThemeId;
-  onChange: (theme: ColorThemeId) => void;
-}) {
-  return (
-    <div>
-      <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
-        Pick a theme
-      </h1>
-      <p className="mt-1.5 text-center text-sm text-text-muted">
-        Change this anytime in Settings.
-      </p>
-      <div className="mt-6">
-        <ThemePicker value={value} onChange={onChange} />
       </div>
     </div>
   );

@@ -180,8 +180,12 @@ export const FileEntry = memo(({
                 <ContextMenuTrigger>
                     <div
                         ref={rowRef}
-                        draggable={!isGit}
+                        draggable={!isGit && ctx.pendingRename !== node.path}
                         onDragStart={(e) => {
+                            if (ctx.pendingRename === node.path) {
+                                e.preventDefault();
+                                return;
+                            }
                             setIsDragging(true);
                             e.dataTransfer.setData("text/plain", node.path);
                             e.dataTransfer.setData("application/x-shape-path", node.path);
@@ -253,7 +257,8 @@ export const FileEntry = memo(({
                             } catch { }
                         }}
                         className={cn(
-                            "h-[20px] flex items-center px-2 rounded-md hover:bg-panel-hover cursor-pointer text-text-primary group text-[14px] font-medium whitespace-nowrap w-full outline-none transition-colors tracking-tight duration-75 select-none",
+                            "h-[20px] flex items-center px-2 rounded-md hover:bg-panel-hover cursor-pointer text-text-primary group text-[14px] font-medium whitespace-nowrap w-full outline-none transition-colors tracking-tight duration-75",
+                            ctx.pendingRename !== node.path && "select-none",
                             isGit && "opacity-40 grayscale cursor-not-allowed pointer-events-none",
                             isDragging && "opacity-50",
                             isSelected && (isActive ? "bg-panel-active text-white" : "bg-panel-hover"),
@@ -332,29 +337,41 @@ export const FileEntry = memo(({
                             }
                         }}
                     >
-                        <div className="w-4 flex items-center justify-center shrink-0">
+                        <span className="relative mr-1.5 flex size-5 shrink-0 items-center justify-center">
                             {node.is_dir ? (
-                                <Icon
-                                    name="chevron_right"
-                                    size={15}
-                                    className={cn("transition-transform duration-150 text-text-muted", open && "rotate-90")}
-                                />
+                                <>
+                                    <FileIcon
+                                        name={node.name}
+                                        isDir
+                                        isOpen={open}
+                                        className="!h-5 !w-5 group-hover:hidden"
+                                    />
+                                    <Icon
+                                        name="chevron_right"
+                                        size={18}
+                                        className={cn(
+                                            "hidden text-text-muted transition-transform duration-150 group-hover:block",
+                                            open && "rotate-90",
+                                        )}
+                                    />
+                                </>
                             ) : (
-                                <span className="w-3" />
+                                <FileIcon name={node.name} className="!h-5 !w-5" />
                             )}
-                        </div>
-                        {node.is_dir ? (
-                            <FileIcon name={node.name} isDir isOpen={open} className="mr-1" />
-                        ) : (
-                            <FileIcon name={node.name} className="mr-1" />
-                        )}
+                        </span>
                         {ctx.pendingRename === node.path ? (
                             <input
                                 autoFocus
+                                draggable={false}
                                 value={renameName}
                                 onChange={(e) => setRenameName(e.target.value)}
                                 onBlur={() => ctx.submitRename(renameName, node.path)}
                                 onClick={(e) => e.stopPropagation()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onDragStart={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
                                 onKeyDown={(e) => {
                                     e.stopPropagation();
                                     if (e.key === "Enter") {
@@ -364,7 +381,7 @@ export const FileEntry = memo(({
                                         ctx.setPendingRename(null);
                                     }
                                 }}
-                                className="h-[18px] flex-1 bg-panel border border-border-subtle rounded px-1 text-sm outline-none focus:border-accent w-full min-w-0"
+                                className="h-[18px] flex-1 bg-panel border border-border-subtle rounded px-1 text-sm outline-none focus:border-accent w-full min-w-0 select-text"
                             />
                         ) : (
                             <span
@@ -588,7 +605,7 @@ export const FileEntry = memo(({
 
             <div
                 className={cn(
-                    "grid",
+                    "grid transition-[grid-template-rows,opacity] duration-200 ease-[var(--ease-out)]",
                     open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
                 )}
             >
@@ -598,13 +615,10 @@ export const FileEntry = memo(({
                             className="h-[22px] flex items-center px-2 text-text-primary text-xs whitespace-nowrap w-full"
                             style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
                         >
-                            <div className="w-4 flex items-center justify-center shrink-0">
-                                <span className="w-3" />
-                            </div>
                             <FileIcon
                                 name={ctx.pendingCreate.type === "folder" ? "folder" : createName || "untitled.txt"}
                                 isDir={ctx.pendingCreate.type === "folder"}
-                                className="mr-1.5"
+                                className="mr-1.5 !h-5 !w-5"
                             />
                             <input
                                 autoFocus
@@ -640,7 +654,7 @@ export const FileEntry = memo(({
                         <button
                             type="button"
                             className="h-[22px] w-full text-left px-2 text-text-muted hover:text-text-primary hover:bg-panel-hover transition-colors text-xs"
-                            style={{ paddingLeft: `${(depth + 1) * 12 + 32}px` }}
+                            style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}
                             onClick={() => setVisibleCount((v) => v + BATCH_SIZE)}
                         >
                             Load more...

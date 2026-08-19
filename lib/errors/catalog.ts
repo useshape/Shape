@@ -28,6 +28,7 @@ export const SHAPE_ERRORS = {
     AI_CREDITS: 2001,
     AI_NETWORK: 2002,
     PAYMENT_REQUIRED: 2003,
+    AI_BILLING_HOLD: 2004,
     AI_RATE_LIMITED: 2100,
 
     UNOFFICIAL_BUILD: 3000,
@@ -82,6 +83,13 @@ const CATALOG: Record<number, ShapeErrorEntry> = {
         title: "Usage limit reached",
         description:
             "You have reached a usage or credit limit. Upgrade your plan or wait for the allowance to reset.",
+    },
+    [SHAPE_ERRORS.AI_BILLING_HOLD]: {
+        code: SHAPE_ERRORS.AI_BILLING_HOLD,
+        name: "Billing confirmation hold",
+        title: "Billing check pending",
+        description:
+            "Shape could not confirm billing for a recent request. Wait a minute and try again. This is not your monthly usage limit.",
     },
     [SHAPE_ERRORS.AI_NETWORK]: {
         code: SHAPE_ERRORS.AI_NETWORK,
@@ -211,15 +219,26 @@ export function classifyAiError(raw: string): ShapeErrorEntry {
     }
     if (lower.includes("sign in")) return getError(SHAPE_ERRORS.AUTH_REQUIRED);
     if (
+        lower.includes("billing could not be confirmed") ||
+        lower.includes("\"code\":2004") ||
+        lower.includes("code\": 2004") ||
+        lower.includes("billing check pending")
+    ) {
+        return getError(SHAPE_ERRORS.AI_BILLING_HOLD);
+    }
+    if (
         lower.includes("usage") ||
         lower.includes("credit") ||
-        lower.includes("billing") ||
+        lower.includes("insufficient") ||
         lower.includes("upgrade")
     ) {
         return getError(SHAPE_ERRORS.AI_CREDITS);
     }
+    if (lower.includes("billing")) {
+        return getError(SHAPE_ERRORS.AI_BILLING_HOLD);
+    }
     if (lower.includes("403") || lower.includes("forbidden")) {
-        return getError(SHAPE_ERRORS.AI_CREDITS);
+        return getError(SHAPE_ERRORS.AI_PROVIDER);
     }
     if (lower.includes("network") || lower.includes("fetch") || lower.includes("timeout")) {
         return getError(SHAPE_ERRORS.AI_NETWORK);

@@ -15,6 +15,14 @@ export async function openEditorPopout(filePath: string) {
 
     try {
         const label = popoutLabel(filePath);
+        // Seed so the popout page can open the file before searchParams hydrate.
+        // localStorage is shared across Shape webviews; sessionStorage is not.
+        try {
+            localStorage.setItem(`shape-popout-file:${label}`, filePath);
+        } catch {
+            /* ignore */
+        }
+
         const url = appRoute("/popout", { file: filePath });
 
         const existing = await WebviewWindow.getByLabel(label);
@@ -24,6 +32,7 @@ export async function openEditorPopout(filePath: string) {
             return;
         }
 
+        // Create hidden, then show on ready — avoids a long blank decorated wait.
         const created = new WebviewWindow(label, {
             url,
             title: filePath.split(/[\\/]/).pop() || "Editor",
@@ -34,11 +43,13 @@ export async function openEditorPopout(filePath: string) {
             decorations: false,
             center: true,
             resizable: true,
-            visible: true,
+            shadow: true,
+            visible: false,
+            focus: true,
         });
 
         await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error("Editor window creation timed out")), 10000);
+            const timeout = setTimeout(() => reject(new Error("Editor window creation timed out")), 8000);
             void created.once("tauri://created", () => {
                 clearTimeout(timeout);
                 resolve();
@@ -49,6 +60,7 @@ export async function openEditorPopout(filePath: string) {
             });
         });
 
+        await created.show();
         await created.setFocus();
     } catch (error) {
         const { notify } = await import("@/features/notifications");

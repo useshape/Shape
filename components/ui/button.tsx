@@ -7,19 +7,20 @@ type ButtonVariant = "default" | "secondary" | "ghost" | "outline" | "destructiv
 type ButtonSize = "xs" | "sm" | "md" | "lg" | "icon";
 
 const variantClasses: Record<ButtonVariant, string> = {
-    default: "bg-accent text-white hover:bg-accent-hover",
-    secondary: "bg-button-secondary-bg text-button-secondary-fg hover:bg-button-secondary-hover",
+    default: "bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-accent/50 disabled:text-accent-fg",
+    secondary: "bg-surface-3 text-text-secondary hover:bg-surface-4",
     ghost: "bg-transparent text-text-secondary hover:bg-panel-hover hover:text-text-primary",
-    outline: "border border-border-subtle bg-transparent text-text-primary hover:bg-panel-hover",
-    destructive: "bg-error text-white hover:opacity-90",
+    outline: "border border-border bg-transparent text-text-primary hover:bg-panel-hover",
+    destructive: "bg-error text-white hover:bg-error/90 disabled:bg-error/50 disabled:text-white",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-    xs: "h-6 px-sm text-xs",
+    xs: "h-7 px-sm text-xs rounded-md",
     sm: "h-chrome px-md text-sm",
     md: "h-8 px-lg text-sm",
     lg: "h-10 px-xl text-base",
-    icon: "h-chrome w-chrome p-0",
+    /** Compact square control (`p-1` = 4px). Avoid `max-h/w-full` on children — with larger padding that collapses them. */
+    icon: "size-6 shrink-0 overflow-visible p-4",
 };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -34,9 +35,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 type={type}
                 className={cn(
-                    "inline-flex items-center justify-center rounded-lg font-medium outline-none",
+                    "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium outline-none",
                     "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-                    "focus-visible:ring-1 focus-visible:ring-border-focus disabled:pointer-events-none disabled:opacity-50",
+                    "focus-visible:ring-1 focus-visible:ring-border-focus disabled:pointer-events-none",
+                    "[&_svg.shape-icon]:pointer-events-none [&_svg.shape-icon]:shrink-0 [&_svg.shape-icon]:opacity-100",
                     variantClasses[variant],
                     sizeClasses[size],
                     className

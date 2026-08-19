@@ -16,7 +16,7 @@ describe("deps", () => {
 
 describe("modules", () => {
     it("branch", async () => {
-        const mod = await import("@/features/git/ui/branches/branch-window");
+        const mod = await import("@/features/git/ui/branches/panel");
         expect(mod.BranchWindow).toBeTypeOf("function");
     });
 

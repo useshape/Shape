@@ -14,6 +14,7 @@ describe("settings-tab", () => {
     it("detects virtual editor tabs", () => {
         expect(isVirtualEditorTab(SETTINGS_TAB_PATH)).toBe(true);
         expect(isVirtualEditorTab("shape://design-preview/abc")).toBe(true);
+        expect(isVirtualEditorTab("shape://browser")).toBe(true);
         expect(isVirtualEditorTab("shape://subagent/abc")).toBe(false);
     });
 });

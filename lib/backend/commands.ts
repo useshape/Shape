@@ -106,6 +106,8 @@ export const commands = {
     getRustDeps: (projectPath: string) => invokeCommand<[string, string][]>("get_rust_deps", { projectPath }),
     getProjectState: () => invokeCommand<ProjectState>("get_project_state"),
     openUrlExternal: (url: string) => invokeCommand("open_url_external", { url }),
+    showDesktopNotification: (title: string, body: string) =>
+        invokeCommand<void>("show_desktop_notification", { title, body }),
     newWindow: () => invokeCommand("spawn_new_window"),
     isFreshWindow: () => invokeCommand<boolean>("is_fresh_window"),
     handleShortcut: (shortcut: string) => invokeCommand("handle_shortcut", { shortcut }),
@@ -192,6 +194,11 @@ export const commands = {
         invalidateGitCacheForPath(repoPath);
         return result;
     },
+    gitCommitAmend: async (repoPath: string, message: string) => {
+        const result = await invokeCommand("git_commit_amend", { repoPath, message });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
     gitDiff: (repoPath: string) => invokeCommand<string>("git_diff", { repoPath }),
     gitFileDiff: (repoPath: string, filePath: string) => invokeCommand<string>("git_file_diff", { repoPath, filePath }),
     gitBranches: (path: string) => invokeCommand<string[]>("git_branches", { path }),
@@ -238,6 +245,8 @@ export const commands = {
     },
     gitCurrentBranch: (path: string) =>
         invokeCachedGit<string>(`git_branch:${path}`, "git_current_branch", { path }),
+    gitLog: (path: string, limit = 50) =>
+        invokeCommand<GitLogEntry[]>("git_log", { path, limit }),
     gitLogStreamStart: (path: string, callerId: string, allRefs = false) =>
         invokeCommand<void>("git_log_stream_start", { path, callerId, allRefs }),
     gitLogStreamNext: (callerId: string, limit: number = 200) =>
@@ -281,6 +290,30 @@ export const commands = {
             "git_list_tags",
             { repoPath },
         ),
+    gitReset: async (repoPath: string, hash: string, mode: "soft" | "mixed" | "hard") => {
+        const result = await invokeCommand("git_reset", { repoPath, hash, mode });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
+    gitCreateTag: async (repoPath: string, name: string, hash: string, message?: string | null) => {
+        const result = await invokeCommand("git_create_tag", {
+            repoPath,
+            name,
+            hash,
+            message: message ?? null,
+        });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
+    gitDeleteTag: async (repoPath: string, name: string) => {
+        const result = await invokeCommand("git_delete_tag", { repoPath, name });
+        invalidateGitCacheForPath(repoPath);
+        return result;
+    },
+    gitDiffNameStatus: (repoPath: string, base: string, compare: string) =>
+        invokeCommand<GitFileParams[]>("git_diff_name_status", { repoPath, base, compare }),
+    gitGetFileAtRef: (repoPath: string, rev: string, filePath: string) =>
+        invokeCommand<string>("git_get_file_at_ref", { repoPath, rev, filePath }),
     gitMergeAbort: async (repoPath: string) => {
         const result = await invokeCommand("git_merge_abort", { repoPath });
         invalidateGitCacheForPath(repoPath);
@@ -402,7 +435,6 @@ export const commands = {
         message: string,
         model?: string,
         mode?: string,
-        customSystemPrompt?: string,
         customRules?: string,
         accessToken?: string,
         designOptions?: {
@@ -414,16 +446,23 @@ export const commands = {
             accessibilityPass: boolean;
         },
         reviewAdversarialEnabled?: boolean,
+        executionPolicy?: {
+            autoRunMode?: string;
+            requireEditApproval?: boolean;
+            protectDestructiveGit?: boolean;
+        },
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
             model,
             mode,
-            customSystemPrompt: customSystemPrompt ?? null,
             customRules: customRules ?? null,
             accessToken: accessToken ?? null,
             designOptions: designOptions ?? null,
             reviewAdversarialEnabled: reviewAdversarialEnabled ?? null,
+            autoRunMode: executionPolicy?.autoRunMode ?? null,
+            requireEditApproval: executionPolicy?.requireEditApproval ?? null,
+            protectDestructiveGit: executionPolicy?.protectDestructiveGit ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -448,6 +487,17 @@ export const commands = {
         invokeCommand<void>("cleanup_design_sandbox", {
             sessionId: sessionId ?? null,
         }),
+    startDesignProxy: (targetUrl: string, bridgeScript: string) =>
+        invokeCommand<{ port: number; src: string }>("start_design_proxy", {
+            targetUrl,
+            bridgeScript,
+        }),
+    stopDesignProxy: () => invokeCommand<void>("stop_design_proxy"),
+    probePreviewUrl: (url: string) => invokeCommand<boolean>("probe_preview_url", { url }),
+    registerDesignBridge: (script: string) =>
+        invokeCommand<void>("register_design_bridge", { script }),
+    designModeLog: (level: string, message: string) =>
+        invokeCommand<void>("design_mode_log", { level, message }),
     stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
     getChatHistory: () => invokeCommand<ChatMessage[]>("get_chat_history"),
     getChatGenerationState: () =>
@@ -462,8 +512,73 @@ export const commands = {
     deleteConversation: (id: string) => invokeCommand<void>("delete_conversation", { id }),
     applyFileEdit: (path: string, original: string, replacement: string) =>
         invokeCommand<void>("apply_file_edit", { path, original, replacement }),
-    generateCommitMessage: (accessToken?: string) =>
-        invokeCommand<string>("generate_commit_message", { accessToken: accessToken ?? null }),
+    generateCommitMessage: (accessToken?: string, repoPath?: string | null) =>
+        invokeCommand<string>("generate_commit_message", {
+            accessToken: accessToken ?? null,
+            repoPath: repoPath ?? null,
+        }),
+    summarizePullRequest: (
+        owner: string,
+        repo: string,
+        number: number,
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("summarize_pull_request", {
+            owner,
+            repo,
+            number,
+            accessToken: accessToken ?? null,
+        }),
+    summarizeIssue: (
+        owner: string,
+        repo: string,
+        number: number,
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("summarize_issue", {
+            owner,
+            repo,
+            number,
+            accessToken: accessToken ?? null,
+        }),
+    summarizeRelease: (
+        owner: string,
+        repo: string,
+        releaseId: number,
+        mode?: "summarize" | "upgrade" | "announce",
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("summarize_release", {
+            owner,
+            repo,
+            releaseId,
+            mode: mode ?? null,
+            accessToken: accessToken ?? null,
+        }),
+    explainCiLog: (logText: string, context?: string | null, accessToken?: string) =>
+        invokeCommand<string>("explain_ci_log", {
+            logText,
+            context: context ?? null,
+            accessToken: accessToken ?? null,
+        }),
+    explainGitChanges: (
+        kind: "commit" | "working" | "branch" | "conflict",
+        opts?: {
+            hash?: string | null;
+            base?: string | null;
+            compare?: string | null;
+            repoPath?: string | null;
+            accessToken?: string;
+        },
+    ) =>
+        invokeCommand<string>("explain_git_changes", {
+            kind,
+            hash: opts?.hash ?? null,
+            base: opts?.base ?? null,
+            compare: opts?.compare ?? null,
+            repoPath: opts?.repoPath ?? null,
+            accessToken: opts?.accessToken ?? null,
+        }),
     restoreCheckpoint: (index: number) => invokeCommand<void>("restore_checkpoint", { index }),
     // Codebase index
     indexProject: (projectPath?: string, accessToken?: string) =>
@@ -495,6 +610,11 @@ export const commands = {
     // Terminal command approval
     approveTerminalCommand: (id: string) => invokeCommand<string>("approve_terminal_command", { id }),
     rejectTerminalCommand: (id: string) => invokeCommand<void>("reject_terminal_command", { id }),
+    // Edit approval (when "require edit approval" is enabled)
+    resolveEditApproval: (id: string, approved: boolean) =>
+        invokeCommand<void>("resolve_edit_approval", { id, approved }),
+    setIndexEmbeddings: (enabled: boolean) =>
+        invokeCommand<void>("set_index_embeddings", { enabled }),
     setDiagnostics: (path: string, diagnostics: unknown[]) => invokeCommand<void>("set_diagnostics", { path, diagnostics }),
     lspStart: (
         language: string,
@@ -560,6 +680,26 @@ export const commands = {
             runId,
             jobId: jobId ?? null,
             failedOnly: failedOnly ?? null,
+        }),
+    githubActionsDownloadArtifact: (repo: string, artifactId: number, destPath: string) =>
+        invokeCommand<void>("github_actions_download_artifact", {
+            repo,
+            artifactId,
+            destPath,
+        }),
+    githubActionsWorkflowYaml: (repo: string, workflow: string) =>
+        invokeCommand<string>("github_actions_workflow_yaml", { repo, workflow }),
+    githubActionsWorkflowDispatch: (
+        repo: string,
+        workflow: string,
+        gitRef: string,
+        inputsJson?: string | null,
+    ) =>
+        invokeCommand<string>("github_actions_workflow_dispatch", {
+            repo,
+            workflow,
+            gitRef,
+            inputsJson: inputsJson ?? null,
         }),
     getDeviceId: () => invokeCommand<string>("get_device_id"),
     setWorkspaceTrusted: (path: string, trusted: boolean) =>

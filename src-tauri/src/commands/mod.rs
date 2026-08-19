@@ -1,4 +1,5 @@
 pub mod device_id;
+pub mod desktop_notification;
 pub mod open;
 pub mod fs;
 pub mod github_auth;
@@ -8,6 +9,8 @@ pub mod lint;
 pub mod packages;
 pub mod python;
 pub mod design_sandbox;
+pub mod design_proxy;
+pub mod design_bridge;
 pub mod preview_render;
 pub mod outline;
 pub mod pty;

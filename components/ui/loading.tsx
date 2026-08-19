@@ -10,7 +10,7 @@ export function LoadingBar({ className }: { className?: string }) {
         <div className={cn("h-[4px] w-full bg-transparent overflow-hidden relative", className)}>
             <div
                 className={cn(
-                    "absolute top-0 left-0 h-full bg-accent transition-transform duration-500 ease-in-out",
+                    "absolute top-0 left-0 h-full bg-accent transition-transform duration-500 ease-[var(--ease-out)]",
                     isLoading ? "w-full animate-progress" : "w-0"
                 )}
             />
@@ -21,7 +21,7 @@ export function LoadingBar({ className }: { className?: string }) {
                     100% { transform: translateX(100%); }
                 }
                 .animate-progress {
-                    animation: progress 1.5s infinite linear;
+                    animation: progress 1.5s infinite cubic-bezier(0.16, 1, 0.3, 1);
                     width: 30% !important;
                 }
             `}</style>

@@ -40,6 +40,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(new Event("save-all-request"));
             return true;
         case "Close Folder":
+            window.dispatchEvent(new Event("shape-design-exit"));
             void import("@/lib/last-project").then(({ saveLastProject }) => saveLastProject(null));
             void commands.setProjectPath(null);
             return true;
@@ -77,6 +78,9 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(
                 new CustomEvent("shape-layout-toggle", { detail: { id: "secondary-sidebar", value: true } }),
             );
+            return true;
+        case "Toggle Design Mode":
+            window.dispatchEvent(new Event("shape-toggle-design-mode"));
             return true;
         case "Go to Line/Column...":
             window.dispatchEvent(new CustomEvent("shape-command-palette", {

@@ -14,11 +14,13 @@ import {
 } from "@/lib/catalog-store";
 import { isModelEnabled, type ModelInfo } from "@/lib/models";
 import {
+    type AutoRunModeSetting,
     type ShapeSettings,
     updateSettingSection,
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
-import { loadMcpServersFromFile, openMcpConfig } from "@/lib/mcp-config";
+import { loadMcpServersFromFile, openMcpConfig, saveMcpServers } from "@/lib/mcp-config";
+import { McpLogo } from "./mcp/catalog";
 import {
     SettingSection,
     SettingRow,
@@ -114,7 +116,11 @@ function applyIndexStatus(
     });
 }
 
-export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
+export function AiSettingsPanel({
+    settings,
+}: {
+    settings: ShapeSettings;
+}) {
     const a = settings.ai;
     useShapeCatalog();
     const allModels = getCatalogModels();
@@ -176,6 +182,18 @@ export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
             await commands.mcpStartOAuth(serverId);
         } catch {
             setMcpConnecting(null);
+        }
+    };
+
+    const handleMcpRemove = async (serverId: string) => {
+        try {
+            const list = await loadMcpServersFromFile();
+            const next = list.filter((s) => s.id !== serverId);
+            await saveMcpServers(next);
+            const status = await commands.syncMcpServers(next);
+            setMcpStatus(status as McpStatusEntry[]);
+        } catch {
+            /* keep list */
         }
     };
 
@@ -300,10 +318,50 @@ export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
                 </SettingRow>
             </SettingSection>
 
+            <SettingSection
+                title="Auto-Run"
+                description="How the agent runs shell commands and other gated tools"
+            >
+                <SettingRow
+                    title="Auto-run mode"
+                    description="Ask every time, auto-run safe commands, or run everything (except hard-blocked)"
+                >
+                    <SettingSelect
+                        value={a.autoRunMode}
+                        options={[
+                            { value: "ask", label: "Ask every time" },
+                            { value: "auto", label: "Auto (safe commands)" },
+                            { value: "always", label: "Run everything" },
+                        ] satisfies Array<{ value: AutoRunModeSetting; label: string }>}
+                        onChange={(v) =>
+                            updateSettingSection("ai", { autoRunMode: v as AutoRunModeSetting })
+                        }
+                    />
+                </SettingRow>
+                <SettingRow
+                    title="Protect destructive git"
+                    description="Always ask before git reset, clean, restore, force-push, and similar"
+                >
+                    <SettingSwitch
+                        checked={a.protectDestructiveGit}
+                        onChange={(on) => updateSettingSection("ai", { protectDestructiveGit: on })}
+                    />
+                </SettingRow>
+            </SettingSection>
+
             <SettingSection title="Edits">
                 <SettingRow
+                    title="Require edit approval"
+                    description="Stage agent file edits for Accept / Skip before they are written to disk"
+                >
+                    <SettingSwitch
+                        checked={a.requireEditApproval}
+                        onChange={(on) => updateSettingSection("ai", { requireEditApproval: on })}
+                    />
+                </SettingRow>
+                <SettingRow
                     title="Auto-apply agent edits"
-                    description="Automatically accept file edits from the agent without showing the review panel"
+                    description="Skip the composer review strip after edits land (unrelated to edit approval above)"
                 >
                     <SettingSwitch
                         checked={a.autoApplyEdits}
@@ -315,7 +373,7 @@ export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
             <SettingSection title="Review">
                 <SettingRow
                     title="Adversarial review"
-                    description="After Review mode finishes, run critic models that challenge the findings before the turn completes"
+                    description="Run critic models after Review mode finishes"
                 >
                     <SettingSwitch
                         checked={a.reviewAdversarialEnabled}
@@ -324,19 +382,33 @@ export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
                 </SettingRow>
             </SettingSection>
 
-            <SettingSection
-                id="settings-ai-context"
-                title="Context"
-                description="How much of each file the agent can pull into context, and codebase search index status."
-            >
+            <SettingSection id="settings-ai-context" title="Context">
                 <SettingRow
                     title="Max context lines per file"
-                    description="Cap on lines included when attaching a file to the agent"
+                    description="Lines included when attaching a file"
                 >
                     <SettingNumberSelect
                         value={a.maxContextLines}
                         options={MAX_CONTEXT_PRESETS}
                         onChange={(v) => updateSettingSection("ai", { maxContextLines: v })}
+                    />
+                </SettingRow>
+                <SettingRow
+                    title="Semantic codebase index"
+                    description="Builds a local search index on project open and after agent edits. Powers search_codebase for the agent. Incremental and runs in the background."
+                >
+                    <span className="text-xs text-text-muted">Always on</span>
+                </SettingRow>
+                <SettingRow
+                    title="Semantic embeddings"
+                    description="Use remote embeddings with BM25 for richer codebase search. Requires sign-in. Off = keyword search only."
+                >
+                    <SettingSwitch
+                        checked={a.indexEmbeddings}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { indexEmbeddings: on });
+                            void commands.setIndexEmbeddings(on).catch(() => { /* ignore */ });
+                        }}
                     />
                 </SettingRow>
                 <div className="px-3.5 py-3 space-y-3">
@@ -350,7 +422,7 @@ export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
                                       ? ` · Last indexed ${new Date(indexStatus.lastIndexedAt * 1000).toLocaleString()}`
                                       : ""
                               }`
-                            : "Not indexed yet"}
+                            : "Not indexed yet — opens automatically when you open a project"}
                     </div>
                     <div className="flex gap-2">
                         <Button variant="secondary" size="sm" disabled={indexing} onClick={() => void handleReindex()}>
@@ -361,87 +433,81 @@ export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
             </SettingSection>
 
             <SettingSection
-                id="settings-ai-memories"
-                title="System Instructions"
-                description="Additional instructions appended to the built-in agent system prompt"
-            >
-                <div className="px-3.5 py-3">
-                    <textarea
-                        value={a.customSystemPrompt}
-                        onChange={(e) => updateSettingSection("ai", { customSystemPrompt: e.target.value })}
-                        placeholder="Style, response language, tone…"
-                        className="w-full min-h-[100px] rounded-lg bg-surface-2 border border-border-subtle px-3 py-2 text-sm text-text-primary resize-y focus:outline-none focus:border-accent select-text"
-                    />
-                </div>
-            </SettingSection>
-
-            <SettingSection
                 id="settings-ai-rules"
                 title="Rules"
-                description="Persistent rules injected every turn. Project rules also load from .shape/rules.md and .shape/rules/*"
+                description="Guide agent behavior. Also loads from .shape/rules.md"
             >
-                <div className="px-3.5 py-3">
-                    <textarea
-                        value={a.customRules}
-                        onChange={(e) => updateSettingSection("ai", { customRules: e.target.value })}
-                        placeholder="Project-specific rules and conventions…"
-                        className="w-full min-h-[100px] rounded-lg bg-surface-2 border border-border-subtle px-3 py-2 text-sm text-text-primary resize-y focus:outline-none focus:border-accent select-text"
-                    />
-                </div>
+                <textarea
+                    value={a.customRules}
+                    onChange={(e) => updateSettingSection("ai", { customRules: e.target.value })}
+                    placeholder="Style, tone, project conventions…"
+                    className="w-full min-h-28 bg-transparent px-3.5 py-3 text-sm text-text-primary placeholder:text-text-disabled resize-y focus:outline-none select-text"
+                />
             </SettingSection>
 
-            <SettingSection
-                id="settings-ai-mcp"
-                title="MCP Servers"
-                description="Status of servers configured in mcp.json."
-            >
-                <div className="px-3.5 py-3 space-y-3">
-                    {mcpStatus.length > 0 ? (
-                        <div className="space-y-2">
-                            {mcpStatus.map((s) => (
-                                <div key={s.id} className="flex items-center justify-between gap-3 text-sm py-1">
-                                    <div className="min-w-0">
-                                        <span className="text-text-primary">{s.name}</span>
-                                        {s.status === "needs_auth" && s.auth === "oauth" ? (
-                                            <p className="text-xs text-text-muted mt-0.5">
-                                                Connects to {s.name} (not your Shape account)
-                                            </p>
-                                        ) : null}
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        {s.status === "needs_auth" ? (
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                disabled={mcpConnecting === s.id}
-                                                onClick={() => void handleMcpConnect(s.id)}
-                                            >
-                                                {mcpConnecting === s.id ? "Connecting…" : "Connect"}
-                                            </Button>
-                                        ) : (
-                                            <span
-                                                className={cn(
-                                                    "text-xs",
-                                                    s.status === "connected" && "text-success",
-                                                    s.status === "disabled" && "text-text-muted",
-                                                    s.status === "error" && "text-error",
-                                                )}
-                                            >
-                                                {s.status === "connected"
-                                                    ? `${s.toolCount} tools`
-                                                    : s.status === "disabled"
-                                                      ? "Disabled"
-                                                      : "Error"}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+            <SettingSection id="settings-ai-mcp" title="Installed MCP Servers">
+                {mcpStatus.length > 0 ? (
+                    mcpStatus.map((s) => (
+                        <div key={s.id} className="flex items-center gap-3 px-3.5 py-2.5">
+                            <div className="relative shrink-0">
+                                <McpLogo server={s} size={30} />
+                                {s.status === "connected" ? (
+                                    <span className="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full bg-success ring-2 ring-panel" />
+                                ) : null}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <span className="text-sm text-text-primary">{s.name}</span>
+                                {s.status === "error" && s.error ? (
+                                    <p className="text-xs text-error mt-0.5 truncate" title={s.error}>
+                                        {s.error}
+                                    </p>
+                                ) : s.status === "connected" ? (
+                                    <p className="text-xs text-text-muted mt-0.5">
+                                        {s.toolCount} tools enabled
+                                    </p>
+                                ) : s.status === "needs_auth" ? (
+                                    <p className="text-xs text-text-muted mt-0.5">Sign in required</p>
+                                ) : null}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                {s.status === "needs_auth" ? (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={mcpConnecting === s.id}
+                                        onClick={() => void handleMcpConnect(s.id)}
+                                    >
+                                        {mcpConnecting === s.id ? "Connecting…" : "Connect"}
+                                    </Button>
+                                ) : s.status === "disabled" ? (
+                                    <span className="text-xs text-text-muted">Disabled</span>
+                                ) : s.status === "error" ? (
+                                    <span className="text-xs text-error">Error</span>
+                                ) : null}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => void handleMcpRemove(s.id)}
+                                >
+                                    Remove
+                                </Button>
+                            </div>
                         </div>
-                    ) : (
-                        <p className="text-sm text-text-muted">No MCP servers configured yet.</p>
-                    )}
-                    <div className="flex flex-wrap gap-2">
+                    ))
+                ) : (
+                    <div className="flex flex-col items-center gap-3 px-3.5 py-8 text-center">
+                        <div className="text-sm font-medium text-text-primary">No MCP Tools</div>
+                        <p className="text-sm text-text-muted max-w-sm">
+                            Configure servers in{" "}
+                            <span className="text-text-secondary">mcp.json</span>
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => void openMcpConfig()}>
+                            Edit mcp.json
+                        </Button>
+                    </div>
+                )}
+                {mcpStatus.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 px-3.5 py-2.5">
                         <Button variant="ghost" size="sm" onClick={() => void openMcpConfig()}>
                             Edit mcp.json
                         </Button>
@@ -449,7 +515,7 @@ export function AiSettingsPanel({ settings }: { settings: ShapeSettings }) {
                             Refresh
                         </Button>
                     </div>
-                </div>
+                ) : null}
             </SettingSection>
         </>
     );

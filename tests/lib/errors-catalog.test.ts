@@ -25,6 +25,11 @@ describe("error catalog", () => {
         expect(classifyAiError("OpenRouter API error").code).toBe(SHAPE_ERRORS.AI_PROVIDER);
         expect(classifyAiError("Please sign in").code).toBe(SHAPE_ERRORS.AUTH_REQUIRED);
         expect(classifyAiError("credit limit").code).toBe(SHAPE_ERRORS.AI_CREDITS);
+        expect(
+            classifyAiError(
+                'OpenRouter API error 403 Forbidden: {"error":"Billing could not be confirmed for a recent request.","code":2004}',
+            ).code,
+        ).toBe(SHAPE_ERRORS.AI_BILLING_HOLD);
         expect(classifyAiError("network timeout").code).toBe(SHAPE_ERRORS.AI_NETWORK);
         expect(classifyAiError("Missing build attestation").code).toBe(SHAPE_ERRORS.UNOFFICIAL_BUILD);
         expect(classifyAiError("429 Too Many Requests").code).toBe(SHAPE_ERRORS.AI_RATE_LIMITED);
