@@ -17,7 +17,7 @@ function ShortcutKeys({ keys }: { keys: string[] }) {
             {keys.map((key) => (
                 <kbd
                     key={key}
-                    className="inline-flex min-w-[1.1rem] items-center justify-center rounded bg-background px-1.5 py-px text-xs font-sans leading-none text-text-foreground"
+                    className="inline-flex min-w-[1.1rem] items-center justify-center rounded px-1.5 py-px text-xs font-sans leading-none text-text-foreground"
                 >
                     {key}
                 </kbd>
@@ -70,25 +70,27 @@ export function ApprovalBar({
     return (
         <div
             className={cn(
-                "my-1 flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-panel px-2.5 py-1.5",
+                "my-1 overflow-hidden rounded-xl border border-border bg-transparent",
                 className,
             )}
         >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-2">
                 {isProcessing ? (
-                    <div className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
+                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
-                    <Icon name="sync" size={14} className="shrink-0 text-text-muted" />
+                    <Icon name="terminal" size={13} className="shrink-0 text-text-muted" />
                 )}
                 <span className="shrink-0 text-xs text-text-muted">{label}</span>
-                <Icon name="terminal" size={14} className="shrink-0 text-text-muted" />
+            </div>
+            <div className="border-t border-border px-3 py-2">
                 <Tooltip content={subject} side="top">
-                    <span className="truncate text-xs text-text-primary">
+                    <span className="block truncate font-mono text-sm text-text-primary">
+                        <span className="select-none text-text-disabled">$ </span>
                         {subject}
                     </span>
                 </Tooltip>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex items-center justify-end gap-1.5 px-2 py-2">
                 <Button
                     type="button"
                     variant="ghost"

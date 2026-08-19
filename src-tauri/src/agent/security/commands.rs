@@ -6,8 +6,7 @@ const SAFE_COMMANDS: &[&str] = &[
     "git show", "git stash list",
     "npm list", "npm ls", "npm outdated", "npm audit",
     "pnpm list", "pnpm ls", "pnpm audit", "pnpm outdated",
-    // cargo check/clippy are relatively safe; build/test execute project code → approval
-    "cargo check", "cargo clippy",
+    // cargo check/clippy run build.rs + proc-macros → approval (same as build/test)
     "node --version", "npm --version", "pnpm --version", "cargo --version",
     "python --version", "rustc --version", "go version",
     "which", "where", "type", "tree", "wc",
@@ -43,7 +42,7 @@ const WARN_PATTERNS: &[&str] = &[
     "npx create", "npm create", "pnpm create", "yarn create", "bun create",
     "create-next-app", "create-react-app", "create-vite", "create-remix",
     "npm install", "npm i ", "yarn add", "pnpm add", "pnpm install", "pnpm i ",
-    "cargo add", "cargo build", "cargo test", "pip install",
+    "cargo add", "cargo build", "cargo test", "cargo check", "cargo clippy", "pip install",
     "git push",
     "docker", "kubectl",
     "curl", "wget", "fetch",
@@ -55,6 +54,54 @@ pub enum CommandSafety {
     Safe,
     NeedsApproval { reason: String },
     Blocked { reason: String },
+}
+
+/// True for git commands that can permanently discard uncommitted work.
+pub fn is_destructive_git(command: &str) -> bool {
+    let cmd_lower = command.trim().to_lowercase();
+    DESTRUCTIVE_GIT_PATTERNS.iter().any(|pattern| {
+        if !cmd_lower.contains(pattern) {
+            return false;
+        }
+        // Creating a branch is not destructive.
+        !(*pattern == "git checkout"
+            && (cmd_lower.contains("git checkout -b") || cmd_lower.contains("git checkout --orphan")))
+    })
+}
+
+/// Apply the user's auto-run mode on top of the base safety analysis.
+///
+/// * `Blocked` is never relaxed.
+/// * `Ask` asks for everything (including safe-listed commands).
+/// * `Auto` keeps the base verdict.
+/// * `Always` auto-approves NeedsApproval, except destructive git commands
+///   while that protection is enabled.
+pub fn apply_auto_run_mode(
+    base: CommandSafety,
+    command: &str,
+    mode: crate::agent::models::AutoRunMode,
+    protect_destructive_git: bool,
+) -> CommandSafety {
+    use crate::agent::models::AutoRunMode;
+    match (&base, mode) {
+        (CommandSafety::Blocked { .. }, _) => base,
+        (_, AutoRunMode::Auto) => base,
+        (CommandSafety::Safe, AutoRunMode::Ask) => CommandSafety::NeedsApproval {
+            reason: "Ask-every-time mode: approve each command before it runs.".to_string(),
+        },
+        (CommandSafety::NeedsApproval { .. }, AutoRunMode::Ask) => base,
+        (_, AutoRunMode::Always) => {
+            if protect_destructive_git && is_destructive_git(command) {
+                CommandSafety::NeedsApproval {
+                    reason: "This git command can permanently discard uncommitted changes. \
+                             Approval is required even in run-everything mode."
+                        .to_string(),
+                }
+            } else {
+                CommandSafety::Safe
+            }
+        }
+    }
 }
 
 /// Analyze a command string for safety.
@@ -103,11 +150,14 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
     safe_sorted.sort_by_key(|s| std::cmp::Reverse(s.len()));
     for safe in safe_sorted {
         if cmd_lower == safe || cmd_lower.starts_with(&format!("{safe} ")) {
-            // Reject if leftover looks like another command injection attempt
             let rest = cmd_lower.strip_prefix(safe).unwrap_or("").trim_start();
-            if rest.is_empty() || !rest.contains("&&") {
-                return CommandSafety::Safe;
+            // Safe-listed git/read commands must not write via --output / -o.
+            if has_output_redirect_flag(rest) {
+                return CommandSafety::NeedsApproval {
+                    reason: "Command writes via --output/-o and needs review.".to_string(),
+                };
             }
+            return CommandSafety::Safe;
         }
     }
 
@@ -118,7 +168,7 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
                     "Scaffolding command ('{}') will modify the project. Review flags (--yes, -y) before running.",
                     pattern.trim()
                 )
-            } else if *pattern == "cargo build" || *pattern == "cargo test" {
+            } else if pattern.starts_with("cargo ") {
                 format!(
                     "'{}' executes project build scripts and macros. Approve only for trusted workspaces.",
                     pattern.trim()
@@ -154,11 +204,46 @@ fn has_shell_metacharacters(cmd: &str) -> bool {
             return true;
         }
     }
-    // Redirects: `>` / `<` outside of comparison-looking tokens is still risky
+    // Redirects, PowerShell subexpressions `(...)`, sh background `&`, and `$` expansion.
+    // Note: `%` is intentionally allowed (common in `git log --format=%H`).
     if cmd.contains('>') || cmd.contains('<') {
         return true;
     }
+    if cmd.contains('(') || cmd.contains(')') {
+        return true;
+    }
+    if cmd.contains('&') || cmd.contains('$') {
+        return true;
+    }
     false
+}
+
+/// Reject `git log --output=file` style write primitives on otherwise-safe commands.
+fn has_output_redirect_flag(rest: &str) -> bool {
+    let mut chars = rest.chars().peekable();
+    let mut token = String::new();
+    let flush = |tok: &mut String| -> bool {
+        if tok.is_empty() {
+            return false;
+        }
+        let t = tok.to_ascii_lowercase();
+        tok.clear();
+        t == "-o"
+            || t == "--output"
+            || t.starts_with("--output=")
+            || t == "--output-directory"
+            || t.starts_with("--output-directory=")
+    };
+    while let Some(c) = chars.next() {
+        if c.is_whitespace() {
+            if flush(&mut token) {
+                return true;
+            }
+        } else {
+            token.push(c);
+        }
+    }
+    flush(&mut token)
 }
 
 #[cfg(test)]
@@ -269,5 +354,91 @@ mod tests {
         } else {
             panic!("expected NeedsApproval for scaffolding command");
         }
+    }
+
+    #[test]
+    fn test_powershell_subexpression_needs_approval() {
+        assert!(matches!(
+            check_command_safety("echo (Remove-Item -Recurse $home)"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("echo hi & calc.exe"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+    }
+
+    #[test]
+    fn test_git_output_flag_needs_approval() {
+        assert!(matches!(
+            check_command_safety("git log -1 --output=.vscode/settings.json"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("git diff --output=/tmp/x"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert_eq!(check_command_safety("git log -1 --oneline"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn test_cargo_check_needs_approval() {
+        assert!(matches!(
+            check_command_safety("cargo check"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("cargo clippy"),
+            CommandSafety::NeedsApproval { .. }
+        ));
+    }
+
+    #[test]
+    fn test_auto_run_modes() {
+        use crate::agent::models::AutoRunMode;
+
+        // Always: approval-class commands run, blocked stays blocked.
+        let base = check_command_safety("npm install express");
+        assert_eq!(
+            apply_auto_run_mode(base, "npm install express", AutoRunMode::Always, true),
+            CommandSafety::Safe
+        );
+        let blocked = check_command_safety("sudo rm -rf .");
+        assert!(matches!(
+            apply_auto_run_mode(blocked, "sudo rm -rf .", AutoRunMode::Always, true),
+            CommandSafety::Blocked { .. }
+        ));
+
+        // Always + git protection: destructive git still asks.
+        let git = check_command_safety("git reset --hard HEAD");
+        assert!(matches!(
+            apply_auto_run_mode(git.clone(), "git reset --hard HEAD", AutoRunMode::Always, true),
+            CommandSafety::NeedsApproval { .. }
+        ));
+        // Protection off: it runs.
+        assert_eq!(
+            apply_auto_run_mode(git, "git reset --hard HEAD", AutoRunMode::Always, false),
+            CommandSafety::Safe
+        );
+
+        // Ask: even safe commands ask.
+        assert!(matches!(
+            apply_auto_run_mode(CommandSafety::Safe, "git status", AutoRunMode::Ask, true),
+            CommandSafety::NeedsApproval { .. }
+        ));
+
+        // Auto: base verdict unchanged.
+        assert_eq!(
+            apply_auto_run_mode(CommandSafety::Safe, "git status", AutoRunMode::Auto, true),
+            CommandSafety::Safe
+        );
+    }
+
+    #[test]
+    fn test_is_destructive_git() {
+        assert!(is_destructive_git("git reset --hard"));
+        assert!(is_destructive_git("git clean -fd"));
+        assert!(!is_destructive_git("git checkout -b feature/x"));
+        assert!(!is_destructive_git("git status"));
     }
 }

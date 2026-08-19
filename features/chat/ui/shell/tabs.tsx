@@ -1,126 +1,106 @@
 "use client";
 
 import { Icon } from "@/components/ui/icon";
-import { Tooltip } from "@/components/ui/tooltip";
-import { SidebarPanelActionButton } from "@/features/panels";
 import {
     ContextMenu,
     ContextMenuContent,
     ContextMenuTrigger,
 } from "@/components/ui/context";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
+import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { SidebarSwitchPanelMenuItems } from "@/features/panels";
-import { openAgentWindow } from "@/lib/open-agent-window";
 import { cn } from "@/lib/utils";
 import { ChatMoreMenu } from "./more";
-import { ChatHistoryMenu } from "./history";
+import type { ReactNode } from "react";
 
 export type ChatTab = {
     id: string;
     title: string;
 };
 
+/** Draft / unsaved conversation sentinel — still used by the chat session store. */
 export const NEW_CHAT_TAB_ID = "__new_chat__";
 
 export function ChatTabBar({
-    tabs,
-    activeTabId,
-    onSelectTab,
-    onCloseTab,
+    title,
     onNewChat,
-    onSelectConversation,
-    activeConversationId,
-    projectPath,
-    onClosePanel,
+    onClosePanel: _onClosePanel,
     sidebarSide = "right",
+    embedWindowControls,
 }: {
-    tabs: ChatTab[];
-    activeTabId: string;
-    onSelectTab: (tabId: string) => void;
-    onCloseTab: (tabId: string) => void;
+    title: string;
     onNewChat: () => void;
-    onSelectConversation: (id: string) => void;
+    /** @deprecated Multi-tab chrome removed; kept optional for call-site compatibility. */
+    tabs?: ChatTab[];
+    activeTabId?: string;
+    onSelectTab?: (tabId: string) => void;
+    onCloseTab?: (tabId: string) => void;
+    onSelectConversation?: (id: string) => void;
     activeConversationId?: string | null;
     projectPath?: string | null;
     onClosePanel?: () => void;
     sidebarSide?: "left" | "right";
+    embedWindowControls?: ReactNode;
 }) {
+    void _onClosePanel;
+    const label = title.trim() || "New Chat";
+
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <header className="chat-tab-bar flex h-[36px] shrink-0 items-center gap-1 bg-panel px-2">
-                    <div className="relative min-w-0 flex-1">
-                        <div className="chat-tab-scroll flex h-full min-w-0 items-center gap-1 overflow-x-auto no-scrollbar">
-                            {tabs.map((tab) => {
-                                const active = tab.id === activeTabId;
-                                return (
-                                    <div
-                                        key={tab.id}
-                                        className={cn(
-                                            "group relative flex h-7 max-w-[200px] shrink-0 items-center gap-1 rounded-lg px-2.5 text-sm transition-colors",
-                                            active
-                                                ? "bg-surface-3 text-text-primary"
-                                                : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
-                                        )}
+                <header className="relative flex h-[36px] shrink-0 items-center bg-panel">
+                    <div className="relative z-10 flex min-w-0 flex-1 items-center pl-3 pr-1">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    type="button"
+                                    className={cn(
+                                        "flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left",
+                                        "text-sm font-normal text-text-primary",
+                                        "outline-none hover:bg-panel-hover",
+                                        "focus-visible:ring-1 focus-visible:ring-border-focus",
+                                    )}
+                                    aria-label={`${label} menu`}
+                                >
+                                    <FadeTruncate
+                                        title={label}
+                                        className="min-w-0 truncate"
                                     >
-                                        <button
-                                            type="button"
-                                            className="min-w-0 truncate text-left"
-                                            onClick={() => onSelectTab(tab.id)}
-                                        >
-                                            {tab.title}
-                                        </button>
-                                        {tabs.length > 1 ? (
-                                            <button
-                                                type="button"
-                                                className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted hover:bg-panel-hover hover:text-text-primary group-hover:visible"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onCloseTab(tab.id);
-                                                }}
-                                                aria-label={`Close ${tab.title}`}
-                                            >
-                                                <Icon name="close" size={12} />
-                                            </button>
-                                        ) : null}
-                                    </div>
-                                );
-                            })}
-                            <div className="min-w-[8px] flex-1 shrink-0" />
-                        </div>
-                        <div
-                            className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-10 bg-gradient-to-l from-panel to-transparent"
-                            aria-hidden
-                        />
+                                        {label}
+                                    </FadeTruncate>
+                                    <Icon
+                                        name="expand_more"
+                                        size={14}
+                                        className="shrink-0 text-text-muted"
+                                    />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48">
+                                <DropdownMenuItem
+                                    className="gap-2.5"
+                                    onClick={onNewChat}
+                                >
+                                    <Icon name="add" size={16} className="text-text-secondary" />
+                                    New Chat
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-0.5 px-1">
-                        <Tooltip content="Open Agent window">
-                            <SidebarPanelActionButton
-                                onClick={() => void openAgentWindow()}
-                                className="h-6 w-6"
-                            >
-                                <Icon name="agents" size={14} />
-                            </SidebarPanelActionButton>
-                        </Tooltip>
-                        <Tooltip content="New Chat">
-                            <SidebarPanelActionButton onClick={onNewChat}>
-                                <Icon name="add" size={14} />
-                            </SidebarPanelActionButton>
-                        </Tooltip>
-                        <ChatHistoryMenu
-                            activeConversationId={activeConversationId}
-                            projectPath={projectPath}
-                            onSelectConversation={(id) => onSelectConversation(id)}
-                        />
+                    <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1">
                         <ChatMoreMenu />
-                        {onClosePanel ? (
-                            <Tooltip content="Close Chat">
-                                <SidebarPanelActionButton onClick={onClosePanel}>
-                                    <Icon name="close" size={14} />
-                                </SidebarPanelActionButton>
-                            </Tooltip>
-                        ) : null}
                     </div>
+
+                    {embedWindowControls ? (
+                        <div className="relative z-10 flex shrink-0 items-stretch">
+                            {embedWindowControls}
+                        </div>
+                    ) : null}
                 </header>
             </ContextMenuTrigger>
             <ContextMenuContent className="w-52">

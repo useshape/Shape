@@ -11,7 +11,6 @@ export function ChatMessageList({
     isLoading,
     activityLabel,
     sendError,
-    contextSummarized = false,
     onDismissError,
     messagesEndRef,
     onRedo,
@@ -24,7 +23,6 @@ export function ChatMessageList({
     isLoading: boolean;
     activityLabel: string | null;
     sendError: string | null;
-    contextSummarized?: boolean;
     onDismissError: () => void;
     messagesEndRef: RefObject<HTMLDivElement | null>;
     onRedo: (msgIdx: number) => void;
@@ -41,14 +39,6 @@ export function ChatMessageList({
                 </div>
             ) : (
                 <>
-                    {contextSummarized ? (
-                        <div
-                            className="mb-3 mt-1 select-none px-1 py-1.5 text-[11px] leading-none text-text-muted/80"
-                            role="status"
-                        >
-                            Chat context summarized
-                        </div>
-                    ) : null}
                     {messageGroups.map((group, groupIdx) => (
                     <div
                         key={`turn-${group[0]?.msg.timestamp ?? groupIdx}`}

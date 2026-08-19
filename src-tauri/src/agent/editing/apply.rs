@@ -69,7 +69,7 @@ pub async fn fast_apply(
         match call_fast_apply_model(client, api_key, &model, &user_prompt).await {
             Ok(raw) => {
                 let cleaned = strip_codefence(&raw);
-                sanity_check(&cleaned, original, code_edit)?;
+                super::sanity::validate_merged_edit(&cleaned, original, code_edit, "fast-apply")?;
                 logging::info(
                     "apply",
                     &format!(
@@ -173,43 +173,4 @@ fn strip_codefence(text: &str) -> String {
         }
     }
     text.trim_end_matches('\n').to_string()
-}
-
-fn sanity_check(merged: &str, original: &str, code_edit: &str) -> Result<(), AppError> {
-    if merged.trim().is_empty() {
-        return Err(AppError::Message(
-            "fast-apply returned an empty file".to_string(),
-        ));
-    }
-
-    // The merged output must not still contain ellipsis markers — if it does, the model
-    // failed to expand them.
-    for line in merged.lines() {
-        if super::speculative::is_marker_line_pub(line) {
-            return Err(AppError::Message(
-                "fast-apply leaked ellipsis markers into the output — refusing to save"
-                    .to_string(),
-            ));
-        }
-    }
-
-    // Catastrophic shrink check: if the original was non-trivial AND the edit didn't
-    // suggest a wholesale delete, refuse outputs that dropped more than 60% of lines.
-    let original_lines = original.lines().count();
-    let merged_lines = merged.lines().count();
-    if original_lines > 20 {
-        let edit_lines = code_edit.lines().count();
-        let intentional_full_rewrite = edit_lines as f64 / original_lines as f64 > 0.6;
-        if !intentional_full_rewrite {
-            let kept_ratio = merged_lines as f64 / original_lines as f64;
-            if kept_ratio < 0.4 {
-                return Err(AppError::Message(format!(
-                    "fast-apply produced a suspiciously small file ({} -> {} lines, edit was {} lines). Refusing to save.",
-                    original_lines, merged_lines, edit_lines
-                )));
-            }
-        }
-    }
-
-    Ok(())
 }

@@ -28,7 +28,7 @@ export function ChatErrorCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <p className="font-medium text-red-400">{entry.title}</p>
+          <p className="font-medium text-error">{entry.title}</p>
           {entry.description ? (
             <p className="text-text-muted leading-relaxed">{entry.description}</p>
           ) : null}

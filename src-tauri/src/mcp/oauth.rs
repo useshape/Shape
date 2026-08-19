@@ -20,6 +20,9 @@ pub struct StoredMcpTokens {
     pub token_url: Option<String>,
     #[serde(default)]
     pub client_id: Option<String>,
+    /// RFC 8707 resource indicator (the MCP server URL) for token requests.
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +32,7 @@ struct PendingOAuth {
     state: String,
     token_url: String,
     client_id: String,
+    resource: String,
 }
 
 static PENDING: LazyLock<Mutex<HashMap<String, PendingOAuth>>> =
@@ -74,6 +78,7 @@ fn token_from_response(
     token_resp: &serde_json::Value,
     token_url: &str,
     client_id: &str,
+    resource: Option<&str>,
     previous_refresh: Option<String>,
 ) -> Result<StoredMcpTokens, String> {
     let access_token = token_resp
@@ -97,6 +102,7 @@ fn token_from_response(
         expires_at,
         token_url: Some(token_url.to_string()),
         client_id: Some(client_id.to_string()),
+        resource: resource.map(|s| s.to_string()),
     })
 }
 
@@ -133,14 +139,19 @@ pub async fn refresh_access_token(server_id: &str) -> Result<StoredMcpTokens, St
         .clone()
         .unwrap_or_else(|| "shape-desktop".to_string());
 
+    let mut form: Vec<(&str, &str)> = vec![
+        ("grant_type", "refresh_token"),
+        ("refresh_token", refresh.as_str()),
+        ("client_id", client_id.as_str()),
+    ];
+    if let Some(resource) = existing.resource.as_deref() {
+        form.push(("resource", resource));
+    }
+
     let client = reqwest::Client::new();
     let token_resp: serde_json::Value = client
         .post(token_url)
-        .form(&[
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh.as_str()),
-            ("client_id", client_id.as_str()),
-        ])
+        .form(&form)
         .send()
         .await
         .map_err(|e| format!("Token refresh failed: {}", e))?
@@ -165,6 +176,7 @@ pub async fn refresh_access_token(server_id: &str) -> Result<StoredMcpTokens, St
         &token_resp,
         token_url,
         &client_id,
+        existing.resource.as_deref(),
         Some(refresh.clone()),
     )?;
     save_token(server_id, &stored)?;
@@ -234,22 +246,42 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         .unwrap_or("")
         .to_string();
 
-    let resource_metadata_url = extract_param(&www, "resource_metadata").or_else(|| {
-        Some(format!(
-            "{}/.well-known/oauth-protected-resource",
-            mcp_url.trim_end_matches('/')
-        ))
-    });
+    // RFC 9728: prefer the URL from WWW-Authenticate; otherwise derive the
+    // well-known location from the server origin (path-aware, then root).
+    let mut prm_candidates: Vec<String> = Vec::new();
+    if let Some(url) = extract_param(&www, "resource_metadata") {
+        prm_candidates.push(url);
+    }
+    if let Ok(parsed) = url::Url::parse(mcp_url) {
+        let origin = format!(
+            "{}://{}",
+            parsed.scheme(),
+            parsed.host_str().map(|h| match parsed.port() {
+                Some(p) => format!("{}:{}", h, p),
+                None => h.to_string(),
+            }).unwrap_or_default()
+        );
+        let path = parsed.path().trim_end_matches('/');
+        if !path.is_empty() {
+            prm_candidates.push(format!("{}/.well-known/oauth-protected-resource{}", origin, path));
+        }
+        prm_candidates.push(format!("{}/.well-known/oauth-protected-resource", origin));
+    }
 
-    let metadata_url = resource_metadata_url.ok_or("Missing OAuth resource metadata URL")?;
-    let prm: serde_json::Value = client
-        .get(&metadata_url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch resource metadata: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Invalid resource metadata: {}", e))?;
+    let mut prm: Option<serde_json::Value> = None;
+    for candidate in &prm_candidates {
+        let resp = match client.get(candidate).send().await {
+            Ok(r) if r.status().is_success() => r,
+            _ => continue,
+        };
+        if let Ok(meta) = resp.json::<serde_json::Value>().await {
+            if meta.get("authorization_servers").is_some() {
+                prm = Some(meta);
+                break;
+            }
+        }
+    }
+    let prm = prm.ok_or("Failed to fetch OAuth resource metadata")?;
 
     let auth_servers = prm
         .get("authorization_servers")
@@ -258,17 +290,25 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         .and_then(|v| v.as_str())
         .ok_or("No authorization server in metadata")?;
 
-    let as_meta: serde_json::Value = client
-        .get(format!(
-            "{}/.well-known/oauth-authorization-server",
-            auth_servers.trim_end_matches('/')
-        ))
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch auth server metadata: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Invalid auth server metadata: {}", e))?;
+    // RFC 8414 discovery with OIDC fallback — servers vary in which one they publish.
+    let as_base = auth_servers.trim_end_matches('/');
+    let mut as_meta: Option<serde_json::Value> = None;
+    for well_known in [
+        format!("{}/.well-known/oauth-authorization-server", as_base),
+        format!("{}/.well-known/openid-configuration", as_base),
+    ] {
+        let resp = match client.get(&well_known).send().await {
+            Ok(r) if r.status().is_success() => r,
+            _ => continue,
+        };
+        if let Ok(meta) = resp.json::<serde_json::Value>().await {
+            if meta.get("authorization_endpoint").is_some() {
+                as_meta = Some(meta);
+                break;
+            }
+        }
+    }
+    let as_meta = as_meta.ok_or("Failed to fetch auth server metadata")?;
 
     let authorize_url = as_meta
         .get("authorization_endpoint")
@@ -295,6 +335,21 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         "shape-desktop".to_string()
     };
 
+    // Prefer scopes advertised by the protected resource (RFC 9728), then the
+    // auth server; fall back to a safe OIDC default.
+    let scope = prm
+        .get("scopes_supported")
+        .or_else(|| as_meta.get("scopes_supported"))
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "openid offline_access".to_string());
+
     let code_verifier = random_urlsafe(64);
     let state = random_urlsafe(32);
     let challenge = pkce_challenge(&code_verifier);
@@ -311,7 +366,7 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         urlencoding::encode(&redirect),
         challenge,
         urlencoding::encode(&state),
-        urlencoding::encode("openid offline_access"),
+        urlencoding::encode(&scope),
         urlencoding::encode(mcp_url),
     );
 
@@ -325,6 +380,7 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
                 state,
                 token_url,
                 client_id,
+                resource: mcp_url.to_string(),
             },
         );
     }
@@ -361,8 +417,10 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
     if pending.server_id != server_id {
         return Err("OAuth server_id mismatch".to_string());
     }
-    if let Some(ref s) = state {
-        if s != &pending.state {
+    // We always send state, so a callback without a matching one is rejected (CSRF).
+    match state.as_deref() {
+        Some(s) if s == pending.state => {}
+        _ => {
             return Err("OAuth state mismatch — possible CSRF. Start Connect again.".to_string());
         }
     }
@@ -378,10 +436,11 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
         .post(&pending.token_url)
         .form(&[
             ("grant_type", "authorization_code"),
-            ("code", &code),
-            ("redirect_uri", &redirect),
-            ("client_id", &pending.client_id),
-            ("code_verifier", &pending.code_verifier),
+            ("code", code.as_str()),
+            ("redirect_uri", redirect.as_str()),
+            ("client_id", pending.client_id.as_str()),
+            ("code_verifier", pending.code_verifier.as_str()),
+            ("resource", pending.resource.as_str()),
         ])
         .send()
         .await
@@ -405,6 +464,7 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
         &token_resp,
         &pending.token_url,
         &pending.client_id,
+        Some(pending.resource.as_str()),
         None,
     )?;
     save_token(&server_id, &stored)?;

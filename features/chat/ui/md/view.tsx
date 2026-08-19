@@ -7,9 +7,9 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
 import { openProjectFile } from "@/lib/open-project-file";
-import { commands } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
+import { ChatLinkChip } from "./link-chip";
 
 function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: boolean; isLast?: boolean }) {
     const nested = options?.nested;
@@ -93,60 +93,32 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
             </p>
         ),
         ul: ({ children }: { children?: React.ReactNode }) => (
-            <ul className="mb-2 ml-4 list-disc list-outside space-y-1 font-sans">{children}</ul>
+            <ul className="mb-2 ml-4 list-disc list-outside space-y-1 font-sans text-sm">{children}</ul>
         ),
         ol: ({ children }: { children?: React.ReactNode }) => (
-            <ol className="mb-2 ml-4 list-decimal list-outside space-y-1 font-sans">{children}</ol>
+            <ol className="mb-2 ml-4 list-decimal list-outside space-y-1 font-sans text-sm">{children}</ol>
         ),
         li: ({ children }: { children?: React.ReactNode }) => (
-            <li className="leading-relaxed pl-0.5 font-normal font-sans">{children}</li>
+            <li className="text-sm leading-relaxed pl-0.5 font-normal font-sans">{children}</li>
         ),
         h1: ({ children }: { children?: React.ReactNode }) => (
-            <h1 className="text-lg font-medium mt-4 mb-2 text-text-primary font-sans">{children}</h1>
+            <h1 className="text-sm font-medium mt-4 mb-2 text-text-primary font-sans">{children}</h1>
         ),
         h2: ({ children }: { children?: React.ReactNode }) => (
-            <h2 className="text-base font-medium mt-3 mb-1.5 text-text-primary font-sans">{children}</h2>
+            <h2 className="text-sm font-medium mt-3 mb-1.5 text-text-primary font-sans">{children}</h2>
         ),
         h3: ({ children }: { children?: React.ReactNode }) => (
             <h3 className="text-sm font-medium mt-2 mb-1 text-text-primary font-sans">{children}</h3>
         ),
         strong: ({ children }: { children?: React.ReactNode }) => (
-            <strong className="font-medium text-text-primary">{children}</strong>
+            <strong className="font-medium text-sm text-text-primary">{children}</strong>
         ),
         hr: () => null,
-        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
-            const isLocalFile = href && !href.startsWith("http") && !href.startsWith("mailto:") && !href.startsWith("#");
-            if (isLocalFile) {
-                const name = href.split(/[\\/]/).pop() || href;
-                return (
-                    <span
-                        className="inline-flex items-center gap-1.5 text-sm bg-panel hover:bg-panel-hover px-2 py-0.5 rounded border border-border-subtle text-text-primary cursor-pointer transition-colors mx-0.5 align-middle font-sans"
-                        title={href}
-                        onClick={() => {
-                            void openProjectFile(href, name);
-                        }}
-                    >
-                        <FileIcon name={name} className="w-3.5 h-3.5" />
-                        {children || name}
-                    </span>
-                );
-            }
-            return (
-                <a
-                    href={href}
-                    className="text-accent underline hover:text-accent/80 transition-colors font-normal font-sans cursor-pointer"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (href) void commands.openUrlExternal(href);
-                    }}
-                >
-                    {children}
-                </a>
-            );
-        },
+        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+            <ChatLinkChip href={href}>{children}</ChatLinkChip>
+        ),
         blockquote: ({ children }: { children?: React.ReactNode }) => (
-            <blockquote className="border-l-2 border-accent/50 pl-3 py-0.5 my-1 text-text-muted italic bg-panel/30 rounded-r font-normal font-sans">
+            <blockquote className="border-l-2 border-accent/50 pl-3 py-0.5 my-1 text-sm text-text-muted italic bg-panel/30 rounded-r font-normal font-sans">
                 {children}
             </blockquote>
         ),

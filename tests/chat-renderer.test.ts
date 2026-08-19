@@ -48,6 +48,17 @@ describe("parseMessageContent", () => {
         expect(cat?.catStartLine).toBe(1);
         expect(cat?.catEndLine).toBe(244);
     });
+    it("dedupes edit_pending chunks for the same id, keeping applied over pending", () => {
+        const text = [
+            '<edit_pending id="e1" file="src/a.ts" status="pending"><original>a</original><replacement>b</replacement></edit_pending>',
+            '<edit_pending id="e1" file="src/a.ts" status="applied"><original>a</original><replacement>b</replacement></edit_pending>',
+        ].join("\n");
+        const chunks = parseMessageContent(text);
+        const edits = chunks.filter((c) => c.type === "edit_pending");
+        expect(edits).toHaveLength(1);
+        expect(edits[0].commandStatus).toBe("applied");
+        expect(edits[0].file).toBe("src/a.ts");
+    });
 });
 
 describe("dedupeTerminalChunks", () => {
@@ -59,8 +70,39 @@ describe("dedupeTerminalChunks", () => {
         expect(result).toHaveLength(1);
         expect(result[0].commandStatus).toBe("completed");
     });
-});
 
+    it("dedupes edit_pending by id independently from terminal commands", () => {
+        const result = dedupeTerminalChunks([
+            {
+                type: "edit_pending",
+                commandId: "e1",
+                commandStatus: "pending",
+                file: "a.ts",
+                original: "x",
+                replacement: "y",
+            },
+            {
+                type: "edit_pending",
+                commandId: "e1",
+                commandStatus: "applied",
+                file: "a.ts",
+                original: "x",
+                replacement: "y",
+            },
+            {
+                type: "terminal_command",
+                commandId: "e1",
+                commandStatus: "pending",
+                command: "echo",
+            },
+        ]);
+        const edits = result.filter((c) => c.type === "edit_pending");
+        const terms = result.filter((c) => c.type === "terminal_command");
+        expect(edits).toHaveLength(1);
+        expect(edits[0].commandStatus).toBe("applied");
+        expect(terms).toHaveLength(1);
+    });
+});
 describe("preprocessChatMarkdown", () => {
     it("strips standalone horizontal rules", () => {
         expect(preprocessChatMarkdown("Hello\n---\nWorld")).toBe("Hello\n\nWorld");
@@ -208,5 +250,38 @@ describe("preprocessChatMarkdown", () => {
         const out = preprocessChatMarkdown(input);
         expect(out).toContain("<terminal_command");
         expect(out).toContain("npm test");
+    });
+
+    it("does not leak edit_file error excerpts that wrap markdown fences", () => {
+        const css = `@import 'tailwindcss';\n${"body{color:red}".repeat(80)}`;
+        const content = [
+            "Working on styles.",
+            "<tool_result>",
+            "[edit_file] ERROR: Could not apply the edit to app/globals.css. Reason: Incomplete SEARCH/REPLACE block.",
+            "Nearest region of the current file (40 lines around best match):",
+            "```",
+            css,
+            "```",
+            "Call read_file for the full content before retrying.",
+            "</tool_result>",
+            "Retrying the edit.",
+        ].join("\n");
+
+        const chunks = parseMessageContent(content);
+        const text = chunks
+            .filter((c) => c.type === "text")
+            .map((c) => c.content)
+            .join("");
+        expect(text).toContain("Working on styles");
+        expect(text).toContain("Retrying the edit");
+        expect(text).not.toContain("[edit_file]");
+        expect(text).not.toContain("@import");
+        expect(text).not.toContain("Incomplete SEARCH");
+
+        const md = preprocessChatMarkdown(content);
+        expect(md).toContain("Working on styles");
+        expect(md).toContain("Retrying the edit");
+        expect(md).not.toContain("@import");
+        expect(md).not.toContain("[edit_file]");
     });
 });

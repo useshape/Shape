@@ -19,12 +19,15 @@ import {
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     formatMessageUsageLine,
-    formatModelLabel,
+    formatMessageModelLabel,
     type MessageUsageStats,
 } from "@/lib/usage-display";
 import { parseShapeContinueAction } from "@/lib/shape-continue-action";
 import { mentionRanges, mentionDisplayLabel } from "@/lib/chat-mentions";
+import { openProjectFile } from "@/lib/open-project-file";
+import { Favicon } from "@/components/ui/favicon";
 import { WebSourcesMenu } from "../blocks/search";
+import { Button } from "@/components/ui/button";
 
 type ChatMessageItemProps = {
     role: string;
@@ -71,12 +74,41 @@ function MentionRichText({ text }: { text: string }) {
                 </span>,
             );
         }
+        const { mention } = range;
+        const openable =
+            (mention.kind === "file" || mention.kind === "folder") && !!mention.path;
+        const label = mentionDisplayLabel(mention);
         nodes.push(
             <span
                 key={`m-${i}`}
-                className="mx-0.5 inline-flex items-center rounded-md border border-accent/30 bg-accent/15 px-1 py-0.5 text-[0.8125rem] font-medium text-accent"
+                role={openable ? "button" : undefined}
+                tabIndex={openable ? 0 : undefined}
+                onClick={
+                    openable
+                        ? () => {
+                              const path =
+                                  mention.kind === "folder" && !mention.path!.endsWith("/")
+                                      ? `${mention.path}/`
+                                      : mention.path!;
+                              void openProjectFile(path, label);
+                          }
+                        : undefined
+                }
+                className={cn(
+                    "mx-0.5 inline-flex items-center gap-1 rounded-lg bg-accent-text-bg px-1.5 py-0.5 text-xs font-medium text-accent-text align-middle",
+                    openable && "cursor-pointer hover:bg-accent-text/20 transition-colors",
+                )}
             >
-                @{mentionDisplayLabel(range.mention)}
+                {mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs" ? (
+                    <span className="chat-link-favicon">
+                        <FileIcon name={label} className="h-3 w-3 shrink-0" />
+                    </span>
+                ) : mention.kind === "browser" ? (
+                    <span className="chat-link-favicon">
+                        <Favicon url={mention.path || label} size={12} />
+                    </span>
+                ) : null}
+                <span>@{label}</span>
             </span>,
         );
         cursor = range.end;
@@ -98,21 +130,6 @@ function selectNodeContents(el: HTMLElement | null) {
     const sel = window.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
-}
-
-function ContinueActionBar({
-    action,
-}: {
-    action: NonNullable<ReturnType<typeof parseShapeContinueAction>["action"]>;
-}) {
-    return (
-        <div className="relative z-0 -mt-4 mx-2 pt-5 flex items-center gap-2 rounded-b-xl border border-border-subtle bg-surface-3/50 px-2.5 py-1.5 text-sm text-text-secondary">
-            <Icon name="list_alt" size={14} className="shrink-0 text-text-muted" />
-            <span className="min-w-0 truncate">
-                Building plan · <span className="text-text-primary">{action.title}</span>
-            </span>
-        </div>
-    );
 }
 
 function ChatMessageItemInner({ role, content, isGenerating, activityLabel, roleLabel, stats, model, index = -1, onRedo, onRestore, isFileEditResolved }: ChatMessageItemProps) {
@@ -194,10 +211,11 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             <ContextMenu>
             <ContextMenuTrigger asChild>
             <div
-                className="flex flex-col w-full mb-4 relative select-text"
+                className="relative mb-4 flex w-full select-text justify-end pl-10"
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
+                <div className="flex max-w-full flex-col items-end gap-1">
                 <div
                     role={isLong ? "button" : undefined}
                     tabIndex={isLong ? 0 : undefined}
@@ -209,7 +227,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                         }
                     } : undefined}
                     className={cn(
-                        "relative z-10 w-full rounded-xl border border-border-subtle bg-surface-3 px-3 py-2",
+                        "relative z-10 w-fit max-w-full rounded-xl bg-surface-3 px-3 py-2",
                         "text-sm text-text-primary group select-text",
                         isLong && "cursor-pointer",
                     )}
@@ -221,7 +239,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                                     {userParts.attachments.map((name, i) => (
                                         <span
                                             key={`${name}-${i}`}
-                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs border border-border-subtle bg-panel text-text-secondary"
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm border border-border-subtle bg-panel text-text-secondary"
                                         >
                                             <FileIcon name={name} className="w-3.5 h-3.5 shrink-0" />
                                             <span className="truncate max-w-[160px]">{name}</span>
@@ -257,7 +275,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                         </div>
                     </div>
                 </div>
-                {continueAction?.action ? <ContinueActionBar action={continueAction.action} /> : null}
+                </div>
             </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
@@ -284,7 +302,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             onKeyDown={handleKeyDown}
         >
             <div ref={bodyRef} className="w-full min-w-0 select-text overflow-hidden">
-                <div className="w-full min-w-0 wrap-break-word chat-markdown max-w-none prose-compact select-text">
+                <div className="w-full min-w-0 wrap-break-word chat-markdown max-w-none prose-compact text-sm select-text">
                     <MessageRenderer
                         content={content}
                         isGenerating={isGenerating}
@@ -297,21 +315,15 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             {!isGenerating && (
                 <div className="flex items-center gap-0.5 mt-1.5 select-none">
                     <Tooltip content="Redo" side="bottom">
-                        <button
-                            onClick={() => onRedo?.(index)}
-                            className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-md hover:bg-panel-hover"
-                        >
-                            <Icon name="refresh" size={14} />
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={() => onRedo?.(index)}>
+                            <Icon name="refresh" size={16} />
+                        </Button>
                     </Tooltip>
 
                     <Tooltip content="Copy Message" side="bottom">
-                        <button
-                            onClick={handleCopy}
-                            className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-md hover:bg-panel-hover"
-                        >
-                            <Icon name="content_copy" size={14} />
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={handleCopy}>
+                            <Icon name="content_copy" size={16} />
+                        </Button>
                     </Tooltip>
 
                     {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
@@ -319,16 +331,16 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                     {role === "assistant" && (stats || model) && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <button className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-md hover:bg-panel-hover">
-                                <Icon name="more_horiz" size={14} />
-                            </button>
+                            <Button variant="ghost" size="icon">
+                                <Icon name="more_horiz" size={16} />
+                            </Button>
                         </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-52 p-2.5">
-                                <div className="flex flex-col gap-1.5 text-xs">
+                            <DropdownMenuContent align="start" className="w-52">
+                                <div className="flex flex-col gap-1.5 text-sm">
                                     <div className="flex items-center justify-between gap-4">
                                         <span className="text-text-muted">Model</span>
                                         <span className="font-medium text-text-primary truncate">
-                                            {formatModelLabel(model)}
+                                            {formatMessageModelLabel(model, stats)}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between gap-4">

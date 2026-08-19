@@ -35,10 +35,10 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
       : `${items.length} task${items.length === 1 ? "" : "s"}`;
 
   return (
-    <div className="border-b border-border-subtle/60">
+    <div className="bg-editor">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-text-muted hover:text-text-primary"
+        className="flex w-full items-center justify-between gap-2 border-b border-border-subtle px-3 py-2 text-xs text-text-muted hover:text-text-primary"
         onClick={() => setOpen((v) => !v)}
       >
         <span className="flex min-w-0 items-center gap-1.5">
@@ -57,26 +57,28 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
       </button>
 
       {open ? (
-        <div className="flex flex-col gap-1 px-2.5 pb-2">
+        <div className="flex flex-col px-2 py-1.5">
           {items.map((item) => (
             <div
               key={item.id}
-              className="flex items-start gap-2 px-0.5 py-0.5 text-xs"
+              className="group flex min-h-7 items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-panel-hover"
             >
               {item.status === "running" ? (
-                <div className="mt-0.5 h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                <div className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
               ) : item.status === "done" ? (
-                <Icon name="check_circle" size={12} className="mt-0.5 shrink-0 text-success" />
+                <span className="flex size-3.5 shrink-0 items-center justify-center rounded border border-success bg-success/15">
+                  <Icon name="check" size={10} className="text-success" />
+                </span>
               ) : (
                 <Icon
-                  name="radio_button_unchecked"
-                  size={12}
-                  className="mt-0.5 shrink-0 text-text-disabled"
+                  name="check_box_outline_blank"
+                  size={14}
+                  className="shrink-0 text-text-disabled"
                 />
               )}
               <span
                 className={cn(
-                  "leading-snug",
+                  "min-w-0 flex-1 truncate leading-snug",
                   item.status === "running"
                     ? "text-text-primary"
                     : "text-text-muted",
@@ -84,6 +86,11 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
               >
                 {item.label}
               </span>
+              {item.status === "running" ? (
+                <span className="shrink-0 rounded-full bg-accent-text-bg px-1.5 py-0.5 text-[10px] text-accent-text">
+                  Running
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
