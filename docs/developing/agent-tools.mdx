@@ -7,9 +7,9 @@ icon: ri-robot-2-line
 
 ## Overview
 
-The agent loop lives in Rust under `src-tauri/src/agent/`. Tools (read file, edit, grep, terminal, plans, and others) are dispatched from a central registry. The frontend renders tool progress and results from streamed events.
+The agent loop lives in Rust under `src-tauri/src/agent/`. Tools (read file, edit, grep, terminal, plans, and others) are dispatched from a central registry. The frontend renders tool progress and results from streamed events; chat collapses those steps into a per-turn summary you can expand.
 
-Modes such as Ask and Plan restrict which tools are available. Those restrictions are agent-policy concerns, not billing entitlements.
+Modes such as Ask and Plan restrict which tools are available. Those restrictions are agent-policy concerns, not billing entitlements. Visual mode (legacy `design`) attaches `DESIGN.md` and allows an in-chat component preview tool.
 
 ## Plans
 

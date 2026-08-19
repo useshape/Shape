@@ -86,7 +86,19 @@ fn is_git_conflict_marker_line(line: &str) -> bool {
         || (t.starts_with(">>>>>>>") && !t.starts_with(">>>>>>> REPLACE"))
 }
 
+const EXCERPT_CHARS: usize = 1200;
+
+fn cap_chars(text: &str, max: usize) -> String {
+    let count = text.chars().count();
+    if count <= max {
+        return text.to_string();
+    }
+    let trimmed: String = text.chars().take(max).collect();
+    format!("{}\n… [truncated, {} chars total]", trimmed, count)
+}
+
 /// Build a short error excerpt: prefer a local window, not the whole file.
+/// Cap by characters as well as lines so minified CSS/JSON cannot dump 8kb "3-line" files.
 pub fn format_edit_error_excerpt(original: &str, search_hint: Option<&str>) -> String {
     const SMALL_FILE: usize = 2000;
     const WINDOW_LINES: usize = 40;
@@ -94,7 +106,7 @@ pub fn format_edit_error_excerpt(original: &str, search_hint: Option<&str>) -> S
     if original.len() <= SMALL_FILE {
         return format!(
             "Current file content:\n```\n{}\n```",
-            original
+            cap_chars(original, EXCERPT_CHARS)
         );
     }
 
@@ -105,7 +117,8 @@ pub fn format_edit_error_excerpt(original: &str, search_hint: Option<&str>) -> S
                 return format!(
                     "Nearest region of the current file ({} lines around best match):\n```\n{}\n```\n\
 Call read_file for the full content before retrying.",
-                    WINDOW_LINES, window
+                    WINDOW_LINES,
+                    cap_chars(&window, EXCERPT_CHARS)
                 );
             }
         }
@@ -117,7 +130,7 @@ Call read_file for the full content before retrying.",
 Call read_file for the full content before retrying.",
         original.len(),
         WINDOW_LINES,
-        head
+        cap_chars(&head, EXCERPT_CHARS)
     )
 }
 
@@ -196,5 +209,14 @@ mod tests {
         let excerpt = format_edit_error_excerpt(&original, Some("line 250"));
         assert!(!excerpt.contains("line 499") || excerpt.contains("Nearest") || excerpt.contains("First"));
         assert!(excerpt.len() < original.len());
+    }
+
+    #[test]
+    fn format_excerpt_caps_minified_long_lines() {
+        let original = format!("@import 'tailwindcss';\n{}\n", "a".repeat(12_000));
+        let excerpt = format_edit_error_excerpt(&original, Some("@import"));
+        assert!(excerpt.contains("truncated"), "expected char cap, got: {}", excerpt.len());
+        assert!(excerpt.len() < 4_000, "excerpt still huge: {}", excerpt.len());
+        assert!(!excerpt.contains(&"a".repeat(2_000)));
     }
 }

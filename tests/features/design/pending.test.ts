@@ -1,27 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { serializeDesignEdits, upsertDesignPending, clearDesignPending, setDesignSelected } from "@/features/preview/design-mode/store";
+import { serializeDesignEdits, upsertDesignPending, clearDesignPending, setDesignSelected, designPendingCountLabel } from "@/features/preview/design-mode/store";
 import { findLayerPath } from "@/features/preview/design-mode/tree";
 import type { DesignLayerNode } from "@/features/preview/design-mode/types";
 import {
     historyKey,
+    initHistory,
     MAX_UNDO,
     pushEntry,
     shouldCoalesce,
+    switchHistory,
     type HistoryEntry,
 } from "@/features/preview/design-mode/history";
 import {
     stylesToClassTokens,
-    patchOpeningTag,
-    findOpeningTag,
-    classSearchNeedles,
-    scoreSourceLine,
-    patchInlineStyles,
     mergeClassTokens,
-    cssModuleLocal,
-} from "@/features/preview/design-mode/apply-to-source";
-import { isBundledGeneratedPath, isProjectSourcePath, isResolvedSource, normalizeOriginalSourcePath, pathFromGeneratedChunk, enrichSourceIdentity } from "@/features/preview/design-mode/source-identity";
-import { locateJsxByHint, locateJsxElement, locateJsxFromSearchLine } from "@/features/preview/design-mode/apply-jsx";
-import { patchCssClass } from "@/features/preview/design-mode/apply-css";
+} from "@/features/preview/design-mode/apply/class-tokens";
+import { patchOpeningTag, patchInlineStyles } from "@/features/preview/design-mode/apply/patch-tag";
+import { findOpeningTag, classSearchNeedles, scoreSourceLine, cssModuleLocal } from "@/features/preview/design-mode/apply/locate-html";
+import { isBundledGeneratedPath, isProjectSourcePath, isResolvedSource, normalizeOriginalSourcePath, pathFromGeneratedChunk, enrichSourceIdentity } from "@/features/preview/design-mode/identity";
+import { locateJsxByHint, locateJsxElement, locateJsxFromSearchLine } from "@/features/preview/design-mode/apply/locate-jsx";
+import { patchCssClass } from "@/features/preview/design-mode/apply/patch-css";
 import { formatLinearGradient, parseLinearGradient } from "@/features/preview/design-mode/css";
 
 describe("design mode pending edits", () => {
@@ -37,6 +35,10 @@ describe("design mode pending edits", () => {
         expect(prompt).toContain("h1.hero");
         expect(prompt).toContain("fontSize: 32px");
         expect(prompt).toContain("Welcome");
+        expect(designPendingCountLabel(1)).toBe("1 Edit");
+        expect(designPendingCountLabel(10)).toBe("10 Edits");
+        expect(designPendingCountLabel(10)).not.toMatch(/\[\d+\]/);
+        expect(designPendingCountLabel(10)).not.toMatch(/Apply \(/);
         clearDesignPending();
         setDesignSelected(null);
     });
@@ -113,8 +115,21 @@ describe("design history coalescing", () => {
         expect(stack[0]?.after.width).toBe("6px");
     });
 
-    it("keys unsaved sessions by origin and path", () => {
-        expect(historyKey("http://localhost:3000/app?x=1")).toBe("design:http://localhost:3000/app");
+    it("keys unsaved sessions by origin, path, and query", () => {
+        expect(historyKey("http://localhost:3000/app?x=1")).toBe("design:http://localhost:3000/app?x=1");
+        expect(historyKey("http://localhost:3000/app/")).toBe("design:http://localhost:3000/app");
+    });
+
+    it("keeps unapplied edits when you leave a page and come back", async () => {
+        const home = historyKey("http://localhost:3000/");
+        const about = historyKey("http://localhost:3000/about");
+        initHistory(home);
+        await switchHistory(home, [{ id: "h1", label: "h1", styles: { color: "red" } }]);
+        const next = await switchHistory(about, [{ id: "h1", label: "h1", styles: { color: "red" } }]);
+        expect(next.key).toBe(about);
+        expect(next.pending).toEqual([]);
+        const back = await switchHistory(home, []);
+        expect(back.pending[0]?.styles.color).toBe("red");
     });
 });
 
@@ -220,11 +235,12 @@ describe("apply edits to source", () => {
         expect(ambiguous.ok).toBe(false);
     });
 
-    it("treats Next chunks and empty component names as unresolved source identity", () => {
+    it("resolves Next chunks and page.tsx names to project source, and never recurses", () => {
         expect(isBundledGeneratedPath("/_next/static/chunks/src_01u.he5._.js")).toBe(true);
         expect(isProjectSourcePath("/_next/static/chunks/src_01u.he5._.js")).toBe(false);
         expect(isResolvedSource({ fileName: "", lineNumber: 0, componentName: "Hero" })).toBe(false);
         expect(isResolvedSource({ fileName: "exports.jsx", lineNumber: 1 })).toBe(false);
+        expect(isResolvedSource({ fileName: "page.tsx", lineNumber: 90, mapped: false })).toBe(true);
         expect(pathFromGeneratedChunk("app_page_tsx_1s_43kl._.js")).toBe("app/page.tsx");
         expect(enrichSourceIdentity({
             fileName: "page.tsx",
@@ -232,11 +248,23 @@ describe("apply edits to source", () => {
             mapped: false,
             generated: { fileName: "app_page_tsx_1s_43kl._.js", lineNumber: 1353, columnNumber: 231 },
         })?.fileName).toBe("app/page.tsx");
+        expect(isResolvedSource({
+            fileName: "http://localhost:3000/_next/static/chunks/app_page_tsx_1s_43kl._.js",
+            lineNumber: 1504,
+            mapped: false,
+            generated: { fileName: "app_page_tsx_1s_43kl._.js", lineNumber: 1504, columnNumber: 200 },
+        })).toBe(true);
         expect(isResolvedSource({ fileName: "src/components/view-animation.tsx", lineNumber: 41 })).toBe(true);
         expect(normalizeOriginalSourcePath("webpack://portfolio/./src/components/view-animation.tsx")).toBe(
             "src/components/view-animation.tsx",
         );
         expect(normalizeOriginalSourcePath("http://localhost:5173/src/App.tsx?t=123")).toBe("src/App.tsx");
+        expect(normalizeOriginalSourcePath("webpack-internal:///(app-pages-browser)/./app/page.tsx")).toBe("app/page.tsx");
+        expect(normalizeOriginalSourcePath("webpack-internal:///(rsc)/./app/layout.tsx")).toBe("app/layout.tsx");
+        expect(enrichSourceIdentity({
+            fileName: "webpack-internal:///(app-pages-browser)/./app/page.tsx",
+            lineNumber: 142,
+        })?.fileName).toBe("app/page.tsx");
         expect(isResolvedSource({ fileName: "http://localhost:5173/src/App.tsx", lineNumber: 12 })).toBe(true);
     });
 
@@ -262,6 +290,28 @@ describe("apply edits to source", () => {
         });
         expect(wrongLine.ok).toBe(true);
         if (wrongLine.ok) expect(wrongLine.hit.tagName).toBe("p");
+    });
+
+    it("picks a unique class among same-tag JSX even when other sections exist", () => {
+        const src = `export default function Page() {
+  return (
+    <>
+      <section className="home-hero">Hero</section>
+      <section className="browse">Browse</section>
+      <section className="footer">Foot</section>
+    </>
+  );
+}
+`;
+        const browse = locateJsxByHint(src, "page.tsx", { className: "browse", tag: "section" });
+        expect(browse.ok).toBe(true);
+        if (browse.ok) expect(browse.hit.text).toContain("browse");
+        const dup = locateJsxByHint(
+            src.replace("footer", "browse"),
+            "page.tsx",
+            { className: "browse", tag: "section" },
+        );
+        expect(dup.ok).toBe(false);
     });
 
     it("patches a CSS class with PostCSS without flattening @media siblings", () => {

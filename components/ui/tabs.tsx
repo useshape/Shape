@@ -4,16 +4,12 @@ import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cn } from "@/lib/utils";
 
-type TabsListVariant = "pill" | "line";
-
-const TabsListVariantContext = React.createContext<TabsListVariant>("pill");
-
 export const Tabs = TabsPrimitive.Root;
 
 export const TabsList = React.forwardRef<
     HTMLDivElement,
-    React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & { variant?: TabsListVariant }
->(({ className, children, variant = "pill", ...props }, ref) => {
+    React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, children, ...props }, ref) => {
     const listRef = React.useRef<HTMLDivElement | null>(null);
     const [indicator, setIndicator] = React.useState({ left: 0, width: 0, ready: false });
 
@@ -37,7 +33,7 @@ export const TabsList = React.forwardRef<
         const listRect = list.getBoundingClientRect();
         const activeRect = active.getBoundingClientRect();
         setIndicator({
-            left: activeRect.left - listRect.left - list.clientLeft + list.scrollLeft,
+            left: activeRect.left - listRect.left - list.clientLeft,
             width: activeRect.width,
             ready: true,
         });
@@ -59,45 +55,37 @@ export const TabsList = React.forwardRef<
         });
         const ro = new ResizeObserver(onChange);
         ro.observe(list);
-        list.addEventListener("scroll", onChange);
         window.addEventListener("resize", onChange);
         return () => {
             mo.disconnect();
             ro.disconnect();
-            list.removeEventListener("scroll", onChange);
             window.removeEventListener("resize", onChange);
         };
     }, [updateIndicator]);
 
     return (
-        <TabsListVariantContext.Provider value={variant}>
-            <TabsPrimitive.List
-                ref={setRefs}
+        <TabsPrimitive.List
+            ref={setRefs}
+            className={cn(
+                "relative inline-flex h-7 items-center rounded-lg bg-panel-secondary p-0.5",
+                className,
+            )}
+            {...props}
+        >
+            <span
+                aria-hidden
                 className={cn(
-                    variant === "line"
-                        ? "relative flex h-chrome w-full items-center overflow-x-auto no-scrollbar border-b border-border-subtle px-sm"
-                        : "relative inline-flex h-7 items-center rounded-lg bg-panel-secondary p-0.5",
-                    className,
+                    "pointer-events-none absolute top-0.5 bottom-0.5 rounded-md bg-panel-active",
+                    "transition-[transform,width,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    indicator.ready ? "opacity-100" : "opacity-0",
                 )}
-                {...props}
-            >
-                <span
-                    aria-hidden
-                    className={cn(
-                        "pointer-events-none absolute transition-[transform,width,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                        variant === "line"
-                            ? "bottom-0 h-px bg-text-primary"
-                            : "top-0.5 bottom-0.5 rounded-md bg-panel-active",
-                        indicator.ready ? "opacity-100" : "opacity-0",
-                    )}
-                    style={{
-                        width: indicator.width,
-                        transform: `translateX(${indicator.left}px)`,
-                    }}
-                />
-                {children}
-            </TabsPrimitive.List>
-        </TabsListVariantContext.Provider>
+                style={{
+                    width: indicator.width,
+                    transform: `translateX(${indicator.left}px)`,
+                }}
+            />
+            {children}
+        </TabsPrimitive.List>
     );
 });
 TabsList.displayName = TabsPrimitive.List.displayName;
@@ -105,23 +93,19 @@ TabsList.displayName = TabsPrimitive.List.displayName;
 export const TabsTrigger = React.forwardRef<
     React.ElementRef<typeof TabsPrimitive.Trigger>,
     React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, ...props }, ref) => {
-    const variant = React.useContext(TabsListVariantContext);
-    return (
-        <TabsPrimitive.Trigger
-            ref={ref}
-            className={cn(
-                "relative z-10 inline-flex shrink-0 items-center justify-center whitespace-nowrap text-sm font-normal",
-                "transition-colors duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                "data-[state=active]:text-text-primary data-[state=active]:bg-transparent",
-                "text-text-secondary hover:text-text-primary",
-                variant === "line" ? "h-chrome px-sm" : "rounded-md px-2 py-1",
-                className,
-            )}
-            {...props}
-        />
-    );
-});
+>(({ className, ...props }, ref) => (
+    <TabsPrimitive.Trigger
+        ref={ref}
+        className={cn(
+            "relative z-10 inline-flex items-center justify-center whitespace-nowrap rounded-md px-2 py-1 text-sm font-normal",
+            "transition-colors duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            "data-[state=active]:text-text-primary data-[state=active]:bg-transparent",
+            "text-text-secondary hover:text-text-primary",
+            className,
+        )}
+        {...props}
+    />
+));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
 export const TabsContent = React.forwardRef<

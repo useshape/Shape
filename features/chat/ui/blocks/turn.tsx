@@ -844,7 +844,13 @@ export function TurnWorkflowSummary({
         <div className="mb-2 select-none">
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => {
+                    setOpen((v) => {
+                        const next = !v;
+                        if (next) setStepsOpen(true);
+                        return next;
+                    });
+                }}
                 className="flex w-fit max-w-full items-center gap-1 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors"
             >
                 <span>
@@ -892,7 +898,7 @@ export function TurnWorkflowSummary({
                         </button>
                     ) : null}
 
-                    <Collapse open={stepsOpen || !!isActive}>
+                    <Collapse open={stepsOpen}>
                         <div className="flex flex-col gap-0.5 pl-3">
                             {(() => {
                                 let skippedLeadThought = false;

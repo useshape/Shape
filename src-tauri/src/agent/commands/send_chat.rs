@@ -523,8 +523,13 @@ pub async fn send_chat_message(
         });
     }
 
+    // Three extra model calls after the user hit Stop is the worst possible time to
+    // spend them, and a turn that ran out of tool loops has nothing worth critiquing.
+    let turn_exhausted_loops = loop_count >= run_turn::max_loops_for_mode(&mode_to_use);
     if mode_to_use.eq_ignore_ascii_case("review")
         && review_adversarial_enabled.unwrap_or(true)
+        && !cancel.is_cancelled()
+        && !turn_exhausted_loops
         && adversarial_review::should_run(&final_full_response)
     {
         streaming::emit_chat_status(

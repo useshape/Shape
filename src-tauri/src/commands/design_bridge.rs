@@ -52,24 +52,15 @@ pub fn register_design_bridge(app: AppHandle, script: String) -> Result<(), AppE
     .map_err(|e| AppError::Message(e.to_string()))
 }
 
-/// Print design-mode diagnostics to the `tauri:dev` terminal (stderr), not the app UI.
+/// Print design-mode diagnostics to the Shape log target only — never the project PTY.
 #[tauri::command]
 pub fn design_mode_log(level: String, message: String) {
-    let ts = {
-        use std::time::SystemTime;
-        let now = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default();
-        let secs = now.as_secs();
-        format!(
-            "{:02}:{:02}:{:02}.{:03}",
-            (secs / 3600) % 24,
-            (secs / 60) % 60,
-            secs % 60,
-            now.subsec_millis()
-        )
-    };
-    eprintln!("[{ts}] [{level}] [design] {message}");
+    match level.to_ascii_uppercase().as_str() {
+        "ERROR" => log::error!(target: "design", "{message}"),
+        "WARN" => log::warn!(target: "design", "{message}"),
+        "DEBUG" => log::debug!(target: "design", "{message}"),
+        _ => log::debug!(target: "design", "{message}"),
+    }
 }
 
 #[cfg(windows)]

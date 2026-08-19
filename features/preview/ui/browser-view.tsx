@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
 import { Tooltip } from "@/components/ui/tooltip";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 import { commands } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import {
@@ -31,7 +38,9 @@ import {
     setDesignReady,
     setDesignSelected,
     setDesignSelection,
+    setDesignSelecting,
     setDesignTool,
+    upsertDesignPending,
     useDesignModeStore,
     getDesignModeState,
 } from "@/features/preview/design-mode/store";
@@ -41,10 +50,32 @@ import {
     historyRedo,
     historyUndo,
     persistHistoryNow,
-    restoreHistory,
+    switchHistory,
+    setHistoryPending,
 } from "@/features/preview/design-mode/history";
 import type { DesignBridgeApi, DesignLayerNode, DesignSelectedElement } from "@/features/preview/design-mode/types";
-import { enrichSourceIdentity, isResolvedSource } from "@/features/preview/design-mode/source-identity";
+import type { DesignExportPayload } from "@/features/preview/design-mode/export-file";
+import { enrichSourceIdentity } from "@/features/preview/design-mode/identity";
+
+type PreviewDevice = {
+    id: string;
+    label: string;
+    icon: "monitor" | "smartphone" | "tablet";
+    width: number | null;
+    height: number | null;
+    radius: number;
+};
+
+const PREVIEW_DEVICES: PreviewDevice[] = [
+    { id: "full", label: "Full", icon: "monitor", width: null, height: null, radius: 0 },
+    { id: "iphone-se", label: "iPhone SE", icon: "smartphone", width: 375, height: 667, radius: 14 },
+    { id: "iphone-16", label: "iPhone 16", icon: "smartphone", width: 393, height: 852, radius: 16 },
+    { id: "iphone-16-pro-max", label: "iPhone 16 Pro Max", icon: "smartphone", width: 440, height: 956, radius: 18 },
+    { id: "pixel-8", label: "Pixel 8", icon: "smartphone", width: 412, height: 915, radius: 16 },
+    { id: "galaxy-s24", label: "Galaxy S24", icon: "smartphone", width: 384, height: 824, radius: 16 },
+    { id: "ipad-mini", label: "iPad mini", icon: "tablet", width: 744, height: 1133, radius: 12 },
+    { id: "ipad-11", label: 'iPad 11"', icon: "tablet", width: 820, height: 1180, radius: 12 },
+];
 
 function displayHost(raw: string) {
     try {
@@ -53,6 +84,36 @@ function displayHost(raw: string) {
     } catch {
         return raw.trim() || "this page";
     }
+}
+
+function pendingSnapshot() {
+    return getDesignModeState().pending.map((p) => ({
+        id: p.id,
+        selector: p.selector,
+        className: p.className,
+        tag: p.tag,
+        locateText: p.locateText,
+        source: p.source,
+        label: p.label,
+        styles: Object.fromEntries(
+            Object.entries(p.styles).filter(([, v]) => v != null && String(v).trim() !== ""),
+        ) as Record<string, string>,
+        text: p.text,
+    }));
+}
+
+function pendingFromSession(pending: ReturnType<typeof pendingSnapshot>) {
+    return pending.map((p) => ({
+        id: p.id,
+        selector: p.selector,
+        className: p.className,
+        tag: p.tag,
+        locateText: p.locateText,
+        source: p.source,
+        label: p.label,
+        styles: p.styles,
+        text: p.text,
+    }));
 }
 
 function BrowserErrorPage({
@@ -66,23 +127,23 @@ function BrowserErrorPage({
 }) {
     return (
         <div
-            className="absolute inset-0 z-10 overflow-auto bg-white"
-            style={{ fontFamily: 'system-ui, "Segoe UI", sans-serif' }}
+            className="absolute inset-0 z-10 overflow-auto bg-editor"
+            style={{ fontFamily: 'inter, "Segoe UI", sans-serif' }}
         >
-            <div className="max-w-[640px] px-[72px] py-10">
-                <h1 className="mb-4 text-[32px] font-normal leading-tight text-black">This site can&apos;t be reached</h1>
-                <p className="mb-2 text-[15px] leading-relaxed text-[#5f6368]">
-                    Check if there is a typo in <span className="font-bold text-black">{host}</span>.
+            <div className="max-w-[640px] px-[92px] py-50">
+                <h1 className="mb-4 text-2xl font-semibold text-text-primary">This site can&apos;t be reached</h1>
+                <p className="mb-2 text-sm text-text-muted">
+                    Check if there is a typo in <span className="font-semibold text-text-primary">{host}</span>.
                 </p>
-                <p className="mb-6 text-[15px] leading-relaxed text-[#5f6368]">If spelling is correct, try reloading the page.</p>
-                <p className="mb-8 text-[12px] tracking-wide text-[#9aa0a6]">{code}</p>
-                <button
-                    type="button"
+                <p className="mb-6 text-sm text-text-muted">If spelling is correct, try reloading the page.</p>
+                <p className="mb-8 text-sm text-text-muted">{code}</p>
+                <Button
                     onClick={onReload}
-                    className="rounded-[4px] bg-[#1a73e8] px-4 py-[7px] text-[13px] font-medium text-white hover:bg-[#1557b0]"
+                    variant="secondary"
+                    size="sm"
                 >
                     Reload
-                </button>
+                </Button>
             </div>
         </div>
     );
@@ -104,7 +165,13 @@ export function BrowserView() {
     const inputRef = useRef<HTMLInputElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const selectSeq = useRef(0);
-    const replayOnceRef = useRef(false);
+    const exportWaiters = useRef(
+        new Map<string, { resolve: (v: DesignExportPayload) => void; reject: (e: Error) => void }>(),
+    );
+    const fontWaiters = useRef(new Map<string, (names: string[]) => void>());
+    const [previewDeviceId, setPreviewDeviceId] = useState("full");
+    const previewDevice = PREVIEW_DEVICES.find((d) => d.id === previewDeviceId) ?? PREVIEW_DEVICES[0]!;
+    const framed = previewDevice.width != null;
     const canBack = index > 0;
     const canForward = index >= 0 && index < history.length - 1;
     const currentUrl = getPreviewCurrentUrl();
@@ -142,7 +209,9 @@ export function BrowserView() {
     }, [currentUrl, urlBar]);
 
     const replayPending = useCallback((frame: HTMLIFrameElement | null) => {
+        const url = getPreviewCurrentUrl() || iframeSrc || urlBar.trim();
         const session = getHistorySession();
+        if (url && session && session.key !== historyKey(url)) return;
         const pending = session?.pending?.length ? session.pending : getDesignModeState().pending;
         for (const edit of pending) {
             if (edit.styles && Object.keys(edit.styles).length) {
@@ -162,7 +231,7 @@ export function BrowserView() {
                 });
             }
         }
-    }, []);
+    }, [iframeSrc, urlBar]);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
@@ -176,9 +245,42 @@ export function BrowserView() {
                     inspect: getDesignModeState().inspect,
                     tool: getDesignModeState().tool,
                 });
-                if (replayOnceRef.current) {
-                    replayOnceRef.current = false;
-                    window.setTimeout(() => replayPending(iframeRef.current), 40);
+                window.setTimeout(() => replayPending(iframeRef.current), 40);
+            }
+            if (data.type === "shape-design-export-result") {
+                const waiter = exportWaiters.current.get(String(data.req || ""));
+                if (!waiter) return;
+                exportWaiters.current.delete(String(data.req || ""));
+                if (data.error) waiter.reject(new Error(String(data.error)));
+                else waiter.resolve(data as DesignExportPayload);
+            }
+            if (data.type === "shape-design-fonts") {
+                const waiter = fontWaiters.current.get(String(data.req || ""));
+                if (!waiter) return;
+                fontWaiters.current.delete(String(data.req || ""));
+                waiter(Array.isArray(data.fonts) ? (data.fonts as string[]) : []);
+            }
+            if (data.type === "shape-design-selecting") {
+                setDesignSelecting(true);
+            }
+            if (data.type === "shape-design-mutated" && data.id && data.styles) {
+                const state = getDesignModeState();
+                const el = state.selection.find((s) => s.id === data.id) ?? (state.selected?.id === data.id ? state.selected : null);
+                if (el) {
+                    const styles = data.styles as Record<string, string>;
+                    upsertDesignPending({
+                        id: el.id,
+                        tag: el.tag,
+                        selector: el.selector,
+                        className: el.className,
+                        locateText: el.locateText,
+                        source: el.source,
+                        label: el.label,
+                        styles,
+                        text: el.text,
+                        inspect: el.inspect,
+                    });
+                    setDesignSelected({ ...el, styles: { ...el.styles, ...styles } }, true);
                 }
             }
             if (data.type === "shape-design-tree" && Array.isArray(data.nodes)) {
@@ -197,7 +299,7 @@ export function BrowserView() {
                     const next = {
                         ...raw,
                         source,
-                        editable: isResolvedSource(source),
+                        editable: true,
                     };
                     setDesignSelected(next, !!data.additive);
                 })();
@@ -223,6 +325,7 @@ export function BrowserView() {
     }, [replayPending, iframeSrc]);
 
     const exitDesignMode = useCallback(() => {
+        setHistoryPending(pendingSnapshot());
         postToFrame(iframeRef.current, { type: "shape-design-disable" });
         void persistHistoryNow();
         setDesignModeEnabled(false);
@@ -241,23 +344,6 @@ export function BrowserView() {
         window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "secondary-sidebar", value: true } }));
         setDesignModeEnabled(true);
         try {
-            const session = await restoreHistory(historyKey(target));
-            if (session.pending.length) {
-                setDesignPending(
-                    session.pending.map((p) => ({
-                        id: p.id,
-                        selector: p.selector,
-                        className: p.className,
-                        tag: p.tag,
-                        locateText: p.locateText,
-                        source: p.source,
-                        label: p.label,
-                        styles: p.styles,
-                        text: p.text,
-                    })),
-                );
-            }
-            replayOnceRef.current = getDesignModeState().pending.length > 0;
             postToFrame(iframeRef.current, {
                 type: "shape-design-enable",
                 inspect: getDesignModeState().inspect,
@@ -268,6 +354,31 @@ export function BrowserView() {
             setDesignModeEnabled(false);
         }
     }, [currentUrl, design.enabled, exitDesignMode, iframeSrc, urlBar]);
+
+    useEffect(() => {
+        if (!design.enabled) return;
+        const url = currentUrl || iframeSrc;
+        if (!url) return;
+        const key = historyKey(url);
+        let cancelled = false;
+        void (async () => {
+            const session = await switchHistory(key, pendingSnapshot());
+            if (cancelled) return;
+            setDesignPending(pendingFromSession(session.pending));
+            setDesignSelected(null);
+            postToFrame(iframeRef.current, {
+                type: "shape-design-enable",
+                inspect: getDesignModeState().inspect,
+                tool: getDesignModeState().tool,
+            });
+            window.setTimeout(() => {
+                if (!cancelled) replayPending(iframeRef.current);
+            }, 60);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [currentUrl, design.enabled, iframeSrc, replayPending]);
 
     useEffect(() => {
         const onExit = () => {
@@ -363,8 +474,9 @@ export function BrowserView() {
     useEffect(() => {
         const api: DesignBridgeApi = {
             select: selectLayer,
-            style: (id: string, styles: Record<string, string>, selector?: string) =>
-                postToFrame(iframeRef.current, { type: "shape-design-style", id, styles, selector }),
+            style: (id: string, styles: Record<string, string>, selector?: string) => {
+                postToFrame(iframeRef.current, { type: "shape-design-style", id, styles, selector });
+            },
             content: (id: string, text: string, selector?: string) =>
                 postToFrame(iframeRef.current, { type: "shape-design-content", id, text, selector }),
             undo: () => postToFrame(iframeRef.current, { type: "shape-design-undo" }),
@@ -384,6 +496,37 @@ export function BrowserView() {
                 postToFrame(iframeRef.current, { type: "shape-design-watch", id, selector, enabled }),
             emulateFocus: (enabled: boolean) =>
                 postToFrame(iframeRef.current, { type: "shape-design-emulate-focus", enabled }),
+            listFonts: () =>
+                new Promise<string[]>((resolve) => {
+                    const req = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+                    fontWaiters.current.set(req, resolve);
+                    postToFrame(iframeRef.current, { type: "shape-design-list-fonts", req });
+                    window.setTimeout(() => {
+                        if (!fontWaiters.current.has(req)) return;
+                        fontWaiters.current.delete(req);
+                        resolve([]);
+                    }, 2000);
+                }),
+            injectFont: (family: string) =>
+                postToFrame(iframeRef.current, { type: "shape-design-inject-font", family }),
+            exportElement: (id, opts) =>
+                new Promise((resolve, reject) => {
+                    const req = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+                    exportWaiters.current.set(req, { resolve, reject });
+                    postToFrame(iframeRef.current, {
+                        type: "shape-design-export",
+                        req,
+                        id,
+                        selector: opts.selector,
+                        format: opts.format,
+                        scale: opts.scale,
+                    });
+                    window.setTimeout(() => {
+                        if (!exportWaiters.current.has(req)) return;
+                        exportWaiters.current.delete(req);
+                        reject(new Error("Export timed out."));
+                    }, 12000);
+                }),
         };
         setDesignBridgeApi(api);
         return () => setDesignBridgeApi(null);
@@ -501,6 +644,42 @@ export function BrowserView() {
                     </Tooltip>
                 ) : null}
 
+                {design.enabled ? (
+                    <DropdownMenu>
+                        <Tooltip content={previewDevice.label}>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-text-muted hover:text-text-primary"
+                                    aria-label="Preview device"
+                                >
+                                    <Icon name={previewDevice.icon} size={16} />
+                                </Button>
+                            </DropdownMenuTrigger>
+                        </Tooltip>
+                        <DropdownMenuContent align="end" className="min-w-[220px]">
+                            <DropdownMenuLabel>Preview size</DropdownMenuLabel>
+                            {PREVIEW_DEVICES.map((device) => (
+                                <DropdownMenuItem
+                                    key={device.id}
+                                    onSelect={() => setPreviewDeviceId(device.id)}
+                                    className={cn(previewDeviceId === device.id && "bg-panel-hover")}
+                                >
+                                    <Icon name={device.icon} size={14} />
+                                    <span className="flex-1">{device.label}</span>
+                                    {device.width ? (
+                                        <span className="text-[11px] text-text-muted">
+                                            {device.width}×{device.height}
+                                        </span>
+                                    ) : null}
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
+
                 <Tooltip content="Open externally">
                     <Button
                         type="button"
@@ -517,13 +696,34 @@ export function BrowserView() {
 
             <div className="relative min-h-0 flex-1 overflow-hidden bg-editor">
                 {frameSrc ? (
+                    <div
+                        className={cn(
+                            "flex h-full min-h-0 w-full justify-center",
+                            framed ? "items-center overflow-auto bg-panel-hover p-4" : "w-full",
+                        )}
+                    >
+                        <div
+                            className={cn("relative min-h-0", framed ? "shrink-0 overflow-hidden bg-editor shadow-md" : "h-full w-full")}
+                            style={
+                                framed
+                                    ? {
+                                          width: previewDevice.width!,
+                                          height: previewDevice.height!,
+                                          maxWidth: "100%",
+                                          maxHeight: "100%",
+                                          borderRadius: previewDevice.radius,
+                                      }
+                                    : { width: "100%", height: "100%" }
+                            }
+                        >
                     <iframe
                         key={`${frameSrc}::${reloadKey}`}
                         ref={iframeRef}
                         title="Browser"
                         src={frameSrc}
                         className={cn(
-                            "absolute inset-0 h-full w-full border-0 bg-editor",
+                            "h-full w-full border-0 bg-editor",
+                            !framed && "absolute inset-0",
                             coverFrame && "invisible",
                         )}
                         onLoad={() => {
@@ -535,6 +735,7 @@ export function BrowserView() {
                                     inspect: design.inspect,
                                     tool: design.tool,
                                 });
+                                window.setTimeout(() => replayPending(frame), 60);
                             }
                             window.setTimeout(() => {
                                 try {
@@ -558,6 +759,8 @@ export function BrowserView() {
                         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
                         referrerPolicy="no-referrer"
                     />
+                        </div>
+                    </div>
                 ) : null}
 
                 {showError ? (

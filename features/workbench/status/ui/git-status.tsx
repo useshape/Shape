@@ -20,7 +20,7 @@ export function GitStatusButton() {
                     window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "source" }))
                 }
             >
-                <Icon name="account_tree" size={14} className="shrink-0" filled />
+                <Icon name="account_tree" size={14} className="shrink-0" />
                 {branch ? <span className="font-medium">{branch}</span> : null}
             </Button>
         </Tooltip>

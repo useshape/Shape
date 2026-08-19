@@ -13,7 +13,9 @@ Use `edit_file` with exact SEARCH/REPLACE copied from `read_file` output (includ
 
 ## Shell (Windows)
 
-Shell is PowerShell on Windows: chain with `;` — never `&&` (parse error on many versions). Prefer `read_file` / `grep` / `list_dir` over `type` / `cat` / `dir` / `Get-Content` for inspection.
+Shell is PowerShell on Windows: chain with `;` — never `&&` (parse error on many versions).
+
+Never inspect files through the shell. `Get-Content`, `Get-Item`, `Select-String`, `Test-Path`, `type`, `cat`, `dir`, and pipelines built on them are all served by `read_file`, `grep`, and `list_dir` instead. If one of those is blocked, switch to the tool — do not look for another shell spelling.
 
 ## Tools over shell
 

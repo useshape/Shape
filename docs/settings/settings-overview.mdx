@@ -1,35 +1,35 @@
 ---
 title: Shape Settings
-description: Open Shape IDE settings for editor, Git, AI, terminal, and more.
+description: Open Shape IDE settings for editor, Git, agents, terminal, and more.
 order: 1
 icon: ri-settings-4-line
 ---
 
 Shape stores preferences in a settings editor that opens as a tab in the workbench. Changes apply immediately or on the next relevant action.
+
 ## Open settings
 
 - Click the **gear** icon on the [activity bar](/docs/workspace/activity-bar)
 - Click **Settings** in the titlebar
-- **File → Preferences → Settings** or **Ctrl+,**
+- **Window → Settings** or **Ctrl+,**
 
 Close the settings tab with **Ctrl+W** like any editor tab.
 
 ## Categories
 
-| Category | What it controls |
-| --- | --- |
-| **Editor** | Font, tabs, minimap, auto-save, formatting |
-| **Appearance** | UI zoom level |
-| **Terminal** | Shell, font, scrollback |
-| **Git** | Auto-fetch, commit confirmation, blame |
-| **AI** | Models, context, rules, MCP, indexing |
-| **Files** | Exclude patterns, line endings |
-| **Lint & Format** | ESLint and Prettier |
-| **Languages & LSP** | Per-language servers |
-| **Node.js & NPM** | Interpreter, package manager |
-| **Design Tools** | Tailwind controls, design autocomplete |
+The left tree groups settings like this:
 
-Select a category from the left sidebar. Settings in each section use toggles, dropdowns, and text fields.
+| Group | Sections |
+| --- | --- |
+| **Account** | Profile, plan, updates channel |
+| **Agents** | Models, rules, context, MCP |
+| **Editor** | Font, indentation, caret, saving, files, Design |
+| **Features** | Terminal, Source Control, language servers, Node.js, Python, ESLint & Prettier |
+| **Application** | Updates, notifications, privacy, developer |
+
+Select a leaf in the tree to jump to that section. Controls are toggles, dropdowns, and text fields.
+
+Design autocomplete, Tailwind controls, and diagnostics are under **Editor → Design**, not a separate top-level category. Agent auto-run, edit approval, and adversarial review are under **Agents**. See [AI Settings](/docs/ai/ai-settings) and [Design Tools](/docs/editor/design-tools).
 
 ## Persistence
 

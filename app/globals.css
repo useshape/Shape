@@ -8,7 +8,7 @@
   /* ── Surface ladder ────────────────────────────────────── */
   --surface-0: #1A1A1A;
   --surface-1: #1b1b1b;
-  --surface-2: #1f1f1f;
+  --surface-2: #222222;
   --surface-3: #282828;
   --surface-4: #333333;
 
@@ -971,6 +971,7 @@ body[data-resizing] .xterm {
 .chat-collapse > .chat-collapse-inner {
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
 }
 
 /* ── Allotment Split View Theme ───────────────────────────── */
@@ -1122,5 +1123,7 @@ body[data-resizing] .xterm {
 
 .workbench-tab-item,
 .chat-tab-item {
-  animation: shape-tab-appear 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Do not retain the animation's final transform; sortable tabs need their
+     inline transform while dragging. */
+  animation: shape-tab-appear 160ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }

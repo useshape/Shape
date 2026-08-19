@@ -1,11 +1,11 @@
 ---
 title: Git Settings in Shape
-description: Configure Shape IDE Git auto-fetch, commit confirmation, and inline blame.
+description: Configure Shape IDE Git auto-fetch, commit confirmation, graph, and inline blame.
 order: 3
 icon: ri-git-branch-line
 ---
 
-**Settings → Git** controls how Shape's [Source Control](/docs/git/source-control) sidebar interacts with your repository.
+**Settings → Features → Source Control** controls how Shape's [Source Control](/docs/git/source-control) sidebar interacts with your repository.
 
 ## Auto fetch
 
@@ -22,6 +22,13 @@ Auto fetch updates remote tracking branches so ahead/behind counts in the status
 
 Disable it for faster commits when you are confident in your staged changes.
 
+## Graph
+
+| Setting | Description |
+| --- | --- |
+| **Graph avatars** | Show author avatars on [Git Graph](/docs/git/git-graph) rows |
+| **Show all branches** | Log every branch (`git log --all`). Off limits the graph to the current branch |
+
 ## Blame
 
 **Git blame** annotates lines in the editor with the last commit author and date. Enable blame in settings, then use the command palette or editor context to toggle blame decorations for the active file.
@@ -32,11 +39,12 @@ Blame helps during code review and when tracing when a line changed. It requires
 
 Branch creation, remote URLs, and push/pull actions live in the [Source Control](/docs/git/source-control) sidebar and [Branches and Remotes](/docs/git/branches-and-remotes) docs, not in settings.
 
-GitHub authentication is managed from the [avatar menu](/docs/git/github-sign-in).
+Pull requests and Actions live in [Git Manager](/docs/git/git-manager). GitHub authentication is managed from the [avatar menu](/docs/git/github-sign-in).
 
 ## Related
 
 - [Source Control](/docs/git/source-control)
+- [Git Manager](/docs/git/git-manager)
 - [Branches and Remotes](/docs/git/branches-and-remotes)
 - [Settings Overview](/docs/settings/settings-overview)
 - [Diff and Merge](/docs/editor/diff-and-merge)

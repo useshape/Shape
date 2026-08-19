@@ -29,7 +29,10 @@ pub fn list_files(path: &str, project_path: &str) -> Result<String, AppError> {
     Ok(list)
 }
 
-pub const DEFAULT_READ_LINES: usize = 200;
+/// Most source files fit under this, so a plain `read_file` returns the whole thing.
+/// A small default made models page through files in dozens of overlapping calls,
+/// which cost far more context than just handing over the file once.
+pub const DEFAULT_READ_LINES: usize = 1000;
 
 /// Read a file's contents, validated against the project root and sensitive file checks.
 /// When no line range is given, returns at most [`DEFAULT_READ_LINES`] lines.
