@@ -21,7 +21,8 @@ export function FilterMenu({
 }) {
     const current = options.find((o) => o.value === value)?.label ?? label;
     return (
-        <DropdownMenu>
+        // modal={false} avoids body scroll-lock / scrollbar gutter jump that shifts graph lanes.
+        <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
                 <Button
                     type="button"
@@ -33,7 +34,11 @@ export function FilterMenu({
                     <Icon name="expand_more" size={14} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-72 w-56">
+            <DropdownMenuContent
+                align="start"
+                className="max-h-72 w-56"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+            >
                 {options.map((opt) => (
                     <DropdownMenuItem
                         key={opt.value}

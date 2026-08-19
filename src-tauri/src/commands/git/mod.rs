@@ -278,9 +278,9 @@ pub struct GitActivityPoint {
     pub hash: String,
 }
 
-/// Fetch only timestamp + short hash for every commit (or a filtered rev).
-/// Used by the Git Manager activity chart so it covers the whole history without
-/// waiting for the virtualized commit list to load.
+/// Fetch timestamp + short hash samples for the Git Manager activity chart.
+/// Streams git stdout (no giant String buffer), hard-caps samples, and prefers
+/// recent history so opening Graph stays responsive on large repos.
 pub fn git_activity_timeline(
     path: String,
     all_refs: Option<bool>,
@@ -289,6 +289,7 @@ pub fn git_activity_timeline(
 ) -> Result<Vec<GitActivityPoint>, AppError> {
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
+    use std::io::{BufRead, BufReader};
     use std::process::Stdio;
 
     let include_all = all_refs.unwrap_or(true);
@@ -296,7 +297,9 @@ pub fn git_activity_timeline(
     cmd.current_dir(&path)
         .arg("log")
         .arg("--date-order")
-        .arg("--format=%ct %h");
+        .arg("--format=%ct %h")
+        // Soft cap — chart only needs density, not every commit over IPC.
+        .arg("--max-count=2500");
 
     if let Some(a) = author.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         cmd.arg(format!("--author={}", a));
@@ -314,20 +317,21 @@ pub fn git_activity_timeline(
     #[cfg(windows)]
     cmd.creation_flags(0x08000000);
 
-    let output = cmd
-        .output()
+    let mut child = cmd
+        .spawn()
         .map_err(|e| AppError::Message(format!("git activity timeline failed: {}", e)))?;
-    if !output.status.success() {
-        return Ok(Vec::new());
-    }
+    let stdout = child.stdout.take().ok_or_else(|| {
+        AppError::Message("git activity timeline: missing stdout".into())
+    })?;
 
-    let text = String::from_utf8_lossy(&output.stdout);
-    let mut points = Vec::with_capacity(4096);
-    const MAX_POINTS: usize = 80_000;
-    for line in text.lines() {
+    let reader = BufReader::new(stdout);
+    let mut points = Vec::with_capacity(1024);
+    const MAX_POINTS: usize = 2_500;
+    for line in reader.lines() {
         if points.len() >= MAX_POINTS {
             break;
         }
+        let Ok(line) = line else { continue };
         let mut parts = line.split_whitespace();
         let Some(ts_raw) = parts.next() else { continue };
         let Some(hash) = parts.next() else { continue };
@@ -337,6 +341,8 @@ pub fn git_activity_timeline(
             hash: hash.to_string(),
         });
     }
+    let _ = child.kill();
+    let _ = child.wait();
     Ok(points)
 }
 
@@ -641,6 +647,53 @@ pub fn git_commit(repo_path: String, message: String) -> Result<(), AppError> {
 
         repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
             .map_err(|e| AppError::Git(e))?;
+
+        Ok(())
+    };
+
+    let result = match try_op() {
+        Err(AppError::Git(e)) if e.code() == git2::ErrorCode::Locked => {
+            let lock_path = Path::new(&repo_path).join(".git").join("index.lock");
+            let _ = std::fs::remove_file(lock_path);
+            try_op()
+        }
+        res => res,
+    };
+    if result.is_ok() {
+        crate::commands::stats::bump_event(&repo_path, "user_git_commits");
+    }
+    result
+}
+
+/// Amend HEAD with the current index and a new message (Git Desktop / GitKraken-style).
+pub fn git_commit_amend(repo_path: String, message: String) -> Result<(), AppError> {
+    let try_op = || -> Result<(), AppError> {
+        let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
+        let mut index = repo.index().map_err(|e| AppError::Git(e))?;
+        let oid = index.write_tree().map_err(|e| AppError::Git(e))?;
+        let tree = repo.find_tree(oid).map_err(|e| AppError::Git(e))?;
+
+        let sig = repo.signature().map_err(|_| {
+            AppError::Message(
+                "Failed to find git signature (user.name/email configured?)".to_string(),
+            )
+        })?;
+
+        let head = repo
+            .head()
+            .map_err(|e| AppError::Git(e))?
+            .peel_to_commit()
+            .map_err(|e| AppError::Git(e))?;
+
+        head.amend(
+            Some("HEAD"),
+            Some(&sig),
+            Some(&sig),
+            None,
+            Some(message.as_str()),
+            Some(&tree),
+        )
+        .map_err(|e| AppError::Git(e))?;
 
         Ok(())
     };
@@ -986,7 +1039,7 @@ pub fn git_branch_details(
     if include_remotes {
         cmd.arg("refs/remotes/");
     }
-    cmd.arg("--format=%(refname:short)|%(authorname)|%(authoremail)|%(committerdate:relative)");
+    cmd.arg("--format=%(refname)|%(refname:short)|%(authorname)|%(authoremail)|%(committerdate:relative)");
     #[cfg(windows)]
     cmd.creation_flags(0x08000000);
 
@@ -1003,24 +1056,30 @@ pub fn git_branch_details(
     let mut details: Vec<GitBranchDetail> = stdout
         .lines()
         .filter_map(|line| {
-            let parts: Vec<&str> = line.splitn(4, '|').collect();
-            if parts.len() < 4 {
+            let parts: Vec<&str> = line.splitn(5, '|').collect();
+            if parts.len() < 5 {
                 return None;
             }
-            let email = parts[2]
+            let full_ref = parts[0].trim();
+            let email = parts[3]
                 .trim()
                 .trim_start_matches('<')
                 .trim_end_matches('>')
                 .to_string();
-            let name = parts[0].trim().to_string();
-            if name.ends_with("/HEAD") {
+            // Remotes keep `origin/foo` short name; locals keep branch name (may contain `/`).
+            let name = if full_ref.starts_with("refs/remotes/") {
+                full_ref.trim_start_matches("refs/remotes/").to_string()
+            } else {
+                parts[1].trim().to_string()
+            };
+            if name.ends_with("/HEAD") || name == "HEAD" {
                 return None;
             }
             Some(GitBranchDetail {
                 name,
-                author: parts[1].trim().to_string(),
+                author: parts[2].trim().to_string(),
                 author_email: email,
-                date: parts[3].trim().to_string(),
+                date: parts[4].trim().to_string(),
                 ahead: None,
                 behind: None,
             })
@@ -1639,7 +1698,9 @@ pub fn git_log_stream_start(
         cmd.arg("--all");
     }
     cmd.args([
-        "--format=@@@START@@@%H%x00%an%x00%ae%x00%ct%x00%B%x00%D%x00%P%x00@@@MSG_END@@@",
+        // Subject only — full bodies bloated IPC/parse for the virtualized list.
+        // Detail views already show the first line; clipboard copies subject.
+        "--format=@@@START@@@%H%x00%an%x00%ae%x00%ct%x00%s%x00%D%x00%P%x00@@@MSG_END@@@",
     ])
     .stdout(Stdio::piped())
     .stderr(Stdio::null());
@@ -1912,11 +1973,13 @@ pub fn git_log_stream_next(caller_id: String, limit: usize) -> Result<Vec<GitLog
     }
 
     let duration = start.elapsed();
-    eprintln!(
-        "git_log_stream_next: dynamic load block of {} commits processed in {:?}",
-        logs.len(),
-        duration
-    );
+    if duration.as_millis() > 50 {
+        eprintln!(
+            "git_log_stream_next: {} commits in {:?}",
+            logs.len(),
+            duration
+        );
+    }
 
     Ok(logs)
 }
@@ -1931,7 +1994,7 @@ pub fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitLogEntry>, A
         "log",
         "-n",
         &limit_str,
-        "--format=%H%x00%an%x00%ae%x00%ct%x00%B%x00%D%x00%P",
+        "--format=%H%x00%an%x00%ae%x00%ct%x00%s%x00%D%x00%P",
     ]);
 
     #[cfg(windows)]
@@ -2029,6 +2092,70 @@ pub fn git_commit_files(repo_path: String, hash: String) -> Result<Vec<GitFilePa
     .map_err(|e| AppError::Git(e))?;
 
     Ok(results)
+}
+
+/// Patch text for a single commit (parent₀ → commit), for AI explain / review.
+pub fn git_commit_patch(repo_path: String, hash: String) -> Result<String, AppError> {
+    let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
+    let obj = repo.revparse_single(&hash).map_err(|e| AppError::Git(e))?;
+    let commit = obj
+        .as_commit()
+        .ok_or(AppError::Message("Object is not a commit".to_string()))?;
+    let tree = commit.tree().map_err(|e| AppError::Git(e))?;
+    let parent_tree = if commit.parent_count() > 0 {
+        let parent = commit.parent(0).map_err(|e| AppError::Git(e))?;
+        Some(parent.tree().map_err(|e| AppError::Git(e))?)
+    } else {
+        None
+    };
+
+    let diff = repo
+        .diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)
+        .map_err(|e| AppError::Git(e))?;
+
+    let mut output = String::new();
+    diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
+        if let Ok(text) = str::from_utf8(line.content()) {
+            output.push_str(text);
+        }
+        true
+    })
+    .map_err(|e| AppError::Git(e))?;
+    Ok(output)
+}
+
+pub fn git_commit_message(repo_path: String, hash: String) -> Result<String, AppError> {
+    let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
+    let obj = repo.revparse_single(&hash).map_err(|e| AppError::Git(e))?;
+    let commit = obj
+        .as_commit()
+        .ok_or(AppError::Message("Object is not a commit".to_string()))?;
+    Ok(commit.message().unwrap_or("").trim().to_string())
+}
+
+/// Full patch for `base...compare` (three-dot), for AI branch explain.
+pub fn git_diff_range_patch(
+    repo_path: String,
+    base: String,
+    compare: String,
+) -> Result<String, AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let range = format!("{base}...{compare}");
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["diff", &range]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd
+        .output()
+        .map_err(|e| AppError::Message(format!("git diff failed: {e}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Message(format!("git diff failed: {stderr}")));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 pub fn git_cherry_pick(repo_path: String, hash: String) -> Result<(), AppError> {
@@ -2620,6 +2747,153 @@ pub fn git_list_tags(repo_path: String) -> Result<Vec<GitTagEntry>, AppError> {
         });
     }
     Ok(tags)
+}
+
+/// Reset current branch to `hash`. mode: soft | mixed | hard
+pub fn git_reset(repo_path: String, hash: String, mode: String) -> Result<(), AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let flag = match mode.trim().to_lowercase().as_str() {
+        "soft" => "--soft",
+        "hard" => "--hard",
+        _ => "--mixed",
+    };
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["reset", flag, &hash]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let output = cmd.output().map_err(|e| AppError::Io(e))?;
+    if !output.status.success() {
+        return Err(AppError::Message(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn git_create_tag(
+    repo_path: String,
+    name: String,
+    hash: String,
+    message: Option<String>,
+) -> Result<(), AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path);
+    let msg = message.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty());
+    if let Some(m) = msg {
+        cmd.args(["tag", "-a", &name, &hash, "-m", m]);
+    } else {
+        cmd.args(["tag", &name, &hash]);
+    }
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let output = cmd.output().map_err(|e| AppError::Io(e))?;
+    if !output.status.success() {
+        return Err(AppError::Message(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn git_delete_tag(repo_path: String, name: String) -> Result<(), AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["tag", "-d", &name]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let output = cmd.output().map_err(|e| AppError::Io(e))?;
+    if !output.status.success() {
+        return Err(AppError::Message(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Changed files between two refs (`base...compare`), name-status only.
+pub fn git_diff_name_status(
+    repo_path: String,
+    base: String,
+    compare: String,
+) -> Result<Vec<GitFileParams>, AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let range = format!("{}...{}", base, compare);
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path)
+        .args(["diff", "--name-status", "--find-renames", &range]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd
+        .output()
+        .map_err(|e| AppError::Message(format!("git diff name-status failed: {}", e)))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Message(format!("git diff name-status failed: {}", stderr)));
+    }
+
+    let mut files = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split('\t');
+        let Some(status_raw) = parts.next() else { continue };
+        let status_char = status_raw.chars().next().unwrap_or('M');
+        let status = status_char.to_string();
+        // Renames: R100\told\tnew — take the new path.
+        let path = if status_char == 'R' || status_char == 'C' {
+            parts.next();
+            parts.next().unwrap_or("").to_string()
+        } else {
+            parts.next().unwrap_or("").to_string()
+        };
+        if path.is_empty() {
+            continue;
+        }
+        files.push(GitFileParams {
+            path,
+            status,
+            staged: false,
+        });
+    }
+    Ok(files)
+}
+
+/// File contents at a ref (`git show rev:path`). Missing file → empty string.
+pub fn git_get_file_at_ref(
+    repo_path: String,
+    rev: String,
+    file_path: String,
+) -> Result<String, AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let normalized = file_path.replace('\\', "/");
+    let spec = format!("{}:{}", rev, normalized);
+    let mut cmd = git_cmd()?;
+    cmd.current_dir(&repo_path).args(["show", &spec]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd
+        .output()
+        .map_err(|e| AppError::Message(format!("git show failed: {}", e)))?;
+    if !output.status.success() {
+        // New/deleted files are expected to miss on one side.
+        return Ok(String::new());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 /// Abort an in-progress merge (`MERGE_HEAD` present).

@@ -4,6 +4,7 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
     type ReactNode,
@@ -32,6 +33,44 @@ const PLACEHOLDERS: Partial<Record<GitSectionId, string>> = {
     "deployment-statuses": "Filter statuses…",
 };
 
+const SECTION_STORAGE_KEY = "shape-git-manager-section";
+
+const KNOWN_SECTIONS = new Set<string>(Object.keys(PLACEHOLDERS));
+
+export function isGitSectionId(value: string | null | undefined): value is GitSectionId {
+    return !!value && KNOWN_SECTIONS.has(value);
+}
+
+export function readStoredGitSection(): GitSectionId | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const fromQuery = new URLSearchParams(window.location.search).get("section");
+        if (isGitSectionId(fromQuery)) return fromQuery;
+        const stored = localStorage.getItem(SECTION_STORAGE_KEY);
+        if (isGitSectionId(stored)) return stored;
+    } catch {
+        /* ignore */
+    }
+    return null;
+}
+
+export function persistGitSection(id: GitSectionId) {
+    if (typeof window === "undefined") return;
+    try {
+        localStorage.setItem(SECTION_STORAGE_KEY, id);
+    } catch {
+        /* ignore */
+    }
+    try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get("section") === id) return;
+        url.searchParams.set("section", id);
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+        /* ignore */
+    }
+}
+
 type FilterContextValue = {
     query: string;
     setQuery: (value: string) => void;
@@ -51,12 +90,24 @@ export function FilterProvider({
     children: ReactNode;
     initialSection?: GitSectionId;
 }) {
+    // Keep SSR + first client paint identical — hydrate from URL/storage after mount.
     const [query, setQueryState] = useState("");
     const [section, setSectionState] = useState<GitSectionId>(initialSection);
+    const [hydrated, setHydrated] = useState(false);
+
+    useEffect(() => {
+        const stored = readStoredGitSection();
+        if (stored) {
+            setSectionState(stored);
+            persistGitSection(stored);
+        }
+        setHydrated(true);
+    }, []);
 
     const setSection = useCallback((id: GitSectionId) => {
         setSectionState(id);
         setQueryState("");
+        persistGitSection(id);
     }, []);
 
     const setQuery = useCallback((value: string) => {
@@ -64,7 +115,8 @@ export function FilterProvider({
     }, []);
 
     const placeholder = PLACEHOLDERS[section] ?? "Search…";
-    const searchEnabled = section !== "source";
+    // Avoid titlebar search flashing before section hydrate (prevents hydration mismatch).
+    const searchEnabled = hydrated && section !== "source";
 
     const value = useMemo(
         () => ({

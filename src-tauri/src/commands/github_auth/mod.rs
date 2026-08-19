@@ -446,6 +446,135 @@ pub fn actions_job_logs(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Download an Actions artifact zip to `dest_path` via authenticated `gh api` (follows redirect).
+pub fn actions_download_artifact(
+    repo: &str,
+    artifact_id: u64,
+    dest_path: &str,
+) -> Result<(), AppError> {
+    let gh = require_gh()?;
+    let api_path = format!("repos/{repo}/actions/artifacts/{artifact_id}/zip");
+    let output = Command::new(&gh)
+        .args([
+            "api",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "--output",
+            dest_path,
+            &api_path,
+        ])
+        .output()?;
+    if !output.status.success() {
+        // Remove empty/partial file on failure.
+        let _ = std::fs::remove_file(dest_path);
+        return Err(gh_output_error(
+            &output,
+            &format!("Failed to download artifact {artifact_id}"),
+        ));
+    }
+    // Guard against tiny error-JSON files written as "success" in edge cases.
+    let meta = std::fs::metadata(dest_path).map_err(|e| AppError::Message(e.to_string()))?;
+    if meta.len() < 64 {
+        let sniff = std::fs::read_to_string(dest_path).unwrap_or_default();
+        let _ = std::fs::remove_file(dest_path);
+        if sniff.trim_start().starts_with('{') {
+            return Err(AppError::Message(format!(
+                "Artifact download failed: {sniff}"
+            )));
+        }
+        return Err(AppError::Message(
+            "Artifact download produced an empty file (expired or inaccessible?).".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Return the workflow YAML (`gh workflow view --yaml`) for input discovery.
+pub fn actions_workflow_yaml(repo: &str, workflow: &str) -> Result<String, AppError> {
+    let gh = require_gh()?;
+    let output = Command::new(&gh)
+        .args([
+            "workflow",
+            "view",
+            workflow,
+            "--yaml",
+            "--repo",
+            repo,
+        ])
+        .output()?;
+    if !output.status.success() {
+        return Err(gh_output_error(
+            &output,
+            &format!("gh workflow view --yaml failed for {workflow}"),
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Trigger `workflow_dispatch` via `gh workflow run`.
+/// `inputs_json` is an optional JSON object of string values, e.g. `{"env":"prod"}`.
+pub fn actions_workflow_dispatch(
+    repo: &str,
+    workflow: &str,
+    git_ref: &str,
+    inputs_json: Option<String>,
+) -> Result<String, AppError> {
+    let gh = require_gh()?;
+    let inputs = inputs_json
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "{}");
+
+    if let Some(json) = inputs {
+        let mut child = Command::new(&gh)
+            .args([
+                "workflow",
+                "run",
+                workflow,
+                "--repo",
+                repo,
+                "--ref",
+                git_ref,
+                "--json",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            stdin.write_all(json.as_bytes())?;
+        }
+        let output = child.wait_with_output()?;
+        if !output.status.success() {
+            return Err(gh_output_error(
+                &output,
+                &format!("gh workflow run failed for {workflow}"),
+            ));
+        }
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+
+    let output = Command::new(&gh)
+        .args([
+            "workflow",
+            "run",
+            workflow,
+            "--repo",
+            repo,
+            "--ref",
+            git_ref,
+        ])
+        .output()?;
+    if !output.status.success() {
+        return Err(gh_output_error(
+            &output,
+            &format!("gh workflow run failed for {workflow}"),
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
