@@ -8,6 +8,8 @@ import { useEditorSplit, type EditorGroupId } from "@/core/providers/editor";
 import { getIconPath } from "@/lib/ui/icons/files";
 import { isSettingsTab, isVirtualEditorTab } from "@/lib/settings-tab";
 import { isDesignPreviewTab } from "@/lib/design-preview-tab";
+import { isBrowserTab } from "@/lib/browser-tab";
+import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -29,10 +31,13 @@ function getTabLabel(file: FileInfo): string {
 
 function TabFileIcon({ file }: { file: FileInfo }) {
     if (isDesignPreviewTab(file.path)) {
-        return <Icon name="auto_awesome" size={14} className="text-text-muted shrink-0" />;
+        return <Icon name="auto_awesome" size={14} className="shrink-0 text-text-muted" />;
+    }
+    if (isBrowserTab(file.path)) {
+        return <ChromeBrowserIcon size={14} className="shrink-0 text-text-muted" />;
     }
     if (isSettingsTab(file.path)) {
-        return <Icon name="settings" size={14} className="text-accent shrink-0" />;
+        return <Icon name="settings" size={14} className="shrink-0 text-accent" />;
     }
     const rawFileName = file.path.startsWith("diff:")
         ? file.name.replace(/^(⟷\s*)?/, "").replace(/^diff:(staged|unstaged):/, "")
@@ -90,7 +95,7 @@ export function CompactTabBar({
                             ) : (
                                 <span className="truncate text-sm text-text-muted">Open editors</span>
                             )}
-                            <Icon name="expand_more" className="size-icon-sm shrink-0 opacity-60" />
+                            <Icon name="expand_more" className="size-icon-sm shrink-0 text-text-muted" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="max-h-72 min-w-[220px] overflow-y-auto">

@@ -22,7 +22,7 @@ export const WORKBENCH_TAB_ACTIONS_CLASS =
 
 export function workbenchTabItemClass(active: boolean, dragging?: boolean) {
     return cn(
-        "workbench-tab-item group relative box-border flex h-7 shrink-0 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium transition-colors",
+        "workbench-tab-item group relative box-border bg-surface-3/50 flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors",
         active
             ? "is-active min-w-[72px] bg-surface-3 text-text-primary"
             : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
@@ -31,7 +31,7 @@ export function workbenchTabItemClass(active: boolean, dragging?: boolean) {
 }
 
 export const WORKBENCH_TAB_CLOSE_BUTTON_CLASS =
-    "invisible flex h-4 w-4 shrink-0 items-center justify-center text-text-muted group-hover:visible";
+    "invisible flex h-4 w-4 shrink-0 items-center justify-center text-text-muted group-hover:visible hover:text-text-primary";
 
 export const WORKBENCH_TAB_CONTENT_CLASS =
     "workbench-tab-content relative z-[1] flex h-full min-w-0 items-center gap-1.5";

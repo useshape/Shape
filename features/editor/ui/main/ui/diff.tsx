@@ -11,15 +11,16 @@ import {
     ContextMenuShortcut,
     ContextMenuTrigger,
 } from "@/components/ui/context";
-import { defineShapeMonacoThemes, getMonacoEditorOptions } from "@/lib/ui/monaco-theme";
+import { defineShapeMonacoThemes, getMonacoEditorOptions, shapeMonacoThemeFromColorTheme } from "@/lib/ui/monaco-theme";
 import { useProjectState } from "@/lib/backend";
 import { resolveRepoForFile } from "@/lib/git/repos";
 import {
     DiffHunkToolbar,
     parseDiffTabPath,
     useDiffHunkState,
-} from "@/features/git/ui/diff-hunks";
+} from "@/features/git/ui/shared/diff-hunks";
 import { bindDiffEditorNativeUiToShape } from "@/lib/editor/suppress-monaco-native-ui";
+import { useSettings } from "@/lib/settings";
 
 interface DiffViewProps {
     path: string;
@@ -37,6 +38,8 @@ export function DiffView({ path, originalContent, content, getLanguage }: DiffVi
     const [modifiedEditor, setModifiedEditor] = useState<MonacoEditor.ICodeEditor | null>(null);
     const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
     const { project_path } = useProjectState();
+    const settings = useSettings();
+    const monacoTheme = shapeMonacoThemeFromColorTheme(settings.appearance?.colorTheme);
     const [repoPath, setRepoPath] = useState<string | null>(null);
 
     const { mode, filePath: realPath } = parseDiffTabPath(path);
@@ -116,7 +119,7 @@ export function DiffView({ path, originalContent, content, getLanguage }: DiffVi
                     original={originalContent}
                     modified={content}
                     language={getLanguage(displayPath)}
-                    theme="shape-dark"
+                    theme={monacoTheme}
                     loading={<div className="flex-1 w-full h-full bg-background" />}
                     beforeMount={(monaco) => {
                         monacoRef.current = monaco;

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef } from "react";
 import type { HSVA } from "./color-utils";
 
 interface ColorCanvasProps {
@@ -9,50 +9,50 @@ interface ColorCanvasProps {
     onDrag: (next: HSVA) => void;
 }
 
-function getPoint(e: MouseEvent | TouchEvent, rect: DOMRect) {
-    const x = ("touches" in e ? e.touches[0].clientX : e.clientX) - rect.left;
-    const y = ("touches" in e ? e.touches[0].clientY : e.clientY) - rect.top;
+function getPoint(e: MouseEvent | TouchEvent | PointerEvent, rect: DOMRect) {
+    const x = ("touches" in e && e.touches[0] ? e.touches[0].clientX : (e as MouseEvent).clientX) - rect.left;
+    const y = ("touches" in e && e.touches[0] ? e.touches[0].clientY : (e as MouseEvent).clientY) - rect.top;
     return {
         x: Math.max(0, Math.min(1, x / rect.width)),
         y: Math.max(0, Math.min(1, y / rect.height)),
     };
 }
 
-function useDrag(
+/** Hold the pointer down and move to scrub. Releases on pointer up. */
+function useHoldDrag(
     ref: React.RefObject<HTMLDivElement | null>,
     onUpdate: (pt: { x: number; y: number }) => void,
 ) {
-    const rectRef = useRef<DOMRect | null>(null);
-
-    return useCallback(
-        (e: React.MouseEvent | React.TouchEvent) => {
+    const dragging = useRef(false);
+    return {
+        onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
             e.preventDefault();
             e.stopPropagation();
+            dragging.current = true;
+            e.currentTarget.setPointerCapture(e.pointerId);
             const el = ref.current;
             if (!el) return;
-
-            rectRef.current = el.getBoundingClientRect();
-            const pt = getPoint(e.nativeEvent as MouseEvent & TouchEvent, rectRef.current);
-            onUpdate(pt);
-
-            const onMove = (ev: MouseEvent | TouchEvent) => {
-                if (!rectRef.current) return;
-                onUpdate(getPoint(ev, rectRef.current));
-            };
-            const onEnd = () => {
-                rectRef.current = null;
-                document.removeEventListener("mousemove", onMove as EventListener);
-                document.removeEventListener("mouseup", onEnd);
-                document.removeEventListener("touchmove", onMove as EventListener);
-                document.removeEventListener("touchend", onEnd);
-            };
-            document.addEventListener("mousemove", onMove as EventListener);
-            document.addEventListener("mouseup", onEnd);
-            document.addEventListener("touchmove", onMove as EventListener, { passive: false });
-            document.addEventListener("touchend", onEnd);
+            document.body.style.cursor = "crosshair";
+            document.body.style.userSelect = "none";
+            onUpdate(getPoint(e.nativeEvent, el.getBoundingClientRect()));
         },
-        [ref, onUpdate],
-    );
+        onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+            if (!dragging.current) return;
+            const el = ref.current;
+            if (!el) return;
+            onUpdate(getPoint(e.nativeEvent, el.getBoundingClientRect()));
+        },
+        onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
+            dragging.current = false;
+            try {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+            } catch {
+                /* ignore */
+            }
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+        },
+    };
 }
 
 export function ColorCanvas({ hsva, hueColor, sPct, vPct, onDrag }: ColorCanvasProps) {
@@ -60,45 +60,39 @@ export function ColorCanvas({ hsva, hueColor, sPct, vPct, onDrag }: ColorCanvasP
     const alphaRef = useRef<HTMLDivElement>(null);
     const hueRef = useRef<HTMLDivElement>(null);
 
-    const handleSvStart = useDrag(svRef, (pt) => {
+    const sv = useHoldDrag(svRef, (pt) => {
         onDrag({ ...hsva, s: pt.x * 100, v: (1 - pt.y) * 100 });
     });
-
-    const handleHueStart = useDrag(hueRef, (pt) => {
+    const hue = useHoldDrag(hueRef, (pt) => {
         onDrag({ ...hsva, h: pt.y * 360 });
     });
-
-    const handleAlphaStart = useDrag(alphaRef, (pt) => {
+    const alpha = useHoldDrag(alphaRef, (pt) => {
         onDrag({ ...hsva, a: 1 - pt.y });
     });
 
     return (
-        <div className="flex gap-2 h-full w-full items-stretch">
-            {/* Saturation-Value 2D Canvas — takes all remaining width */}
+        <div className="flex h-[180px] min-h-[180px] w-full items-stretch gap-2">
             <div
                 ref={svRef}
-                className="h-full rounded-lg relative cursor-crosshair touch-none overflow-hidden min-w-0"
+                className="relative h-full min-w-0 cursor-crosshair touch-none overflow-hidden rounded-lg"
                 style={{
                     flex: "1 1 0%",
                     backgroundImage: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${hueColor})`,
                 }}
-                onMouseDown={handleSvStart}
-                onTouchStart={handleSvStart}
+                {...sv}
             >
                 <div
-                    className="absolute w-3 h-3 rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,0.5)] pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                    className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,0.5)]"
                     style={{ left: `${sPct}%`, top: `${100 - vPct}%` }}
                 />
             </div>
 
-            {/* Alpha Slider */}
             <div
                 ref={alphaRef}
-                className="w-3 shrink-0 h-full relative cursor-pointer touch-none select-none"
-                onMouseDown={handleAlphaStart}
-                onTouchStart={handleAlphaStart}
+                className="relative h-full w-3 shrink-0 cursor-pointer touch-none select-none"
+                {...alpha}
             >
-                <div className="absolute inset-0 rounded-md overflow-hidden border border-border-subtle">
+                <div className="absolute inset-0 overflow-hidden rounded-md border border-border-subtle">
                     <div
                         className="absolute inset-0 z-0 opacity-40"
                         style={{
@@ -112,24 +106,22 @@ export function ColorCanvas({ hsva, hueColor, sPct, vPct, onDrag }: ColorCanvasP
                     />
                 </div>
                 <div
-                    className="absolute z-20 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-1.5 rounded-full bg-white border border-black/30 shadow-sm pointer-events-none"
+                    className="pointer-events-none absolute left-1/2 z-20 h-1.5 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/30 bg-white shadow-sm"
                     style={{ top: `${(1 - hsva.a) * 100}%` }}
                 />
             </div>
 
-            {/* Hue Slider */}
             <div
                 ref={hueRef}
-                className="w-3 shrink-0 h-full relative cursor-pointer touch-none select-none"
-                onMouseDown={handleHueStart}
-                onTouchStart={handleHueStart}
+                className="relative h-full w-3 shrink-0 cursor-pointer touch-none select-none overflow-hidden rounded-md border border-border-subtle"
+                style={{
+                    background:
+                        "linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)",
+                }}
+                {...hue}
             >
                 <div
-                    className="absolute inset-0 rounded-md overflow-hidden border border-border-subtle"
-                    style={{ backgroundImage: "linear-gradient(to bottom, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)" }}
-                />
-                <div
-                    className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-1.5 rounded-full bg-white border border-black/30 shadow-sm pointer-events-none"
+                    className="pointer-events-none absolute left-1/2 z-20 h-1.5 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/30 bg-white shadow-sm"
                     style={{ top: `${(hsva.h / 360) * 100}%` }}
                 />
             </div>
