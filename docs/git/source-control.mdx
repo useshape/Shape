@@ -5,12 +5,15 @@ order: 1
 icon: ri-git-branch-line
 ---
 
-The **Source Control** sidebar is Shape's built-in Git panel. Stage files, write commits, and push or pull without leaving the IDE.
+The **Source Control** sidebar is Shape's built-in Git panel. Stage files or hunks, write commits, and push or pull without leaving the IDE.
+
 ## Open Source Control
 
 - Click the **branch** icon on the [activity bar](/docs/workspace/activity-bar)
 - **View → Source Control** or **Ctrl+Shift+G**
 - Click the branch indicator in the status bar
+
+For pull requests, Actions, and checks, open [Git Manager](/docs/git/git-manager) from **Window → Git Manager** or the Shape logo in this sidebar header.
 
 ## Changed files
 
@@ -23,9 +26,20 @@ The **Changes** section lists modified, added, and deleted files. Click a file t
 | Stage all | Click **+** on the Changes header |
 | Discard | Right-click and choose discard (confirm when prompted) |
 
+## Stage and unstage hunks
+
+Open a file from Changes to review the diff. A floating toolbar on the hunk lets you stage, unstage, or restore that hunk without leaving the file.
+
+| Diff | Actions |
+| --- | --- |
+| **Working Tree** (unstaged) | **Stage** (**Ctrl+Y**), **Restore** |
+| **Index** (staged) | **Unstage** (**Ctrl+Shift+Y**) |
+
+Select changed lines first to stage or restore only that selection. See [Diff and Merge](/docs/editor/diff-and-merge).
+
 ## Write a commit
 
-1. Stage the files you want included.
+1. Stage the files or hunks you want included.
 2. Enter a **commit message** in the text box at the top.
 3. Optionally add a longer description in the second field.
 4. Click **Commit** or press **Ctrl+Enter**.
@@ -59,6 +73,7 @@ The bottom status bar shows the current branch and ahead/behind counts. Click it
 
 ## Related
 
+- [Git Manager](/docs/git/git-manager)
 - [Branches and Remotes](/docs/git/branches-and-remotes)
 - [Diff and Merge](/docs/editor/diff-and-merge)
 - [Git Graph](/docs/git/git-graph)

@@ -1,17 +1,20 @@
 ---
-title: Git Graph
-description: Explore commit history visually and inspect changes from the graph view.
+title: Git Graph in Shape
+description: Use Shape IDE's Git Graph sidebar to explore commit history, compare commits, and open diffs.
 order: 3
 icon: ri-git-commit-line
 ---
 
-The **Git Graph** sidebar shows your repository's commit history as a lane diagram. Inspect past work, compare commits, and open file diffs from one view.
+The **Git Graph** sidebar in Shape shows your repository's commit history as a lane diagram. Inspect past work, compare commits, and open file diffs from one view.
+
 ## Open Git Graph
 
 - Click the **commit** icon on the [activity bar](/docs/workspace/activity-bar)
 - **View → Git Graph** from the menu bar
 
 The graph loads commits for the open Git repository. Large histories virtualize for performance as you scroll.
+
+Open [Git Manager](/docs/git/git-manager) from the Shape logo in the graph header (or **Window → Git Manager**) for a larger graph plus PRs and checks.
 
 ## Read the graph
 
@@ -21,7 +24,9 @@ Each row is a commit. Columns show:
 - **Message**: commit subject (click `@mentions` to open GitHub profiles)
 - **Author** and **relative time**
 
-Expand a commit row to see files changed in that commit.
+Expand a commit row to see files changed in that commit. Author avatars can be toggled in [Git Settings](/docs/settings/git-settings).
+
+By default the graph shows **all branches**. Turn off **Show all branches** in Git settings to limit the log to the current branch.
 
 ## Actions on commits
 
@@ -45,6 +50,7 @@ Click the refresh button after external Git operations (terminal commands, pulls
 ## Related
 
 - [Source Control](/docs/git/source-control)
+- [Git Manager](/docs/git/git-manager)
 - [Diff and Merge](/docs/editor/diff-and-merge)
 - [Branches and Remotes](/docs/git/branches-and-remotes)
 - [Activity Bar](/docs/workspace/activity-bar)

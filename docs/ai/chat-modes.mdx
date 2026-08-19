@@ -1,6 +1,6 @@
 ---
 title: Chat Modes
-description: Choose Ask, Code, Plan, Design, or Review mode for each conversation.
+description: Choose Ask, Code, Plan, Visual, or Review mode for each conversation.
 order: 2
 icon: ri-sparkling-line
 ---
@@ -12,10 +12,10 @@ Each chat message runs in a **mode** that controls what the assistant can do. Pi
 | Mode | Behavior | Best for |
 | --- | --- | --- |
 | **Ask** | Read-only. No file edits or terminal commands. | Learning the codebase, explaining errors |
-| **Code** | Can read, edit, and run commands. Proposes changes for review. | Implementing features and fixes |
+| **Code** | Can read, edit, and run commands. Edits show for Keep / Undo. | Implementing features and fixes |
 | **Plan** | Research only. Writes a markdown plan to `.shape/plans/`. | Designing an approach before coding |
-| **Design** | UI and styling focused. Follows existing design patterns. | Layout, Tailwind, and component polish |
-| **Review** | Systematic investigation of bugs, failures, and security issues, with an optional adversarial self-check. | Tracking down runtime/build errors, auditing auth, input handling, and dependencies |
+| **Visual** | UI and styling focused. Follows existing design patterns. Optional in-chat component preview. | Layout, Tailwind, and component polish |
+| **Review** | Systematic investigation of bugs, failures, and security issues. | Tracking down runtime/build errors, auditing auth, input handling, and dependencies |
 
 ## Ask mode
 
@@ -26,8 +26,8 @@ Safe default for exploration. The assistant reads your project and answers quest
 The default for implementation work. The assistant can:
 
 - Read and search files
-- Propose and apply edits shown as review cards (Keep / Undo)
-- Run terminal commands (with your approval)
+- Edit files, shown as review cards (Keep / Undo)
+- Run terminal commands (see [AI Settings](/docs/ai/ai-settings) for auto-run)
 - Call `finish` when the task is done
 
 Switch to Code when you are ready to apply changes. See [Reviewing Edits](/docs/ai/reviewing-edits).
@@ -40,11 +40,17 @@ When the plan is ready, review the file and click **Build this plan** (or switch
 
 ## Visual mode
 
-Visual mode is for UI work. It reuses your project’s component library when present; otherwise it defaults to Radix + Tailwind. Ask it to **preview** a component in chat before adding it, or tell it to **build without stopping**. There is no multi-option gallery or Select UI — reply in chat. Pair with [Design Tools](/docs/editor/design-tools) in the editor.
+Visual mode is for UI work. It reuses your project’s component library when present; otherwise it defaults to Radix + Tailwind. Ask it to **preview** a component in chat before adding it, or tell it to **build without stopping**. There is no multi-option gallery or Select UI — reply in chat.
+
+Pair Visual mode with [Visual Design](/docs/editor/visual-design) on the live preview and [Design Tools](/docs/editor/design-tools) in the editor.
+
+Older **Design** selections are treated as Visual.
 
 ## Review mode
 
-Review mode combines systematic debugging with security-minded review: it reads errors, logs, and relevant code before suggesting fixes, and watches for vulnerability patterns in auth flows, user input, and unsafe APIs. Enable the adversarial self-check in AI settings to have a second pass challenge the first response before it's shown.
+Review mode investigates bugs and security-sensitive code: it reads errors, logs, and relevant files before suggesting fixes, and watches for patterns in auth flows, user input, and unsafe APIs.
+
+By default, **Adversarial review** in [AI Settings](/docs/ai/ai-settings) runs a second critic pass after Review finishes. Turn that off if you want a single pass.
 
 Older **Debug** and **Security** selections are automatically migrated to Review — the two were folded into one mode.
 
@@ -56,5 +62,6 @@ Change the mode between messages in the same thread. Earlier context carries ove
 
 - [Chat Overview](/docs/ai/chat-overview)
 - [Reviewing Edits](/docs/ai/reviewing-edits)
+- [Visual Design](/docs/editor/visual-design)
 - [Refactor with AI Tutorial](/docs/tutorials/refactor-with-ai)
 - [AI Settings](/docs/ai/ai-settings)

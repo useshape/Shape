@@ -1,11 +1,12 @@
 ---
 title: Diff and Merge
-description: Review Git changes, inline diffs, and AI-proposed edits in comparison views.
+description: Review Git changes, stage hunks, and inspect AI-proposed edits in comparison views.
 order: 4
 icon: ri-git-merge-line
 ---
 
-Shape shows file differences in dedicated diff tabs so you can review changes before committing or accepting AI edits.
+Shape shows file differences in dedicated diff tabs so you can review changes before committing or keeping AI edits.
+
 ## Git diff tabs
 
 From **Source Control**, click a changed file to open a diff tab. Tabs are labeled with the filename and context:
@@ -15,7 +16,21 @@ From **Source Control**, click a changed file to open a diff tab. Tabs are label
 | **Working Tree** | Unstaged changes vs the index |
 | **Index** | Staged changes vs the last commit |
 
-The diff view uses Monaco's inline comparison with added and removed highlighting. Read the changes, then stage or discard from the Source Control sidebar.
+The diff view uses Monaco's inline comparison with added and removed highlighting.
+
+## Hunk actions
+
+A toolbar follows the hunk under the cursor:
+
+| Diff | Button | Shortcut |
+| --- | --- | --- |
+| Working Tree | **Stage** | **Ctrl+Y** |
+| Working Tree | **Restore** | (toolbar) |
+| Index | **Unstage** | **Ctrl+Shift+Y** |
+
+The label shows **Hunk N/M**. Select changed lines to stage, unstage, or restore only that selection instead of the whole hunk.
+
+Unstaged and staged diffs open as separate tabs so you can compare both states.
 
 ### Open diffs from Git Graph
 
@@ -23,13 +38,13 @@ In the [Git Graph](/docs/git/git-graph), right-click a commit and choose **Compa
 
 ## AI edit previews
 
-When AI chat edits files in **Code** mode, each change appears as a review card after it is written to disk.
+When AI chat edits files, each change appears as a review card after it is written to disk (unless you require approval first).
 
-1. Click the file (or **Preview**) to open a diff in the editor.
+1. Click the file in the pending strip to open a diff in the editor.
 2. Compare the latest step against the previous version.
 3. **Keep** leaves the file as written. **Undo** restores the baseline from before the unresolved edit chain.
 
-See [Reviewing Edits](/docs/ai/reviewing-edits) for the full Keep/Undo workflow.
+See [Reviewing Edits](/docs/ai/reviewing-edits) for Keep/Undo and optional pre-write approval.
 
 ## Merge conflicts
 
@@ -48,12 +63,12 @@ Resolve conflicts manually in the editor, then stage the file and commit. Shape 
 ## Tips
 
 - Close diff tabs with **Ctrl+W** when review is done.
-- Unstaged and staged diffs open as separate tabs so you can compare both states.
 - Enable **Git: Blame** in settings to see line attribution while reviewing changes.
 
 ## Related
 
 - [Source Control](/docs/git/source-control)
+- [Git Manager](/docs/git/git-manager)
 - [Reviewing Edits](/docs/ai/reviewing-edits)
 - [Tabs and Splits](/docs/editor/tabs-and-splits)
 - [Git Graph](/docs/git/git-graph)
