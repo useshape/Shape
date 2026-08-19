@@ -1,11 +1,11 @@
 ---
-title: GitHub Sign In
-description: Authenticate Git operations against GitHub remotes from the avatar menu.
-order: 4
+title: Sign in to GitHub in Shape
+description: Authenticate Git push and pull to GitHub remotes from Shape IDE's avatar menu.
+order: 5
 icon: ri-github-line
 ---
 
-**GitHub sign-in** lets Shape push and pull to GitHub without repeated password prompts. It is separate from your [Shape account](/docs/introduction/accounts) used for AI features.
+**GitHub sign-in** in Shape lets you push and pull to GitHub without repeated password prompts. It also loads issues, pull requests, Actions, and checks in [Git Manager](/docs/git/git-manager). It is separate from your [Shape account](/docs/introduction/accounts) used for AI features.
 
 ## When you need it
 
@@ -13,6 +13,7 @@ Sign in when you:
 
 - Push commits to a GitHub HTTPS remote
 - Pull from a private GitHub repository
+- Open issues, PRs, Actions, or checks in Git Manager
 - Want your GitHub username shown in the avatar menu
 
 Local Git operations (commit, branch, log) work without signing in.
@@ -56,9 +57,14 @@ If neither is installed, the avatar menu shows a note to install one. See [Insta
 
 Sign out, then sign in with the correct GitHub account. Credential helpers may cache the previous user until you clear them.
 
+### Git Manager lists stay empty
+
+Confirm you signed in with GitHub and that the open folder is a GitHub remote (not only a local repo). [Summarize](/docs/git/git-manager) on a PR also needs a Shape account.
+
 ## Related
 
 - [Accounts](/docs/introduction/accounts)
+- [Git Manager](/docs/git/git-manager)
 - [Source Control](/docs/git/source-control)
 - [Branches and Remotes](/docs/git/branches-and-remotes)
 - [Clone and Commit Tutorial](/docs/tutorials/clone-and-commit)

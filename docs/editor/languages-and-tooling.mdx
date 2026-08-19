@@ -1,7 +1,7 @@
 ---
 title: Languages and tooling
 description: Languages Shape highlights, plus Prettier, ESLint, LSP, Emmet, and design tools.
-order: 6
+order: 8
 icon: ri-code-box-line
 ---
 
@@ -49,7 +49,7 @@ Highlighting alone does not mean IntelliSense or formatting for that language. S
 
 ## Prettier
 
-Built-in document formatter when **Enable Prettier** is on (**Settings → Lint & Format**).
+Built-in document formatter when **Enable Prettier** is on (**Settings → Features → ESLint & Prettier**).
 
 | Formats with Prettier | Extensions |
 | --- | --- |
@@ -63,7 +63,7 @@ Use **Format Document** (**Alt+Shift+F**), or turn on **Format On Save** in edit
 
 ## ESLint
 
-Linting for JavaScript and TypeScript projects (**Settings → Lint & Format**).
+Linting for JavaScript and TypeScript projects (**Settings → Features → ESLint & Prettier**).
 
 | Supported | Extensions |
 | --- | --- |
@@ -82,14 +82,14 @@ Issues appear in the editor and the **Problems** panel. Optional **Fix on save**
 | Python | `.py` | Pyright |
 | Markdown | `.md` | remark language service |
 | GraphQL | `.graphql` | GraphQL language service |
-| Tailwind CSS | class-aware editing when the project uses Tailwind | Toggle in **Languages & LSP** |
+| Tailwind CSS | class-aware editing when the project uses Tailwind | Toggle in **Features → Language Servers** |
 | Vue / Svelte | when those frameworks are detected in the project | Best results when the file language mode matches |
 
-Toggle the main servers under **Settings → Languages & LSP**. Details: [Lint and LSP](/docs/settings/lint-and-lsp) and [IntelliSense](/docs/editor/intellisense).
+Toggle the main servers under **Settings → Features → Language Servers**. Details: [Lint and LSP](/docs/settings/lint-and-lsp) and [IntelliSense](/docs/editor/intellisense).
 
 ## Emmet
 
-HTML/CSS abbreviations and expansions in HTML, CSS/SCSS/Less, and JSX/TSX. Controlled by the **Emmet** toggle under **Languages & LSP**.
+HTML/CSS abbreviations and expansions in HTML, CSS/SCSS/Less, and JSX/TSX. Controlled by the **Emmet** toggle under **Features → Language Servers**.
 
 ## Design tools
 
@@ -97,12 +97,13 @@ For UI work in web files:
 
 | Tool | What it does |
 | --- | --- |
+| Visual design | Inspect the live preview and apply layout, fill, and type to source |
 | Design autocomplete | Suggests Tailwind-style classes and project patterns in `className` |
 | Tailwind controls | Inline panels for flex, gap, padding, colors |
 | Design diagnostics | Contrast and related accessibility checks |
 | CSS variable IntelliSense | Completions and hover for `var(--*)` |
 
-See [Design Tools](/docs/editor/design-tools).
+See [Visual Design](/docs/editor/visual-design) and [Design Tools](/docs/editor/design-tools).
 
 ## Other editor extras
 
@@ -119,5 +120,6 @@ See [Design Tools](/docs/editor/design-tools).
 - [Editing Files](/docs/editor/editing-files)
 - [IntelliSense](/docs/editor/intellisense)
 - [Lint and LSP](/docs/settings/lint-and-lsp)
+- [Visual Design](/docs/editor/visual-design)
 - [Design Tools](/docs/editor/design-tools)
 - [Editor Settings](/docs/settings/editor-settings)

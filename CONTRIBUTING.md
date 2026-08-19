@@ -65,7 +65,7 @@ npm run test:all      # Both
 
 | Path | What it is |
 | --- | --- |
-| `app/` | Next.js routes (workbench, settings, agent windows) |
+| `app/` | Next.js routes (workbench, settings, git, stats windows) |
 | `features/` | Product UI — editor, chat, explorer, Git, terminal |
 | `lib/` | Shared TypeScript (IPC wrappers, settings, auth) |
 | `components/ui/` | Shared UI primitives |

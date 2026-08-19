@@ -5,7 +5,7 @@ order: 1
 icon: ri-chat-ai-line
 ---
 
-AI Chat lives in the right sidebar. Ask about the project, get explanations, and request edits with review before anything is applied.
+AI Chat lives in the right sidebar. The agent can search the repo, read files, edit source, and run checks in one thread.
 
 ## Open chat
 
@@ -22,13 +22,24 @@ Cloud AI needs a [Shape account](/docs/introduction/accounts). Local editing doe
 ## Send a message
 
 1. Type in the input at the bottom of the panel.
-2. Pick a [mode](/docs/ai/chat-modes) (start with **Ask** for read-only questions).
+2. Pick a [mode](/docs/ai/chat-modes) (start with **Ask** for read-only questions, **Code** to implement).
 3. Choose a model, or leave **Auto**.
 4. Press **Enter** to send (**Shift+Enter** for a new line).
 
 Shape attaches workspace context when it helps: open files, project layout, and diagnostics.
 
 Use `@` mentions for a file, folder, the codebase, or the current editor selection.
+
+## What the agent does
+
+In **Code** and other editing modes, each turn can:
+
+- Search and read files
+- Edit files (shown as steps with `+/-` counts)
+- Run terminal commands, tests, and linters
+- Call `finish` when the task is done
+
+Tool activity collapses into a summary you can expand (for example **8 explored**). Click the summary to show or hide the steps. File changes still appear for [Keep / Undo](/docs/ai/reviewing-edits) unless you change that in settings.
 
 ## Attachments
 
@@ -42,7 +53,7 @@ Click **Stop** while a reply is streaming to cancel. Partial output stays in the
 
 ## Terminal commands
 
-In **Code** and related modes, the assistant may propose shell commands. Each one shows **Run** or **Reject** before it executes.
+The assistant may propose shell commands. Default **Auto-run** in [AI Settings](/docs/ai/ai-settings) runs safe commands without a prompt and still asks for anything destructive. Switch to **Ask every time** if you want a **Run** / **Reject** card on every command.
 
 ## Related
 
