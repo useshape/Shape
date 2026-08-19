@@ -52,8 +52,9 @@ import {
     persistHistoryNow,
     switchHistory,
     setHistoryPending,
+    type HistorySession,
 } from "@/features/preview/design-mode/history";
-import type { DesignBridgeApi, DesignLayerNode, DesignSelectedElement } from "@/features/preview/design-mode/types";
+import type { DesignBridgeApi, DesignLayerNode, DesignPendingEdit, DesignSelectedElement } from "@/features/preview/design-mode/types";
 import type { DesignExportPayload } from "@/features/preview/design-mode/export-file";
 import { enrichSourceIdentity } from "@/features/preview/design-mode/identity";
 
@@ -86,7 +87,7 @@ function displayHost(raw: string) {
     }
 }
 
-function pendingSnapshot() {
+function pendingSnapshot(): HistorySession["pending"] {
     return getDesignModeState().pending.map((p) => ({
         id: p.id,
         selector: p.selector,
@@ -102,7 +103,7 @@ function pendingSnapshot() {
     }));
 }
 
-function pendingFromSession(pending: ReturnType<typeof pendingSnapshot>) {
+function pendingFromSession(pending: HistorySession["pending"]): DesignPendingEdit[] {
     return pending.map((p) => ({
         id: p.id,
         selector: p.selector,

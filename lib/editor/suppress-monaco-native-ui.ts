@@ -13,7 +13,7 @@
  */
 
 type MonacoNs = typeof import("monaco-editor");
-type CodeEditor = import("monaco-editor").editor.IStandaloneCodeEditor | import("monaco-editor").editor.ICodeEditor;
+type CodeEditor = import("monaco-editor").editor.IStandaloneCodeEditor;
 
 let keybindingRulesInstalled = false;
 
