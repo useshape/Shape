@@ -1085,16 +1085,18 @@ export function SettingsView() {
                     </Button>
                 </div>
             </aside>
-            <section className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-tr-xl bg-background">
-                <div className="w-full space-y-2 p-6 pb-24">
-                    <AccountSettingsPanel />
-                    <AiSettings settings={settings} />
-                    <EditorSettings settings={settings} />
-                    <TerminalSettings settings={settings} />
-                    <GitSettings settings={settings} />
-                    <LspSettings settings={settings} />
-                    <ToolsSettings settings={settings} />
-                    <AdvancedSettings settings={settings} />
+            <section className="min-w-0 flex-1 overflow-hidden bg-background p-2 pl-0">
+                <div className="h-full overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-sm">
+                    <div className="no-scrollbar mx-auto h-full w-full max-w-5xl space-y-2 overflow-y-auto p-6 pb-24 lg:p-8">
+                        <AccountSettingsPanel />
+                        <AiSettings settings={settings} />
+                        <EditorSettings settings={settings} />
+                        <TerminalSettings settings={settings} />
+                        <GitSettings settings={settings} />
+                        <LspSettings settings={settings} />
+                        <ToolsSettings settings={settings} />
+                        <AdvancedSettings settings={settings} />
+                    </div>
                 </div>
             </section>
 

@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import { Button } from "@/components/ui/button";
+import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import {
     DropdownMenu,
@@ -11,9 +10,9 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import { Tooltip } from "@/components/ui/tooltip";
 import { ColorPickerPortal, type PickerAnchor } from "@/features/editor/ui/color-picker/portal";
-import { PadGlyph, PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
-import { SidebarPanelActionButton } from "@/features/panels/ui/sidebar-panel-header";
+import { PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import { cn } from "@/lib/utils";
 import {
     colorParts,
@@ -22,7 +21,44 @@ import {
     isTransparentColor,
     parsePx,
     toCssColor,
-} from "../design-mode/css";
+} from "../../design-mode/css";
+
+export function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+    return (
+        <div
+            className="grid transition-[grid-template-rows] duration-200 ease-out"
+            style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+        >
+            <div className="min-h-0 overflow-hidden">
+                <div className="pt-1">{children}</div>
+            </div>
+        </div>
+    );
+}
+
+export function CornerGlyph({ corner }: { corner: "TL" | "TR" | "BL" | "BR" }) {
+    const radius =
+        corner === "TL" ? "5px 0 0 0" : corner === "TR" ? "0 5px 0 0" : corner === "BR" ? "0 0 5px 0" : "0 0 0 5px";
+    return (
+        <span
+            aria-hidden
+            className="inline-block h-3 w-3 shrink-0 border border-current opacity-80"
+            style={{ borderRadius: radius }}
+        />
+    );
+}
+
+/** Four-corner control — distinct from the uniform radius (Radius) icon. */
+export function IndependentCornersGlyph() {
+    return (
+        <span aria-hidden className="grid h-3 w-3 grid-cols-2 gap-px">
+            <span className="rounded-[2px_0_0_0] border border-current" />
+            <span className="rounded-[0_2px_0_0] border border-current" />
+            <span className="rounded-[0_0_0_2px] border border-current" />
+            <span className="rounded-[0_0_2px_0] border border-current" />
+        </span>
+    );
+}
 
 export function Section({
     title,
@@ -54,9 +90,14 @@ export function AddHeader({
     return (
         <div className="flex h-8 items-center justify-between border-b border-border-subtle px-3">
             <span className="text-xs font-medium text-text-primary">{title}</span>
-            <SidebarPanelActionButton title={`Add ${title.toLowerCase()}`} onClick={onAdd}>
+            <button
+                type="button"
+                title={`Add ${title.toLowerCase()}`}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                onClick={onAdd}
+            >
                 <Icon name="add" size={14} />
-            </SidebarPanelActionButton>
+            </button>
         </div>
     );
 }
@@ -66,11 +107,13 @@ export function CompactSelect({
     options,
     onChange,
     className,
+    title,
 }: {
     value: string;
-    options: { value: string; label: string; icon?: React.ReactNode }[];
+    options: { value: string; label: string; icon?: React.ReactNode; style?: React.CSSProperties }[];
     onChange: (v: string) => void;
     className?: string;
+    title?: string;
 }) {
     const opts = options.some((o) => o.value === value)
         ? options
@@ -81,13 +124,20 @@ export function CompactSelect({
     return (
         <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
-                <Button type="button" variant="secondary" size="xs" className={cn("w-full justify-between", className)}>
+                <button
+                    type="button"
+                    title={title}
+                    className={cn(
+                        "flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-md bg-panel-hover px-2 text-xs text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50",
+                        className,
+                    )}
+                >
                     <span className="flex min-w-0 items-center gap-1.5">
                         {current?.icon}
-                        <span className="truncate">{current?.label ?? value}</span>
+                        <span className="truncate" style={current?.style}>{current?.label ?? value}</span>
                     </span>
                     <Icon name="expand_more" size={12} className="shrink-0 text-text-muted" />
-                </Button>
+                </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[200px]">
                 {opts.map((opt) => (
@@ -95,7 +145,7 @@ export function CompactSelect({
                         key={opt.value}
                         onSelect={() => onChange(opt.value)}
                     >
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-2" style={opt.style}>
                             {opt.icon}
                             {opt.label}
                         </span>
@@ -127,19 +177,99 @@ export function IconBtn({
 }: {
     title: string;
     active?: boolean;
-    onClick: () => void;
+    onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
     children: React.ReactNode;
 }) {
     return (
-        <Button
-            type="button"
-            title={title}
-            variant={active ? "secondary" : "ghost"}
-            size="icon"
-            onClick={onClick}
+        <Tooltip content={title} side="top" delayDuration={400}>
+            <button
+                type="button"
+                title={title}
+                onClick={onClick}
+                className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                    active ? "bg-panel-active text-text-primary" : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
+                )}
+            >
+                {children}
+            </button>
+        </Tooltip>
+    );
+}
+
+export function FlyoutCard({
+    title,
+    anchor,
+    onClose,
+    trigger,
+    children,
+}: {
+    title: string;
+    anchor: DOMRect;
+    onClose: () => void;
+    trigger?: EventTarget | null;
+    children: React.ReactNode;
+}) {
+    const ref = React.useRef<HTMLDivElement>(null);
+    const onRight = anchor.left > (typeof window === "undefined" ? 0 : window.innerWidth * 0.45);
+    const top = Math.max(12, Math.min(anchor.top, (typeof window === "undefined" ? 400 : window.innerHeight) - 24));
+    const style: React.CSSProperties = onRight
+        ? { top, right: Math.max(12, window.innerWidth - anchor.left + 8) }
+        : { top, left: anchor.right + 8 };
+
+    React.useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        const onDown = (e: MouseEvent) => {
+            const t = e.target;
+            if (!(t instanceof Element)) return;
+            if (ref.current?.contains(t)) return;
+            if (trigger instanceof Element && (trigger === t || trigger.contains(t))) return;
+            if (t.closest("#shape-color-picker-widget, .shape-color-picker-widget, [data-radix-popper-content-wrapper], [data-shape-flyout]")) {
+                return;
+            }
+            onClose();
+        };
+        window.addEventListener("keydown", onKey);
+        window.addEventListener("mousedown", onDown);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("mousedown", onDown);
+        };
+    }, [onClose]);
+
+    if (typeof document === "undefined") return null;
+    return createPortal(
+        <div
+            ref={ref}
+            data-shape-flyout=""
+            className="fixed z-[80] w-64 rounded-lg border border-border-subtle bg-panel p-3 shadow-lg"
+            style={style}
         >
-            {children}
-        </Button>
+            <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-text-primary">{title}</span>
+                <button
+                    type="button"
+                    title="Close"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                    onClick={onClose}
+                >
+                    <Icon name="close" size={14} />
+                </button>
+            </div>
+            <div className="flex flex-col gap-2">{children}</div>
+        </div>,
+        document.body,
+    );
+}
+
+export function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex min-h-8 items-center gap-2">
+            <span className="w-16 shrink-0 text-xs text-text-muted">{label}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-1">{children}</div>
+        </div>
     );
 }
 
@@ -185,12 +315,11 @@ export function ColorRow({
 
     return (
         <>
-            <div className="flex items-center gap-1">
-                <Button
+            <div className="flex items-center gap-0.5">
+                <button
                     type="button"
                     title="Color"
-                    variant="secondary"
-                    size="icon"
+                    className="shape-swatch-design flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-panel-hover outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
                     onClick={(e) => {
                         const r = e.currentTarget.getBoundingClientRect();
                         setAnchor({ x: r.left, y: r.top });
@@ -199,7 +328,7 @@ export function ColorRow({
                     }}
                 >
                     <span
-                        className="size-3.5 rounded-md border border-border-subtle"
+                        className="h-4 w-4 rounded-[4px] border border-border-subtle"
                         style={
                             gradient
                                 ? { backgroundImage: display, backgroundSize: "cover" }
@@ -212,8 +341,8 @@ export function ColorRow({
                                   : { backgroundColor: swatch }
                         }
                     />
-                </Button>
-                <Input
+                </button>
+                <input
                     type="text"
                     spellCheck={false}
                     aria-label="Hex"
@@ -227,10 +356,11 @@ export function ColorRow({
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                     }}
                     disabled={gradient}
+                    className="h-7 min-w-0 flex-1 rounded-md bg-panel-hover px-1.5 text-xs tabular-nums text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50 disabled:text-text-muted"
                 />
-                <div className="w-[68px] shrink-0">
+                <div className="w-[72px] shrink-0">
                     <PxInput
-                        glyph={<span>%</span>}
+                        glyph={<span className="text-[9px]">%</span>}
                         title="Opacity"
                         value={parts.alphaPct}
                         max={100}
@@ -244,7 +374,7 @@ export function ColorRow({
                 </div>
                 {onToggleHidden ? (
                     <IconBtn title={hidden ? "Show" : "Hide"} active={hidden} onClick={onToggleHidden}>
-                        <Icon name={hidden ? "visibility_off" : "visibility"} size={16} />
+                        <Icon name={hidden ? "visibility_off" : "visibility"} size={13} />
                     </IconBtn>
                 ) : null}
                 {onRemove ? (
@@ -336,7 +466,7 @@ export function PadXY({
                     {(["left", "top", "right", "bottom"] as const).map((side) => (
                         <PxInput
                             key={side}
-                            glyph={<PadGlyph side={side} />}
+                            glyph={<Glyph>{side[0]!.toUpperCase()}</Glyph>}
                             title={`Padding ${side}`}
                             value={parsePx(values[side])}
                             onCommit={(n) => onSide((side[0]!.toUpperCase() + side.slice(1)) as "Top" | "Right" | "Bottom" | "Left", n)}
@@ -352,13 +482,13 @@ export function PadXY({
     return (
         <div className="flex min-w-0 flex-1 items-center gap-1">
             <PxInput
-                glyph={<PadGlyph side="left" />}
+                glyph={<Glyph>X</Glyph>}
                 title="Horizontal padding"
                 value={x}
                 onCommit={(n) => onChange("x", n)}
             />
             <PxInput
-                glyph={<PadGlyph side="top" />}
+                glyph={<Glyph>Y</Glyph>}
                 title="Vertical padding"
                 value={y}
                 onCommit={(n) => onChange("y", n)}
@@ -457,21 +587,21 @@ export type DesignEffectKind =
     | "drop-shadow"
     | "inner-shadow"
     | "layer-blur"
-    | "background-blur"
-    | "glass"
-    | "noise"
-    | "texture";
+    | "background-blur";
 
 export type DesignEffect = {
     id: string;
     kind: DesignEffectKind;
     hidden?: boolean;
     blur: number;
+    startBlur?: number;
     x?: number;
     y?: number;
     spread?: number;
     opacity?: number;
     color?: string;
+    progressive?: boolean;
+    progressiveAngle?: number;
 };
 
 const EFFECT_META: { kind: DesignEffectKind; label: string }[] = [
@@ -479,71 +609,7 @@ const EFFECT_META: { kind: DesignEffectKind; label: string }[] = [
     { kind: "drop-shadow", label: "Drop shadow" },
     { kind: "layer-blur", label: "Layer blur" },
     { kind: "background-blur", label: "Background blur" },
-    { kind: "glass", label: "Glass" },
-    { kind: "noise", label: "Noise" },
-    { kind: "texture", label: "Texture" },
 ];
-
-function EffectIcon({ kind }: { kind: DesignEffectKind }) {
-    if (kind === "inner-shadow") {
-        return (
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                <rect x="2.5" y="2.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-                <path d="M4 4h6v1.4H5.4V10H4V4Z" fill="currentColor" opacity="0.45" />
-            </svg>
-        );
-    }
-    if (kind === "drop-shadow") {
-        return (
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                <rect x="2" y="2" width="8" height="8" rx="1.2" fill="currentColor" opacity="0.28" />
-                <rect x="4" y="4" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-            </svg>
-        );
-    }
-    if (kind === "layer-blur") {
-        return (
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                {[3, 7, 11].map((x) =>
-                    [3, 7, 11].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.05" fill="currentColor" />),
-                )}
-            </svg>
-        );
-    }
-    if (kind === "background-blur") {
-        return (
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                {[3, 5.5, 8, 10.5].flatMap((x) =>
-                    [3, 5.5, 8, 10.5].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="0.85" fill="currentColor" />),
-                )}
-            </svg>
-        );
-    }
-    if (kind === "glass") {
-        return (
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                <rect x="2.5" y="2.5" width="9" height="9" rx="1.5" fill="currentColor" opacity="0.12" stroke="currentColor" strokeWidth="1.2" />
-                <path d="M4 8.5 8.5 4" stroke="currentColor" strokeWidth="1.1" opacity="0.7" />
-            </svg>
-        );
-    }
-    if (kind === "noise") {
-        return (
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                {Array.from({ length: 18 }, (_, i) => (
-                    <circle key={i} cx={2 + ((i * 7) % 11)} cy={2 + ((i * 5) % 11)} r="0.7" fill="currentColor" />
-                ))}
-            </svg>
-        );
-    }
-    return (
-        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-            {Array.from({ length: 9 }, (_, i) => (
-                <circle key={i} cx={3 + (i % 3) * 4} cy={3 + Math.floor(i / 3) * 4} r="1.2" fill="currentColor" opacity="0.7" />
-            ))}
-        </svg>
-    );
-}
 
 function withOpacity(color: string, opacity: number) {
     const a = Math.max(0, Math.min(1, opacity));
@@ -555,7 +621,7 @@ function withOpacity(color: string, opacity: number) {
     return `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, transparent)`;
 }
 
-export function effectsToStyles(effects: DesignEffect[]): Partial<Record<"boxShadow" | "filter" | "backdropFilter", string>> {
+export function effectsToStyles(effects: DesignEffect[]): Record<string, string> {
     const visible = effects.filter((e) => !e.hidden);
     const shadows = visible
         .filter((e) => e.kind === "drop-shadow" || e.kind === "inner-shadow")
@@ -565,25 +631,24 @@ export function effectsToStyles(effects: DesignEffect[]): Partial<Record<"boxSha
             return `${inset}${e.x ?? 0}px ${e.y ?? 4}px ${e.blur}px ${e.spread ?? 0}px ${color}`;
         });
     const layerBlur = visible.find((e) => e.kind === "layer-blur");
-    const noise = visible.find((e) => e.kind === "noise" || e.kind === "texture");
     const bgBlur = visible.find((e) => e.kind === "background-blur");
-    const glass = visible.find((e) => e.kind === "glass");
+    const progressive = [layerBlur, bgBlur].find((e) => e?.progressive);
     const filters: string[] = [];
-    if (layerBlur) filters.push(`blur(${layerBlur.blur}px)`);
-    if (noise) filters.push(`url(#shape-noise)`);
-    if (noise && !layerBlur) filters.push(`contrast(1.05)`);
+    if (layerBlur && !layerBlur.progressive) filters.push(`blur(${layerBlur.blur}px)`);
     const backdrop: string[] = [];
-    if (bgBlur) backdrop.push(`blur(${bgBlur.blur}px)`);
-    if (glass) {
-        backdrop.push(`blur(${glass.blur}px)`);
-        backdrop.push("saturate(180%)");
-        backdrop.push("brightness(1.08)");
-    }
-    return {
+    if (bgBlur && !bgBlur.progressive) backdrop.push(`blur(${bgBlur.blur}px)`);
+    const out: Record<string, string> = {
         boxShadow: shadows.length ? shadows.join(", ") : "none",
         filter: filters.length ? filters.join(" ") : "none",
         backdropFilter: backdrop.length ? backdrop.join(" ") : "none",
+        maskImage: "none",
+        WebkitMaskImage: "none",
+        "--shape-prog-start": progressive ? `${progressive.startBlur ?? 0}px` : "",
+        "--shape-prog-blur": progressive ? `${progressive.blur}px` : "",
+        "--shape-prog-angle": progressive ? `${progressive.progressiveAngle ?? 180}deg` : "",
+        "--shape-prog-mode": progressive ? (progressive.kind === "background-blur" ? "backdrop" : "layer") : "",
     };
+    return out;
 }
 
 export function EffectsSection({
@@ -594,18 +659,23 @@ export function EffectsSection({
     onChange: (next: DesignEffect[]) => void;
 }) {
     const [menu, setMenu] = React.useState(false);
+    const [openId, setOpenId] = React.useState<string | null>(null);
+    const [anchor, setAnchor] = React.useState<DOMRect | null>(null);
+    const triggerRef = React.useRef<HTMLElement | null>(null);
     const add = (kind: DesignEffectKind) => {
         const shadow = kind.includes("shadow");
+        const id = `${kind}-${Date.now().toString(36)}`;
         onChange([
             ...effects,
             {
-                id: `${kind}-${Date.now().toString(36)}`,
+                id,
                 kind,
-                blur: kind === "glass" ? 20 : kind.includes("blur") ? 8 : 16,
+                blur: kind.includes("blur") ? 8 : 16,
+                startBlur: 0,
                 x: 0,
                 y: shadow ? 4 : 0,
                 spread: 0,
-                opacity: shadow ? 0.25 : kind === "glass" ? 0.7 : 1,
+                opacity: shadow ? 0.25 : 1,
                 color: "rgb(0 0 0 / 0.25)",
             },
         ]);
@@ -613,112 +683,177 @@ export function EffectsSection({
     };
     const patch = (id: string, next: Partial<DesignEffect>) =>
         onChange(effects.map((e) => (e.id === id ? { ...e, ...next } : e)));
+    const dragId = React.useRef<string | null>(null);
+    const move = (fromId: string, toId: string) => {
+        if (fromId === toId) return;
+        const from = effects.findIndex((e) => e.id === fromId);
+        const to = effects.findIndex((e) => e.id === toId);
+        if (from < 0 || to < 0) return;
+        const next = effects.slice();
+        const [item] = next.splice(from, 1);
+        if (!item) return;
+        next.splice(to, 0, item);
+        onChange(next);
+    };
+    const openFx = effects.find((e) => e.id === openId);
+    const shadow = openFx && (openFx.kind === "drop-shadow" || openFx.kind === "inner-shadow");
+    const blurKind = openFx && (openFx.kind === "layer-blur" || openFx.kind === "background-blur");
     return (
         <div className="border-b border-border-subtle">
             <div className="flex h-8 items-center justify-between px-3">
                 <span className="text-xs font-medium text-text-primary">Effects</span>
                 <DropdownMenu modal={false} open={menu} onOpenChange={setMenu}>
                     <DropdownMenuTrigger asChild>
-                        <SidebarPanelActionButton title="Add effect">
+                        <button
+                            type="button"
+                            title="Add effect"
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                        >
                             <Icon name="add" size={14} />
-                        </SidebarPanelActionButton>
+                        </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-[200px]">
                         {EFFECT_META.map((item) => (
                             <DropdownMenuItem key={item.kind} onSelect={() => add(item.kind)}>
-                                <span className="flex items-center gap-2 text-xs">
-                                    <span className="text-text-muted">
-                                        <EffectIcon kind={item.kind} />
-                                    </span>
-                                    {item.label}
-                                </span>
+                                <span className="text-xs">{item.label}</span>
                             </DropdownMenuItem>
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
-            {effects.map((fx) => {
-                const shadow = fx.kind === "drop-shadow" || fx.kind === "inner-shadow";
-                return (
-                    <div key={fx.id} className="flex flex-col gap-1.5 px-3 pb-3">
-                        <div className="flex items-center gap-1.5">
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-panel-hover text-text-muted">
-                                <EffectIcon kind={fx.kind} />
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
-                                {EFFECT_META.find((m) => m.kind === fx.kind)?.label}
-                            </span>
-                            <IconBtn
-                                title={fx.hidden ? "Show" : "Hide"}
-                                active={fx.hidden}
-                                onClick={() => patch(fx.id, { hidden: !fx.hidden })}
-                            >
-                                <Icon name={fx.hidden ? "visibility_off" : "visibility"} size={13} />
-                            </IconBtn>
-                            <IconBtn title="Remove" onClick={() => onChange(effects.filter((e) => e.id !== fx.id))}>
-                                <Icon name="remove" size={13} />
-                            </IconBtn>
-                        </div>
-                        <div className="grid grid-cols-4 gap-1">
-                            {shadow ? (
-                                <>
-                                    <PxInput
-                                        glyph={<span className="text-[9px]">X</span>}
-                                        title="X"
-                                        value={fx.x ?? 0}
-                                        onCommit={(n) => patch(fx.id, { x: n })}
-                                    />
-                                    <PxInput
-                                        glyph={<span className="text-[9px]">Y</span>}
-                                        title="Y"
-                                        value={fx.y ?? 0}
-                                        onCommit={(n) => patch(fx.id, { y: n })}
-                                    />
-                                </>
-                            ) : null}
+            {effects.map((fx) => (
+                <div
+                    key={fx.id}
+                    className="flex items-center gap-1 px-2 pb-1"
+                    draggable
+                    onDragStart={() => {
+                        dragId.current = fx.id;
+                    }}
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragId.current) move(dragId.current, fx.id);
+                        dragId.current = null;
+                    }}
+                >
+                    <span className="cursor-grab text-text-muted" title="Drag to reorder">
+                        <Icon name="more_vert" size={12} />
+                    </span>
+                    <button
+                        type="button"
+                        className={cn(
+                            "flex h-8 min-w-0 flex-1 items-center rounded-md px-2 text-left text-xs text-text-primary",
+                            openId === fx.id ? "bg-panel-active" : "hover:bg-panel-hover",
+                        )}
+                        onClick={(e) => {
+                            triggerRef.current = e.currentTarget;
+                            setAnchor(e.currentTarget.getBoundingClientRect());
+                            setOpenId(fx.id);
+                        }}
+                    >
+                        {EFFECT_META.find((m) => m.kind === fx.kind)?.label}
+                    </button>
+                    <IconBtn
+                        title={fx.hidden ? "Show" : "Hide"}
+                        active={fx.hidden}
+                        onClick={() => patch(fx.id, { hidden: !fx.hidden })}
+                    >
+                        <Icon name={fx.hidden ? "visibility_off" : "visibility"} size={13} />
+                    </IconBtn>
+                    <IconBtn
+                        title="Remove"
+                        onClick={() => {
+                            if (openId === fx.id) setOpenId(null);
+                            onChange(effects.filter((e) => e.id !== fx.id));
+                        }}
+                    >
+                        <Icon name="remove" size={13} />
+                    </IconBtn>
+                </div>
+            ))}
+            {openFx && anchor ? (
+                <FlyoutCard
+                    title={EFFECT_META.find((m) => m.kind === openFx.kind)?.label ?? "Effect"}
+                    anchor={anchor}
+                    trigger={triggerRef.current}
+                    onClose={() => setOpenId(null)}
+                >
+                    {shadow ? (
+                        <FieldRow label="Position">
+                            <PxInput glyph={<Glyph>X</Glyph>} title="X" value={openFx.x ?? 0} onCommit={(n) => patch(openFx.id, { x: n })} />
+                            <PxInput glyph={<Glyph>Y</Glyph>} title="Y" value={openFx.y ?? 0} onCommit={(n) => patch(openFx.id, { y: n })} />
+                        </FieldRow>
+                    ) : null}
+                    {blurKind && openFx.progressive ? (
+                        <>
+                            <FieldRow label="Start">
+                                <PxInput
+                                    glyph={<Glyph>S</Glyph>}
+                                    title="Start blur"
+                                    value={openFx.startBlur ?? 0}
+                                    onCommit={(n) => patch(openFx.id, { startBlur: n })}
+                                />
+                            </FieldRow>
+                            <FieldRow label="End">
+                                <PxInput glyph={<Glyph>E</Glyph>} title="End blur" value={openFx.blur} onCommit={(n) => patch(openFx.id, { blur: n })} />
+                            </FieldRow>
+                        </>
+                    ) : (
+                        <FieldRow label="Blur">
+                            <PxInput glyph={<Glyph>B</Glyph>} title="Blur" value={openFx.blur} onCommit={(n) => patch(openFx.id, { blur: n })} />
+                        </FieldRow>
+                    )}
+                    {shadow ? (
+                        <FieldRow label="Spread">
                             <PxInput
-                                glyph={<span className="text-[9px]">Bl</span>}
-                                title="Blur"
-                                value={fx.blur}
-                                onCommit={(n) => patch(fx.id, { blur: n })}
+                                glyph={<Glyph>S</Glyph>}
+                                title="Spread"
+                                value={openFx.spread ?? 0}
+                                onCommit={(n) => patch(openFx.id, { spread: n })}
                             />
-                            {shadow ? (
-                                <PxInput
-                                    glyph={<span className="text-[9px]">Sp</span>}
-                                    title="Spread"
-                                    value={fx.spread ?? 0}
-                                    onCommit={(n) => patch(fx.id, { spread: n })}
-                                />
-                            ) : (
-                                <PxInput
-                                    glyph={<span className="text-[9px]">%</span>}
-                                    title="Opacity"
-                                    value={Math.round((fx.opacity ?? 1) * 100)}
-                                    onCommit={(n) => patch(fx.id, { opacity: Math.max(0, Math.min(100, n)) / 100 })}
-                                />
-                            )}
-                        </div>
-                        {shadow ? (
-                            <div className="flex items-center gap-1">
-                                <div className="min-w-0 flex-1">
-                                    <ColorRow
-                                        cssValue={fx.color || "rgb(0 0 0 / 0.25)"}
-                                        onChange={(c) => patch(fx.id, { color: c })}
-                                    />
-                                </div>
-                                <div className="w-[64px]">
-                                    <PxInput
-                                        glyph={<span className="text-[9px]">%</span>}
-                                        title="Opacity"
-                                        value={Math.round((fx.opacity ?? 0.25) * 100)}
-                                        onCommit={(n) => patch(fx.id, { opacity: Math.max(0, Math.min(100, n)) / 100 })}
-                                    />
-                                </div>
-                            </div>
-                        ) : null}
-                    </div>
-                );
-            })}
+                        </FieldRow>
+                    ) : (
+                        <FieldRow label="Opacity">
+                            <PxInput
+                                glyph={<Glyph>%</Glyph>}
+                                title="Opacity"
+                                value={Math.round((openFx.opacity ?? 1) * 100)}
+                                onCommit={(n) => patch(openFx.id, { opacity: Math.max(0, Math.min(100, n)) / 100 })}
+                            />
+                        </FieldRow>
+                    )}
+                    {shadow ? (
+                        <FieldRow label="Color">
+                            <ColorRow cssValue={openFx.color || "rgb(0 0 0 / 0.25)"} onChange={(c) => patch(openFx.id, { color: c })} />
+                        </FieldRow>
+                    ) : null}
+                    {blurKind ? (
+                        <label className="flex items-center gap-2 text-xs text-text-secondary">
+                            <input
+                                type="checkbox"
+                                checked={!!openFx.progressive}
+                                onChange={(e) => patch(openFx.id, { progressive: e.target.checked })}
+                                className="accent-accent"
+                            />
+                            Progressive blur
+                        </label>
+                    ) : null}
+                    {blurKind && openFx.progressive ? (
+                        <FieldRow label="Direction">
+                            <PxInput
+                                glyph={<Glyph>°</Glyph>}
+                                title="Blur falloff angle"
+                                value={openFx.progressiveAngle ?? 180}
+                                min={0}
+                                max={360}
+                                onCommit={(n) => patch(openFx.id, { progressiveAngle: n })}
+                            />
+                        </FieldRow>
+                    ) : null}
+                </FlyoutCard>
+            ) : null}
         </div>
     );
 }
@@ -737,20 +872,18 @@ export function SelectionColors({
                 {colors.slice(0, 8).map((c, i) => {
                     const parts = colorParts(c);
                     return (
-                        <Button
+                        <button
                             key={`${c}-${i}`}
                             type="button"
-                            variant="secondary"
-                            size="xs"
-                            className="w-full justify-start"
+                            className="flex h-8 items-center gap-2 rounded-md bg-panel-hover px-1.5 text-left"
                             onClick={() => onPick(c)}
                         >
                             <span
-                                className="size-3.5 shrink-0 rounded-md border border-border"
+                                className="h-4 w-4 shrink-0 rounded-[4px] border border-border-subtle"
                                 style={{ backgroundColor: c }}
                             />
-                            <span className="tabular-nums">{parts.hex}</span>
-                        </Button>
+                            <span className="text-xs tabular-nums text-text-primary">{parts.hex}</span>
+                        </button>
                     );
                 })}
             </div>

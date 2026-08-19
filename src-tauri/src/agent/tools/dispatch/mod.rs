@@ -36,6 +36,10 @@ const TRUST_GATED_TOOLS: &[&str] = &[
 const WORKSPACE_UNTRUSTED_MSG: &str =
     "Workspace is not trusted. Trust this folder in Shape to allow agent shell commands and file writes.";
 
+/// Marks a shell command that was served by a native tool instead of a shell, so the
+/// turn loop knows nothing was actually executed.
+pub const REDIRECTED_TOOL_PREFIX: &str = "[Ran as the `";
+
 /// Per-call execution context. Immutable; turn-level state belongs to the chat loop.
 pub struct ToolCtx<'a> {
     pub project_path: &'a str,
@@ -165,6 +169,11 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         }
     };
     record_tool_event(name, &outcome, ctx.project_path);
+    // read_file already caps its own output, and pointing a file read at a spill file
+    // just tells the model to read the same content again from somewhere else.
+    if name == "read_file" {
+        return outcome;
+    }
     let tool_result = crate::agent::tools::spill::maybe_spill_tool_output(
         ctx.project_path,
         name,

@@ -1,11 +1,12 @@
 ---
 title: Activity Bar
-description: Switch between Explorer, Search, Git, and other sidebar views from the activity bar.
+description: Switch between Explorer, Search, Git, Browser, and other views from the activity bar.
 order: 2
 icon: ri-side-bar-line
 ---
 
-The **activity bar** is the vertical strip on the far left of the workbench. Each icon opens a different view in the **primary sidebar**.
+The **activity bar** is the vertical strip on the far left of the workbench. Each icon opens a different view in the **primary sidebar**, except **Browser** and **Settings**, which open editor tabs.
+
 ## Sidebar views
 
 | Icon | View | Purpose |
@@ -28,22 +29,23 @@ Below the view icons, the activity bar has two fixed buttons:
 
 | Button | Action |
 | --- | --- |
-| Terminal icon | Opens the **Command Palette** (**Ctrl+Shift+P**) |
+| Chrome icon | Opens the **Browser** tab ([Visual Design](/docs/editor/visual-design)) |
 | Gear icon | Opens **Settings** |
 
-These are shortcuts, not sidebar views. Settings opens in an editor tab.
+These are not sidebar views. Browser and Settings open as editor tabs.
 
 ## Opening views from the menu
 
-Every activity bar view is also available from **View** in the menu bar:
+Every activity bar sidebar view is also available from **View** in the menu bar:
 
 - **View → Explorer** (**Ctrl+Shift+E**)
 - **View → Search** (**Ctrl+Shift+F**)
 - **View → Source Control** (**Ctrl+Shift+G**)
 - **View → Git Graph**
 - **View → Outline**
+- **View → Preview** (Browser tab)
 
-Use whichever path fits your workflow.
+[Git Manager](/docs/git/git-manager) is **Window → Git Manager**, not an activity bar icon.
 
 ## What is not on the activity bar
 
@@ -57,6 +59,8 @@ Some features live elsewhere:
 ## Related
 
 - [File Explorer](/docs/files/file-explorer)
+- [Visual Design](/docs/editor/visual-design)
 - [Workbench Tour](/docs/workspace/workbench-tour)
 - [Source Control](/docs/git/source-control)
+- [Git Manager](/docs/git/git-manager)
 - [Bookmarks](/docs/files/bookmarks)

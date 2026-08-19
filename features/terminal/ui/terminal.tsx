@@ -991,7 +991,7 @@ export default function Terminal({
     return (
         <div className="flex h-full flex-col overflow-hidden bg-panel select-none font-sans" data-terminal-root="true">
             {!terminalOnly ? (
-                <div className="relative z-20 flex h-9 min-w-0 shrink-0 items-center gap-1 border-b border-border-subtle px-2">
+                <div className="relative z-20 flex h-12 min-w-0 shrink-0 items-center gap-1 px-2">
                     <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
                         {(["problems", "output", "terminal", "tests"] as const).map((viewId) => {
                             const labels: Record<string, string> = {
@@ -1002,11 +1002,13 @@ export default function Terminal({
                             };
                             const active = activeView === viewId;
                             return (
-                                <button
+                                <Button
                                     key={viewId}
                                     type="button"
+                                    variant="ghost"
+                                    size="xs"
                                     className={cn(
-                                        "h-7 rounded-md px-2.5 text-sm transition-colors",
+                                        "",
                                         active
                                             ? "bg-surface-3 text-text-primary"
                                             : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
@@ -1019,7 +1021,7 @@ export default function Terminal({
                                             {problemCount > 99 ? "99+" : problemCount}
                                         </span>
                                     ) : null}
-                                </button>
+                                </Button>
                             );
                         })}
                     </div>

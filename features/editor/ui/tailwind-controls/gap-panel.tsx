@@ -9,9 +9,12 @@ export function GapPanel({ currentClasses, onApply, onClose }: TwPanelProps) {
 
     return (
         <PanelShell title="Gap" onClose={onClose}>
-            <div className="flex items-center gap-2">
-                <RowLabel>Gap</RowLabel>
-                <div className="flex flex-1 gap-1">
+            <div className="rounded-xl border border-border-subtle bg-panel p-2.5">
+                <div className="mb-2 flex items-center justify-between">
+                    <RowLabel>Spacing</RowLabel>
+                    <span className="text-[11px] text-text-muted">pixels</span>
+                </div>
+                <div className="flex gap-2">
                     <PxInput
                         glyph={GAP_X_GLYPH}
                         title="Column gap (px)"

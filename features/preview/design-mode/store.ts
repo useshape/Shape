@@ -21,6 +21,8 @@ export type DesignModeState = {
     pending: DesignPendingEdit[];
     proxySrc: string | null;
     ready: boolean;
+    selecting: boolean;
+    applyFailedIds: string[];
 };
 
 const listeners = new Set<() => void>();
@@ -35,6 +37,8 @@ let state: DesignModeState = {
     pending: [],
     proxySrc: null,
     ready: false,
+    selecting: false,
+    applyFailedIds: [],
 };
 
 function emit() {
@@ -68,6 +72,8 @@ export function setDesignModeEnabled(enabled: boolean) {
             selected: null,
             layers: [],
             proxySrc: null,
+            selecting: false,
+            applyFailedIds: [],
         });
         return;
     }
@@ -90,18 +96,29 @@ export function setDesignLayers(layers: DesignLayerNode[]) {
     setState({ layers });
 }
 
+export function setDesignSelecting(selecting: boolean) {
+    setState({ selecting });
+}
+
+export function setDesignApplyFailedIds(applyFailedIds: string[]) {
+    setState({ applyFailedIds });
+}
+
 export function setDesignSelected(selected: DesignSelectedElement | null, additive = false) {
     if (!selected) {
-        setState({ selected: null, selection: [] });
+        setState({ selected: null, selection: [], selecting: false });
         return;
     }
+    const pending = selected.source
+        ? state.pending.map((p) => (p.id === selected.id && !p.source ? { ...p, source: selected.source } : p))
+        : state.pending;
     if (additive) {
         const without = state.selection.filter((s) => s.id !== selected.id);
         const selection = [...without, selected];
-        setState({ selected, selection });
+        setState({ selected, selection, pending, selecting: false });
         return;
     }
-    setState({ selected, selection: [selected] });
+    setState({ selected, selection: [selected], pending, selecting: false });
 }
 
 export function setDesignSelection(selection: DesignSelectedElement[]) {
@@ -124,7 +141,7 @@ export function upsertDesignPending(edit: DesignPendingEdit) {
                         selector: edit.selector || p.selector,
                         className: edit.className || p.className,
                         locateText: edit.locateText || p.locateText,
-                        source: edit.source || p.source,
+                        source: edit.source ?? p.source ?? state.selected?.source,
                         label: edit.label || p.label,
                         styles: { ...p.styles, ...edit.styles },
                         text: edit.text ?? p.text,
@@ -135,7 +152,7 @@ export function upsertDesignPending(edit: DesignPendingEdit) {
                     }
                   : p,
           )
-        : [...state.pending, edit];
+        : [...state.pending, { ...edit, source: edit.source ?? state.selected?.source }];
     setState({ pending: next });
 }
 
@@ -145,6 +162,10 @@ export function setDesignPending(pending: DesignPendingEdit[]) {
 
 export function clearDesignPending() {
     setState({ pending: [] });
+}
+
+export function designPendingCountLabel(count: number) {
+    return count === 1 ? "1 Edit" : `${count} Edits`;
 }
 
 export function serializeDesignEdits(): string {

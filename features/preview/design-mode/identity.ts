@@ -26,7 +26,11 @@ export function isProjectSourcePath(fileName: string): boolean {
 }
 
 export function isResolvedSource(loc?: DesignSourceLoc | null): boolean {
-    return !!loc && isProjectSourcePath(loc.fileName);
+    if (!loc) return false;
+    const file = normalizeOriginalSourcePath(loc.fileName);
+    if (isProjectSourcePath(file) || isProjectSourcePath(loc.fileName)) return true;
+    const chunk = pathFromGeneratedChunk(loc.generated?.fileName || loc.fileName);
+    return !!chunk;
 }
 
 export function normalizeOriginalSourcePath(fileName: string): string {
@@ -36,14 +40,16 @@ export function normalizeOriginalSourcePath(fileName: string): string {
     } catch {
         /* keep */
     }
+    name = name.split("?")[0] ?? name;
     name = name.replace(/^https?:\/\/[^/]+/, "");
-    name = name.replace(/^webpack:\/\/[^/]+\//, "");
+    name = name.replace(/^rsc:\/\/React\/(?:Server|Client)\//i, "");
     name = name.replace(/^webpack-internal:\/\/\//, "");
+    name = name.replace(/^webpack:\/\/[^/]+\//, "");
+    name = name.replace(/^turbopack:\/\/\/(?:\[project\]\/)?/, "");
     name = name.replace(/^file:\/\//, "");
     name = name.replace(/^\/@fs\//, "");
-    name = name.split("?")[0] ?? name;
-    name = name.replace(/^\(+/, "");
-    name = name.replace(/^\([^)]+\)\//, "");
+    name = name.replace(/^\/_N_E\//, "");
+    while (/^\([^)]+\)\//.test(name)) name = name.replace(/^\([^)]+\)\//, "");
     name = name.replace(/^\.\//, "");
     const src = name.toLowerCase().lastIndexOf("/src/");
     if (src >= 0) name = name.slice(src + 1);
@@ -74,15 +80,10 @@ export function enrichSourceIdentity(loc: DesignSourceLoc | undefined): DesignSo
         chunk && (!fileName.includes("/") || chunk.split("/").length > fileName.split("/").length)
             ? chunk
             : fileName;
-    const next: DesignSourceLoc = {
-        ...loc,
-        fileName: chosen || fileName,
-    };
-    if (isResolvedSource(next)) return next;
-    if (!chunk) return next;
+    const resolved = chosen || fileName || chunk || loc.fileName;
     return {
-        ...next,
-        fileName: chunk,
-        nodeId: `${chunk}:${next.lineNumber}:${next.columnNumber ?? 1}`,
+        ...loc,
+        fileName: resolved,
+        nodeId: `${resolved}:${loc.lineNumber}:${loc.columnNumber ?? 1}`,
     };
 }

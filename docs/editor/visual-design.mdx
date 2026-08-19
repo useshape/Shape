@@ -1,0 +1,75 @@
+---
+title: Visual Design
+description: Inspect a live preview and apply layout, color, and type changes back to source.
+order: 5
+icon: ri-cursor-line
+---
+
+**Visual design** lets you inspect the running page, edit layout and appearance in a Design sidebar, then **Apply** those changes to project source. It lives in the **Browser** tab, not in the code editor.
+
+For Tailwind class panels on tokens in the file, see [Design Tools](/docs/editor/design-tools).
+
+## Open the Browser
+
+- Chrome icon at the bottom of the [activity bar](/docs/workspace/activity-bar)
+- **View → Preview**
+- Command palette: search for Preview
+
+The tab is labeled **Browser**. It has back, forward, reload, a URL field, and an **Open externally** button.
+
+Start your app from **Scripts** or the [terminal](/docs/terminal/integrated-terminal), then enter the local URL (often `http://localhost:3000`).
+
+## Turn on design mode
+
+Click the **palette** in the Browser toolbar, or press **Ctrl+Shift+D**. The Design sidebar opens on the right.
+
+The **inspect** control (eyedropper) is on while you select elements. Click the page to target a node. The overlay shows the tag and a short label, for example `button.Get started`.
+
+| Action | What it does |
+| --- | --- |
+| Click | Select one element |
+| **Ctrl+click** | Add to the selection |
+| **Shift-drag** | Select a region |
+| **Ctrl+I** | Toggle inspect vs interacting with the page |
+| **Escape** | Clear the selection |
+
+When inspect is off, you can click links and use the page as usual.
+
+## Design sidebar
+
+After you select an element, the sidebar shows:
+
+| Section | What you edit |
+| --- | --- |
+| **Position** | X and Y offsets |
+| **Layout** | Block, horizontal, vertical, or grid; width and height |
+| **Appearance** | Radius, padding, overflow |
+| **Fill** | Background or text color, opacity |
+| **Stroke** | Border width, style, and color |
+| **Effects** | Shadows and similar |
+| **Export** | Copy or export related assets |
+
+Changes preview live in the iframe. They are pending until you apply.
+
+## Apply to source
+
+The footer shows how many pending edits you have.
+
+1. **Undo** reverts the last design change in the preview.
+2. **Apply** writes matching updates to JSX, HTML, or CSS in the open project.
+3. **Reset** (toolbar) clears pending preview edits without writing files.
+
+Apply needs an open project folder and a local preview it can map back to source. If a node cannot be located, the sidebar marks that element and leaves the rest applied.
+
+**Ctrl+Z** / **Ctrl+Y** undo and redo design-mode history while the Browser tab is focused (outside text fields).
+
+## Device frames
+
+With design mode on, the device control frames the preview at phone and tablet sizes (iPhone, Pixel, iPad, and Full). Full uses the whole tab.
+
+## Related
+
+- [Design Tools](/docs/editor/design-tools)
+- [Chat Modes](/docs/ai/chat-modes) (Visual mode in chat)
+- [Activity Bar](/docs/workspace/activity-bar)
+- [First project tutorial](/docs/tutorials/first-project)

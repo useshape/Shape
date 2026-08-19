@@ -49,14 +49,14 @@ export function ActivityBar({
                     active={activeTab === "source"}
                     onClick={() => toggleTab("source")}
                 >
-                    <Icon name="account_tree" size={ICON_SIZE} />
+                    <Icon name="source_control" size={ICON_SIZE} />
                 </ActivityBarItem>
                 <ActivityBarItem
                     label="Git Graph"
                     active={activeTab === "graph"}
                     onClick={() => toggleTab("graph")}
                 >
-                    <Icon name="commit" size={ICON_SIZE} />
+                    <Icon name="git_graph" size={ICON_SIZE} />
                 </ActivityBarItem>
                 <ActivityBarItem
                     label="Outline"

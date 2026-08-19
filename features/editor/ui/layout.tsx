@@ -12,8 +12,8 @@ import Graph from "@/features/git/ui/graph/graph";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { getDesignBridge, subscribeDesignBridge, useDesignModeStore } from "@/features/preview/design-mode/store";
-import { DesignLayersPanel } from "@/features/preview/ui/design-layers";
-import { DesignInspectorPanel } from "@/features/preview/ui/design-inspector";
+import { DesignLayersPanel } from "@/features/preview/ui/design/layers";
+import { DesignInspectorPanel } from "@/features/preview/ui/design/inspector";
 import type { DesignBridgeApi } from "@/features/preview/design-mode/types";
 
 function renderLeftPanel(activeTab: string) {

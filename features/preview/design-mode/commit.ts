@@ -1,8 +1,9 @@
-import { applyEditsToProject, revertSourceWrites } from "./apply-to-source";
-
-export { abortDesignApply } from "./apply-to-source";
+import { abortDesignApply, applyEditsToProject } from "./apply/commit-edits";
+import { revertSourceWrites } from "./apply/source-files";
 import { designLog } from "./log";
 import type { DesignPendingEdit } from "./types";
+
+export { abortDesignApply };
 
 export type DesignRevertEntry = { path: string; previous: string };
 
@@ -21,6 +22,27 @@ export function subscribeDesignRevert(listener: () => void) {
 
 export function designRevertDepth() {
     return stack.length;
+}
+
+const APPLY_BUDGET_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => void): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            onTimeout();
+            reject(new Error("Apply timed out. Try applying fewer edits."));
+        }, ms);
+        promise.then(
+            (value) => {
+                clearTimeout(timer);
+                resolve(value);
+            },
+            (err) => {
+                clearTimeout(timer);
+                reject(err);
+            },
+        );
+    });
 }
 
 export async function commitDesignEdits(projectPath: string, edits: DesignPendingEdit[]) {
@@ -55,7 +77,12 @@ export async function commitDesignEdits(projectPath: string, edits: DesignPendin
         }
         return result;
     };
-    const next = queue.then(run, run);
+    const budgeted = () =>
+        withTimeout(run(), APPLY_BUDGET_MS, () => {
+            abortDesignApply();
+            designLog("ERROR", "apply timed out", { count: edits.length });
+        });
+    const next = queue.then(budgeted, budgeted);
     queue = next.then(
         () => undefined,
         () => undefined,

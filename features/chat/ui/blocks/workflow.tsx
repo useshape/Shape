@@ -699,7 +699,7 @@ export function AgentWorkflow({
     }
 
     const header = computeGroupHeader(visibleBlocks);
-    const showRows = isOpen || isActive;
+    const showRows = isOpen;
 
     return (
         <div className="flex flex-col w-full my-1 select-none">

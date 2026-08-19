@@ -1,41 +1,45 @@
 ---
 title: Reviewing Edits
-description: Keep or undo AI file changes after the agent writes them to disk.
+description: Keep or undo AI file changes after the agent writes them, or approve edits before they land.
 order: 3
 icon: ri-file-check-line
 ---
 
-In **Code** mode (and other editing modes), the assistant can change files on disk as it works. Each change shows up for review so you can **Keep** it or **Undo** it.
+In **Code** mode (and other editing modes), the assistant can change files as it works. Shape gives you two separate controls: review after write, and optional approval before write.
 
-## How edits land
+## After edits land (default)
+
+By default the agent writes files, then a strip above the chat input lets you **Keep** or **Undo**.
 
 1. The agent writes the updated file to disk.
-2. Chat shows an edit card with `+/-` line counts for that step.
-3. Open the file (or use **Preview**) to review the diff in the editor.
-4. **Keep** dismisses the review and leaves the file as written.
-5. **Undo** restores the file to how it was before this unresolved edit chain.
+2. Chat shows an edit step with `+/-` line counts.
+3. Click the file in the pending strip to open a [diff](/docs/editor/diff-and-merge) in the editor.
+4. **Keep** (or **Keep All**) dismisses the review and leaves the file as written.
+5. **Undo** (or **Undo All**) restores the file to how it was before this unresolved edit chain.
 
 If the agent edits the same file again before you Keep or Undo, the review updates to the latest step. Undo restores the baseline from before the first unresolved edit on that file.
 
-## Edit cards
+Enable **Auto-apply agent edits** in [AI Settings](/docs/ai/ai-settings) to skip this strip and auto-Keep as edits arrive.
 
-Each file change in the thread shows:
+## Require edit approval
 
-- The affected file path
-- Added and removed line counts for that edit step
-- Actions to open or review the change
+Turn on **Require edit approval** in [AI Settings](/docs/ai/ai-settings) to stage each file change **before** it is written.
 
-## Pending edits bar
+The thread shows an approval card with the filename, `+/-` counts, and an expandable diff. **Accept** writes the edit (**Ctrl+Enter**). **Skip** discards it.
 
-When files still need a Keep or Undo decision, a summary appears above the chat input. Use **Keep All** or **Undo All**, or handle files one at a time.
+This is independent of the Keep / Undo strip. You can use both: approve the write, then still Keep or Undo afterward unless auto-apply is on.
 
-## Auto-apply
+## Terminal commands
 
-By default, edits still appear for review after they are written. Enable **Auto Apply Edits** in [AI Settings](/docs/ai/ai-settings) to auto-Keep proposals as they arrive. Use this only when you trust the workflow.
+Separate from file edits, terminal commands follow **Auto-run** in [AI Settings](/docs/ai/ai-settings):
 
-## Terminal command approval
+| Mode | Behavior |
+| --- | --- |
+| **Ask every time** | **Run** or **Reject** on each command |
+| **Auto (safe commands)** | Runs common safe commands; still asks for the rest |
+| **Run everything** | Runs commands except hard-blocked ones |
 
-Separate from file edits, terminal commands show their own approval card. Click **Run** to execute in the integrated terminal or **Reject** to skip. The assistant cannot run shell commands without your approval.
+**Protect destructive git** (on by default) always asks before `git reset`, `clean`, `restore`, force-push, and similar, even in **Run everything**.
 
 ## Session persistence
 

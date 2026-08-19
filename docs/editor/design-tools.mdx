@@ -1,11 +1,13 @@
 ---
 title: Design Tools
 description: Tailwind controls, color picker, and design diagnostics in the editor.
-order: 5
+order: 6
 icon: ri-palette-line
 ---
 
-Shape includes design-aware tooling for web UI work. Completions, inline controls, and diagnostics help you edit Tailwind classes and CSS variables without leaving the editor.
+Shape includes design-aware tooling for web UI work in the **editor**. Completions, inline controls, and diagnostics help you edit Tailwind classes and CSS variables without leaving the file.
+
+To inspect a running page and apply changes from a Design sidebar, see [Visual Design](/docs/editor/visual-design).
 
 ## Tailwind inline controls
 
@@ -25,11 +27,11 @@ Placing the cursor on a flex, gap, padding, or radius token also opens the match
 
 Hold **Alt** and drag left/right over a scrubbable number (`gap-4`, `p-[24px]`, or CSS `padding: 16px`), or scroll the mouse wheel while hovering the underlined value. Scale values snap to Tailwind’s spacing scale. Panel inputs also accept wheel nudges (Shift for 1px steps).
 
-Toggle scrubbing, underlines, cursor-bind, and wheel-on-inputs in **Settings → Design**.
+Toggle scrubbing, underlines, cursor-bind, and wheel-on-inputs in **Settings → Editor → Design**.
 
 ## Design blame
 
-Hover a UI token to see a plain-language “last changed” blurb from git blame. Disable via **Settings → Design → Design Blame Hover**.
+Hover a UI token to see a plain-language “last changed” blurb from git blame. Disable via **Settings → Editor → Design → Design Blame Hover**.
 
 ## Spacing scale refactor
 
@@ -39,7 +41,7 @@ Right-click a Tailwind spacing scale number (e.g. the `4` in `gap-4`) and choose
 
 Shape suggests Tailwind utilities with project frequency, sibling context (e.g. after `flex` prefer `items-*` / `gap-*`), fuzzy matching, and spacing scales — not prefix-only regex.
 
-Enable or disable this in **Settings → Design → Design Autocomplete**.
+Enable or disable this in **Settings → Editor → Design → Design Autocomplete**.
 
 ## Monorepo git and aliases
 
@@ -47,7 +49,7 @@ Opening a parent folder (for example a repo that contains `shape/` and `website/
 
 Accessibility checks run on color contrast and related design issues in supported files (JSX, TSX, CSS). Violations appear as squiggles in the editor and in the **Problems** panel.
 
-Configure severity in **Settings → Design → Design Diagnostics**. Choose **AA** or **AAA** contrast level.
+Configure **WCAG Contrast Warnings** and **Compliance Level** (**AA** or **AAA**) in **Settings → Editor → Design**.
 
 ## Color and CSS variables
 
@@ -60,10 +62,11 @@ Picking a color inserts the matching class or variable reference at the cursor.
 
 ## AI Visual mode
 
-The chat panel includes a **Visual** mode for UI work. Ask it to preview a component in chat before adding it, or tell it to build without stopping. See [Chat Modes](/docs/ai/chat-modes).
+The chat panel includes a **Visual** mode for UI work. Ask it to preview a component in chat before adding it, or tell it to build without stopping. Pair that with [Visual Design](/docs/editor/visual-design) on the live page. See [Chat Modes](/docs/ai/chat-modes).
 
 ## Related
 
+- [Visual Design](/docs/editor/visual-design)
 - [IntelliSense](/docs/editor/intellisense)
 - [Lint and LSP](/docs/settings/lint-and-lsp)
 - [AI Settings](/docs/ai/ai-settings)

@@ -64,12 +64,13 @@ fn readonly_nudge_after(mode: &str) -> usize {
     }
 }
 
-/// Hard-stop only after extended read-only thrash (safety valve; max loops still apply).
+/// Hard-stop after extended read-only thrash. Must stay below the mode's max loops,
+/// otherwise the turn dies on the loop cap first and the model never sees this message.
 fn readonly_hard_stop_after(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
-        "visual" | "design" => 10,
-        "ask" | "plan" => 16,
-        _ => 20,
+        "visual" | "design" => 8,
+        "ask" | "plan" => 13,
+        _ => 16,
     }
 }
 
@@ -87,11 +88,68 @@ const DEDUPED_READONLY_TOOLS: &[&str] = &[
     "read_lints",
 ];
 
+/// Tools that can change files on disk, so earlier reads may be stale afterwards.
+/// Deliberately narrower than "not read-only": a blocked command, a plan save or a
+/// todo update cannot invalidate a read, and treating them as if they could let the
+/// agent re-read the same file after every failed shell attempt.
+const READ_INVALIDATING_TOOLS: &[&str] = &[
+    "create_directory",
+    "create_file",
+    "edit_file",
+    "apply_patch",
+    "delete_file",
+    "rename_file",
+    "run_terminal",
+    "write_to_terminal",
+];
+
+fn tool_invalidates_reads(name: &str, tool_result: &str) -> bool {
+    if name.starts_with("mcp_") {
+        return true;
+    }
+    if !READ_INVALIDATING_TOOLS.contains(&name) {
+        return false;
+    }
+    // Blocked or redirected commands never reached a shell, so nothing changed.
+    !tool_result.starts_with("BLOCKED:")
+        && !tool_result.starts_with(dispatch::REDIRECTED_TOOL_PREFIX)
+}
+
 /// Cap how many times the agent can call `wait` in one turn (stops sleep loops).
 const MAX_WAIT_CALLS_PER_TURN: usize = 6;
 
 fn duplicate_call_key(name: &str, arguments: &str) -> String {
     format!("{}\u{1}{}", name, arguments.trim())
+}
+
+/// Line range a `read_file` call asked for, defaulting to a whole-file read.
+fn read_file_range_args(arguments: &str) -> Option<(String, usize, usize)> {
+    let args: Value = serde_json::from_str(arguments).ok()?;
+    let path = args.get("path")?.as_str()?.to_string();
+    if path.is_empty() {
+        return None;
+    }
+    let start = args.get("start_line").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
+    let end = args
+        .get("end_line")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize)
+        .unwrap_or(usize::MAX);
+    Some((path, start, end.max(start)))
+}
+
+/// The range a `read_file` result actually returned, which can be smaller than the
+/// range asked for when the file is short or the default line budget kicks in.
+fn parse_read_result_range(tool_result: &str) -> Option<(usize, usize)> {
+    tool_result.lines().take(3).find_map(|line| {
+        let (start, end) = line
+            .split(" (lines ")
+            .nth(1)?
+            .split(" of ")
+            .next()?
+            .split_once('-')?;
+        Some((start.trim().parse().ok()?, end.trim().parse().ok()?))
+    })
 }
 
 fn duplicate_call_message(name: &str) -> String {
@@ -348,6 +406,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut needs_reread: HashSet<String> = HashSet::new();
     let mut file_cache: HashMap<String, String> = HashMap::new();
     let mut executed_readonly_calls: HashSet<String> = HashSet::new();
+    // Line ranges already returned for each file this turn.
+    let mut read_coverage: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
     let mut wait_calls = 0usize;
     let mut final_full_response = String::new();
     let mut finished_signal: Option<String> = None;
@@ -547,6 +607,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 .collect();
             assistant_msg["tool_calls"] = Value::Array(calls);
         }
+        drop_stale_reasoning(config.api_messages);
         config.api_messages.push(assistant_msg);
 
         if outcome.tool_calls.is_empty() {
@@ -683,7 +744,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 }
             }
 
-            super::messages::clear_old_tool_results(config.api_messages);
+            if super::messages::clear_old_tool_results(config.api_messages) {
+                read_coverage.clear();
+            }
 
             // Count this parallel read-only batch as one explore round.
             consecutive_readonly_rounds += 1;
@@ -738,6 +801,27 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     let msg = duplicate_call_message(&call.name);
                     push_tool_result(config.api_messages, &call.id, &call.name, &msg);
                     continue;
+                }
+                // Paging through a file produces a different key every time, so exact-argument
+                // dedup never catches it. Compare line coverage instead.
+                if call.name == "read_file" {
+                    if let Some((path, start, end)) = read_file_range_args(&call.arguments) {
+                        let abs = resolve_abs(&path, config.project_path);
+                        let covered = read_coverage
+                            .get(&abs)
+                            .is_some_and(|seen| seen.iter().any(|(s, e)| *s <= start && *e >= end));
+                        if covered && !needs_reread.contains(&abs) {
+                            let msg = format!(
+                                "DUPLICATE READ BLOCKED: lines {}-{} of '{}' are already in this conversation and the file has not changed since. \
+                                 Scroll back to the earlier read_file result, or read a range you have not seen yet.",
+                                start,
+                                if end == usize::MAX { "end".to_string() } else { end.to_string() },
+                                path
+                            );
+                            push_tool_result(config.api_messages, &call.id, &call.name, &msg);
+                            continue;
+                        }
+                    }
                 }
             } else {
                 round_had_write = true;
@@ -828,6 +912,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                                 emit_turn_chat_token(&config, ui.clone());
                                 track_stream_chunk(&config, &ui, None);
                                 push_tool_result(config.api_messages, &call.id, &call.name, &display);
+                                if let Some(range) = parse_read_result_range(cached) {
+                                    read_coverage.entry(abs.clone()).or_default().push(range);
+                                }
                                 read_paths.insert(abs.clone());
                                 edit_counts.remove(&abs);
                                 edit_fail_counts.remove(&abs);
@@ -855,10 +942,21 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
             let tool_outcome = dispatch::execute_tool(&call.name, &call.arguments, &ctx).await;
 
-            // Mutating tools (edits, terminal commands) can change what read-only
-            // tools would return, so repeated reads become legitimate again.
-            if !DEDUPED_READONLY_TOOLS.contains(&call.name.as_str()) {
+            // Writing to disk can change what read-only tools would return, so repeated
+            // reads become legitimate again.
+            if tool_invalidates_reads(&call.name, &tool_outcome.tool_result) {
                 executed_readonly_calls.clear();
+                read_coverage.clear();
+            }
+
+            if call.name == "read_file" {
+                if let (Some((path, _, _)), Some(range)) = (
+                    read_file_range_args(&call.arguments),
+                    parse_read_result_range(&tool_outcome.tool_result),
+                ) {
+                    let abs = resolve_abs(&path, config.project_path);
+                    read_coverage.entry(abs).or_default().push(range);
+                }
             }
 
             if !tool_outcome.ui_chunk.is_empty() {
@@ -990,7 +1088,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
         }
 
-        super::messages::clear_old_tool_results(config.api_messages);
+        if super::messages::clear_old_tool_results(config.api_messages) {
+            read_coverage.clear();
+        }
     }
 
     if let Some(ref summary) = finished_signal {
@@ -1028,6 +1128,22 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         interrupt_error,
         wrote_files,
     })
+}
+
+/// Providers only need reasoning on the latest assistant turn to keep the chain of
+/// thought intact. Older copies are resent verbatim on every request and, over a long
+/// tool loop, become one of the largest parts of the input.
+fn drop_stale_reasoning(api_messages: &mut [Value]) {
+    for msg in api_messages.iter_mut() {
+        if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
+            continue;
+        }
+        if let Some(obj) = msg.as_object_mut() {
+            obj.remove("reasoning");
+            obj.remove("reasoning_content");
+            obj.remove("reasoning_details");
+        }
+    }
 }
 
 fn push_tool_result(api_messages: &mut Vec<Value>, id: &str, name: &str, content: &str) {

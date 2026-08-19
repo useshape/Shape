@@ -13,6 +13,7 @@ use super::common::{
     blocked_outcome, clip, error_outcome, escape_xml_text, get_str, is_read_only_mode,
     ApprovalDecision,
 };
+use super::discover::tool_grep;
 use super::files::{cat_ui_chunk, tool_list_dir, tool_read_file};
 use super::{SideEffect, ToolCtx, ToolOutcome};
 
@@ -29,7 +30,7 @@ pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
     // dedicated tools exist. Running a shell for simple file inspection wastes loops,
     // bypasses read tracking, and on Windows may prompt/format unexpectedly. Translate
     // those commands into the proper tools instead of executing them.
-    if let Some(outcome) = intercept_file_inspection_command(&command, ctx) {
+    if let Some(outcome) = intercept_file_inspection_command(&command, ctx).await {
         return outcome;
     }
 
@@ -152,13 +153,26 @@ pub(super) fn intercept_file_mutation_command(command: &str) -> Option<ToolOutco
         return None;
     }
 
+    let looks_like_read = cmd_lower.contains(".read(")
+        || cmd_lower.contains(".readlines(")
+        || cmd_lower.contains("readfile")
+        || cmd_lower.contains("get-content")
+        || cmd_lower.contains("select-string")
+        || cmd_lower.contains("splitlines");
+
     let blocked_reason = if cmd_lower.starts_with("python -c")
         || cmd_lower.starts_with("python3 -c")
         || cmd_lower.contains("powershell -command")
         || cmd_lower.contains("powershell -enc")
         || cmd_lower.contains("pwsh -command")
     {
-        Some("Shell one-liners cannot edit files. Use `edit_file` or `apply_patch` (whichever is in your tool list).")
+        // Steering a read attempt toward edit tools sends the model looking for another
+        // shell trick instead of the tool it actually wanted.
+        if looks_like_read {
+            Some("Shell one-liners cannot inspect files. Use `read_file` (it takes start_line/end_line) or `grep`.")
+        } else {
+            Some("Shell one-liners cannot edit files. Use `edit_file` or `apply_patch` (whichever is in your tool list).")
+        }
     } else if cmd_lower.contains("set-content")
         || cmd_lower.contains("out-file")
         || cmd_lower.contains("add-content")
@@ -188,74 +202,247 @@ pub(super) fn intercept_file_mutation_command(command: &str) -> Option<ToolOutco
     })
 }
 
-pub(super) fn intercept_file_inspection_command(command: &str, ctx: &ToolCtx<'_>) -> Option<ToolOutcome> {
-    let trimmed = command.trim();
-    if trimmed.contains('|') || trimmed.contains("&&") || trimmed.contains(';') {
+/// Split a command into pipeline/statement segments, ignoring separators inside quotes.
+fn split_command_segments(command: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = command.chars().peekable();
+    while let Some(c) = chars.next() {
+        match quote {
+            Some(q) => {
+                cur.push(c);
+                if c == q {
+                    quote = None;
+                }
+            }
+            None => match c {
+                '\'' | '"' => {
+                    quote = Some(c);
+                    cur.push(c);
+                }
+                '|' | ';' | '\n' => out.push(std::mem::take(&mut cur)),
+                '&' if chars.peek() == Some(&'&') => {
+                    chars.next();
+                    out.push(std::mem::take(&mut cur));
+                }
+                _ => cur.push(c),
+            },
+        }
+    }
+    out.push(cur);
+    out.into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Split a segment into argv, stripping quotes.
+fn tokenize_segment(segment: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut quoted = false;
+    let mut quote: Option<char> = None;
+    for c in segment.chars() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => cur.push(c),
+            None => match c {
+                '\'' | '"' => {
+                    quote = Some(c);
+                    quoted = true;
+                }
+                _ if c.is_whitespace() => {
+                    if quoted || !cur.is_empty() {
+                        out.push(std::mem::take(&mut cur));
+                        quoted = false;
+                    }
+                }
+                _ => cur.push(c),
+            },
+        }
+    }
+    if quoted || !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Pipeline stages that only reshape output, so the command feeding them is still a plain read.
+const BENIGN_PIPELINE_STAGES: &[&str] = &[
+    "select-object", "select", "format-list", "fl", "format-table", "ft", "out-string",
+    "out-host", "measure-object", "measure", "sort-object", "sort", "write-output",
+    "write-host", "echo", "more",
+];
+
+fn command_name(token: &str) -> String {
+    let lowered = token.to_ascii_lowercase();
+    lowered
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(&lowered)
+        .trim_end_matches(".exe")
+        .to_string()
+}
+
+fn is_benign_stage(segment: &str) -> bool {
+    tokenize_segment(segment)
+        .first()
+        .map(|t| BENIGN_PIPELINE_STAGES.contains(&command_name(t).as_str()))
+        .unwrap_or(false)
+}
+
+#[derive(Default)]
+struct ShellReadArgs {
+    path: Option<String>,
+    pattern: Option<String>,
+    head: Option<usize>,
+    tail: Option<usize>,
+    context: usize,
+    /// Arguments with no flag, in the order they appeared.
+    positional: Vec<String>,
+}
+
+/// Best-effort argv parse covering POSIX flags and PowerShell named parameters.
+/// Callers assign positionals themselves, since `grep <pattern> <path>` and
+/// `Select-String -Path <path>` order them differently.
+fn parse_shell_read_args(args: &[String]) -> ShellReadArgs {
+    let mut out = ShellReadArgs::default();
+    let mut i = 0;
+    while i < args.len() {
+        let raw = args[i].as_str();
+        if raw.starts_with('-') && raw.len() > 1 {
+            let flag = raw.trim_start_matches('-').to_ascii_lowercase();
+            let value = args.get(i + 1);
+            // Numeric flags only consume the next token when it really is a number;
+            // `-n` means "line numbers" to grep but "count" to head.
+            let num = value
+                .and_then(|v| v.split(',').next())
+                .and_then(|v| v.parse::<usize>().ok());
+            let consumed = match flag.as_str() {
+                "path" | "literalpath" | "filepath" => {
+                    out.path = value.cloned();
+                    value.is_some()
+                }
+                "pattern" | "regexp" | "e" => {
+                    out.pattern = value.cloned();
+                    value.is_some()
+                }
+                "totalcount" | "first" | "head" | "n" => {
+                    out.head = num;
+                    num.is_some()
+                }
+                "tail" | "last" => {
+                    out.tail = num;
+                    num.is_some()
+                }
+                "context" | "c" => {
+                    out.context = num.unwrap_or(0);
+                    num.is_some()
+                }
+                "encoding" | "delimiter" => value.is_some(),
+                _ => false,
+            };
+            i += if consumed { 2 } else { 1 };
+            continue;
+        }
+        out.positional.push(raw.to_string());
+        i += 1;
+    }
+    out
+}
+
+fn redirected(outcome: ToolOutcome, tool: &str) -> ToolOutcome {
+    let ToolOutcome { tool_result, ui_chunk, side_effect } = outcome;
+    ToolOutcome {
+        tool_result: format!(
+            "{}{tool}` tool instead of a shell command. Any other flags were ignored — \
+             call `{tool}` directly next time.]\n{tool_result}",
+            super::REDIRECTED_TOOL_PREFIX
+        ),
+        ui_chunk,
+        side_effect,
+    }
+}
+
+fn read_tail(path: &str, count: usize, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    match files::read_file(path, ctx.project_path) {
+        Ok(content) => {
+            let lines: Vec<&str> = content.lines().collect();
+            let tail = lines[lines.len().saturating_sub(count)..].join("\n");
+            ToolOutcome {
+                tool_result: tail,
+                ui_chunk: cat_ui_chunk(path, None, None),
+                side_effect: Some(SideEffect::FileRead { path: path.to_string(), content }),
+            }
+        }
+        Err(e) => error_outcome("run_terminal", &e.to_string()),
+    }
+}
+
+/// Translate shell file inspection into the equivalent native tool.
+///
+/// Running a shell for this wastes loops, bypasses read tracking, and on Windows may
+/// format output unexpectedly. Covers POSIX commands and the PowerShell cmdlets/aliases
+/// that models reach for, including read-only pipelines like `Get-Content x | Select -First 5`.
+pub(super) async fn intercept_file_inspection_command(
+    command: &str,
+    ctx: &ToolCtx<'_>,
+) -> Option<ToolOutcome> {
+    let segments = split_command_segments(command);
+    let (first, rest) = segments.split_first()?;
+    if !rest.iter().all(|s| is_benign_stage(s)) {
         return None;
     }
 
-    let parts: Vec<&str> = trimmed.split_whitespace().collect();
-    match parts.as_slice() {
-        ["cat", path] | ["type", path] => {
-            let args = serde_json::json!({ "path": *path });
-            Some(tool_read_file(&args, ctx))
-        }
-        ["cat", ..] | ["type", ..] => {
-            Some(error_outcome("run_terminal", "Using `cat` or `type` with globs/multiple files is not supported. Use `read_file` or `grep`."))
-        }
-        ["head", path] => {
-            let args = serde_json::json!({ "path": *path, "start_line": 1, "end_line": 80 });
-            Some(tool_read_file(&args, ctx))
-        }
-        ["tail", path] => {
-            let res = files::read_file(path, ctx.project_path);
-            Some(match res {
-                Ok(content) => {
-                    let tail = content
-                        .lines()
-                        .rev()
-                        .take(80)
-                        .collect::<Vec<_>>()
-                        .into_iter()
-                        .rev()
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    ToolOutcome {
-                        tool_result: tail.clone(),
-                        ui_chunk: cat_ui_chunk(path, None, None),
-                        side_effect: Some(SideEffect::FileRead {
-                            path: (*path).to_string(),
-                            content,
-                        }),
-                    }
-                }
-                Err(e) => error_outcome("run_terminal", &e.to_string()),
-            })
-        }
-        ["ls"] | ["dir"] => {
-            let args = serde_json::json!({ "path": "." });
-            Some(tool_list_dir(&args, ctx))
-        }
-        ["ls", path] | ["dir", path] => {
-            if path.starts_with('-') || path.contains('/') && path.starts_with('-') {
-                return Some(error_outcome("run_terminal", "Using `ls` or `dir` with flags (like -R or /s) is not supported. Use `list_dir` or `grep`."));
+    let tokens = tokenize_segment(first);
+    let (head, args) = tokens.split_first()?;
+    let name = command_name(head);
+    let mut parsed = parse_shell_read_args(args);
+    let steer = |msg: &str| Some(error_outcome("run_terminal", msg));
+
+    match name.as_str() {
+        "cat" | "type" | "gc" | "get-content" | "head" | "tail" => {
+            let path = parsed.path.take().or_else(|| parsed.positional.first().cloned())?;
+            if path.contains('*') || path.contains('?') {
+                return steer("Reading several files with a glob is not supported. Use `read_file` per file, or `grep`.");
             }
-            let args = serde_json::json!({ "path": *path });
-            Some(tool_list_dir(&args, ctx))
-        }
-        ["ls", ..] | ["dir", ..] => {
-            Some(error_outcome("run_terminal", "Using `ls` or `dir` with multiple arguments is not supported. Use `list_dir` or `grep`."))
-        }
-        ["find", ..] => {
-            Some(error_outcome("run_terminal", "Using `find` is not supported. Use `list_dir` or `grep` instead."))
-        }
-        _ => {
-            // Also catch things like `ls -R path` where `ls` is the first part
-            if parts[0] == "ls" || parts[0] == "dir" || parts[0] == "find" || parts[0] == "cat" || parts[0] == "type" {
-                return Some(error_outcome("run_terminal", &format!("Using `{}` via the terminal is blocked to prevent looping and formatting issues. Use native tools (`list_dir`, `read_file`, `grep`) instead.", parts[0])));
+            if name == "tail" || parsed.tail.is_some() {
+                let n = parsed.tail.unwrap_or(80);
+                return Some(redirected(read_tail(&path, n, ctx), "read_file"));
             }
-            None
+            let limit = parsed.head.or(if name == "head" { Some(80) } else { None });
+            let args = match limit {
+                Some(n) => json!({ "path": path, "start_line": 1, "end_line": n }),
+                None => json!({ "path": path }),
+            };
+            Some(redirected(tool_read_file(&args, ctx), "read_file"))
         }
+        "ls" | "dir" | "gci" | "get-childitem" | "gi" | "get-item" => {
+            let path = parsed.path.take().or_else(|| parsed.positional.first().cloned());
+            if path.as_deref().is_some_and(|p| p.contains('*') || p.contains('?')) {
+                return steer("Listing with a glob is not supported. Use `list_dir` or `search_files`.");
+            }
+            let args = json!({ "path": path.as_deref().unwrap_or(".") });
+            Some(redirected(tool_list_dir(&args, ctx), "list_dir"))
+        }
+        "select-string" | "sls" => {
+            // PowerShell positional order is <pattern> then <path>.
+            let mut positional = parsed.positional.into_iter();
+            let pattern = parsed.pattern.or_else(|| positional.next());
+            let path = parsed.path.or_else(|| positional.next());
+            let Some(pattern) = pattern else {
+                return steer("Use the `grep` tool to search file contents.");
+            };
+            let mut args = json!({ "query": pattern, "context": parsed.context });
+            if let Some(path) = path {
+                args["path"] = json!(path);
+            }
+            Some(redirected(tool_grep(&args, ctx).await, "grep"))
+        }
+        "find" => steer("Using `find` is not supported. Use `list_dir`, `search_files`, or `grep` instead."),
+        "test-path" => steer("Use `list_dir` to check whether a path exists."),
+        _ => None,
     }
 }
 
@@ -697,5 +884,88 @@ pub(super) fn tool_write_to_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
             side_effect: None,
         },
         Err(e) => error_outcome("write_to_terminal", &e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(command: &str) -> (String, ShellReadArgs) {
+        let tokens = tokenize_segment(command);
+        let (head, rest) = tokens.split_first().expect("command");
+        (command_name(head), parse_shell_read_args(rest))
+    }
+
+    #[test]
+    fn splits_on_separators_outside_quotes() {
+        assert_eq!(
+            split_command_segments("Get-Item 'app/page.tsx' | Select-Object Length, Name"),
+            vec!["Get-Item 'app/page.tsx'", "Select-Object Length, Name"]
+        );
+        assert_eq!(split_command_segments("echo 'a | b'"), vec!["echo 'a | b'"]);
+        assert_eq!(split_command_segments("a && b"), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn tokenizes_quoted_paths() {
+        assert_eq!(
+            tokenize_segment("Select-String -Path 'app/my page.tsx' -Pattern \"function X\""),
+            vec!["Select-String", "-Path", "app/my page.tsx", "-Pattern", "function X"]
+        );
+    }
+
+    #[test]
+    fn formatting_stages_do_not_block_interception() {
+        assert!(is_benign_stage("Select-Object Length, Name"));
+        assert!(is_benign_stage("Format-Table"));
+        assert!(!is_benign_stage("Remove-Item x"));
+        assert!(!is_benign_stage("node script.js"));
+    }
+
+    #[test]
+    fn reads_powershell_named_parameters() {
+        let (name, parsed) = args("Get-Content -Path 'app/page.tsx' -TotalCount 40");
+        assert_eq!(name, "get-content");
+        assert_eq!(parsed.path.as_deref(), Some("app/page.tsx"));
+        assert_eq!(parsed.head, Some(40));
+    }
+
+    #[test]
+    fn reads_select_string_with_context() {
+        let (name, parsed) = args("Select-String -Path 'app/page.tsx' -Pattern 'function X' -Context 0,50");
+        assert_eq!(name, "select-string");
+        assert_eq!(parsed.path.as_deref(), Some("app/page.tsx"));
+        assert_eq!(parsed.pattern.as_deref(), Some("function X"));
+        assert_eq!(parsed.context, 0);
+    }
+
+    #[test]
+    fn valueless_flags_do_not_swallow_the_next_argument() {
+        // `-n` means "line numbers" here, not a count, so `pattern` must survive.
+        let (_, parsed) = args("grep -n pattern src/main.rs");
+        assert_eq!(parsed.head, None);
+        assert_eq!(parsed.positional, vec!["pattern", "src/main.rs"]);
+
+        let (_, counted) = args("head -n 25 src/main.rs");
+        assert_eq!(counted.head, Some(25));
+        assert_eq!(counted.positional, vec!["src/main.rs"]);
+    }
+
+    #[test]
+    fn strips_executable_paths_and_extensions() {
+        assert_eq!(command_name("C:\\Windows\\System32\\findstr.exe"), "findstr");
+        assert_eq!(command_name("/usr/bin/CAT"), "cat");
+    }
+
+    #[test]
+    fn read_shaped_one_liners_are_pointed_at_read_file() {
+        let blocked = intercept_file_mutation_command("python -c \"print(open('a.txt').read())\"")
+            .expect("blocked");
+        assert!(blocked.tool_result.contains("read_file"), "{}", blocked.tool_result);
+
+        let write = intercept_file_mutation_command("python -c \"open('a.txt','w').write('x')\"")
+            .expect("blocked");
+        assert!(write.tool_result.contains("edit_file"), "{}", write.tool_result);
     }
 }

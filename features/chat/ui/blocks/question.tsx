@@ -23,18 +23,13 @@ export function QuestionBlock({ question, options, onAnswer }: {
     const isAnswered = answered !== null;
 
     return (
-        <div className="my-1 w-full overflow-hidden rounded-xl border border-border bg-transparent animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="flex items-center gap-2 px-3 py-2">
-                <Icon name="help" size={13} className="shrink-0 text-text-muted" />
-                <span className="truncate text-xs text-text-muted">Question</span>
-            </div>
-
-            <div className="border-t border-border px-3 py-2.5">
+        <div className="sticky bottom-0 z-10 my-2 w-full overflow-hidden rounded-2xl border border-border bg-editor shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="px-3 py-3">
                 <div className="text-sm font-medium text-text-primary leading-relaxed">
                     {question}
                 </div>
 
-                <div className="mt-2.5 flex flex-col gap-1.5">
+                <div className="mt-2 flex flex-col">
                     {options.map((option, i) => {
                         const isSelected = answered === option;
                         return (
@@ -44,14 +39,15 @@ export function QuestionBlock({ question, options, onAnswer }: {
                                 size="sm"
                                 disabled={isAnswered}
                                 className={cn(
-                                    "h-auto justify-start rounded-lg border border-border px-2.5 py-2 text-left whitespace-normal",
+                                    "group h-auto min-h-8 justify-start gap-2 rounded-lg border-0 px-2 py-1.5 text-left whitespace-normal",
                                     isSelected
-                                        ? "border-accent/40 bg-accent/10 text-text-primary"
+                                        ? "bg-accent-text-bg text-text-primary"
                                         : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
                                     !isSelected && isAnswered && "opacity-40",
                                 )}
                                 onClick={() => handleAnswer(option)}
                             >
+                                <Icon name="arrow_forward" size={14} className="shrink-0 text-text-muted group-hover:text-text-primary" />
                                 {option}
                             </Button>
                         );
@@ -87,7 +83,7 @@ export function QuestionBlock({ question, options, onAnswer }: {
                                         variant="ghost"
                                         size="sm"
                                         disabled
-                                        className="h-auto justify-start rounded-lg border border-accent/40 bg-accent/10 px-2.5 py-2 text-left text-text-primary"
+                                        className="h-auto justify-start rounded-lg bg-accent-text-bg px-2.5 py-2 text-left text-text-primary"
                                     >
                                         {answered}
                                     </Button>
@@ -98,16 +94,17 @@ export function QuestionBlock({ question, options, onAnswer }: {
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-auto justify-start rounded-lg border border-border px-2.5 py-2 text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                            className="h-auto justify-start gap-2 rounded-lg px-2 py-1.5 text-text-muted hover:bg-panel-hover hover:text-text-primary"
                             onClick={() => setIsOtherSelected(true)}
                         >
+                            <Icon name="arrow_forward" size={14} />
                             Other
                         </Button>
                     ) : null}
                 </div>
             </div>
 
-            <div className="flex items-center justify-end gap-1.5 px-2 py-2">
+            <div className="flex items-center justify-end gap-1.5 border-t border-border-subtle px-2 py-2">
                 <Button
                     variant="ghost"
                     size="xs"

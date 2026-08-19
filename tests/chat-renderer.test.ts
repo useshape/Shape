@@ -251,4 +251,37 @@ describe("preprocessChatMarkdown", () => {
         expect(out).toContain("<terminal_command");
         expect(out).toContain("npm test");
     });
+
+    it("does not leak edit_file error excerpts that wrap markdown fences", () => {
+        const css = `@import 'tailwindcss';\n${"body{color:red}".repeat(80)}`;
+        const content = [
+            "Working on styles.",
+            "<tool_result>",
+            "[edit_file] ERROR: Could not apply the edit to app/globals.css. Reason: Incomplete SEARCH/REPLACE block.",
+            "Nearest region of the current file (40 lines around best match):",
+            "```",
+            css,
+            "```",
+            "Call read_file for the full content before retrying.",
+            "</tool_result>",
+            "Retrying the edit.",
+        ].join("\n");
+
+        const chunks = parseMessageContent(content);
+        const text = chunks
+            .filter((c) => c.type === "text")
+            .map((c) => c.content)
+            .join("");
+        expect(text).toContain("Working on styles");
+        expect(text).toContain("Retrying the edit");
+        expect(text).not.toContain("[edit_file]");
+        expect(text).not.toContain("@import");
+        expect(text).not.toContain("Incomplete SEARCH");
+
+        const md = preprocessChatMarkdown(content);
+        expect(md).toContain("Working on styles");
+        expect(md).toContain("Retrying the edit");
+        expect(md).not.toContain("@import");
+        expect(md).not.toContain("[edit_file]");
+    });
 });

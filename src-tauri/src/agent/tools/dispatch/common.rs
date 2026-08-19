@@ -22,10 +22,24 @@ pub(super) fn get_str(args: &Value, key: &str) -> Result<String, String> {
     }
 }
 
+/// Short UI copy for tool errors. Keep fenced file dumps in `tool_result` only —
+/// markdown fences inside `<tool_result>` leak into the chat transcript.
+fn ui_error_message(message: &str) -> String {
+    let head = message
+        .split("```")
+        .next()
+        .unwrap_or(message)
+        .replace("</tool_result>", "")
+        .replace("<tool_result>", "");
+    let first: String = head.lines().take(3).collect::<Vec<_>>().join("\n");
+    clip(first.trim(), 400)
+}
+
 pub(super) fn error_outcome(tool: &str, message: &str) -> ToolOutcome {
     let ui = format!(
         "\n<tool_result>\n[{}] ERROR: {}\n</tool_result>\n",
-        tool, message
+        tool,
+        ui_error_message(message)
     );
     ToolOutcome {
         tool_result: format!("ERROR: {}", message),
@@ -94,4 +108,28 @@ pub(super) fn record_tool_event(name: &str, outcome: &ToolOutcome, project_path:
         _ => return,
     };
     crate::commands::stats::bump_event(project_path, key);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_outcome_ui_drops_fenced_file_dump() {
+        let message = "Could not apply the edit to app/globals.css. Reason: Incomplete SEARCH/REPLACE block.\n\n\
+Nearest region of the current file (40 lines around best match):\n```\n@import 'tailwindcss';\nbody{color:red}\n```\n\
+Call read_file for the full content before retrying.";
+        let out = error_outcome("edit_file", message);
+        assert!(out.tool_result.contains("Incomplete SEARCH/REPLACE"));
+        assert!(out.tool_result.contains("@import 'tailwindcss'"));
+        assert!(
+            !out.ui_chunk.contains("```"),
+            "ui_chunk must not wrap a markdown fence: {}",
+            out.ui_chunk
+        );
+        assert!(!out.ui_chunk.contains("@import"));
+        assert!(out.ui_chunk.contains("Incomplete SEARCH/REPLACE"));
+        assert!(out.ui_chunk.contains("<tool_result>"));
+        assert!(out.ui_chunk.contains("</tool_result>"));
+    }
 }

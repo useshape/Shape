@@ -127,6 +127,8 @@ export type DesignComputedStyles = {
     textAlign: string;
     textDecoration: string;
     textTransform: string;
+    whiteSpace: string;
+    textOverflow: string;
     marginTop: string;
     marginRight: string;
     marginBottom: string;
@@ -160,6 +162,8 @@ export type DesignComputedStyles = {
     mixBlendMode: string;
     filter: string;
     backdropFilter: string;
+    maskImage: string;
+    WebkitMaskImage: string;
 };
 
 export type DesignGeneratedLoc = {
@@ -219,6 +223,12 @@ export type DesignBridgeApi = {
     classToggle?: (id: string, className: string, enabled: boolean, selector?: string) => void;
     watch?: (id: string, enabled: boolean, selector?: string) => void;
     emulateFocus?: (enabled: boolean) => void;
+    listFonts?: () => Promise<string[]>;
+    injectFont?: (family: string) => void;
+    exportElement?: (
+        id: string,
+        opts: { format: string; scale: number; selector?: string },
+    ) => Promise<import("./export-file").DesignExportPayload>;
 };
 
 export const DESIGN_STYLE_KEYS: (keyof DesignComputedStyles)[] = [
@@ -234,6 +244,8 @@ export const DESIGN_STYLE_KEYS: (keyof DesignComputedStyles)[] = [
     "textAlign",
     "textDecoration",
     "textTransform",
+    "whiteSpace",
+    "textOverflow",
     "marginTop",
     "marginRight",
     "marginBottom",
@@ -267,4 +279,6 @@ export const DESIGN_STYLE_KEYS: (keyof DesignComputedStyles)[] = [
     "mixBlendMode",
     "filter",
     "backdropFilter",
+    "maskImage",
+    "WebkitMaskImage",
 ];
