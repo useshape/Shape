@@ -6,12 +6,9 @@ import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
 import { stripDiffPrefix } from "../hooks/use-image-loader";
 import {
-    ImageToolsCard,
-    ImageAdjustmentsPanel,
-    buildImageFilter,
     DEFAULT_ADJUSTMENTS,
+    buildImageFilter,
     type ImageAdjustments,
-    type ImageSessionActions,
 } from "./image-tools";
 import {
     cloneAdjustments,
@@ -38,9 +35,6 @@ interface ImageViewProps {
     onZoomChange: (zoom: number) => void;
     containerRef: React.RefObject<HTMLDivElement | null>;
     handleWheel: (e: React.WheelEvent) => void;
-    showTools?: boolean;
-    sessionRef?: React.MutableRefObject<ImageSessionActions | null>;
-    onSessionChange?: () => void;
 }
 
 export function ImageView({
@@ -52,9 +46,6 @@ export function ImageView({
     onZoomChange,
     containerRef,
     handleWheel,
-    showTools = false,
-    sessionRef,
-    onSessionChange,
 }: ImageViewProps) {
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
@@ -95,8 +86,7 @@ export function ImageView({
 
     const bumpHistory = useCallback(() => {
         setHistoryVersion((v) => v + 1);
-        onSessionChange?.();
-    }, [onSessionChange]);
+    }, []);
 
     useEffect(() => {
         if (sessionPathRef.current === path) return;
@@ -110,27 +100,8 @@ export function ImageView({
         historyRef.current = [initial];
         historyIndexRef.current = 0;
         setHistoryVersion((v) => v + 1);
-        onSessionChange?.();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- path-only reset
     }, [path]);
-
-    const pushHistory = useCallback((next: ImageAdjustments) => {
-        const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
-        trimmed.push(cloneAdjustments(next));
-        historyRef.current = trimmed;
-        historyIndexRef.current = trimmed.length - 1;
-        setAdjustments(next);
-        bumpHistory();
-    }, [bumpHistory]);
-
-    const handlePreview = useCallback((next: ImageAdjustments) => {
-        setAdjustments(next);
-        onSessionChange?.();
-    }, [onSessionChange]);
-
-    const handleCommit = useCallback((next: ImageAdjustments) => {
-        pushHistory(next);
-    }, [pushHistory]);
 
     const undo = useCallback(() => {
         if (historyIndexRef.current <= 0) return;
@@ -194,21 +165,6 @@ export function ImageView({
     const canUndo = historyIndexRef.current > 0;
     const canRedo = historyIndexRef.current < historyRef.current.length - 1;
 
-    const session = useMemo<ImageSessionActions>(() => ({
-        undo,
-        redo,
-        save,
-        discard,
-        isDirty,
-        canUndo,
-        canRedo,
-    }), [undo, redo, save, discard, isDirty, canUndo, canRedo]);
-
-    useEffect(() => {
-        if (!sessionRef) return;
-        sessionRef.current = session;
-    }, [sessionRef, session]);
-
     useEffect(() => {
         const onSaveRequest = () => {
             if (!isDirty) return;
@@ -226,7 +182,6 @@ export function ImageView({
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (e.button !== 0) return;
-        if ((e.target as HTMLElement).closest(".image-adjustments-panel")) return;
         e.preventDefault();
         setIsDragging(true);
         dragRef.current = {
@@ -343,16 +298,6 @@ export function ImageView({
             ) : (
                 <p className="text-sm text-text-muted">Loading image…</p>
             )}
-
-            <ImageAdjustmentsPanel open={showTools}>
-                <ImageToolsCard
-                    adjustments={adjustments}
-                    session={session}
-                    onPreview={handlePreview}
-                    onCommit={handleCommit}
-                    onSave={() => void save()}
-                />
-            </ImageAdjustmentsPanel>
         </div>
     );
 }

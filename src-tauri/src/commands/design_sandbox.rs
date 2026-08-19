@@ -335,6 +335,32 @@ fn build_offline_preview_document(kind: PreviewDocumentKind<'_>, project_css: &s
 <html lang="en">
 <head>
   {head}
+  <style>
+    html, body {{
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #09090b;
+      color: #fafafa;
+    }}
+    body {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 28px 24px;
+      overflow: auto;
+    }}
+    #root {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: max-content;
+      max-width: 100%;
+      margin: 0 auto;
+    }}
+  </style>
 </head>
 <body>
 {body}

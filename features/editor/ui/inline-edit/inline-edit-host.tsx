@@ -78,7 +78,6 @@ export function InlineEditHost() {
                 prompt,
                 "auto",
                 "Code",
-                settings.ai.customSystemPrompt || undefined,
                 settings.ai.customRules || undefined,
                 token,
             );
