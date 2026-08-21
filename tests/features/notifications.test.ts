@@ -4,6 +4,10 @@ import { notificationStore, notify, notifyGitError } from "@/features/notificati
 describe("notifications", () => {
     beforeEach(() => {
         notificationStore.clearAll();
+        // clearAll keeps requireAction toasts — force a clean slate for tests.
+        for (const n of notificationStore.getSnapshot().notifications) {
+            notificationStore.remove(n.id);
+        }
     });
 
     it("adds info notification", () => {
@@ -86,5 +90,48 @@ describe("notifications", () => {
         const entry = notificationStore.getSnapshot().notifications[0];
         expect(entry?.code).toBe(4100);
         expect(entry?.type).toBe("error");
+    });
+
+    it("action notifications stick until answered", () => {
+        const onYes = vi.fn();
+        const id = notify.warning("Replace unsaved edits?", "file.ts was updated on disk.", {
+            requireAction: true,
+            actions: [
+                { id: "no", label: "No", onClick: () => undefined },
+                { id: "yes", label: "Yes", onClick: onYes },
+            ],
+        });
+        const entry = notificationStore.getSnapshot().notifications.find((n) => n.id === id);
+        expect(entry?.requireAction).toBe(true);
+        expect(entry?.autoHide).toBe(false);
+        expect(entry?.actions).toHaveLength(2);
+
+        // Cannot dismiss without choosing.
+        notificationStore.dismissToast(id);
+        expect(notificationStore.getSnapshot().toastIds).toContain(id);
+
+        // Clear all keeps the prompt.
+        notificationStore.add("noise", "info");
+        notificationStore.clearAll();
+        expect(notificationStore.getSnapshot().notifications.map((n) => n.id)).toEqual([id]);
+        expect(notificationStore.getSnapshot().toastIds).toEqual([id]);
+
+        // Sticky toasts are not bumped out of the stack.
+        notificationStore.add("a", "info");
+        notificationStore.add("b", "info");
+        notificationStore.add("c", "info");
+        notificationStore.add("d", "info");
+        expect(notificationStore.getSnapshot().toastIds).toContain(id);
+
+        // Not pruned by history TTL.
+        vi.useFakeTimers();
+        const now = Date.now();
+        vi.setSystemTime(now + 10 * 60 * 1000);
+        notificationStore.markViewed();
+        expect(notificationStore.getSnapshot().notifications.some((n) => n.id === id)).toBe(true);
+        vi.useRealTimers();
+
+        notificationStore.remove(id);
+        expect(notificationStore.getSnapshot().notifications.some((n) => n.requireAction)).toBe(false);
     });
 });
