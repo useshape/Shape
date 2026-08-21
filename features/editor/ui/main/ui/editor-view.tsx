@@ -85,6 +85,7 @@ import { defineShapeMonacoThemes, getMonacoEditorOptions, shapeMonacoThemeFromCo
 import { registerEmmetForMonaco } from "../hooks/use-emmet";
 import { attachBlameProvider } from "../../blame/blame-provider";
 import { attachConflictResolver } from "../../conflict/conflict-resolver";
+import { attachCommentsProvider } from "../../comments/comments-provider";
 import { useEslint, applyEslintFixOnSave, registerPrettierFormatProvider } from "../hooks/use-eslint";
 import { useDesignDiagnostics } from "../hooks/use-design-diagnostics";
 import { useEditorSplit, type EditorGroupId } from "@/core/providers/editor";
@@ -1857,9 +1858,16 @@ export const CodeEditorView = memo(function CodeEditorView({
                                 () => projectPath,
                             );
                             const cleanupConflict = attachConflictResolver(editor, monaco);
+                            const cleanupComments = attachCommentsProvider(
+                                editor,
+                                monaco,
+                                () => pathRef.current,
+                                () => projectPathRef.current,
+                            );
                             editor.onDidDispose(() => {
                                 cleanupBlame();
                                 cleanupConflict();
+                                cleanupComments();
                             });
 
                             COLOR_REGEX.lastIndex = 0;

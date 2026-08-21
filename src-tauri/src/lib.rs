@@ -273,6 +273,7 @@ pub fn run() {
             adapters::outline::get_outline,
             // agent
             agent::commands::send_chat::send_chat_message,
+            agent::commands::comment::generate_editor_comment,
             agent::commands::conversation::get_chat_history,
             agent::commands::conversation::get_chat_generation_state,
             agent::commands::conversation::clear_chat_history,

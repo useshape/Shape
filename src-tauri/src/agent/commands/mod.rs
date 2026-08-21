@@ -1,6 +1,7 @@
 pub mod adversarial_review;
 pub mod approvals;
 pub mod checkpoints;
+pub mod comment;
 pub mod commit_message;
 pub mod conversation;
 pub mod git_ai;

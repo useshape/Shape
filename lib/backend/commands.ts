@@ -431,6 +431,22 @@ export const commands = {
             singleFilePath: singleFilePath ?? null,
         }),
     // Chat
+    generateEditorComment: (
+        instruction: string,
+        filePath: string,
+        line: number,
+        fileContext: string,
+        accessToken?: string,
+        mentionHints?: string,
+    ) =>
+        invokeCommand<string>("generate_editor_comment", {
+            instruction,
+            filePath,
+            line,
+            fileContext,
+            accessToken: accessToken ?? null,
+            mentionHints: mentionHints ?? null,
+        }),
     sendChatMessage: (
         message: string,
         model?: string,

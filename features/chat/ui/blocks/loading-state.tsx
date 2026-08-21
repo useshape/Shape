@@ -24,31 +24,56 @@ export function LoadingState({
     label = "Working",
     variant = "Drive",
 }: {
-    label?: string;
+    label?: string | null;
     variant?: "Drive" | "Dots" | "Orbit" | string;
 }) {
-    const { delays, dur, round } = PATTERNS[variant] ?? PATTERNS.Drive;
-
     return (
         <div className="flex w-fit items-center gap-2.5">
-            <span aria-hidden className="grid grid-cols-[repeat(3,4px)] gap-[1.5px]">
-                {delays.map((d, i) => (
-                    <span
-                        key={i}
-                        className={`size-[4px] bg-text-primary ${round ? "rounded-full" : "rounded-[1px]"}`}
-                        style={{
-                            opacity: d === null ? 0.07 : 0.15,
-                            animation:
-                                d === null
-                                    ? "none"
-                                    : `pixel-on ${dur}ms ease-in-out ${d}ms infinite`,
-                        }}
-                    />
-                ))}
-            </span>
-            <span className="ai-shimmer-text text-sm font-medium tracking-tight whitespace-nowrap">
-                {label}
-            </span>
+            <ThinkingPixels variant={variant} />
+            {label ? (
+                <span className="ai-shimmer-text text-sm font-medium tracking-tight whitespace-nowrap">
+                    {label}
+                </span>
+            ) : null}
         </div>
+    );
+}
+
+/** 3×3 pixel grid used for AI thinking. */
+export function ThinkingPixels({
+    variant = "Drive",
+    active = true,
+    size = 4,
+}: {
+    variant?: "Drive" | "Dots" | "Orbit" | string;
+    active?: boolean;
+    size?: number;
+}) {
+    const { delays, dur, round } = PATTERNS[variant] ?? PATTERNS.Drive;
+    return (
+        <span
+            aria-hidden
+            className="grid shrink-0"
+            style={{
+                gridTemplateColumns: `repeat(3, ${size}px)`,
+                gap: Math.max(1, size * 0.35),
+            }}
+        >
+            {delays.map((d, i) => (
+                <span
+                    key={i}
+                    className={`bg-text-primary ${round ? "rounded-full" : "rounded-[1px]"}`}
+                    style={{
+                        width: size,
+                        height: size,
+                        opacity: d === null ? 0.07 : active ? 0.15 : 0.28,
+                        animation:
+                            active && d !== null
+                                ? `pixel-on ${dur}ms ease-in-out ${d}ms infinite`
+                                : "none",
+                    }}
+                />
+            ))}
+        </span>
     );
 }

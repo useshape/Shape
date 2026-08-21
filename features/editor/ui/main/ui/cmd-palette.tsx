@@ -27,12 +27,13 @@ interface EditorAction {
     delete?: (e: React.MouseEvent) => void;
 }
 
-type PaletteFilter = "all" | "agents" | "files" | "actions" | "settings";
+type PaletteFilter = "all" | "agents" | "files" | "comments" | "actions" | "settings";
 
 const PALETTE_FILTERS: { id: PaletteFilter; label: string }[] = [
     { id: "all", label: "All" },
     { id: "agents", label: "Agents" },
     { id: "files", label: "Files" },
+    { id: "comments", label: "Comments" },
     { id: "actions", label: "Actions" },
     { id: "settings", label: "Settings" },
 ];
@@ -195,6 +196,7 @@ export function CommandPalette() {
     const [actions, setActions] = useState<EditorAction[]>([]);
     const [agentActions, setAgentActions] = useState<EditorAction[]>([]);
     const [fileActions, setFileActions] = useState<EditorAction[]>([]);
+    const [commentActions, setCommentActions] = useState<EditorAction[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [mode, setMode] = useState<string>("");
     const [filterTab, setFilterTab] = useState<PaletteFilter>("all");
@@ -297,6 +299,7 @@ export function CommandPalette() {
             setActions([]);
             setAgentActions([]);
             setFileActions([]);
+            setCommentActions([]);
             setPlaceholder("Search agents, files, actions...");
         }
     }, []);
@@ -385,6 +388,115 @@ export function CommandPalette() {
         }, query.trim() ? 140 : 0);
         return () => window.clearTimeout(handle);
     }, [open, browse, filterTab, query, recentFiles]);
+
+    // Load both source-code comments (//, #, /*) and persisted Shape comments.
+    useEffect(() => {
+        if (!open || !browse || filterTab !== "comments") {
+            setCommentActions([]);
+            return;
+        }
+        let cancelled = false;
+        const handle = window.setTimeout(() => {
+            void import("@/lib/backend").then(async ({ commands }) => {
+                try {
+                    const state = await commands.getProjectState();
+                    const projectPath = state.project_path;
+                    if (!projectPath) {
+                        if (!cancelled) setCommentActions([]);
+                        return;
+                    }
+                    const [{ listProjectComments }, { joinPath, toFsPath }] = await Promise.all([
+                        import("@/features/editor/ui/comments/comments-store"),
+                        import("@/lib/path-utils"),
+                    ]);
+                    const q = query.trim().toLowerCase();
+                    const custom = (await listProjectComments(projectPath))
+                        .filter((comment) => {
+                            if (!q) return true;
+                            return [comment.body, comment.file, comment.snippet]
+                                .some((value) => value.toLowerCase().includes(q));
+                        })
+                        .slice(0, 80)
+                        .map((comment) => {
+                            const name = comment.file.split("/").pop() || comment.file;
+                            return {
+                                id: `comment:shape:${comment.id}`,
+                                label: comment.body.replace(/\s+/g, " ").trim() || "Comment",
+                                shortcut: "",
+                                meta: `${comment.file}:${comment.line}`,
+                                section: "Shape Comments",
+                                run: async () => {
+                                    await commands.openFile(
+                                        toFsPath(joinPath(projectPath, comment.file)),
+                                        name,
+                                    );
+                                    window.setTimeout(() => {
+                                        window.dispatchEvent(new CustomEvent("shape-editor-action", {
+                                            detail: { action: "jumpToPosition", line: comment.line, column: 1 },
+                                        }));
+                                    }, 50);
+                                },
+                            } satisfies EditorAction;
+                        });
+
+                    const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    const marker = "(^|[[:space:]])(//|#|/\\*|\\*|--|<!--)[[:space:]]*";
+                    const source = await commands.searchContent(
+                        `${marker}.*${escaped}`,
+                        {
+                            case_sensitive: false,
+                            whole_word: false,
+                            is_regex: true,
+                            exclude_pattern: ".shape/**",
+                            respect_gitignore: true,
+                            include_hidden: false,
+                            follow_symlinks: false,
+                            exclude_tests: false,
+                            exclude_docs: false,
+                            exclude_build: true,
+                            exclude_assets: true,
+                            only_source: true,
+                        },
+                    );
+                    const normal = source.flatMap((result) =>
+                        result.matches.slice(0, 20).map((match) => {
+                            const name = result.path.split(/[\\/]/).pop() || result.path;
+                            return {
+                                id: `comment:source:${result.path}:${match.line_number}:${match.column_start}`,
+                                label: match.line_text
+                                    .trim()
+                                    .replace(/^(\/\/|#|\/\*+|\*|--|<!--)\s*/, "")
+                                    .replace(/(\*\/|-->)$/, "")
+                                    .trim() || "Comment",
+                                shortcut: "",
+                                meta: `${result.relative_path}:${match.line_number}`,
+                                section: "Code Comments",
+                                run: async () => {
+                                    await commands.openFile(result.path, name);
+                                    window.setTimeout(() => {
+                                        window.dispatchEvent(new CustomEvent("shape-editor-action", {
+                                            detail: {
+                                                action: "jumpToPosition",
+                                                line: match.line_number,
+                                                column: match.column_start + 1,
+                                            },
+                                        }));
+                                    }, 50);
+                                },
+                            } satisfies EditorAction;
+                        }),
+                    ).slice(0, 120);
+                    if (!cancelled) setCommentActions([...custom, ...normal]);
+                } catch {
+                    if (!cancelled) setCommentActions([]);
+                }
+            });
+        }, query.trim() ? 180 : 0);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(handle);
+        };
+    }, [open, browse, filterTab, query]);
 
     // Legacy mode: files-only when mode===files still uses fileActions via browse
     useEffect(() => {
@@ -510,6 +622,8 @@ export function CommandPalette() {
             pool = agentActions;
         } else if (filterTab === "files") {
             pool = activeFileBias ? [...currentFileActions, ...fileActions] : fileActions;
+        } else if (filterTab === "comments") {
+            pool = commentActions;
         } else if (filterTab === "actions") {
             pool = actionCommands;
         } else if (filterTab === "settings") {
@@ -538,6 +652,7 @@ export function CommandPalette() {
         filterTab,
         agentActions,
         fileActions,
+        commentActions,
         actionCommands,
         settingsCommands,
         currentFileActions,
@@ -672,6 +787,8 @@ export function CommandPalette() {
                                       ? "No symbols in the current file"
                                       : filterTab === "agents"
                                         ? "No agents yet"
+                                        : filterTab === "comments"
+                                          ? "No matching comments"
                                         : "No matching results"}
                             </div>
                         )}
@@ -705,6 +822,9 @@ export function CommandPalette() {
                                             ) : null}
                                             {browse && action.id.startsWith("agent:") ? (
                                                 <Icon name="agents" size={14} className="shrink-0 text-text-muted" />
+                                            ) : null}
+                                            {browse && action.id.startsWith("comment:") ? (
+                                                <Icon name="chat" size={14} className="shrink-0 text-text-muted" />
                                             ) : null}
                                             {!browse && action.icon ? (
                                                 <FileIcon name={action.icon} className="h-4 w-4 shrink-0 opacity-70" />
@@ -764,6 +884,7 @@ function browsePlaceholder(mode: string, filter: string): string {
     if (mode === "workspace_symbols") return "Search symbols in workspace…";
     if (filter === "files" || mode === "files") return "Search files by name...";
     if (filter === "agents") return "Search agents…";
+    if (filter === "comments") return "Search code and Shape comments…";
     return "Search agents, files, actions...";
 }
 
