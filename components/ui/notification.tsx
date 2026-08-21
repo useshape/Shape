@@ -39,6 +39,16 @@ function openNotificationTarget(notification: Notification) {
     }
 }
 
+function runNotificationAction(notification: Notification, actionId: string) {
+    const action = notification.actions?.find((a) => a.id === actionId);
+    if (!action) return;
+    try {
+        action.onClick();
+    } finally {
+        notificationStore.remove(notification.id);
+    }
+}
+
 function ToastCard({
     notification,
     stackIndex,
@@ -52,10 +62,12 @@ function ToastCard({
     leaving: boolean;
     onDismiss: () => void;
 }) {
-    const autoHideMs = notification.autoHide === false ? null : TOAST_AUTO_HIDE_MS;
+    const requireAction = Boolean(notification.requireAction);
+    const autoHideMs = requireAction || notification.autoHide === false ? null : TOAST_AUTO_HIDE_MS;
     const fromFront = stackCount - 1 - stackIndex;
     const isFront = fromFront === 0;
     const [entered, setEntered] = React.useState(false);
+    const hasActions = (notification.actions?.length ?? 0) > 0;
 
     React.useEffect(() => {
         const frame = window.requestAnimationFrame(() => {
@@ -71,9 +83,10 @@ function ToastCard({
     }, [autoHideMs, isFront, onDismiss]);
 
     const clickable =
-        notification.code != null ||
-        notification.type === "error" ||
-        notification.type === "warning";
+        !hasActions &&
+        (notification.code != null ||
+            notification.type === "error" ||
+            notification.type === "warning");
 
     return (
         <div
@@ -83,8 +96,9 @@ function ToastCard({
             )}
             data-mounted={entered ? "true" : undefined}
             data-leaving={leaving && isFront ? "true" : undefined}
-            role="status"
+            role={requireAction ? "alertdialog" : "status"}
             aria-live="polite"
+            aria-modal={requireAction ? true : undefined}
             style={{
                 zIndex: stackIndex + 1,
                 pointerEvents: isFront ? "auto" : "none",
@@ -127,19 +141,39 @@ function ToastCard({
                             {notification.description}
                         </div>
                     ) : null}
+                    {hasActions ? (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                            {notification.actions!.map((action) => (
+                                <Button
+                                    key={action.id}
+                                    type="button"
+                                    size="xs"
+                                    variant={action.variant ?? "secondary"}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        runNotificationAction(notification, action.id);
+                                    }}
+                                >
+                                    {action.label}
+                                </Button>
+                            ))}
+                        </div>
+                    ) : null}
                 </div>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDismiss();
-                    }}
-                    aria-label="Dismiss notification"
-                >
-                    <Icon name="close" size={14} />
-                </Button>
+                {!requireAction ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDismiss();
+                        }}
+                        aria-label="Dismiss notification"
+                    >
+                        <Icon name="close" size={14} />
+                    </Button>
+                ) : null}
             </div>
         </div>
     );
@@ -157,18 +191,23 @@ export function NotificationToasts() {
         .filter((n): n is Notification => Boolean(n));
 
     const dismiss = React.useCallback((id: string) => {
+        const target = notifications.find((n) => n.id === id);
+        if (target?.requireAction) return;
         setLeavingId(id);
         window.setTimeout(() => {
             notificationStore.dismissToast(id);
             setLeavingId((cur) => (cur === id ? null : cur));
         }, TOAST_EXIT_MS);
-    }, []);
+    }, [notifications]);
 
     if (!mounted || toasts.length === 0) return null;
 
+    const hasActionToast = toasts.some((t) => (t.actions?.length ?? 0) > 0);
+    const stackHeight = (hasActionToast ? 118 : 88) + Math.max(0, toasts.length - 1) * 8;
+
     return createPortal(
         <div className={TOAST_STACK_CLASS} data-toast-stack="">
-            <div className="relative w-full max-w-[380px]" style={{ height: 88 + Math.max(0, toasts.length - 1) * 8 }}>
+            <div className="relative w-full max-w-[380px]" style={{ height: stackHeight }}>
                 {toasts.map((notification, index) => (
                     <ToastCard
                         key={notification.id}

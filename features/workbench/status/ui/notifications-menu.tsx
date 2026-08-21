@@ -96,11 +96,34 @@ export function NotificationsMenu() {
                                     )}
                                 </div>
                             </div>
-                            <CopyButton
-                                text={[notification.message, notification.description]
-                                    .filter(Boolean)
-                                    .join("\n")}
-                            />
+                            {(notification.actions?.length ?? 0) > 0 ? (
+                                <div className="mt-1 flex flex-wrap gap-1.5 pl-5">
+                                    {notification.actions!.map((action) => (
+                                        <Button
+                                            key={action.id}
+                                            type="button"
+                                            size="xs"
+                                            variant={action.variant ?? "secondary"}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                try {
+                                                    action.onClick();
+                                                } finally {
+                                                    notificationStore.remove(notification.id);
+                                                }
+                                            }}
+                                        >
+                                            {action.label}
+                                        </Button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <CopyButton
+                                    text={[notification.message, notification.description]
+                                        .filter(Boolean)
+                                        .join("\n")}
+                                />
+                            )}
                         </DropdownMenuItem>
                     ))
                 )}
