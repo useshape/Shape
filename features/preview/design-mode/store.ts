@@ -223,8 +223,5 @@ export function getDesignBridge(): DesignBridgeApi | null {
 }
 
 export function subscribeDesignBridge(listener: () => void) {
-    bridgeListeners.add(listener);
-    return () => {
-        bridgeListeners.delete(listener);
-    };
+ 
 }

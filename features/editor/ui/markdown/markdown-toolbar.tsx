@@ -5,22 +5,23 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
     DropdownMenuLabel,
+    DropdownMenuSeparator,
 } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 import { ShapeLogo } from "@/components/ui/shape-logo";
-import { useTextRewrite, type TextRewriteAction } from "../main/lib/use-text-rewrite";
+import type { TextRewriteAction } from "../main/lib/use-text-rewrite";
 import type { MarkdownBlockKind, MarkdownInlineFormat, MarkdownSourceRange } from "./lib/markdown-format";
 
 export type MarkdownSelection = {
     text: string;
     rect: { top: number; left: number; width: number; height: number };
-    /** Preferred source offsets from DOM data-source-* mapping. */
     sourceRange?: MarkdownSourceRange | null;
 };
 
@@ -45,11 +46,11 @@ function clampToolbarPosition(
     toolbarW: number,
     toolbarH: number,
 ) {
-    const pad = 8;
-    const preferAbove = rect.top - toolbarH - 8;
+    const pad = 10;
+    const preferAbove = rect.top - toolbarH - 10;
     const top = preferAbove >= pad
         ? preferAbove
-        : Math.min(window.innerHeight - toolbarH - pad, rect.top + rect.height + 8);
+        : Math.min(window.innerHeight - toolbarH - pad, rect.top + rect.height + 10);
     const left = Math.min(
         Math.max(pad, rect.left + rect.width / 2 - toolbarW / 2),
         window.innerWidth - toolbarW - pad,
@@ -68,42 +69,62 @@ function readLiveSelectionRect(): MarkdownSelection["rect"] | null {
 export type MarkdownToolbarProps = {
     selection: MarkdownSelection;
     scrollRoot?: HTMLElement | null;
+    loading?: boolean;
+    loggedIn?: boolean;
     onFormat: (format: MarkdownInlineFormat) => void;
     onBlock: (block: MarkdownBlockKind) => void;
     onList: (ordered: boolean) => void;
-    onReplaceText: (newText: string) => void;
+    onQuote: () => void;
+    onFence: () => void;
+    onLink: (url: string) => void;
+    onInsertTable: () => void;
+    onInsertRule: () => void;
+    onInsertImage: (src: string) => void;
+    onAi: (action: TextRewriteAction) => void;
     onClose: () => void;
     onRectChange?: (rect: MarkdownSelection["rect"]) => void;
 };
 
-/** Notion-style floating toolbar shown when selecting text in the markdown preview. */
 export function MarkdownToolbar({
     selection,
     scrollRoot,
+    loading = false,
+    loggedIn = false,
     onFormat,
     onBlock,
     onList,
-    onReplaceText,
+    onQuote,
+    onFence,
+    onLink,
+    onInsertTable,
+    onInsertRule,
+    onInsertImage,
+    onAi,
     onClose,
     onRectChange,
 }: MarkdownToolbarProps) {
     const panelRef = useRef<HTMLDivElement>(null);
     const [position, setPosition] = useState({ top: 0, left: 0 });
     const [liveRect, setLiveRect] = useState(selection.rect);
-    const { rewrite, loading, loggedIn } = useTextRewrite();
+    const [linkOpen, setLinkOpen] = useState(false);
+    const [linkUrl, setLinkUrl] = useState("");
+    const [imageOpen, setImageOpen] = useState(false);
+    const [imageSrc, setImageSrc] = useState("");
 
     useEffect(() => {
         setLiveRect(selection.rect);
+        setLinkOpen(false);
+        setImageOpen(false);
     }, [selection.rect.top, selection.rect.left, selection.rect.width, selection.rect.height, selection.text]);
 
     useEffect(() => {
         const sync = () => {
+            if (loading) return;
             const next = readLiveSelectionRect();
             if (!next) {
                 onClose();
                 return;
             }
-            // Dismiss when selection scrolled fully out of the preview.
             if (scrollRoot) {
                 const rootRect = scrollRoot.getBoundingClientRect();
                 const visible =
@@ -129,49 +150,50 @@ export function MarkdownToolbar({
             window.removeEventListener("resize", sync);
             document.removeEventListener("selectionchange", sync);
         };
-    }, [scrollRoot, onClose, onRectChange]);
+    }, [scrollRoot, onClose, onRectChange, loading]);
 
     useLayoutEffect(() => {
         const el = panelRef.current;
         if (!el) return;
         const { width, height } = el.getBoundingClientRect();
-        setPosition(clampToolbarPosition(liveRect, width || 360, height || 40));
-    }, [liveRect.top, liveRect.left, liveRect.width, liveRect.height, selection.text]);
-
-    const handleAi = async (action: TextRewriteAction) => {
-        const next = await rewrite(selection.text, action);
-        if (next) onReplaceText(next);
-    };
+        setPosition(clampToolbarPosition(liveRect, width || 420, height || 44));
+    }, [liveRect.top, liveRect.left, liveRect.width, liveRect.height, selection.text, linkOpen, imageOpen]);
 
     const toolbar = (
         <div
             ref={panelRef}
-            className="fixed z-710 flex items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-3 px-1 py-1 shadow-xl"
+            className={cn(
+                "fixed z-dropdown flex items-center gap-0.5 rounded-xl",
+                "animate-in fade-in zoom-in-95 duration-200",
+                "border border-accent-text/25 bg-surface-3/95 px-1 py-1",
+                "shadow-[0_12px_40px_-12px_rgba(0,0,0,0.65),0_0_0_1px_color-mix(in_srgb,var(--accent-text)_18%,transparent)]",
+                "backdrop-blur-md transition-[top,left] duration-200 ease-out",
+            )}
             style={{ top: position.top, left: position.left }}
             onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onClick={(e) => e.stopPropagation()}
         >
-            <Tooltip content={loggedIn ? "AI rewrite" : "Sign in to use AI"}>
+            <Tooltip content={loggedIn ? "Rewrite with AI" : "Sign in to use AI"}>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 text-accent-text"
                             disabled={!loggedIn || loading}
                         >
                             {loading ? (
-                                <div className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+                                <span className="size-3.5 rounded-full border-2 border-accent-text border-t-transparent animate-spin" />
                             ) : (
                                 <ShapeLogo size={14} className={cn(!loggedIn && "opacity-40")} />
                             )}
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                        <DropdownMenuLabel className="text-xs text-text-muted">AI</DropdownMenuLabel>
+                    <DropdownMenuContent align="start" className="w-52">
+                        <DropdownMenuLabel className="text-xs text-text-muted">Rewrite selection</DropdownMenuLabel>
                         {AI_ACTIONS.map(({ action, label }) => (
-                            <DropdownMenuItem key={action} onClick={() => void handleAi(action)}>
+                            <DropdownMenuItem key={action} onClick={() => onAi(action)}>
                                 {label}
                             </DropdownMenuItem>
                         ))}
@@ -185,6 +207,7 @@ export function MarkdownToolbar({
                 <DropdownMenuTrigger asChild>
                     <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs font-medium">
                         Turn into
+                        <Icon name="expand_more" size={14} className="text-text-muted" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -198,10 +221,10 @@ export function MarkdownToolbar({
 
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
 
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Bold" onClick={() => onFormat("bold")}>
-                <Icon name="format_bold" size={16} />
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 font-semibold" title="Bold" onClick={() => onFormat("bold")}>
+                B
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Italic" onClick={() => onFormat("italic")}>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 italic" title="Italic" onClick={() => onFormat("italic")}>
                 <Icon name="format_italic" size={16} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Strikethrough" onClick={() => onFormat("strike")}>
@@ -209,6 +232,9 @@ export function MarkdownToolbar({
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Inline code" onClick={() => onFormat("code")}>
                 <Icon name="code" size={16} />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Link" onClick={() => { setImageOpen(false); setLinkOpen((v) => !v); }}>
+                <Icon name="link" size={16} />
             </Button>
 
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
@@ -219,10 +245,72 @@ export function MarkdownToolbar({
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Numbered list" onClick={() => onList(true)}>
                 <Icon name="format_list_numbered" size={16} />
             </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Quote" onClick={onQuote}>
+                <Icon name="format_align_left" size={16} />
+            </Button>
+
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Insert">
+                        <Icon name="add" size={16} />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={onFence}>Code block</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onInsertTable}>Table</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onInsertRule}>Divider</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => { setLinkOpen(false); setImageOpen(true); }}>
+                        Image…
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 ml-0.5" title="Close" onClick={onClose}>
                 <Icon name="close" size={14} />
             </Button>
+
+            {linkOpen && (
+                <form
+                    className="absolute top-full left-0 mt-1.5 flex w-72 items-center gap-1 rounded-xl border border-border-subtle bg-surface-3 p-1 shadow-md"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (linkUrl.trim()) onLink(linkUrl.trim());
+                        setLinkOpen(false);
+                        setLinkUrl("");
+                    }}
+                >
+                    <Input
+                        autoFocus
+                        value={linkUrl}
+                        onChange={(e) => setLinkUrl(e.target.value)}
+                        placeholder="https://"
+                        className="h-8"
+                    />
+                    <Button type="submit" size="sm" className="h-8 px-2">Apply</Button>
+                </form>
+            )}
+
+            {imageOpen && (
+                <form
+                    className="absolute top-full left-0 mt-1.5 flex w-72 items-center gap-1 rounded-xl border border-border-subtle bg-surface-3 p-1 shadow-md"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (imageSrc.trim()) onInsertImage(imageSrc.trim());
+                        setImageOpen(false);
+                        setImageSrc("");
+                    }}
+                >
+                    <Input
+                        autoFocus
+                        value={imageSrc}
+                        onChange={(e) => setImageSrc(e.target.value)}
+                        placeholder="Image URL or path"
+                        className="h-8"
+                    />
+                    <Button type="submit" size="sm" className="h-8 px-2">Insert</Button>
+                </form>
+            )}
         </div>
     );
 

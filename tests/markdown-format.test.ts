@@ -3,7 +3,10 @@ import {
     locateMarkdownText,
     applyInlineMarkdownFormat,
     applyMarkdownBlock,
+    applyMarkdownLink,
+    applyMarkdownQuote,
     findMarkdownSpan,
+    toggleMarkdownTask,
 } from "@/features/editor/ui/markdown/lib/markdown-format";
 
 describe("locateMarkdownText", () => {
@@ -76,5 +79,29 @@ describe("applyMarkdownBlock", () => {
         expect(applyMarkdownBlock("Hello world\n\nMore", "Hello world", "h2")).toBe(
             "## Hello world\n\nMore",
         );
+    });
+});
+
+describe("applyMarkdownLink", () => {
+    it("wraps selected text in a markdown link", () => {
+        expect(applyMarkdownLink("See Shape now", "Shape", "https://shape.dev")).toBe(
+            "See [Shape](https://shape.dev) now",
+        );
+    });
+});
+
+describe("applyMarkdownQuote", () => {
+    it("prefixes selected lines with a blockquote marker", () => {
+        expect(applyMarkdownQuote("Hello\nWorld", "Hello\nWorld")).toBe("> Hello\n> World");
+    });
+});
+
+describe("toggleMarkdownTask", () => {
+    it("checks an unchecked task", () => {
+        expect(toggleMarkdownTask("- [ ] ship it", { start: 0, end: 14 })).toBe("- [x] ship it");
+    });
+
+    it("unchecks a checked task", () => {
+        expect(toggleMarkdownTask("- [x] ship it", { start: 0, end: 14 })).toBe("- [ ] ship it");
     });
 });

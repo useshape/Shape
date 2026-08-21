@@ -406,3 +406,90 @@ export function selectionToSourceRange(
 
     return locateMarkdownText(content, text);
 }
+
+export function applyMarkdownLink(
+    content: string,
+    selected: string,
+    url: string,
+    preferred?: MarkdownSourceRange | null,
+): string | null {
+    const range = locateMarkdownText(content, selected, preferred);
+    if (!range) return null;
+    const href = url.trim();
+    if (!href) return null;
+    const inner = content.slice(range.start, range.end);
+    const already = inner.match(/^\[([^\]]+)\]\([^)]*\)$/);
+    if (already) {
+        return `${content.slice(0, range.start)}[${already[1]}](${href})${content.slice(range.end)}`;
+    }
+    return `${content.slice(0, range.start)}[${inner}](${href})${content.slice(range.end)}`;
+}
+
+export function applyMarkdownQuote(
+    content: string,
+    selected: string,
+    preferred?: MarkdownSourceRange | null,
+): string | null {
+    const range = locateMarkdownText(content, selected, preferred);
+    if (!range) return null;
+    const lines = linesIntersectingRange(content, range);
+    if (lines.length === 0) return null;
+    let next = content;
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const { start, end } = lines[i]!;
+        const line = next.slice(start, end);
+        if (!line.trim()) continue;
+        const quoted = line.startsWith(">") ? line : `> ${line.replace(/^\s*/, "")}`;
+        next = next.slice(0, start) + quoted + next.slice(end);
+    }
+    return next;
+}
+
+export function applyMarkdownFence(
+    content: string,
+    selected: string,
+    preferred?: MarkdownSourceRange | null,
+): string | null {
+    const range = locateMarkdownText(content, selected, preferred);
+    if (!range) return null;
+    const inner = content.slice(range.start, range.end);
+    if (inner.startsWith("```") && inner.endsWith("```")) {
+        const unfenced = inner.replace(/^```[^\n]*\n?/, "").replace(/\n?```$/, "");
+        return content.slice(0, range.start) + unfenced + content.slice(range.end);
+    }
+    const fenced = `\`\`\`\n${inner}\n\`\`\``;
+    return content.slice(0, range.start) + fenced + content.slice(range.end);
+}
+
+export function toggleMarkdownTask(
+    content: string,
+    preferred: MarkdownSourceRange,
+): string | null {
+    if (preferred.start < 0 || preferred.start > content.length) return null;
+    const { start, end } = lineBoundsAt(content, preferred.start);
+    const line = content.slice(start, end);
+    const unchecked = line.match(/^(\s*(?:[-*+]|\d+\.)\s+)\[ \]/);
+    if (unchecked) {
+        return content.slice(0, start) + line.replace("[ ]", "[x]") + content.slice(end);
+    }
+    const checked = line.match(/^(\s*(?:[-*+]|\d+\.)\s+)\[[xX]\]/);
+    if (checked) {
+        return content.slice(0, start) + line.replace(/\[[xX]\]/, "[ ]") + content.slice(end);
+    }
+    return null;
+}
+
+export function sourceRangeFromElement(
+    el: Element | null,
+    root: HTMLElement | null,
+    contentLength: number,
+): MarkdownSourceRange | null {
+    if (!el || !root) return null;
+    const stamped = el.closest("[data-source-start][data-source-end]");
+    if (!stamped || !root.contains(stamped)) return null;
+    const start = Number(stamped.getAttribute("data-source-start"));
+    const end = Number(stamped.getAttribute("data-source-end"));
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    if (start < 0 || end > contentLength || end <= start) return null;
+    return { start, end };
+}
