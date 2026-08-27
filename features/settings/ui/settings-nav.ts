@@ -30,7 +30,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
             { id: "ai-models", label: "Models", targetId: "settings-ai-models" },
             { id: "ai-rules", label: "Rules", targetId: "settings-ai-rules" },
             { id: "ai-context", label: "Context", targetId: "settings-ai-context" },
-            { id: "mcp", label: "MCP", targetId: "settings-ai-mcp" },
+            { id: "mcp", label: "Integrations", href: "/settings/integrations" },
         ],
     },
     {
@@ -106,7 +106,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         id: "agents",
         label: "Agents",
         icon: "auto_awesome",
-        keywords: ["ai", "models", "mcp", "rules", "context"],
+        keywords: ["ai", "models", "mcp", "connections", "integrations", "rules", "context"],
     },
     {
         id: "editor",

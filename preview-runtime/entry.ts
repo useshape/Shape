@@ -51,7 +51,7 @@ function injectBaseLayoutCss() {
 function normalizeUserCode(source: string): string {
     const trimmed = source.trim();
     if (!trimmed) {
-        return `function App() { return React.createElement("div", { className: "p-8 text-white bg-zinc-950" }, "Empty preview"); }`;
+        return `function App() { return React.createElement("div", { className: "p-8 text-neutral-300" }, "Empty preview"); }`;
     }
     if (trimmed.includes("function App") || trimmed.startsWith("const App")) {
         return trimmed;

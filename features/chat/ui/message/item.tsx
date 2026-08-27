@@ -228,7 +228,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                     } : undefined}
                     className={cn(
                         "relative z-10 w-fit max-w-full rounded-xl bg-surface-3 px-3 py-2",
-                        "text-sm text-text-primary group select-text",
+                        "chat-copy text-text-primary group select-text",
                         isLong && "cursor-pointer",
                     )}
                 >
@@ -302,7 +302,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             onKeyDown={handleKeyDown}
         >
             <div ref={bodyRef} className="w-full min-w-0 select-text overflow-hidden">
-                <div className="w-full min-w-0 wrap-break-word chat-markdown max-w-none prose-compact text-sm select-text">
+                <div className="w-full min-w-0 wrap-break-word chat-markdown max-w-none prose-compact select-text">
                     <MessageRenderer
                         content={content}
                         isGenerating={isGenerating}

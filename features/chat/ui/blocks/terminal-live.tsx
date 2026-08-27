@@ -25,6 +25,7 @@ import {
 import { commands } from "@/lib/backend/commands";
 import { useSettings, updateSettingSection, type AutoRunModeSetting } from "@/lib/settings";
 import type { Chunk } from "../md/renderer";
+import { ServiceChip } from "./service-chip";
 
 const OUTPUT_CAP = 16_000;
 
@@ -217,81 +218,92 @@ export function CommandApprovalCard({
     }, [isProcessing, onRun]);
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl bg-transparent border border-border">
-            <div className="flex items-center gap-2 px-3 pt-2 pb-2">
-                {isProcessing ? (
+        <ServiceChip
+            leading={
+                isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
-                    <Icon name="terminal" size={13} className="shrink-0 text-text-muted" />
-                )}
-                <span className="truncate text-xs text-text-muted">
-                    Run command{reason ? "" : ""}
+                    <Icon name="terminal" size={13} className="text-text-muted" />
+                )
+            }
+            title="Run command"
+            detail={
+                <span className="font-mono">
+                    {command.length > 48 ? `${command.slice(0, 48)}…` : command}
                 </span>
-                {reason ? (
+            }
+            trailing={
+                reason ? (
                     <Tooltip content={reason} side="top">
                         <Icon name="info" size={12} className="shrink-0 text-text-disabled" />
                     </Tooltip>
-                ) : null}
-            </div>
-            <div>
-                <div className="max-h-[96px] pt-2 px-3 min-h-[64px] border-t border-border overflow-y-auto custom-scrollbar font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
+                ) : null
+            }
+            expandable
+            defaultOpen
+            footer={
+                <div className="flex items-center justify-between gap-2">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild disabled={isProcessing}>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                disabled={isProcessing}
+                                aria-label="Approval mode for future agent commands"
+                            >
+                                {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
+                                    ?? "Ask every time"}
+                                <Icon name="expand_more" size={14} className="opacity-70" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48">
+                            {AUTO_RUN_OPTIONS.map((opt) => {
+                                const selected = settings.ai.autoRunMode === opt.value;
+                                return (
+                                    <DropdownMenuItem
+                                        key={opt.value}
+                                        onClick={() =>
+                                            updateSettingSection("ai", { autoRunMode: opt.value })
+                                        }
+                                        className={cn(
+                                            "flex w-full cursor-pointer items-center",
+                                            selected && "bg-panel-hover",
+                                        )}
+                                    >
+                                        <span className="flex-1 text-sm text-text-primary">{opt.label}</span>
+                                        {selected ? (
+                                            <Icon name="check" size={16} className="text-text-primary" />
+                                        ) : null}
+                                    </DropdownMenuItem>
+                                );
+                            })}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        <Button type="button" variant="ghost" size="xs" disabled={isProcessing} onClick={onSkip}>
+                            Skip
+                        </Button>
+                        <Button type="button" variant="default" size="xs" disabled={isProcessing} onClick={onRun}>
+                            Run
+                            <span className="ml-1.5 inline-flex items-center gap-0.5">
+                                <kbd className="inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
+                                    ↵
+                                </kbd>
+                            </span>
+                        </Button>
+                    </div>
+                </div>
+            }
+        >
+            <div className="space-y-1">
+                <p className="text-xs text-text-muted">Command</p>
+                <pre className="max-h-24 overflow-y-auto rounded-md bg-panel/60 px-2.5 py-2 font-mono text-xs text-text-primary whitespace-pre-wrap break-all custom-scrollbar">
                     <span className="select-none text-text-disabled">$ </span>
                     {command}
-                </div>
+                </pre>
             </div>
-            <div className="flex items-center justify-between gap-2 px-2 py-2">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild disabled={isProcessing}>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            disabled={isProcessing}
-                            aria-label="Approval mode for future agent commands"
-                        >
-                            {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
-                                ?? "Ask every time"}
-                            <Icon name="expand_more" size={14} className="opacity-70" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                        {AUTO_RUN_OPTIONS.map((opt) => {
-                            const selected = settings.ai.autoRunMode === opt.value;
-                            return (
-                                <DropdownMenuItem
-                                    key={opt.value}
-                                    onClick={() =>
-                                        updateSettingSection("ai", { autoRunMode: opt.value })
-                                    }
-                                    className={cn(
-                                        "flex w-full cursor-pointer items-center",
-                                        selected && "bg-panel-hover",
-                                    )}
-                                >
-                                    <span className="flex-1 text-sm text-text-primary">{opt.label}</span>
-                                    {selected ? (
-                                        <Icon name="check" size={16} className="text-text-primary" />
-                                    ) : null}
-                                </DropdownMenuItem>
-                            );
-                        })}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                <div className="flex shrink-0 items-center gap-1.5">
-                    <Button type="button" variant="ghost" size="xs" disabled={isProcessing} onClick={onSkip}>
-                        Skip
-                    </Button>
-                    <Button type="button" variant="default" size="xs" disabled={isProcessing} onClick={onRun}>
-                        Run
-                        <span className="ml-1.5 inline-flex items-center gap-0.5">
-                            <kbd className="inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
-                                ↵
-                            </kbd>
-                        </span>
-                    </Button>
-                </div>
-            </div>
-        </div>
+        </ServiceChip>
     );
 }
 
@@ -301,7 +313,6 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     const chunkStatus = block.commandStatus || "completed";
     const [localStatus, setLocalStatus] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [outputOpen, setOutputOpen] = useState(false);
 
     // Live events can outrun the transcript chunk (approval → start → exit).
     const couldBeLive =
@@ -376,46 +387,33 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     if (effectiveStatus === "rejected" || effectiveStatus === "blocked") {
         const label = effectiveStatus === "rejected" ? "Rejected command" : "Blocked command";
         return (
-            <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
-                <div className="flex items-center gap-2 px-3 py-2">
-                    <Icon name="block" size={13} className="shrink-0 text-text-muted" />
-                    <span className="truncate text-xs text-text-muted">{label}</span>
-                </div>
-                <div className="border-t border-border px-3 py-2">
-                    <span className="font-mono text-sm text-text-disabled line-through whitespace-pre-wrap break-words">
-                        <span className="select-none">$ </span>
-                        {command}
-                    </span>
-                </div>
-            </div>
+            <ServiceChip
+                leading={<Icon name="block" size={14} className="text-text-muted" />}
+                title={label}
+                detail={<span className="font-mono line-through">{command}</span>}
+            />
         );
     }
 
     if (effectiveStatus === "running" || effectiveStatus === "background") {
         const liveText = stream.output || stripTerminalChunkOutput(block);
         return (
-            <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
-                <div className="flex items-center gap-2 px-3 py-2">
+            <ServiceChip
+                leading={
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-                    <span className="truncate text-xs text-text-muted">
-                        {effectiveStatus === "background" ? "Running in background" : "Running command"}
-                    </span>
-                </div>
-                <div className="border-t border-border px-3 py-2">
-                    <div className="font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
-                        <span className="select-none text-text-disabled">$ </span>
-                        {command}
+                }
+                title={effectiveStatus === "background" ? "Running in background" : "Running command"}
+                detail={<span className="font-mono">{command.length > 40 ? `${command.slice(0, 40)}…` : command}</span>}
+                expandable
+                defaultOpen
+            >
+                {stream.waitingForInput ? (
+                    <div className="mb-2 rounded-md bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+                        Waiting for input — the agent can answer with write_to_terminal, or stop the turn.
                     </div>
-                    {stream.waitingForInput ? (
-                        <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-                            Waiting for input — the agent can answer with write_to_terminal, or stop the turn.
-                        </div>
-                    ) : null}
-                    <div className="mt-2">
-                        <LiveTerminalOutput text={liveText} />
-                    </div>
-                </div>
-            </div>
+                ) : null}
+                <LiveTerminalOutput text={liveText} />
+            </ServiceChip>
         );
     }
 
@@ -431,46 +429,27 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
           : "Ran command";
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
-            <button
-                type="button"
-                onClick={() => hasOutput && setOutputOpen((v) => !v)}
-                className={cn(
-                    "flex w-full items-center gap-2 px-3 py-2 text-left",
-                    hasOutput && "cursor-pointer hover:bg-panel-hover/40 transition-colors",
-                )}
-            >
+        <ServiceChip
+            leading={
                 <Icon
                     name={cancelled ? "cancel" : failed ? "error" : "terminal"}
-                    size={13}
-                    className="shrink-0 text-text-muted"
+                    size={14}
+                    className="text-text-muted"
                 />
-                <span className="truncate text-xs text-text-muted">{statusLabel}</span>
-                {failed && !cancelled && typeof exitCode === "number" ? (
-                    <span className="shrink-0 rounded bg-error/15 px-1 py-px text-[10px] font-medium text-error">
-                        exit {exitCode}
-                    </span>
-                ) : null}
-                {hasOutput ? (
-                    <Icon
-                        name={outputOpen ? "expand_less" : "expand_more"}
-                        size={14}
-                        className="ml-auto shrink-0 text-text-muted"
-                    />
-                ) : null}
-            </button>
-            <div className="border-t border-border px-3 py-2">
-                <div className="font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
-                    <span className="select-none text-text-disabled">$ </span>
-                    {command}
-                </div>
-                {outputOpen && hasOutput ? (
-                    <div className="mt-2">
-                        <LiveTerminalOutput text={staticOutput} maxHeight={240} />
-                    </div>
-                ) : null}
-            </div>
-        </div>
+            }
+            title={statusLabel}
+            detail={<span className="font-mono">{command}</span>}
+            trailing={
+                failed && !cancelled && typeof exitCode === "number" ? (
+                    <span className="shrink-0 text-xs text-error">exit {exitCode}</span>
+                ) : null
+            }
+            expandable={hasOutput}
+        >
+            <pre className="max-h-60 overflow-auto text-xs leading-relaxed text-text-muted whitespace-pre-wrap break-all custom-scrollbar">
+                {staticOutput}
+            </pre>
+        </ServiceChip>
     );
 }
 

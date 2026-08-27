@@ -8,11 +8,45 @@ pub use oauth::{handle_oauth_callback, start_oauth};
 pub use types::*;
 
 use client::McpClient as StdioClient;
+use credentials::delete_token;
 use http_client::HttpMcpClient;
 use oauth::get_token;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+/// Built-in hosted MCP servers that support OAuth. Kept in sync with the
+/// TypeScript catalog so the agent can prompt Connect before mcp.json exists.
+const BUILTIN_OAUTH_MCP: &[(&str, &str)] = &[
+    ("github", "GitHub"),
+    ("linear", "Linear"),
+    ("notion", "Notion"),
+    ("figma", "Figma"),
+    ("sentry", "Sentry"),
+    ("stripe", "Stripe"),
+    ("vercel", "Vercel"),
+    ("supabase", "Supabase"),
+    ("neon", "Neon"),
+    ("atlassian", "Atlassian"),
+    ("datadog", "Datadog"),
+    ("posthog", "PostHog"),
+    ("slack", "Slack"),
+    ("hubspot", "HubSpot"),
+    ("amplitude", "Amplitude"),
+    ("asana", "Asana"),
+    ("monday", "Monday.com"),
+    ("intercom", "Intercom"),
+    ("launchdarkly", "LaunchDarkly"),
+    ("webflow", "Webflow"),
+    ("canva", "Canva"),
+    ("pagerduty", "PagerDuty"),
+    ("prisma", "Prisma"),
+    ("paypal", "PayPal"),
+    ("clickup", "ClickUp"),
+    ("mixpanel", "Mixpanel"),
+    ("mongodb", "MongoDB"),
+    ("gitlab", "GitLab"),
+];
 
 enum ConnectedClient {
     Stdio(StdioClient),
@@ -130,7 +164,7 @@ impl McpState {
                         status: McpServerStatus::NeedsAuth,
                         tool_count: 0,
                         error: Some(
-                            "Connect your account in MCP settings (separate from Shape sign-in)."
+                            "Connect your account in Settings → Connections (separate from Shape sign-in)."
                                 .to_string(),
                         ),
                         auth: server.auth.clone(),
@@ -216,7 +250,7 @@ impl McpState {
     }
 
     pub fn tools_as_openai_schema(&self) -> Result<Vec<Value>, String> {
-        Ok(self
+        let mut out = self
             .all_tools()?
             .into_iter()
             .map(|t| {
@@ -229,7 +263,91 @@ impl McpState {
                     }
                 })
             })
-            .collect())
+            .collect::<Vec<_>>();
+
+        // Disconnected OAuth servers: one connect tool so the model can prompt login.
+        let configs = self.configs.lock().map_err(|e| e.to_string())?;
+        for cfg in configs.iter() {
+            if !cfg.enabled || cfg.auth != McpAuthType::Oauth {
+                continue;
+            }
+            if get_token(&cfg.id).is_some() {
+                continue;
+            }
+            let slug = crate::mcp::client::sanitize_name(&cfg.id);
+            out.push(json!({
+                "type": "function",
+                "function": {
+                    "name": format!("mcp_connect_{}", slug),
+                    "description": format!(
+                        "[MCP: {}] Not connected. Call this when you need {}. It shows a Connect card so the user can sign in with OAuth. Do not invent other {} tools until they connect.",
+                        cfg.name, cfg.name, cfg.name
+                    ),
+                    "parameters": { "type": "object", "properties": {} },
+                }
+            }));
+        }
+
+        let mut listed: std::collections::HashSet<String> = configs
+            .iter()
+            .map(|c| crate::mcp::client::sanitize_name(&c.id))
+            .collect();
+        drop(configs);
+        for (id, name) in BUILTIN_OAUTH_MCP {
+            if get_token(id).is_some() {
+                continue;
+            }
+            let slug = crate::mcp::client::sanitize_name(id);
+            if listed.contains(&slug) {
+                continue;
+            }
+            listed.insert(slug.clone());
+            out.push(json!({
+                "type": "function",
+                "function": {
+                    "name": format!("mcp_connect_{}", slug),
+                    "description": format!(
+                        "[MCP: {}] Not connected. Call this when you need {}. It shows a Connect card so the user can sign in with OAuth. Do not invent other {} tools until they connect.",
+                        name, name, name
+                    ),
+                    "parameters": { "type": "object", "properties": {} },
+                }
+            }));
+        }
+        Ok(out)
+    }
+
+    pub fn describe_tool(&self, qualified_name: &str) -> Option<(String, String, String)> {
+        let clients = self.clients.lock().ok()?;
+        for client in clients.values() {
+            let guard = client.lock().ok()?;
+            if let Some(t) = guard.tools().iter().find(|t| t.qualified_name == qualified_name) {
+                return Some((t.server_id.clone(), t.server_name.clone(), t.name.clone()));
+            }
+        }
+        None
+    }
+
+    pub fn find_server_by_connect_tool(&self, qualified_name: &str) -> Option<(String, String)> {
+        let slug = qualified_name.strip_prefix("mcp_connect_")?;
+        if let Ok(configs) = self.configs.lock() {
+            if let Some(found) = configs.iter().find_map(|cfg| {
+                if crate::mcp::client::sanitize_name(&cfg.id) == slug {
+                    Some((cfg.id.clone(), cfg.name.clone()))
+                } else {
+                    None
+                }
+            }) {
+                return Some(found);
+            }
+        }
+        BUILTIN_OAUTH_MCP.iter().find_map(|(id, name)| {
+            if crate::mcp::client::sanitize_name(id) == slug {
+                Some(((*id).to_string(), (*name).to_string()))
+            } else {
+                None
+            }
+        })
     }
 
     pub fn call_tool(&self, qualified_name: &str, args_json: &str) -> Result<String, String> {
@@ -347,5 +465,9 @@ impl McpState {
             (server.id, url)
         };
         start_oauth(&server_id_owned, &url).await
+    }
+
+    pub fn clear_server_oauth(&self, server_id: &str) -> Result<(), String> {
+        delete_token(server_id)
     }
 }

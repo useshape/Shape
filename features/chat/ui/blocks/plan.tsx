@@ -9,6 +9,7 @@ import { useEditorView } from "@/core/providers/editor";
 import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan-preview";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
+import { ChatCard, ChatCardBody, ChatCardFooter, ChatCardHeader } from "./chat-card";
 
 type PlanStep = {
     label: string;
@@ -33,38 +34,28 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
             ),
         [steps, isGenerating],
     );
-    const active = displaySteps.find((s) => s.status === "active");
-    const visibleSteps = isOpen
-        ? displaySteps
-        : active
-          ? [active]
-          : displaySteps.filter((s) => s.status === "done").slice(-2);
-
     return (
-        <div className="my-1 w-full overflow-hidden rounded-xl border border-border bg-transparent">
-            <div className="flex items-center justify-between gap-2 px-3 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                    <Icon name="checklist" size={13} className="text-text-muted shrink-0" />
-                    <span className="text-xs text-text-muted tabular-nums whitespace-nowrap">
-                        {completedCount} of {totalCount} done
-                    </span>
-                </div>
+        <ChatCard>
+            <ChatCardHeader onClick={totalCount > 1 ? () => setIsOpen((open) => !open) : undefined}>
+                <Icon name="checklist" size={14} className="text-text-muted shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-sm text-text-primary">Plan</span>
+                <span className="shrink-0 text-xs text-text-muted tabular-nums">
+                    {completedCount} of {totalCount}
+                </span>
                 {totalCount > 1 ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => setIsOpen((open) => !open)}
-                        className="h-6 shrink-0 text-xs text-text-muted"
-                    >
-                        {isOpen ? "Hide" : "View all"}
-                    </Button>
+                    <Icon
+                        name="expand_more"
+                        size={14}
+                        className={cn(
+                            "shrink-0 text-text-muted transition-transform duration-[var(--chat-motion-duration,180ms)]",
+                            isOpen && "rotate-180",
+                        )}
+                    />
                 ) : null}
-            </div>
-
-            {visibleSteps.length > 0 ? (
-                <div className="flex flex-col gap-1.5 border-t border-border px-3 py-2.5">
-                    {visibleSteps.map((step, i) => (
+            </ChatCardHeader>
+            <ChatCardBody open={isOpen || totalCount <= 1}>
+                <div className="flex flex-col gap-1.5">
+                    {displaySteps.map((step, i) => (
                         <div key={`${step.label}-${i}`} className="flex items-start gap-2">
                             {step.status === "done" ? (
                                 <Icon name="check_circle" size={14} className="text-success shrink-0 mt-0.5" />
@@ -89,8 +80,8 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                         </div>
                     ))}
                 </div>
-            ) : null}
-        </div>
+            </ChatCardBody>
+        </ChatCard>
     );
 }
 
@@ -166,15 +157,11 @@ export function PlanSavedBlock({ title, path }: { title: string; path: string })
     const todos = preview?.todos ?? [];
 
     return (
-        <div className={cn(
-            "w-full flex flex-col rounded-lg border my-2 overflow-hidden",
-            "border-border-subtle",
-        )}>
-            <div className="flex items-center justify-between gap-2 px-3 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                    <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
-                    <span className="text-xs text-text-muted truncate">{fileName}</span>
-                </div>
+        <ChatCard>
+            <ChatCardHeader>
+                <Icon name="account_tree" size={14} className="text-text-muted shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{displayTitle}</span>
+                <span className="shrink-0 text-xs text-text-muted truncate max-w-[40%]">{fileName}</span>
                 <Tooltip content="Open plan" side="top">
                     <button
                         type="button"
@@ -184,12 +171,8 @@ export function PlanSavedBlock({ title, path }: { title: string; path: string })
                         <Icon name="open_in_new" size={14} />
                     </button>
                 </Tooltip>
-            </div>
-
-            <div className="px-4 pt-1 pb-2 flex flex-col gap-2">
-                <h3 className="text-base font-medium text-text-primary leading-snug">
-                    {displayTitle}
-                </h3>
+            </ChatCardHeader>
+            <div className="flex flex-col gap-2 px-3 pb-1">
                 {preview?.goal ? (
                     <p className="text-sm text-text-muted leading-relaxed">{preview.goal}</p>
                 ) : null}
@@ -200,11 +183,10 @@ export function PlanSavedBlock({ title, path }: { title: string; path: string })
                 >
                     Read detailed plan
                 </button>
-
                 {todos.length > 0 ? (
-                    <div className="mt-2 rounded-lg border border-border-subtle bg-panel/50 px-3 py-2.5">
-                        <p className="text-xs text-text-muted mb-2">{todos.length} todos</p>
-                        <ul className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1.5">
+                        <p className="text-xs text-text-muted">{todos.length} todos</p>
+                        <ul className="flex flex-col gap-1.5">
                             {todos.map((todo) => (
                                 <li key={todo} className="flex items-start gap-2">
                                     <Icon
@@ -218,15 +200,13 @@ export function PlanSavedBlock({ title, path }: { title: string; path: string })
                         </ul>
                     </div>
                 ) : null}
-
                 {missing ? (
                     <p className="text-sm text-error">
                         Plan file not found. It may have been deleted or moved.
                     </p>
                 ) : null}
             </div>
-
-            <div className="flex justify-end px-4 pb-4 pt-1">
+            <ChatCardFooter>
                 <Button
                     disabled={isLoading || checking}
                     onClick={() => { void handleBuild(); }}
@@ -240,7 +220,7 @@ export function PlanSavedBlock({ title, path }: { title: string; path: string })
                         <kbd className="text-[10px]">↵</kbd>
                     </span>
                 </Button>
-            </div>
-        </div>
+            </ChatCardFooter>
+        </ChatCard>
     );
 }

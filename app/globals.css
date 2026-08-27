@@ -141,7 +141,7 @@
   --text-2xs: 12px;
   --text-xs: 13px;
   --text-sm: 13px;
-  --text-base: 14px;
+  --text-base: 13.5px;
   --text-md: 15px;
   --text-lg: 16px;
   --text-xl: 17px;
@@ -152,7 +152,8 @@
   --line-height-base: 18px;
   --line-height-lg: 20px;
 
-  --conversation-text-font-size: var(--text-sm);
+  /* Chat transcript follows --text-base. Do not pin this to --text-sm. */
+  --conversation-text-font-size: var(--text-base);
   --conversation-tool-font-size: var(--text-base);
   --conversation-tray-font-size: var(--text-base);
   --conversation-font-size: var(--conversation-text-font-size);
@@ -516,13 +517,34 @@ body[data-resizing] .xterm {
 
 /* ── Chat markdown (no tailwind typography plugin) ─────── */
 .chat-markdown,
-.chat-markdown-body {
+.chat-markdown-body,
+.chat-copy {
   font-family: var(--font-ui);
   font-weight: 400;
   font-size: var(--conversation-font-size);
   line-height: var(--conversation-line-height);
   letter-spacing: -0.006em;
   color: var(--text-primary);
+}
+
+.chat-markdown p,
+.chat-markdown li,
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown blockquote,
+.chat-markdown strong,
+.chat-markdown-body p,
+.chat-markdown-body li,
+.chat-markdown-body h1,
+.chat-markdown-body h2,
+.chat-markdown-body h3,
+.chat-markdown-body h4,
+.chat-markdown-body blockquote,
+.chat-markdown-body strong {
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .chat-markdown strong,
@@ -890,11 +912,7 @@ body[data-resizing] .xterm {
   mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
 }
 
-/* Streaming assistant text: soft top→bottom reveal while typing. */
-.chat-stream-fade-in {
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
-}
+/* Streaming assistant text stays unmasked so tokens don't flicker. */
 
 /* ── Pixel grid loader (LoadingState) ── */
 @keyframes pixel-on {
@@ -941,7 +959,7 @@ body[data-resizing] .xterm {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: ai-text-shimmer 2.2s linear infinite;
+  animation: ai-text-shimmer 2.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -959,8 +977,8 @@ body[data-resizing] .xterm {
   grid-template-rows: 0fr;
   opacity: 0;
   transition:
-    grid-template-rows 220ms cubic-bezier(0.33, 1, 0.68, 1),
-    opacity 180ms ease;
+    grid-template-rows var(--chat-motion-duration, 180ms) var(--chat-motion-ease, cubic-bezier(0.33, 1, 0.68, 1)),
+    opacity 140ms ease;
 }
 
 .chat-collapse[data-open="true"] {
@@ -972,6 +990,32 @@ body[data-resizing] .xterm {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-collapse {
+    transition: none;
+  }
+}
+
+@keyframes chat-grid-shimmer {
+  0% { background-position: 105% 0%; }
+  100% { background-position: -5% 0%; }
+}
+
+.chat-grid-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.5) 40%,
+    rgba(255, 255, 255, 0.98) 50%,
+    rgba(255, 255, 255, 0.5) 60%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: chat-grid-shimmer 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  animation-delay: 0.5s;
 }
 
 /* ── Allotment Split View Theme ───────────────────────────── */

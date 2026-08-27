@@ -53,7 +53,7 @@ export function ChatMessageList({
                                 <div
                                     key={`${msg.role}-${msg.timestamp}-${msgIdx}`}
                                     data-chat-message-index={msgIdx}
-                                    className="rounded-lg transition-colors duration-[var(--transition-fast)]"
+                                    className="rounded-lg"
                                 >
                                     <ChatMessageItem
                                         role={msg.role}

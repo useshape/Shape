@@ -308,6 +308,7 @@ pub fn run() {
             agent::commands::mcp_cmds::restart_mcp_server,
             agent::commands::mcp_cmds::mcp_start_oauth,
             agent::commands::mcp_cmds::mcp_complete_oauth,
+            agent::commands::mcp_cmds::mcp_clear_oauth,
             agent::commands::mcp_cmds::call_mcp_tool,
             // lsp
             adapters::lsp::lsp_start,
@@ -324,6 +325,9 @@ pub fn run() {
             // workspace trust
             adapters::workspace_trust::set_workspace_trusted,
             adapters::workspace_trust::is_workspace_trusted,
+            commands::shape_auth::shape_auth_save_token,
+            commands::shape_auth::shape_auth_load_token,
+            commands::shape_auth::shape_auth_clear_token,
             // history
             adapters::history::get_file_history_command,
             adapters::history::restore_history_version_command,

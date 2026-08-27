@@ -141,6 +141,26 @@ describe("parseMessageContent design_previews", () => {
             height: 360,
         });
     });
+
+    it("parses html data-URI preview paths used by the playground", () => {
+        const path = "data:text/html;charset=utf-8,%3Chtml%3Eok%3C/html%3E";
+        const text = `<design_previews selected="hero">
+<design_preview id="hero" name="Hero" style="Minimal" path="${path}" width="640" height="240" kind="html" />
+</design_previews>`;
+        const chunks = parseMessageContent(text);
+        const block = chunks.find((c) => c.type === "design_previews");
+        expect(block?.designPreviews?.[0]?.path).toBe(path);
+        expect(block?.designPreviews?.[0]?.kind).toBe("html");
+    });
+
+    it("parses a generating preview with no concepts yet", () => {
+        const chunks = parseMessageContent(
+            '<design_previews generating="true" selected=""></design_previews>',
+        );
+        const block = chunks.find((c) => c.type === "design_previews");
+        expect(block?.isGenerating).toBe(true);
+        expect(block?.designPreviews ?? []).toHaveLength(0);
+    });
 });
 
 describe("preview runtime bundle", () => {

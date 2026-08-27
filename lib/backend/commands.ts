@@ -605,6 +605,10 @@ export const commands = {
     mcpStartOAuth: (id: string) => invokeCommand<void>("mcp_start_oauth", { id }),
     mcpCompleteOAuth: (callbackUrl: string) =>
         invokeCommand<string>("mcp_complete_oauth", { callbackUrl }),
+    mcpClearOAuth: (id: string) => invokeCommand<void>("mcp_clear_oauth", { id }),
+    shapeAuthSaveToken: (token: string) => invokeCommand<void>("shape_auth_save_token", { token }),
+    shapeAuthLoadToken: () => invokeCommand<string | null>("shape_auth_load_token"),
+    shapeAuthClearToken: () => invokeCommand<void>("shape_auth_clear_token"),
     callMcpTool: (qualifiedName: string, args: Record<string, unknown>) =>
         invokeCommand<string>("call_mcp_tool", { qualifiedName, arguments: args }),
     // Terminal command approval

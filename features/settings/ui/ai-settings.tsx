@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { commands } from "@/lib/backend";
-import type { IndexProgress, IndexStatus, McpStatusEntry } from "@/lib/backend/types";
+import type { IndexProgress, IndexStatus } from "@/lib/backend/types";
 import {
     getCatalogDefaultEnabledIds,
     getCatalogModels,
@@ -19,8 +19,6 @@ import {
     updateSettingSection,
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
-import { loadMcpServersFromFile, openMcpConfig, saveMcpServers } from "@/lib/mcp-config";
-import { McpLogo } from "./mcp/catalog";
 import {
     SettingSection,
     SettingRow,
@@ -127,8 +125,6 @@ export function AiSettingsPanel({
     const unavailableHint =
         "This model is not available on your plan. Manage models on useshape.org.";
     const [showAllModels, setShowAllModels] = React.useState(false);
-    const [mcpStatus, setMcpStatus] = React.useState<McpStatusEntry[]>([]);
-    const [mcpConnecting, setMcpConnecting] = React.useState<string | null>(null);
     const [indexStatus, setIndexStatus] = React.useState<{
         filesIndexed: number;
         totalFiles: number;
@@ -146,56 +142,6 @@ export function AiSettingsPanel({
     const displayedModels = showAllModels
         ? allModels
         : allModels.filter((m) => featuredIds.has(m.id));
-
-    const syncMcpFromFile = React.useCallback(async () => {
-        try {
-            const servers = await loadMcpServersFromFile();
-            const status = await commands.syncMcpServers(servers);
-            setMcpStatus(status as McpStatusEntry[]);
-        } catch {
-            /* ignore */
-        }
-    }, []);
-
-    React.useEffect(() => {
-        void syncMcpFromFile();
-    }, [syncMcpFromFile]);
-
-    React.useEffect(() => {
-        let unlistenOAuth: (() => void) | undefined;
-        void import("@/lib/mcp-install").then(({ initMcpOAuthListener }) => {
-            void initMcpOAuthListener(async () => {
-                setMcpConnecting(null);
-                await syncMcpFromFile();
-            }).then((fn) => {
-                unlistenOAuth = fn;
-            });
-        });
-        return () => {
-            unlistenOAuth?.();
-        };
-    }, [syncMcpFromFile]);
-
-    const handleMcpConnect = async (serverId: string) => {
-        setMcpConnecting(serverId);
-        try {
-            await commands.mcpStartOAuth(serverId);
-        } catch {
-            setMcpConnecting(null);
-        }
-    };
-
-    const handleMcpRemove = async (serverId: string) => {
-        try {
-            const list = await loadMcpServersFromFile();
-            const next = list.filter((s) => s.id !== serverId);
-            await saveMcpServers(next);
-            const status = await commands.syncMcpServers(next);
-            setMcpStatus(status as McpStatusEntry[]);
-        } catch {
-            /* keep list */
-        }
-    };
 
     React.useEffect(() => {
         void commands.getIndexStatus().then((s) => {
@@ -443,79 +389,6 @@ export function AiSettingsPanel({
                     placeholder="Style, tone, project conventions…"
                     className="w-full min-h-28 bg-transparent px-3.5 py-3 text-sm text-text-primary placeholder:text-text-disabled resize-y focus:outline-none select-text"
                 />
-            </SettingSection>
-
-            <SettingSection id="settings-ai-mcp" title="Installed MCP Servers">
-                {mcpStatus.length > 0 ? (
-                    mcpStatus.map((s) => (
-                        <div key={s.id} className="flex items-center gap-3 px-3.5 py-2.5">
-                            <div className="relative shrink-0">
-                                <McpLogo server={s} size={30} />
-                                {s.status === "connected" ? (
-                                    <span className="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full bg-success ring-2 ring-panel" />
-                                ) : null}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <span className="text-sm text-text-primary">{s.name}</span>
-                                {s.status === "error" && s.error ? (
-                                    <p className="text-xs text-error mt-0.5 truncate" title={s.error}>
-                                        {s.error}
-                                    </p>
-                                ) : s.status === "connected" ? (
-                                    <p className="text-xs text-text-muted mt-0.5">
-                                        {s.toolCount} tools enabled
-                                    </p>
-                                ) : s.status === "needs_auth" ? (
-                                    <p className="text-xs text-text-muted mt-0.5">Sign in required</p>
-                                ) : null}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                                {s.status === "needs_auth" ? (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        disabled={mcpConnecting === s.id}
-                                        onClick={() => void handleMcpConnect(s.id)}
-                                    >
-                                        {mcpConnecting === s.id ? "Connecting…" : "Connect"}
-                                    </Button>
-                                ) : s.status === "disabled" ? (
-                                    <span className="text-xs text-text-muted">Disabled</span>
-                                ) : s.status === "error" ? (
-                                    <span className="text-xs text-error">Error</span>
-                                ) : null}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => void handleMcpRemove(s.id)}
-                                >
-                                    Remove
-                                </Button>
-                            </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="flex flex-col items-center gap-3 px-3.5 py-8 text-center">
-                        <div className="text-sm font-medium text-text-primary">No MCP Tools</div>
-                        <p className="text-sm text-text-muted max-w-sm">
-                            Configure servers in{" "}
-                            <span className="text-text-secondary">mcp.json</span>
-                        </p>
-                        <Button variant="outline" size="sm" onClick={() => void openMcpConfig()}>
-                            Edit mcp.json
-                        </Button>
-                    </div>
-                )}
-                {mcpStatus.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 px-3.5 py-2.5">
-                        <Button variant="ghost" size="sm" onClick={() => void openMcpConfig()}>
-                            Edit mcp.json
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => void syncMcpFromFile()}>
-                            Refresh
-                        </Button>
-                    </div>
-                ) : null}
             </SettingSection>
         </>
     );

@@ -187,7 +187,14 @@ async function createPkcePair() {
 
 async function loadToken(): Promise<string | null> {
   try {
-    return localStorage.getItem(STORAGE_KEY);
+    const fromWeb = localStorage.getItem(STORAGE_KEY);
+    if (fromWeb?.trim()) return fromWeb;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const fromOs = await commands.shapeAuthLoadToken();
+    return fromOs?.trim() ? fromOs : null;
   } catch {
     return null;
   }
@@ -242,6 +249,12 @@ async function saveToken(token: string | null) {
     else localStorage.removeItem(STORAGE_KEY);
   } catch {
     /* ignore */
+  }
+  try {
+    if (token) await commands.shapeAuthSaveToken(token);
+    else await commands.shapeAuthClearToken();
+  } catch {
+    /* not in tauri */
   }
   broadcastAuthChange();
 }
@@ -537,6 +550,7 @@ export async function initShapeAuth() {
 
   const token = await loadToken();
   if (token) {
+    void commands.shapeAuthSaveToken(token).catch(() => undefined);
     const cached = loadCachedProfile();
     if (cached) applyCachedProfile(token, cached);
     clearPendingOAuth();

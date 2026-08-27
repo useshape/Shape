@@ -59,6 +59,40 @@ describe("parseMessageContent", () => {
         expect(edits[0].commandStatus).toBe("applied");
         expect(edits[0].file).toBe("src/a.ts");
     });
+
+    it("parses MCP call and auth cards", () => {
+        const text = [
+            '<mcp_call server="neon" name="Neon" tool="inspect" title="Inspecting public.users">',
+            "id | email",
+            "</mcp_call>",
+            '<mcp_auth server="github" name="GitHub" />',
+        ].join("\n");
+        const chunks = parseMessageContent(text);
+        const call = chunks.find((c) => c.type === "mcp_call");
+        const auth = chunks.find((c) => c.type === "mcp_auth");
+        expect(call?.mcpServerId).toBe("neon");
+        expect(call?.mcpTitle).toBe("Inspecting public.users");
+        expect(call?.content).toContain("id | email");
+        expect(auth?.mcpServerId).toBe("github");
+        expect(auth?.mcpServerName).toBe("GitHub");
+    });
+});
+
+describe("status chunks", () => {
+    it("parses summarized context between tool runs", () => {
+        const chunks = parseMessageContent(
+            '<cat path="a.ts"></cat>\nI\'ll check auth next.\n<status>Chat context summarized</status>\n<grep query="login"></grep>',
+        );
+        const catIdx = chunks.findIndex((c) => c.type === "cat");
+        const statusIdx = chunks.findIndex((c) => c.type === "status");
+        const grepIdx = chunks.findIndex((c) => c.type === "grep");
+        expect(catIdx).toBeGreaterThanOrEqual(0);
+        expect(statusIdx).toBeGreaterThan(catIdx);
+        expect(grepIdx).toBeGreaterThan(statusIdx);
+        expect(chunks.find((c) => c.type === "status")?.content?.trim()).toBe(
+            "Chat context summarized",
+        );
+    });
 });
 
 describe("dedupeTerminalChunks", () => {

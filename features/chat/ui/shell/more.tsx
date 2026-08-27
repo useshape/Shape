@@ -10,7 +10,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { openSettingsWindow } from "@/lib/open-settings";
-import { openMcpConfig } from "@/lib/mcp-config";
 import { notify } from "@/features/notifications";
 
 async function downloadDiagnostics() {
@@ -64,6 +63,11 @@ export function ChatMoreMenu() {
                 <DropdownMenuItem onClick={() => void downloadDiagnostics()}>
                     Download Diagnostics
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={() => window.dispatchEvent(new CustomEvent("shape-chat-ui-playground"))}
+                >
+                    Chat UI playground
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                     onClick={() => void openSettingsWindow({ category: "ai", section: "rules" })}
@@ -75,8 +79,10 @@ export function ChatMoreMenu() {
                 >
                     Configure Workflows
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void openMcpConfig()}>
-                    Configure MCP
+                <DropdownMenuItem
+                    onClick={() => void openSettingsWindow({ category: "ai", section: "mcp" })}
+                >
+                    Connections
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

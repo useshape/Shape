@@ -118,7 +118,7 @@ export function buildReactSandboxHtml(
       } catch (error) {
         const root = document.getElementById("root");
         if (root) {
-          root.innerHTML = '<pre style="color:#fca5a5;padding:16px;white-space:pre-wrap;">' + String(error) + '</pre>';
+          root.innerHTML = '<pre style="color:#a3a3a3;padding:16px;white-space:pre-wrap;">' + String(error) + '</pre>';
         }
         if (typeof window.${PREVIEW_EMIT_FN} === "function") {
           await window.${PREVIEW_EMIT_FN}();

@@ -12,15 +12,6 @@ function formatStatusLabel(label: string, elapsedSec: number): string {
     return base;
 }
 
-function statusVariant(label: string): "Drive" | "Dots" | "Orbit" {
-    const lower = label.toLowerCase();
-    if (lower.includes("search") || lower.includes("web")) return "Dots";
-    if (lower.includes("command") || lower.includes("run") || lower.includes("test")) {
-        return "Orbit";
-    }
-    return "Drive";
-}
-
 /**
  * Live status line while streaming — pixel grid + shimmer label.
  */
@@ -46,8 +37,8 @@ export function GeneratingIndicator({ label }: { label?: string }) {
     const display = formatStatusLabel(raw, elapsedSec);
 
     return (
-        <div className="flex items-center py-1.5 px-1 animate-in fade-in duration-300">
-            <LoadingState label={display} variant={statusVariant(display)} />
+        <div className="flex items-center py-1 px-1">
+            <LoadingState label={display} />
         </div>
     );
 }

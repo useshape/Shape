@@ -17,17 +17,100 @@ pub(super) async fn tool_mcp_call(name: &str, args_json: &str, ctx: &ToolCtx<'_>
     let Some(mcp_state) = ctx.mcp_state else {
         return error_outcome(name, "MCP is not configured.");
     };
+    if name.starts_with("mcp_connect_") {
+        return tool_mcp_connect(name, mcp_state);
+    }
     match mcp_state.call_tool(name, args_json) {
-        Ok(text) => ToolOutcome {
-            tool_result: clip(&text, 12000),
-            ui_chunk: format!(
-                "\n<tool_result>\n[MCP {}]\n{}\n</tool_result>\n",
-                name,
-                escape_xml_text(&clip(&text, 2000))
-            ),
-            side_effect: None,
-        },
+        Ok(text) => {
+            let (server_id, server_name, tool_name) = mcp_state
+                .describe_tool(name)
+                .unwrap_or_else(|| (String::new(), String::new(), name.to_string()));
+            let title = mcp_call_title(&tool_name, args_json);
+            ToolOutcome {
+                tool_result: clip(&text, 12000),
+                ui_chunk: format!(
+                    "\n<mcp_call server=\"{}\" name=\"{}\" tool=\"{}\" title=\"{}\">\n{}\n</mcp_call>\n",
+                    escape_xml_attr(&server_id),
+                    escape_xml_attr(&server_name),
+                    escape_xml_attr(&tool_name),
+                    escape_xml_attr(&title),
+                    escape_xml_text(&clip(&text, 2000))
+                ),
+                side_effect: None,
+            }
+        }
+        Err(e) if is_mcp_auth_error(&e) => {
+            let (server_id, server_name) = mcp_state
+                .describe_tool(name)
+                .map(|(id, name, _)| (id, name))
+                .unwrap_or_else(|| (String::new(), String::new()));
+            mcp_auth_outcome(&server_id, &server_name, &e)
+        }
         Err(e) => error_outcome(name, &e),
+    }
+}
+
+fn tool_mcp_connect(name: &str, mcp_state: &crate::mcp::McpState) -> ToolOutcome {
+    match mcp_state.find_server_by_connect_tool(name) {
+        Some((id, display)) => mcp_auth_outcome(
+            &id,
+            &display,
+            &format!("Connect {} to continue.", display),
+        ),
+        None => error_outcome(name, "Unknown MCP connection."),
+    }
+}
+
+fn is_mcp_auth_error(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("needs_auth")
+        || lower.contains("authentication required")
+        || lower.contains("unauthorized")
+        || lower.contains("reconnect this mcp")
+}
+
+fn mcp_auth_outcome(server_id: &str, server_name: &str, message: &str) -> ToolOutcome {
+    ToolOutcome {
+        tool_result: format!("ERROR: {}", message),
+        ui_chunk: format!(
+            "\n<mcp_auth server=\"{}\" name=\"{}\" />\n",
+            escape_xml_attr(server_id),
+            escape_xml_attr(server_name)
+        ),
+        side_effect: None,
+    }
+}
+
+fn mcp_call_title(tool_name: &str, args_json: &str) -> String {
+    let pretty = humanize_tool_name(tool_name);
+    let Ok(v) = serde_json::from_str::<Value>(args_json) else {
+        return pretty;
+    };
+    for key in [
+        "table",
+        "name",
+        "query",
+        "path",
+        "title",
+        "owner",
+        "repo",
+        "schema",
+        "projectId",
+        "project_id",
+    ] {
+        if let Some(s) = v.get(key).and_then(|x| x.as_str()).filter(|s| !s.is_empty()) {
+            return format!("{} {}", pretty, s);
+        }
+    }
+    pretty
+}
+
+fn humanize_tool_name(name: &str) -> String {
+    let replaced = name.replace('_', " ");
+    let mut chars = replaced.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+        None => replaced,
     }
 }
 pub(super) fn tool_save_plan(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {

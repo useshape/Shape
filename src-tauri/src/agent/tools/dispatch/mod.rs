@@ -97,11 +97,11 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         return blocked_outcome(name, DESIGN_GATE_BLOCK_MSG);
     }
 
-    if is_read_only_mode(ctx.mode) && name.starts_with("mcp_") {
+    if is_read_only_mode(ctx.mode) && name.starts_with("mcp_") && !name.starts_with("mcp_connect_") {
         return blocked_outcome(name, "MCP tools are not available in Ask or Plan mode.");
     }
 
-    if TRUST_GATED_TOOLS.contains(&name) || name.starts_with("mcp_") {
+    if TRUST_GATED_TOOLS.contains(&name) || (name.starts_with("mcp_") && !name.starts_with("mcp_connect_")) {
         let trust = ctx.app_handle.state::<WorkspaceTrustState>();
         if !trust.is_trusted(ctx.project_path) {
             return blocked_outcome(name, WORKSPACE_UNTRUSTED_MSG);

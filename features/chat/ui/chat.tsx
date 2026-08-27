@@ -7,8 +7,12 @@ import { ChatTabBar } from "./shell/tabs";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
 import { ChatEmptyState } from "./shell/empty";
+import { listen } from "@/lib/tauri/client-api";
 import { parseMessageContent } from "./md/renderer";
 import type { ComposerTaskItem } from "./composer/activity";
+import { groupChatMessages } from "../lib/chat-session-utils";
+import { UI_PLAYGROUND_MESSAGES, UI_PLAYGROUND_TITLE } from "../lib/ui-playground";
+import { GeneratingIndicator } from "./blocks/generating";
 
 export default function Chat({
     className,
@@ -22,6 +26,20 @@ export default function Chat({
     embedWindowControls?: React.ReactNode;
 }) {
     const session = useChatSession();
+    const [playground, setPlayground] = React.useState(false);
+
+    React.useEffect(() => {
+        const onPlayground = () => setPlayground(true);
+        window.addEventListener("shape-chat-ui-playground", onPlayground);
+        let unlisten: (() => void) | undefined;
+        void listen("shape-chat-ui-playground", onPlayground).then((fn) => {
+            unlisten = fn;
+        }).catch(() => { /* browser */ });
+        return () => {
+            window.removeEventListener("shape-chat-ui-playground", onPlayground);
+            unlisten?.();
+        };
+    }, []);
 
     const taskItems = useMemo((): ComposerTaskItem[] => {
         // Only real todo tasks belong in the composer strip - never tool chatter
@@ -48,8 +66,11 @@ export default function Chat({
 
     const sendRef = React.useRef(session.handleSendMessage);
     sendRef.current = session.handleSendMessage;
+    const playgroundRef = React.useRef(playground);
+    playgroundRef.current = playground;
     React.useEffect(() => {
         const onAnswer = (e: Event) => {
+            if (playgroundRef.current) return;
             const answer = (e as CustomEvent<{ answer?: string }>).detail?.answer;
             if (!answer?.trim()) return;
             void sendRef.current(answer);
@@ -58,11 +79,19 @@ export default function Chat({
         return () => window.removeEventListener("shape-question-answer", onAnswer as EventListener);
     }, []);
 
+    const playgroundMessages = playground ? UI_PLAYGROUND_MESSAGES : session.messages;
+    const playgroundGroups = playground
+        ? groupChatMessages(UI_PLAYGROUND_MESSAGES)
+        : session.messageGroups;
+
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden bg-panel font-sans", className)}>
             <ChatTabBar
-                title={session.chatTitle}
-                onNewChat={() => void session.handleNewChat()}
+                title={playground ? UI_PLAYGROUND_TITLE : session.chatTitle}
+                onNewChat={() => {
+                    setPlayground(false);
+                    void session.handleNewChat();
+                }}
                 onClosePanel={onClose}
                 sidebarSide={sidebarSide}
                 embedWindowControls={embedWindowControls}
@@ -100,12 +129,19 @@ export default function Chat({
                 >
                     <div className="flex min-h-full w-full min-w-0 flex-col pb-8 pt-1">
                         <ChatMessageList
-                            messageGroups={session.messageGroups}
-                            messages={session.messages}
-                            isLoading={session.isLoading}
+                            messageGroups={playgroundGroups}
+                            messages={playgroundMessages}
+                            isLoading={playground ? false : session.isLoading}
                             activityLabel={session.activityLabel}
-                            sendError={session.sendError}
-                            onDismissError={() => session.setSendError(null)}
+                            sendError={
+                                playground
+                                    ? "Rate limited: too many requests (playground error card)."
+                                    : session.sendError
+                            }
+                            onDismissError={() => {
+                                if (playground) return;
+                                session.setSendError(null);
+                            }}
                             messagesEndRef={session.messagesEndRef}
                             onRedo={session.handleRedo}
                             onRestore={session.handleRestore}
@@ -120,6 +156,11 @@ export default function Chat({
                                 />
                             }
                         />
+                        {playground ? (
+                            <div className="mt-2 flex flex-col items-start px-1">
+                                <GeneratingIndicator label="Editing File" />
+                            </div>
+                        ) : null}
                     </div>
                 </div>
 
@@ -138,7 +179,10 @@ export default function Chat({
                         uploadedFiles={session.uploadedFiles}
                         onInputChange={session.handleInputChange}
                         onKeyDown={session.handleKeyDown}
-                        onSendMessage={() => { void session.handleSendMessage(); }}
+                        onSendMessage={() => {
+                            setPlayground(false);
+                            void session.handleSendMessage();
+                        }}
                         onStopMessage={() => { void session.handleStopMessage(); }}
                         setUploadedFiles={session.setUploadedFiles}
                         selectedModel={session.selectedModel}

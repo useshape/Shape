@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
@@ -13,11 +12,17 @@ import { looksLikeProseMarkdown } from "../md/stream";
 import { openProjectFile } from "@/lib/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
 import { TerminalCommandStep } from "./terminal-live";
+import { ActionPhrase } from "./chat-card";
+import { ServiceChip } from "./service-chip";
+import { Collapse } from "./collapse";
+import { McpAuthCard, McpCallCard } from "./mcp-card";
+import { WebSearchCard, WebVisitCard } from "./web-cards";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
-    "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
+    "search", "grep", "web_search", "web_result", "web_visit", "search_result",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
     "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
+    "mcp_call", "mcp_auth",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -165,203 +170,119 @@ function GitStatusBadge({ status }: { status: string }) {
                 ? "text-warning"
                 : "text-text-muted";
     return (
-        <span
-            className={cn(
-                "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border font-mono text-[10px]",
-                color,
-            )}
-        >
+        <span className={cn("shrink-0 font-mono text-xs tabular-nums", color)}>
             {letter}
         </span>
     );
 }
 
 function GitCardShell({
-    icon,
     title,
     meta,
-    open,
-    onToggle,
     children,
 }: {
-    icon: string;
     title: string;
     meta?: string;
-    open: boolean;
-    onToggle: () => void;
     children: React.ReactNode;
 }) {
     return (
-        <div className="my-1 w-full overflow-hidden rounded-2xl border border-border bg-transparent">
-            <button
-                type="button"
-                onClick={onToggle}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left"
-            >
-                <Icon name={icon} size={13} className="shrink-0 text-text-muted" />
-                <span className="truncate text-sm text-text-muted">{title}</span>
-                {meta ? (
-                    <span className="min-w-0 truncate text-sm text-text-disabled">{meta}</span>
-                ) : null}
-                <Icon
-                    name={open ? "expand_less" : "expand_more"}
-                    size={14}
-                    className="ml-auto shrink-0 text-text-muted"
-                />
-            </button>
-            {open ? (
-                <div className="px-3 py-2.5">
-                    {children}
-                </div>
-            ) : null}
-        </div>
+        <ServiceChip
+            leading={<Icon name="account_tree" size={14} className="text-text-muted" />}
+            title={title}
+            detail={meta}
+            expandable
+        >
+            <div className="flex flex-col gap-1">{children}</div>
+        </ServiceChip>
     );
 }
 
 export function GitStageGroup({ paths }: { paths: string[] }) {
-    const [open, setOpen] = useState(true);
     const unique = [...new Set(paths.filter(Boolean))];
 
     return (
-        <GitCardShell
-            icon="account_tree"
-            title="Staged files"
-            meta={`${unique.length} file${unique.length === 1 ? "" : "s"}`}
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
-        >
-            <div className="flex flex-col gap-1.5">
-                {unique.map((path) => (
-                    <div key={path} className="flex min-w-0 items-center gap-2">
-                        <GitStatusBadge status="A" />
-                        <FilePill path={path} />
-                    </div>
-                ))}
-            </div>
+        <GitCardShell title="Staged" meta={`${unique.length}`}>
+            {unique.map((path) => (
+                <div key={path} className="flex min-w-0 items-center gap-2">
+                    <GitStatusBadge status="A" />
+                    <GitFileLink path={path} />
+                </div>
+            ))}
         </GitCardShell>
     );
 }
 
 function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
-    const [open, setOpen] = useState(true);
     const staged = lines.filter((l) => l.area === "staged");
     const unstaged = lines.filter((l) => l.area === "unstaged");
 
     return (
         <GitCardShell
-            icon="account_tree"
             title="Git status"
-            meta={`${staged.length} staged · ${unstaged.length} unstaged`}
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
+            meta={`${lines.length}`}
         >
-            <div className="flex flex-col gap-3">
-                {staged.length > 0 ? (
-                    <div className="flex flex-col gap-1.5">
-                        <span className="text-sm text-text-disabled">Staged</span>
-                        {staged.map((line) => (
-                            <div key={`staged-${line.path}`} className="flex min-w-0 items-center gap-2">
-                                <GitStatusBadge status={line.status} />
-                                <FilePill path={line.path} />
-                            </div>
-                        ))}
-                    </div>
-                ) : null}
-                {unstaged.length > 0 ? (
-                    <div className="flex flex-col gap-1.5">
-                        <span className="text-sm text-text-disabled">Unstaged</span>
-                        {unstaged.map((line) => (
-                            <div key={`unstaged-${line.path}`} className="flex min-w-0 items-center gap-2">
-                                <GitStatusBadge status={line.status} />
-                                <FilePill path={line.path} />
-                            </div>
-                        ))}
-                    </div>
-                ) : null}
-                {lines.length === 0 ? (
-                    <span className="text-sm text-text-muted">Clean working tree</span>
-                ) : null}
-            </div>
+            {staged.map((line) => (
+                <div key={`staged-${line.path}`} className="flex min-w-0 items-center gap-2">
+                    <GitStatusBadge status={line.status} />
+                    <GitFileLink path={line.path} />
+                </div>
+            ))}
+            {unstaged.map((line) => (
+                <div key={`unstaged-${line.path}`} className="flex min-w-0 items-center gap-2">
+                    <GitStatusBadge status={line.status} />
+                    <GitFileLink path={line.path} />
+                </div>
+            ))}
+            {lines.length === 0 ? (
+                <span className="text-sm text-text-muted">Clean working tree</span>
+            ) : null}
         </GitCardShell>
     );
 }
 
 function GitLogGroup({ lines }: { lines: GitLogLine[] }) {
-    const [open, setOpen] = useState(true);
-
     return (
-        <GitCardShell
-            icon="history"
-            title="Git log"
-            meta={`${lines.length} commit${lines.length === 1 ? "" : "s"}`}
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
-        >
-            <div className="flex flex-col gap-2">
-                {lines.map((line) => (
-                    <div
-                        key={`${line.hash}-${line.subject}`}
-                        className="flex flex-col gap-0.5 rounded-lg bg-surface-3 px-2.5 py-2"
-                    >
-                        <div className="flex min-w-0 items-center gap-2">
-                            <span className="shrink-0 text-sm text-text-primary">{line.hash}</span>
-                            {line.author ? (
-                                <span className="shrink-0 text-sm text-text-disabled">{line.author}</span>
-                            ) : null}
-                            {line.date ? (
-                                <span className="ml-auto shrink-0 text-sm text-text-disabled">{line.date}</span>
-                            ) : null}
-                        </div>
-                        <span className="text-sm text-text-primary leading-snug">{line.subject}</span>
+        <GitCardShell title="Git log" meta={`${lines.length}`}>
+            {lines.map((line) => (
+                <div key={`${line.hash}-${line.subject}`} className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2 text-sm">
+                        <span className="shrink-0 font-mono text-text-muted">{line.hash}</span>
+                        <span className="min-w-0 truncate text-text-primary">{line.subject}</span>
                     </div>
-                ))}
-            </div>
+                    {line.author || line.date ? (
+                        <div className="text-xs text-text-muted">
+                            {[line.author, line.date].filter(Boolean).join(" · ")}
+                        </div>
+                    ) : null}
+                </div>
+            ))}
         </GitCardShell>
     );
 }
 
 function GitBranchesGroup({ lines }: { lines: GitBranchLine[] }) {
-    const [open, setOpen] = useState(true);
     const current = lines.find((l) => l.current);
 
     return (
-        <GitCardShell
-            icon="account_tree"
-            title="Branches"
-            meta={current ? `on ${current.name}` : `${lines.length}`}
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
-        >
-            <div className="flex flex-col gap-1.5">
-                {lines.map((line) => (
-                    <div
-                        key={line.name}
+        <GitCardShell title="Branches" meta={current ? current.name : `${lines.length}`}>
+            {lines.map((line) => (
+                <div key={line.name} className="flex min-w-0 items-center gap-2 text-sm">
+                    <span
                         className={cn(
-                            "flex min-w-0 items-center gap-2 rounded-lg bg-surface-3 px-2 py-1.5",
-                            line.current && "border border-border-subtle bg-transparent",
+                            "h-1.5 w-1.5 shrink-0 rounded-full",
+                            line.current ? "bg-success" : "bg-text-disabled/40",
+                        )}
+                    />
+                    <span
+                        className={cn(
+                            "min-w-0 truncate",
+                            line.current ? "text-text-primary" : "text-text-muted",
                         )}
                     >
-                        <span
-                            className={cn(
-                                "h-1.5 w-1.5 shrink-0 rounded-full",
-                                line.current ? "bg-success" : "bg-text-disabled/40",
-                            )}
-                        />
-                        <span
-                            className={cn(
-                                "min-w-0 truncate text-sm",
-                                line.current ? "text-text-primary" : "text-text-secondary",
-                                line.remote && "text-text-muted",
-                            )}
-                        >
-                            {line.name}
-                        </span>
-                        {line.current ? (
-                            <span className="ml-auto shrink-0 text-sm text-text-disabled">current</span>
-                        ) : null}
-                    </div>
-                ))}
-            </div>
+                        {line.name}
+                    </span>
+                </div>
+            ))}
         </GitCardShell>
     );
 }
@@ -375,35 +296,20 @@ function GitDiffGroup({
     scope?: string;
     body: string;
 }) {
-    const [open, setOpen] = useState(true);
     const lineCount = body ? body.split("\n").filter(Boolean).length : 0;
-    const title = file
-        ? "Git diff"
-        : scope === "staged"
-          ? "Staged diff"
-          : "Git diff";
-    const meta = file
-        ? `${file.split(/[/\\]/).pop()} · ${lineCount} lines`
-        : `${lineCount} lines`;
+    const title = scope === "staged" ? "Staged diff" : "Git diff";
+    const fileName = file?.split(/[/\\]/).pop();
+    const meta = [fileName, lineCount ? `${lineCount} lines` : null].filter(Boolean).join(" · ");
 
     return (
-        <GitCardShell
-            icon="code"
-            title={title}
-            meta={meta}
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
-        >
-            <div className="flex flex-col gap-2">
-                {file ? <FilePill path={file} /> : null}
-                {body.trim() ? (
-                    <pre className="max-h-64 overflow-auto rounded-lg bg-surface-3 px-2.5 py-2 text-sm leading-relaxed text-text-secondary whitespace-pre-wrap break-all custom-scrollbar">
-                        {body}
-                    </pre>
-                ) : (
-                    <span className="text-sm text-text-muted">No diff output</span>
-                )}
-            </div>
+        <GitCardShell title={title} meta={meta || undefined}>
+            {body.trim() ? (
+                <pre className="max-h-48 overflow-auto text-xs leading-relaxed text-text-muted whitespace-pre-wrap break-all custom-scrollbar">
+                    {body}
+                </pre>
+            ) : (
+                <span className="text-sm text-text-muted">No diff output</span>
+            )}
         </GitCardShell>
     );
 }
@@ -631,9 +537,20 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 gitStatusLines: statusLines.length > 0 ? statusLines : undefined,
                 gitLogLines: logLines.length > 0 ? logLines : undefined,
                 gitBranchLines: branchLines.length > 0 ? branchLines : undefined,
-                gitDiffMeta: diffMeta?.body ? diffMeta : undefined,
+                gitDiffMeta: op === "diff" ? (diffMeta ?? { body: "" }) : undefined,
             };
         }
+        case "mcp_call":
+            return {
+                label: block.mcpTitle || block.mcpTool || "MCP",
+                expandable: Boolean(block.content?.trim()),
+                content: block.content,
+            };
+        case "mcp_auth":
+            return {
+                label: block.mcpServerName ? `Connect ${block.mcpServerName}` : "Connect",
+                expandable: false,
+            };
         default:
             return null;
     }
@@ -643,6 +560,21 @@ export function isRenderableWorkflowBlock(block: Chunk, isActive?: boolean) {
     if (block.type === "tool_result" || block.type === "status") return false;
     if ((block.type === "think" || block.type === "thought") && !block.content?.trim() && !isActive) return false;
     return getWorkflowActionConfig(block, isActive) !== null;
+}
+
+export function visibleWorkflowBlocks(blocks: Chunk[], isActive?: boolean): Chunk[] {
+    const filtered = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
+    const resultQueries = new Set(
+        filtered
+            .filter((b) => b.type === "web_result")
+            .map((b) => (b.query || "").trim())
+            .filter(Boolean),
+    );
+    return filtered.filter((b) => {
+        if (b.type !== "web_search") return true;
+        const q = (b.query || "").trim();
+        return !q || !resultQueries.has(q);
+    });
 }
 
 /** Runs up to this size render as plain inline rows; larger runs get a collapsible summary. */
@@ -663,7 +595,7 @@ export function AgentWorkflow({
     isActive?: boolean;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
 }) {
-    const visibleBlocks = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
+    const visibleBlocks = visibleWorkflowBlocks(blocks, isActive);
     const collapsible = visibleBlocks.length > INLINE_GROUP_MAX;
 
     // Open while streaming, collapse once the run finishes. Render-time state
@@ -709,7 +641,7 @@ export function AgentWorkflow({
                 className="flex items-center gap-2 py-1 w-fit text-left group"
             >
                 <Icon name={header.icon} size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
+                <span className="text-sm text-text-primary group-hover:text-text-primary transition-colors">
                     {header.label}
                 </span>
                 <span className="text-xs text-text-disabled">
@@ -723,7 +655,7 @@ export function AgentWorkflow({
             </button>
 
             {showRows && (
-                <div className="flex flex-col gap-0.5 mt-0.5 ml-[7px] border-l border-border-subtle pl-3">
+                <div className="flex flex-col gap-0.5 mt-0.5">
                     {rows}
                 </div>
             )}
@@ -731,27 +663,16 @@ export function AgentWorkflow({
     );
 }
 
-function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
+function GitFileLink({ path }: { path: string }) {
     const fileName = path.split(/[\\/]/).pop() || path;
-    const handleOpen = onClick ?? (() => { void openProjectFile(path, fileName); });
     return (
-        <span
-            role="button"
-            tabIndex={0}
-            onClick={handleOpen}
-            onAuxClick={(e) => {
-                if (e.button === 1) handleOpen();
-            }}
-            onKeyDown={(e) => { if (e.key === "Enter") handleOpen(); }}
-            className={cn(
-                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm",
-                "bg-surface-3 text-text-primary",
-                "cursor-pointer hover:bg-panel-hover",
-            )}
+        <button
+            type="button"
+            onClick={() => { void openProjectFile(path, fileName); }}
+            className="min-w-0 truncate text-sm text-text-muted hover:text-text-primary"
         >
-            <FileIcon name={fileName} className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate max-w-[180px]">{fileName}</span>
-        </span>
+            {fileName}
+        </button>
     );
 }
 
@@ -782,6 +703,48 @@ export function ActionItem({
 
     if (!config) return null;
 
+    if (block.type === "mcp_call") {
+        return (
+            <McpCallCard
+                serverId={block.mcpServerId}
+                serverName={block.mcpServerName}
+                title={block.mcpTitle || block.mcpTool || "MCP"}
+                content={block.content}
+            />
+        );
+    }
+
+    if (block.type === "mcp_auth") {
+        return (
+            <McpAuthCard
+                serverId={block.mcpServerId}
+                serverName={block.mcpServerName}
+            />
+        );
+    }
+
+    if (block.type === "web_search" || block.type === "web_result") {
+        return (
+            <WebSearchCard
+                query={block.query}
+                content={block.content}
+                isGenerating={block.isGenerating}
+            />
+        );
+    }
+
+    if (block.type === "web_visit") {
+        const host = block.visitHost || block.visitTitle || block.content || "";
+        const url = block.visitUrl || block.visitHost || "";
+        return (
+            <WebVisitCard
+                host={host}
+                url={url}
+                isGenerating={block.isGenerating}
+            />
+        );
+    }
+
     if (block.type === "terminal_command") {
         return <TerminalCommandStep block={block} />;
     }
@@ -790,50 +753,59 @@ export function ActionItem({
         // Edit approval cards live in TurnWorkflowSummary; keep a compact
         // fallback if this legacy AgentWorkflow path still renders one.
         return (
-            <div className="py-0.5 text-xs text-text-muted">
-                Pending edit approval for{" "}
-                <span className="text-text-secondary">
-                    {(block.file || "").split(/[\\/]/).pop() || "file"}
-                </span>
+            <div className="py-0.5 text-xs">
+                <ActionPhrase
+                    verb="Pending edit approval for"
+                    detail={(block.file || "").split(/[\\/]/).pop() || "file"}
+                />
             </div>
         );
     }
 
-    if (block.type === "git_operation" && block.gitOp === "status" && config.gitStatusLines?.length) {
-        return <GitStatusGroup lines={config.gitStatusLines} />;
+    if (block.type === "git_operation" && block.gitOp === "status") {
+        return <GitStatusGroup lines={config.gitStatusLines ?? parseGitStatusLines(block.content)} />;
     }
 
-    if (block.type === "git_operation" && block.gitOp === "log" && config.gitLogLines?.length) {
-        return <GitLogGroup lines={config.gitLogLines} />;
+    if (block.type === "git_operation" && block.gitOp === "log") {
+        return <GitLogGroup lines={config.gitLogLines ?? parseGitLogLines(block.content)} />;
     }
 
-    if (block.type === "git_operation" && block.gitOp === "branches" && config.gitBranchLines?.length) {
-        return <GitBranchesGroup lines={config.gitBranchLines} />;
+    if (block.type === "git_operation" && block.gitOp === "branches") {
+        return <GitBranchesGroup lines={config.gitBranchLines ?? parseGitBranchLines(block.content)} />;
     }
 
-    if (block.type === "git_operation" && block.gitOp === "diff" && config.gitDiffMeta) {
+    if (block.type === "git_operation" && block.gitOp === "diff") {
+        const meta = config.gitDiffMeta ?? parseGitDiffMeta(block.content);
         return (
             <GitDiffGroup
-                file={config.gitDiffMeta.file}
-                scope={config.gitDiffMeta.scope}
-                body={config.gitDiffMeta.body}
+                file={meta.file}
+                scope={meta.scope}
+                body={meta.body}
             />
         );
     }
 
     if (block.type === "git_operation" && block.gitOp === "stage" && config.file) {
+        return <GitStageGroup paths={[config.file]} />;
+    }
+
+    if (block.type === "git_operation") {
         return (
-            <div className="flex items-center gap-1.5 py-0.5">
-                <span className="text-sm text-text-muted">Staged</span>
-                <FilePill path={config.file} />
-            </div>
+            <ServiceChip
+                leading={<Icon name="account_tree" size={14} className="text-text-muted" />}
+                title={config.label}
+                expandable={Boolean(block.content?.trim())}
+            >
+                <pre className="max-h-48 overflow-auto text-xs leading-relaxed text-text-muted whitespace-pre-wrap break-all custom-scrollbar">
+                    {block.content}
+                </pre>
+            </ServiceChip>
         );
     }
 
     const useMarkdown =
         isThink
         || block.type === "search_result"
-        || block.type === "web_result"
         || (block.type === "search" && !!config.content && looksLikeProseMarkdown(config.content));
 
     const editResolved = isEdit && block.file
@@ -862,7 +834,7 @@ export function ActionItem({
                     (config.expandable || config.onClick || isEdit) && "cursor-pointer hover:opacity-80",
                 )}
             >
-                <span className="text-sm text-text-muted">
+                <span className="text-sm text-text-primary">
                     {isEdit && editResolved ? "Applied" : config.label}
                 </span>
 
@@ -887,13 +859,11 @@ export function ActionItem({
                     <span className="text-sm text-text-muted truncate max-w-[260px]">
                         {typeof config.query === "string" && config.query.length > 60
                             ? `"${config.query.slice(0, 60)}…"`
-                            : block.type === "web_visit"
-                              ? String(config.query)
-                              : `"${config.query}"`}
+                            : `"${config.query}"`}
                     </span>
                 )}
 
-                {config.file && <FilePill path={config.file} />}
+                {config.file && <GitFileLink path={config.file} />}
 
                 {editStats && !editResolved && (
                     <span className="flex items-center gap-1 text-xs ml-0.5">
@@ -914,14 +884,14 @@ export function ActionItem({
                 )}
             </button>
 
-            {expanded && config.expandable && config.content && (
+            <Collapse open={expanded && !!config.expandable && !!config.content}>
                 <div className={cn(
                     "text-sm mt-1 mb-1",
                     isThink
                         ? "text-text-muted leading-relaxed"
                         : useMarkdown
                             ? "font-sans"
-                            : "overflow-x-auto whitespace-pre-wrap p-2 rounded-md border border-border-subtle bg-panel text-text-secondary text-xs font-mono",
+                            : "overflow-x-auto whitespace-pre-wrap text-text-secondary text-xs font-mono",
                 )}>
                     {useMarkdown ? (
                         <ChatMarkdown content={config.content || ""} />
@@ -929,7 +899,7 @@ export function ActionItem({
                         config.content
                     )}
                 </div>
-            )}
+            </Collapse>
         </div>
     );
 }

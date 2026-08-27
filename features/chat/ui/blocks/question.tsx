@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { ChatCard } from "./chat-card";
 
 export function QuestionBlock({ question, options, onAnswer }: {
     question: string;
@@ -23,9 +24,9 @@ export function QuestionBlock({ question, options, onAnswer }: {
     const isAnswered = answered !== null;
 
     return (
-        <div className="sticky bottom-0 z-10 my-2 w-full overflow-hidden rounded-2xl border border-border bg-editor shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <ChatCard className="w-fit max-w-full">
             <div className="px-3 py-3">
-                <div className="text-sm font-medium text-text-primary leading-relaxed">
+                <div className="font-medium text-text-primary leading-relaxed">
                     {question}
                 </div>
 
@@ -104,7 +105,7 @@ export function QuestionBlock({ question, options, onAnswer }: {
                 </div>
             </div>
 
-            <div className="flex items-center justify-end gap-1.5 border-t border-border-subtle px-2 py-2">
+            <div className="flex items-center justify-start gap-1.5 px-2 py-2">
                 <Button
                     variant="ghost"
                     size="xs"
@@ -115,6 +116,6 @@ export function QuestionBlock({ question, options, onAnswer }: {
                     Skip
                 </Button>
             </div>
-        </div>
+        </ChatCard>
     );
 }

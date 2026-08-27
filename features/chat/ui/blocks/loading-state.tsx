@@ -46,7 +46,7 @@ export function LoadingState({
                     />
                 ))}
             </span>
-            <span className="ai-shimmer-text text-sm font-medium tracking-tight whitespace-nowrap">
+            <span className="ai-shimmer-text font-medium tracking-tight whitespace-nowrap">
                 {label}
             </span>
         </div>

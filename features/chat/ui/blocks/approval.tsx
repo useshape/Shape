@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { ChatCard, ChatCardFooter, ChatCardHeader } from "./chat-card";
 
 function modKeyLabel(): string {
     if (typeof navigator === "undefined") return "Ctrl";
@@ -68,21 +68,16 @@ export function ApprovalBar({
     }, [isProcessing, onAccept]);
 
     return (
-        <div
-            className={cn(
-                "my-1 overflow-hidden rounded-xl border border-border bg-transparent",
-                className,
-            )}
-        >
-            <div className="flex items-center gap-2 px-3 py-2">
+        <ChatCard className={className}>
+            <ChatCardHeader>
                 {isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
                     <Icon name="terminal" size={13} className="shrink-0 text-text-muted" />
                 )}
-                <span className="shrink-0 text-xs text-text-muted">{label}</span>
-            </div>
-            <div className="border-t border-border px-3 py-2">
+                <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{label}</span>
+            </ChatCardHeader>
+            <div className="px-3 pb-2">
                 <Tooltip content={subject} side="top">
                     <span className="block truncate font-mono text-sm text-text-primary">
                         <span className="select-none text-text-disabled">$ </span>
@@ -90,7 +85,7 @@ export function ApprovalBar({
                     </span>
                 </Tooltip>
             </div>
-            <div className="flex items-center justify-end gap-1.5 px-2 py-2">
+            <ChatCardFooter>
                 <Button
                     type="button"
                     variant="ghost"
@@ -110,7 +105,7 @@ export function ApprovalBar({
                     {acceptLabel}
                     <ShortcutKeys keys={[mod, "↵"]} />
                 </Button>
-            </div>
-        </div>
+            </ChatCardFooter>
+        </ChatCard>
     );
 }

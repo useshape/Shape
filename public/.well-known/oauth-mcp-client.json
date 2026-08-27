@@ -1,0 +1,10 @@
+{
+  "client_id": "https://www.useshape.org/.well-known/oauth-mcp-client.json",
+  "client_name": "Shape",
+  "client_uri": "https://useshape.org",
+  "application_type": "native",
+  "token_endpoint_auth_method": "none",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "redirect_uris": ["shape://mcp/oauth/callback"]
+}

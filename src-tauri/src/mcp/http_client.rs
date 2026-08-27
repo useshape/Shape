@@ -51,7 +51,7 @@ impl HttpMcpClient {
                     Ok(Some(tokens.access_token))
                 } else {
                     let tokens = get_token(&self.server_id).ok_or_else(|| {
-                        "Authentication required. Connect this MCP server in Settings → AI → MCP."
+                        "Authentication required. Connect this MCP server in Settings → Connections."
                             .to_string()
                     })?;
                     Ok(Some(tokens.access_token))

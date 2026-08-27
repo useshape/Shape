@@ -11,7 +11,7 @@ import {
 } from '../blocks/workflow';
 import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
-import { PlanningBlock } from '../blocks/plan';
+import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import { DesignPreviewGallery, type DesignPreviewItem } from '../blocks/gallery';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { QuestionBlock } from '../blocks/question';
@@ -86,7 +86,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'mcp_call' | 'mcp_auth';
     content?: string;
     file?: string;
     query?: string;
@@ -112,6 +112,10 @@ export type Chunk = {
     visitUrl?: string;
     visitHost?: string;
     visitTitle?: string;
+    mcpServerId?: string;
+    mcpServerName?: string;
+    mcpTool?: string;
+    mcpTitle?: string;
 };
 
 export function parseMessageContent(text: string): Chunk[] {
@@ -257,11 +261,18 @@ export function parseMessageContent(text: string): Chunk[] {
         const selectedMatch = block.match(/selected="([^"]*)"/);
         const selected = selectedMatch?.[1] ?? "";
         const previews: DesignPreviewItem[] = [];
-        const re = /<design_preview\s+([^>]+)\/>/g;
+        const re = /<design_preview\b((?:\s+\w+="[^"]*")*)\s*\/>/g;
         let match: RegExpExecArray | null;
+        const decodeAttr = (value: string) =>
+            value
+                .replace(/&quot;/g, '"')
+                .replace(/&apos;/g, "'")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&amp;/g, "&");
         while ((match = re.exec(block)) !== null) {
             const attrs = match[1];
-            const get = (name: string) => attrs.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+            const get = (name: string) => decodeAttr(attrs.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "");
             const kindAttr = get("kind");
             const id = get("id");
             const path = get("path");
@@ -278,7 +289,13 @@ export function parseMessageContent(text: string): Chunk[] {
                 kind: kindAttr === "html" || kindAttr === "png" ? kindAttr : undefined,
             });
         }
-        return { type: "design_previews", designPreviews: previews, selectedConcept: selected };
+        const generating = /\bgenerating="(?:true|1|yes)"/i.test(block);
+        return {
+            type: "design_previews",
+            designPreviews: previews,
+            selectedConcept: selected,
+            isGenerating: generating || undefined,
+        };
     };
 
     const parseReviewDebateBlock = (block: string): Chunk => {
@@ -323,6 +340,28 @@ export function parseMessageContent(text: string): Chunk[] {
         };
     };
 
+    const parseMcpCallBlock = (tagFull: string, inner: string, isGenerating: boolean): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type: "mcp_call",
+            mcpServerId: get("server"),
+            mcpServerName: get("name"),
+            mcpTool: get("tool"),
+            mcpTitle: get("title") || get("tool"),
+            content: inner,
+            isGenerating,
+        };
+    };
+
+    const parseMcpAuthBlock = (tagFull: string): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type: "mcp_auth",
+            mcpServerId: get("server"),
+            mcpServerName: get("name"),
+        };
+    };
+
     while (currentIndex < text.length) {
         const searchTags = [
             { type: 'edit', start: '<edit', end: '</edit>' },
@@ -331,6 +370,8 @@ export function parseMessageContent(text: string): Chunk[] {
             { type: 'design_previews', start: '<design_previews', end: '</design_previews>' },
             { type: 'review_debate', start: '<review_debate', end: '</review_debate>' },
             { type: 'question', start: '<question', end: '</question>' },
+            { type: 'mcp_call', start: '<mcp_call', end: '</mcp_call>' },
+            { type: 'mcp_auth', start: '<mcp_auth', end: '</mcp_auth>' },
             { type: 'search_result', start: '<search_result', end: '</search_result>' },
             { type: 'search', start: '<search', end: '</search>' },
             { type: 'grep', start: '<grep', end: '</grep>' },
@@ -478,6 +519,10 @@ export function parseMessageContent(text: string): Chunk[] {
                 });
             } else if (firstMatch.type === 'web_visit') {
                 chunks.push(parseWebVisitBlock(tagFull, false));
+            } else if (firstMatch.type === 'mcp_call') {
+                chunks.push(parseMcpCallBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'mcp_auth') {
+                chunks.push(parseMcpAuthBlock(tagFull));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -556,6 +601,12 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'web_visit') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseWebVisitBlock(tagFull, true));
+            } else if (firstMatch.type === 'mcp_call') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseMcpCallBlock(tagFull, content, true));
+            } else if (firstMatch.type === 'mcp_auth') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseMcpAuthBlock(tagFull));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -633,6 +684,12 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'web_visit') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseWebVisitBlock(tagFull, false));
+            } else if (firstMatch.type === 'mcp_call') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseMcpCallBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'mcp_auth') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseMcpAuthBlock(tagFull));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -716,26 +773,34 @@ export function extractWebSearchResults(content: string): WebSearchResultItem[] 
 /**
  * A message is rendered as a chronological sequence of segments: prose text,
  * runs of consecutive tool actions, plans, images. Tool runs stay in place
- * between the prose that surrounds them (like Cursor) instead of being hoisted
- * into one condensed dropdown at the top of the message.
+ * between the prose that surrounds them instead of being hoisted into one
+ * condensed dropdown at the top of the message.
  */
 type Segment =
     | { kind: 'workflow'; blocks: Chunk[] }
     | { kind: 'chunk'; chunk: Chunk };
 
-function buildSegments(chunks: Chunk[]): Segment[] {
+function isThoughtChunk(chunk: Chunk) {
+    return chunk.type === 'think' || chunk.type === 'thought';
+}
+
+function buildSegments(chunks: Chunk[], isGenerating?: boolean): Segment[] {
     const segments: Segment[] = [];
     for (const chunk of chunks) {
-        if (WORKFLOW_CHUNK_TYPES.has(chunk.type)) {
+        if (isThoughtChunk(chunk)) {
+            segments.push({ kind: 'workflow', blocks: [chunk] });
+            continue;
+        }
+        if (WORKFLOW_CHUNK_TYPES.has(chunk.type) && isRenderableWorkflowBlock(chunk, isGenerating)) {
             const prev = segments[segments.length - 1];
-            if (prev?.kind === 'workflow') {
+            if (prev?.kind === 'workflow' && !prev.blocks.some(isThoughtChunk)) {
                 prev.blocks.push(chunk);
             } else {
                 segments.push({ kind: 'workflow', blocks: [chunk] });
             }
-        } else {
-            segments.push({ kind: 'chunk', chunk });
+            continue;
         }
+        segments.push({ kind: 'chunk', chunk });
     }
     return segments;
 }
@@ -760,42 +825,40 @@ export function MessageRenderer({
         chunks.filter((c) => c.type !== 'subagent_ref' && c.type !== 'subagent'),
     ), [chunks]);
 
-    const workflowBlocks = useMemo(
-        () => contentChunks.filter(
-            (c) => WORKFLOW_CHUNK_TYPES.has(c.type) && isRenderableWorkflowBlock(c, isGenerating),
-        ),
+    const segments = useMemo(
+        () => buildSegments(contentChunks, isGenerating),
         [contentChunks, isGenerating],
     );
-
-    const proseChunks = useMemo(
-        () => contentChunks.filter(
-            (c) => !WORKFLOW_CHUNK_TYPES.has(c.type) || !isRenderableWorkflowBlock(c, isGenerating),
-        ),
-        [contentChunks, isGenerating],
-    );
-
-    const segments = useMemo(() => buildSegments(proseChunks), [proseChunks]);
 
     const lastSegment = segments[segments.length - 1];
+    const lastWorkflow = [...segments].reverse().find((s) => s.kind === 'workflow');
     const proseIsStreaming =
         lastSegment?.kind === 'chunk'
         && lastSegment.chunk.type === 'text'
         && !!lastSegment.chunk.content?.trim();
-    const hasPendingApproval = workflowBlocks.some(
+    const hasPendingApproval = contentChunks.some(
         (b) =>
             (b.type === 'terminal_command' || b.type === 'edit_pending')
             && b.commandStatus === 'pending',
     );
+    const hasDesignPreview = contentChunks.some(
+        (c) => c.type === 'design_previews' && !!c.designPreviews?.length,
+    );
+    const previewActivity = /preview/i.test(activityLabel || '');
+    const isCreatingPreview = !!isGenerating && previewActivity && !hasDesignPreview;
     const showStatusLine =
         !!isGenerating
-        && workflowBlocks.length === 0
+        && lastSegment?.kind !== 'workflow'
+        && !previewActivity
         && (
             hasPendingApproval
             || !!activityLabel?.trim()
             || !proseIsStreaming
         );
 
-    const lastWorkflowBlock = workflowBlocks[workflowBlocks.length - 1];
+    const lastWorkflowBlock = lastWorkflow?.kind === 'workflow'
+        ? lastWorkflow.blocks[lastWorkflow.blocks.length - 1]
+        : undefined;
     const isThinking = !!isGenerating
         && (lastWorkflowBlock?.type === 'think' || lastWorkflowBlock?.type === 'thought')
         && !!lastWorkflowBlock.isGenerating;
@@ -807,10 +870,27 @@ export function MessageRenderer({
         const isLastSegment = index === segments.length - 1;
 
         if (segment.kind === 'workflow') {
-            return null;
+            return (
+                <TurnWorkflowSummary
+                    key={`workflow-${index}`}
+                    blocks={segment.blocks}
+                    isActive={isGenerating && isLastSegment}
+                    durationMs={durationMs}
+                    activityLabel={isGenerating && isLastSegment ? activityLabel : null}
+                />
+            );
         }
 
         const chunk = segment.chunk;
+        if (chunk.type === 'status') {
+            const text = chunk.content?.trim();
+            if (!text) return null;
+            return (
+                <div key={`status-${index}`} className="pb-4 text-md text-text-muted">
+                    {text}
+                </div>
+            );
+        }
         if (chunk.type === 'text') {
             const text = chunk.content;
             if (!text?.trim()) return null;
@@ -818,8 +898,7 @@ export function MessageRenderer({
                 <div
                     key={`text-${index}`}
                     className={cn(
-                        "text-sm font-normal text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
-                        isGenerating && isLastSegment && "animate-in fade-in duration-300",
+                        "font-normal text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
                     )}
                 >
                     <ChatMarkdown content={text} isGenerating={isGenerating} isLast={isLastSegment} />
@@ -829,13 +908,11 @@ export function MessageRenderer({
         if (chunk.type === 'plan_saved') {
             const title = chunk.content || 'Implementation Plan';
             return (
-                <div
+                <PlanSavedBlock
                     key={`plan-saved-${index}`}
-                    className="py-0.5 text-sm text-text-muted"
-                >
-                    Saved plan{" "}
-                    <span className="text-text-secondary">{title}</span>
-                </div>
+                    title={title}
+                    path={chunk.file || ''}
+                />
             );
         }
         if (chunk.type === 'plan') {
@@ -901,12 +978,13 @@ export function MessageRenderer({
                 </button>
             );
         }
-        if (chunk.type === 'design_previews' && chunk.designPreviews?.length) {
+        if (chunk.type === 'design_previews' && (chunk.designPreviews?.length || chunk.isGenerating)) {
             return (
                 <DesignPreviewGallery
                     key={`design-previews-${index}`}
-                    previews={chunk.designPreviews}
+                    previews={chunk.designPreviews ?? []}
                     selectedId={chunk.selectedConcept}
+                    isGenerating={Boolean(chunk.isGenerating) || (Boolean(isGenerating) && isLastSegment)}
                 />
             );
         }
@@ -935,22 +1013,13 @@ export function MessageRenderer({
         return null;
     });
 
-    const answerContent = <>{renderedSegments}</>;
-
     return (
         <div className="flex flex-col gap-0 overflow-hidden">
-            {workflowBlocks.length > 0 ? (
-                <TurnWorkflowSummary
-                    blocks={workflowBlocks}
-                    isActive={isGenerating}
-                    durationMs={durationMs}
-                    activityLabel={activityLabel}
-                >
-                    {answerContent}
-                </TurnWorkflowSummary>
-            ) : (
-                answerContent
-            )}
+            {renderedSegments}
+
+            {isCreatingPreview ? (
+                <DesignPreviewGallery previews={[]} isGenerating />
+            ) : null}
 
             {showStatusLine && (
                 <GeneratingIndicator label={statusLabel} />

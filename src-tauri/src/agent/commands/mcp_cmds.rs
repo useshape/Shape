@@ -80,6 +80,16 @@ pub async fn mcp_complete_oauth(
 }
 
 #[tauri::command]
+pub fn mcp_clear_oauth(
+    id: String,
+    mcp_state: tauri::State<'_, McpState>,
+) -> Result<(), AppError> {
+    mcp_state
+        .clear_server_oauth(&id)
+        .map_err(|e| AppError::Message(e))
+}
+
+#[tauri::command]
 pub fn call_mcp_tool(
     qualified_name: String,
     arguments: Value,

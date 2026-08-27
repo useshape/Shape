@@ -14,7 +14,7 @@ import type { PackageDep, PackageInfo } from "@/lib/backend/types";
 import { resolvePackageManager } from "@/lib/package-manager";
 import { notify } from "@/features/notifications";
 import { appRoute } from "@/lib/app-route";
-import { listen, WebviewWindow } from "@/lib/tauri/client-api";
+import { listen, WebviewWindow, emit } from "@/lib/tauri/client-api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -37,11 +37,12 @@ import {
 } from "./setting-controls";
 import { AiSettingsPanel } from "./ai-settings";
 import { AccountSettingsPanel } from "./account-settings";
+import { IntegrationsSettingsPanel } from "./integrations-settings";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { Icon } from "@/components/ui/icon";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -640,6 +641,20 @@ function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
                         onChange={(v) => updateSettingSection("developer", { enableDevTools: v })}
                     />
                 </SettingRow>
+                <SettingRow
+                    title="Chat UI playground"
+                    description="Open a sample chat with every agent UI block so you can restyle them."
+                >
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                            void emit("shape-chat-ui-playground");
+                        }}
+                    >
+                        Open playground
+                    </Button>
+                </SettingRow>
             </SettingSection>
             <SettingSection title="Onboarding">
                 <SettingRow title="Restart onboarding">
@@ -857,8 +872,12 @@ export function SettingsView() {
     const settings = useSettings();
     const searchParams = useSearchParams();
     const router = useRouter();
+    const pathname = usePathname();
+    const isIntegrations = pathname?.includes("/settings/integrations");
     const [query, setQuery] = useState("");
-    const [activeLeafId, setActiveLeafId] = useState("account-profile");
+    const [activeLeafId, setActiveLeafId] = useState(
+        isIntegrations ? "mcp" : "account-profile",
+    );
     const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
         () => new Set(SETTINGS_NAV.map((g) => g.id)),
@@ -867,6 +886,7 @@ export function SettingsView() {
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "rules") return "settings-ai-rules";
+        if (section === "mcp" || section === "integrations") return "integrations";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
         switch (category) {
@@ -911,10 +931,22 @@ export function SettingsView() {
         (category?: string | null, section?: string | null) => {
             const target = resolveTargetFromDeepLink(category, section);
             if (!target) return;
+            if (target === "integrations") {
+                router.push("/settings/integrations");
+                setActiveLeafId("mcp");
+                return;
+            }
+            if (isIntegrations) {
+                router.push("/settings");
+            }
             window.setTimeout(() => scrollToTarget(target), 80);
         },
-        [resolveTargetFromDeepLink, scrollToTarget],
+        [resolveTargetFromDeepLink, scrollToTarget, router, isIntegrations],
     );
+
+    useEffect(() => {
+        if (isIntegrations) setActiveLeafId("mcp");
+    }, [isIntegrations]);
 
     useEffect(() => {
         applyNavigation(searchParams.get("category"), searchParams.get("section"));
@@ -1007,10 +1039,16 @@ export function SettingsView() {
     const onLeafClick = (leaf: SettingsNavLeaf) => {
         if (leaf.href) {
             router.push(leaf.href);
+            setActiveLeafId(leaf.id);
             return;
         }
         if (leaf.targetId) {
             setActiveLeafId(leaf.id);
+            if (isIntegrations) {
+                router.push("/settings");
+                window.setTimeout(() => scrollToTarget(leaf.targetId!), 120);
+                return;
+            }
             scrollToTarget(leaf.targetId);
         }
     };
@@ -1024,7 +1062,7 @@ export function SettingsView() {
                         <Input
                             placeholder="Search settings"
                             value={query}
-                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                            className="h-auto! bg-transparent px-0 text-md font-medium shadow-none focus-visible:ring-0 select-text"
                             onChange={(e) => setQuery(e.target.value)}
                         />
                     </div>
@@ -1037,7 +1075,7 @@ export function SettingsView() {
                                 <button
                                     type="button"
                                     onClick={() => toggleGroup(group.id)}
-                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
+                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-md font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
                                 >
                                     {group.label}
                                 </button>
@@ -1048,15 +1086,16 @@ export function SettingsView() {
                                                 key={leaf.id}
                                                 variant="ghost"
                                                 type="button"
+                                                size="xs"
                                                 onClick={() => onLeafClick(leaf)}
                                                 className={cn(
-                                                    "h-8 w-full justify-start rounded-md px-2.5",
+                                                    "h-7.5so w-full justify-start rounded-md px-2.5",
                                                     activeLeafId === leaf.id
                                                         ? "bg-panel-hover text-text-primary hover:bg-panel-hover hover:text-text-primary"
                                                         : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
                                                 )}
                                             >
-                                                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-regular">
+                                                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-md font-regular">
                                                     {leaf.label}
                                                     {leaf.href ? (
                                                         <Icon name="chevron_right" size={14} className="shrink-0 text-text-muted" />
@@ -1086,17 +1125,23 @@ export function SettingsView() {
                 </div>
             </aside>
             <section className="min-w-0 flex-1 overflow-hidden bg-background p-2 pl-0">
-                <div className="h-full overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-sm">
-                    <div className="no-scrollbar mx-auto h-full w-full max-w-5xl space-y-2 overflow-y-auto p-6 pb-24 lg:p-8">
-                        <AccountSettingsPanel />
-                        <AiSettings settings={settings} />
-                        <EditorSettings settings={settings} />
-                        <TerminalSettings settings={settings} />
-                        <GitSettings settings={settings} />
-                        <LspSettings settings={settings} />
-                        <ToolsSettings settings={settings} />
-                        <AdvancedSettings settings={settings} />
-                    </div>
+                <div className="h-full overflow-hidden rounded-xl bg-surface-1">
+                    {isIntegrations ? (
+                        <div className="no-scrollbar h-full overflow-y-auto">
+                            <IntegrationsSettingsPanel />
+                        </div>
+                    ) : (
+                        <div className="no-scrollbar mx-auto h-full w-full max-w-5xl space-y-2 overflow-y-auto p-6 pb-24 lg:p-8">
+                            <AccountSettingsPanel />
+                            <AiSettings settings={settings} />
+                            <EditorSettings settings={settings} />
+                            <TerminalSettings settings={settings} />
+                            <GitSettings settings={settings} />
+                            <LspSettings settings={settings} />
+                            <ToolsSettings settings={settings} />
+                            <AdvancedSettings settings={settings} />
+                        </div>
+                    )}
                 </div>
             </section>
 

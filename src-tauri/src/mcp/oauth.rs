@@ -8,6 +8,11 @@ use super::credentials::{load_token, save_token};
 
 pub const MCP_OAUTH_REDIRECT: &str = "shape://mcp/oauth/callback";
 
+/// Client ID Metadata Document (SEP-991). One Shape identity for every MCP
+/// authorization server that supports URL client_ids.
+pub const MCP_CIMD_CLIENT_ID: &str =
+    "https://www.useshape.org/.well-known/oauth-mcp-client.json";
+
 /// Refresh when fewer than this many seconds remain before expiry.
 const REFRESH_SKEW_SECS: i64 = 60;
 
@@ -109,7 +114,7 @@ fn token_from_response(
 /// Return a usable access token, refreshing when near expiry.
 pub async fn ensure_fresh_token(server_id: &str) -> Result<StoredMcpTokens, String> {
     let tokens = get_token(server_id).ok_or_else(|| {
-        "Authentication required. Connect this MCP server in Settings → AI → MCP.".to_string()
+        "Authentication required. Connect this MCP server in Settings → Connections.".to_string()
     })?;
 
     if let Some(expires_at) = tokens.expires_at {
@@ -129,7 +134,7 @@ pub async fn refresh_access_token(server_id: &str) -> Result<StoredMcpTokens, St
     let refresh = existing
         .refresh_token
         .as_ref()
-        .ok_or("No refresh_token — reconnect this MCP server in Settings → AI → MCP.")?;
+        .ok_or("No refresh_token — reconnect this MCP server in Settings → Connections.")?;
     let token_url = existing
         .token_url
         .as_ref()
@@ -137,7 +142,8 @@ pub async fn refresh_access_token(server_id: &str) -> Result<StoredMcpTokens, St
     let client_id = existing
         .client_id
         .clone()
-        .unwrap_or_else(|| "shape-desktop".to_string());
+        .filter(|id| !id.is_empty() && id != "shape-desktop")
+        .ok_or("Missing OAuth client_id — reconnect this MCP server.")?;
 
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "refresh_token"),
@@ -195,7 +201,8 @@ async fn try_dynamic_client_registration(
             "redirect_uris": [MCP_OAUTH_REDIRECT],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],
-            "token_endpoint_auth_method": "none"
+            "token_endpoint_auth_method": "none",
+            "application_type": "native"
         }))
         .send()
         .await
@@ -320,19 +327,22 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         .ok_or("Missing token_endpoint")?
         .to_string();
 
-    let client_id = if let Some(reg) = as_meta
+    let cimd_supported = as_meta
+        .get("client_id_metadata_document_supported")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let client_id = if cimd_supported {
+        MCP_CIMD_CLIENT_ID.to_string()
+    } else if let Some(reg) = as_meta
         .get("registration_endpoint")
         .and_then(|v| v.as_str())
     {
-        match try_dynamic_client_registration(&client, reg).await {
-            Ok(id) => id,
-            Err(e) => {
-                log::warn!("MCP DCR failed, falling back to shape-desktop: {}", e);
-                "shape-desktop".to_string()
-            }
-        }
+        try_dynamic_client_registration(&client, reg).await?
     } else {
-        "shape-desktop".to_string()
+        return Err(
+            "This MCP server does not support Client ID Metadata or dynamic registration. Shape cannot connect without a pre-registered OAuth app."
+                .to_string(),
+        );
     };
 
     // Prefer scopes advertised by the protected resource (RFC 9728), then the
@@ -354,16 +364,11 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
     let state = random_urlsafe(32);
     let challenge = pkce_challenge(&code_verifier);
 
-    let redirect = format!(
-        "{}?server_id={}",
-        MCP_OAUTH_REDIRECT,
-        urlencoding::encode(server_id)
-    );
     let auth_link = format!(
         "{}?response_type=code&client_id={}&redirect_uri={}&code_challenge={}&code_challenge_method=S256&state={}&scope={}&resource={}",
         authorize_url,
         urlencoding::encode(&client_id),
-        urlencoding::encode(&redirect),
+        urlencoding::encode(MCP_OAUTH_REDIRECT),
         challenge,
         urlencoding::encode(&state),
         urlencoding::encode(&scope),
@@ -372,8 +377,9 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
 
     {
         let mut pending = PENDING.lock().map_err(|e| e.to_string())?;
+        pending.retain(|_, p| p.server_id != server_id);
         pending.insert(
-            server_id.to_string(),
+            state.clone(),
             PendingOAuth {
                 server_id: server_id.to_string(),
                 code_verifier,
@@ -400,36 +406,21 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
     let state = parsed
         .query_pairs()
         .find(|(k, _)| k == "state")
-        .map(|(_, v)| v.to_string());
-    let server_id = parsed
-        .query_pairs()
-        .find(|(k, _)| k == "server_id")
         .map(|(_, v)| v.to_string())
-        .ok_or("Missing server_id for OAuth callback")?;
+        .ok_or("Missing OAuth state in callback")?;
 
     let pending = {
         let mut guard = PENDING.lock().map_err(|e| e.to_string())?;
         guard
-            .remove(&server_id)
-            .ok_or("No pending OAuth session for this server — start Connect again.")?
+            .remove(&state)
+            .ok_or("No pending OAuth session for this callback — start Connect again.")?
     };
 
-    if pending.server_id != server_id {
-        return Err("OAuth server_id mismatch".to_string());
-    }
-    // We always send state, so a callback without a matching one is rejected (CSRF).
-    match state.as_deref() {
-        Some(s) if s == pending.state => {}
-        _ => {
-            return Err("OAuth state mismatch — possible CSRF. Start Connect again.".to_string());
-        }
+    if pending.state != state {
+        return Err("OAuth state mismatch — possible CSRF. Start Connect again.".to_string());
     }
 
-    let redirect = format!(
-        "{}?server_id={}",
-        MCP_OAUTH_REDIRECT,
-        urlencoding::encode(&server_id)
-    );
+    let server_id = pending.server_id.clone();
 
     let client = reqwest::Client::new();
     let token_resp: serde_json::Value = client
@@ -437,7 +428,7 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code.as_str()),
-            ("redirect_uri", redirect.as_str()),
+            ("redirect_uri", MCP_OAUTH_REDIRECT),
             ("client_id", pending.client_id.as_str()),
             ("code_verifier", pending.code_verifier.as_str()),
             ("resource", pending.resource.as_str()),

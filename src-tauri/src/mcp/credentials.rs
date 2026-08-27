@@ -13,3 +13,12 @@ pub fn save_token(server_id: &str, tokens: &StoredMcpTokens) -> Result<(), Strin
     let json = serde_json::to_string(tokens).map_err(|e| e.to_string())?;
     entry.set_password(&json).map_err(|e| e.to_string())
 }
+
+pub fn delete_token(server_id: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(SERVICE, server_id).map_err(|e| e.to_string())?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}

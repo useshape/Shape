@@ -199,7 +199,7 @@ pub async fn send_chat_message(
         t.clone()
     };
 
-    let needs_title = state.title.lock()?.is_none();
+    let mut needs_title = state.title.lock()?.is_none();
     let provisional_title = if needs_title {
         let provisional = title_from_message(&message);
         *state.title.lock()? = Some(provisional.clone());
@@ -398,12 +398,22 @@ pub async fn send_chat_message(
                         "chat_context_summarized",
                         json!({ "conversationId": conversation_id }),
                     );
+                    streaming::emit_stream_token(
+                        &app_handle,
+                        &proxy_base,
+                        "\n<status>Chat context summarized</status>\n",
+                    );
                 }
             } else if let Some(ref s) = existing {
                 snapshot = messages::apply_summary(&snapshot, Some(s));
                 let _ = app_handle.emit(
                     "chat_context_summarized",
                     json!({ "conversationId": conversation_id }),
+                );
+                streaming::emit_stream_token(
+                    &app_handle,
+                    &proxy_base,
+                    "\n<status>Chat context summarized</status>\n",
                 );
             }
         }

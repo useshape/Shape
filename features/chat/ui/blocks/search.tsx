@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { WebSearchResultItem } from "../md/renderer";
+import { WebSearchCard } from "./web-cards";
 
 type WebSearchResult = WebSearchResultItem;
 
@@ -20,71 +21,15 @@ export function WebSearchBlock({ query, results, isActive }: {
     results: WebSearchResult[];
     isActive?: boolean;
 }) {
-    const [isOpen, setIsOpen] = React.useState(false);
-
+    const content = results
+        .map((result) => `### ${result.title}\nURL: ${result.url}\n${result.snippet}`)
+        .join("\n---\n");
     return (
-        <div className="flex flex-col gap-1 my-2">
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors group w-full text-left"
-            >
-                <Icon
-                    name="expand_more"
-                    size={14}
-                    className={cn(
-                        "text-text-muted transition-transform duration-[var(--transition-fast)]",
-                        !isOpen && "-rotate-90"
-                    )}
-                />
-                <Icon name="language" size={14} className="text-text-muted" />
-                {isActive ? (
-                    <span className="font-medium text-sm web-search-gradient-text">Searching the web...</span>
-                ) : (
-                    <span className="font-medium text-sm">Searched &quot;{query}&quot;</span>
-                )}
-                {isActive && (
-                    <div className="w-2.5 h-2.5 border-[1.5px] border-accent border-t-transparent rounded-full animate-spin ml-1" />
-                )}
-            </button>
-
-            {isOpen && (
-                <div className="flex flex-col gap-2 ml-2 mt-1 pb-2">
-                    {results.map((result, i) => {
-                        const host = hostnameOf(result.url);
-                        return (
-                            <div key={i} className="mx-2 p-2 rounded">
-                                <div className="flex items-center gap-2 mb-1">
-                                    {host ? <Favicon url={result.url} size={14} /> : null}
-                                    <span className="text-sm font-medium text-text-primary truncate">{result.title}</span>
-                                </div>
-                                <span className="text-sm text-text-muted block truncate mb-1">{result.url}</span>
-                                <span className="text-sm text-text-muted leading-relaxed">{result.snippet}</span>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            <style jsx>{`
-                .web-search-gradient-text {
-                    background: linear-gradient(
-                        90deg,
-                        var(--text-muted) 0%,
-                        var(--text-primary) 40%,
-                        var(--text-muted) 80%
-                    );
-                    background-size: 200% 100%;
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                    animation: web-search-gradient-swipe 2s ease-in-out infinite;
-                }
-                @keyframes web-search-gradient-swipe {
-                    0% { background-position: 100% 0; }
-                    100% { background-position: -100% 0; }
-                }
-            `}</style>
-        </div>
+        <WebSearchCard
+            query={query}
+            content={content}
+            isGenerating={isActive}
+        />
     );
 }
 
