@@ -989,7 +989,7 @@ export default function Terminal({
     );
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-panel select-none font-sans" data-terminal-root="true">
+        <div className="flex h-full w-full flex-col overflow-hidden bg-panel select-none font-sans" data-terminal-root="true">
             {!terminalOnly ? (
                 <div className="relative z-20 flex h-12 min-w-0 shrink-0 items-center gap-1 px-2">
                     <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">

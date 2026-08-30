@@ -444,10 +444,10 @@ export function ChatInput({
     const inputPanel = (
                 <div
                     className={cn(
-                        "relative flex w-full flex-col bg-surface-3 transition-colors focus-within:border-border",
-                        "rounded-xl",
+                        "relative flex w-full flex-col border border-border-subtle bg-surface-3 transition-colors focus-within:border-border",
+                        "rounded-[1.35rem]",
                         needsSignIn && "opacity-50 cursor-not-allowed pointer-events-none",
-                        hasComposerChrome && "rounded-t-none",
+                        hasComposerChrome && "rounded-t-none border-t-0",
                     )}
                     onDrop={needsSignIn ? undefined : handleDrop}
                     onDragOver={needsSignIn ? undefined : handleDragOver}
@@ -559,7 +559,7 @@ export function ChatInput({
                                 placeholder={needsSignIn ? "Sign in to use the chat" : "Ask anything…"}
                                 rows={1}
                                 className="relative z-[1] min-h-7 w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium leading-relaxed text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30"
-                                style={{ caretColor: "var(--text-primary, #e5e5e5)" }}
+                                style={{ caretColor: "var(--text-primary)" }}
                             />
                         </ContextMenuTrigger>
                         <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -631,45 +631,9 @@ export function ChatInput({
                         >
                             <Icon name="add" size={16} />
                         </Button>
+                    </div>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild disabled={needsSignIn}>
-                                <Button
-                                    variant="secondary"
-                                    size="xs"
-                                    disabled={needsSignIn}
-                                    className="h-8 rounded-full bg-panel-hover px-2 font-medium text-text-muted hover:text-text-primary"
-                                >
-                                    <span className="flex items-center gap-1.5">
-                                        <Icon name={selectedModeInfo.icon} size={14} />
-                                        {selectedMode}
-                                    </span>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-52">
-                                {CHAT_MODES.map((mode) => (
-                                    <DropdownMenuItem
-                                        key={mode.id}
-                                        onClick={() => setSelectedMode(mode.id)}
-                                        className={cn(
-                                            "flex w-full cursor-pointer items-center",
-                                            selectedMode === mode.id && "bg-panel-hover",
-                                        )}
-                                    >
-                                        <div className="flex w-full items-center gap-1.5">
-                                            <Icon name={mode.icon} size={16} />
-                                            <span className="flex-1 font-regular text-sm text-text-primary">
-                                                {mode.id}
-                                            </span>
-                                            {selectedMode === mode.id && (
-                                                <Icon name="check" size={14} className="text-text-primary" />
-                                            )}
-                                        </div>
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-
+                    <div className="flex shrink-0 items-center gap-0.5">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild disabled={needsSignIn}>
                                 <Button
@@ -678,23 +642,48 @@ export function ChatInput({
                                     disabled={needsSignIn}
                                     className="h-8 max-w-[140px] rounded-full px-2 font-medium text-text-muted hover:text-text-primary"
                                 >
-                                    <div className="flex min-w-0 items-center gap-1.5 text-sm">
-                                        {providerIcon(selectedModel, 14)}
+                                    <div className="flex min-w-0 items-center gap-1 text-sm">
                                         <span className="truncate">
-                                            {modelInfo.name === "auto" ? "Auto" : modelInfo.name}
+                                            {modelInfo.name === "auto" ? "Fast" : modelInfo.name}
                                         </span>
+                                        <Icon name="expand_more" size={14} className="shrink-0 opacity-70" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-55 overflow-hidden">
+                            <DropdownMenuContent align="end" className="w-55 overflow-hidden">
                                 <div className="relative">
                                     <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
+                                        <DropdownMenuLabel className="text-sm font-regular text-text-muted">
+                                            Mode
+                                        </DropdownMenuLabel>
+                                        {CHAT_MODES.map((mode) => (
+                                            <DropdownMenuItem
+                                                key={mode.id}
+                                                onClick={() => setSelectedMode(mode.id)}
+                                                className={cn(
+                                                    "flex w-full cursor-pointer items-center",
+                                                    selectedMode === mode.id && "bg-panel-hover",
+                                                )}
+                                            >
+                                                <div className="flex w-full items-center gap-1.5">
+                                                    <Icon name={mode.icon} size={16} />
+                                                    <span className="flex-1 font-regular text-sm text-text-primary">
+                                                        {mode.id}
+                                                    </span>
+                                                    {selectedMode === mode.id && (
+                                                        <Icon name="check" size={14} className="text-text-primary" />
+                                                    )}
+                                                </div>
+                                            </DropdownMenuItem>
+                                        ))}
+                                        <DropdownMenuLabel className="text-sm font-regular text-text-muted">
+                                            Model
+                                        </DropdownMenuLabel>
                                         <ModelItem
                                             model={autoModel}
                                             isSelected={selectedModel === "auto"}
                                             onSelect={() => setSelectedModel("auto")}
                                         />
-
                                         {providerOrder.filter((p) => p !== "Auto").map((provider) => {
                                             const providerModels = MODELS.filter((m) => m.provider === provider);
                                             if (providerModels.length === 0) return null;
@@ -723,9 +712,7 @@ export function ChatInput({
                                 </div>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                    </div>
 
-                    <div className="flex shrink-0 items-center gap-1.5">
                         {shapeAuth.loggedIn ? (
                             <Tooltip
                                 content={
@@ -754,9 +741,9 @@ export function ChatInput({
                             onClick={isLoading ? onStopMessage : () => onSendMessage()}
                             disabled={needsSignIn || (!isLoading && !inputValue.trim() && uploadedFiles.length === 0)}
                             className={cn(
-                                "flex size-7 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40",
+                                "flex size-8 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40",
                                 (inputValue.trim() || isLoading || uploadedFiles.length > 0)
-                                    ? "bg-text-primary text-panel hover:opacity-90"
+                                    ? "bg-accent text-white hover:opacity-90"
                                     : "bg-panel-hover text-text-muted",
                             )}
                             aria-label={isLoading ? "Stop" : "Send"}

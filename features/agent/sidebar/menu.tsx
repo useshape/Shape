@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { Icon } from "@/components/ui/icon";
-import { Button } from "@/components/ui/button";
 import { commands } from "@/lib/backend";
 import { HELP_LINKS } from "@/lib/help-links";
 import { getShortcutForLabel } from "@/lib/ui/shortcuts";
@@ -22,7 +21,7 @@ import {
     DropdownMenuSubContent,
     DropdownMenuShortcut,
 } from "@/components/ui/dropdown";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 
 function formatAccountLabel(
     name: string | null,
@@ -35,7 +34,7 @@ function formatAccountLabel(
     return tierPart ? `${displayName} Account (${emailPart} - ${tierPart})` : `${displayName} Account (${emailPart})`;
 }
 
-export function AccountMenu() {
+export function AccountMenu({ children }: { children: ReactNode }) {
     const shapeAuth = useShapeAuth();
     const githubAuth = useGitHubAuth();
 
@@ -79,12 +78,8 @@ export function AccountMenu() {
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-text-muted">
-                    <Icon name="expand_more" size={16} />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="mt-2 w-72">
+            <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-72">
                 <DropdownMenuSub>
                     <DropdownMenuSubTrigger className="truncate">
                         {accountLabel}
@@ -149,7 +144,7 @@ export function AccountMenu() {
                                     unoptimized
                                 />
                             ) : (
-                                <Icon name="dependabot" size={14} className="shrink-0 text-text-muted" />
+                                <Icon name="github" size={14} className="shrink-0 text-text-muted" />
                             )}
                             <span className="truncate">
                                 {githubAuth.loggedIn && githubAuth.username

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useProjectState, commands } from "@/lib/backend";
+import { useProjectState, commands, getProjectSnapshot } from "@/lib/backend";
 import { usePathname } from "next/navigation";
-import { CommandPalette } from "@/features/editor/ui/main/ui/cmd-palette";
-import { EditorLayout } from "@/features/editor/ui/layout";
-import { ActivityBar } from "@/features/activity-bar";
+import { AgentLayout, openProject, normalizeProjectPath } from "@/features/agent";
 import { dispatchShortcutAction } from "@/lib/ui/shortcut-actions";
-import { useLayout } from "@/core/providers/layout";
+import { upsertRepoHistory } from "@/lib/repo-history";
+import { saveLastProject, loadLastProject } from "@/lib/last-project";
+import { clearClosedTabs } from "@/lib/closed-tabs";
+import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
 
 function TauriShortcutBridge() {
     useEffect(() => {
@@ -37,24 +38,52 @@ function TauriShortcutBridge() {
     return null;
 }
 
-export default function Main({ children }: { children: React.ReactNode }) {
-    const { zenMode } = useLayout();
-    const pathname = usePathname();
-    const [activeTab, setActiveTab] = useState("explorer");
-
-    const [leftOpen, setLeftOpen] = useState(true);
-    const [rightOpen, setRightOpen] = useState(true);
-    const [terminalOpen, setTerminalOpen] = useState(false);
-    const [sidebarsFlipped, setSidebarsFlipped] = useState(false);
+function ProjectOpenHost() {
+    const { project_path } = useProjectState();
 
     useEffect(() => {
-        try {
-            setSidebarsFlipped(localStorage.getItem("shape-sidebars-flipped") === "true");
-        } catch { /* ignore */ }
+        if (!project_path) return;
+        upsertRepoHistory(project_path);
+        saveLastProject(project_path);
+        clearClosedTabs();
+    }, [project_path]);
+
+    useEffect(() => {
+        const handleEvent = (e: Event) => {
+            const custom = e as CustomEvent<{ path: string }>;
+            if (custom.detail?.path) void openProject(custom.detail.path);
+        };
+        window.addEventListener("shape-open-project", handleEvent);
+        return () => window.removeEventListener("shape-open-project", handleEvent);
     }, []);
 
-    const projectState = useProjectState();
-    const { project_path } = projectState;
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                if (getProjectSnapshot().project_path) return;
+                if (!isTauriRuntime()) return;
+                const isMain = await isMainTauriWindow();
+                if (!isMain || cancelled) return;
+                const fresh = await commands.isFreshWindow().catch(() => false);
+                if (fresh || cancelled) return;
+                const last = loadLastProject();
+                if (!last || cancelled) return;
+                await openProject(last);
+            } catch {
+                /* ignore */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    return null;
+}
+
+export default function Main({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname();
 
     useEffect(() => {
         const handleOpenSettings = () => {
@@ -65,16 +94,14 @@ export default function Main({ children }: { children: React.ReactNode }) {
             const selected = await open({ directory: false, multiple: false });
             if (typeof selected === "string") {
                 const name = selected.split(/[\\/]/).pop() || selected;
-                commands.openFile(selected, name);
+                await commands.openFile(selected, name);
             }
         };
         const handleOpenFolderRequest = async () => {
             const { open } = await import("@tauri-apps/plugin-dialog");
             const selected = await open({ directory: true, multiple: false });
-            if (typeof selected === "string") {
-                window.dispatchEvent(
-                    new CustomEvent("shape-open-project", { detail: { path: selected } }),
-                );
+            if (typeof selected === "string" && selected.trim()) {
+                await openProject(normalizeProjectPath(selected));
             }
         };
 
@@ -89,126 +116,25 @@ export default function Main({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
-    useEffect(() => {
-        const handleToggle = (e: Event) => {
-            const custom = e as CustomEvent<{ id: string, value?: boolean }>;
-            const { id, value } = custom.detail || {};
-
-            if (id === "primary-sidebar") {
-                setLeftOpen(prev => value !== undefined ? value : !prev);
-            } else if (id === "panel") {
-                setTerminalOpen(prev => value !== undefined ? value : !prev);
-            } else if (id === "secondary-sidebar") {
-                setRightOpen(prev => value !== undefined ? value : !prev);
-            }
-        };
-
-        const handleSetTab = (e: Event) => {
-            const custom = e as CustomEvent<string>;
-            const tabId = custom.detail?.toLowerCase();
-            if (!tabId) return;
-
-            const normalizedTab = ["files", "explorer", "navigation", "navigator"].includes(tabId) ? "explorer" : tabId;
-            setActiveTab(normalizedTab);
-
-            if (["explorer", "source", "graph", "search", "outline"].includes(normalizedTab)) {
-                if (!leftOpen && project_path) setLeftOpen(true);
-            }
-        };
-
-        const handleSwapSidebars = () => {
-            setSidebarsFlipped((prev) => {
-                const next = !prev;
-                try {
-                    localStorage.setItem("shape-sidebars-flipped", String(next));
-                } catch { /* ignore */ }
-                return next;
-            });
-        };
-
-        const handleRequestTab = () => {
-            window.dispatchEvent(new CustomEvent("shape-active-tab", { detail: activeTab }));
-        };
-
-        window.addEventListener("shape-layout-toggle", handleToggle as EventListener);
-        window.addEventListener("shape-set-active-tab", handleSetTab as EventListener);
-        window.addEventListener("shape-swap-sidebars", handleSwapSidebars);
-        window.addEventListener("shape-request-active-tab", handleRequestTab);
-
-        return () => {
-            window.removeEventListener("shape-layout-toggle", handleToggle as EventListener);
-            window.removeEventListener("shape-set-active-tab", handleSetTab as EventListener);
-            window.removeEventListener("shape-swap-sidebars", handleSwapSidebars);
-            window.removeEventListener("shape-request-active-tab", handleRequestTab);
-        };
-    }, [leftOpen, activeTab, project_path]);
-
-    useEffect(() => {
-        window.dispatchEvent(new CustomEvent("shape-active-tab", { detail: activeTab }));
-    }, [activeTab]);
-
-    useEffect(() => {
-        window.dispatchEvent(new CustomEvent("shape-layout-state", {
-            detail: {
-                primarySidebarOpen: leftOpen,
-                panelOpen: terminalOpen,
-                secondarySidebarOpen: rightOpen,
-            }
-        }));
-    }, [leftOpen, terminalOpen, rightOpen]);
-
     if (
         pathname === "/settings" || pathname === "/settings/" || pathname.startsWith("/settings/")
         || pathname === "/branch" || pathname === "/branch/" || pathname.startsWith("/branch/")
         || pathname === "/git" || pathname === "/git/" || pathname.startsWith("/git/")
         || pathname === "/popout" || pathname.startsWith("/popout/")
     ) {
-        return <main className="h-full w-full overflow-hidden flex flex-col">{children}</main>;
+        return <main className="flex h-full w-full flex-col overflow-hidden">{children}</main>;
     }
 
     return (
         <div
-            className="flex flex-row flex-1 min-h-0 overflow-hidden relative text-text-primary text-md bg-background"
+            className="relative flex min-h-0 flex-1 flex-row overflow-hidden bg-background text-md text-text-primary"
             data-workbench-main
         >
-            {!zenMode && (
-                <div className="z-20 h-full shrink-0 bg-transparent">
-                    <ActivityBar
-                        activeTab={activeTab}
-                        toggleTab={(id) => {
-                            if (activeTab === id) {
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-layout-toggle", {
-                                        detail: { id: "primary-sidebar" },
-                                    }),
-                                );
-                            } else {
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-set-active-tab", { detail: id }),
-                                );
-                            }
-                        }}
-                    />
-                </div>
-            )}
-
-            <div className="flex-1 flex overflow-hidden pointer-events-auto relative z-10 min-w-0">
-                <EditorLayout
-                    activeTab={activeTab}
-                    leftOpen={zenMode ? false : leftOpen}
-                    rightOpen={zenMode ? false : rightOpen}
-                    terminalOpen={zenMode ? false : terminalOpen}
-                    sidebarsFlipped={sidebarsFlipped}
-                    setLeftOpen={setLeftOpen}
-                    setRightOpen={setRightOpen}
-                    setTerminalOpen={setTerminalOpen}
-                >
-                    {children}
-                </EditorLayout>
+            <div className="relative z-10 flex min-w-0 flex-1 overflow-hidden">
+                <AgentLayout>{children}</AgentLayout>
             </div>
-
+            <ProjectOpenHost />
             <TauriShortcutBridge />
-            <CommandPalette />
         </div>
     );
 }

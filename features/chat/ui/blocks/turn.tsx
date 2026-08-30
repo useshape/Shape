@@ -25,6 +25,7 @@ import { Favicon } from "@/components/ui/favicon";
 import { parseWebResults } from "../md/renderer";
 import { GeneratingIndicator } from "./generating";
 import { LoadingState } from "./loading-state";
+import { EntityPill } from "../message/bubble";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "< 1s";
@@ -547,25 +548,48 @@ function StepRow({ block }: { block: Chunk }) {
         return <ThoughtStep content={block.content || ""} isActive={block.isGenerating} />;
     }
 
+    if (block.type === "tool_result") {
+        const raw = block.content || "";
+        const mcp = raw.match(/^\[MCP\s+([^\]]+)\]/i)?.[1]?.trim() || "Tool";
+        return (
+            <div className="wf-step">
+                <div className="wf-step-rail">
+                    <span className="wf-step-dot">
+                        <Icon name="bot" size={12} />
+                    </span>
+                </div>
+                <EntityPill
+                    icon={<Icon name="bot" size={12} />}
+                    label={mcp}
+                />
+            </div>
+        );
+    }
+
     if (block.type === "cat") {
         const path = block.content || "";
-        const range = lineRangeLabel(block.catStartLine, block.catEndLine);
         return (
-            <button
-                type="button"
-                onClick={() => path && void openProjectFile(path)}
-                className="py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors w-fit text-left cursor-pointer"
-            >
-                Read <span className="text-text-secondary">{fileName(path)}</span>
-                {range ? <span> {range}</span> : null}
-            </button>
+            <div className="wf-step">
+                <div className="wf-step-rail">
+                    <span className="wf-step-dot">
+                        <Icon name="description" size={12} />
+                    </span>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => path && void openProjectFile(path)}
+                    className="text-left text-sm text-text-muted hover:text-text-primary"
+                >
+                    Read <span className="text-text-secondary">{fileName(path)}</span>
+                </button>
+            </div>
         );
     }
 
     if (block.type === "grep") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-sm text-text-muted truncate">
+            <div className="py-0.5 text-sm font-regular text-text-primary/80 truncate">
                 Grepped <span className="text-text-secondary">{q}</span>
             </div>
         );
@@ -574,7 +598,7 @@ function StepRow({ block }: { block: Chunk }) {
     if (block.type === "search" || block.type === "search_result") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-sm text-text-muted truncate">
+            <div className="py-0.5 text-sm font-regular text-text-primary/80 truncate">
                 Searched <span className="text-text-secondary">{q}</span>
             </div>
         );
@@ -589,7 +613,7 @@ function StepRow({ block }: { block: Chunk }) {
             .filter((url, i, arr) => arr.indexOf(url) === i)
             .slice(0, 5);
         return (
-            <div className="flex items-center gap-1.5 py-0.5 text-sm text-text-muted min-w-0">
+            <div className="flex items-center gap-1.5 py-0.5 text-sm font-regular text-text-primary/80 min-w-0">
                 <span className="shrink-0">
                     {block.isGenerating ? "Searching" : "Searched"}
                 </span>
@@ -603,7 +627,7 @@ function StepRow({ block }: { block: Chunk }) {
                         {favicons.map((url) => (
                             <span
                                 key={url}
-                                className="inline-flex size-4 items-center justify-center rounded-full border border-border-subtle bg-panel overflow-hidden"
+                                className="inline-flex size-5 items-center justify-center rounded-full border border-border-subtle bg-panel overflow-hidden"
                             >
                                 <Favicon url={url} size={12} />
                             </span>
@@ -623,7 +647,7 @@ function StepRow({ block }: { block: Chunk }) {
                 onClick={() => {
                     if (block.visitUrl) void commands.openUrlExternal(block.visitUrl);
                 }}
-                className="flex items-center gap-1.5 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors w-fit max-w-full text-left"
+                className="flex items-center gap-1.5 py-0.5 text-sm font-regular text-text-primary/80 hover:text-text-primary transition-colors w-fit max-w-full text-left"
             >
                 {url ? (
                     <span className="chat-link-favicon">
@@ -647,7 +671,7 @@ function StepRow({ block }: { block: Chunk }) {
                     type="button"
                     onClick={() => hasDiff && setDiffOpen((v) => !v)}
                     className={cn(
-                        "flex items-center gap-1.5 text-sm text-text-muted w-fit max-w-full text-left",
+                        "flex items-center gap-1.5 text-md font-medium text-text-primary/80 w-fit max-w-full text-left",
                         hasDiff && "hover:text-text-primary transition-colors",
                     )}
                 >
@@ -658,7 +682,7 @@ function StepRow({ block }: { block: Chunk }) {
                     {hasDiff ? (
                         <Icon
                             name="chevron_right"
-                            size={12}
+                            size={16}
                             className={cn("opacity-0 transition-transform duration-200 shrink-0", diffOpen && "rotate-90 opacity-50")}
                         />
                     ) : null}
@@ -685,10 +709,10 @@ function StepRow({ block }: { block: Chunk }) {
         if (finishedFine && !block.isGenerating && isLintCommand(cmd)) {
             const status = lintStatusFromOutput(block.content || "");
             if (status === "clean") {
-                return <div className="py-0.5 text-sm text-text-muted">No linter errors</div>;
+                return <div className="py-0.5 text-md text-text-primary/80">No linter errors</div>;
             }
             if (status === "errors") {
-                return <div className="py-0.5 text-sm text-text-muted">Linter errors found</div>;
+                return <div className="py-0.5 text-md text-text-primary/80">Linter errors found</div>;
             }
         }
         return <TerminalCommandStep block={block} />;
@@ -704,7 +728,7 @@ function StepRow({ block }: { block: Chunk }) {
             return <StepRowAppliedEdit block={block} />;
         }
         return (
-            <div className="py-0.5 text-sm text-text-muted">
+            <div className="py-0.5 text-md text-text-primary/80">
                 {status === "cancelled" ? "Cancelled edit to " : "Rejected edit to "}
                 <span className="text-text-secondary">{block.file ? fileName(block.file) : "file"}</span>
             </div>
@@ -721,7 +745,7 @@ function StepRow({ block }: { block: Chunk }) {
                     ? "Deleted"
                     : "Renamed";
         return (
-            <div className="py-0.5 text-sm text-text-muted">
+            <div className="py-0.5 text-md text-text-muted">
                 {label}{" "}
                 <span className="text-text-secondary">
                     {block.content ? fileName(block.content) : ""}
@@ -851,7 +875,7 @@ export function TurnWorkflowSummary({
                         return next;
                     });
                 }}
-                className="flex w-fit max-w-full items-center gap-1 py-0.5 text-sm text-text-muted hover:text-text-primary transition-colors"
+                className="flex w-fit max-w-full items-center gap-1 py-0.5 text-sm text-text-primary/80 hover:text-text-primary transition-colors"
             >
                 <span>
                     {isActive ? (
@@ -865,7 +889,7 @@ export function TurnWorkflowSummary({
                 </span>
                 <Icon
                     name="chevron_right"
-                    size={14}
+                    size={16}
                     className={cn("shrink-0 opacity-0 transition-transform duration-200", open && "rotate-90 opacity-50")}
                 />
             </button>
@@ -881,7 +905,7 @@ export function TurnWorkflowSummary({
                             type="button"
                             title={summaryLabel}
                             onClick={() => setStepsOpen((v) => !v)}
-                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-sm text-text-muted hover:text-text-primary transition-colors"
+                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-md font-medium text-text-primary/80 hover:text-text-primary transition-colors"
                         >
                             <span className="min-w-0 truncate">{summaryLabel}</span>
                             {hasLintDelta ? (
@@ -889,7 +913,7 @@ export function TurnWorkflowSummary({
                             ) : null}
                             <Icon
                                 name="chevron_right"
-                                size={12}
+                                size={16}
                                 className={cn(
                                     "shrink-0 opacity-0 transition-transform duration-200",
                                     stepsOpen && "rotate-90 opacity-50",
@@ -899,12 +923,74 @@ export function TurnWorkflowSummary({
                     ) : null}
 
                     <Collapse open={stepsOpen}>
-                        <div className="flex flex-col gap-0.5 pl-3">
+                        <div className="relative ml-1 flex flex-col gap-0.5 border-l border-border pl-3">
                             {(() => {
                                 let skippedLeadThought = false;
                                 return rows.map((row, i) => {
                                     if (row.kind === "git_stage_group") {
                                         return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
+                                    }
+                                    if (row.kind === "read_group") {
+                                        const n = row.paths.length;
+                                        if (n === 1) {
+                                            return (
+                                                <StepRow
+                                                    key={`read-${i}`}
+                                                    block={{ type: "cat", content: row.paths[0] } as Chunk}
+                                                />
+                                            );
+                                        }
+                                        return (
+                                            <div key={`reads-${i}`} className="wf-step">
+                                                <div className="wf-step-rail">
+                                                    <span className="wf-step-dot">
+                                                        <Icon name="description" size={12} />
+                                                    </span>
+                                                </div>
+                                                <details className="min-w-0">
+                                                    <summary className="cursor-pointer list-none text-sm text-text-muted hover:text-text-primary">
+                                                        Read {n} files
+                                                    </summary>
+                                                    <ul className="mt-1 space-y-0.5 pl-1">
+                                                        {row.paths.map((p) => (
+                                                            <li key={p}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => void openProjectFile(p)}
+                                                                    className="text-left text-xs text-text-secondary hover:text-text-primary"
+                                                                >
+                                                                    {fileName(p)}
+                                                                </button>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </details>
+                                            </div>
+                                        );
+                                    }
+                                    if (row.kind === "search_group") {
+                                        return (
+                                            <div key={`searches-${i}`} className="wf-step">
+                                                <div className="wf-step-rail">
+                                                    <span className="wf-step-dot">
+                                                        <Icon name="search" size={12} />
+                                                    </span>
+                                                </div>
+                                                <details className="min-w-0">
+                                                    <summary className="cursor-pointer list-none text-sm text-text-muted hover:text-text-primary">
+                                                        Ran {row.count} search{row.count === 1 ? "" : "es"}
+                                                    </summary>
+                                                    <ul className="mt-1 space-y-0.5 pl-1">
+                                                        {row.queries.map((q, qi) => (
+                                                            <li key={`${q}-${qi}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
+                                                                <Icon name="public" size={11} className="shrink-0 text-text-muted" />
+                                                                <span className="truncate">{q}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </details>
+                                            </div>
+                                        );
                                     }
                                     if (row.kind === "block") {
                                         const isThought =

@@ -2,7 +2,6 @@
 
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Icon } from "@/components/ui/icon";
 import { COLOR_THEMES, COLOR_THEME_ORDER, type ColorThemeId } from "@/lib/themes";
 import { ThemeWorkbenchPreview } from "./theme-workbench-preview";
 
@@ -24,7 +23,7 @@ export function ThemePicker({
         const next = (fromIndex + delta + COLOR_THEME_ORDER.length) % COLOR_THEME_ORDER.length;
         const buttons = groupRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
         buttons?.[next]?.focus();
-        onChange(COLOR_THEME_ORDER[next]);
+        onChange(COLOR_THEME_ORDER[next]!);
     };
 
     return (
@@ -43,6 +42,7 @@ export function ThemePicker({
                         type="button"
                         role="radio"
                         aria-checked={selected}
+                        aria-label={theme.label}
                         tabIndex={selected ? 0 : -1}
                         onClick={() => onChange(id)}
                         onKeyDown={(e) => {
@@ -55,28 +55,15 @@ export function ThemePicker({
                             }
                         }}
                         className={cn(
-                            "flex min-w-0 flex-col gap-2 rounded-xl border pb-3 pt-0.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                            "overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                             selected
-                                ? "border-accent bg-panel"
-                                : "border-border-subtle hover:border-border hover:bg-panel/40",
+                                ? "border-accent"
+                                : "border-border-subtle hover:border-border",
                         )}
                     >
                         <ThemeWorkbenchPreview theme={id} />
-                        <div className="flex items-center justify-between gap-2 px-3">
-                            <span className="truncate text-sm font-medium text-text-primary">
-                                {theme.label}
-                            </span>
-                            <span
-                                aria-hidden
-                                className={cn(
-                                    "flex size-4 shrink-0 items-center justify-center rounded-full border",
-                                    selected
-                                        ? "border-accent bg-accent text-accent-fg"
-                                        : "border-text-muted/40",
-                                )}
-                            >
-                                {selected ? <Icon name="check" size={10} /> : null}
-                            </span>
+                        <div className="px-3 py-2">
+                            <span className="text-sm font-medium text-text-primary">{theme.label}</span>
                         </div>
                     </button>
                 );

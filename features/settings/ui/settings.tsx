@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import {
     useSettings,
@@ -40,6 +41,9 @@ import { AccountSettingsPanel } from "./account-settings";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { Icon } from "@/components/ui/icon";
+import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
+import { ThemePicker } from "./theme-picker";
+import { normalizeColorTheme } from "@/lib/themes";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
 import { useRouter } from "next/navigation";
 import {
@@ -605,30 +609,11 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
 function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
     const dev = settings.developer;
 
-    const restartOnboarding = async () => {
+    const restartOnboarding = () => {
         localStorage.removeItem("shape-onboarding-complete");
-        if (!("__TAURI_INTERNALS__" in window)) return;
-        try {
-            const existing = await WebviewWindow.getByLabel("onboarding");
-            if (existing) {
-                await existing.show();
-                await existing.setFocus();
-                return;
-            }
-            const created = new WebviewWindow("onboarding", {
-                url: appRoute("/onboarding"),
-                title: "Welcome to Shape",
-                width: 960,
-                height: 720,
-                center: true,
-                decorations: false,
-                resizable: true,
-                visible: true,
-            });
-            await created.setFocus();
-        } catch (error) {
-            notify.error("Onboarding", error instanceof Error ? error.message : String(error));
-        }
+        window.dispatchEvent(new CustomEvent("shape-onboarding-restart"));
+        // Close settings overlay if open in agent shell.
+        window.dispatchEvent(new CustomEvent("shape-agent-overlay", { detail: null }));
     };
 
     return (
@@ -643,7 +628,7 @@ function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
             </SettingSection>
             <SettingSection title="Onboarding">
                 <SettingRow title="Restart onboarding">
-                    <Button size="sm" variant="secondary" onClick={() => void restartOnboarding()}>
+                    <Button size="sm" variant="secondary" onClick={restartOnboarding}>
                         Restart onboarding
                     </Button>
                 </SettingRow>
@@ -847,13 +832,36 @@ function ToolsSettings({ settings }: { settings: ShapeSettings }) {
 function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
+            <SettingSection id="settings-appearance" title="Appearance">
+                <SettingRow
+                    title="Theme"
+                    description="Choose light or dark chrome."
+                >
+                    <div className="w-full max-w-md">
+                        <ThemePicker
+                            value={normalizeColorTheme(settings.appearance.colorTheme)}
+                            onChange={(id) => updateSettingSection("appearance", { colorTheme: id })}
+                        />
+                    </div>
+                </SettingRow>
+            </SettingSection>
             <DeveloperSettings settings={settings} />
             <PrivacySettings settings={settings} />
         </>
     );
 }
 
-export function SettingsView() {
+export function SettingsView({
+    navPortalTarget,
+    sidebarExpanded = true,
+    onBack,
+}: {
+    /** When set, the settings nav is rendered into this element (agent sidebar). */
+    navPortalTarget?: HTMLElement | null;
+    /** Agent sidebar expanded — when false, only Back stays in the rail. */
+    sidebarExpanded?: boolean;
+    onBack?: () => void;
+} = {}) {
     const settings = useSettings();
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -866,6 +874,7 @@ export function SettingsView() {
     const scrollingToRef = React.useRef<string | null>(null);
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
+        if (section === "mcp") return "settings-ai-mcp";
         if (section === "rules") return "settings-ai-rules";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
@@ -1016,76 +1025,103 @@ export function SettingsView() {
     };
 
     return (
-        <div className="flex h-full w-full min-w-0 overflow-hidden bg-background select-none">
-            <aside className="flex w-64 shrink-0 flex-col bg-background">
-                <div className="p-3 pb-2">
-                    <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                        <Input
-                            placeholder="Search settings"
-                            value={query}
-                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                            onChange={(e) => setQuery(e.target.value)}
-                        />
-                    </div>
-                </div>
-                <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-2 pb-2">
-                    {filteredNav.map((group) => {
-                        const open = expandedGroups.has(group.id) || !!query.trim();
-                        return (
-                            <div key={group.id} className="space-y-0.5">
-                                <button
-                                    type="button"
-                                    onClick={() => toggleGroup(group.id)}
-                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
-                                >
-                                    {group.label}
-                                </button>
-                                {open && (
-                                    <div className="space-y-0.5">
-                                        {group.children.map((leaf) => (
-                                            <Button
-                                                key={leaf.id}
-                                                variant="ghost"
-                                                type="button"
-                                                onClick={() => onLeafClick(leaf)}
-                                                className={cn(
-                                                    "h-8 w-full justify-start rounded-md px-2.5",
-                                                    activeLeafId === leaf.id
-                                                        ? "bg-panel-hover text-text-primary hover:bg-panel-hover hover:text-text-primary"
-                                                        : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
-                                                )}
-                                            >
-                                                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-regular">
-                                                    {leaf.label}
-                                                    {leaf.href ? (
-                                                        <Icon name="chevron_right" size={14} className="shrink-0 text-text-muted" />
-                                                    ) : null}
-                                                </span>
-                                            </Button>
-                                        ))}
+        <div
+            className={cn(
+                "flex h-full w-full min-w-0 overflow-hidden select-none",
+                navPortalTarget ? "bg-panel" : "bg-background",
+            )}
+        >
+            {(() => {
+                const collapsed = Boolean(navPortalTarget) && !sidebarExpanded;
+                const nav = (
+                    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+                        {onBack ? (
+                            <HostedSidebarBack
+                                label="Back"
+                                onBack={onBack}
+                                collapsed={collapsed}
+                            />
+                        ) : null}
+                        {collapsed ? null : (
+                            <>
+                                <div className="p-3 pb-2">
+                                    <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
+                                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                                        <Input
+                                            placeholder="Search settings"
+                                            value={query}
+                                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                                            onChange={(e) => setQuery(e.target.value)}
+                                        />
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </nav>
-                <div className="relative p-3 pt-1">
-                    <div
-                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-background to-transparent"
-                        aria-hidden
-                    />
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start rounded-md text-sm"
-                        onClick={() => setResetConfirmOpen(true)}
-                    >
-                        Reset to Defaults
-                    </Button>
-                </div>
-            </aside>
-            <section className="min-w-0 flex-1 overflow-hidden bg-background p-2 pl-0">
+                                </div>
+                                <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+                                    {filteredNav.map((group) => {
+                                        const open = expandedGroups.has(group.id) || !!query.trim();
+                                        return (
+                                            <div key={group.id} className="space-y-0.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleGroup(group.id)}
+                                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
+                                                >
+                                                    {group.label}
+                                                </button>
+                                                {open && (
+                                                    <div className="space-y-0.5">
+                                                        {group.children.map((leaf) => (
+                                                            <Button
+                                                                key={leaf.id}
+                                                                variant="ghost"
+                                                                type="button"
+                                                                onClick={() => onLeafClick(leaf)}
+                                                                className={cn(
+                                                                    "h-8 w-full justify-start rounded-md px-2.5",
+                                                                    activeLeafId === leaf.id
+                                                                        ? "bg-panel-hover text-text-primary hover:bg-panel-hover hover:text-text-primary"
+                                                                        : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
+                                                                )}
+                                                            >
+                                                                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-regular">
+                                                                    {leaf.label}
+                                                                    {leaf.href ? (
+                                                                        <Icon name="chevron_right" size={14} className="shrink-0 text-text-muted" />
+                                                                    ) : null}
+                                                                </span>
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </nav>
+                                <div className="relative p-3 pt-1">
+                                    <div
+                                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-sidebar to-transparent"
+                                        aria-hidden
+                                    />
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full justify-start rounded-md text-sm"
+                                        onClick={() => setResetConfirmOpen(true)}
+                                    >
+                                        Reset to Defaults
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                );
+                if (navPortalTarget) return createPortal(nav, navPortalTarget);
+                return (
+                    <aside className="flex w-64 shrink-0 flex-col overflow-hidden bg-background">
+                        {nav}
+                    </aside>
+                );
+            })()}
+            <section className="min-w-0 flex-1 overflow-hidden bg-panel p-2 pl-0">
                 <div className="h-full overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-sm">
                     <div className="no-scrollbar mx-auto h-full w-full max-w-5xl space-y-2 overflow-y-auto p-6 pb-24 lg:p-8">
                         <AccountSettingsPanel />

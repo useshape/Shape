@@ -460,9 +460,6 @@ function applySettingsFromPayload(next: Partial<ShapeSettings> | ShapeSettings) 
 function emitLocal() {
     listeners.forEach((l) => l());
     if (typeof window !== "undefined") {
-        void import("@/lib/editor/monaco-registry").then(({ applyMonacoSettingsToAllEditors }) => {
-            applyMonacoSettingsToAllEditors();
-        }).catch(() => { /* registry unavailable during SSR */ });
         window.dispatchEvent(new CustomEvent("shape-settings-changed", { detail: currentSettings }));
     }
 }
@@ -606,18 +603,15 @@ export function applyAppearanceSettings(settings: ShapeSettings) {
     document.documentElement.style.setProperty("--editor-font-size", `${settings.editor.fontSize}px`);
     document.documentElement.style.setProperty("--font-mono", settings.editor.fontFamily);
 
-    // Dark is the only theme — clear any leftover data-theme from older builds.
-    delete document.documentElement.dataset.theme;
-    document.documentElement.style.colorScheme = "dark";
-    document.documentElement.classList.add("dark");
-
-    // Re-apply Monaco colors from CSS vars after theme tokens settle.
-    if (typeof window !== "undefined") {
-        requestAnimationFrame(() => {
-            void import("@/lib/ui/monaco-theme").then(({ refreshShapeMonacoTheme }) => {
-                refreshShapeMonacoTheme();
-            }).catch(() => { /* monaco not loaded */ });
-        });
+    const theme = normalizeColorTheme(settings.appearance.colorTheme);
+    if (theme === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.documentElement.style.colorScheme = "light";
+        document.documentElement.classList.remove("dark");
+    } else {
+        delete document.documentElement.dataset.theme;
+        document.documentElement.style.colorScheme = "dark";
+        document.documentElement.classList.add("dark");
     }
 }
 

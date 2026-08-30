@@ -13,7 +13,7 @@ import {
     MenubarSubTrigger,
     MenubarSubContent,
 } from "@/components/ui/dropdown";
-import { menuStructure, type MenuItem } from "@/lib/ui/menus";
+import { agentMenuStructure, type MenuItem } from "@/lib/ui/menus";
 import type { RepoHistoryEntry } from "@/lib/repo-history";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -148,7 +148,7 @@ export function TitlebarMenubar({
     onAction,
     repoHistory,
     onClearHistory,
-    structure = menuStructure,
+    structure = agentMenuStructure,
 }: {
     windowWidth: number;
     onAction: (label: string) => void;

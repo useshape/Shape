@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 import type { ColorThemeId } from "@/lib/themes";
 
 /**
- * Compact theme preview: sidebar + editor only.
- * Text skeletons use one muted color so the card reads as a layout, not fake syntax.
+ * Minimal theme card mockup: outer window + sidebar strip + main pane.
+ * Offset to the top-left — no fake text, no centered chrome.
  */
 export function ThemeWorkbenchPreview({
     theme,
@@ -14,26 +14,26 @@ export function ThemeWorkbenchPreview({
     theme: ColorThemeId;
     className?: string;
 }) {
+    const light = theme === "light";
+    const windowBg = light ? "#f4f4f5" : "#1a1a1a";
+    const sidebarBg = light ? "#e8e8ea" : "#141414";
+    const mainBg = light ? "#ffffff" : "#222222";
+    const border = light ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)";
+
     return (
         <div
             data-theme={theme}
             aria-hidden
-            className={cn(
-                "relative h-20 w-full overflow-hidden rounded-lg border border-border-subtle bg-background",
-                className,
-            )}
+            className={cn("relative h-[72px] w-full overflow-hidden rounded-xl", className)}
+            style={{ background: light ? "#ececee" : "#0f0f0f" }}
         >
-            <div className="flex h-full w-full">
-                <div className="flex min-w-0 flex-1 flex-col bg-editor">
-                    <div className="h-3.5 shrink-0 border-b border-border-subtle bg-panel" />
-                    <div className="flex flex-col gap-1.5 px-2.5 py-2.5">
-                        <div className="h-1 w-[42%] rounded-sm bg-text-muted/20" />
-                        <div className="h-1 w-[48%] rounded-sm bg-text-muted/20" />
-                        <div className="h-1 w-[22%] rounded-sm bg-text-muted/20" />
-                        <div className="h-1 w-[34%] rounded-sm bg-text-muted/20" />
-                        <div className="h-1 w-[46%] rounded-sm bg-text-muted/20" />
-                    </div>
-                </div>
+            {/* Offset window — top-left aligned, not centered */}
+            <div
+                className="absolute left-2.5 top-2.5 flex h-[78%] w-[78%] overflow-hidden rounded-lg"
+                style={{ background: windowBg, boxShadow: `inset 0 0 0 1px ${border}` }}
+            >
+                <div className="h-full w-[22%] shrink-0" style={{ background: sidebarBg }} />
+                <div className="h-full min-w-0 flex-1" style={{ background: mainBg }} />
             </div>
         </div>
     );

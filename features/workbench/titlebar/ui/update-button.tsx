@@ -36,11 +36,11 @@ export function TitlebarUpdateButton() {
   const canDismiss = status.kind === "available";
 
   return (
-    <div className="relative z-20 mx-1 flex h-6 max-w-[14rem] items-center rounded-sm text-xs text-text-primary">
+    <div className="relative z-20 mx-2 flex h-7 max-w-[15rem] items-center rounded-md text-sm bg-white/10 text-text-primary">
       <button
         type="button"
         disabled={busy && status.kind === "checking"}
-        className="flex h-full min-w-0 items-center rounded-sm px-2 transition-colors hover:bg-panel-hover disabled:opacity-70"
+        className="flex h-full min-w-0 items-center rounded-sm px-1.5 transition-colors hover:bg-panel-hover disabled:opacity-70"
         title={
           status.kind === "available"
             ? `Update available: ${status.version}`
@@ -63,7 +63,7 @@ export function TitlebarUpdateButton() {
       {canDismiss ? (
         <button
           type="button"
-          className="flex h-full w-5 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
+          className="flex h-full w-5 shrink-0 mr-1.5 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
           title="Dismiss"
           aria-label="Dismiss update"
           onClick={(e) => {
@@ -71,7 +71,7 @@ export function TitlebarUpdateButton() {
             dismissAvailableUpdate();
           }}
         >
-          <Icon name="close" size={12} />
+          <Icon name="close" size={16} />
         </button>
       ) : null}
     </div>

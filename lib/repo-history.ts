@@ -69,11 +69,20 @@ export function saveRepoHistory(entries: RepoHistoryEntry[]) {
 export function upsertRepoHistory(path: string) {
     const now = Date.now();
     const current = loadRepoHistory();
-    const next = [
-        { path, lastOpenedAt: now },
-        ...current.filter((entry) => entry.path !== path),
-    ].slice(0, MAX_REPO_HISTORY_ITEMS);
+    const existing = current.findIndex((entry) => entry.path === path);
+    let next: RepoHistoryEntry[];
+    if (existing >= 0) {
+        // Keep user order — only refresh timestamp in place.
+        next = current.map((entry, i) =>
+            i === existing ? { ...entry, lastOpenedAt: now } : entry,
+        );
+    } else {
+        next = [{ path, lastOpenedAt: now }, ...current].slice(0, MAX_REPO_HISTORY_ITEMS);
+    }
     saveRepoHistory(next);
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("shape-repo-history-changed"));
+    }
     return next;
 }
 

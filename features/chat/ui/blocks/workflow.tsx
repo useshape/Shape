@@ -25,10 +25,12 @@ function resolvePath(filePath: string): string {
 }
 
 function openFileEdit(file: string, original: string, replacement: string, isResolved?: boolean) {
+    // Agent window: open a lightweight right-side preview — never a tabbed IDE.
     const fileName = file.split(/[\\/]/).pop() || file;
     const resolved = resolvePath(file);
     void openProjectFile(file, fileName).then((ok) => {
         if (!ok) return;
+        window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "preview" }));
         if (isResolved) {
             window.dispatchEvent(new CustomEvent("shape-dismiss-diff", {
                 detail: { path: resolved, rawPath: file },
@@ -39,7 +41,7 @@ function openFileEdit(file: string, original: string, replacement: string, isRes
             window.dispatchEvent(new CustomEvent("shape-editor-preview-diff", {
                 detail: { path: resolved, original, replacement },
             }));
-        }, 150);
+        }, 100);
     });
 }
 
@@ -127,30 +129,71 @@ export function parseGitDiffMeta(content?: string): { file?: string; scope?: str
 
 type WorkflowRow =
     | { kind: "block"; block: Chunk }
-    | { kind: "git_stage_group"; paths: string[] };
+    | { kind: "git_stage_group"; paths: string[] }
+    | { kind: "read_group"; paths: string[] }
+    | { kind: "search_group"; queries: string[]; count: number };
 
 export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
     const rows: WorkflowRow[] = [];
     let stagePaths: string[] = [];
+    let readPaths: string[] = [];
+    let searchQueries: string[] = [];
 
     const flushStages = () => {
         if (stagePaths.length === 0) return;
         rows.push({ kind: "git_stage_group", paths: [...stagePaths] });
         stagePaths = [];
     };
+    const flushReads = () => {
+        if (readPaths.length === 0) return;
+        rows.push({ kind: "read_group", paths: [...readPaths] });
+        readPaths = [];
+    };
+    const flushSearches = () => {
+        if (searchQueries.length === 0) return;
+        rows.push({
+            kind: "search_group",
+            queries: [...searchQueries],
+            count: searchQueries.length,
+        });
+        searchQueries = [];
+    };
 
     for (const block of blocks) {
         if (block.type === "git_operation" && block.gitOp === "stage") {
+            flushReads();
+            flushSearches();
             const path = parseGitStagePath(block.content);
             if (path) {
                 stagePaths.push(path);
                 continue;
             }
         }
+        if (block.type === "cat" && block.content) {
+            flushStages();
+            flushSearches();
+            readPaths.push(block.content);
+            continue;
+        }
+        if (
+            (block.type === "search" || block.type === "grep" || block.type === "search_result"
+                || block.type === "web_search" || block.type === "web_result")
+            && !block.isGenerating
+        ) {
+            flushStages();
+            flushReads();
+            const q = (block.query || block.content || "").trim();
+            if (q) searchQueries.push(q);
+            continue;
+        }
         flushStages();
+        flushReads();
+        flushSearches();
         rows.push({ kind: "block", block });
     }
     flushStages();
+    flushReads();
+    flushSearches();
     return rows;
 }
 
@@ -640,7 +683,8 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
 }
 
 export function isRenderableWorkflowBlock(block: Chunk, isActive?: boolean) {
-    if (block.type === "tool_result" || block.type === "status") return false;
+    if (block.type === "status") return false;
+    if (block.type === "tool_result") return true;
     if ((block.type === "think" || block.type === "thought") && !block.content?.trim() && !isActive) return false;
     return getWorkflowActionConfig(block, isActive) !== null;
 }
@@ -682,6 +726,9 @@ export function AgentWorkflow({
             {groupWorkflowRows(visibleBlocks).map((row, i) => {
                 if (row.kind === "git_stage_group") {
                     return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
+                }
+                if (row.kind === "read_group" || row.kind === "search_group") {
+                    return null;
                 }
                 return (
                     <ActionItem

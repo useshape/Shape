@@ -23,7 +23,7 @@ import {
     usePreviewStore,
 } from "../store";
 
-export default function PreviewPanel() {
+export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: boolean }) {
     const { history, index, urlBar, iframeSrc, reloadKey, error, loading } = usePreviewStore();
     const inputRef = useRef<HTMLInputElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -142,6 +142,7 @@ export default function PreviewPanel() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-panel font-sans">
+            {hideToolbar ? null : (
             <div className="flex shrink-0 items-center gap-1 px-2 py-1.5">
                 <Tooltip content="Back">
                     <Button
@@ -229,6 +230,7 @@ export default function PreviewPanel() {
                     </Button>
                 </Tooltip>
             </div>
+            )}
 
             {error ? (
                 <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border-subtle bg-surface-1 px-3 py-2 text-xs text-text-secondary">

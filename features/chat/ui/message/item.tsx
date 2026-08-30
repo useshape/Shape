@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { cn } from "@/lib/utils";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
 import { Icon } from "@/components/ui/icon";
@@ -28,6 +28,35 @@ import { openProjectFile } from "@/lib/open-project-file";
 import { Favicon } from "@/components/ui/favicon";
 import { WebSourcesMenu } from "../blocks/search";
 import { Button } from "@/components/ui/button";
+import { useGitHubAuth } from "@/lib/github-auth/store";
+import { useShapeAuth } from "@/lib/shape-auth/store";
+import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { providerIcon } from "@/lib/ui/provider-icon";
+import { MsgBubble, TypingDots } from "./bubble";
+
+function UserMessageAvatar() {
+    const github = useGitHubAuth();
+    const auth = useShapeAuth();
+    const [failed, setFailed] = React.useState(false);
+
+    const src =
+        (github.loggedIn && github.avatarUrl ? github.avatarUrl : null)
+        ?? (auth.userId && !auth.offline ? `${SHAPE_API_BASE}/api/avatar/${auth.userId}` : null);
+
+    if (!src || failed) return null;
+
+    return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+            src={src}
+            alt=""
+            width={28}
+            height={28}
+            className="mt-0.5 size-7 shrink-0 rounded-full object-cover"
+            onError={() => setFailed(true)}
+        />
+    );
+}
 
 type ChatMessageItemProps = {
     role: string;
@@ -44,6 +73,8 @@ type ChatMessageItemProps = {
     onRedo?: (index: number) => void;
     onRestore?: (index: number) => void;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
+    /** Apple SMS: only the last bubble in a consecutive run gets a tail. */
+    hasTail?: boolean;
 };
 
 const ATTACHMENT_BLOCK_RE = /<attached_(?:image|file)\b[^>]*>[\s\S]*?<\/attached_(?:image|file)>\n*/g;
@@ -61,18 +92,69 @@ function splitUserAttachments(content: string): { text: string; attachments: str
 
 function MentionRichText({ text }: { text: string }) {
     const ranges = mentionRanges(text);
+
+    /** Color backtick spans and bare paths even when there are no @mentions. */
+    const paintPlain = (chunk: string, keyPrefix: string): React.ReactNode[] => {
+        const out: React.ReactNode[] = [];
+        const re = /(`[^`\n]+`)|((?:[A-Za-z]:)?(?:[\w.-]+[\\/])+[\w.-]+\.\w+)/g;
+        let last = 0;
+        let m: RegExpExecArray | null;
+        let i = 0;
+        while ((m = re.exec(chunk)) !== null) {
+            if (m.index > last) {
+                out.push(
+                    <span key={`${keyPrefix}-t-${i}`} className="whitespace-pre-wrap">
+                        {chunk.slice(last, m.index)}
+                    </span>,
+                );
+            }
+            if (m[1]) {
+                const inner = m[1].slice(1, -1);
+                out.push(
+                    <code
+                        key={`${keyPrefix}-c-${i}`}
+                        className="rounded bg-panel px-1 py-0.5 font-mono text-[0.9em] text-accent-text"
+                    >
+                        {inner}
+                    </code>,
+                );
+            } else if (m[2]) {
+                const path = m[2];
+                const name = path.split(/[\\/]/).pop() || path;
+                out.push(
+                    <span
+                        key={`${keyPrefix}-p-${i}`}
+                        role="button"
+                        tabIndex={0}
+                        title={path}
+                        onClick={() => void openProjectFile(path, name)}
+                        className="inline cursor-pointer font-mono text-[0.9em] text-accent-text underline-offset-2 hover:underline"
+                    >
+                        {path}
+                    </span>,
+                );
+            }
+            last = m.index + m[0].length;
+            i += 1;
+        }
+        if (last < chunk.length) {
+            out.push(
+                <span key={`${keyPrefix}-t-end`} className="whitespace-pre-wrap">
+                    {chunk.slice(last)}
+                </span>,
+            );
+        }
+        return out.length > 0 ? out : [<span key={`${keyPrefix}-all`} className="whitespace-pre-wrap">{chunk}</span>];
+    };
+
     if (ranges.length === 0) {
-        return <span className="whitespace-pre-wrap select-text">{text}</span>;
+        return <span className="select-text">{paintPlain(text, "root")}</span>;
     }
     const nodes: React.ReactNode[] = [];
     let cursor = 0;
     ranges.forEach((range, i) => {
         if (range.start > cursor) {
-            nodes.push(
-                <span key={`t-${i}`} className="whitespace-pre-wrap">
-                    {text.slice(cursor, range.start)}
-                </span>,
-            );
+            nodes.push(...paintPlain(text.slice(cursor, range.start), `pre-${i}`));
         }
         const { mention } = range;
         const openable =
@@ -114,11 +196,7 @@ function MentionRichText({ text }: { text: string }) {
         cursor = range.end;
     });
     if (cursor < text.length) {
-        nodes.push(
-            <span key="t-end" className="whitespace-pre-wrap">
-                {text.slice(cursor)}
-            </span>,
-        );
+        nodes.push(...paintPlain(text.slice(cursor), "end"));
     }
     return <span className="select-text">{nodes}</span>;
 }
@@ -132,7 +210,20 @@ function selectNodeContents(el: HTMLElement | null) {
     sel?.addRange(range);
 }
 
-function ChatMessageItemInner({ role, content, isGenerating, activityLabel, roleLabel, stats, model, index = -1, onRedo, onRestore, isFileEditResolved }: ChatMessageItemProps) {
+function ChatMessageItemInner({
+    role,
+    content,
+    isGenerating,
+    activityLabel,
+    roleLabel,
+    stats,
+    model,
+    index = -1,
+    onRedo,
+    onRestore,
+    isFileEditResolved,
+    hasTail = true,
+}: ChatMessageItemProps) {
     const [expanded, setExpanded] = React.useState(false);
     const bodyRef = React.useRef<HTMLDivElement>(null);
 
@@ -201,6 +292,7 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
         [isUser, content],
     );
 
+
     if (role === "user" && userParts) {
         const displayText = continueAction?.action
             ? continueAction.displayText
@@ -211,71 +303,58 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
             <ContextMenu>
             <ContextMenuTrigger asChild>
             <div
-                className="relative mb-4 flex w-full select-text justify-end pl-10"
+                className="relative mb-1 flex w-full select-text items-end justify-end gap-2 pl-10"
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
-                <div className="flex max-w-full flex-col items-end gap-1">
-                <div
-                    role={isLong ? "button" : undefined}
-                    tabIndex={isLong ? 0 : undefined}
-                    onClick={isLong ? () => setExpanded((v) => !v) : undefined}
-                    onKeyDown={isLong ? (e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setExpanded((v) => !v);
-                        }
-                    } : undefined}
-                    className={cn(
-                        "relative z-10 w-fit max-w-full rounded-xl bg-surface-3 px-3 py-2",
-                        "text-sm text-text-primary group select-text",
-                        isLong && "cursor-pointer",
-                    )}
-                >
-                    <div className="flex items-start gap-2 w-full min-w-0">
-                        <div ref={bodyRef} className="flex-1 min-w-0 wrap-break-word select-text">
-                            {userParts.attachments.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                                    {userParts.attachments.map((name, i) => (
-                                        <span
-                                            key={`${name}-${i}`}
-                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm border border-border-subtle bg-panel text-text-secondary"
-                                        >
-                                            <FileIcon name={name} className="w-3.5 h-3.5 shrink-0" />
-                                            <span className="truncate max-w-[160px]">{name}</span>
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                            <div
-                                className={cn(
-                                    isLong && !expanded && "chat-message-fade-clamp",
+                <div className="group flex max-w-[min(100%,36rem)] flex-col items-end gap-1">
+                    <MsgBubble side="sent" hasTail={hasTail} className="text-sm">
+                        <div
+                            role={isLong ? "button" : undefined}
+                            tabIndex={isLong ? 0 : undefined}
+                            onClick={isLong ? () => setExpanded((v) => !v) : undefined}
+                            onKeyDown={isLong ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setExpanded((v) => !v);
+                                }
+                            } : undefined}
+                            className={cn(isLong && "cursor-pointer")}
+                        >
+                            <div ref={bodyRef} className="min-w-0 wrap-break-word select-text">
+                                {userParts.attachments.length > 0 && (
+                                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                                        {userParts.attachments.map((name, i) => (
+                                            <span
+                                                key={`${name}-${i}`}
+                                                className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-black/15 px-1.5 py-0.5 text-sm"
+                                            >
+                                                <FileIcon name={name} className="h-3.5 w-3.5 shrink-0" />
+                                                <span className="max-w-[160px] truncate">{name}</span>
+                                            </span>
+                                        ))}
+                                    </div>
                                 )}
-                            >
-                                <MentionRichText text={displayText} />
+                                <div className={cn(isLong && !expanded && "chat-message-fade-clamp")}>
+                                    <MentionRichText text={displayText} />
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-0.5 shrink-0 select-none" onClick={(e) => e.stopPropagation()}>
-                            <Tooltip content="Copy Message" side="top">
-                                <button
-                                    onClick={handleCopy}
-                                    className="text-text-muted hover:text-text-primary p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <Icon name="content_copy" size={14} />
-                                </button>
-                            </Tooltip>
-                            <Tooltip content="Restore to this checkpoint" side="top">
-                                <button
-                                    onClick={() => onRestore?.(index)}
-                                    className="text-text-muted hover:text-text-primary p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <Icon name="undo" size={14} />
-                                </button>
-                            </Tooltip>
-                        </div>
+                    </MsgBubble>
+                    <div className="flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
+                        <Tooltip content="Copy Message" side="top">
+                            <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
+                                <Icon name="content_copy" size={14} />
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="Restore to this checkpoint" side="top">
+                            <button onClick={() => onRestore?.(index)} className="rounded-md p-1 text-text-muted hover:text-text-primary">
+                                <Icon name="undo" size={14} />
+                            </button>
+                        </Tooltip>
                     </div>
                 </div>
-                </div>
+                <UserMessageAvatar />
             </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
@@ -293,41 +372,60 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
         );
     }
 
+    const modelLabel = roleLabel || formatMessageModelLabel(model, stats) || "Shape";
+    const showTypingOnly = Boolean(isGenerating && !content.trim());
+
     return (
         <ContextMenu>
         <ContextMenuTrigger asChild>
         <div
-            className="flex flex-col w-full mb-4 last:border-0 relative z-10 group select-text"
+            className="group relative z-10 mb-1 flex w-full select-text flex-col gap-1"
             tabIndex={0}
             onKeyDown={handleKeyDown}
         >
-            <div ref={bodyRef} className="w-full min-w-0 select-text overflow-hidden">
-                <div className="w-full min-w-0 wrap-break-word chat-markdown max-w-none prose-compact text-sm select-text">
-                    <MessageRenderer
-                        content={content}
-                        isGenerating={isGenerating}
-                        activityLabel={activityLabel}
-                        isFileEditResolved={isFileEditResolved}
-                        durationMs={stats?.timeMs}
-                    />
+            <div className="flex items-end gap-2 pr-8">
+                <span className="mb-1 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-3">
+                    {providerIcon(model || "auto", 16)}
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="pl-1 text-xs text-text-muted">{modelLabel}</span>
+                    <MsgBubble side="recv" hasTail={hasTail} className="text-sm">
+                        <div ref={bodyRef} className="min-w-0 select-text overflow-hidden">
+                            {showTypingOnly ? (
+                                <TypingDots />
+                            ) : (
+                                <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
+                                    <MessageRenderer
+                                        content={content}
+                                        isGenerating={isGenerating}
+                                        activityLabel={activityLabel}
+                                        isFileEditResolved={isFileEditResolved}
+                                        durationMs={stats?.timeMs}
+                                    />
+                                    {isGenerating ? (
+                                        <span className="ml-1 inline-flex align-middle">
+                                            <TypingDots />
+                                        </span>
+                                    ) : null}
+                                </div>
+                            )}
+                        </div>
+                    </MsgBubble>
                 </div>
             </div>
             {!isGenerating && (
-                <div className="flex items-center gap-0.5 mt-1.5 select-none">
+                <div className="ml-9 flex items-center gap-0.5 select-none">
                     <Tooltip content="Redo" side="bottom">
                         <Button variant="ghost" size="icon" onClick={() => onRedo?.(index)}>
                             <Icon name="refresh" size={16} />
                         </Button>
                     </Tooltip>
-
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
                             <Icon name="content_copy" size={16} />
                         </Button>
                     </Tooltip>
-
                     {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
-
                     {role === "assistant" && (stats || model) && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -335,23 +433,23 @@ function ChatMessageItemInner({ role, content, isGenerating, activityLabel, role
                                 <Icon name="more_horiz" size={16} />
                             </Button>
                         </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-52">
-                                <div className="flex flex-col gap-1.5 text-sm">
-                                    <div className="flex items-center justify-between gap-4">
-                                        <span className="text-text-muted">Model</span>
-                                        <span className="font-medium text-text-primary truncate">
-                                            {formatMessageModelLabel(model, stats)}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-4">
-                                        <span className="text-text-muted">Usage</span>
-                                        <span className="font-medium text-text-primary tabular-nums">
-                                            {formatMessageUsageLine(stats, model)}
-                                        </span>
-                                    </div>
+                        <DropdownMenuContent align="start" className="w-52">
+                            <div className="flex flex-col gap-1.5 text-sm">
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-text-muted">Model</span>
+                                    <span className="truncate font-medium text-text-primary">
+                                        {formatMessageModelLabel(model, stats)}
+                                    </span>
                                 </div>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-text-muted">Usage</span>
+                                    <span className="font-medium tabular-nums text-text-primary">
+                                        {formatMessageUsageLine(stats, model)}
+                                    </span>
+                                </div>
+                            </div>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     )}
                 </div>
             )}

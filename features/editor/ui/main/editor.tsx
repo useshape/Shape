@@ -4,42 +4,29 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useEditorView } from "@/core/providers/editor";
 import { useProjectState, commands } from "@/lib/backend";
 import { diffLines } from "diff";
-import { detectFrameworks } from "../../lsp/frameworks";
-import type { ProjectFrameworks } from "../../lsp/frameworks";
 import { MarkdownPreview } from "../markdown/markdown";
 import { Panel } from "@/features/panels";
-import { getMonacoLanguage } from "../../lsp/languages";
 import { getFileExtension, isImageExtension, isFontExtension } from "../../lsp/image-types";
 
 // UI Components
 import { Breadcrumbs } from "./ui/breadcrumb";
 import { PlanEditorHeader } from "./ui/plan-editor-header";
-import { DiagnosticsIndicator } from "./ui/diagnostics";
 import { ErrorView } from "./ui/error";
 import { ImageView } from "./ui/image";
 import { FontView } from "./ui/font";
 
-// Hooks — load Monaco workers before pulling in @monaco-editor/react (via editor-view/diff).
 import { getProposedEdit, clearProposedEdit, isFileResolvedForCurrentConversation } from "../../../chat/lib/proposed-edits";
-import { useMonacoWorkers } from "./hooks/use-monaco-workers";
 import { useFileContent } from "./hooks/use-file-content";
 import { useImageLoader } from "./hooks/use-image-loader";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
-import { Tooltip } from "@/components/ui/tooltip";
+import { SimpleCodeEditor } from "../simple/simple-editor";
+import { SimpleDiffView } from "../simple/simple-diff";
 
 import type { EditorGroupId } from "@/core/providers/editor";
 import { isPlanFilePath } from "@/lib/plan-file";
 
-const CodeEditorView = React.lazy(() =>
-    import("./ui/editor-view").then((m) => ({ default: m.CodeEditorView })),
-);
-const DiffView = React.lazy(() =>
-    import("./ui/diff").then((m) => ({ default: m.DiffView })),
-);
-
 // Main file viewer component handling various file types (text, image, markdown)
-export default function FileViewer({ path, group = "left" }: { path: string; group?: EditorGroupId }) {
+export default function FileViewer({ path, group: _group = "left" }: { path: string; group?: EditorGroupId }) {
     const { getViewMode } = useEditorView();
     // getFileExtension handles diff: prefixes and display-name suffixes like " (abc1234)"
     const ext = useMemo(() => getFileExtension(path), [path]);
@@ -56,13 +43,6 @@ export default function FileViewer({ path, group = "left" }: { path: string; gro
     const skipTextContent = isRasterImage || (isSvg && showImagePreview) || (isFont && showFontPreview);
 
     const { open_files, project_path } = useProjectState();
-    const [frameworks, setFrameworks] = useState<ProjectFrameworks | null>(null);
-
-    useEffect(() => {
-        if (project_path) {
-            detectFrameworks(project_path).then(setFrameworks);
-        }
-    }, [project_path]);
 
     const fileInfo = useMemo(() => open_files.find(f => f.path === path), [path, open_files]);
     const isDiff = fileInfo?.kind === 'diff';
@@ -285,7 +265,6 @@ export default function FileViewer({ path, group = "left" }: { path: string; gro
         return { additions: add, deletions: del };
     }, [diffState]);
 
-    const monacoReady = useMonacoWorkers();
     const { imageSrc, svgContent, error: imageLoadError } = useImageLoader(path, showImagePreview);
 
     const [zoom, setZoom] = useState(1);
@@ -385,130 +364,129 @@ export default function FileViewer({ path, group = "left" }: { path: string; gro
         );
     }
 
-    if (!monacoReady) {
-        return <div className="flex-1 w-full h-full min-h-0 bg-background" />;
-    }
-
     if (loading) {
         return <div className="flex-1 w-full h-full min-h-0 bg-editor" />;
     }
 
     const renderDiffEditor = () => {
-        return (
-            <React.Suspense fallback={<div className="flex-1 w-full h-full min-h-0 bg-editor" />}>
-                <DiffView
+        if (diffState) {
+            return (
+                <SimpleDiffView
                     path={path}
-                    originalContent={originalContent}
-                    content={content}
-                    getLanguage={getMonacoLanguage}
+                    originalContent={diffState.original}
+                    content={diffState.replacement}
                 />
-            </React.Suspense>
+            );
+        }
+        return (
+            <SimpleDiffView
+                path={path}
+                originalContent={originalContent}
+                content={content}
+            />
         );
     };
 
     const renderEditor = () => {
         if (isDiff) return renderDiffEditor();
+        if (diffState) {
+            return (
+                <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
+                    <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
+                        <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
+                        <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-2 pl-2 border-l border-border-subtle h-[28px] shrink-0">
+                                <div className="flex items-center gap-1.5 font-sans text-xs font-medium mr-1">
+                                    <span className="text-success">+{additions}</span>
+                                    <span className="text-error">-{deletions}</span>
+                                </div>
+                                <span className="text-sm font-medium text-text-secondary">Reviewing changes</span>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    onClick={async () => {
+                                        try {
+                                            window.dispatchEvent(new CustomEvent('shape-editor-edit-action', {
+                                                detail: {
+                                                    path: diffState.path,
+                                                    action: 'rejected',
+                                                    replacement: diffState.replacement,
+                                                }
+                                            }));
+                                            await commands.applyFileEdit(
+                                                diffState.path,
+                                                "",
+                                                diffState.baseline || diffState.snippetOriginal,
+                                            );
+                                            clearProposedEdit(diffState.path);
+                                            window.dispatchEvent(new CustomEvent('shape-dismiss-diff', {
+                                                detail: { path: diffState.path, rawPath: diffState.path }
+                                            }));
+                                            setDiffState(null);
+                                        } catch (e) { console.error("Failed to revert diff:", e) }
+                                    }}
+                                >
+                                    Revert
+                                </Button>
+                                <Button
+                                    variant="default"
+                                    size="xs"
+                                    onClick={() => {
+                                        window.dispatchEvent(new CustomEvent('shape-editor-edit-action', {
+                                            detail: {
+                                                path: diffState.path,
+                                                action: 'applied',
+                                                replacement: diffState.replacement,
+                                            }
+                                        }));
+                                        clearProposedEdit(diffState.path);
+                                        window.dispatchEvent(new CustomEvent('shape-dismiss-diff', {
+                                            detail: { path: diffState.path, rawPath: diffState.path }
+                                        }));
+                                        setDiffState(null);
+                                    }}
+                                >
+                                    Accept
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex-1 w-full min-h-0 overflow-hidden relative">
+                        <SimpleDiffView
+                            path={path}
+                            originalContent={diffState.original}
+                            content={diffState.replacement}
+                        />
+                    </div>
+                </div>
+            );
+        }
         return (
             <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
                 {isPlanFile ? (
                     <PlanEditorHeader path={path} />
                 ) : (
                     <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
-                        <DiagnosticsIndicator path={path} />
                         <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
-                        <div className="flex items-center gap-1 shrink-0">
-                    {diffState && (
-                        <div className="flex items-center gap-2 pl-2 border-l border-border-subtle h-[28px] shrink-0">
-                            <div className="flex items-center gap-1.5 font-sans text-xs font-medium mr-1">
-                                <span className="text-success">+{additions}</span>
-                                <span className="text-error">-{deletions}</span>
-                            </div>
-                            <span className="text-sm font-medium text-text-secondary">Reviewing changes</span>
-                            <Button
-                                variant="ghost"
-                                size="xs"
-                                onClick={async () => {
-                                    try {
-                                        window.dispatchEvent(new CustomEvent('shape-editor-edit-action', {
-                                            detail: {
-                                                path: diffState.path,
-                                                action: 'rejected',
-                                                replacement: diffState.replacement,
-                                            }
-                                        }));
-                                        await commands.applyFileEdit(
-                                            diffState.path,
-                                            "",
-                                            diffState.baseline || diffState.snippetOriginal,
-                                        );
-                                        clearProposedEdit(diffState.path);
-                                        window.dispatchEvent(new CustomEvent('shape-dismiss-diff', {
-                                            detail: { path: diffState.path, rawPath: diffState.path }
-                                        }));
-                                        setDiffState(null);
-                                    } catch (e) { console.error("Failed to revert diff:", e) }
-                                }}
-                            >
-                                Revert
-                            </Button>
-                            <Button
-                                variant="default"
-                                size="xs"
-                                onClick={() => {
-                                    window.dispatchEvent(new CustomEvent('shape-editor-edit-action', {
-                                        detail: {
-                                            path: diffState.path,
-                                            action: 'applied',
-                                            replacement: diffState.replacement,
-                                        }
-                                    }));
-                                    clearProposedEdit(diffState.path);
-                                    window.dispatchEvent(new CustomEvent('shape-dismiss-diff', {
-                                        detail: { path: diffState.path, rawPath: diffState.path }
-                                    }));
-                                    setDiffState(null);
-                                }}
-                            >
-                                Accept
-                            </Button>
-                        </div>
-                    )}
                     </div>
-                </div>
                 )}
                 <div className="flex-1 w-full min-h-0 overflow-hidden relative">
-                    <React.Suspense fallback={<div className="flex-1 w-full h-full min-h-0 bg-editor" />}>
-                    <CodeEditorView
+                    <SimpleCodeEditor
                         path={path}
-                        group={group}
                         content={content}
                         setContent={setContent}
                         savedContentRef={savedContentRef}
                         isDirtyRef={isDirtyRef}
                         bufferVersionRef={bufferVersionRef}
                         isFirstLoadRef={isFirstLoadRef}
-                        projectPath={project_path}
-                        frameworks={frameworks}
-                        monacoReady={monacoReady}
-                        diffState={diffState}
                     />
-                    </React.Suspense>
                 </div>
             </div>
         );
     };
 
     const applyMarkdownContent = async (next: string) => {
-        // Split view has Monaco — apply through the editor so Ctrl+Z uses its undo stack.
-        if (mode === "split") {
-            window.dispatchEvent(
-                new CustomEvent("shape-markdown-apply-content", {
-                    detail: { path, content: next },
-                }),
-            );
-            return;
-        }
-        // Preview-only mode has no Monaco — keep a small local undo stack.
+        // Local undo stack for markdown preview edits (no Monaco).
         const prev = content;
         if (prev !== next) {
             markdownUndoRef.current.push(prev);

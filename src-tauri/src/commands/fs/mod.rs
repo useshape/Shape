@@ -619,25 +619,61 @@ pub async fn set_project_path(
     _agent_state: State<'_, crate::agent::models::AgentState>,
     path: Option<String>,
 ) -> Result<(), AppError> {
-    {
+    let normalize = |p: &str| -> String {
+        let trimmed = p.trim().trim_end_matches(['/', '\\']);
+        #[cfg(target_os = "windows")]
+        {
+            return trimmed.replace('/', "\\");
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            return trimmed.replace('\\', "/");
+        }
+    };
+
+    let path = path.map(|p| normalize(&p));
+
+    let changed = {
         let mut state = state.0.lock()?;
-        if state.project_path != path {
-            state.project_path = path.clone();
+        let current = state.project_path.as_deref().map(normalize);
+        let next = path.clone();
+        let same = match (&current, &next) {
+            (Some(a), Some(b)) => {
+                #[cfg(target_os = "windows")]
+                {
+                    a.eq_ignore_ascii_case(b)
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    a == b
+                }
+            }
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            state.project_path = next;
             state.open_files.clear();
             state.active_file = None;
+            true
+        } else {
+            // Keep canonical form even when "same"
+            if state.project_path != path {
+                state.project_path = path.clone();
+            }
+            false
         }
-    }
+    };
 
-    if let Some(p) = path {
-        start_watcher(app.clone(), &p);
-        // Kick off codebase indexing in the background as soon as a project
-        // opens (incremental + skipped when fresh), instead of lazily on the
-        // first chat message.
-        if let Some(index_state) =
-            app.try_state::<crate::agent::index::IndexState>()
-        {
-            if index_state.should_background_index(&p) {
-                let _ = index_state.spawn_background_index(app.clone(), p.clone());
+    if let Some(p) = path.as_ref() {
+        start_watcher(app.clone(), p);
+        if changed {
+            if let Some(index_state) =
+                app.try_state::<crate::agent::index::IndexState>()
+            {
+                if index_state.should_background_index(p) {
+                    let _ = index_state.spawn_background_index(app.clone(), p.clone());
+                }
             }
         }
     }
