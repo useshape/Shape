@@ -16,6 +16,7 @@ import {
     horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { restrictToHorizontalAxis, restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
+import { cn } from "@/lib/utils";
 import {
     WORKBENCH_TAB_ACTIONS_CLASS,
     WORKBENCH_TAB_BAR_CLASS,
@@ -32,9 +33,18 @@ interface TabBarShellProps {
     actions?: ReactNode;
     dndId?: string;
     hideTabs?: boolean;
+    className?: string;
 }
 
-export function TabBarShell({ itemIds, onDragEnd, children, actions, dndId, hideTabs }: TabBarShellProps) {
+export function TabBarShell({
+    itemIds,
+    onDragEnd,
+    children,
+    actions,
+    dndId,
+    hideTabs,
+    className,
+}: TabBarShellProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const sensors = useSensors(
@@ -49,7 +59,7 @@ export function TabBarShell({ itemIds, onDragEnd, children, actions, dndId, hide
     }, []);
 
     return (
-        <div className={WORKBENCH_TAB_BAR_CLASS}>
+        <div className={cn(WORKBENCH_TAB_BAR_CLASS, className)}>
             {!hideTabs ? (
                 <div
                     ref={scrollContainerRef}

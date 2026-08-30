@@ -11,10 +11,7 @@ import { useWindowControls } from "../hooks/use-window-controls";
 import { useRepoHistory } from "../hooks/use-repo-history";
 import { useEditorBuffer } from "../hooks/use-editor-buffer";
 import { TitlebarMenubar } from "../ui/app-menu";
-import { CommandOmnibar } from "../ui/command-center";
-import { AccountMenu } from "../ui/account-menu";
 import { WindowControls } from "../ui/window-controls";
-import { TitlebarLayoutControls, TitlebarSidebarToggle } from "../ui/layout-controls";
 import { TitlebarUpdateButton } from "../ui/update-button";
 import { TitlebarSearch } from "@/features/git/ui/manager/titlebar-search";
 
@@ -29,7 +26,6 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
     const isCompact = Boolean(onboarding || settings);
     const isFocus = Boolean(focus);
     const [windowWidth, setWindowWidth] = useState(1200);
-    const showSearch = windowWidth >= 900;
 
     const { isMaximized, minimize, toggleMaximize, close, closeWindow } = useWindowControls();
     const { repoHistory, clearHistory } = useRepoHistory(project_path);
@@ -77,7 +73,6 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
                                     className="logo-invert rounded-sm"
                                 />
                             </div>
-                            {!isFocus ? <TitlebarSidebarToggle /> : null}
                         </div>
                         {!isFocus ? (
                             <TitlebarMenubar
@@ -123,14 +118,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
 
             <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1">
                 {settings && title === "Git" ? <TitlebarSearch /> : null}
-                {!isCompact && !isFocus ? (
-                    <>
-                        {showSearch ? <CommandOmnibar /> : null}
-                        <TitlebarUpdateButton />
-                        <TitlebarLayoutControls />
-                        <AccountMenu />
-                    </>
-                ) : null}
+                {!isCompact && !isFocus ? <TitlebarUpdateButton /> : null}
                 <WindowControls
                     isMaximized={isMaximized}
                     onMinimize={minimize}

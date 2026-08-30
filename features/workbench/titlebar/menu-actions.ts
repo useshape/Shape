@@ -51,6 +51,10 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
             case "New Window":
                 await commands.newWindow();
                 break;
+            case "New Chat":
+                window.dispatchEvent(new CustomEvent("shape-chat-new"));
+                window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
+                break;
             case "Open File": {
                 const { open } = await import("@tauri-apps/plugin-dialog");
                 const selected = await open({
@@ -72,9 +76,10 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
             case "Open Folder": {
                 const { open } = await import("@tauri-apps/plugin-dialog");
                 const selected = await open({ directory: true, multiple: false });
-                if (selected) {
+                if (typeof selected === "string" && selected.trim()) {
+                    const normalized = selected.trim().replace(/[\\/]+$/, "").replace(/\//g, "\\");
                     window.dispatchEvent(
-                        new CustomEvent("shape-open-project", { detail: { path: selected as string } }),
+                        new CustomEvent("shape-open-project", { detail: { path: normalized } }),
                     );
                 }
                 break;
@@ -200,13 +205,17 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 }
                 break;
             case "Explorer":
-                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "explorer" }));
+                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "files" }));
                 break;
             case "Search":
-                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "search" }));
+                window.dispatchEvent(
+                    new CustomEvent("shape-command-palette", {
+                        detail: { mode: "files", placeholder: "Search files…" },
+                    }),
+                );
                 break;
             case "Source Control":
-                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "source" }));
+                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "changes" }));
                 break;
             case "Git Manager":
                 void import("@/lib/open-git-window").then(({ openGitWindow }) => openGitWindow());
@@ -228,7 +237,10 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 window.dispatchEvent(new Event("shape-open-output"));
                 break;
             case "Preview":
-                void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
+                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "preview" }));
+                break;
+            case "Changes":
+                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "changes" }));
                 break;
             case "Terminal":
                 window.dispatchEvent(

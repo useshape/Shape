@@ -4,7 +4,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
-import { PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
+import { PxInput } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import { useProjectState } from "@/lib/backend";
 import {
     clearDesignPending,
@@ -49,10 +49,10 @@ import {
     Glyph,
     IconBtn,
     IndependentCornersGlyph,
-    PadXY,
     Section,
     type DesignEffect,
 } from "./fields";
+import { ColorCapsule, DotStops, IconSegment, TickDial } from "./controls";
 import { TypographySection } from "./typography-section";
 import { ExportSection } from "./export-section";
 import { parseEffectsFromStyles } from "./parse-effects";
@@ -325,33 +325,16 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                             </div>
                         </Section>
                         <Section title="Layout">
-                            <div className="flex rounded-md bg-panel-hover p-0.5">
-                                {(
-                                    [
-                                        { kind: "block", label: "Block" },
-                                        { kind: "row", label: "Horizontal" },
-                                        { kind: "column", label: "Vertical" },
-                                        { kind: "grid", label: "Grid" },
-                                    ] as const
-                                ).map(({ kind, label }) => (
-                                    <ToggleBtn
-                                        key={kind}
-                                        label={label}
-                                        active={flow === kind}
-                                        onClick={() => patch(stylesForFlow(kind))}
-                                    >
-                                        {kind === "block" ? (
-                                            <Icon name="crop_square" size={14} />
-                                        ) : kind === "row" ? (
-                                            <Icon name="arrow_forward" size={14} />
-                                        ) : kind === "column" ? (
-                                            <Icon name="arrow_downward" size={14} />
-                                        ) : (
-                                            <Icon name="layout_grid" size={14} />
-                                        )}
-                                    </ToggleBtn>
-                                ))}
-                            </div>
+                            <IconSegment
+                                value={flow}
+                                onChange={(kind) => patch(stylesForFlow(kind))}
+                                options={[
+                                    { id: "block", icon: "crop_square", label: "Block" },
+                                    { id: "row", icon: "arrow_forward", label: "Horizontal" },
+                                    { id: "column", icon: "arrow_downward", label: "Vertical" },
+                                    { id: "grid", icon: "layout_grid", label: "Grid" },
+                                ]}
+                            />
                             <div className="flex gap-1">
                                 <PxInput
                                     glyph={<Glyph>W</Glyph>}
@@ -399,32 +382,35 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                             align={align === "stretch" ? "center" : align}
                                             onChange={(j, a) => patch({ justifyContent: j, alignItems: a })}
                                         />
-                                        <PxInput
-                                            glyph={<Icon name="width" size={12} />}
-                                            title="Gap"
-                                            value={parsePx(s.columnGap || s.gap) ?? parsePx(s.rowGap)}
-                                            onCommit={(n) => patch({ gap: px(n), columnGap: px(n), rowGap: px(n) })}
+                                        <DotStops
+                                            value={parsePx(s.columnGap || s.gap) ?? parsePx(s.rowGap) ?? 0}
+                                            stops={[0, 4, 8, 16]}
+                                            labels={["0", "4px", "8px", "16px"]}
+                                            onChange={(n) =>
+                                                patch({ gap: px(n), columnGap: px(n), rowGap: px(n) })
+                                            }
+                                            onReset={() =>
+                                                patch({ gap: "0px", columnGap: "0px", rowGap: "0px" })
+                                            }
                                         />
                                     </div>
-                                    <PadXY
-                                        x={padX}
-                                        y={padY}
-                                        independent={padIndependent}
-                                        onToggleIndependent={() => setPadIndependent((v) => !v)}
-                                        values={{
-                                            top: s.paddingTop,
-                                            right: s.paddingRight,
-                                            bottom: s.paddingBottom,
-                                            left: s.paddingLeft,
-                                        }}
-                                        onChange={(axis, n) => {
+                                    <TickDial
+                                        value={padX ?? 0}
+                                        min={0}
+                                        max={48}
+                                        step={2}
+                                        majorEvery={4}
+                                        tooltip={(n) => `Padding ${n}px`}
+                                        onChange={(n) => {
                                             const v = px(n);
-                                            if (axis === "x") patch({ paddingLeft: v, paddingRight: v });
-                                            else patch({ paddingTop: v, paddingBottom: v });
+                                            patch({
+                                                paddingLeft: v,
+                                                paddingRight: v,
+                                                paddingTop: v,
+                                                paddingBottom: v,
+                                            });
+                                            setPadIndependent(false);
                                         }}
-                                        onSide={(side, n) =>
-                                            patch({ [`padding${side}`]: px(n) } as Partial<DesignComputedStyles>)
-                                        }
                                     />
                                 </div>
                             </Collapse>
@@ -440,6 +426,21 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                         </Section>
 
                         <Section title="Appearance">
+                            <TickDial
+                                value={corners[0] ?? 0}
+                                min={0}
+                                max={32}
+                                step={1}
+                                majorEvery={4}
+                                tooltip={(n) => `Radius ${n}px`}
+                                onChange={(n) =>
+                                    patch({
+                                        borderRadius: radiusIndependent
+                                            ? formatRadiusCorners(n, corners[1], corners[2], corners[3])
+                                            : px(n),
+                                    })
+                                }
+                            />
                             <div className="flex gap-1">
                                 <PxInput
                                     glyph={<Glyph>%</Glyph>}
@@ -448,25 +449,13 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     max={100}
                                     onCommit={(n) => patch({ opacity: String(Math.max(0, Math.min(100, n)) / 100) })}
                                 />
-                                <PxInput
-                                        glyph={<Icon name="radius" size={12} />}
-                                    title="Corner radius"
-                                    value={corners[0]}
-                                    onCommit={(n) =>
-                                        patch({
-                                            borderRadius: radiusIndependent
-                                                ? formatRadiusCorners(n, corners[1], corners[2], corners[3])
-                                                : px(n),
-                                        })
-                                    }
-                                />
-                                    <IconBtn
-                                        title="Independent corners"
-                                        active={radiusIndependent}
-                                        onClick={() => setRadiusIndependent((v) => !v)}
-                                    >
-                                        <IndependentCornersGlyph />
-                                    </IconBtn>
+                                <IconBtn
+                                    title="Independent corners"
+                                    active={radiusIndependent}
+                                    onClick={() => setRadiusIndependent((v) => !v)}
+                                >
+                                    <IndependentCornersGlyph />
+                                </IconBtn>
                             </div>
                             <Collapse open={radiusIndependent}>
                                 <div className="grid grid-cols-2 gap-1">
@@ -510,7 +499,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     </IconBtn>
                                 }
                             >
-                                <ColorRow
+                                <ColorCapsule
                                     cssValue={
                                         fillKey === "color"
                                             ? s.color
@@ -518,20 +507,6 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                               ? s.backgroundImage
                                               : s.backgroundColor
                                     }
-                                    hidden={fillHidden}
-                                    onToggleHidden={() => {
-                                        const next = !fillHidden;
-                                        setFillHidden(next);
-                                        if (fillKey === "color") {
-                                            patch({ color: next ? "transparent" : "#ffffff" });
-                                            return;
-                                        }
-                                        patch(
-                                            next
-                                                ? { backgroundColor: "transparent", backgroundImage: "none" }
-                                                : { backgroundColor: "#ffffff", backgroundImage: "none" },
-                                        );
-                                    }}
                                     onChange={(c) => {
                                         setFillHidden(false);
                                         if (fillKey === "color") {
@@ -543,14 +518,6 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                             return;
                                         }
                                         patch({ backgroundColor: c, backgroundImage: "none" });
-                                    }}
-                                    onRemove={() => {
-                                        setFillHidden(true);
-                                        patch(
-                                            fillKey === "color"
-                                                ? { color: "transparent" }
-                                                : { backgroundColor: "transparent", backgroundImage: "none" },
-                                        );
                                     }}
                                 />
                             </Section>

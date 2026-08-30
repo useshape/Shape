@@ -17,24 +17,22 @@ const TooltipContent = React.forwardRef<
             ref={ref}
             sideOffset={sideOffset}
             collisionPadding={{
-                top: 40,    // Titlebar (35px) + small buffer
-                bottom: 31, // Status bar (26px) + small buffer
+                top: 40,
+                bottom: 31,
                 left: 10,
-                right: 10
+                right: 10,
             }}
             className={cn(
-                "shape-popover-content z-tooltip rounded-lg bg-panel px-2 py-1",
+                "shape-popover-content z-tooltip rounded-lg bg-surface-2 px-2 py-1",
                 "text-sm text-text-primary",
                 "filter-[drop-shadow(1px_0_0_var(--border-subtle))_drop-shadow(-1px_0_0_var(--border-subtle))_drop-shadow(0_1px_0_var(--border-subtle))_drop-shadow(0_-1px_0_var(--border-subtle))]",
-                className
+                className,
             )}
             onPointerLeave={(e) => {
-                // If primary mouse button is held down (e.g. dragging to select text), prevent closing!
                 if (e.buttons === 1) {
                     e.preventDefault();
                     const target = e.currentTarget;
                     const handlePointerUp = () => {
-                        // Resimulate pointer leave to let Radix naturally unmount now that dragging finished!
                         target.dispatchEvent(new PointerEvent("pointerleave", { bubbles: true }));
                         window.removeEventListener("pointerup", handlePointerUp);
                     };
@@ -45,7 +43,7 @@ const TooltipContent = React.forwardRef<
             {...props}
         >
             {children}
-            <TooltipPrimitive.Arrow className="fill-panel" />
+            <TooltipPrimitive.Arrow className="fill-surface-2" />
         </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
 ));
@@ -56,7 +54,7 @@ function Tooltip({
     children,
     content,
     side = "top",
-    delayDuration = 200,
+    delayDuration = 100,
     open,
     defaultOpen,
     onOpenChange,

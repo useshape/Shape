@@ -1,9 +1,8 @@
 /**
- * Color theme registry. Shape ships Dark only — tokens live on `:root`.
- * Theme ids stay for settings migration; unknown values normalize to dark.
+ * Color theme registry. Dark is default; Light is a soft chrome option.
  */
 
-export type ColorThemeId = "dark";
+export type ColorThemeId = "dark" | "light";
 
 export interface ColorThemeDefinition {
     id: ColorThemeId;
@@ -25,22 +24,29 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeDefinition> = {
         description: "Neutral charcoal. The default.",
         swatch: { background: "#141414", surface: "#1a1a1a", accent: "#3946ff" },
     },
+    light: {
+        id: "light",
+        label: "Light",
+        description: "Soft light chrome.",
+        swatch: { background: "#f4f4f5", surface: "#ffffff", accent: "#3946ff" },
+    },
 };
 
-export const COLOR_THEME_ORDER: ColorThemeId[] = ["dark"];
+export const COLOR_THEME_ORDER: ColorThemeId[] = ["dark", "light"];
 
 export function isColorThemeId(value: unknown): value is ColorThemeId {
     return typeof value === "string" && value in COLOR_THEMES;
 }
 
-/** True for themes that use a dark color scheme (editor chrome + Monaco). */
-export function isDarkColorTheme(_theme: ColorThemeId): boolean {
-    return true;
+/** True for themes that use a dark color scheme. */
+export function isDarkColorTheme(theme: ColorThemeId): boolean {
+    return theme !== "light";
 }
 
 /**
- * Migrate unknown/removed values (light, graphite, one, purple/Umber, etc.) to dark.
+ * Migrate unknown/removed values to dark; keep light when valid.
  */
-export function normalizeColorTheme(_value: unknown): ColorThemeId {
+export function normalizeColorTheme(value: unknown): ColorThemeId {
+    if (isColorThemeId(value)) return value;
     return "dark";
 }

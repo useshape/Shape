@@ -2,10 +2,33 @@
 
 import { appRoute } from "@/lib/app-route";
 import { emit, WebviewWindow } from "@/lib/tauri/client-api";
+import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
 
-/** Open the Git manager window (branches, source control, Actions, Issues, …). */
+function openInline(section?: string) {
+    window.dispatchEvent(
+        new CustomEvent("shape-agent-overlay", {
+            detail: { type: "git", section },
+        }),
+    );
+}
+
+/** Open Git Manager in the main agent shell (inline). */
 export async function openGitWindow(section?: string) {
-    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    if (typeof window === "undefined") return;
+
+    if (!isTauriRuntime()) {
+        openInline(section);
+        return;
+    }
+
+    try {
+        const isMain = await isMainTauriWindow();
+        if (isMain) {
+            openInline(section);
+            return;
+        }
+    } catch {
+        openInline(section);
         return;
     }
 
@@ -22,7 +45,6 @@ export async function openGitWindow(section?: string) {
             return;
         }
 
-        // Keep legacy "branch" label working if an old window is open.
         const legacy = await WebviewWindow.getByLabel("branch");
         if (legacy) {
             try {

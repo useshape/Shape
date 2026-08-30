@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { listen } from "@tauri-apps/api/event";
@@ -22,9 +23,20 @@ import { useGitRepos } from "@/lib/git/repos";
 import { LoadingBar } from "@/components/ui/loading";
 import { useLoading } from "@/features/loading/context";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
-import { GitManagerShellSkeleton } from "@/features/git/ui/shared/skeletons";
+import {
+    GitListSkeleton,
+    GitManagerShellSkeleton,
+    Skeleton,
+} from "@/features/git/ui/shared/skeletons";
+import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 
 export type { GitSectionId } from "@/features/git/types";
+
+const GitEmbedCtx = createContext<{
+    navPortalTarget?: HTMLElement | null;
+    sidebarExpanded?: boolean;
+    onClose?: () => void;
+}>({});
 
 type NavLeaf = { id: GitSectionId; label: string; keywords?: string[] };
 type NavGroup = { id: string; label: string; children: NavLeaf[] };
@@ -175,7 +187,7 @@ function GitManagerEmpty({ reason }: { reason: GitEmptyReason }) {
               : "This repository has no commits yet.";
 
     return (
-        <div className="flex h-full flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <div className="flex h-full flex-col items-center justify-center gap-3 bg-panel px-6 text-center">
             <ShapeLogo size={32} />
             <div>
                 <p className="text-base font-medium text-text-primary">Project is empty</p>
@@ -185,14 +197,47 @@ function GitManagerEmpty({ reason }: { reason: GitEmptyReason }) {
     );
 }
 
+/** Content-only skeleton — nav lives in the agent sidebar when embedded. */
+function GitContentSkeleton() {
+    return (
+        <div
+            className="h-full min-h-0 w-full overflow-hidden bg-panel p-3"
+            aria-busy
+            aria-label="Loading Git Manager"
+        >
+            <Skeleton className="mb-3 h-9 w-48" />
+            <GitListSkeleton rows={10} />
+        </div>
+    );
+}
+
+/** Minimal Back control while Git is loading / empty — still uses the agent sidebar slot. */
+function GitEmbedNavChrome() {
+    const { navPortalTarget, sidebarExpanded = true, onClose } = useContext(GitEmbedCtx);
+    if (!navPortalTarget || !onClose) return null;
+    const collapsed = !sidebarExpanded;
+    return createPortal(
+        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+            <HostedSidebarBack
+                label="Back"
+                onBack={onClose}
+                collapsed={collapsed}
+            />
+        </div>,
+        navPortalTarget,
+    );
+}
+
 function GitManagerGate() {
     const { project_path } = useProjectState();
     const { repos, activeRepoPath, loading } = useGitRepos(project_path);
+    const { navPortalTarget } = useContext(GitEmbedCtx);
     const [emptyReason, setEmptyReason] = useState<GitEmptyReason | null>(null);
     const [checking, setChecking] = useState(true);
     const [refreshToken, setRefreshToken] = useState(0);
 
     const repoPath = activeRepoPath ?? repos[0]?.path ?? null;
+    const embedded = Boolean(navPortalTarget);
 
     useEffect(() => {
         const onRefresh = () => setRefreshToken((n) => n + 1);
@@ -250,11 +295,21 @@ function GitManagerGate() {
     }, [project_path, loading, repoPath, refreshToken]);
 
     if (emptyReason) {
-        return <GitManagerEmpty reason={emptyReason} />;
+        return (
+            <>
+                {embedded ? <GitEmbedNavChrome /> : null}
+                <GitManagerEmpty reason={emptyReason} />
+            </>
+        );
     }
 
     if (checking || loading || !project_path) {
-        return <GitManagerShellSkeleton />;
+        return (
+            <>
+                {embedded ? <GitEmbedNavChrome /> : null}
+                {embedded ? <GitContentSkeleton /> : <GitManagerShellSkeleton />}
+            </>
+        );
     }
 
     return <ManagerShell key={project_path} />;
@@ -265,6 +320,7 @@ function ManagerShell() {
     const pathname = usePathname();
     const { section, setSection } = useFilter();
     const { resetLoading } = useLoading();
+    const { navPortalTarget, sidebarExpanded = true, onClose } = useContext(GitEmbedCtx);
     const [query, setQuery] = useState("");
     const [activeLeafId, setActiveLeafId] = useState<string>(() => section);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
@@ -308,7 +364,18 @@ function ManagerShell() {
         }).then((fn) => {
             unlisten = fn;
         });
-        return () => unlisten?.();
+        const onWindow = (e: Event) => {
+            const section = (e as CustomEvent<{ section?: string }>).detail?.section;
+            if (isSection(section)) {
+                setSection(section);
+                setActiveLeafId(section);
+            }
+        };
+        window.addEventListener("shape-git-section", onWindow as EventListener);
+        return () => {
+            unlisten?.();
+            window.removeEventListener("shape-git-section", onWindow as EventListener);
+        };
     }, [setSection]);
 
     const filteredNav = useMemo(() => {
@@ -347,49 +414,77 @@ function ManagerShell() {
         [setSection],
     );
 
-    return (
-        <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden select-none bg-background text-text-primary">
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                <aside className="flex w-64 shrink-0 flex-col bg-background">
-                    <div className="p-2">
-                        <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                            <Input
-                                placeholder="Search git"
-                                value={query}
-                                className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                                onChange={(e) => setQuery(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-                        {filteredNav.map((group) => {
-                            const open = expandedGroups.has(group.id) || !!query.trim();
-                            return (
-                                <CollapsibleNavGroup
-                                    key={group.id}
-                                    label={group.label}
-                                    open={open}
-                                    onToggle={() => toggleGroup(group.id)}
-                                >
-                                    {group.children.map((leaf) => (
-                                        <NavLeafButton
-                                            key={leaf.id}
-                                            active={activeLeafId === leaf.id || section === leaf.id}
-                                            onClick={() => select(leaf.id)}
-                                        >
-                                            <span className="truncate text-sm font-regular">
-                                                {leaf.label}
-                                            </span>
-                                        </NavLeafButton>
-                                    ))}
-                                </CollapsibleNavGroup>
-                            );
-                        })}
-                    </nav>
-                </aside>
+    const collapsed = Boolean(navPortalTarget) && !sidebarExpanded;
 
-                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-tr-xl bg-background">
+    return (
+        <div
+            className={cn(
+                "relative flex h-full w-full min-w-0 flex-col overflow-hidden select-none text-text-primary",
+                navPortalTarget ? "bg-panel" : "bg-background",
+            )}
+        >
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                {(() => {
+                    const nav = (
+                        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+                            {onClose ? (
+                                <HostedSidebarBack
+                                    label="Back"
+                                    onBack={onClose}
+                                    collapsed={collapsed}
+                                />
+                            ) : null}
+                            {collapsed ? null : (
+                                <>
+                                    <div className="p-2">
+                                        <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
+                                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                                            <Input
+                                                placeholder="Search git"
+                                                value={query}
+                                                className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
+                                                onChange={(e) => setQuery(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+                                        {filteredNav.map((group) => {
+                                            const open = expandedGroups.has(group.id) || !!query.trim();
+                                            return (
+                                                <CollapsibleNavGroup
+                                                    key={group.id}
+                                                    label={group.label}
+                                                    open={open}
+                                                    onToggle={() => toggleGroup(group.id)}
+                                                >
+                                                    {group.children.map((leaf) => (
+                                                        <NavLeafButton
+                                                            key={leaf.id}
+                                                            active={activeLeafId === leaf.id || section === leaf.id}
+                                                            onClick={() => select(leaf.id)}
+                                                        >
+                                                            <span className="truncate text-sm font-regular">
+                                                                {leaf.label}
+                                                            </span>
+                                                        </NavLeafButton>
+                                                    ))}
+                                                </CollapsibleNavGroup>
+                                            );
+                                        })}
+                                    </nav>
+                                </>
+                            )}
+                        </div>
+                    );
+                    if (navPortalTarget) return createPortal(nav, navPortalTarget);
+                    return (
+                        <aside className="flex w-64 shrink-0 flex-col overflow-hidden bg-background">
+                            {nav}
+                        </aside>
+                    );
+                })()}
+
+                <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-panel">
                     {/* Keep-alive panes use `hidden` (not `invisible`) so Monaco/diff
                         overlays cannot paint over other sections when inactive. */}
                     {visited.has("source") ? (
@@ -472,11 +567,28 @@ function ManagerShell() {
     );
 }
 
-export function GitManager() {
-    return (
+export function GitManager({
+    embedded = false,
+    navPortalTarget,
+    sidebarExpanded = true,
+    onClose,
+}: {
+    embedded?: boolean;
+    navPortalTarget?: HTMLElement | null;
+    sidebarExpanded?: boolean;
+    onClose?: () => void;
+}) {
+    const body = embedded ? (
+        <GitManagerGate />
+    ) : (
         <GitManagerIntro>
             <GitManagerGate />
         </GitManagerIntro>
+    );
+    return (
+        <GitEmbedCtx.Provider value={{ navPortalTarget, sidebarExpanded, onClose }}>
+            {body}
+        </GitEmbedCtx.Provider>
     );
 }
 

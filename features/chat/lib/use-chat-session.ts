@@ -38,6 +38,50 @@ import { loadProjectRules } from "@/lib/project-rules";
 import { isWorkspaceTrusted } from "@/lib/workspace-trust";
 import { clearAllDesignPreviewSessions } from "@/lib/design-preview-store";
 
+function chatTabsStorageKey(projectPath: string | null | undefined) {
+    const norm = (projectPath || "").replace(/\\/g, "/").toLowerCase();
+    return `shape-chat-open-tabs:${norm || "__none__"}`;
+}
+
+function readPersistedChatTabs(projectPath: string | null | undefined): {
+    tabs: ChatTab[];
+    activeId: string;
+} | null {
+    try {
+        const raw = localStorage.getItem(chatTabsStorageKey(projectPath));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { tabs?: ChatTab[]; activeId?: string };
+        if (!Array.isArray(parsed.tabs) || parsed.tabs.length === 0) return null;
+        const tabs = parsed.tabs.filter(
+            (t) => t && typeof t.id === "string" && typeof t.title === "string",
+        );
+        if (tabs.length === 0) return null;
+        const activeId =
+            typeof parsed.activeId === "string"
+            && tabs.some((t) => t.id === parsed.activeId)
+                ? parsed.activeId
+                : tabs[0]!.id;
+        return { tabs, activeId };
+    } catch {
+        return null;
+    }
+}
+
+function writePersistedChatTabs(
+    projectPath: string | null | undefined,
+    tabs: ChatTab[],
+    activeId: string,
+) {
+    try {
+        localStorage.setItem(
+            chatTabsStorageKey(projectPath),
+            JSON.stringify({ tabs, activeId }),
+        );
+    } catch {
+        /* ignore */
+    }
+}
+
 export function useChatSession() {
     const [uploadedFiles, setUploadedFiles] = React.useState<File[]>([]);
     const [inputValue, setInputValue] = React.useState(() => {
@@ -67,6 +111,7 @@ export function useChatSession() {
     const [activeChatTabId, setActiveChatTabId] = React.useState<string>(NEW_CHAT_TAB_ID);
     const [selectedModel, setSelectedModel] = React.useState("auto");
     const [selectedMode, setSelectedMode] = React.useState("Code");
+    const tabsHydratedForRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
         setSelectedMode((mode) =>
@@ -113,6 +158,70 @@ export function useChatSession() {
 
     const { project_path } = useProjectState();
     const shapeAuth = useShapeAuth();
+    const [tabsReady, setTabsReady] = React.useState(false);
+
+    // Restore open chat tabs per repo so switching projects keeps your session strip.
+    React.useEffect(() => {
+        let cancelled = false;
+        setTabsReady(false);
+        const key = chatTabsStorageKey(project_path);
+        tabsHydratedForRef.current = key;
+
+        void (async () => {
+            const persisted = readPersistedChatTabs(project_path);
+            if (persisted) {
+                setOpenChatTabs(persisted.tabs);
+                setActiveChatTabId(persisted.activeId);
+                if (persisted.activeId !== NEW_CHAT_TAB_ID) {
+                    try {
+                        await commands.loadConversation(
+                            persisted.activeId,
+                            project_path ?? undefined,
+                        );
+                        if (!cancelled) {
+                            clearAllDesignPreviewSessions();
+                            setContextSummarized(false);
+                        }
+                    } catch (err) {
+                        console.error("Failed to restore chat tab:", err);
+                    }
+                }
+            } else {
+                setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
+                setActiveChatTabId(NEW_CHAT_TAB_ID);
+            }
+            if (!cancelled) setTabsReady(true);
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [project_path, setContextSummarized]);
+
+    React.useEffect(() => {
+        if (!tabsReady) return;
+        writePersistedChatTabs(project_path, openChatTabs, activeChatTabId);
+    }, [tabsReady, project_path, openChatTabs, activeChatTabId]);
+
+    React.useEffect(() => {
+        const models = [
+            ...new Set(
+                messages
+                    .filter((m) => m.role === "assistant" && m.model)
+                    .map((m) => m.model as string)
+                    .slice(-4),
+            ),
+        ];
+        setOpenChatTabs((prev) =>
+            prev.map((tab) => {
+                if (tab.id !== activeChatTabId) return tab;
+                const same =
+                    (tab.models?.length ?? 0) === models.length
+                    && (tab.models ?? []).every((m, i) => m === models[i]);
+                return same ? tab : { ...tab, models };
+            }),
+        );
+    }, [messages, activeChatTabId]);
 
     // Latest editor selection, kept live by editor-view.tsx so an `@selection`
     // mention in the message always resolves against what's selected right now.
@@ -428,8 +537,9 @@ export function useChatSession() {
     );
 
     React.useEffect(() => {
-        refreshHistory();
-    }, [refreshHistory]);
+        if (!tabsReady) return;
+        void refreshHistory();
+    }, [tabsReady, refreshHistory]);
 
     React.useEffect(() => {
         if (project_path) {
@@ -972,6 +1082,16 @@ export function useChatSession() {
         },
         [refreshHistory, recentConvs, project_path, refreshMetadata, setMessages, setContextSummarized],
     );
+
+    React.useEffect(() => {
+        const onLoad = (e: Event) => {
+            const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+            if (!id) return;
+            void handleLoadConversation(id, { force: true });
+        };
+        window.addEventListener("shape-chat-load", onLoad as EventListener);
+        return () => window.removeEventListener("shape-chat-load", onLoad as EventListener);
+    }, [handleLoadConversation]);
 
     const handleViewAllHistory = React.useCallback(() => {
         openChatHistoryMenu();

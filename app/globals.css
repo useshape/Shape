@@ -6,24 +6,24 @@
   color-scheme: dark;
 
   /* ── Surface ladder ────────────────────────────────────── */
-  --surface-0: #1A1A1A;
-  --surface-1: #1b1b1b;
-  --surface-2: #222222;
-  --surface-3: #282828;
-  --surface-4: #333333;
+  --surface-0: #0c0c0c;
+  --surface-1: #121212;
+  --surface-2: #1a1a1a;
+  --surface-3: #222222;
+  --surface-4: #2a2a2a;
 
   /* ── Role surfaces ─────────────────────────────────────── */
-  --chrome: #151515;
-  --sidebar: #1d1d1d;
-  --editor: #151515;
-  --base: #ededee;
+  --chrome: #181818;
+  --sidebar: #181818;
+  --editor: #141414;
+  --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: var(--sidebar);
+  --panel: #141414;
   --panel-secondary: var(--surface-2);
-  --panel-active: rgba(145, 145, 145, 0.08);
+  --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.04);
   --titlebar: var(--chrome);
   --activitybar: transparent;
@@ -31,12 +31,11 @@
   --statusbar: transparent;
   --statusbar-fg: var(--text-primary);
 
-  /* ── Text ──────────────────────────────────────────────── */
-  --text-primary: var(--base);
-  --text-secondary: #b4b4b9;
-  /* Opaque greys — alpha on muted made Lucide stroke joins look broken */
-  --text-muted: #8e8e94;
-  --text-disabled: #55555a;
+  /* ── Text (neutral — no blue cast) ─────────────────────── */
+  --text-primary: #f2f2f2;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --text-disabled: #525252;
   --text-active: #ffffff;
 
   /* ── Borders / stroke ──────────────────────────────────── */
@@ -127,21 +126,21 @@
   --titlebar-height: 34px;
   --statusbar-height: 33px;
 
-  /* ── Typography (11/12/13/14; Inter) ── */
-  --font-ui: var(--font-inter), Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ── Typography (Geist) ── */
+  --font-ui: var(--font-geist-sans), "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  /* Font rendering */
+  /* Font rendering — Conductor-like crispness */
   --font-smoothing: antialiased;
   --font-smoothing-moz: grayscale;
 
   --text-2xs: 12px;
   --text-xs: 13px;
-  --text-sm: 13px;
-  --text-base: 14px;
+  --text-sm: 14px;
+  --text-base: 15px;
   --text-md: 15px;
   --text-lg: 16px;
   --text-xl: 17px;
@@ -187,6 +186,9 @@
   --pill-muted-bg: var(--surface-3);
   --pill-muted-fg: var(--text-secondary);
 
+  /* Shell tab underline (Conductor-style active indicator) */
+  --tab-indicator: #c45c4a;
+
   /* Allotment split view */
   --sash-size: 4px;
   --sash-hover-size: 4px;
@@ -201,6 +203,35 @@
 
 [data-theme="light"] .logo-invert {
   filter: invert(1) brightness(0.15);
+}
+
+/* Soft light chrome — keeps accent; flips surfaces/text. */
+[data-theme="light"] {
+  color-scheme: light;
+  --surface-0: #f7f7f8;
+  --surface-1: #ffffff;
+  --surface-2: #f0f0f2;
+  --surface-3: #e8e8eb;
+  --surface-4: #dedee3;
+  --chrome: #f4f4f5;
+  --sidebar: #ececee;
+  --editor: #ffffff;
+  --base: #141414;
+  --background: var(--chrome);
+  --foreground: var(--base);
+  --panel: #ffffff;
+  --panel-secondary: var(--surface-2);
+  --panel-active: rgba(0, 0, 0, 0.06);
+  --panel-hover: rgba(0, 0, 0, 0.04);
+  --titlebar: var(--chrome);
+  --text-primary: #141414;
+  --text-secondary: #525252;
+  --text-muted: #737373;
+  --text-disabled: #a3a3a3;
+  --text-active: #0a0a0a;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border-secondary: rgba(0, 0, 0, 0.12);
 }
 
 @theme inline {
@@ -246,6 +277,7 @@
   --color-accent-text: var(--accent-text);
   --color-accent-text-hover: var(--accent-text-hover);
   --color-accent-text-bg: var(--accent-text-bg);
+  --color-tab-indicator: var(--tab-indicator);
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -754,11 +786,11 @@ body[data-resizing] .xterm {
 }
 
 .shape-popover-content[data-state="open"] {
-  animation: shape-popover-in 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: shape-popover-in 80ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .shape-popover-content[data-state="closed"] {
-  animation: shape-popover-out 75ms cubic-bezier(0.7, 0, 0.84, 0);
+  animation: shape-popover-out 60ms cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 /* Toast notifications — CSS transitions so stack moves stay interruptible (Sonner/shadcn). */
@@ -888,6 +920,151 @@ body[data-resizing] .xterm {
   overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+
+/* ── Apple Messages–style bubbles (Samuel Kraft / iOS tail technique) ── */
+.imsg-bubble {
+  position: relative;
+  isolation: isolate;
+  max-width: min(100%, 36rem);
+  padding: 0.55rem 0.85rem;
+  line-height: 1.4;
+  word-wrap: break-word;
+  border-radius: 1.15rem;
+}
+
+.imsg-bubble.has-tail::before,
+.imsg-bubble.has-tail::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  height: 1.25rem;
+  z-index: -1;
+}
+
+.imsg-bubble.has-tail::before {
+  width: 1.25rem;
+}
+
+.imsg-bubble.has-tail::after {
+  width: 1.625rem;
+  background: var(--color-panel);
+}
+
+.imsg-bubble-sent {
+  color: #fff;
+  background: var(--imsg-sent, #0b84fe);
+}
+
+.imsg-bubble-sent.has-tail::before {
+  right: -0.4rem;
+  background: var(--imsg-sent, #0b84fe);
+  border-bottom-left-radius: 1rem 0.875rem;
+}
+
+.imsg-bubble-sent.has-tail::after {
+  right: -1.625rem;
+  border-bottom-left-radius: 0.625rem;
+}
+
+.imsg-bubble-recv {
+  color: var(--color-text-primary);
+  background: var(--imsg-recv, var(--color-surface-3));
+}
+
+.imsg-bubble-recv.has-tail::before {
+  left: -0.4rem;
+  background: var(--imsg-recv, var(--color-surface-3));
+  border-bottom-right-radius: 1rem 0.875rem;
+}
+
+.imsg-bubble-recv.has-tail::after {
+  left: -1.625rem;
+  border-bottom-right-radius: 0.625rem;
+}
+
+/* Typing indicator — three bouncing dots */
+.imsg-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.2rem;
+  min-height: 1.1rem;
+}
+
+.imsg-typing span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--color-text-muted);
+  animation: imsg-dot 1.2s ease-in-out infinite;
+}
+
+.imsg-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.imsg-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes imsg-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.2rem);
+  }
+}
+
+/* Workflow step rail (Grok-style) */
+.wf-step {
+  position: relative;
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.2rem 0;
+}
+
+.wf-step-rail {
+  display: flex;
+  width: 1rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wf-step-dot {
+  z-index: 1;
+  display: flex;
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.wf-step-line {
+  width: 1px;
+  flex: 1;
+  min-height: 0.5rem;
+  background: var(--color-border);
+}
+
+.wf-pill {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  padding: 0.15rem 0.55rem 0.15rem 0.3rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
 }
 
 /* Streaming assistant text: soft top→bottom reveal while typing. */
@@ -1125,5 +1302,24 @@ body[data-resizing] .xterm {
 .chat-tab-item {
   /* Do not retain the animation's final transform; sortable tabs need their
      inline transform while dragging. */
-  animation: shape-tab-appear 160ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: shape-tab-appear 160ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Panel / overlay fade */
+@keyframes shape-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation: shape-fade-in var(--transition-base) var(--ease-out) both;
+}
+
+/* Smooth editor scrolling (textarea + synced overlays) */
+.shape-smooth-scroll {
+  scroll-behavior: smooth;
 }

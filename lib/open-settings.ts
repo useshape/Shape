@@ -2,17 +2,52 @@
 
 import { appRoute } from "@/lib/app-route";
 import { emit, WebviewWindow } from "@/lib/tauri/client-api";
+import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
 
+function openInline(detail: {
+    type: "settings";
+    category?: string;
+    section?: string;
+    path?: string;
+}) {
+    window.dispatchEvent(new CustomEvent("shape-agent-overlay", { detail }));
+}
+
+/**
+ * Open Settings in the main agent shell (inline). Falls back to a window only
+ * when not running inside the main Shape window.
+ */
 export async function openSettingsWindow(options?: {
     category?: string;
     section?: string;
-    /** Open a settings sub-route directly instead of the default `/settings` page. */
     path?: string;
 }) {
-    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    if (typeof window === "undefined") return;
+
+    const detail = {
+        type: "settings" as const,
+        category: options?.category,
+        section: options?.section,
+        path: options?.path,
+    };
+
+    if (!isTauriRuntime()) {
+        openInline(detail);
         return;
     }
 
+    try {
+        const isMain = await isMainTauriWindow();
+        if (isMain) {
+            openInline(detail);
+            return;
+        }
+    } catch {
+        openInline(detail);
+        return;
+    }
+
+    // Secondary /settings windows (legacy) still use WebviewWindow.
     const targetPath = options?.path
         ? appRoute(options.path.startsWith("/") ? options.path : `/${options.path}`)
         : (() => {

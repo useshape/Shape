@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import type { editor as MonacoEditor } from "monaco-editor";
+// Monaco removed — unused in agent window; keep a permissive stand-in for leftover hunk helpers.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CodeEditorLike = any;
 import { commands } from "@/lib/backend/commands";
 import type { GitHunk } from "@/lib/backend/types";
 import { notify } from "@/features/notifications";
@@ -59,7 +61,7 @@ export function DiffHunkToolbar({
   hunks: GitHunk[];
   activeHunkIndex: number;
   selectedNewLines: Set<number>;
-  modifiedEditor: MonacoEditor.ICodeEditor | null;
+  modifiedEditor: CodeEditorLike | null;
   containerEl: HTMLElement | null;
   onDone: () => void;
 }) {
@@ -208,7 +210,7 @@ export function useDiffHunkState(
   repoPath: string | null,
   filePath: string,
   mode: DiffHunkMode | null,
-  modifiedEditor: MonacoEditor.ICodeEditor | null,
+  modifiedEditor: CodeEditorLike | null,
 ) {
   const [hunks, setHunks] = useState<GitHunk[]>([]);
   const [activeHunkIndex, setActiveHunkIndex] = useState(0);

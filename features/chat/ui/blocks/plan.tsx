@@ -3,9 +3,8 @@
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { commands, useProjectState, getProjectSnapshot } from "@/lib/backend";
+import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
-import { useEditorView } from "@/core/providers/editor";
 import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan-preview";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -102,7 +101,6 @@ function modKeyLabel(): string {
 export function PlanSavedBlock({ title, path }: { title: string; path: string }) {
     const { project_path } = useProjectState();
     const { isLoading } = useChatStream();
-    const { setViewMode } = useEditorView();
     const [missing, setMissing] = React.useState(false);
     const [checking, setChecking] = React.useState(false);
     const [preview, setPreview] = React.useState<{ goal: string; todos: string[] } | null>(null);
@@ -131,8 +129,9 @@ export function PlanSavedBlock({ title, path }: { title: string; path: string })
         const abs = resolvePath(path);
         const name = fileName;
         await commands.openFile(abs, name);
-        const openedPath = getProjectSnapshot().active_file ?? abs;
-        setViewMode(openedPath, "preview");
+        window.dispatchEvent(
+            new CustomEvent("shape-set-active-tab", { detail: "preview" }),
+        );
         setMissing(false);
     };
 

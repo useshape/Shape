@@ -30,5 +30,19 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "features/editor/ui/main/ui/editor-view.tsx",
+    "features/editor/ui/main/ui/diff.tsx",
+    "features/editor/ui/main/hooks/use-monaco-workers.ts",
+    "features/editor/ui/main/hooks/use-emmet.ts",
+    "features/editor/ui/main/hooks/use-eslint.ts",
+    "features/editor/ui/main/hooks/use-design-diagnostics.ts",
+    "features/editor/lsp/**",
+    "features/editor/ui/layout.tsx",
+    "features/explorer/**",
+    "features/activity-bar/**",
+    "lib/editor/suppress-monaco-native-ui.ts",
+    "lib/editor/register-monaco-languages.ts"
+  ]
 }
