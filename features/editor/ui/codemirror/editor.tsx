@@ -36,40 +36,50 @@ const shapeTheme = EditorView.theme(
     {
         "&": {
             height: "100%",
-            fontSize: "13px",
-            backgroundColor: "var(--color-editor)",
+            fontSize: "13.5px",
+            backgroundColor: "var(--color-panel)",
             color: "var(--color-text-primary)",
         },
         ".cm-scroller": {
-            fontFamily: "var(--font-mono, 'IBM Plex Mono', ui-monospace, monospace)",
-            lineHeight: "1.55",
+            fontFamily:
+                "var(--font-geist-mono, var(--font-mono), 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace)",
+            lineHeight: "1.6",
             overflow: "auto",
         },
         ".cm-content": {
             caretColor: "var(--color-text-primary)",
-            padding: "8px 0",
+            padding: "10px 0 24px",
+            minHeight: "100%",
+        },
+        ".cm-line": {
+            padding: "0 12px 0 4px",
         },
         ".cm-cursor, .cm-dropCursor": {
-            borderLeftColor: "var(--color-accent)",
+            borderLeftColor: "var(--color-text-primary)",
         },
         "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-            backgroundColor: "color-mix(in srgb, var(--color-accent) 28%, transparent)",
+            backgroundColor: "color-mix(in srgb, var(--color-accent) 22%, transparent)",
         },
         ".cm-activeLine": {
-            backgroundColor: "color-mix(in srgb, var(--color-panel-hover) 70%, transparent)",
+            backgroundColor: "color-mix(in srgb, var(--color-panel-hover) 55%, transparent)",
         },
         ".cm-gutters": {
-            backgroundColor: "var(--color-editor)",
-            color: "var(--color-text-muted)",
+            backgroundColor: "var(--color-panel)",
+            color: "var(--color-text-disabled, var(--color-text-muted))",
             border: "none",
             borderRight: "1px solid var(--color-border-subtle)",
+            minWidth: "3rem",
+        },
+        ".cm-gutterElement": {
+            padding: "0 8px 0 12px",
+            fontSize: "12px",
         },
         ".cm-activeLineGutter": {
             backgroundColor: "transparent",
             color: "var(--color-text-secondary)",
         },
         ".cm-foldPlaceholder": {
-            backgroundColor: "var(--color-panel-hover)",
+            backgroundColor: "var(--color-surface-3)",
             border: "none",
             color: "var(--color-text-muted)",
         },

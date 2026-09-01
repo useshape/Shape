@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { getMonacoOptionsFromSettings, updateSettingSection } from "@/lib/settings";
+import { getEditorOptionsFromSettings, updateSettingSection } from "@/lib/settings";
 
 describe("settings", () => {
-    it("monaco", () => {
+    it("editor options", () => {
         updateSettingSection("editor", { fontFamily: "Fira Code", fontSize: 18 });
-        const options = getMonacoOptionsFromSettings();
+        const options = getEditorOptionsFromSettings();
         expect(options.fontFamily).toBe("Fira Code");
         expect(options.fontSize).toBe(18);
     });
 
     it("guides", () => {
         updateSettingSection("editor", { showIndentGuides: true, showBracketGuides: true });
-        const options = getMonacoOptionsFromSettings();
+        const options = getEditorOptionsFromSettings();
         expect(options.guides.indentation).toBe(true);
         expect(options.guides.highlightActiveIndentation).toBe(true);
         expect(options.guides.bracketPairs).toBe(true);

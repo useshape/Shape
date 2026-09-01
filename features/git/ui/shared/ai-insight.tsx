@@ -88,7 +88,7 @@ export function GitAiAction({
             <DropdownMenuContent
                 align="end"
                 sideOffset={6}
-                className="w-[min(24rem,calc(100vw-2rem))] overflow-hidden p-0"
+                className="w-[min(24rem,calc(100vw-2rem))]"
                 onCloseAutoFocus={(e) => e.preventDefault()}
                 onClick={(e) => e.stopPropagation()}
             >

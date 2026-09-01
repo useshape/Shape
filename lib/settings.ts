@@ -171,7 +171,7 @@ export interface ShapeSettings {
         channel: UpdateChannel;
     };
     appearance: {
-        /** Color theme. Dark-only — stored for migration; always normalized to dark. */
+        /** Color theme. */
         colorTheme: ColorThemeSetting;
     };
 }
@@ -615,7 +615,7 @@ export function applyAppearanceSettings(settings: ShapeSettings) {
     }
 }
 
-export function getMonacoOptionsFromSettings(settings: ShapeSettings = getSettings()) {
+export function getEditorOptionsFromSettings(settings: ShapeSettings = getSettings()) {
     return {
         fontFamily: settings.editor.fontFamily,
         fontSize: settings.editor.fontSize,

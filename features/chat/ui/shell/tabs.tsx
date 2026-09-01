@@ -15,7 +15,15 @@ import {
     workbenchTabItemClass,
 } from "@/features/editor/ui/tabs/workbench-tab-styles";
 import { cn } from "@/lib/utils";
-import { ModelAvatarStack } from "../message/bubble";
+import { ModelAvatarStack, WorkingDots } from "../message/bubble";
+import { useIsChatGenerating } from "../../lib/generating-chats";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger,
+} from "@/components/ui/context";
 
 export type ChatTab = {
     id: string;
@@ -27,18 +35,29 @@ export type ChatTab = {
 /** Draft / unsaved conversation sentinel — still used by the chat session store. */
 export const NEW_CHAT_TAB_ID = "__new_chat__";
 
+/** In-memory demo conversation (not persisted to disk). */
+export const DEMO_CHAT_TAB_ID = "__demo_chat__";
+
+export function isEphemeralChatTabId(id: string): boolean {
+    return id === NEW_CHAT_TAB_ID || id === DEMO_CHAT_TAB_ID;
+}
+
 function SortableChatTab({
     tab,
     isActive,
     canClose,
     onSelect,
     onClose,
+    onCloseOthers,
+    onCloseAll,
 }: {
     tab: ChatTab;
     isActive: boolean;
     canClose: boolean;
     onSelect: (id: string) => void;
     onClose?: (id: string) => void;
+    onCloseOthers?: (id: string) => void;
+    onCloseAll?: () => void;
 }) {
     const {
         attributes,
@@ -48,6 +67,7 @@ function SortableChatTab({
         transition,
         isDragging,
     } = useSortable({ id: tab.id });
+    const generating = useIsChatGenerating(tab.id);
 
     const style = {
         transform: transform
@@ -63,40 +83,71 @@ function SortableChatTab({
     };
 
     return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            {...attributes}
-            {...listeners}
-            onClick={() => onSelect(tab.id)}
-            className={workbenchTabItemClass(isActive, isDragging)}
-        >
-            <div className={cn(WORKBENCH_TAB_CONTENT_CLASS, isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS)}>
-                {tab.models && tab.models.length > 0 ? (
-                    <ModelAvatarStack models={tab.models} size={14} />
-                ) : null}
-                <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
-                    <FadeTruncate title={tab.title} className="min-w-0 max-w-[140px] truncate text-sm">
-                        {tab.title || "New Chat"}
-                    </FadeTruncate>
-                </div>
-                {canClose && onClose ? (
-                    <div className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center">
-                        <button
-                            type="button"
-                            aria-label={`Close ${tab.title}`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onClose(tab.id);
-                            }}
-                            className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
-                        >
-                            <Icon name="close" size={12} />
-                        </button>
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
+                <div
+                    ref={setNodeRef}
+                    style={style}
+                    {...attributes}
+                    {...listeners}
+                    onClick={() => onSelect(tab.id)}
+                    className={workbenchTabItemClass(isActive, isDragging)}
+                >
+                    <div
+                        className={cn(
+                            WORKBENCH_TAB_CONTENT_CLASS,
+                            isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS,
+                        )}
+                    >
+                        {generating ? (
+                            <WorkingDots className="imsg-typing imsg-typing-sm shrink-0" />
+                        ) : tab.models && tab.models.length > 0 ? (
+                            <ModelAvatarStack models={tab.models} size={14} />
+                        ) : null}
+                        <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
+                            <FadeTruncate
+                                title={tab.title}
+                                className="min-w-0 max-w-[140px] truncate text-sm"
+                            >
+                                {tab.title || "New Chat"}
+                            </FadeTruncate>
+                        </div>
+                        {canClose && onClose ? (
+                            <div className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center">
+                                <button
+                                    type="button"
+                                    aria-label={`Close ${tab.title}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onClose(tab.id);
+                                    }}
+                                    className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
+                                >
+                                    <Icon name="close" size={12} />
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
+                </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="min-w-44">
+                <ContextMenuItem onClick={() => onSelect(tab.id)}>Open</ContextMenuItem>
+                {canClose && onClose ? (
+                    <ContextMenuItem onClick={() => onClose(tab.id)}>Close</ContextMenuItem>
                 ) : null}
-            </div>
-        </div>
+                {onCloseOthers ? (
+                    <ContextMenuItem onClick={() => onCloseOthers(tab.id)}>
+                        Close Others
+                    </ContextMenuItem>
+                ) : null}
+                {onCloseAll ? (
+                    <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onClick={onCloseAll}>Close All</ContextMenuItem>
+                    </>
+                ) : null}
+            </ContextMenuContent>
+        </ContextMenu>
     );
 }
 
@@ -143,17 +194,32 @@ export function ChatTabBar({
         [onReorderTabs, tabs],
     );
 
+    const closeOthers = useCallback(
+        (keepId: string) => {
+            if (!onCloseTab || !tabs) return;
+            for (const t of tabs) {
+                if (t.id !== keepId) onCloseTab(t.id);
+            }
+        },
+        [onCloseTab, tabs],
+    );
+
+    const closeAll = useCallback(() => {
+        if (!onCloseTab || !tabs) return;
+        for (const t of tabs) onCloseTab(t.id);
+    }, [onCloseTab, tabs]);
+
     return (
         <TabBarShell
             dndId="agent-chat-tabs"
             itemIds={list.map((t) => t.id)}
             onDragEnd={handleDragEnd}
             className="h-full min-w-0 flex-1 bg-transparent px-1"
-            actions={
+            listEnd={
                 <button
                     type="button"
                     onClick={onNewChat}
-                    className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
+                    className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "ml-0.5 shrink-0 self-center")}
                     aria-label="New chat"
                 >
                     <Icon name="add" size={ICON_SIZE_SM} />
@@ -168,6 +234,8 @@ export function ChatTabBar({
                     canClose={Boolean(onCloseTab) && list.length > 1}
                     onSelect={(id) => onSelectTab?.(id)}
                     onClose={onCloseTab}
+                    onCloseOthers={onCloseTab ? closeOthers : undefined}
+                    onCloseAll={onCloseTab ? closeAll : undefined}
                 />
             ))}
         </TabBarShell>

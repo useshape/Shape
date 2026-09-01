@@ -12,7 +12,7 @@ import {
 import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
 import { PlanningBlock } from '../blocks/plan';
-import { DesignPreviewGallery, type DesignPreviewItem } from '../blocks/gallery';
+import type { DesignPreviewItem } from '../blocks/gallery';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { QuestionBlock } from '../blocks/question';
 import { hostnameOf } from '@/lib/favicon';
@@ -901,14 +901,8 @@ export function MessageRenderer({
                 </button>
             );
         }
-        if (chunk.type === 'design_previews' && chunk.designPreviews?.length) {
-            return (
-                <DesignPreviewGallery
-                    key={`design-previews-${index}`}
-                    previews={chunk.designPreviews}
-                    selectedId={chunk.selectedConcept}
-                />
-            );
+        if (chunk.type === 'design_previews') {
+            return null;
         }
         if (chunk.type === 'review_debate') {
             return (

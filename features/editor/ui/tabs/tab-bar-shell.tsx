@@ -30,6 +30,8 @@ interface TabBarShellProps {
     itemIds: string[];
     onDragEnd: (event: DragEndEvent) => void;
     children: ReactNode;
+    /** Rendered after the tab list, still in the scroll row (before the flex trail). */
+    listEnd?: ReactNode;
     actions?: ReactNode;
     dndId?: string;
     hideTabs?: boolean;
@@ -40,6 +42,7 @@ export function TabBarShell({
     itemIds,
     onDragEnd,
     children,
+    listEnd,
     actions,
     dndId,
     hideTabs,
@@ -78,6 +81,7 @@ export function TabBarShell({
                                 <SortableContext items={itemIds} strategy={horizontalListSortingStrategy}>
                                     {children}
                                 </SortableContext>
+                                {listEnd}
                             </div>
                             <div className={WORKBENCH_TAB_TRAIL_CLASS} aria-hidden />
                         </div>

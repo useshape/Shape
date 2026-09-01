@@ -30,9 +30,9 @@ export function ChatMessageList({
     isFileEditResolved: (file: string, replacement?: string) => boolean;
     emptyState?: ReactNode;
     activeChatTabId?: string;
+    /** @deprecated sticky removed */
+    stickyTurnIndex?: number;
 }) {
-    const flat = messageGroups.flat();
-
     return (
         <>
             {messages.length === 0 ? (
@@ -52,8 +52,6 @@ export function ChatMessageList({
                                     isLoading
                                     && msg.role === "assistant"
                                     && msgIdx === messages.length - 1;
-                                const next = flat.find((f) => f.msgIdx === msgIdx + 1)?.msg;
-                                const hasTail = !next || next.role !== msg.role;
                                 return (
                                     <div
                                         key={`${msg.role}-${msg.timestamp}-${msgIdx}`}
@@ -72,7 +70,6 @@ export function ChatMessageList({
                                             onRedo={onRedo}
                                             onRestore={onRestore}
                                             isFileEditResolved={isFileEditResolved}
-                                            hasTail={hasTail}
                                         />
                                     </div>
                                 );

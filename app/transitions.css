@@ -1,0 +1,604 @@
+:root {
+  --goo-std: 10;
+  --goo-alpha: 18;
+  --goo-bias: -7;
+  --goo-fancy-alpha: 19;
+  --goo-fancy-bias: -9;
+
+  --dropdown-open-dur: 250ms;
+  --dropdown-close-dur: 150ms;
+  --dropdown-pre-scale: 0.97;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --morph-open-dur: 320ms;
+  --morph-close-dur: 240ms;
+  --morph-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --morph-close-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --morph-r-closed: 16px;
+  --morph-r-open: 16px;
+  --morph-fade-dur: 180ms;
+  --morph-fade-delay: 40ms;
+  --morph-slide: 0px;
+  --morph-rotate: 45deg;
+  --morph-scale: 1;
+  --morph-blur: 0px;
+  --morph-w-closed: 40px;
+  --morph-h-closed: 40px;
+  --morph-w-open: 260px;
+  --morph-h-open: 180px;
+
+  --toggle-dur: 350ms;
+  --toggle-travel: 14.66px;
+  --toggle-ov1: 1px;
+  --toggle-ov2: 0px;
+  --toggle-track: 0ms;
+  --toggle-ease: cubic-bezier(0.34, 1.35, 0.64, 1);
+
+  --think-hold: 2000ms;
+  --think-swap: 150ms;
+  --think-gap: 50ms;
+  --think-distance: 8px;
+  --think-blur: 2px;
+  --think-shimmer: 2000ms;
+  --think-base: var(--text-muted);
+  --think-highlight: var(--text-primary);
+  --think-ease: ease-in-out;
+
+  --reason-hold: 840ms;
+  --reason-step: 500ms;
+  --reason-lines: 2;
+  --reason-fade: 28px;
+  --reason-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --stream-fade: 180ms;
+  --stream-gap: 60ms;
+  --stream-blur: 4px;
+  --stream-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --hint-swap: 320ms;
+  --hint-distance: 8px;
+  --hint-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --check-opacity-dur: 400ms;
+  --check-rotate-dur: 400ms;
+  --check-rotate-from: 80deg;
+  --check-bob-dur: 400ms;
+  --check-y-amount: 8px;
+  --check-blur-dur: 400ms;
+  --check-blur-from: 4px;
+  --check-path-dur: 400ms;
+  --check-path-delay: 60ms;
+  --check-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-ease-opacity: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-ease-rotate: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-ease-bob: cubic-bezier(0.34, 1.35, 0.64, 1);
+  --check-ease-path: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes shape-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--dropdown-pre-scale));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shape-popover-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(var(--dropdown-closing-scale));
+  }
+}
+
+.shape-popover-content {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(
+      --radix-context-menu-content-transform-origin,
+      var(--radix-tooltip-content-transform-origin, center)
+    )
+  );
+  will-change: opacity, transform;
+}
+
+.shape-popover-content[data-state="open"] {
+  animation: shape-popover-in var(--dropdown-open-dur) var(--dropdown-ease);
+}
+
+.shape-popover-content[data-state="closed"] {
+  animation: shape-popover-out var(--dropdown-close-dur) var(--dropdown-ease);
+}
+
+.shape-goo-filters {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.t-morph {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--morph-w-closed, 40px);
+  height: var(--morph-h-closed, 40px);
+  /* Half closed height = pill. Never 9999px — browsers glitch interpolating that. */
+  border-radius: var(--morph-r-closed, 16px);
+  overflow: hidden;
+  /* Inset ring avoids border-box width fighting the measured trigger. */
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  transform-origin: bottom left;
+  will-change: width, height, border-radius;
+  transition:
+    width var(--morph-close-dur) var(--morph-close-ease),
+    height var(--morph-close-dur) var(--morph-close-ease),
+    border-radius var(--morph-close-dur) var(--morph-close-ease);
+}
+
+.t-morph[data-align="end"] {
+  transform-origin: bottom right;
+}
+
+/* Skip size tween until closed width is measured (avoids 96→real snap). */
+.t-morph[data-ready="false"] {
+  transition: none !important;
+}
+
+.t-morph[data-open="true"] {
+  width: var(--morph-w-open, 183px);
+  height: var(--morph-h-open, 172px);
+  border-radius: var(--morph-r-open, 16px);
+  transition:
+    width var(--morph-open-dur) var(--morph-ease),
+    height var(--morph-open-dur) var(--morph-ease),
+    border-radius var(--morph-open-dur) var(--morph-ease);
+}
+
+/* Dropdown morph: closed chrome comes from the trigger button itself. */
+.t-morph--dropdown {
+  background: transparent;
+  box-shadow: none;
+}
+.t-morph--dropdown[data-open="true"] {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+/* Trigger stays closed-size at the bottom edge; fades out on open (no slide/blur). */
+.t-morph-plus {
+  position: absolute;
+  inset: auto auto 0 0;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: var(--morph-w-closed, 40px);
+  height: var(--morph-h-closed, 40px);
+  max-height: var(--morph-h-closed, 40px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding-inline: 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity var(--morph-fade-dur) var(--morph-close-ease);
+}
+
+.t-morph[data-align="end"] .t-morph-plus {
+  inset: auto 0 0 auto;
+}
+
+.t-morph-plus:hover {
+  color: var(--text-primary);
+}
+
+.t-morph[data-open="true"] .t-morph-plus {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.t-morph-menu {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  opacity: 0;
+  /* Size morph handles motion; content only fades to avoid blurry slide. */
+  transform: none !important;
+  pointer-events: none !important;
+  visibility: hidden;
+  transition:
+    opacity var(--morph-fade-dur) var(--morph-close-ease),
+    visibility 0s linear var(--morph-fade-dur);
+  transition-delay: 0ms;
+}
+
+.t-morph[data-open="true"] .t-morph-menu {
+  opacity: 1;
+  pointer-events: auto !important;
+  visibility: visible;
+  transition-delay: var(--morph-fade-delay);
+  transition:
+    opacity var(--morph-fade-dur) var(--morph-close-ease),
+    visibility 0s linear 0s;
+}
+
+.t-toggle {
+  transition: background var(--toggle-track) var(--toggle-ease);
+}
+
+.t-toggle-thumb {
+  translate: 0 0;
+  will-change: translate;
+}
+
+.t-toggle[data-on="true"] .t-toggle-thumb {
+  translate: var(--toggle-travel) 0;
+}
+
+.t-toggle.is-init[data-on="true"] .t-toggle-thumb {
+  animation: t-toggle-on var(--toggle-dur) var(--toggle-ease) both;
+}
+
+.t-toggle.is-init[data-on="false"] .t-toggle-thumb {
+  animation: t-toggle-off var(--toggle-dur) var(--toggle-ease) both;
+}
+
+@keyframes t-toggle-on {
+  0% {
+    translate: 0 0;
+  }
+  55% {
+    translate: calc(var(--toggle-travel) + var(--toggle-ov1)) 0;
+  }
+  80% {
+    translate: calc(var(--toggle-travel) - var(--toggle-ov2)) 0;
+  }
+  100% {
+    translate: var(--toggle-travel) 0;
+  }
+}
+
+@keyframes t-toggle-off {
+  0% {
+    translate: var(--toggle-travel) 0;
+  }
+  55% {
+    translate: calc(0px - var(--toggle-ov1)) 0;
+  }
+  80% {
+    translate: var(--toggle-ov2) 0;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+
+.t-think {
+  position: relative;
+  display: inline-block;
+  text-align: left;
+}
+
+.t-think-sizer {
+  display: block;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.t-think-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: block;
+  color: var(--think-base);
+  white-space: nowrap;
+  transform: translateY(0);
+  filter: blur(0);
+  opacity: 1;
+  transition:
+    transform var(--think-swap) var(--think-ease),
+    filter var(--think-swap) var(--think-ease),
+    opacity var(--think-swap) var(--think-ease);
+  will-change: transform, filter, opacity;
+}
+
+.t-think-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--think-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 400% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-think-shimmer var(--think-shimmer) linear infinite;
+}
+
+@keyframes t-think-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+.t-think-text.is-exit {
+  transform: translateY(calc(var(--think-distance) * -1));
+  filter: blur(var(--think-blur));
+  opacity: 0;
+}
+
+.t-think-text.is-enter-start {
+  transition: none;
+  transform: translateY(var(--think-distance));
+  filter: blur(var(--think-blur));
+  opacity: 0;
+}
+
+.t-reason {
+  position: relative;
+  overflow: hidden;
+}
+
+.t-reason-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    transparent 0,
+    black var(--reason-fade),
+    black calc(100% - var(--reason-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    transparent 0,
+    black var(--reason-fade),
+    black calc(100% - var(--reason-fade)),
+    transparent 100%
+  );
+}
+
+.t-reason-scroll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(0);
+  will-change: transform;
+}
+
+.t-stream-w {
+  opacity: 0;
+  filter: blur(var(--stream-blur));
+  transition:
+    opacity var(--stream-fade) var(--stream-ease),
+    filter var(--stream-fade) var(--stream-ease);
+}
+
+.t-stream-w.is-in {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.t-success-check {
+  display: inline-block;
+  transform-origin: center;
+  opacity: 0;
+  will-change: transform, opacity, filter;
+}
+
+.t-success-check svg {
+  display: block;
+  overflow: visible;
+}
+
+.t-success-check svg path {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+}
+
+.t-success-check[data-state="in"] {
+  animation:
+    t-check-fade var(--check-opacity-dur) var(--check-ease-opacity) forwards,
+    t-check-rotate var(--check-rotate-dur) var(--check-ease-rotate) forwards,
+    t-check-blur var(--check-blur-dur) var(--check-ease-out) forwards,
+    t-check-bob var(--check-bob-dur) var(--check-ease-bob) forwards;
+}
+
+.t-success-check[data-state="in"] svg path {
+  animation: t-check-draw var(--check-path-dur) var(--check-ease-path)
+    var(--check-path-delay, 0ms) forwards;
+}
+
+@keyframes t-check-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes t-check-rotate {
+  from {
+    transform: rotate(var(--check-rotate-from));
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes t-check-blur {
+  from {
+    filter: blur(var(--check-blur-from));
+  }
+  to {
+    filter: blur(0);
+  }
+}
+
+@keyframes t-check-bob {
+  from {
+    translate: 0 var(--check-y-amount);
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes t-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.t-spin-check {
+  position: relative;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+
+.t-spin-check__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  animation: t-spin-check-spin 0.7s linear infinite;
+  opacity: 1;
+  transition: opacity 120ms var(--dropdown-ease);
+}
+
+.t-spin-check[data-state="done"] .t-spin-check__ring {
+  opacity: 0;
+  animation: none;
+}
+
+.t-spin-check__mark {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.t-spin-check[data-state="done"] .t-spin-check__mark {
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 160ms var(--dropdown-ease),
+    transform 220ms var(--morph-ease);
+}
+
+@keyframes t-spin-check-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Composer rotating empty-state hint (fade up). */
+.t-composer-hint {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.t-composer-hint__text {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.625;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    opacity var(--hint-swap) var(--hint-ease),
+    transform var(--hint-swap) var(--hint-ease);
+}
+.t-composer-hint__text[data-phase="in"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+.t-composer-hint__text[data-phase="out"] {
+  opacity: 0;
+  transform: translateY(calc(var(--hint-distance) * -1));
+}
+.t-composer-hint__text[data-phase="enter"] {
+  opacity: 0;
+  transform: translateY(var(--hint-distance));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shape-popover-content[data-state="open"],
+  .shape-popover-content[data-state="closed"] {
+    animation: none !important;
+  }
+  .t-morph,
+  .t-morph-plus,
+  .t-morph-menu {
+    transition: none !important;
+  }
+  .t-composer-hint__text {
+    transition: none !important;
+  }
+  .t-toggle-thumb {
+    animation: none !important;
+  }
+  .t-think-text {
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .t-think-text::before {
+    display: none !important;
+  }
+  .t-reason-scroll {
+    transition: none !important;
+    transform: none !important;
+  }
+  .t-stream-w {
+    transition: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+  .t-success-check {
+    animation: none !important;
+    opacity: 1;
+  }
+  .t-success-check svg path {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .t-spin-check__ring {
+    animation: none !important;
+  }
+}
+
+/* Design Mode — match sidebar chrome to background */
+html[data-design-mode="1"] .titlebar-container {
+  background-color: var(--background) !important;
+}

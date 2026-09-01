@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,7 +23,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
   "include": [
@@ -34,15 +40,9 @@
     "node_modules",
     "features/editor/ui/main/ui/editor-view.tsx",
     "features/editor/ui/main/ui/diff.tsx",
-    "features/editor/ui/main/hooks/use-monaco-workers.ts",
     "features/editor/ui/main/hooks/use-emmet.ts",
     "features/editor/ui/main/hooks/use-eslint.ts",
     "features/editor/ui/main/hooks/use-design-diagnostics.ts",
-    "features/editor/lsp/**",
-    "features/editor/ui/layout.tsx",
-    "features/explorer/**",
-    "features/activity-bar/**",
-    "lib/editor/suppress-monaco-native-ui.ts",
-    "lib/editor/register-monaco-languages.ts"
+    "features/editor/ui/layout.tsx"
   ]
 }

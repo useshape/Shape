@@ -1,5 +1,5 @@
 pub(crate) mod client;
-mod credentials;
+pub(crate) mod credentials;
 mod http_client;
 mod oauth;
 mod types;
@@ -66,12 +66,30 @@ impl McpState {
             if server.auth == McpAuthType::Oauth && get_token(&server.id).is_none() {
                 return Err("NEEDS_AUTH".to_string());
             }
+            let bearer = server
+                .env
+                .get("AUTHORIZATION")
+                .or_else(|| server.env.get("Authorization"))
+                .map(|v| {
+                    let t = v.trim();
+                    t.strip_prefix("Bearer ")
+                        .or_else(|| t.strip_prefix("bearer "))
+                        .unwrap_or(t)
+                        .to_string()
+                })
+                .filter(|s| !s.is_empty());
             // Reached from async Tauri commands: `block_on` on a tokio worker panics
             // unless the worker is first moved to blocking mode via `block_in_place`.
             let rt = tokio::runtime::Handle::current();
             let auth = server.auth.clone();
             let client = tokio::task::block_in_place(|| {
-                rt.block_on(HttpMcpClient::connect(&server.id, &server.name, url, auth))
+                rt.block_on(HttpMcpClient::connect(
+                    &server.id,
+                    &server.name,
+                    url,
+                    auth,
+                    bearer,
+                ))
             })?;
             return Ok(ConnectedClient::Http(client));
         }

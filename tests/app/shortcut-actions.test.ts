@@ -89,19 +89,16 @@ describe("dispatchShortcutAction", () => {
 
     it("dispatches explorer", () => {
         const tab = listenCustomEvent("shape-set-active-tab");
-        const layout = listenCustomEvent("shape-layout-toggle");
         expect(dispatchShortcutAction("Explorer", "Ctrl+Shift+E")).toBe(true);
-        expect(tab.events[0]?.detail).toBe("explorer");
-        expect(layout.events[0]?.detail).toEqual({ id: "primary-sidebar", value: true });
+        expect(tab.events[0]?.detail).toBe("files");
         tab.off();
-        layout.off();
     });
 
-    it("dispatches search sidebar", () => {
-        const tab = listenCustomEvent("shape-set-active-tab");
+    it("dispatches search via command palette", () => {
+        const palette = listenCustomEvent("shape-command-palette");
         expect(dispatchShortcutAction("Search", "Ctrl+Shift+F")).toBe(true);
-        expect(tab.events[0]?.detail).toBe("search");
-        tab.off();
+        expect(palette.events[0]?.detail).toMatchObject({ mode: "files" });
+        palette.off();
     });
 
     it("dispatches source control", () => {
@@ -111,28 +108,22 @@ describe("dispatchShortcutAction", () => {
         tab.off();
     });
 
-    it("dispatches problems panel", () => {
-        const problems = listenWindowEvent("shape-open-problems");
-        const layout = listenCustomEvent("shape-layout-toggle");
-        expect(dispatchShortcutAction("Problems", "Ctrl+Shift+M")).toBe(true);
-        expect(problems.events).toHaveLength(1);
-        expect(layout.events[0]?.detail).toEqual({ id: "panel", value: true });
-        problems.off();
-        layout.off();
+    it("ignores removed problems shortcut", () => {
+        expect(dispatchShortcutAction("Problems", "Ctrl+Shift+M")).toBe(false);
     });
 
-    it("dispatches find in files", () => {
-        const mode = listenCustomEvent<{ mode: string }>("shape-search-mode");
+    it("dispatches find in files via command palette", () => {
+        const palette = listenCustomEvent("shape-command-palette");
         expect(dispatchShortcutAction("Find in Files", "Ctrl+Shift+F")).toBe(true);
-        expect(mode.events[0]?.detail).toEqual({ mode: "search" });
-        mode.off();
+        expect(palette.events[0]?.detail).toMatchObject({ mode: "files" });
+        palette.off();
     });
 
-    it("dispatches replace in files", () => {
-        const mode = listenCustomEvent<{ mode: string }>("shape-search-mode");
+    it("dispatches replace in files via command palette", () => {
+        const palette = listenCustomEvent("shape-command-palette");
         expect(dispatchShortcutAction("Replace in Files", "Ctrl+H")).toBe(true);
-        expect(mode.events[0]?.detail).toEqual({ mode: "replace" });
-        mode.off();
+        expect(palette.events[0]?.detail).toMatchObject({ mode: "files" });
+        palette.off();
     });
 
     it("dispatches command palette variants", () => {

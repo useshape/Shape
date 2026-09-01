@@ -7,7 +7,11 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
     DropdownMenuLabel,
+    DropdownMenuSub,
+    DropdownMenuSubTrigger,
+    DropdownMenuSubContent,
 } from "@/components/ui/dropdown";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
@@ -19,13 +23,14 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context";
 import { providerIcon } from "@/lib/ui/provider-icon";
+import { AUTO_DISPLAY_MODEL } from "../message/bubble";
 import { MentionPicker } from "./mentions";
 import { PendingEditsPanel } from "./edits";
 import {
     ComposerTasksStrip,
     type ComposerTaskItem,
 } from "./activity";
-import { ComposerAttachments, isImageFile } from "./attachments";
+import { ComposerAttachments, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
 import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText } from "@/lib/chat-mentions";
 import { FileIcon } from "@/components/ui/file-icon";
@@ -47,25 +52,51 @@ type ChatInputProps = {
     inputValue: string;
     isLoading: boolean;
     webSearch: string;
-    uploadedFiles: File[];
+    uploadedFiles: ComposerAttachment[];
     onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     onKeyDown: (e: React.KeyboardEvent) => void;
     onSendMessage: () => void;
     onStopMessage: () => void;
     setWebSearch: (s: string) => void;
-    setUploadedFiles: React.Dispatch<React.SetStateAction<File[]>>;
+    setUploadedFiles: React.Dispatch<React.SetStateAction<ComposerAttachment[]>>;
+    addUploadedFiles: (files: File[]) => void;
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     selectedModel: string;
     setSelectedModel: (m: string) => void;
     selectedMode: string;
     setSelectedMode: (m: string) => void;
+    reasoningEffort: ReasoningEffort;
+    setReasoningEffort: (e: ReasoningEffort) => void;
+    /** OpenRouter priority / Fast — independent of reasoning effort. */
+    fastMode: boolean;
+    setFastMode: (v: boolean) => void;
     pendingEdits?: { id: string; file: string; original: string; replacement: string; baseline?: string }[];
     onAcceptAllEdits?: () => void;
     onRejectAllEdits?: () => void;
     onAcceptEdit?: (id: string) => void;
     onRejectEdit?: (id: string) => void;
     taskItems?: ComposerTaskItem[];
+    /** Tighter chrome for empty-chat centered layout */
+    variant?: "default" | "empty";
 };
+
+export type ReasoningEffort = "low" | "high" | "ultra" | "max";
+
+const EFFORT_OPTIONS: { id: ReasoningEffort; label: string }[] = [
+    { id: "low", label: "Low" },
+    { id: "high", label: "Medium" },
+    { id: "ultra", label: "High" },
+    { id: "max", label: "Max" },
+];
+
+function effortLabel(id: ReasoningEffort): string {
+    return EFFORT_OPTIONS.find((o) => o.id === id)?.label ?? "Low";
+}
+
+function effortFastLabel(effort: ReasoningEffort, fast: boolean): string {
+    const base = effortLabel(effort);
+    return fast ? `${base} Fast` : base;
+}
 
 
 
@@ -196,6 +227,17 @@ const CODE_EXTENSIONS = new Set([
     'gitignore', 'env', 'ini', 'cfg', 'conf', 'txt', 'log', 'csv', 'lock'
 ]);
 
+/** Binary assets the agent can write into the project (fonts, icons, etc.). */
+const ASSET_EXTENSIONS = new Set([
+    'ttf', 'otf', 'woff', 'woff2', 'eot',
+    'ico', 'icns',
+    'pdf',
+]);
+
+const VIDEO_EXTENSIONS = new Set([
+    'mp4', 'mov', 'webm', 'avi', 'mkv', 'm4v', 'wmv', 'flv', 'mpeg', 'mpg',
+]);
+
 function getFileExtension(name: string): string {
     const parts = name.split('.');
     return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
@@ -205,17 +247,73 @@ function isCodeFile(file: File): boolean {
     return CODE_EXTENSIONS.has(getFileExtension(file.name));
 }
 
+function isAssetFile(file: File): boolean {
+    return ASSET_EXTENSIONS.has(getFileExtension(file.name));
+}
+
+function isVideoFile(file: File): boolean {
+    if (file.type.startsWith("video/")) return true;
+    return VIDEO_EXTENSIONS.has(getFileExtension(file.name));
+}
+
 function isAllowedFile(file: File): boolean {
-    return isImageFile(file) || isCodeFile(file);
+    if (isVideoFile(file)) return false;
+    return isImageFile(file) || isCodeFile(file) || isAudioFile(file) || isAssetFile(file);
 }
 
 const CHAT_MODES = [
-    { id: "Code", icon: "code" },
-    { id: "Ask", icon: "chat" },
-    { id: "Plan", icon: "list_alt" },
-    { id: "Visual", icon: "palette" },
-    { id: "Review", icon: "security" },
+    { id: "Code", icon: "code", color: "#3B82F6" },
+    { id: "Ask", icon: "chat", color: "#22C55E" },
+    { id: "Plan", icon: "list_alt", color: "#A855F7" },
+    { id: "Visual", icon: "palette", color: "#EC4899" },
+    { id: "Review", icon: "security", color: "#F59E0B" },
 ] as const;
+
+const COMPOSER_HINTS = [
+    "Plan, Build, / for skills, @ for context",
+    "Drop an image or screenshot to redesign",
+    "Ask to explore the codebase with @codebase",
+    "Paste a stack trace to debug",
+    "Describe a UI change and preview it in Visual",
+    "Review a PR or file for bugs and edge cases",
+] as const;
+
+function RotatingComposerHint({ paused }: { paused: boolean }) {
+    const [index, setIndex] = React.useState(0);
+    const [phase, setPhase] = React.useState<"in" | "out" | "enter">("in");
+    const indexRef = React.useRef(0);
+
+    React.useEffect(() => {
+        if (paused) {
+            setPhase("in");
+            return;
+        }
+        let exitTimer: ReturnType<typeof setTimeout> | undefined;
+        let enterTimer: ReturnType<typeof setTimeout> | undefined;
+        const hold = window.setInterval(() => {
+            setPhase("out");
+            exitTimer = setTimeout(() => {
+                indexRef.current = (indexRef.current + 1) % COMPOSER_HINTS.length;
+                setIndex(indexRef.current);
+                setPhase("enter");
+                enterTimer = setTimeout(() => setPhase("in"), 30);
+            }, 320);
+        }, 8000);
+        return () => {
+            window.clearInterval(hold);
+            if (exitTimer) clearTimeout(exitTimer);
+            if (enterTimer) clearTimeout(enterTimer);
+        };
+    }, [paused]);
+
+    return (
+        <div className="t-composer-hint" aria-hidden>
+            <span className="t-composer-hint__text text-sm!" data-phase={phase}>
+                {COMPOSER_HINTS[index]}
+            </span>
+        </div>
+    );
+}
 
 export function ChatInput({
     inputValue,
@@ -226,17 +324,23 @@ export function ChatInput({
     onSendMessage,
     onStopMessage,
     setUploadedFiles,
+    addUploadedFiles,
     selectedModel,
     setSelectedModel,
     selectedMode,
     setSelectedMode,
+    reasoningEffort,
+    setReasoningEffort,
+    fastMode,
+    setFastMode,
     pendingEdits = [],
     onAcceptAllEdits,
     onRejectAllEdits,
     onAcceptEdit,
     onRejectEdit,
     taskItems = [],
-}: Omit<ChatInputProps, 'webSearch' | 'setWebSearch' | 'handleFileUpload'>) {
+    variant = "default",
+}: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
     const shapeAuth = useShapeAuth();
@@ -346,19 +450,37 @@ export function ChatInput({
 
         if (filesToAdd.length > 0) {
             e.preventDefault();
-            setUploadedFiles((prev: File[]) => [...prev, ...filesToAdd]);
+            addUploadedFiles(filesToAdd);
         }
-    }, [setUploadedFiles]);
+    }, [addUploadedFiles]);
 
-    // Handle drop events
+    const [dragOver, setDragOver] = React.useState(false);
+    const dragDepth = React.useRef(0);
+
     const handleDrop = React.useCallback((e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        dragDepth.current = 0;
+        setDragOver(false);
         const files = Array.from(e.dataTransfer.files).filter(isAllowedFile);
         if (files.length > 0) {
-            setUploadedFiles((prev: File[]) => [...prev, ...files]);
+            addUploadedFiles(files);
         }
-    }, [setUploadedFiles]);
+    }, [addUploadedFiles]);
+
+    const handleDragEnter = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragDepth.current += 1;
+        if (e.dataTransfer.types.includes("Files")) setDragOver(true);
+    }, []);
+
+    const handleDragLeave = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDragOver(false);
+    }, []);
 
     const handleDragOver = React.useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -370,12 +492,12 @@ export function ChatInput({
         if (e.target.files) {
             const allowed = Array.from(e.target.files).filter(isAllowedFile);
             if (allowed.length > 0) {
-                setUploadedFiles((prev: File[]) => [...prev, ...allowed]);
+                addUploadedFiles(allowed);
             }
         }
         // Reset input so same file can be re-selected
-        e.target.value = '';
-    }, [setUploadedFiles]);
+        e.target.value = "";
+    }, [addUploadedFiles]);
 
     const MODELS = getVisibleModels(allModels, settings.ai.enabledModels);
     const autoModel = allModels.find((m) => m.id === "auto") ?? {
@@ -413,9 +535,16 @@ export function ChatInput({
 
     // Build the accept string for the file input
     const acceptString = [
-        ...Array.from(IMAGE_EXTENSIONS).map(ext => `.${ext}`),
-        ...Array.from(CODE_EXTENSIONS).map(ext => `.${ext}`),
-    ].join(',');
+        ...Array.from(IMAGE_EXTENSIONS).map((ext) => `.${ext}`),
+        ...Array.from(CODE_EXTENSIONS).map((ext) => `.${ext}`),
+        ...Array.from(ASSET_EXTENSIONS).map((ext) => `.${ext}`),
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".ogg",
+        ".flac",
+        ".aac",
+    ].join(",");
 
     const [mediaViewer, setMediaViewer] = React.useState<{
         src?: string;
@@ -439,19 +568,24 @@ export function ChatInput({
         };
     }, []);
 
-    const hasComposerChrome = pendingEdits.length > 0 || taskItems.length > 0;
-
     const inputPanel = (
                 <div
                     className={cn(
                         "relative flex w-full flex-col border border-border-subtle bg-surface-3 transition-colors focus-within:border-border",
                         "rounded-[1.35rem]",
+                        dragOver && "border-accent bg-accent/5",
                         needsSignIn && "opacity-50 cursor-not-allowed pointer-events-none",
-                        hasComposerChrome && "rounded-t-none border-t-0",
                     )}
                     onDrop={needsSignIn ? undefined : handleDrop}
+                    onDragEnter={needsSignIn ? undefined : handleDragEnter}
+                    onDragLeave={needsSignIn ? undefined : handleDragLeave}
                     onDragOver={needsSignIn ? undefined : handleDragOver}
                 >
+                {dragOver ? (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-dashed border-accent/60 bg-surface-3/90">
+                        <p className="text-sm font-medium text-text-primary">Drop files to attach</p>
+                    </div>
+                ) : null}
                 <MentionPicker
                     open={mentionOpen}
                     query={mentionQuery}
@@ -462,18 +596,25 @@ export function ChatInput({
                 />
                 <div className="flex min-h-0 flex-col overflow-hidden rounded-[inherit]">
                 <ComposerAttachments
-                    files={uploadedFiles}
-                    onRemove={(index) =>
-                        setUploadedFiles((prev: File[]) =>
-                            prev.filter((_, idx) => idx !== index),
-                        )
+                    attachments={uploadedFiles}
+                    onRemove={(id) =>
+                        setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
                     }
                 />
 
                 <div className="relative px-4 py-3">
+                    {!needsSignIn && !inputValue ? (
+                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0">
+                            <RotatingComposerHint paused={false} />
+                        </div>
+                    ) : needsSignIn && !inputValue ? (
+                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 text-sm font-medium leading-relaxed text-text-muted">
+                            Sign in to use the chat
+                        </div>
+                    ) : null}
                     <div
                         aria-hidden
-                        className="pointer-events-none absolute inset-x-4 inset-y-3 overflow-hidden whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-text-primary"
+                        className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 overflow-hidden whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-text-primary"
                     >
                         {(() => {
                             const ranges = mentionRanges(inputValue);
@@ -556,7 +697,12 @@ export function ChatInput({
                                     }
                                 }}
                                 readOnly={needsSignIn}
-                                placeholder={needsSignIn ? "Sign in to use the chat" : "Ask anything…"}
+                                placeholder=""
+                                aria-label={
+                                    needsSignIn
+                                        ? "Sign in to use the chat"
+                                        : COMPOSER_HINTS[0]
+                                }
                                 rows={1}
                                 className="relative z-[1] min-h-7 w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium leading-relaxed text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30"
                                 style={{ caretColor: "var(--text-primary)" }}
@@ -631,6 +777,44 @@ export function ChatInput({
                         >
                             <Icon name="add" size={16} />
                         </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild disabled={needsSignIn}>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    disabled={needsSignIn}
+                                    className="h-8 rounded-full px-2.5 font-medium"
+                                    style={{
+                                        backgroundColor: `${selectedModeInfo.color}22`,
+                                        color: selectedModeInfo.color,
+                                    }}
+                                >
+                                    <div className="flex items-center gap-1.5 text-sm">
+                                        <Icon name={selectedModeInfo.icon} size={14} />
+                                        <span className="truncate">{selectedModeInfo.id}</span>
+                                        <Icon name="expand_more" size={14} className="opacity-70" />
+                                    </div>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48">
+                                {CHAT_MODES.map((mode) => (
+                                    <DropdownMenuItem
+                                        key={mode.id}
+                                        onClick={() => setSelectedMode(mode.id)}
+                                    >
+                                        <Icon
+                                            name={mode.icon}
+                                            size={14}
+                                            style={{ color: mode.color }}
+                                        />
+                                        <span className="flex-1">{mode.id}</span>
+                                        {selectedMode === mode.id ? (
+                                            <Icon name="check" size={14} className="text-text-muted" />
+                                        ) : null}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-0.5">
@@ -640,76 +824,104 @@ export function ChatInput({
                                     variant="ghost"
                                     size="xs"
                                     disabled={needsSignIn}
-                                    className="h-8 max-w-[140px] rounded-full px-2 font-medium text-text-muted hover:text-text-primary"
+                                    className="h-8 max-w-[200px] rounded-full px-2 font-medium"
                                 >
                                     <div className="flex min-w-0 items-center gap-1 text-sm">
-                                        <span className="truncate">
-                                            {modelInfo.name === "auto" ? "Fast" : modelInfo.name}
+                                        {providerIcon(
+                                            selectedModel === "auto" ? AUTO_DISPLAY_MODEL : selectedModel,
+                                            14,
+                                        )}
+                                        <span className="truncate text-text-primary">
+                                            {selectedModel === "auto" || modelInfo.name === "auto"
+                                                ? "Auto"
+                                                : modelInfo.name}
                                         </span>
-                                        <Icon name="expand_more" size={14} className="shrink-0 opacity-70" />
+                                        <span className="shrink-0 text-text-muted">
+                                            {effortFastLabel(reasoningEffort, fastMode)}
+                                        </span>
+                                        <Icon name="expand_more" size={14} className="shrink-0 opacity-70 text-text-muted" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-55 overflow-hidden">
-                                <div className="relative">
-                                    <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
-                                        <DropdownMenuLabel className="text-sm font-regular text-text-muted">
-                                            Mode
-                                        </DropdownMenuLabel>
-                                        {CHAT_MODES.map((mode) => (
+                            <DropdownMenuContent align="end" className="w-[260px]">
+                                <div className="flex h-9 items-center justify-between gap-3 rounded-lg px-2.5">
+                                    <span className="text-sm text-text-primary">Fast</span>
+                                    <Switch
+                                        checked={fastMode}
+                                        onCheckedChange={(on) => setFastMode(on)}
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                </div>
+
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
+                                        <span className="text-sm text-text-primary">Effort</span>
+                                        <span className="flex items-center gap-1 text-sm text-text-muted">
+                                            {effortLabel(reasoningEffort)}
+                                        </span>
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-40">
+                                        {EFFORT_OPTIONS.map((opt) => (
                                             <DropdownMenuItem
-                                                key={mode.id}
-                                                onClick={() => setSelectedMode(mode.id)}
+                                                key={opt.id}
+                                                onClick={() => setReasoningEffort(opt.id)}
                                                 className={cn(
-                                                    "flex w-full cursor-pointer items-center",
-                                                    selectedMode === mode.id && "bg-panel-hover",
+                                                    "flex cursor-pointer items-center",
+                                                    reasoningEffort === opt.id && "bg-panel-hover",
                                                 )}
                                             >
-                                                <div className="flex w-full items-center gap-1.5">
-                                                    <Icon name={mode.icon} size={16} />
-                                                    <span className="flex-1 font-regular text-sm text-text-primary">
-                                                        {mode.id}
-                                                    </span>
-                                                    {selectedMode === mode.id && (
-                                                        <Icon name="check" size={14} className="text-text-primary" />
-                                                    )}
-                                                </div>
+                                                <span className="flex-1 text-sm">{opt.label}</span>
+                                                {reasoningEffort === opt.id ? (
+                                                    <Icon name="check" size={14} />
+                                                ) : null}
                                             </DropdownMenuItem>
                                         ))}
-                                        <DropdownMenuLabel className="text-sm font-regular text-text-muted">
-                                            Model
-                                        </DropdownMenuLabel>
-                                        <ModelItem
-                                            model={autoModel}
-                                            isSelected={selectedModel === "auto"}
-                                            onSelect={() => setSelectedModel("auto")}
-                                        />
-                                        {providerOrder.filter((p) => p !== "Auto").map((provider) => {
-                                            const providerModels = MODELS.filter((m) => m.provider === provider);
-                                            if (providerModels.length === 0) return null;
-                                            return (
-                                                <div key={provider}>
-                                                    <DropdownMenuLabel className="text-sm font-regular text-text-muted">
-                                                        {provider}
-                                                    </DropdownMenuLabel>
-                                                    {providerModels.map((m) => {
-                                                        const allowed = isCatalogModelAllowed(m.id);
-                                                        return (
-                                                            <ModelItem
-                                                                key={m.id}
-                                                                model={m}
-                                                                isSelected={selectedModel === m.id}
-                                                                onSelect={setSelectedModel}
-                                                                disabled={!allowed}
-                                                                disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
-                                                            />
-                                                        );
-                                                    })}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
+                                        <span className="text-sm text-text-primary">Model</span>
+                                        <span className="min-w-0 truncate text-sm text-text-muted">
+                                            {selectedModel === "auto" ? "Auto" : modelInfo.name}
+                                        </span>
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-60">
+                                        <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
+                                            <ModelItem
+                                                model={autoModel}
+                                                isSelected={selectedModel === "auto"}
+                                                onSelect={() => setSelectedModel("auto")}
+                                            />
+                                            {providerOrder.filter((p) => p !== "Auto").map((provider) => {
+                                                const providerModels = MODELS.filter(
+                                                    (m) => m.provider === provider,
+                                                );
+                                                if (providerModels.length === 0) return null;
+                                                return (
+                                                    <div key={provider}>
+                                                        <DropdownMenuLabel className="text-xs font-regular text-text-muted">
+                                                            {provider}
+                                                        </DropdownMenuLabel>
+                                                        {providerModels.map((m) => {
+                                                            const allowed = isCatalogModelAllowed(m.id);
+                                                            return (
+                                                                <ModelItem
+                                                                    key={m.id}
+                                                                    model={m}
+                                                                    isSelected={selectedModel === m.id}
+                                                                    onSelect={setSelectedModel}
+                                                                    disabled={!allowed}
+                                                                    disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
+                                                                />
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
 
@@ -739,10 +951,15 @@ export function ChatInput({
                         <button
                             type="button"
                             onClick={isLoading ? onStopMessage : () => onSendMessage()}
-                            disabled={needsSignIn || (!isLoading && !inputValue.trim() && uploadedFiles.length === 0)}
+                            disabled={
+                                needsSignIn ||
+                                (!isLoading && !inputValue.trim() && uploadedFiles.length === 0) ||
+                                uploadedFiles.some((a) => a.status === "processing")
+                            }
                             className={cn(
                                 "flex size-8 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40",
-                                (inputValue.trim() || isLoading || uploadedFiles.length > 0)
+                                (inputValue.trim() || isLoading || uploadedFiles.length > 0) &&
+                                    !uploadedFiles.some((a) => a.status === "processing")
                                     ? "bg-accent text-white hover:opacity-90"
                                     : "bg-panel-hover text-text-muted",
                             )}
@@ -761,33 +978,52 @@ export function ChatInput({
     );
 
     return (
-        <div className="relative shrink-0 px-3 pb-3 pt-1">
-            <div className="relative z-10 flex flex-col">
-                {pendingEdits.length > 0 && onAcceptAllEdits && onRejectAllEdits ? (
-                    <PendingEditsPanel
-                        embedded
-                        edits={pendingEdits}
-                        onAcceptAll={onAcceptAllEdits}
-                        onRejectAll={onRejectAllEdits}
-                        onAccept={onAcceptEdit}
-                        onReject={onRejectEdit}
-                    />
-                ) : null}
-                {taskItems.length > 0 ? (
-                    <div
-                        className={cn(
-                            "overflow-hidden border mx-2 border-border bg-panel border-b-0",
-                            pendingEdits.length > 0
-                                ? "rounded-none border-t-0"
-                                : "rounded-t-xl",
-                        )}
-                    >
-                        <ComposerTasksStrip items={taskItems} />
+        <div
+            className={cn(
+                "relative shrink-0 overflow-visible",
+                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-3 pb-3 pt-1",
+            )}
+        >
+            {/* Morph pills float above the input (items-end so open morph grows up, never into input). */}
+            <div className="relative z-10 overflow-visible">
+                {(pendingEdits.length > 0 || taskItems.length > 0) ? (
+                    <div className="pointer-events-none absolute bottom-full left-2 z-30 mb-2 flex flex-wrap items-end gap-1.5">
+                        <div className="pointer-events-auto flex flex-wrap items-end gap-1.5">
+                            {pendingEdits.length > 0 && onAcceptAllEdits && onRejectAllEdits ? (
+                                <PendingEditsPanel
+                                    edits={pendingEdits}
+                                    onAcceptAll={onAcceptAllEdits}
+                                    onRejectAll={onRejectAllEdits}
+                                    onAccept={onAcceptEdit}
+                                    onReject={onRejectEdit}
+                                />
+                            ) : null}
+                            {taskItems.length > 0 ? (
+                                <ComposerTasksStrip items={taskItems} />
+                            ) : null}
+                        </div>
                     </div>
                 ) : null}
                 {needsSignIn ? (
                     <Tooltip side="top" content="Sign in to Shape to use AI chat.">
-                        <div className="w-full cursor-not-allowed">{inputPanel}</div>
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            className="w-full cursor-pointer text-left"
+                            onClick={() => {
+                                void import("@/features/workbench/ui/login-prompt-dialog").then(
+                                    ({ requestShapeLogin }) => requestShapeLogin(),
+                                );
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    (e.currentTarget as HTMLElement).click();
+                                }
+                            }}
+                        >
+                            {inputPanel}
+                        </div>
                     </Tooltip>
                 ) : (
                     inputPanel

@@ -389,13 +389,9 @@ export function BrowserView() {
         return () => window.removeEventListener("shape-design-exit", onExit);
     }, [exitDesignMode]);
 
-    useEffect(() => {
-        const onToggle = () => {
-            void toggleDesignMode();
-        };
-        window.addEventListener("shape-toggle-design-mode", onToggle);
-        return () => window.removeEventListener("shape-toggle-design-mode", onToggle);
-    }, [toggleDesignMode]);
+    // Design Mode is owned by DesignStudio (full-bleed). Browser tab keeps its
+    // own palette toggle via `toggleDesignMode` — do not also listen to
+    // `shape-toggle-design-mode` or both surfaces fight each other.
 
     useEffect(() => {
         const onTool = (e: Event) => {
@@ -445,7 +441,7 @@ export function BrowserView() {
         const onKey = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "d") {
                 e.preventDefault();
-                void toggleDesignMode();
+                window.dispatchEvent(new CustomEvent("shape-toggle-design-mode"));
             }
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
                 e.preventDefault();

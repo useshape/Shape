@@ -29,6 +29,7 @@ import {
     Skeleton,
 } from "@/features/git/ui/shared/skeletons";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
+import { AccountRow } from "@/features/agent/sidebar/account";
 
 export type { GitSectionId } from "@/features/git/types";
 
@@ -472,6 +473,11 @@ function ManagerShell() {
                                             );
                                         })}
                                     </nav>
+                                    {navPortalTarget ? (
+                                        <div className="mt-auto shrink-0 px-1 pb-1">
+                                            <AccountRow />
+                                        </div>
+                                    ) : null}
                                 </>
                             )}
                         </div>

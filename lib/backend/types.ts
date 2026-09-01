@@ -258,6 +258,9 @@ export interface ChatMessage {
         creditsCharged?: number;
         usedAuto?: boolean;
         autoPercent?: number;
+        reasoningEffort?: string;
+        mode?: string;
+        latencyMs?: number;
     };
 }
 

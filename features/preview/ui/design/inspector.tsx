@@ -281,9 +281,12 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                         <div className="h-8 w-2/3 animate-pulse rounded-md bg-panel-hover" />
                     </div>
                 ) : !selected || !s ? (
-                    <p className="px-3 py-4 text-xs leading-relaxed text-text-muted">
-                        Click an element in the preview to inspect it.
-                    </p>
+                    <div className="flex flex-col gap-2 px-3 py-4" aria-hidden>
+                        <div className="h-3 w-20 rounded bg-panel-hover/70" />
+                        <div className="h-8 w-full rounded-md bg-panel-hover/50" />
+                        <div className="h-8 w-full rounded-md bg-panel-hover/40" />
+                        <div className="h-8 w-1/2 rounded-md bg-panel-hover/30" />
+                    </div>
                 ) : (
                     <>
                         {selection.length > 1 ? (

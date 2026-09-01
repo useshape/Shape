@@ -11,9 +11,9 @@ import { Button } from "./button";
 
 export const TOAST_AUTO_HIDE_MS = 5500;
 const TOAST_EXIT_MS = 380;
-/** Sit above the 33px status bar, horizontally centered. */
+/** Sit above the status bar, bottom-right (react-toastify `bottom-right` style). */
 export const TOAST_STACK_CLASS =
-    "pointer-events-none fixed inset-x-0 bottom-[calc(var(--statusbar-height)+12px)] z-notification flex justify-center px-4 outline-none";
+    "pointer-events-none fixed bottom-[calc(var(--statusbar-height)+16px)] right-4 z-notification flex justify-end outline-none";
 
 const typeIcons: Record<Notification["type"], string> = {
     info: "info",
@@ -32,10 +32,6 @@ const typeIconColor: Record<Notification["type"], string> = {
 function openNotificationTarget(notification: Notification) {
     if (notification.code != null) {
         void commands.openUrlExternal(errorDocsUrl(notification.code));
-        return;
-    }
-    if (notification.type === "error" || notification.type === "warning") {
-        window.dispatchEvent(new Event("shape-open-problems"));
     }
 }
 
@@ -168,7 +164,7 @@ export function NotificationToasts() {
 
     return createPortal(
         <div className={TOAST_STACK_CLASS} data-toast-stack="">
-            <div className="relative w-full max-w-[380px]" style={{ height: 88 + Math.max(0, toasts.length - 1) * 8 }}>
+            <div className="relative w-[min(380px,calc(100vw-2rem))]" style={{ height: 88 + Math.max(0, toasts.length - 1) * 8 }}>
                 {toasts.map((notification, index) => (
                     <ToastCard
                         key={notification.id}

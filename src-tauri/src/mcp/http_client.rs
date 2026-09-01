@@ -10,6 +10,8 @@ pub struct HttpMcpClient {
     pub server_name: String,
     pub url: String,
     pub auth: McpAuthType,
+    /// Static bearer for auth:none + token paste (from mcp.json env).
+    pub static_bearer: Option<String>,
     pub tools: Vec<McpToolInfo>,
     pub last_error: Option<String>,
     pub session_id: Option<String>,
@@ -22,6 +24,7 @@ impl HttpMcpClient {
         server_name: &str,
         url: &str,
         auth: McpAuthType,
+        static_bearer: Option<String>,
     ) -> Result<Self, String> {
         let client = reqwest::Client::new();
         let mut http = Self {
@@ -29,6 +32,7 @@ impl HttpMcpClient {
             server_name: server_name.to_string(),
             url: url.to_string(),
             auth,
+            static_bearer,
             tools: Vec::new(),
             last_error: None,
             session_id: None,
@@ -41,17 +45,17 @@ impl HttpMcpClient {
         Ok(http)
     }
 
-    /// `None` auth → no bearer token. OAuth → load/refresh from keyring.
+    /// `None` auth → optional static bearer. OAuth → load/refresh from keyring.
     async fn resolve_token(&self, proactive_refresh: bool) -> Result<Option<String>, String> {
         match self.auth {
-            McpAuthType::None => Ok(None),
+            McpAuthType::None => Ok(self.static_bearer.clone()),
             McpAuthType::Oauth => {
                 if proactive_refresh {
                     let tokens = ensure_fresh_token(&self.server_id).await?;
                     Ok(Some(tokens.access_token))
                 } else {
                     let tokens = get_token(&self.server_id).ok_or_else(|| {
-                        "Authentication required. Connect this MCP server in Settings → AI → MCP."
+                        "Authentication required. Connect this MCP server in Settings → Integrations."
                             .to_string()
                     })?;
                     Ok(Some(tokens.access_token))

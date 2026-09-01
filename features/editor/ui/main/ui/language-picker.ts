@@ -1,8 +1,8 @@
-import { getMonacoLanguage } from "@/features/editor/lsp/languages";
-import { MONACO_LANGUAGE_OPTIONS } from "@/lib/monaco-languages";
+import { getLanguageId } from "@/features/editor/lib/languages";
+import { LANGUAGE_OPTIONS } from "@/features/editor/lib/language-options";
 
 export function openLanguageModePicker(filePath: string, currentLanguage?: string) {
-    const detected = getMonacoLanguage(filePath);
+    const detected = getLanguageId(filePath);
     const active = currentLanguage || detected;
 
     const actions = [
@@ -16,7 +16,7 @@ export function openLanguageModePicker(filePath: string, currentLanguage?: strin
                 }));
             },
         },
-        ...MONACO_LANGUAGE_OPTIONS.map((lang) => ({
+        ...LANGUAGE_OPTIONS.map((lang) => ({
             id: `language-${lang.id}`,
             label: lang.label,
             shortcut: lang.id,

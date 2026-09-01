@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "description": "Repos, issues, PRs, and CI.",
+      "category": "Popular",
+      "logo": "/integrations/logos/github.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "description": "Issues and project tracking.",
+      "category": "Popular",
+      "logo": "/integrations/logos/linear.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.linear.app/sse",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "description": "Pages and databases.",
+      "category": "Popular",
+      "logo": "/integrations/logos/notion.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.notion.com/mcp",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "description": "Design files and components.",
+      "category": "Popular",
+      "logo": "/integrations/logos/figma.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.figma.com/mcp",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "description": "Send messages and read channels.",
+      "category": "Popular",
+      "logo": "/integrations/logos/slack.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.slack.com/mcp",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "vercel",
+      "name": "Vercel",
+      "description": "Deployments, projects, and logs.",
+      "category": "Popular",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.vercel.com",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "neon",
+      "name": "Neon",
+      "description": "Serverless Postgres.",
+      "category": "Popular",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.neon.tech/mcp",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "stripe",
+      "name": "Stripe",
+      "description": "Payments and customers.",
+      "category": "Popular",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.stripe.com",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "description": "Database and auth tools.",
+      "category": "Infrastructure",
+      "logo": "/integrations/logos/supabase.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.supabase.com/mcp",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry",
+      "description": "Errors and performance.",
+      "category": "Infrastructure",
+      "logo": "/integrations/logos/sentry.svg",
+      "popular": false,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.sentry.dev/mcp",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "atlassian",
+      "name": "Atlassian",
+      "description": "Jira and Confluence.",
+      "category": "Productivity",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": false,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.atlassian.com/v1/sse",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright",
+      "description": "Browser automation.",
+      "category": "Infrastructure",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["@playwright/mcp@latest"],
+        "auth": "none"
+      }
+    },
+    {
+      "id": "context7",
+      "name": "Context7",
+      "description": "Up-to-date library docs.",
+      "category": "Popular",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": true,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.context7.com/mcp",
+        "auth": "none"
+      }
+    },
+    {
+      "id": "deepwiki",
+      "name": "DeepWiki",
+      "description": "Ask about public GitHub repos.",
+      "category": "Popular",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": false,
+      "mcp": {
+        "transport": "http",
+        "url": "https://mcp.deepwiki.com/mcp",
+        "auth": "none"
+      }
+    },
+    {
+      "id": "custom-mcp",
+      "name": "Custom MCP",
+      "description": "Connect any MCP server by URL.",
+      "category": "Custom",
+      "logo": "/integrations/logos/mcp.svg",
+      "popular": false,
+      "custom": true,
+      "mcp": {
+        "transport": "http",
+        "url": "",
+        "auth": "none"
+      }
+    }
+  ]
+}

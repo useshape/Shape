@@ -6,7 +6,7 @@ import { useProjectState, commands } from "@/lib/backend";
 import { diffLines } from "diff";
 import { MarkdownPreview } from "../markdown/markdown";
 import { Panel } from "@/features/panels";
-import { getFileExtension, isImageExtension, isFontExtension } from "../../lsp/image-types";
+import { getFileExtension, isImageExtension, isFontExtension } from "../../lib/image-types";
 
 // UI Components
 import { Breadcrumbs } from "./ui/breadcrumb";
@@ -19,8 +19,8 @@ import { getProposedEdit, clearProposedEdit, isFileResolvedForCurrentConversatio
 import { useFileContent } from "./hooks/use-file-content";
 import { useImageLoader } from "./hooks/use-image-loader";
 import { Button } from "@/components/ui/button";
-import { SimpleCodeEditor } from "../simple/simple-editor";
-import { SimpleDiffView } from "../simple/simple-diff";
+import { CodeMirrorEditor } from "../codemirror/editor";
+import { DiffView } from "../diff/diff-view";
 
 import type { EditorGroupId } from "@/core/providers/editor";
 import { isPlanFilePath } from "@/lib/plan-file";
@@ -276,7 +276,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         }
     };
 
-    // Preview-only markdown has no Monaco — wire Save / Undo / Redo here.
+    // Preview-only markdown — wire Save / Undo / Redo here.
     // Must stay above early returns so hook order is stable across renders.
     useEffect(() => {
         if (!(isMarkdown && mode === "preview")) return;
@@ -371,7 +371,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
     const renderDiffEditor = () => {
         if (diffState) {
             return (
-                <SimpleDiffView
+                <DiffView
                     path={path}
                     originalContent={diffState.original}
                     content={diffState.replacement}
@@ -379,7 +379,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
             );
         }
         return (
-            <SimpleDiffView
+            <DiffView
                 path={path}
                 originalContent={originalContent}
                 content={content}
@@ -452,7 +452,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                         </div>
                     </div>
                     <div className="flex-1 w-full min-h-0 overflow-hidden relative">
-                        <SimpleDiffView
+                        <DiffView
                             path={path}
                             originalContent={diffState.original}
                             content={diffState.replacement}
@@ -471,7 +471,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                     </div>
                 )}
                 <div className="flex-1 w-full min-h-0 overflow-hidden relative">
-                    <SimpleCodeEditor
+                    <CodeMirrorEditor
                         path={path}
                         content={content}
                         setContent={setContent}
@@ -486,7 +486,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
     };
 
     const applyMarkdownContent = async (next: string) => {
-        // Local undo stack for markdown preview edits (no Monaco).
+        // Local undo stack for markdown preview edits.
         const prev = content;
         if (prev !== next) {
             markdownUndoRef.current.push(prev);

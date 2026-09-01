@@ -7,6 +7,7 @@ import EditorTabs from "@/features/editor/ui/tabs/tabs";
 import { FileTree } from "./tree";
 import { FileEditor } from "./editor";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
+import { AccountRow } from "@/features/agent/sidebar/account";
 
 /** Editor in main; file tree portaled into the agent sidebar. */
 export function FilesMode({
@@ -60,13 +61,18 @@ function FilesModeInner({
                 <HostedSidebarBack label="Back" onBack={onClose} collapsed={collapsed} />
             ) : null}
             {collapsed ? null : (
-                <div className="min-h-0 flex-1 overflow-hidden">
-                    <FileTree
-                        projectPath={projectPath}
-                        activePath={active_file}
-                        onOpenFile={openDiskFile}
-                    />
-                </div>
+                <>
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                        <FileTree
+                            projectPath={projectPath}
+                            activePath={active_file}
+                            onOpenFile={openDiskFile}
+                        />
+                    </div>
+                    <div className="mt-auto shrink-0 px-1 pb-1">
+                        <AccountRow />
+                    </div>
+                </>
             )}
         </div>
     );

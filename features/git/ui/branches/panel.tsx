@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/context";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
-import { ManagerDiffEditor } from "@/features/git/ui/shared/monaco-diff";
+import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
 import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
 import { useGitRepos } from "@/lib/git/repos";

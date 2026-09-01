@@ -12,6 +12,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from "@/components/ui/context";
 import { TabBarShell } from "@/features/editor/ui/tabs/tab-bar-shell";
 import {
     WORKBENCH_TAB_ACTION_BUTTON_CLASS,
@@ -60,38 +66,48 @@ function SortableWorkspaceTab({
     };
 
     return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            {...attributes}
-            {...listeners}
-            onClick={() => onSelect(tab.id)}
-            className={workbenchTabItemClass(isActive, isDragging)}
-        >
-            <div className={cn(WORKBENCH_TAB_CONTENT_CLASS, isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS)}>
-                <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-                    <Icon name={iconFor(tab.kind)} size={14} className="text-text-muted" />
-                </div>
-                <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
-                    <span className="truncate whitespace-nowrap text-sm">{tab.title}</span>
-                </div>
-                {canClose ? (
-                    <div className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center">
-                        <button
-                            type="button"
-                            aria-label={`Close ${tab.title}`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onClose(tab.id);
-                            }}
-                            className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
-                        >
-                            <Icon name="close" size={12} />
-                        </button>
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
+                <div
+                    ref={setNodeRef}
+                    style={style}
+                    {...attributes}
+                    {...listeners}
+                    onClick={() => onSelect(tab.id)}
+                    className={workbenchTabItemClass(isActive, isDragging)}
+                >
+                    <div className={cn(WORKBENCH_TAB_CONTENT_CLASS, isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS)}>
+                        <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+                            <Icon name={iconFor(tab.kind)} size={14} className="text-text-muted" />
+                        </div>
+                        <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
+                            <span className="truncate whitespace-nowrap text-sm">{tab.title}</span>
+                        </div>
+                        {canClose ? (
+                            <div className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center">
+                                <button
+                                    type="button"
+                                    aria-label={`Close ${tab.title}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onClose(tab.id);
+                                    }}
+                                    className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
+                                >
+                                    <Icon name="close" size={12} />
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
+                </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="min-w-40">
+                <ContextMenuItem onClick={() => onSelect(tab.id)}>Open</ContextMenuItem>
+                {canClose ? (
+                    <ContextMenuItem onClick={() => onClose(tab.id)}>Close</ContextMenuItem>
                 ) : null}
-            </div>
-        </div>
+            </ContextMenuContent>
+        </ContextMenu>
     );
 }
 
@@ -134,8 +150,6 @@ export function WorkspaceTabs({
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-1.5 text-2xs text-text-muted">Open files, terminal, or browser</div>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => onNew("file")}>
                     <Icon name="folder" size={ICON_SIZE_SM} />
                     <span className="flex-1">Files</span>
@@ -145,11 +159,6 @@ export function WorkspaceTabs({
                     <Icon name="terminal" size={ICON_SIZE_SM} />
                     <span className="flex-1">Terminal</span>
                     <span className="text-2xs text-text-muted">Ctrl+J</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onNew("browser")}>
-                    <Icon name="public" size={ICON_SIZE_SM} />
-                    <span className="flex-1">Browser</span>
-                    <span className="text-2xs text-text-muted">Ctrl+Shift+B</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("changes")}>
                     <Icon name="changes" size={ICON_SIZE_SM} />

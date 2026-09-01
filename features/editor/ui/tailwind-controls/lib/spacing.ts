@@ -3,7 +3,7 @@
  * Tailwind token parsing and minimal class edits.
  */
 
-import type { ClassEditResult } from "./alignment";
+export type ClassEditResult = { add: string[]; remove: string[] };
 
 export type PaddingSides = {
     left: number | null;

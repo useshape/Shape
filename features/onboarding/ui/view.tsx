@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { clsx } from "clsx";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
 import { Switch } from "@/components/ui/switch";
 import { loginShape, cancelLoginShape, useShapeAuth } from "@/lib/shape-auth/store";
 import { markOnboardingComplete } from "@/features/onboarding/config";
@@ -13,13 +12,19 @@ import { applyTelemetryPreference } from "@/lib/telemetry";
 import { ThemePicker } from "@/features/settings/ui/theme-picker";
 import type { ColorThemeId } from "@/lib/themes";
 import { normalizeColorTheme } from "@/lib/themes";
+import {
+    getCatalogDefaultEnabledIds,
+    getCatalogModels,
+    useShapeCatalog,
+} from "@/lib/catalog-store";
+import { isModelEnabled } from "@/lib/models";
+import { OnboardingWindowChrome } from "./window-chrome";
 
 type Phase = "intro" | "content";
 
-const STEPS = ["security", "notifications", "theme", "login"] as const;
+const STEPS = ["privacy", "notifications", "theme", "models", "login"] as const;
 type StepId = (typeof STEPS)[number];
 
-/** Keyboard return / enter key glyph. */
 function EnterKeyIcon({ size = 14, className }: { size?: number; className?: string }) {
     return (
         <svg
@@ -41,16 +46,17 @@ function EnterKeyIcon({ size = 14, className }: { size?: number; className?: str
 
 export default function Onboarding({
     embedded = false,
+    loginOnly = false,
     onComplete,
 }: {
-    /** Rendered inside the main window (no separate webview). */
     embedded?: boolean;
+    loginOnly?: boolean;
     onComplete?: () => void;
 }) {
-    const [phase, setPhase] = useState<Phase>("intro");
+    const [phase, setPhase] = useState<Phase>(loginOnly ? "content" : "intro");
     const [introVisible, setIntroVisible] = useState(false);
-    const [contentVisible, setContentVisible] = useState(false);
-    const [step, setStep] = useState(0);
+    const [contentVisible, setContentVisible] = useState(loginOnly);
+    const [step, setStep] = useState(loginOnly ? STEPS.indexOf("login") : 0);
     const [dir, setDir] = useState<1 | -1>(1);
     const [finishing, setFinishing] = useState(false);
     const [telemetryEnabled, setTelemetryEnabled] = useState(false);
@@ -58,20 +64,28 @@ export default function Onboarding({
     const [desktopNotifs, setDesktopNotifs] = useState(true);
     const [importantOnly, setImportantOnly] = useState(false);
     const settings = useSettings();
+    useShapeCatalog();
     const [theme, setTheme] = useState<ColorThemeId>(() =>
         normalizeColorTheme(settings.appearance.colorTheme),
     );
+    const [enabledModels, setEnabledModels] = useState<string[]>(() =>
+        settings.ai.enabledModels.length > 0
+            ? [...settings.ai.enabledModels]
+            : getCatalogDefaultEnabledIds(),
+    );
     const shapeAuth = useShapeAuth();
 
-    const stepId: StepId = STEPS[step] ?? "security";
+    const stepId: StepId = STEPS[step] ?? "privacy";
     const isLoginStep = stepId === "login";
-    const canNext =
-        stepId !== "security" || privacyChosen;
+    const canNext = stepId !== "privacy" || privacyChosen;
 
     const finishOnboarding = async () => {
         setFinishing(true);
         try {
-            markOnboardingComplete();
+            if (!loginOnly) {
+                updateSettingSection("ai", { enabledModels });
+                markOnboardingComplete();
+            }
             if (embedded) {
                 onComplete?.();
                 window.dispatchEvent(new CustomEvent("shape-onboarding-complete"));
@@ -90,6 +104,9 @@ export default function Onboarding({
 
     const goNext = () => {
         if (!canNext || isLoginStep) return;
+        if (stepId === "models") {
+            updateSettingSection("ai", { enabledModels });
+        }
         setDir(1);
         setStep((s) => Math.min(s + 1, STEPS.length - 1));
     };
@@ -122,6 +139,11 @@ export default function Onboarding({
     };
 
     useEffect(() => {
+        if (loginOnly) {
+            setPhase("content");
+            setContentVisible(true);
+            return;
+        }
         let cancelled = false;
         let t1: number | undefined;
         let t2: number | undefined;
@@ -148,12 +170,13 @@ export default function Onboarding({
             if (t1 !== undefined) window.clearTimeout(t1);
             if (t2 !== undefined) window.clearTimeout(t2);
         };
-    }, []);
+    }, [loginOnly]);
 
     useEffect(() => {
         if (isLoginStep && shapeAuth.loggedIn && !finishing) {
             void finishOnboarding();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- finish once on login
     }, [isLoginStep, shapeAuth.loggedIn, finishing]);
 
     useEffect(() => {
@@ -165,6 +188,7 @@ export default function Onboarding({
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [phase, isLoginStep, canNext, step]);
 
     if (phase === "intro") {
@@ -173,6 +197,7 @@ export default function Onboarding({
                 id="shape-onboarding"
                 className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-text-primary select-none"
             >
+                <OnboardingWindowChrome />
                 <div className="flex flex-1 items-center justify-center">
                     <Image
                         src="/logos/logo.svg"
@@ -181,7 +206,7 @@ export default function Onboarding({
                         height={56}
                         priority
                         style={{ width: 46, height: "auto" }}
-                        className={clsx(
+                        className={cn(
                             "logo-invert transition-opacity duration-500 ease-out",
                             introVisible ? "opacity-100" : "opacity-0",
                         )}
@@ -196,8 +221,9 @@ export default function Onboarding({
             id="shape-onboarding"
             className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-text-primary select-none"
         >
+            <OnboardingWindowChrome />
             <div
-                className={clsx(
+                className={cn(
                     "flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-6 py-10 transition-opacity duration-500 ease-out",
                     contentVisible ? "opacity-100" : "opacity-0",
                 )}
@@ -205,13 +231,13 @@ export default function Onboarding({
                 <div className="relative flex w-full max-w-md flex-col overflow-hidden">
                     <div
                         key={stepId}
-                        className={clsx(
+                        className={cn(
                             "w-full animate-in fade-in duration-300 ease-[var(--ease-out)] fill-mode-both",
                             dir > 0 ? "slide-in-from-right-6" : "slide-in-from-left-6",
                         )}
                     >
-                        {stepId === "security" ? (
-                            <SecurityPanel
+                        {stepId === "privacy" ? (
+                            <PrivacyPanel
                                 chosen={privacyChosen}
                                 enabled={telemetryEnabled}
                                 onAllow={() => choosePrivacy(true)}
@@ -227,6 +253,12 @@ export default function Onboarding({
                         ) : null}
                         {stepId === "theme" ? (
                             <ThemeStep theme={theme} onChange={applyTheme} />
+                        ) : null}
+                        {stepId === "models" ? (
+                            <ModelsPanel
+                                enabledModels={enabledModels}
+                                onChange={setEnabledModels}
+                            />
                         ) : null}
                         {stepId === "login" ? (
                             <LoginPanel
@@ -262,24 +294,26 @@ export default function Onboarding({
                         </Button>
                     ) : null}
 
-                    <div className="mt-6 flex items-center justify-center gap-1.5" aria-hidden>
-                        {STEPS.map((id, i) => (
-                            <span
-                                key={id}
-                                className={clsx(
-                                    "h-1.5 rounded-full transition-all duration-300",
-                                    i === step ? "w-4 bg-accent" : "w-1.5 bg-text-muted/30",
-                                )}
-                            />
-                        ))}
-                    </div>
+                    {loginOnly ? null : (
+                        <div className="mt-6 flex items-center justify-center gap-1.5" aria-hidden>
+                            {STEPS.map((id, i) => (
+                                <span
+                                    key={id}
+                                    className={cn(
+                                        "h-1.5 rounded-full transition-all duration-300",
+                                        i === step ? "w-4 bg-accent" : "w-1.5 bg-text-muted/30",
+                                    )}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-function SecurityPanel({
+function PrivacyPanel({
     chosen,
     enabled,
     onAllow,
@@ -292,40 +326,54 @@ function SecurityPanel({
 }) {
     return (
         <div>
-            <h1 className="mt-4 text-center text-xl font-medium tracking-tight text-text-primary">
-                Security &amp; data use
+            <div className="mx-auto mb-5 w-full max-w-xs text-text-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/onboarding/privacy.svg" alt="" className="h-auto w-full" />
+            </div>
+            <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
+                Privacy
             </h1>
             <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                Your code stays private and is only sent to the AI model you choose.
+                Your code stays private and is only sent to the model you pick.
             </p>
-            <div className="mt-6 flex flex-col gap-2">
-                <Button
+            <div className="mt-6 flex flex-col gap-2" role="radiogroup" aria-label="Privacy">
+                <button
                     type="button"
-                    size="lg"
-                    className={clsx(
-                        "w-full rounded-full",
-                        chosen && enabled && "ring-2 ring-accent",
-                    )}
+                    role="radio"
+                    aria-checked={chosen && enabled}
                     onClick={onAllow}
-                >
-                    Allow anonymous usage data
-                </Button>
-                <Button
-                    type="button"
-                    size="lg"
-                    variant="ghost"
-                    className={clsx(
-                        "w-full rounded-full",
-                        chosen && !enabled && "ring-2 ring-border",
+                    className={cn(
+                        "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                        chosen && enabled
+                            ? "border-accent bg-accent/10"
+                            : "border-border-subtle bg-surface-2 hover:bg-panel-hover",
                     )}
-                    onClick={onDeny}
                 >
-                    Don&apos;t share data
-                </Button>
+                    <div className="text-sm font-medium text-text-primary">
+                        Allow anonymous usage data
+                    </div>
+                    <div className="mt-0.5 text-xs text-text-muted">
+                        Helps improve Shape. Never includes your code.
+                    </div>
+                </button>
+                <button
+                    type="button"
+                    role="radio"
+                    aria-checked={chosen && !enabled}
+                    onClick={onDeny}
+                    className={cn(
+                        "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                        chosen && !enabled
+                            ? "border-accent bg-accent/10"
+                            : "border-border-subtle bg-surface-2 hover:bg-panel-hover",
+                    )}
+                >
+                    <div className="text-sm font-medium text-text-primary">Don&apos;t share data</div>
+                    <div className="mt-0.5 text-xs text-text-muted">
+                        You can change this later in Settings.
+                    </div>
+                </button>
             </div>
-            <p className="mt-3 text-center text-xs text-text-muted">
-                Choose one to continue. You can change this later in Settings.
-            </p>
         </div>
     );
 }
@@ -341,34 +389,18 @@ function NotificationsPanel({
 }) {
     return (
         <div>
+            <div className="mx-auto mb-5 w-full max-w-xs text-text-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/onboarding/notifications.svg" alt="" className="h-auto w-full" />
+            </div>
             <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
-                Never miss a moment
+                Notifications
             </h1>
             <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                Get notified when generations finish or your approval is needed.
+                Get notified when generations finish or approval is needed.
             </p>
-
-            <div className="relative mx-auto mt-8 h-28 w-full max-w-xs">
-                <div className="absolute inset-x-4 top-6 rounded-2xl bg-surface-3/40 px-3 py-2.5 opacity-40 blur-[0.5px]">
-                    <span className="text-xs text-text-muted">Agent finished a task</span>
-                </div>
-                <div className="absolute inset-x-2 top-3 rounded-2xl bg-surface-3/60 px-3 py-2.5 opacity-70">
-                    <span className="text-xs text-text-secondary">Approval required</span>
-                </div>
-                <div className="absolute inset-x-0 top-0 flex items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/90 px-3 py-2.5 backdrop-blur-md">
-                    <span className="flex size-7 items-center justify-center rounded-lg bg-panel-hover">
-                        <Icon name="notifications" size={14} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
-                        Generation complete
-                    </span>
-                    <span className="text-xs text-text-muted">now</span>
-                </div>
-            </div>
-
             <div className="mt-8 flex flex-col gap-2">
                 <NotifRow
-                    icon="notifications"
                     label="All notifications"
                     checked={desktop && !important}
                     onCheckedChange={(v) => {
@@ -377,7 +409,6 @@ function NotificationsPanel({
                     }}
                 />
                 <NotifRow
-                    icon="chat"
                     label="Only important"
                     checked={desktop && important}
                     onCheckedChange={(v) => {
@@ -391,21 +422,16 @@ function NotificationsPanel({
 }
 
 function NotifRow({
-    icon,
     label,
     checked,
     onCheckedChange,
 }: {
-    icon: string;
     label: string;
     checked: boolean;
     onCheckedChange: (v: boolean) => void;
 }) {
     return (
         <div className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-panel-hover text-text-primary">
-                <Icon name={icon} size={16} />
-            </span>
             <span className="min-w-0 flex-1 text-sm text-text-primary">{label}</span>
             <Switch checked={checked} onCheckedChange={onCheckedChange} />
         </div>
@@ -430,6 +456,59 @@ function ThemeStep({
             <div className="mt-6">
                 <ThemePicker value={theme} onChange={onChange} />
             </div>
+        </div>
+    );
+}
+
+function ModelsPanel({
+    enabledModels,
+    onChange,
+}: {
+    enabledModels: string[];
+    onChange: (ids: string[]) => void;
+}) {
+    const models = useMemo(() => getCatalogModels().slice(0, 12), []);
+
+    const toggle = (id: string) => {
+        const allIds = models.map((m) => m.id);
+        const base = enabledModels.length === 0 ? allIds : [...enabledModels];
+        const next = base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+        onChange(next);
+    };
+
+    return (
+        <div>
+            <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
+                Models
+            </h1>
+            <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
+                Choose which models show up in chat. Toggle anytime in Settings.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {models.map((model) => {
+                    const on = isModelEnabled(model.id, enabledModels);
+                    return (
+                        <button
+                            key={model.id}
+                            type="button"
+                            onClick={() => toggle(model.id)}
+                            className={cn(
+                                "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                                on
+                                    ? "border-accent bg-accent/15 text-text-primary"
+                                    : "border-border-subtle bg-surface-2 text-text-muted hover:text-text-secondary",
+                            )}
+                        >
+                            {model.name}
+                        </button>
+                    );
+                })}
+            </div>
+            {models.length === 0 ? (
+                <p className="mt-6 text-center text-sm text-text-muted">
+                    Model catalog loads after launch — you can enable models in Settings.
+                </p>
+            ) : null}
         </div>
     );
 }
@@ -468,9 +547,9 @@ function LoginPanel({
                 Sign in with Shape
             </h1>
             <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                Opens your browser. Return here once you&apos;re signed in.
+                Opens your browser. Come back here when you&apos;re done.
             </p>
-            <div className="mt-8 flex flex-col gap-2">
+            <div className="mt-8 flex items-center gap-2">
                 <Button
                     onClick={async () => {
                         setWaiting(true);
@@ -482,16 +561,23 @@ function LoginPanel({
                     }}
                     disabled={busy || shapeAuth.loggedIn}
                     size="lg"
-                    className="w-full gap-2 rounded-full"
+                    className="min-w-0 flex-[1.6] gap-2 rounded-full"
                 >
-                    {busy ? "Waiting for browser…" : "Sign in with Shape"}
+                    <Image
+                        src="/logos/logo.svg"
+                        alt=""
+                        width={16}
+                        height={16}
+                        className="logo-invert size-4 shrink-0"
+                    />
+                    {busy ? "Waiting…" : "Sign in"}
                 </Button>
                 {busy && !finishing ? (
                     <Button
                         type="button"
                         variant="ghost"
                         size="lg"
-                        className="w-full gap-2 rounded-full"
+                        className="shrink-0 rounded-full px-4"
                         onClick={() => {
                             cancelLoginShape();
                             setWaiting(false);
@@ -504,11 +590,11 @@ function LoginPanel({
                         type="button"
                         variant="ghost"
                         size="lg"
-                        className="mt-3 w-full gap-2 rounded-full"
+                        className="shrink-0 rounded-full px-4"
                         disabled={busy}
                         onClick={onSkip}
                     >
-                        Skip for now
+                        Skip
                     </Button>
                 )}
             </div>

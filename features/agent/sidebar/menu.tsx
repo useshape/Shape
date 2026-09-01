@@ -5,7 +5,8 @@ import { Icon } from "@/components/ui/icon";
 import { commands } from "@/lib/backend";
 import { HELP_LINKS } from "@/lib/help-links";
 import { getShortcutForLabel } from "@/lib/ui/shortcuts";
-import { loginShape, logoutShape, openShapeBilling, useShapeAuth } from "@/lib/shape-auth/store";
+import { logoutShape, openShapeBilling, useShapeAuth } from "@/lib/shape-auth/store";
+import { requestShapeLogin } from "@/features/workbench/ui/login-prompt-dialog";
 import { loginGitHub, logoutGitHub, useGitHubAuth } from "@/lib/github-auth/store";
 import { openSettingsWindow } from "@/lib/open-settings";
 import { notify } from "@/features/notifications";
@@ -101,7 +102,7 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                                     </DropdownMenuItem>
                                 </>
                             ) : (
-                                <DropdownMenuItem onClick={() => void loginShape()}>
+                                <DropdownMenuItem onClick={() => requestShapeLogin()}>
                                     Sign in to Shape
                                 </DropdownMenuItem>
                             )}

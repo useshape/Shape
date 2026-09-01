@@ -131,13 +131,17 @@ type WorkflowRow =
     | { kind: "block"; block: Chunk }
     | { kind: "git_stage_group"; paths: string[] }
     | { kind: "read_group"; paths: string[] }
-    | { kind: "search_group"; queries: string[]; count: number };
+    | { kind: "search_group"; queries: string[]; count: number }
+    | { kind: "write_group"; count: number }
+    | { kind: "list_group"; count: number };
 
 export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
     const rows: WorkflowRow[] = [];
     let stagePaths: string[] = [];
     let readPaths: string[] = [];
     let searchQueries: string[] = [];
+    let writeCount = 0;
+    let listCount = 0;
 
     const flushStages = () => {
         if (stagePaths.length === 0) return;
@@ -158,11 +162,30 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         });
         searchQueries = [];
     };
+    const flushWrites = () => {
+        if (writeCount === 0) return;
+        rows.push({ kind: "write_group", count: writeCount });
+        writeCount = 0;
+    };
+    const flushLists = () => {
+        if (listCount === 0) return;
+        rows.push({ kind: "list_group", count: listCount });
+        listCount = 0;
+    };
+    const flushAll = () => {
+        flushStages();
+        flushReads();
+        flushSearches();
+        flushWrites();
+        flushLists();
+    };
 
     for (const block of blocks) {
         if (block.type === "git_operation" && block.gitOp === "stage") {
             flushReads();
             flushSearches();
+            flushWrites();
+            flushLists();
             const path = parseGitStagePath(block.content);
             if (path) {
                 stagePaths.push(path);
@@ -172,6 +195,8 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         if (block.type === "cat" && block.content) {
             flushStages();
             flushSearches();
+            flushWrites();
+            flushLists();
             readPaths.push(block.content);
             continue;
         }
@@ -182,18 +207,39 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         ) {
             flushStages();
             flushReads();
+            flushWrites();
+            flushLists();
             const q = (block.query || block.content || "").trim();
             if (q) searchQueries.push(q);
             continue;
         }
-        flushStages();
-        flushReads();
-        flushSearches();
+        if (
+            block.type === "create_file"
+            || block.type === "mkdir"
+            || block.type === "delete_file"
+            || block.type === "rename_file"
+            || block.type === "edit"
+            || block.type === "edit_pending"
+        ) {
+            flushStages();
+            flushReads();
+            flushSearches();
+            flushLists();
+            writeCount += 1;
+            continue;
+        }
+        if (block.type === "ls") {
+            flushStages();
+            flushReads();
+            flushSearches();
+            flushWrites();
+            listCount += 1;
+            continue;
+        }
+        flushAll();
         rows.push({ kind: "block", block });
     }
-    flushStages();
-    flushReads();
-    flushSearches();
+    flushAll();
     return rows;
 }
 
@@ -242,9 +288,9 @@ function GitCardShell({
                 className="flex w-full items-center gap-2 px-3 py-2 text-left"
             >
                 <Icon name={icon} size={13} className="shrink-0 text-text-muted" />
-                <span className="truncate text-sm text-text-muted">{title}</span>
+                <span className="truncate chat-text text-text-muted">{title}</span>
                 {meta ? (
-                    <span className="min-w-0 truncate text-sm text-text-disabled">{meta}</span>
+                    <span className="min-w-0 truncate chat-text text-text-disabled">{meta}</span>
                 ) : null}
                 <Icon
                     name={open ? "expand_less" : "expand_more"}
@@ -301,7 +347,7 @@ function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
             <div className="flex flex-col gap-3">
                 {staged.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
-                        <span className="text-sm text-text-disabled">Staged</span>
+                        <span className="chat-text text-text-disabled">Staged</span>
                         {staged.map((line) => (
                             <div key={`staged-${line.path}`} className="flex min-w-0 items-center gap-2">
                                 <GitStatusBadge status={line.status} />
@@ -312,7 +358,7 @@ function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
                 ) : null}
                 {unstaged.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
-                        <span className="text-sm text-text-disabled">Unstaged</span>
+                        <span className="chat-text text-text-disabled">Unstaged</span>
                         {unstaged.map((line) => (
                             <div key={`unstaged-${line.path}`} className="flex min-w-0 items-center gap-2">
                                 <GitStatusBadge status={line.status} />
@@ -322,7 +368,7 @@ function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
                     </div>
                 ) : null}
                 {lines.length === 0 ? (
-                    <span className="text-sm text-text-muted">Clean working tree</span>
+                    <span className="chat-text text-text-muted">Clean working tree</span>
                 ) : null}
             </div>
         </GitCardShell>
@@ -347,15 +393,15 @@ function GitLogGroup({ lines }: { lines: GitLogLine[] }) {
                         className="flex flex-col gap-0.5 rounded-lg bg-surface-3 px-2.5 py-2"
                     >
                         <div className="flex min-w-0 items-center gap-2">
-                            <span className="shrink-0 text-sm text-text-primary">{line.hash}</span>
+                            <span className="shrink-0 chat-text text-text-primary">{line.hash}</span>
                             {line.author ? (
-                                <span className="shrink-0 text-sm text-text-disabled">{line.author}</span>
+                                <span className="shrink-0 chat-text text-text-disabled">{line.author}</span>
                             ) : null}
                             {line.date ? (
-                                <span className="ml-auto shrink-0 text-sm text-text-disabled">{line.date}</span>
+                                <span className="ml-auto shrink-0 chat-text text-text-disabled">{line.date}</span>
                             ) : null}
                         </div>
-                        <span className="text-sm text-text-primary leading-snug">{line.subject}</span>
+                        <span className="chat-text text-text-primary leading-snug">{line.subject}</span>
                     </div>
                 ))}
             </div>
@@ -392,7 +438,7 @@ function GitBranchesGroup({ lines }: { lines: GitBranchLine[] }) {
                         />
                         <span
                             className={cn(
-                                "min-w-0 truncate text-sm",
+                                "min-w-0 truncate chat-text",
                                 line.current ? "text-text-primary" : "text-text-secondary",
                                 line.remote && "text-text-muted",
                             )}
@@ -400,7 +446,7 @@ function GitBranchesGroup({ lines }: { lines: GitBranchLine[] }) {
                             {line.name}
                         </span>
                         {line.current ? (
-                            <span className="ml-auto shrink-0 text-sm text-text-disabled">current</span>
+                            <span className="ml-auto shrink-0 chat-text text-text-disabled">current</span>
                         ) : null}
                     </div>
                 ))}
@@ -440,11 +486,11 @@ function GitDiffGroup({
             <div className="flex flex-col gap-2">
                 {file ? <FilePill path={file} /> : null}
                 {body.trim() ? (
-                    <pre className="max-h-64 overflow-auto rounded-lg bg-surface-3 px-2.5 py-2 text-sm leading-relaxed text-text-secondary whitespace-pre-wrap break-all custom-scrollbar">
+                    <pre className="max-h-64 overflow-auto rounded-lg bg-surface-3 px-2.5 py-2 chat-text leading-relaxed text-text-secondary whitespace-pre-wrap break-all custom-scrollbar">
                         {body}
                     </pre>
                 ) : (
-                    <span className="text-sm text-text-muted">No diff output</span>
+                    <span className="chat-text text-text-muted">No diff output</span>
                 )}
             </div>
         </GitCardShell>
@@ -727,8 +773,53 @@ export function AgentWorkflow({
                 if (row.kind === "git_stage_group") {
                     return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
                 }
-                if (row.kind === "read_group" || row.kind === "search_group") {
-                    return null;
+                if (row.kind === "read_group") {
+                    return (
+                        <div key={`reads-${i}`} className="wf-step">
+                            <div className="wf-step-rail">
+                                <span className="wf-step-dot">
+                                    <Icon name="description" size={14} />
+                                </span>
+                            </div>
+                            <span className="chat-text">Explored files</span>
+                        </div>
+                    );
+                }
+                if (row.kind === "search_group") {
+                    return (
+                        <div key={`searches-${i}`} className="wf-step">
+                            <div className="wf-step-rail">
+                                <span className="wf-step-dot">
+                                    <Icon name="search" size={14} />
+                                </span>
+                            </div>
+                            <span className="chat-text">Searched</span>
+                        </div>
+                    );
+                }
+                if (row.kind === "write_group") {
+                    return (
+                        <div key={`writes-${i}`} className="wf-step">
+                            <div className="wf-step-rail">
+                                <span className="wf-step-dot">
+                                    <Icon name="edit" size={14} />
+                                </span>
+                            </div>
+                            <span className="chat-text">Edited files</span>
+                        </div>
+                    );
+                }
+                if (row.kind === "list_group") {
+                    return (
+                        <div key={`lists-${i}`} className="wf-step">
+                            <div className="wf-step-rail">
+                                <span className="wf-step-dot">
+                                    <Icon name="folder" size={14} />
+                                </span>
+                            </div>
+                            <span className="chat-text">Listed folders</span>
+                        </div>
+                    );
                 }
                 return (
                     <ActionItem
@@ -756,11 +847,8 @@ export function AgentWorkflow({
                 className="flex items-center gap-2 py-1 w-fit text-left group"
             >
                 <Icon name={header.icon} size={14} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
+                <span className="chat-text text-text-secondary group-hover:text-text-primary transition-colors">
                     {header.label}
-                </span>
-                <span className="text-xs text-text-disabled">
-                    {visibleBlocks.length} step{visibleBlocks.length === 1 ? "" : "s"}
                 </span>
                 <Icon
                     name={showRows ? "expand_less" : "expand_more"}
@@ -770,7 +858,7 @@ export function AgentWorkflow({
             </button>
 
             {showRows && (
-                <div className="flex flex-col gap-0.5 mt-0.5 ml-[7px] border-l border-border-subtle pl-3">
+                <div className="flex flex-col gap-0.5 mt-0.5 ml-0">
                     {rows}
                 </div>
             )}
@@ -791,7 +879,7 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
             }}
             onKeyDown={(e) => { if (e.key === "Enter") handleOpen(); }}
             className={cn(
-                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm",
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md chat-text",
                 "bg-surface-3 text-text-primary",
                 "cursor-pointer hover:bg-panel-hover",
             )}
@@ -837,7 +925,7 @@ export function ActionItem({
         // Edit approval cards live in TurnWorkflowSummary; keep a compact
         // fallback if this legacy AgentWorkflow path still renders one.
         return (
-            <div className="py-0.5 text-xs text-text-muted">
+            <div className="py-0.5 chat-text text-text-muted">
                 Pending edit approval for{" "}
                 <span className="text-text-secondary">
                     {(block.file || "").split(/[\\/]/).pop() || "file"}
@@ -871,7 +959,7 @@ export function ActionItem({
     if (block.type === "git_operation" && block.gitOp === "stage" && config.file) {
         return (
             <div className="flex items-center gap-1.5 py-0.5">
-                <span className="text-sm text-text-muted">Staged</span>
+                <span className="chat-text text-text-muted">Staged</span>
                 <FilePill path={config.file} />
             </div>
         );
@@ -909,7 +997,7 @@ export function ActionItem({
                     (config.expandable || config.onClick || isEdit) && "cursor-pointer hover:opacity-80",
                 )}
             >
-                <span className="text-sm text-text-muted">
+                <span className="chat-text text-text-muted">
                     {isEdit && editResolved ? "Applied" : config.label}
                 </span>
 
@@ -931,7 +1019,7 @@ export function ActionItem({
                 ) : null}
 
                 {config.query && (
-                    <span className="text-sm text-text-muted truncate max-w-[260px]">
+                    <span className="chat-text text-text-muted truncate max-w-[260px]">
                         {typeof config.query === "string" && config.query.length > 60
                             ? `"${config.query.slice(0, 60)}…"`
                             : block.type === "web_visit"
@@ -943,7 +1031,7 @@ export function ActionItem({
                 {config.file && <FilePill path={config.file} />}
 
                 {editStats && !editResolved && (
-                    <span className="flex items-center gap-1 text-xs ml-0.5">
+                    <span className="flex items-center gap-1 chat-text ml-0.5">
                         <span className="text-success">+{editStats.add}</span>
                         <span className="text-error">-{editStats.del}</span>
                     </span>
@@ -963,12 +1051,12 @@ export function ActionItem({
 
             {expanded && config.expandable && config.content && (
                 <div className={cn(
-                    "text-sm mt-1 mb-1",
+                    "chat-text mt-1 mb-1",
                     isThink
                         ? "text-text-muted leading-relaxed"
                         : useMarkdown
                             ? "font-sans"
-                            : "overflow-x-auto whitespace-pre-wrap p-2 rounded-md border border-border-subtle bg-panel text-text-secondary text-xs font-mono",
+                            : "overflow-x-auto whitespace-pre-wrap p-2 rounded-md border border-border-subtle bg-panel text-text-secondary chat-text font-mono",
                 )}>
                     {useMarkdown ? (
                         <ChatMarkdown content={config.content || ""} />

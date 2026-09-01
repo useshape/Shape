@@ -234,6 +234,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     creditsCharged?: number;
                     usedAuto?: boolean;
                     autoPercent?: number;
+                    reasoningEffort?: string;
+                    mode?: string;
+                    latencyMs?: number;
                 };
                 model?: string;
                 error?: string;

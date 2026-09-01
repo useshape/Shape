@@ -36,7 +36,7 @@ export function FilterMenu({
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 align="start"
-                className="max-h-72 w-56"
+                className="w-56"
                 onCloseAutoFocus={(e) => e.preventDefault()}
             >
                 {options.map((opt) => (

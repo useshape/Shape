@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { commands, type GitFileParams, type GitLogEntry } from "@/lib/backend";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { renderCommitMessage, getRelativeTime } from "./utils";
-import { ManagerDiffEditor } from "@/features/git/ui/shared/monaco-diff";
+import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
 import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
 import { notify } from "@/features/notifications";

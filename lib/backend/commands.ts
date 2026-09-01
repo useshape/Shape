@@ -451,6 +451,8 @@ export const commands = {
             requireEditApproval?: boolean;
             protectDestructiveGit?: boolean;
         },
+        reasoningEffort?: string,
+        serviceTier?: string | null,
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -463,6 +465,8 @@ export const commands = {
             autoRunMode: executionPolicy?.autoRunMode ?? null,
             requireEditApproval: executionPolicy?.requireEditApproval ?? null,
             protectDestructiveGit: executionPolicy?.protectDestructiveGit ?? null,
+            reasoningEffort: reasoningEffort ?? null,
+            serviceTier: serviceTier ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -605,6 +609,7 @@ export const commands = {
     mcpStartOAuth: (id: string) => invokeCommand<void>("mcp_start_oauth", { id }),
     mcpCompleteOAuth: (callbackUrl: string) =>
         invokeCommand<string>("mcp_complete_oauth", { callbackUrl }),
+    mcpClearOAuth: (id: string) => invokeCommand<void>("mcp_clear_oauth", { id }),
     callMcpTool: (qualifiedName: string, args: Record<string, unknown>) =>
         invokeCommand<string>("call_mcp_tool", { qualifiedName, arguments: args }),
     // Terminal command approval
@@ -616,26 +621,6 @@ export const commands = {
     setIndexEmbeddings: (enabled: boolean) =>
         invokeCommand<void>("set_index_embeddings", { enabled }),
     setDiagnostics: (path: string, diagnostics: unknown[]) => invokeCommand<void>("set_diagnostics", { path, diagnostics }),
-    lspStart: (
-        language: string,
-        command: string,
-        args: string[],
-        cwd?: string | null,
-        isolateNpx?: boolean,
-    ) =>
-        invokeCommand("lsp_start", {
-            language,
-            command,
-            args,
-            cwd: cwd ?? null,
-            isolateNpx: isolateNpx ?? false,
-        }),
-    resolveTypescriptTsdk: (projectPath: string) =>
-        invokeCommand<string | null>("resolve_typescript_tsdk", { projectPath }),
-    lspStop: (language: string) => invokeCommand("lsp_stop", { language }),
-    lspStopAll: () => invokeCommand("lsp_stop_all"),
-    lspSend: (language: string, message: string) =>
-        invokeCommand("lsp_send", { language, message }),
     ptyAvailableShells: () =>
         invokeCommand<import("./types").TerminalShellProfile[]>("pty_available_shells"),
     saveColorToHistory: (color: string) => invokeCommand<void>("save_color_to_history", { color }),

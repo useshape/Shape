@@ -29,9 +29,9 @@ export function SettingSection({
         <div id={id} className="mb-8 last:mb-0 scroll-mt-3">
             <div className="mb-2.5">
                 <h2 className="text-xs font-medium text-text-muted">{title}</h2>
-                {description && <p className="mt-1 text-sm text-text-muted">{description}</p>}
+                {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
             </div>
-            <div className="flex flex-col overflow-hidden rounded-xl bg-panel divide-y divide-border-subtle">
+            <div className="flex flex-col gap-0.5 overflow-hidden rounded-2xl border border-border-subtle bg-surface-2 p-1">
                 {children}
             </div>
         </div>
@@ -49,12 +49,12 @@ export function SettingRow({
     children: React.ReactNode;
     stack?: boolean;
 }) {
-    if (stack) {
+            if (stack) {
         return (
-            <div className="px-3.5 py-3 space-y-2.5">
+            <div className="rounded-xl px-3.5 py-3 space-y-2.5">
                 <div>
                     <div className="text-sm font-medium text-text-primary">{title}</div>
-                    {description && <div className="text-sm text-text-muted mt-1">{description}</div>}
+                    {description && <div className="mt-0.5 text-xs text-text-muted">{description}</div>}
                 </div>
                 {children}
             </div>
@@ -62,10 +62,10 @@ export function SettingRow({
     }
 
     return (
-        <div className="px-3.5 py-3 flex items-start justify-between gap-4">
+        <div className="rounded-xl px-3.5 py-3 flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-text-primary">{title}</div>
-                {description && <div className="text-sm text-text-muted mt-1 leading-normal">{description}</div>}
+                {description && <div className="mt-0.5 text-xs text-text-muted">{description}</div>}
             </div>
             <div className="flex items-center shrink-0">{children}</div>
         </div>
@@ -97,7 +97,7 @@ export function SettingSelect<T extends string>({
                     <Icon name="expand_more" className="size-icon-sm shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[180px] max-h-[280px] overflow-y-auto custom-scrollbar">
+            <DropdownMenuContent align="start" className="min-w-[180px]">
                 {options.map((opt) => (
                     <DropdownMenuCheckboxItem
                         key={opt.value}
@@ -287,7 +287,7 @@ export function SettingMultiSelect({
                     <Icon name="expand_more" className="size-icon-sm shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[200px] max-h-[280px] overflow-y-auto custom-scrollbar">
+            <DropdownMenuContent align="start" className="min-w-[200px]">
                 {options.map((opt) => (
                     <DropdownMenuCheckboxItem
                         key={opt.value}

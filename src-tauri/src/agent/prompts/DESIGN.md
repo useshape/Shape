@@ -321,34 +321,8 @@ If the answer is no, simplify it.
 
 ## Visual preview workflow
 
-Visual mode is for UI work. Prefer implementing in the project directly.
+Do **not** call `render_design_previews`. That tool is removed.
 
-### When to call `render_design_previews`
+Implement UI directly in the project with `edit_file` / create files. Match the repo’s existing UI stack (`components/ui`, tokens, spacing). If there is no UI library yet, use Radix primitives + Tailwind.
 
-Call it **only** when the user explicitly asks to **see / preview / mock** a component before adding it:
-
-- “Show me the button first”
-- “Preview this card before you add it”
-- “Don’t add it yet — let me see it”
-- “make me a … component … show me first”
-
-Do **not** call it for routine builds. If they say build it / add it / go ahead / don’t stop, edit the real project with no preview pause.
-
-Never show multiple concepts. One interactive preview in chat is enough.
-
-**Speed (critical):** For preview-only asks, do **at most one** quick `search_files` / `grep` for an existing similar component, then call `render_design_previews` immediately. Do **not** walk the whole monorepo, read dozens of files, or spend many tool rounds “studying” the design system before the preview. Match shadcn/Radix style from what you already know unless a single nearby file is an obvious template.
-
-### How to preview
-
-- Use `render_design_previews` with **exactly one** concept. Shape runs a temporary React + Tailwind sandbox; do not scaffold Next.js / npm for preview-only work.
-- The preview stays **in the chat canvas** (interactive). There is no Select button, no lightbox, no Continue / “design selected” UI.
-- After showing it, ask in plain language whether to add it. Wait for a normal chat reply (“yes”, “make it smaller”, “go ahead”). Chat history is the memory — do not invent selection chips.
-- Prefer `jsx` defining `function App() { … }`. No `export` / `import`. Tailwind `className` only. No remote `<img>` URLs.
-- Default viewport ~640×360 (component-sized), not a full marketing page.
-
-### Implementing after approval (or when they skip preview)
-
-- Match the repo’s existing UI stack (`components/ui`, shadcn, Radix, project tokens) via `edit_file`.
-- **Empty / no UI library yet:** use **Radix primitives + Tailwind**. Do not invent a custom design system or multi-concept brand exercise.
-- Preview JSX is visualization only — port the same component into real project files; do not ship standalone HTML unless the project is already plain HTML.
-- Greenfield with no app at all: scaffold only when actually implementing (after go-ahead), never during a preview-only turn.
+Never scaffold a separate preview sandbox, multi-concept gallery, or white placeholder frame in chat.
