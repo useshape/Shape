@@ -14,7 +14,7 @@ export function FileEditor({ path }: { path: string }) {
 
 type EditorMod = {
     CodeMirrorEditor: typeof import("@/features/editor/ui/codemirror/editor").CodeMirrorEditor;
-    SimpleDiffView: typeof import("@/features/editor/ui/simple/simple-diff").SimpleDiffView;
+    DiffView: typeof import("@/features/editor/ui/diff/diff-view").DiffView;
     useFileContent: typeof import("@/features/editor/ui/main/hooks/use-file-content").useFileContent;
 };
 
@@ -25,13 +25,13 @@ function CodeEditor({ path }: { path: string }) {
         let cancelled = false;
         void Promise.all([
             import("@/features/editor/ui/codemirror/editor"),
-            import("@/features/editor/ui/simple/simple-diff"),
+            import("@/features/editor/ui/diff/diff-view"),
             import("@/features/editor/ui/main/hooks/use-file-content"),
         ]).then(([editor, diff, content]) => {
             if (cancelled) return;
             setMod({
                 CodeMirrorEditor: editor.CodeMirrorEditor,
-                SimpleDiffView: diff.SimpleDiffView,
+                DiffView: diff.DiffView,
                 useFileContent: content.useFileContent,
             });
         });
@@ -69,7 +69,7 @@ function FileEditorInner({
     if (loading) return <div className="h-full bg-editor" />;
     if (isDiff) {
         return (
-            <mod.SimpleDiffView path={path} originalContent={originalContent} content={content} />
+            <mod.DiffView path={path} originalContent={originalContent} content={content} />
         );
     }
     return (

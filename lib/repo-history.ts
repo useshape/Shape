@@ -1,3 +1,5 @@
+import { toTimestampMs } from "@/lib/timestamp";
+
 export type RepoHistoryEntry = {
     path: string;
     lastOpenedAt: number;
@@ -25,11 +27,12 @@ export function cleanPath(path: string): string {
 }
 
 export function formatTimeAgo(timestamp: number): string {
-    const diffMs = Date.now() - timestamp;
+    const diffMs = Date.now() - toTimestampMs(timestamp);
     const minute = 60 * 1000;
     const hour = 60 * minute;
     const day = 24 * hour;
 
+    if (diffMs < 0 || diffMs > 3650 * day) return "—";
     if (diffMs < minute) return "just now";
     if (diffMs < hour) {
         const minutes = Math.floor(diffMs / minute);
@@ -89,4 +92,14 @@ export function upsertRepoHistory(path: string) {
 export function clearRepoHistory() {
     if (typeof window === "undefined") return;
     window.localStorage.removeItem(REPO_HISTORY_KEY);
+}
+
+export function removeFromRepoHistory(path: string) {
+    if (typeof window === "undefined") return;
+    const norm = path.replace(/\\/g, "/").toLowerCase();
+    const next = loadRepoHistory().filter(
+        (e) => e.path.replace(/\\/g, "/").toLowerCase() !== norm,
+    );
+    saveRepoHistory(next);
+    window.dispatchEvent(new Event("shape-repo-history-changed"));
 }

@@ -13,13 +13,13 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { SidebarPanelActionButton } from "@/features/panels";
 import { commands } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
+import { toTimestampMs } from "@/lib/timestamp";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 
 export const CHAT_HISTORY_OPEN_EVENT = "shape-chat-open-history";
 
 function formatConversationDate(timestamp: number): string {
-    return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+    return new Date(toTimestampMs(timestamp)).toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
     });
@@ -130,18 +130,19 @@ export function ChatHistoryMenu({
             <Tooltip content={tooltip}>
                 <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
             </Tooltip>
-            <DropdownMenuContent align={align} className="w-72 overflow-hidden p-0">
-                <div>
-                    <Input
+                <DropdownMenuContent align={align} className="w-72 p-0">
+                <div className="-mx-[var(--menu-pad)] -mt-[var(--menu-pad)] mb-1">
+                    <input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search history..."
                         onKeyDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
-                        className="bg-surface-1 h-10! rounded-xl"
+                        className="shape-menu__search"
+                        autoFocus
                     />
                 </div>
-                <div className="max-h-[320px] overflow-y-auto custom-scrollbar p-1">
+                <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
                     {loading ? (
                         <div className="px-2 py-3 text-sm text-text-muted">Loading...</div>
                     ) : filtered.length === 0 ? (

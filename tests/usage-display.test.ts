@@ -39,19 +39,35 @@ describe("usage-display", () => {
         expect(
             formatMessageUsageLine({ usedAuto: true, tokens: 100_000 }, "auto"),
         ).toBe("2% used");
-        expect(formatMessageUsageLine({ usedAuto: true }, "auto")).toBe("0% used");
+        expect(formatMessageUsageLine({ usedAuto: true }, "auto")).toBe("No charge");
     });
 
     it("formats credit usage lines without tokens", () => {
         expect(
             formatMessageUsageLine({ creditsCharged: 1.25 }, "anthropic/claude-sonnet-4"),
-        ).toBe("1.25 credits");
+        ).toBe("1.25");
         expect(
             formatMessageUsageLine(
                 { creditsCharged: 1.25, tokens: 3400 },
                 "anthropic/claude-sonnet-4",
             ),
-        ).toBe("1.25 credits");
+        ).toBe("1.25");
+    });
+
+    it("splits usage into separate rows and omits empty fields", async () => {
+        const { formatMessageUsageRows } = await import("@/lib/usage-display");
+        expect(
+            formatMessageUsageRows(
+                { usedAuto: true, tokens: 100_000, inputTokens: 80_000, outputTokens: 20_000 },
+                "auto",
+            ),
+        ).toEqual([
+            { label: "Usage", value: "2% used" },
+            { label: "Input", value: "80,000" },
+            { label: "Output", value: "20,000" },
+        ]);
+        expect(formatMessageUsageRows({ usedAuto: true }, "auto")).toEqual([]);
+        expect(formatMessageUsageRows(undefined, "auto")).toEqual([]);
     });
 
     it("resolves chat ring from last-turn delta only as %, no token tooltip", () => {

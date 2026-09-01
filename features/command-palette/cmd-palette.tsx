@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { isPopoutPath } from "@/lib/tauri-window";
 import { SETTINGS_CATEGORIES } from "@/features/settings/ui/settings-nav";
 import { openSettingsWindow } from "@/lib/open-settings";
+import { toTimestampMs } from "@/lib/timestamp";
 
 interface EditorAction {
     id: string;
@@ -52,14 +53,15 @@ function isBrowseMode(mode: string): boolean {
 }
 
 function formatRelativeAgo(timestamp: number): string {
-    const now = Date.now() / 1000;
-    const diff = Math.max(0, now - timestamp);
-    const minutes = Math.floor(diff / 60);
-    const hours = Math.floor(diff / 3600);
-    const days = Math.floor(diff / 86400);
+    const diffMs = Date.now() - toTimestampMs(timestamp);
+    if (!Number.isFinite(diffMs) || diffMs < 0) return "—";
+    const minutes = Math.floor(diffMs / 60_000);
+    const hours = Math.floor(diffMs / 3_600_000);
+    const days = Math.floor(diffMs / 86_400_000);
     if (days >= 1) return `${days}d`;
     if (hours >= 1) return `${hours}h`;
-    return `${Math.max(1, minutes)}m`;
+    if (minutes < 1) return "now";
+    return `${minutes}m`;
 }
 
 function projectNameFromPath(path?: string | null): string {
@@ -105,41 +107,6 @@ function getSettingsPaletteActions(): EditorAction[] {
 
 function shortcut(label: string) {
     return getShortcutForLabel(label) ?? "";
-}
-
-/** Monaco actions that open built-in widgets/overlays — Shape provides its own UI. */
-const MONACO_UI_ACTION_IDS = new Set([
-    "editor.action.quickCommand",
-    "editor.action.gotoLine",
-    "editor.action.quickOutline",
-    "editor.action.startFindAction",
-    "editor.action.startFindReplaceAction",
-    "actions.find",
-    "actions.findWithSelection",
-    "editor.action.referenceSearch.trigger",
-    "editor.action.showReferences",
-    "editor.action.peekLocations",
-    "editor.action.peekDefinition",
-    "editor.action.peekDeclaration",
-    "editor.action.peekTypeDefinition",
-    "editor.action.peekImplementation",
-    "editor.action.revealDefinitionAside",
-    "editor.action.showAccessibilityHelp",
-    "editor.action.focusFindWidget",
-    "editor.action.focusFindReplaceWidget",
-    "editor.action.closeFindWidget",
-    "editor.action.triggerSuggest",
-    "editor.action.triggerParameterHints",
-    "editor.action.showHover",
-    "editor.action.showContextMenu",
-]);
-
-function isMonacoUiAction(actionId: string, label: string): boolean {
-    if (MONACO_UI_ACTION_IDS.has(actionId)) return true;
-    const lower = label.toLowerCase();
-    if (lower.includes("peek ") || lower.startsWith("peek ")) return true;
-    if (lower.includes("widget") || lower.includes("accessibility help")) return true;
-    return false;
 }
 
 function toggleLayout(id: "primary-sidebar" | "secondary-sidebar" | "panel") {
@@ -227,26 +194,10 @@ export function CommandPalette() {
             const defaultPlaceholder = browsePlaceholder(openMode, requestedFilter || (openMode === "files" ? "files" : "all"));
             setPlaceholder(detail?.placeholder || defaultPlaceholder);
 
-            if (openMode === "workspace_symbols") {
-                import("@/features/editor/lsp/workspace-symbols").then(({ buildWorkspaceSymbolActions }) => {
-                    buildWorkspaceSymbolActions().then((symbolActions) => {
-                        setActions(symbolActions);
-                        setQuery(detail?.filter && !PALETTE_FILTERS.some((f) => f.id === detail.filter) ? detail.filter : "");
-                        setOpen(true);
-                    });
-                });
-            } else if (openMode === "goto_line") {
+            if (openMode === "goto_line") {
                 setActions([]);
                 setQuery(detail?.filter || "");
                 setOpen(true);
-            } else if (openMode === "editor_symbols") {
-                import("@/features/editor/lsp/document-symbols").then(({ buildDocumentSymbolActions }) => {
-                    buildDocumentSymbolActions("").then((symbolActions) => {
-                        setActions(symbolActions);
-                        setQuery("");
-                        setOpen(true);
-                    });
-                });
             } else if (openMode === "language_mode" && detail?.actions?.length) {
                 setActions(detail.actions);
                 setQuery(detail.filter || "");
@@ -257,7 +208,7 @@ export function CommandPalette() {
                 setOpen(true);
             } else {
                 // Browse mode: All / Agents / Files / Actions / Settings
-                setActions(getMonacoActions());
+                setActions(getAppCommands());
                 setQuery(
                     detail?.filter && !PALETTE_FILTERS.some((f) => f.id === detail.filter)
                         ? detail.filter
@@ -387,29 +338,9 @@ export function CommandPalette() {
     }, [open, browse, filterTab, query, recentFiles]);
 
     // Legacy mode: files-only when mode===files still uses fileActions via browse
-    useEffect(() => {
-        if (mode !== "editor_symbols" || !open) return;
-        const handle = window.setTimeout(() => {
-            import("@/features/editor/lsp/document-symbols").then(({ buildDocumentSymbolActions }) => {
-                buildDocumentSymbolActions(query.trim()).then(setActions);
-            });
-        }, query.trim() ? 200 : 0);
-        return () => window.clearTimeout(handle);
-    }, [mode, open, query]);
-
-    useEffect(() => {
-        if (mode !== "workspace_symbols" || !open) return;
-        const handle = window.setTimeout(() => {
-            import("@/features/editor/lsp/workspace-symbols").then(({ buildWorkspaceSymbolActions }) => {
-                buildWorkspaceSymbolActions(query.trim()).then(setActions);
-            });
-        }, query.trim() ? 200 : 0);
-        return () => window.clearTimeout(handle);
-    }, [mode, open, query]);
 
     const actionCommands = useMemo(() => {
         if (!browse) return actions;
-        // getMonacoActions() already merges app + editor commands
         return actions.map((a) => ({ ...a, section: a.section || "Commands" }));
     }, [browse, actions]);
 
@@ -617,7 +548,7 @@ export function CommandPalette() {
                 <Dialog.Content className={cn(
                     SHAPE_OVERLAY_CONTENT_CLASS,
                     SHAPE_MODAL_PANEL_CLASS,
-                    "fixed top-[12%] left-1/2 -translate-x-1/2 flex bg-surface-2/50 backdrop-blur-2xl w-full max-w-[650px] rounded-2xl flex-col overflow-hidden focus:outline-none",
+                    "fixed top-[12%] left-1/2 z-50 -translate-x-1/2 flex bg-surface-2/80 backdrop-blur-2xl w-full max-w-[650px] rounded-2xl flex-col overflow-hidden border border-border-subtle shadow-lg focus:outline-none",
                 )}>
                     <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
                     <Dialog.Description className="sr-only">Search agents, files, and actions</Dialog.Description>
@@ -767,118 +698,7 @@ function browsePlaceholder(mode: string, filter: string): string {
     return "Search agents, files, actions...";
 }
 
-/**
- * Decode a Monaco numeric keybinding into a human-readable shortcut string.
- * Monaco encodes keybindings as bitfields combining KeyMod and KeyCode values.
- */
-function decodeKeybinding(keybinding: number): string {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const monaco = (window as any).monaco;
-    if (!monaco) return "";
-
-    try {
-        // Use Monaco's internal keybinding service to resolve to a label
-        const editors = monaco.editor?.getEditors?.() ?? [];
-        if (editors.length > 0) {
-            const editor = editors[0];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const kbService = (editor as any)._standaloneKeybindingService;
-            if (kbService?.resolveKeybinding) {
-                const createKeybinding = kbService.resolveKeybinding(
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    new (monaco as any).Keybinding(keybinding)
-                );
-                if (createKeybinding?.[0]) {
-                    const label = createKeybinding[0].getLabel?.();
-                    if (label) return label;
-                }
-            }
-        }
-    } catch {
-        // Fall through to manual decode
-    }
-
-    // Manual bitfield decode fallback
-    const parts: string[] = [];
-
-    // Monaco KeyMod values
-    const CtrlCmd = 2048;
-    const Shift = 1024;
-    const Alt = 512;
-    const WinCtrl = 256;
-
-    if (keybinding & CtrlCmd) parts.push("Ctrl");
-    if (keybinding & Shift) parts.push("Shift");
-    if (keybinding & Alt) parts.push("Alt");
-    if (keybinding & WinCtrl) parts.push("Win");
-
-    // Strip modifier bits to get the raw KeyCode
-    const keyCode = keybinding & 0xFF;
-    const keyName = getKeyName(keyCode);
-    if (keyName) parts.push(keyName);
-
-    return parts.join("+");
-}
-
-/**
- * Map a Monaco KeyCode value to a human-readable key name
- */
-function getKeyName(keyCode: number): string {
-    const keyCodeMap: Record<number, string> = {
-        0: "", 1: "", // Unknown / Backspace internal
-        3: "Enter", 4: "Tab", 5: "Space",
-        6: "Backspace", 7: "Escape",
-        // arrows
-        15: "↑", 16: "↓", 17: "←", 18: "→",
-        // Page navigation
-        11: "Home", 12: "End",
-        13: "PageUp", 14: "PageDown",
-        19: "Insert", 20: "Delete",
-        // F-keys
-        59: "F1", 60: "F2", 61: "F3", 62: "F4",
-        63: "F5", 64: "F6", 65: "F7", 66: "F8",
-        67: "F9", 68: "F10", 69: "F11", 70: "F12",
-        // Digits 0-9
-        21: "0", 22: "1", 23: "2", 24: "3", 25: "4",
-        26: "5", 27: "6", 28: "7", 29: "8", 30: "9",
-        // Letters A-Z
-        31: "A", 32: "B", 33: "C", 34: "D", 35: "E",
-        36: "F", 37: "G", 38: "H", 39: "I", 40: "J",
-        41: "K", 42: "L", 43: "M", 44: "N", 45: "O",
-        46: "P", 47: "Q", 48: "R", 49: "S", 50: "T",
-        51: "U", 52: "V", 53: "W", 54: "X", 55: "Y",
-        56: "Z",
-        // Punctuation & symbols
-        80: ";", 81: "=", 82: ",", 83: "-",
-        84: ".", 85: "/", 86: "`",
-        87: "[", 88: "\\", 89: "]", 90: "'",
-    };
-
-    return keyCodeMap[keyCode] ?? "";
-}
-
-/**
- * Look up the keybinding label string for an action using Monaco's keybinding service
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getActionKeybindingLabel(editor: any, actionId: string): string {
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const kbService = (editor as any)._standaloneKeybindingService;
-        if (kbService?.lookupKeybinding) {
-            const kb = kbService.lookupKeybinding(actionId);
-            if (kb) {
-                const label = kb.getLabel?.();
-                if (label) return label;
-            }
-        }
-    } catch {
-        // ignore
-    }
-    return "";
-}
-
-/** App-level commands that go beyond Monaco editor actions (like VS Code's workbench commands). */
+/** App-level workbench commands for the command palette. */
 function getAppCommands(): EditorAction[] {
     const commands: EditorAction[] = [
         // ── Navigation ───────────────────────────────────────────────────────
@@ -890,6 +710,19 @@ function getAppCommands(): EditorAction[] {
                 window.dispatchEvent(
                     new CustomEvent("shape-command-palette", { detail: { mode: "files" } }),
                 ),
+        },
+        {
+            id: "app.chat.openDemo",
+            label: "Chat: Open Demo",
+            shortcut: "",
+            run: () => {
+                window.dispatchEvent(
+                    new CustomEvent("shape-layout-toggle", {
+                        detail: { id: "secondary-sidebar", value: true },
+                    }),
+                );
+                window.dispatchEvent(new CustomEvent("shape-demo-chat"));
+            },
         },
         {
             id: "app.file.recentFiles",
@@ -914,71 +747,12 @@ function getAppCommands(): EditorAction[] {
                 ),
         },
         {
-            id: "app.nav.editorSymbols",
-            label: "Go to Symbol in Editor...",
-            shortcut: shortcut("Go to Symbol in Editor..."),
-            run: () =>
-                window.dispatchEvent(
-                    new CustomEvent("shape-command-palette", { detail: { mode: "editor_symbols" } }),
-                ),
-        },
-        {
-            id: "app.view.workspaceSymbols",
-            label: "Go to Symbol in Workspace...",
-            shortcut: shortcut("Go to Symbol in Workspace..."),
-            run: () =>
-                window.dispatchEvent(
-                    new CustomEvent("shape-command-palette", { detail: { mode: "workspace_symbols" } }),
-                ),
-        },
-        {
             id: "app.nav.findInFile",
             label: "Find in Current File",
             shortcut: shortcut("Find"),
             run: () => window.dispatchEvent(new Event("open-in-file-search")),
         },
-        {
-            id: "app.nav.findInFiles",
-            label: "Find in Files",
-            shortcut: shortcut("Find in Files"),
-            run: () => openSearchSidebar("search"),
-        },
-        {
-            id: "app.nav.replaceInFiles",
-            label: "Replace in Files",
-            shortcut: shortcut("Replace in Files"),
-            run: () => openSearchSidebar("replace"),
-        },
         // ── View / Panels ──────────────────────────────────────────────────────
-        {
-            id: "app.view.explorer",
-            label: "View: Show Explorer",
-            shortcut: shortcut("Explorer"),
-            run: () => showSidebarTab("explorer"),
-        },
-        {
-            id: "app.view.revealInExplorer",
-            label: "Reveal Active File in Explorer",
-            shortcut: "",
-            run: () => {
-                void import("@/lib/backend").then(({ commands }) =>
-                    commands.getProjectState().then((state) => {
-                        if (!state.active_file) return;
-                        window.dispatchEvent(
-                            new CustomEvent("shape-reveal-in-explorer", {
-                                detail: { path: state.active_file },
-                            }),
-                        );
-                    }),
-                );
-            },
-        },
-        {
-            id: "app.view.search",
-            label: "View: Show Search",
-            shortcut: shortcut("Search"),
-            run: () => showSidebarTab("search"),
-        },
         {
             id: "app.view.sourceControl",
             label: "View: Show Source Control",
@@ -992,12 +766,6 @@ function getAppCommands(): EditorAction[] {
             run: () => showSidebarTab("graph"),
         },
         {
-            id: "app.view.outline",
-            label: "View: Show Outline",
-            shortcut: shortcut("Outline"),
-            run: () => showSidebarTab("outline"),
-        },
-        {
             id: "app.view.togglePrimarySidebar",
             label: "View: Toggle Primary Sidebar",
             shortcut: "",
@@ -1008,32 +776,6 @@ function getAppCommands(): EditorAction[] {
             label: "View: Toggle AI Chat",
             shortcut: shortcut("AI Chat"),
             run: () => toggleLayout("secondary-sidebar"),
-        },
-        {
-            id: "app.view.problems",
-            label: "View: Show Problems",
-            shortcut: shortcut("Problems"),
-            run: () => {
-                window.dispatchEvent(new Event("shape-open-problems"));
-                window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
-            },
-        },
-        {
-            id: "app.view.output",
-            label: "View: Show Output",
-            shortcut: shortcut("Output"),
-            run: () => {
-                window.dispatchEvent(new Event("shape-open-output"));
-                window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
-            },
-        },
-        {
-            id: "app.view.preview",
-            label: "View: Show Browser",
-            shortcut: "",
-            run: () => {
-                void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
-            },
         },
         {
             id: "app.view.terminal",
@@ -1121,14 +863,6 @@ function getAppCommands(): EditorAction[] {
             label: "Preferences: Open Settings",
             shortcut: shortcut("Settings"),
             run: () => window.dispatchEvent(new Event("shape-open-settings")),
-        },
-        {
-            id: "app.stats.open",
-            label: "View: Open Project Statistics",
-            shortcut: "",
-            run: () => {
-                void import("@/lib/open-stats-window").then(({ openStatsWindow }) => openStatsWindow());
-            },
         },
         {
             id: "app.editor.wordWrap",
@@ -1538,55 +1272,3 @@ function getAppCommands(): EditorAction[] {
     return commands;
 }
 
-/**
- * Extract all actions from the currently active Monaco editor instance
- */
-function getMonacoActions(): EditorAction[] {
-    const appCommands = getAppCommands();
-
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const monacoEditors = (window as any).monaco?.editor?.getEditors?.() ?? [];
-
-        if (monacoEditors.length > 0) {
-            const monacoActions: EditorAction[] = [];
-            const seenIds = new Set<string>(appCommands.map((a) => a.id));
-            const seenLabels = new Set(appCommands.map((a) => a.label.toLowerCase()));
-
-            const editor = monacoEditors[monacoEditors.length - 1];
-            const supported = editor.getSupportedActions?.() ?? [];
-
-            for (const action of supported) {
-                const actionId = action.id;
-                const label = action.label || actionId;
-                if (seenIds.has(actionId)) continue;
-                if (isMonacoUiAction(actionId, label)) continue;
-                if (seenLabels.has(label.toLowerCase())) continue;
-                seenIds.add(actionId);
-                seenLabels.add(label.toLowerCase());
-
-                let kb = getActionKeybindingLabel(editor, actionId);
-                if (!kb && action.keybindings?.length > 0) {
-                    kb = decodeKeybinding(action.keybindings[0]);
-                }
-
-                const capturedEditor = editor;
-                monacoActions.push({
-                    id: actionId,
-                    label,
-                    shortcut: kb,
-                    run: () => {
-                        capturedEditor.focus();
-                        capturedEditor.trigger("command-palette", actionId, null);
-                    },
-                });
-            }
-
-            return [...appCommands, ...monacoActions].sort((a, b) => a.label.localeCompare(b.label));
-        }
-    } catch {
-        // Fall through
-    }
-
-    return appCommands.sort((a, b) => a.label.localeCompare(b.label));
-}

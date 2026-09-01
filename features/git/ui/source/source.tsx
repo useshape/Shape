@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { FileIcon } from "@/components/ui/file-icon";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
-import { ManagerDiffEditor } from "@/features/git/ui/shared/monaco-diff";
+import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
 import { Panel } from "@/features/panels";
 import {
     ContextMenu,

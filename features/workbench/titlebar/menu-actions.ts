@@ -4,7 +4,7 @@ import { isPopoutPath } from "@/lib/tauri-window";
 import { notifyWorkspaceClosed, notifyWorkspaceOpened } from "@/lib/workspace-trust";
 import { clearExtraWorkspaceFolders } from "@/lib/workspace-folders";
 import type { MenuActionContext } from "./types";
-import { getFileExtension, isImageExtension, isFontExtension } from "@/features/editor/lsp/image-types";
+import { getFileExtension, isImageExtension, isFontExtension } from "@/features/editor/lib/image-types";
 
 function getFileName(path: string) {
     return path.split(/[\\/]/).pop() || path;
@@ -189,9 +189,6 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
             case "Git Graph":
                 window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "graph" }));
                 break;
-            case "Outline":
-                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "outline" }));
-                break;
             case "AI Chat":
                 window.dispatchEvent(
                     new CustomEvent("shape-layout-toggle", {
@@ -220,21 +217,9 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
             case "Git Manager":
                 void import("@/lib/open-git-window").then(({ openGitWindow }) => openGitWindow());
                 break;
-            case "Project Statistics":
-                void import("@/lib/open-stats-window").then(({ openStatsWindow }) => openStatsWindow());
-                break;
             case "Open View...":
             case "Go to File...":
                 window.dispatchEvent(new CustomEvent("shape-command-palette", { detail: { mode: "files" } }));
-                break;
-            case "Problems":
-                window.dispatchEvent(new Event("shape-open-problems"));
-                break;
-            case "Output":
-                window.dispatchEvent(
-                    new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),
-                );
-                window.dispatchEvent(new Event("shape-open-output"));
                 break;
             case "Preview":
                 window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "preview" }));

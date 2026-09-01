@@ -86,9 +86,6 @@ jobs:
       - name: Build preview runtime
         run: npm run build:preview-runtime
 
-      - name: Build Monaco workers
-        run: npm run build:monaco-workers
-
       # Password-protected key in secrets (upload via node/fs, not PowerShell pipe —
       # UTF-16 piping corrupts the key and surfaces as "Wrong password").
       - name: Build Tauri (NSIS only)

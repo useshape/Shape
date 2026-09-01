@@ -4,7 +4,7 @@ import React from "react";
 import { listen } from "@tauri-apps/api/event";
 import { commands, Conversation, useProjectState } from "@/lib/backend";
 import { useChatStream } from "./chat-stream-store";
-import { NEW_CHAT_TAB_ID, type ChatTab } from "../ui/shell/tabs";
+import { NEW_CHAT_TAB_ID, DEMO_CHAT_TAB_ID, isEphemeralChatTabId, type ChatTab } from "../ui/shell/tabs";
 import { openChatHistoryMenu } from "../ui/shell/history";
 import { parseMessageContent, type Chunk } from "../ui/md/renderer";
 import {
@@ -37,6 +37,11 @@ import { buildPlanBuildMessage } from "@/lib/shape-continue-action";
 import { loadProjectRules } from "@/lib/project-rules";
 import { isWorkspaceTrusted } from "@/lib/workspace-trust";
 import { clearAllDesignPreviewSessions } from "@/lib/design-preview-store";
+import {
+    createPendingAttachment,
+    processAttachment,
+    type ComposerAttachment,
+} from "@/features/chat/ui/composer/attachments";
 
 function chatTabsStorageKey(projectPath: string | null | undefined) {
     const norm = (projectPath || "").replace(/\\/g, "/").toLowerCase();
@@ -73,9 +78,15 @@ function writePersistedChatTabs(
     activeId: string,
 ) {
     try {
+        const persistable = tabs.filter(
+            (t) => !isEphemeralChatTabId(t.id) || t.id === NEW_CHAT_TAB_ID || t.id === DEMO_CHAT_TAB_ID,
+        );
+        const nextActive = isEphemeralChatTabId(activeId) && activeId !== NEW_CHAT_TAB_ID
+            ? (persistable[0]?.id ?? NEW_CHAT_TAB_ID)
+            : activeId;
         localStorage.setItem(
             chatTabsStorageKey(projectPath),
-            JSON.stringify({ tabs, activeId }),
+            JSON.stringify({ tabs: persistable, activeId: nextActive }),
         );
     } catch {
         /* ignore */
@@ -83,7 +94,18 @@ function writePersistedChatTabs(
 }
 
 export function useChatSession() {
-    const [uploadedFiles, setUploadedFiles] = React.useState<File[]>([]);
+    const [uploadedFiles, setUploadedFiles] = React.useState<ComposerAttachment[]>([]);
+
+    const addUploadedFiles = React.useCallback((files: File[]) => {
+        if (files.length === 0) return;
+        const pending = files.map(createPendingAttachment);
+        setUploadedFiles((prev) => [...prev, ...pending]);
+        for (const att of pending) {
+            void processAttachment(att).then((ready) => {
+                setUploadedFiles((prev) => prev.map((a) => (a.id === ready.id ? ready : a)));
+            });
+        }
+    }, []);
     const [inputValue, setInputValue] = React.useState(() => {
         try {
             return localStorage.getItem("shape-chat-input") || "";
@@ -107,10 +129,13 @@ export function useChatSession() {
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
     const [openChatTabs, setOpenChatTabs] = React.useState<ChatTab[]>([
         { id: NEW_CHAT_TAB_ID, title: "New Chat" },
+        { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
     ]);
     const [activeChatTabId, setActiveChatTabId] = React.useState<string>(NEW_CHAT_TAB_ID);
     const [selectedModel, setSelectedModel] = React.useState("auto");
     const [selectedMode, setSelectedMode] = React.useState("Code");
+    const [reasoningEffort, setReasoningEffort] = React.useState<"low" | "high" | "ultra" | "max">("low");
+    const [fastMode, setFastMode] = React.useState(true);
     const tabsHydratedForRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
@@ -170,9 +195,16 @@ export function useChatSession() {
         void (async () => {
             const persisted = readPersistedChatTabs(project_path);
             if (persisted) {
-                setOpenChatTabs(persisted.tabs);
+                const tabs = [...persisted.tabs];
+                if (!tabs.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
+                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] });
+                }
+                if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
+                    tabs.unshift({ id: NEW_CHAT_TAB_ID, title: "New Chat" });
+                }
+                setOpenChatTabs(tabs);
                 setActiveChatTabId(persisted.activeId);
-                if (persisted.activeId !== NEW_CHAT_TAB_ID) {
+                if (persisted.activeId !== NEW_CHAT_TAB_ID && !isEphemeralChatTabId(persisted.activeId)) {
                     try {
                         await commands.loadConversation(
                             persisted.activeId,
@@ -183,11 +215,32 @@ export function useChatSession() {
                             setContextSummarized(false);
                         }
                     } catch (err) {
-                        console.error("Failed to restore chat tab:", err);
+                        // Ephemeral / deleted tabs — fall back to a draft quietly.
+                        if (!cancelled) {
+                            setOpenChatTabs([
+                                { id: NEW_CHAT_TAB_ID, title: "New Chat" },
+                                { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+                            ]);
+                            setActiveChatTabId(NEW_CHAT_TAB_ID);
+                        }
+                    }
+                } else if (persisted.activeId === DEMO_CHAT_TAB_ID) {
+                    // Demo is in-memory only — rebuild if the tab was persisted.
+                    const { buildDemoChatMessages } = await import("./demo-chat");
+                    if (!cancelled) {
+                        setMessages(buildDemoChatMessages());
+                        setOpenChatTabs((prev) => {
+                            if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) return prev;
+                            return [...prev, { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] }];
+                        });
+                        setActiveChatTabId(DEMO_CHAT_TAB_ID);
                     }
                 }
             } else {
-                setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
+                setOpenChatTabs([
+                    { id: NEW_CHAT_TAB_ID, title: "New Chat" },
+                    { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+                ]);
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
             }
             if (!cancelled) setTabsReady(true);
@@ -616,7 +669,14 @@ export function useChatSession() {
 
     const handleSendMessage = async (overrideContent?: string): Promise<boolean> => {
         const messageContent = typeof overrideContent === "string" ? overrideContent : inputValue;
-        if ((!messageContent.trim() && uploadedFiles.length === 0) || isLoading || sendingInFlightRef.current) {
+        if (
+            (!messageContent.trim() && uploadedFiles.length === 0) ||
+            isLoading ||
+            sendingInFlightRef.current
+        ) {
+            return false;
+        }
+        if (uploadedFiles.some((a) => a.status === "processing")) {
             return false;
         }
 
@@ -642,15 +702,9 @@ export function useChatSession() {
             const token = shapeAuth.accessToken;
             const attachmentBlocks: string[] = [];
 
-            for (const file of uploadedFiles) {
-                const ext = file.name.split(".").pop()?.toLowerCase() || "";
-                const VISION_SUPPORTED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-                const isVisionImage =
-                    VISION_SUPPORTED_TYPES.includes(file.type) ||
-                    ["jpg", "jpeg", "png", "gif", "webp"].includes(ext);
-                const isAutoModel =
-                    selectedModel === "auto" || selectedModel.startsWith("auto/");
-
+            for (const att of uploadedFiles) {
+                if (att.status !== "ready") continue;
+                const ext = att.name.split(".").pop()?.toLowerCase() || "";
                 const CODE_LIKE_EXT = new Set([
                     "ts", "tsx", "js", "jsx", "rs", "py", "go", "java", "c", "cpp", "h", "hpp",
                     "css", "scss", "less", "html", "xml", "svg", "json", "toml", "yaml", "yml",
@@ -658,42 +712,31 @@ export function useChatSession() {
                     "lua", "r", "sql", "graphql", "gql", "proto", "txt", "log", "csv", "lock",
                     "env", "ini", "cfg", "conf",
                 ]);
+                const BINARY_ASSET_EXT = new Set([
+                    "ttf", "otf", "woff", "woff2", "eot", "ico", "icns", "pdf",
+                ]);
 
-                if (isVisionImage && !isAutoModel) {
-                    const base64 = await new Promise<string>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result as string);
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
-
-                    let standardizedBase64 = base64;
-                    if (base64.startsWith("data:image/jpg;base64,")) {
-                        standardizedBase64 = base64.replace(
-                            "data:image/jpg;base64,",
-                            "data:image/jpeg;base64,",
-                        );
-                    }
-
+                if (att.kind === "image" && att.dataUrl) {
+                    // Native multimodal — model sees pixels via image_url (no separate OCR API).
                     attachmentBlocks.push(
-                        `<attached_image name="${file.name}" type="${file.type}" size="${file.size}">${standardizedBase64}</attached_image>`,
+                        `<attached_image name="${att.name}" type="${att.mimeType}" size="${att.size}">${att.dataUrl}</attached_image>`,
+                    );
+                } else if (att.kind === "audio") {
+                    attachmentBlocks.push(
+                        `<attached_file name="${att.name}" type="${att.mimeType || "audio"}" size="${att.size}">\n[Audio file attached — playback in UI; transcription not available in this turn.]\n</attached_file>`,
                     );
                 } else {
                     const isTextLike =
-                        file.type.startsWith("text/") ||
+                        att.mimeType.startsWith("text/") ||
                         CODE_LIKE_EXT.has(ext) ||
                         ["svg", "json", "xml", "md", "mdx"].includes(ext);
 
-                    if (isVisionImage && isAutoModel) {
-                        attachmentBlocks.push(
-                            `<attached_file name="${file.name}" type="text/plain" size="${file.size}">\n[Image attachment omitted on Auto — switch to a vision-capable model to analyze images.]\n</attached_file>`,
-                        );
-                    } else if (isTextLike) {
+                    if (isTextLike) {
                         const text = await new Promise<string>((resolve, reject) => {
                             const reader = new FileReader();
                             reader.onload = () => resolve(reader.result as string);
                             reader.onerror = reject;
-                            reader.readAsText(file);
+                            reader.readAsText(att.file);
                         });
 
                         const maxChars = 20000;
@@ -703,8 +746,29 @@ export function useChatSession() {
                                 : text;
 
                         attachmentBlocks.push(
-                            `<attached_file name="${file.name}" type="${file.type || "text/plain"}" size="${file.size}">\n${content}\n</attached_file>`,
+                            `<attached_file name="${att.name}" type="${att.mimeType || "text/plain"}" size="${att.size}">\n${content}\n</attached_file>`,
                         );
+                    } else if (BINARY_ASSET_EXT.has(ext) || att.mimeType.startsWith("font/")) {
+                        // Usable binary — instruct the agent to write/use the file, not just describe it.
+                        const dataUrl = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(att.file);
+                        });
+                        const maxBytes = 2_500_000;
+                        if (att.size <= maxBytes) {
+                            attachmentBlocks.push(
+                                `<attached_asset name="${att.name}" type="${att.mimeType || "application/octet-stream"}" size="${att.size}" usable="true">\n` +
+                                    `When the user asks to use this file (e.g. apply a font, add an icon), write it into the project from this data URL and wire it up — do not only describe it.\n` +
+                                    `${dataUrl}\n` +
+                                    `</attached_asset>`,
+                            );
+                        } else {
+                            attachmentBlocks.push(
+                                `<attached_file name="${att.name}" type="${att.mimeType || "application/octet-stream"}" size="${att.size}">\n[Binary asset too large to inline (${att.size} bytes). Ask the user for a path in the repo, or copy it locally.]\n</attached_file>`,
+                            );
+                        }
                     }
                 }
             }
@@ -726,8 +790,9 @@ export function useChatSession() {
             const attachmentKinds = [
                 ...new Set(
                     uploadedFiles.map((f) => {
-                        if (f.type.startsWith("image/")) return "image";
-                        if (f.type.startsWith("text/")) return "text";
+                        if (f.kind === "image") return "image";
+                        if (f.kind === "audio") return "audio";
+                        if (f.mimeType.startsWith("text/")) return "text";
                         return "file";
                     }),
                 ),
@@ -765,6 +830,8 @@ export function useChatSession() {
                     requireEditApproval: settings.ai.requireEditApproval,
                     protectDestructiveGit: settings.ai.protectDestructiveGit,
                 },
+                reasoningEffort,
+                fastMode ? "priority" : null,
             );
             await refreshMetadata();
             return true;
@@ -988,6 +1055,10 @@ export function useChatSession() {
             await handleNewChat();
             return;
         }
+        if (tabId === DEMO_CHAT_TAB_ID) {
+            window.dispatchEvent(new CustomEvent("shape-demo-chat"));
+            return;
+        }
         try {
             const conv = recentConvs.find((c) => c.id === tabId);
             await commands.loadConversation(tabId, conv?.project_path ?? project_path);
@@ -1002,7 +1073,10 @@ export function useChatSession() {
     const handleCloseChatTab = async (tabId: string) => {
         const remaining = openChatTabs.filter((tab) => tab.id !== tabId);
         if (remaining.length === 0) {
-            setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
+            setOpenChatTabs([
+                { id: NEW_CHAT_TAB_ID, title: "New Chat" },
+                { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+            ]);
             setActiveChatTabId(NEW_CHAT_TAB_ID);
             setMessages([]);
             setConversationId(null);
@@ -1093,6 +1167,35 @@ export function useChatSession() {
         return () => window.removeEventListener("shape-chat-load", onLoad as EventListener);
     }, [handleLoadConversation]);
 
+    React.useEffect(() => {
+        const onDemo = () => {
+            void (async () => {
+                const { buildDemoChatMessages } = await import("./demo-chat");
+                const demo = buildDemoChatMessages();
+                setMessages(demo);
+                setInputValue("");
+                setSendError(null);
+                setOpenChatTabs((prev) => {
+                    if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
+                        return prev.map((t) =>
+                            t.id === DEMO_CHAT_TAB_ID ? { ...t, title: "Demo", models: ["auto"] } : t,
+                        );
+                    }
+                    return [
+                        ...prev.filter((t) => t.id !== NEW_CHAT_TAB_ID),
+                        { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+                    ];
+                });
+                setActiveChatTabId(DEMO_CHAT_TAB_ID);
+                setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                }, 50);
+            })();
+        };
+        window.addEventListener("shape-demo-chat", onDemo);
+        return () => window.removeEventListener("shape-demo-chat", onDemo);
+    }, []);
+
     const handleViewAllHistory = React.useCallback(() => {
         openChatHistoryMenu();
     }, []);
@@ -1133,10 +1236,15 @@ export function useChatSession() {
         setInputValue,
         uploadedFiles,
         setUploadedFiles,
+        addUploadedFiles,
         selectedModel,
         setSelectedModel,
         selectedMode,
         setSelectedMode,
+        reasoningEffort,
+        setReasoningEffort,
+        fastMode,
+        setFastMode,
         chatTitle,
         conversationId,
         recentConvs,

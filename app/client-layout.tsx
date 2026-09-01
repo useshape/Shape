@@ -32,7 +32,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const isOnboarding = pathMatches(pathname, "/onboarding");
     const isSettings = pathMatches(pathname, "/settings");
     const isBranch = pathMatches(pathname, "/branch") || pathMatches(pathname, "/git");
-    const isStats = pathMatches(pathname, "/stats");
+
     const isPopout = pathMatches(pathname, "/popout");
     const isPlayground = pathMatches(pathname, "/playground");
 
@@ -41,6 +41,30 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             void initSettings();
             initGitHubAuth();
             void import("@/lib/shape-auth/store").then(({ initShapeAuth }) => initShapeAuth());
+
+            // MCP: OAuth deep links + sync tools so the agent sees them without visiting Settings.
+            void import("@/lib/mcp-install").then(({ initMcpOAuthListener }) => {
+                void initMcpOAuthListener(async () => {
+                    try {
+                        const { loadMcpServersFromFile } = await import("@/lib/mcp-config");
+                        const { commands } = await import("@/lib/backend");
+                        const servers = await loadMcpServersFromFile();
+                        await commands.syncMcpServers(servers);
+                    } catch {
+                        /* ignore */
+                    }
+                });
+            });
+            void (async () => {
+                try {
+                    const { loadMcpServersFromFile } = await import("@/lib/mcp-config");
+                    const { commands } = await import("@/lib/backend");
+                    const servers = await loadMcpServersFromFile();
+                    if (servers.length > 0) await commands.syncMcpServers(servers);
+                } catch {
+                    /* ignore */
+                }
+            })();
 
             const isMain = !isTauriRuntime() || await isMainTauriWindow();
             if (!isMain) return;
@@ -59,7 +83,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }, []);
 
     useEffect(() => {
-        if (isOnboarding || isSettings || isBranch || isStats || isPopout || isPlayground) return;
+        if (isOnboarding || isSettings || isBranch || isPopout || isPlayground) return;
         let unlisten: (() => void) | undefined;
         let cancelled = false;
 
@@ -110,7 +134,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             cancelled = true;
             unlisten?.();
         };
-    }, [isOnboarding, isSettings, isBranch, isStats, isPopout, isPlayground]);
+    }, [isOnboarding, isSettings, isBranch, isPopout, isPlayground]);
 
     // Block the native WebView context menu without breaking Radix menus.
     // Must be bubble phase: Radix opens on the target first; capture+preventDefault
@@ -194,8 +218,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         );
     }
 
-    if (isSettings || isBranch || isStats) {
-        const windowTitle = isBranch ? "Git" : isStats ? "Statistics" : "Settings";
+    if (isSettings || isBranch) {
+        const windowTitle = isBranch ? "Git" : "Settings";
         const body = (
             <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
                 <Titlebar settings title={windowTitle} />
@@ -232,6 +256,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
 function Content({ children }: { children: React.ReactNode }) {
     const [showOnboarding, setShowOnboarding] = React.useState(false);
+    const [showLogin, setShowLogin] = React.useState(false);
 
     React.useEffect(() => {
         const refresh = () => {
@@ -244,6 +269,12 @@ function Content({ children }: { children: React.ReactNode }) {
             window.removeEventListener("shape-onboarding-complete", refresh);
             window.removeEventListener("shape-onboarding-restart", refresh);
         };
+    }, []);
+
+    React.useEffect(() => {
+        const onLogin = () => setShowLogin(true);
+        window.addEventListener("shape-show-login", onLogin);
+        return () => window.removeEventListener("shape-show-login", onLogin);
     }, []);
 
     return (
@@ -264,6 +295,14 @@ function Content({ children }: { children: React.ReactNode }) {
                     <Onboarding
                         embedded
                         onComplete={() => setShowOnboarding(false)}
+                    />
+                </div>
+            ) : showLogin ? (
+                <div className="absolute inset-0 z-[80] bg-background">
+                    <Onboarding
+                        embedded
+                        loginOnly
+                        onComplete={() => setShowLogin(false)}
                     />
                 </div>
             ) : null}

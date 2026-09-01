@@ -5,7 +5,6 @@ pub mod git;
 pub mod github_auth;
 pub mod history;
 pub mod lint;
-pub mod lsp;
 pub mod outline;
 pub mod packages;
 pub mod shortcuts;

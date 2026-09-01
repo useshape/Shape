@@ -798,7 +798,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                             align="start"
-                            className="min-w-(--radix-dropdown-menu-trigger-width) max-w-120"
+                            
                         >
                             <DropdownMenuRadioGroup
                                 value={selectedDepId != null ? String(selectedDepId) : undefined}

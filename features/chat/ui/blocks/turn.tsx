@@ -23,9 +23,7 @@ import {
 } from "./workflow";
 import { Favicon } from "@/components/ui/favicon";
 import { parseWebResults } from "../md/renderer";
-import { GeneratingIndicator } from "./generating";
-import { LoadingState } from "./loading-state";
-import { EntityPill } from "../message/bubble";
+import { EntityPill, TypingDots } from "../message/bubble";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "< 1s";
@@ -171,32 +169,20 @@ function computeTurnStats(blocks: Chunk[]) {
 }
 
 function buildSummaryLabel(stats: ReturnType<typeof computeTurnStats>): string | null {
-    const parts: string[] = [];
-    if (stats.editFileCount > 0) {
-        parts.push(`${stats.editFileCount} edit${stats.editFileCount === 1 ? "" : "s"}`);
-    }
-    if (stats.reads > 0) {
-        parts.push(`${stats.reads} explored`);
-    }
-    if (stats.searches > 0) {
-        parts.push(`${stats.searches} search${stats.searches === 1 ? "" : "es"}`);
-    }
-    if (stats.commands > 0) {
-        parts.push(`${stats.commands} cmd${stats.commands === 1 ? "" : "s"}`);
-    }
-    if (stats.stagedCount > 0) {
-        parts.push(`${stats.stagedCount} staged`);
-    }
-    if (stats.lintChecks > 0) {
-        parts.push("lints");
-    }
-    return parts.length > 0 ? parts.join(" · ") : null;
+    const hasWork =
+        stats.editFileCount > 0
+        || stats.reads > 0
+        || stats.searches > 0
+        || stats.commands > 0
+        || stats.stagedCount > 0
+        || stats.lintChecks > 0;
+    return hasWork ? "Working" : null;
 }
 
 function LineDelta({ add, del }: { add: number; del: number }) {
     if (add === 0 && del === 0) return null;
     return (
-        <span className="inline-flex items-center gap-1 font-mono text-sm shrink-0 tabular-nums">
+        <span className="inline-flex items-center gap-1 font-mono chat-text shrink-0 tabular-nums">
             {add > 0 ? <span className="text-success">+{add}</span> : null}
             {del > 0 ? <span className="text-error">-{del}</span> : null}
         </span>
@@ -213,7 +199,7 @@ function ThoughtHeading({ content, isActive }: { content: string; isActive?: boo
     if (isActive) return <>Thinking</>;
     return (
         <>
-            Thought <span className="text-text-disabled">for {secs}s</span>
+            Thought <span className="wf-summary-text-strong">for {secs}s</span>
         </>
     );
 }
@@ -236,16 +222,19 @@ function ThoughtStep({
     return (
         <div className="py-0.5">
             {isActive ? (
-                <LoadingState label="Thinking" variant="Drive" />
+                <div className="flex items-center gap-2 py-0.5 chat-text text-text-muted">
+                    <TypingDots />
+                    <span>Thinking</span>
+                </div>
             ) : (
                 <button
                     type="button"
                     onClick={() => expandable && setOpen((v) => !v)}
                     className={cn(
-                        "flex items-center gap-1 text-sm transition-colors",
+                        "flex items-center gap-1 wf-summary-text transition-colors",
                         expandable
-                            ? "text-text-muted hover:text-text-primary cursor-pointer"
-                            : "text-text-muted cursor-default",
+                            ? "hover:text-text-primary cursor-pointer"
+                            : "cursor-default",
                     )}
                 >
                     <span>
@@ -265,7 +254,7 @@ function ThoughtStep({
             )}
             {expandable && !isActive ? (
                 <Collapse open={open || !!showBody}>
-                    <div className="mt-1 text-xs leading-relaxed text-text-muted max-w-full whitespace-pre-wrap">
+                    <div className="mt-1 chat-text leading-relaxed text-text-muted max-w-full whitespace-pre-wrap">
                         {trimmed}
                     </div>
                 </Collapse>
@@ -334,7 +323,7 @@ function WorkflowEditPreview({
 
     return (
         <div className="my-1.5 rounded-md border border-border-subtle overflow-hidden bg-panel/40 max-w-full">
-            <div className="max-h-[220px] overflow-y-auto custom-scrollbar text-sm font-mono">
+            <div className="max-h-[220px] overflow-y-auto custom-scrollbar chat-text font-mono">
                 {rows.map((row, i) => (
                     <div
                         key={`${row.type}-${i}`}
@@ -430,7 +419,7 @@ function EditApprovalRow({ block }: { block: Chunk }) {
         // Applied/rejected states render via the regular step rows once the
         // upserted chunk arrives; show a minimal line meanwhile.
         return (
-            <div className="py-0.5 text-xs text-text-muted">
+            <div className="py-0.5 chat-text text-text-muted">
                 {status === "applied" ? "Applying edit to " : "Rejected edit to "}
                 <span className="text-text-secondary">{fileName(file)}</span>
             </div>
@@ -449,9 +438,9 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                 ) : (
                     <Icon name="edit" size={13} className="shrink-0 text-text-muted" />
                 )}
-                <span className="truncate text-xs text-text-muted">Edit file</span>
-                <span className="truncate text-sm text-text-primary">{fileName(file)}</span>
-                <span className="flex shrink-0 items-center gap-1 text-xs">
+                <span className="truncate chat-text text-text-muted">Edit file</span>
+                <span className="truncate chat-text text-text-primary">{fileName(file)}</span>
+                <span className="flex shrink-0 items-center gap-1 chat-text">
                     <span className="text-success">+{add}</span>
                     <span className="text-error">-{del}</span>
                 </span>
@@ -491,7 +480,7 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                     onClick={() => resolve(true)}
                 >
                     Accept
-                    <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
+                    <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans chat-text leading-none text-text-foreground">
                         ↵
                     </kbd>
                 </Button>
@@ -512,7 +501,7 @@ function StepRowAppliedEdit({ block }: { block: Chunk }) {
                 type="button"
                 onClick={() => hasDiff && setDiffOpen((v) => !v)}
                 className={cn(
-                    "flex items-center gap-1.5 text-sm text-text-muted w-fit max-w-full text-left",
+                    "flex items-center gap-1.5 chat-text text-text-muted w-fit max-w-full text-left",
                     hasDiff && "hover:text-text-primary transition-colors",
                 )}
             >
@@ -578,7 +567,7 @@ function StepRow({ block }: { block: Chunk }) {
                 <button
                     type="button"
                     onClick={() => path && void openProjectFile(path)}
-                    className="text-left text-sm text-text-muted hover:text-text-primary"
+                    className="text-left chat-text text-text-muted hover:text-text-primary"
                 >
                     Read <span className="text-text-secondary">{fileName(path)}</span>
                 </button>
@@ -589,7 +578,7 @@ function StepRow({ block }: { block: Chunk }) {
     if (block.type === "grep") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-sm font-regular text-text-primary/80 truncate">
+            <div className="py-0.5 chat-text font-regular text-text-primary/80 truncate">
                 Grepped <span className="text-text-secondary">{q}</span>
             </div>
         );
@@ -598,7 +587,7 @@ function StepRow({ block }: { block: Chunk }) {
     if (block.type === "search" || block.type === "search_result") {
         const q = (block.query || block.content || "").trim();
         return (
-            <div className="py-0.5 text-sm font-regular text-text-primary/80 truncate">
+            <div className="py-0.5 chat-text font-regular text-text-primary/80 truncate">
                 Searched <span className="text-text-secondary">{q}</span>
             </div>
         );
@@ -613,7 +602,7 @@ function StepRow({ block }: { block: Chunk }) {
             .filter((url, i, arr) => arr.indexOf(url) === i)
             .slice(0, 5);
         return (
-            <div className="flex items-center gap-1.5 py-0.5 text-sm font-regular text-text-primary/80 min-w-0">
+            <div className="flex items-center gap-1.5 py-0.5 chat-text font-regular text-text-primary/80 min-w-0">
                 <span className="shrink-0">
                     {block.isGenerating ? "Searching" : "Searched"}
                 </span>
@@ -647,7 +636,7 @@ function StepRow({ block }: { block: Chunk }) {
                 onClick={() => {
                     if (block.visitUrl) void commands.openUrlExternal(block.visitUrl);
                 }}
-                className="flex items-center gap-1.5 py-0.5 text-sm font-regular text-text-primary/80 hover:text-text-primary transition-colors w-fit max-w-full text-left"
+                className="flex items-center gap-1.5 py-0.5 chat-text font-regular text-text-primary/80 hover:text-text-primary transition-colors w-fit max-w-full text-left"
             >
                 {url ? (
                     <span className="chat-link-favicon">
@@ -875,15 +864,15 @@ export function TurnWorkflowSummary({
                         return next;
                     });
                 }}
-                className="flex w-fit max-w-full items-center gap-1 py-0.5 text-sm text-text-primary/80 hover:text-text-primary transition-colors"
+                className="flex w-fit max-w-full items-center gap-1 py-0.5 chat-text text-text-muted hover:text-text-primary transition-colors"
             >
-                <span>
+                <span className="wf-summary-text">
                     {isActive ? (
                         "Working…"
                     ) : (
                         <>
                             Worked for{" "}
-                            <span className="text-text-secondary">{formatDuration(durationMs)}</span>
+                            <span className="wf-summary-text-strong">{formatDuration(durationMs)}</span>
                         </>
                     )}
                 </span>
@@ -905,7 +894,7 @@ export function TurnWorkflowSummary({
                             type="button"
                             title={summaryLabel}
                             onClick={() => setStepsOpen((v) => !v)}
-                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-md font-medium text-text-primary/80 hover:text-text-primary transition-colors"
+                            className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left chat-text text-text-muted hover:text-text-primary transition-colors"
                         >
                             <span className="min-w-0 truncate">{summaryLabel}</span>
                             {hasLintDelta ? (
@@ -923,7 +912,7 @@ export function TurnWorkflowSummary({
                     ) : null}
 
                     <Collapse open={stepsOpen}>
-                        <div className="relative ml-1 flex flex-col gap-0.5 border-l border-border pl-3">
+                        <div className="relative ml-0.5 flex flex-col gap-0.5 pl-0">
                             {(() => {
                                 let skippedLeadThought = false;
                                 return rows.map((row, i) => {
@@ -931,40 +920,14 @@ export function TurnWorkflowSummary({
                                         return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
                                     }
                                     if (row.kind === "read_group") {
-                                        const n = row.paths.length;
-                                        if (n === 1) {
-                                            return (
-                                                <StepRow
-                                                    key={`read-${i}`}
-                                                    block={{ type: "cat", content: row.paths[0] } as Chunk}
-                                                />
-                                            );
-                                        }
                                         return (
                                             <div key={`reads-${i}`} className="wf-step">
                                                 <div className="wf-step-rail">
                                                     <span className="wf-step-dot">
-                                                        <Icon name="description" size={12} />
+                                                        <Icon name="description" size={14} />
                                                     </span>
                                                 </div>
-                                                <details className="min-w-0">
-                                                    <summary className="cursor-pointer list-none text-sm text-text-muted hover:text-text-primary">
-                                                        Read {n} files
-                                                    </summary>
-                                                    <ul className="mt-1 space-y-0.5 pl-1">
-                                                        {row.paths.map((p) => (
-                                                            <li key={p}>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => void openProjectFile(p)}
-                                                                    className="text-left text-xs text-text-secondary hover:text-text-primary"
-                                                                >
-                                                                    {fileName(p)}
-                                                                </button>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </details>
+                                                <span className="chat-text">Explored files</span>
                                             </div>
                                         );
                                     }
@@ -973,22 +936,34 @@ export function TurnWorkflowSummary({
                                             <div key={`searches-${i}`} className="wf-step">
                                                 <div className="wf-step-rail">
                                                     <span className="wf-step-dot">
-                                                        <Icon name="search" size={12} />
+                                                        <Icon name="search" size={14} />
                                                     </span>
                                                 </div>
-                                                <details className="min-w-0">
-                                                    <summary className="cursor-pointer list-none text-sm text-text-muted hover:text-text-primary">
-                                                        Ran {row.count} search{row.count === 1 ? "" : "es"}
-                                                    </summary>
-                                                    <ul className="mt-1 space-y-0.5 pl-1">
-                                                        {row.queries.map((q, qi) => (
-                                                            <li key={`${q}-${qi}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                                                                <Icon name="public" size={11} className="shrink-0 text-text-muted" />
-                                                                <span className="truncate">{q}</span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </details>
+                                                <span className="chat-text">Searched</span>
+                                            </div>
+                                        );
+                                    }
+                                    if (row.kind === "write_group") {
+                                        return (
+                                            <div key={`writes-${i}`} className="wf-step">
+                                                <div className="wf-step-rail">
+                                                    <span className="wf-step-dot">
+                                                        <Icon name="edit" size={14} />
+                                                    </span>
+                                                </div>
+                                                <span className="chat-text">Edited files</span>
+                                            </div>
+                                        );
+                                    }
+                                    if (row.kind === "list_group") {
+                                        return (
+                                            <div key={`lists-${i}`} className="wf-step">
+                                                <div className="wf-step-rail">
+                                                    <span className="wf-step-dot">
+                                                        <Icon name="folder" size={14} />
+                                                    </span>
+                                                </div>
+                                                <span className="chat-text">Listed folders</span>
                                             </div>
                                         );
                                     }
@@ -1010,7 +985,7 @@ export function TurnWorkflowSummary({
                                 });
                             })()}
                             {showLintFooter && !lintShownInSteps ? (
-                                <div className="py-0.5 text-sm text-text-muted">No linter errors</div>
+                                <div className="py-0.5 chat-text text-text-muted">No linter errors</div>
                             ) : null}
                         </div>
                     </Collapse>
@@ -1026,7 +1001,10 @@ export function TurnWorkflowSummary({
             {children}
 
             {showClosedLiveStatus ? (
-                <GeneratingIndicator label={liveActivityLabel(visible, activityLabel)} />
+                <div className="mt-1 flex items-center gap-2 chat-text text-text-muted">
+                    <TypingDots />
+                    <span className="truncate">{liveActivityLabel(visible, activityLabel)}</span>
+                </div>
             ) : null}
         </div>
     );

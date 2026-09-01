@@ -261,9 +261,12 @@ export function DesignLayersPanel({
                         className="min-h-0 flex-1 overflow-y-auto px-1 py-1 custom-scrollbar outline-none"
                     >
                         {roots.length === 0 ? (
-                            <p className="px-3 py-4 text-xs text-text-muted">
-                                Click an element in the preview to inspect the page tree.
-                            </p>
+                            <div className="flex flex-col gap-2 px-3 py-4" aria-hidden>
+                                <div className="h-3 w-24 rounded bg-panel-hover/60" />
+                                <div className="h-3 w-full rounded bg-panel-hover/40" />
+                                <div className="h-3 w-5/6 rounded bg-panel-hover/30" />
+                                <div className="h-3 w-2/3 rounded bg-panel-hover/25" />
+                            </div>
                         ) : layerQuery || visibleOnly || interactiveOnly ? (
                             visible.map((node) => (
                                 <LayerRow

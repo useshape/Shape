@@ -216,13 +216,13 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
 
                 <div className="flex items-center gap-2">
                     {isGenerating && (
-                        <span className="ai-shimmer-text text-xs font-medium mr-2">Generating…</span>
+                        <span className="text-xs font-medium mr-2 text-text-muted">Generating…</span>
                     )}
                     {status === "error" && !isGenerating && (
                         <span className="text-xs text-error font-regular mr-1">Failed</span>
                     )}
                     {status === "applying" && (
-                        <span className="ai-shimmer-text text-2xs font-medium mr-2">Applying…</span>
+                        <span className="text-2xs font-medium mr-2 text-text-muted">Applying…</span>
                     )}
                     {status === "accepted" && <span className="text-2xs text-success font-regular mr-1">Applied</span>}
                     {status === "rejected" && <span className="text-2xs text-error font-regular mr-1">Discarded</span>}

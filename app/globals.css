@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
+@import "./transitions.css";
 
 :root {
   color-scheme: dark;
@@ -12,10 +13,10 @@
   --surface-3: #222222;
   --surface-4: #2a2a2a;
 
-  /* ── Role surfaces ─────────────────────────────────────── */
-  --chrome: #181818;
-  --sidebar: #181818;
-  --editor: #141414;
+  /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
+  --chrome: #141414;
+  --sidebar: #141414;
+  --editor: #181818;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
@@ -45,6 +46,7 @@
   --stroke: 1px;
 
   /* ── Actions ───────────────────────────────────────────── */
+  /* Deliberate brand accent (not an accidental indigo default) */
   --accent: #3946FF;
   --accent-hover: #4365FF;
   --action-label: #ffffff;
@@ -141,7 +143,7 @@
   --text-xs: 13px;
   --text-sm: 14px;
   --text-base: 15px;
-  --text-md: 15px;
+  --text-md: var(--text-base);
   --text-lg: 16px;
   --text-xl: 17px;
   --text-2xl: 18px;
@@ -151,12 +153,13 @@
   --line-height-base: 18px;
   --line-height-lg: 20px;
 
-  --conversation-text-font-size: var(--text-sm);
+  --chat-text: var(--text-base);
+  --chat-text-lh: 1.45;
+  --conversation-text-font-size: var(--chat-text);
   --conversation-tool-font-size: var(--text-base);
   --conversation-tray-font-size: var(--text-base);
-  --conversation-font-size: var(--conversation-text-font-size);
-  /* Conductor-like body copy: roomy, not condensed */
-  --conversation-line-height: 1.7;
+  --conversation-font-size: var(--chat-text);
+  --conversation-line-height: 1.4;
   --conversation-block-gap: 10px;
   --conversation-list-item-gap: 6px;
 
@@ -176,6 +179,19 @@
   --z-titlebar-controls: 1100;
   --z-tooltip: 1200;
   --z-notification: 1300;
+
+  --menu-bg: var(--editor);
+  --menu-radius: var(--radius-xl);
+  --menu-pad: 4px;
+  --menu-row-pad-y: 4px;
+  --menu-row-pad-x: 8px;
+  --menu-row-radius: 6px;
+  --menu-row-gap: 6px;
+  --menu-min-w: 160px;
+  --menu-max-h: min(320px, 80vh);
+  --menu-shadow:
+    0 4px 16px color-mix(in srgb, #000 28%, transparent),
+    0 1px 2px color-mix(in srgb, #000 18%, transparent);
 
   --overlay-scrim: transparent;
 
@@ -214,7 +230,7 @@
   --surface-3: #e8e8eb;
   --surface-4: #dedee3;
   --chrome: #f4f4f5;
-  --sidebar: #ececee;
+  --sidebar: #f4f4f5;
   --editor: #ffffff;
   --base: #141414;
   --background: var(--chrome);
@@ -223,6 +239,10 @@
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(0, 0, 0, 0.06);
   --panel-hover: rgba(0, 0, 0, 0.04);
+  --menu-bg: var(--surface-1);
+  --menu-shadow:
+    0 3px 8px color-mix(in srgb, #000 12%, transparent),
+    0 1px 2px color-mix(in srgb, #000 6%, transparent);
   --titlebar: var(--chrome);
   --text-primary: #141414;
   --text-secondary: #525252;
@@ -757,46 +777,61 @@ body[data-resizing] .xterm {
   color: var(--accent) !important;
   font-weight: bold !important;
 }
-/* ── Popover / menu animations (shadcn-style) ───────────── */
-@keyframes shape-popover-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.shape-menu {
+  box-sizing: border-box;
+  min-width: var(--menu-min-w);
+  border-radius: var(--menu-radius);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--menu-bg);
+  box-shadow: var(--menu-shadow);
 }
 
-@keyframes shape-popover-out {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.96);
-  }
+.shape-menu__inset {
+  padding: var(--menu-pad);
 }
 
-.shape-popover-content {
-  transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-context-menu-content-transform-origin, var(--radix-tooltip-content-transform-origin, center)));
-  will-change: opacity, transform;
+.shape-menu__row {
+  gap: var(--menu-row-gap);
+  border-radius: var(--menu-row-radius);
+  padding-block: var(--menu-row-pad-y);
+  padding-inline: var(--menu-row-pad-x);
 }
 
-.shape-popover-content[data-state="open"] {
-  animation: shape-popover-in 80ms cubic-bezier(0.16, 1, 0.3, 1);
+.shape-menu__search {
+  display: block;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  padding: 0 var(--menu-row-pad-x);
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  outline: none;
+  box-shadow: none;
 }
 
-.shape-popover-content[data-state="closed"] {
-  animation: shape-popover-out 60ms cubic-bezier(0.7, 0, 0.84, 0);
+.shape-menu__search::placeholder {
+  color: var(--text-muted);
+}
+
+.shape-menu .shape-menu__icon {
+  color: inherit;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-text {
+  font-size: var(--chat-text);
+  line-height: var(--chat-text-lh);
 }
 
 /* Toast notifications — CSS transitions so stack moves stay interruptible (Sonner/shadcn). */
 .shape-toast {
   opacity: 0;
-  transform: translate3d(0, 14px, 0) scale(0.9);
+  transform: translate3d(12px, 14px, 0) scale(0.92);
   transition:
     transform 400ms cubic-bezier(0.16, 1, 0.3, 1),
     opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -810,7 +845,7 @@ body[data-resizing] .xterm {
 
 .shape-toast[data-leaving="true"] {
   opacity: 0;
-  transform: translate3d(0, 18px, 0) scale(0.9);
+  transform: translate3d(16px, 10px, 0) scale(0.9);
   pointer-events: none;
 }
 
@@ -1008,6 +1043,17 @@ body[data-resizing] .xterm {
   animation-delay: 0.3s;
 }
 
+.imsg-typing-sm {
+  gap: 0.18rem;
+  padding: 0;
+  min-height: 0;
+}
+
+.imsg-typing-sm span {
+  width: 0.22rem;
+  height: 0.22rem;
+}
+
 @keyframes imsg-dot {
   0%,
   60%,
@@ -1021,20 +1067,34 @@ body[data-resizing] .xterm {
   }
 }
 
-/* Workflow step rail (Grok-style) */
+.wf-summary-text {
+  font-size: var(--chat-text);
+  line-height: var(--chat-text-lh);
+  color: var(--color-text-muted);
+}
+
+.wf-summary-text-strong {
+  color: var(--color-text-secondary);
+}
 .wf-step {
   position: relative;
   display: flex;
-  gap: 0.6rem;
-  padding: 0.2rem 0;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+  min-height: 1.4rem;
+  font-size: var(--chat-text);
+  line-height: var(--chat-text-lh);
+  color: var(--color-text-muted);
 }
 
 .wf-step-rail {
   display: flex;
-  width: 1rem;
+  width: 1.125rem;
   flex-shrink: 0;
   flex-direction: column;
   align-items: center;
+  padding-top: 0.2rem;
 }
 
 .wf-step-dot {
@@ -1046,6 +1106,15 @@ body[data-resizing] .xterm {
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted);
+}
+
+.wf-step > :not(.wf-step-rail) {
+  min-width: 0;
+  flex: 1;
+  font-size: var(--chat-text);
+  line-height: var(--chat-text-lh);
+  color: var(--color-text-muted);
+  padding-top: 0;
 }
 
 .wf-step-line {
@@ -1061,10 +1130,11 @@ body[data-resizing] .xterm {
   align-items: center;
   gap: 0.35rem;
   border-radius: 999px;
-  background: var(--color-surface-3);
-  padding: 0.15rem 0.55rem 0.15rem 0.3rem;
-  font-size: 0.8125rem;
-  color: var(--color-text-primary);
+  background: transparent;
+  padding: 0;
+  font-size: var(--chat-text);
+  line-height: var(--chat-text-lh);
+  color: var(--color-text-muted);
 }
 
 /* Streaming assistant text: soft top→bottom reveal while typing. */
@@ -1091,42 +1161,6 @@ body[data-resizing] .xterm {
     100% {
       opacity: 0.2;
     }
-  }
-}
-
-/* ── AI status shimmer: animated gradient sweeping through the text ── */
-@keyframes ai-text-shimmer {
-  0% {
-    background-position: 200% center;
-  }
-  100% {
-    background-position: -200% center;
-  }
-}
-
-.ai-shimmer-text {
-  background-image: linear-gradient(
-    90deg,
-    var(--text-disabled) 0%,
-    var(--text-disabled) 35%,
-    var(--text-primary) 50%,
-    var(--text-disabled) 65%,
-    var(--text-disabled) 100%
-  );
-  background-size: 200% auto;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  animation: ai-text-shimmer 2.2s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ai-shimmer-text {
-    animation: none;
-    background-image: none;
-    color: var(--text-muted);
-    -webkit-text-fill-color: var(--text-muted);
   }
 }
 

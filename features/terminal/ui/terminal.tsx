@@ -19,13 +19,10 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
-import Problems from "@/features/diagnostics/ui/problems";
-import OutputPanel from "@/features/output/ui/output";
 import TestPanel from "@/features/testing/ui/test-panel";
 import { Button } from "@/components/ui/button";
 import { getSettings, resolveDefaultTerminalShell } from "@/lib/settings";
 import { setLastDevUrl } from "@/features/preview/store";
-import { useDiagnostics } from "@/features/diagnostics/store";
 import { Input } from "@/components/ui/input";
 import {
     WORKBENCH_TAB_ACTION_BUTTON_CLASS,
@@ -33,17 +30,11 @@ import {
     WORKBENCH_TAB_CLOSE_BUTTON_CLASS,
     workbenchTabItemClass,
 } from "@/features/editor/ui/tabs/workbench-tab-styles";
+import { terminalSessionStore, type TerminalTab as SessionTab } from "@/features/terminal/session";
 
-type TerminalShell = TerminalShellProfile["id"] | "ai";
-type TerminalGroupId = "left" | "right";
-type TerminalTab = {
-    id: string;
-    title: string;
-    shell: TerminalShell;
-    cwd: string;
-    boundPtyId?: number;
-    group: TerminalGroupId;
-};
+type TerminalShell = SessionTab["shell"];
+type TerminalGroupId = SessionTab["group"];
+type TerminalTab = SessionTab;
 
 const SHELL_DISPLAY_NAMES: Record<TerminalShell, string> = {
     powershell: "PowerShell",
@@ -80,52 +71,26 @@ function isLayoutResizing() {
 
 const lastPtySize = new Map<number, { cols: number; rows: number }>();
 
-// ── GLOBAL STORE FOR PERSISTENCE ──
-class TerminalGlobalStore {
-    tabs: TerminalTab[] = [];
-    activeProjectTabs: Record<string, string | null> = {};
-    /** Per-cwd active tab in the right split pane (when split). */
-    activeSecondaryTabs: Record<string, string | null> = {};
-    focusedGroup: Record<string, TerminalGroupId> = {};
-    instances = new Map<string, { term: XTermType; fitAddon: FitAddonType; ptyId: number; unlistenOutput: () => void }>();
-    listeners = new Set<() => void>();
+const globalTerminalStore = terminalSessionStore;
 
-    subscribe(l: () => void): () => void { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
-    notify() { this.listeners.forEach(l => l()); }
-    setTabs(u: (p: TerminalTab[]) => TerminalTab[]) {
-        this.tabs = u(this.tabs).map((t) => ({ ...t, group: t.group ?? "left" }));
-        this.notify();
-    }
-    setActive(cwd: string, id: string | null) { this.activeProjectTabs = { ...this.activeProjectTabs, [cwd]: id }; this.notify(); }
-    setSecondaryActive(cwd: string, id: string | null) {
-        this.activeSecondaryTabs = { ...this.activeSecondaryTabs, [cwd]: id };
-        this.notify();
-    }
-    setFocusedGroup(cwd: string, group: TerminalGroupId) {
-        this.focusedGroup = { ...this.focusedGroup, [cwd]: group };
-        this.notify();
-    }
-
-    async refitAll() {
-        if (isLayoutResizing()) return;
-        const { invoke } = await import("@tauri-apps/api/core");
-        for (const [, inst] of this.instances) {
-            try {
-                inst.fitAddon.fit();
-                const cols = inst.term.cols;
-                const rows = inst.term.rows;
-                if (inst.ptyId <= 0 || cols < 20 || rows < 4) continue;
-                const prev = lastPtySize.get(inst.ptyId);
-                if (prev && prev.cols === cols && prev.rows === rows) continue;
-                lastPtySize.set(inst.ptyId, { cols, rows });
-                await invoke("pty_resize", { id: inst.ptyId, rows, cols });
-            } catch {
-                // ignore fit/resize failures during layout transitions
-            }
+async function refitAllTerminals() {
+    if (isLayoutResizing()) return;
+    const { invoke } = await import("@tauri-apps/api/core");
+    for (const [, inst] of globalTerminalStore.instances) {
+        try {
+            inst.fitAddon.fit();
+            const cols = inst.term.cols as number;
+            const rows = inst.term.rows as number;
+            if (inst.ptyId <= 0 || cols < 20 || rows < 4) continue;
+            const prev = lastPtySize.get(inst.ptyId);
+            if (prev && prev.cols === cols && prev.rows === rows) continue;
+            lastPtySize.set(inst.ptyId, { cols, rows });
+            await invoke("pty_resize", { id: inst.ptyId, rows, cols });
+        } catch {
+            // ignore fit/resize failures during layout transitions
         }
     }
 }
-const globalTerminalStore = new TerminalGlobalStore();
 
 /** Unlisten stale PTY listeners after a webview reload (HMR). */
 export function reapOrphanedTerminalSessions() {
@@ -264,6 +229,9 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                         if (devMatch) {
                             setLastDevUrl(devMatch[0]);
                         }
+                        void import("@/features/preview/run-status").then(({ noteDevRunOutput }) => {
+                            noteDevRunOutput(e.payload.data);
+                        });
                     }
                 });
                 const unlistenExit = await listen<{ id: number; exit_code: number | null }>("pty-exit", (e) => {
@@ -271,6 +239,9 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                         const code = e.payload.exit_code ?? 0;
                         term.write(`\r\n\x1b[38;2;120;120;120m[Process exited with code ${code}]\x1b[0m\r\n`);
                         term.scrollToBottom();
+                        void import("@/features/preview/run-status").then(({ noteDevRunExit }) => {
+                            noteDevRunExit(code);
+                        });
                     }
                 });
                 const originalUnlistenOutput = unlistenOutput;
@@ -291,6 +262,12 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                     ptyId = spawnedId;
                     lastPtySize.set(ptyId, { cols: Math.max(20, term.cols || 80), rows: Math.max(4, term.rows || 24) });
                 } else {
+                    // Replay buffered output from background Run before live attach.
+                    try {
+                        const { terminalSessionStore } = await import("@/features/terminal/session");
+                        const buffered = terminalSessionStore.takePtyScrollback(ptyId);
+                        if (buffered) term.write(buffered);
+                    } catch { /* ignore */ }
                     // Agent-spawned sessions start at a fixed size; sync to the visible xterm.
                     try {
                         fitAddon.fit();
@@ -424,8 +401,6 @@ export default function Terminal({
     terminalOnly?: boolean;
 }) {
     const { project_path } = useProjectState();
-    const { totals: diagnosticTotals } = useDiagnostics();
-    const problemCount = diagnosticTotals.errors + diagnosticTotals.warnings;
     const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>(globalTerminalStore.tabs);
     const [projectActiveTabs, setProjectActiveTabs] = useState<Record<string, string | null>>(globalTerminalStore.activeProjectTabs);
     const [secondaryActiveTabs, setSecondaryActiveTabs] = useState<Record<string, string | null>>(globalTerminalStore.activeSecondaryTabs);
@@ -439,7 +414,7 @@ export default function Terminal({
     const activeTerminalId = projectActiveTabs[safeCwd] || null;
     const secondaryTerminalId = secondaryActiveTabs[safeCwd] || null;
     const focusedGroup = focusedGroups[safeCwd] || "left";
-    const [activeView, setActiveView] = useState<"terminal" | "problems" | "tests" | "output">("terminal");
+    const [activeView, setActiveView] = useState<"terminal" | "tests">("terminal");
     const [availableShells, setAvailableShells] = useState<TerminalShellProfile[]>([]);
     const tabScrollRef = useRef<HTMLDivElement>(null);
     const [splitRatio, setSplitRatio] = useState(0.5);
@@ -470,23 +445,11 @@ export default function Terminal({
     }, []);
 
     useEffect(() => {
-        const handleOpenProblems = () => {
-            setActiveView("problems");
-            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
-        };
-        const handleOpenOutput = () => {
-            setActiveView("output");
-            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
-        };
         const handleOpenBrowser = () => {
             void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
         };
-        window.addEventListener("shape-open-problems", handleOpenProblems);
-        window.addEventListener("shape-open-output", handleOpenOutput);
         window.addEventListener("shape-open-preview", handleOpenBrowser);
         return () => {
-            window.removeEventListener("shape-open-problems", handleOpenProblems);
-            window.removeEventListener("shape-open-output", handleOpenOutput);
             window.removeEventListener("shape-open-preview", handleOpenBrowser);
         };
     }, []);
@@ -497,7 +460,7 @@ export default function Terminal({
             if (isLayoutResizing()) return;
             if (timer) clearTimeout(timer);
             timer = setTimeout(() => {
-                if (!isLayoutResizing()) void globalTerminalStore.refitAll();
+                if (!isLayoutResizing()) void refitAllTerminals();
             }, 200);
         };
         const onVisibility = () => {
@@ -652,7 +615,7 @@ export default function Terminal({
             }
             return next;
         });
-        setTimeout(() => void globalTerminalStore.refitAll(), 50);
+        setTimeout(() => void refitAllTerminals(), 50);
     }, [activeTerminalId, secondaryTerminalId, onClose, safeCwd, setActiveTerminalId, setSecondaryTerminalId]);
 
     const addTab = useCallback((shell: TerminalShell, group: TerminalGroupId = "left") => {
@@ -670,7 +633,7 @@ export default function Terminal({
             globalTerminalStore.setFocusedGroup(safeCwd, "left");
         }
         setActiveView("terminal");
-        setTimeout(() => void globalTerminalStore.refitAll(), 80);
+        setTimeout(() => void refitAllTerminals(), 80);
     }, [safeCwd, setActiveTerminalId, setSecondaryTerminalId, ensurePanelOpen]);
 
     /** Split like the editor: open a new terminal in the right pane (reuse split if present). */
@@ -719,45 +682,16 @@ export default function Terminal({
             }
         };
 
-        const handleTerminalRun = (e: Event) => {
-            const custom = e as CustomEvent<{ command: string }>;
-            if (!custom.detail?.command) return;
-            const command = custom.detail.command;
-            // Create a new terminal and write the command to it after it spawns
-            const id = createTabId();
-            ensurePanelOpen();
-            globalTerminalStore.setTabs(tabs => {
-                const title = `Run: ${command.split(' ').slice(0, 3).join(' ')}`;
-                return [...tabs, createTerminalTab(resolveAvailableDefaultShell(), title, safeCwd, id)];
-            });
-            setActiveTerminalId(id);
-            setActiveView("terminal");
-            // Wait for the terminal to spawn, then write the command
-            const waitAndWrite = () => {
-                const inst = globalTerminalStore.instances.get(id);
-                if (inst && inst.ptyId >= 0) {
-                    import("@tauri-apps/api/core").then(({ invoke }) => {
-                        invoke("pty_write", { id: inst.ptyId, data: command + "\r\n" }).catch(() => { });
-                    });
-                } else {
-                    setTimeout(waitAndWrite, 200);
-                }
-            };
-            setTimeout(waitAndWrite, 500);
-        };
-
         window.addEventListener("shape-terminal-shortcut", handleTerminalShortcut as EventListener);
-        window.addEventListener("shape-terminal-run", handleTerminalRun as EventListener);
         const handleTerminalView = (e: Event) => {
             const view = (e as CustomEvent<string>).detail;
-            if (view === "output" || view === "problems" || view === "tests" || view === "terminal") {
+            if (view === "tests" || view === "terminal") {
                 setActiveView(view);
             }
         };
         window.addEventListener("shape-terminal-view", handleTerminalView as EventListener);
         return () => {
             window.removeEventListener("shape-terminal-shortcut", handleTerminalShortcut as EventListener);
-            window.removeEventListener("shape-terminal-run", handleTerminalRun as EventListener);
             window.removeEventListener("shape-terminal-view", handleTerminalView as EventListener);
         };
     }, [addTab, closeTab, onClose, safeCwd, activeTerminalId, secondaryTerminalId, focusedGroup, setActiveTerminalId, currentTabs, ensurePanelOpen, resolveAvailableDefaultShell, splitTerminal]);
@@ -767,6 +701,21 @@ export default function Terminal({
 
         const projectTabs = terminalTabs.filter(t => t.cwd === safeCwd);
         if (projectTabs.length === 0) {
+            // Prefer a background Run tab registered under this cwd (or legacy "global").
+            const bound = terminalTabs.find(
+                (t) =>
+                    typeof t.boundPtyId === "number" &&
+                    (t.cwd === safeCwd || (safeCwd !== "global" && t.cwd === "global")),
+            );
+            if (bound) {
+                if (bound.cwd !== safeCwd) {
+                    globalTerminalStore.setTabs((tabs) =>
+                        tabs.map((t) => (t.id === bound.id ? { ...t, cwd: safeCwd } : t)),
+                    );
+                }
+                setActiveTerminalId(bound.id);
+                return;
+            }
             const shell = resolveAvailableDefaultShell();
             const id = createTabId();
             globalTerminalStore.setTabs(tabs => {
@@ -831,7 +780,7 @@ export default function Terminal({
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
             document.body.removeAttribute("data-resizing");
-            void globalTerminalStore.refitAll();
+            void refitAllTerminals();
         };
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
@@ -866,7 +815,7 @@ export default function Terminal({
                 <DropdownMenuItem onClick={() => addTab("ai")}>Agent Terminal</DropdownMenuItem>
                 <DropdownMenuSub>
                     <DropdownMenuSubTrigger>Split Terminal</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="min-w-[180px]">
+                    <DropdownMenuSubContent >
                         {availableShells.map((shell) => (
                             <DropdownMenuItem key={`split-${shell.id}`} onClick={() => splitTerminal(shell.id)}>
                                 {shell.label}
@@ -993,10 +942,8 @@ export default function Terminal({
             {!terminalOnly ? (
                 <div className="relative z-20 flex h-12 min-w-0 shrink-0 items-center gap-1 px-2">
                     <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
-                        {(["problems", "output", "terminal", "tests"] as const).map((viewId) => {
+                        {(["terminal", "tests"] as const).map((viewId) => {
                             const labels: Record<string, string> = {
-                                problems: "Problems",
-                                output: "Output",
                                 tests: "Tests",
                                 terminal: "Terminal",
                             };
@@ -1016,28 +963,12 @@ export default function Terminal({
                                     onClick={() => setActiveView(viewId)}
                                 >
                                     {labels[viewId]}
-                                    {viewId === "problems" && problemCount > 0 ? (
-                                        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-medium text-white">
-                                            {problemCount > 99 ? "99+" : problemCount}
-                                        </span>
-                                    ) : null}
                                 </Button>
                             );
                         })}
                     </div>
 
                     <div className="flex shrink-0 items-center gap-0.5">
-                        {(activeView === "output" || activeView === "problems") && (
-                            <div className="mr-1 flex h-7 w-[min(220px,28vw)] items-center gap-1.5 rounded-md border border-border bg-transparent px-2">
-                                <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                                <Input
-                                    value={panelFilter}
-                                    onChange={(e) => setPanelFilter(e.target.value)}
-                                    placeholder="Filter"
-                                    className="h-auto! bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
-                                />
-                            </div>
-                        )}
                         {activeView === "terminal" ? (
                             <>
                                 <Tooltip content="Clear Terminal">
@@ -1085,11 +1016,7 @@ export default function Terminal({
             ) : null}
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-                {view === "problems" ? (
-                    <Problems search={panelFilter} />
-                ) : view === "output" ? (
-                    <OutputPanel />
-                ) : view === "tests" ? (
+                {view === "tests" ? (
                     <TestPanel />
                 ) : null}
                 <div

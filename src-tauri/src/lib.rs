@@ -7,7 +7,6 @@ mod domain;
 mod mcp;
 
 use core::state::AppState;
-use domain::lsp::service::LspState;
 use domain::terminal::service::PtyState;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -80,7 +79,6 @@ pub fn run() {
         .manage(agent::AgentState::new())
         .manage(agent::index::IndexState::new())
         .manage(mcp::McpState::new())
-        .manage(LspState::new())
         .manage(crate::core::workspace_trust::WorkspaceTrustState::new())
         .manage(commands::preview_render::PreviewCaptureState::default())
         .manage(commands::design_proxy::DesignProxyState::default())
@@ -308,13 +306,8 @@ pub fn run() {
             agent::commands::mcp_cmds::restart_mcp_server,
             agent::commands::mcp_cmds::mcp_start_oauth,
             agent::commands::mcp_cmds::mcp_complete_oauth,
+            agent::commands::mcp_cmds::mcp_clear_oauth,
             agent::commands::mcp_cmds::call_mcp_tool,
-            // lsp
-            adapters::lsp::lsp_start,
-            adapters::lsp::resolve_typescript_tsdk,
-            adapters::lsp::lsp_send,
-            adapters::lsp::lsp_stop,
-            adapters::lsp::lsp_stop_all,
             // lint
             adapters::lint::eslint_lint_file,
             adapters::lint::prettier_format_file,

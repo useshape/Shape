@@ -38,6 +38,10 @@ pub struct ProxyContext {
     pub project_path: Option<String>,
     /// Serialized JSON context composition for usage analytics.
     pub context_breakdown: Option<String>,
+    /// User-selected reasoning effort: `low` | `high` | `ultra` | `max`.
+    pub reasoning_effort: Option<String>,
+    /// OpenRouter service tier (`priority` / `fast`) — speed, not reasoning depth.
+    pub service_tier: Option<String>,
 }
 
 impl ProxyContext {
@@ -49,6 +53,8 @@ impl ProxyContext {
             request_id: Some(uuid::Uuid::new_v4().to_string()),
             project_path: None,
             context_breakdown: None,
+            reasoning_effort: None,
+            service_tier: None,
         }
     }
 
@@ -65,6 +71,16 @@ impl ProxyContext {
 
     pub fn with_context_breakdown(mut self, breakdown: Option<Value>) -> Self {
         self.context_breakdown = breakdown.map(|v| v.to_string());
+        self
+    }
+
+    pub fn with_reasoning_effort(mut self, effort: Option<String>) -> Self {
+        self.reasoning_effort = effort;
+        self
+    }
+
+    pub fn with_service_tier(mut self, tier: Option<String>) -> Self {
+        self.service_tier = tier;
         self
     }
 
@@ -261,8 +277,16 @@ pub async fn stream_chat(
 
     // OpenRouter leaves Gemini thinking off unless requested. Without this, Flash
     // dumps plans into normal `content` instead of the reasoning channel (think UI).
-    if let Some(reasoning) = reasoning_config_for_model(model) {
+    if let Some(reasoning) = reasoning_config_for_model(model, proxy_ctx.reasoning_effort.as_deref()) {
         body["reasoning"] = reasoning;
+    }
+
+    // Fast mode = OpenRouter priority / service_tier — independent of reasoning effort.
+    if let Some(tier) = proxy_ctx.service_tier.as_deref() {
+        let t = tier.trim().to_ascii_lowercase();
+        if t == "priority" || t == "fast" || t == "flex" {
+            body["service_tier"] = json!(if t == "fast" { "priority" } else { t.as_str() });
+        }
     }
 
     if !tools.is_empty() {
@@ -912,20 +936,56 @@ fn get_model_max_tokens(model: &str) -> u32 {
     }
 }
 
+/// Normalize UI effort (`fast` | `high` | `ultra`) → OpenRouter effort string.
+/// Higher effort must never map to a cheaper provider setting than a lower one.
+fn openrouter_effort(user_effort: Option<&str>) -> &'static str {
+    match user_effort.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        Some("max") | Some("ultra") | Some("xhigh") => "xhigh",
+        Some("high") | Some("medium") => "high",
+        // fast / low / missing
+        _ => "low",
+    }
+}
+
+/// Credit / auto-pool multiplier. Max ≥ Ultra ≥ High ≥ Fast; never undercharge.
+pub fn effort_billing_multiplier(user_effort: Option<&str>) -> f64 {
+    match user_effort.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        Some("max") => 3.0,
+        Some("ultra") => 2.5,
+        Some("high") | Some("medium") => 1.5,
+        _ => 1.0,
+    }
+}
+
 /// OpenRouter reasoning config so thinking-capable models stream into the
 /// `reasoning` channel (Shape `<think>` UI) instead of dumping plans into content.
-fn reasoning_config_for_model(model: &str) -> Option<Value> {
+fn reasoning_config_for_model(model: &str, user_effort: Option<&str>) -> Option<Value> {
     let m = model.to_lowercase();
+    let effort = openrouter_effort(user_effort);
+    // Gemini uses token budget instead of effort strings.
+    let gemini_budget = match effort {
+        "xhigh" => 24576,
+        "high" => 16384,
+        _ => 4096,
+    };
     if m.contains("gemini") {
-        // Gemini 2.5 uses thinkingBudget via max_tokens; -1 = dynamic.
-        Some(json!({ "max_tokens": 8192 }))
+        Some(json!({ "max_tokens": gemini_budget }))
     } else if m.contains("anthropic/") || m.contains("claude") {
-        Some(json!({ "effort": "medium" }))
+        // Anthropic via OpenRouter: low | medium | high (no xhigh) — map ultra → high
+        let anth = if effort == "xhigh" { "high" } else if effort == "high" { "high" } else { "low" };
+        Some(json!({ "effort": anth }))
     } else if m.contains("gpt-5") && !m.contains("nano") {
-        Some(json!({ "effort": "low" }))
+        Some(json!({ "effort": effort }))
     } else if m.contains("o1") || m.contains("o3") || m.contains("o4") {
-        Some(json!({ "effort": "medium" }))
+        Some(json!({ "effort": effort }))
+    } else if m.contains("deepseek") || m.contains("r1") {
+        Some(json!({ "effort": if effort == "low" { "low" } else { "high" } }))
     } else {
-        None
+        // Still request reasoning when user picks high/ultra on other models.
+        if matches!(effort, "high" | "xhigh") {
+            Some(json!({ "effort": effort }))
+        } else {
+            None
+        }
     }
 }

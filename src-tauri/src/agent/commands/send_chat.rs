@@ -42,6 +42,8 @@ pub async fn send_chat_message(
     auto_run_mode: Option<String>,
     require_edit_approval: Option<bool>,
     protect_destructive_git: Option<bool>,
+    reasoning_effort: Option<String>,
+    service_tier: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -58,8 +60,37 @@ pub async fn send_chat_message(
 
     let raw_model = model.unwrap_or_else(|| MODEL_DEFAULT.to_string());
     let selected_auto = model_router::is_auto_selection(&raw_model);
-    let model_to_use = model_router::normalize_model(&raw_model);
+    let has_images = message.contains("<attached_image");
+    let model_to_use = model_router::normalize_model_with_images(&raw_model, has_images);
     let mode_to_use = mode.unwrap_or_else(|| "Ask".to_string());
+    let effort_raw = reasoning_effort
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("low");
+    let effort_norm = match effort_raw.to_ascii_lowercase().as_str() {
+        "max" => "max",
+        "ultra" => "ultra",
+        "high" | "medium" => "high",
+        "low" | "fast" => "low",
+        _ => "low",
+    }
+    .to_string();
+    let effort_mult = streaming::effort_billing_multiplier(Some(&effort_norm));
+    let tier_norm = service_tier
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let t = s.to_ascii_lowercase();
+            if t == "fast" || t == "priority" {
+                "priority".to_string()
+            } else if t == "flex" {
+                "flex".to_string()
+            } else {
+                t
+            }
+        });
 
     logging::info(
         "chat",
@@ -314,7 +345,9 @@ pub async fn send_chat_message(
     );
     let proxy_base = streaming::ProxyContext::new("chat")
         .with_turn(Some(turn_id.clone()), conversation_id.clone())
-        .with_project_path(current_proj_path.clone());
+        .with_project_path(current_proj_path.clone())
+        .with_reasoning_effort(Some(effort_norm.clone()))
+        .with_service_tier(tier_norm.clone());
 
     let (context_string, _active_file, _project_root) = build_context_with_options(
         &app_state,
@@ -563,7 +596,11 @@ pub async fn send_chat_message(
         }
     }
     let (total_input_tokens, total_output_tokens) = state.turn_meter_totals();
-    let billed_tokens = total_input_tokens + total_output_tokens;
+    let billed_tokens_raw = total_input_tokens + total_output_tokens;
+    // Effort multiplier applies to billed tokens / credits so Ultra ≥ High ≥ Fast.
+    let billed_tokens = ((billed_tokens_raw as f64) * effort_mult).ceil() as usize;
+    let billed_input = ((total_input_tokens as f64) * effort_mult).ceil() as usize;
+    let billed_output = ((total_output_tokens as f64) * effort_mult).ceil() as usize;
     let duration_ms = start_time.elapsed().as_millis() as f64;
     let cost_per_token = estimate_cost_per_token(&model_to_use);
     let estimated_cost = (billed_tokens as f64) * cost_per_token;
@@ -572,7 +609,8 @@ pub async fn send_chat_message(
     let credits_charged = if used_auto {
         None
     } else {
-        Some(estimate_credits_charged(total_input_tokens, total_output_tokens))
+        let base = estimate_credits_charged(total_input_tokens, total_output_tokens);
+        Some(((base * effort_mult) * 100.0).round() / 100.0)
     };
 
     let assistant_message = ChatMessage {
@@ -583,10 +621,13 @@ pub async fn send_chat_message(
             time_ms: duration_ms,
             cost: estimated_cost,
             tokens: billed_tokens,
-            input_tokens: total_input_tokens,
-            output_tokens: total_output_tokens,
+            input_tokens: billed_input,
+            output_tokens: billed_output,
             credits_charged,
             used_auto: Some(used_auto),
+            reasoning_effort: Some(effort_norm.clone()),
+            mode: Some(mode_to_use.clone()),
+            latency_ms: None,
         }),
         model: Some(model_to_use.clone()),
     };
@@ -629,6 +670,8 @@ pub async fn send_chat_message(
                     "outputTokens": total_output_tokens,
                     "creditsCharged": credits_charged,
                     "usedAuto": used_auto,
+                    "reasoningEffort": &effort_norm,
+                    "mode": &mode_to_use,
                 },
                 "model": model_to_use,
                 "turnId": &turn_id,
@@ -721,6 +764,8 @@ pub async fn send_chat_message(
                     "outputTokens": total_output_tokens,
                     "creditsCharged": credits_charged,
                     "usedAuto": used_auto,
+                    "reasoningEffort": &effort_norm,
+                    "mode": &mode_to_use,
                 },
                 "model": model_to_use,
                 "turnId": &turn_id,

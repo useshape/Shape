@@ -92,7 +92,6 @@ pub fn tools_for_mode_and_family(
         "ask" => ask_tools(),
         "visual" | "design" => {
             let mut tools = all_tools_for_family(family);
-            tools.push(render_design_previews());
             tools.extend(extra);
             tools
         }
@@ -539,6 +538,7 @@ fn finish() -> Value {
     )
 }
 
+#[allow(dead_code)]
 fn render_design_previews() -> Value {
     tool(
         "render_design_previews",

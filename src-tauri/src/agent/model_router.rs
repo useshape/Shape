@@ -11,6 +11,10 @@
 /// Fast included model used for Auto and auxiliary work (titles, explore, etc.).
 pub const MODEL_FAST: &str = "deepseek/deepseek-v4-flash";
 
+/// Cheap vision-capable model when Auto is selected *and* the turn has images.
+/// Native multimodal (image_url parts) — not a separate OCR / recognition API.
+pub const MODEL_FAST_VISION: &str = "google/gemini-2.5-flash";
+
 /// Provider family used to select prompts and edit tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModelFamily {
@@ -47,6 +51,15 @@ pub fn normalize_model(model: &str) -> String {
         "auto" | "openrouter/auto" => MODEL_FAST.to_string(),
         other => other.to_string(),
     }
+}
+
+/// Like [`normalize_model`], but when Auto + images, use a cheap vision model so
+/// screenshots are actually seen (still included-tier pricing intent).
+pub fn normalize_model_with_images(model: &str, has_images: bool) -> String {
+    if has_images && is_auto_selection(model) {
+        return MODEL_FAST_VISION.to_string();
+    }
+    normalize_model(model)
 }
 
 /// True when the user selected Shape's Auto option (included usage), not a paid pick.
@@ -137,6 +150,11 @@ mod tests {
         assert_eq!(normalize_model("auto"), MODEL_FAST);
         assert_eq!(normalize_model("openrouter/auto"), MODEL_FAST);
         assert_eq!(normalize_model("anthropic/claude-sonnet-4"), "anthropic/claude-sonnet-4");
+        assert_eq!(
+            normalize_model_with_images("auto", true),
+            MODEL_FAST_VISION
+        );
+        assert_eq!(normalize_model_with_images("auto", false), MODEL_FAST);
     }
 
     #[test]

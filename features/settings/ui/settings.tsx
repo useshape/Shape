@@ -38,10 +38,12 @@ import {
 } from "./setting-controls";
 import { AiSettingsPanel } from "./ai-settings";
 import { AccountSettingsPanel } from "./account-settings";
+import { IntegrationsView } from "./integrations";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { Icon } from "@/components/ui/icon";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
+import { AccountRow } from "@/features/agent/sidebar/account";
 import { ThemePicker } from "./theme-picker";
 import { normalizeColorTheme } from "@/lib/themes";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
@@ -227,7 +229,7 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
             </SettingSection>
 
             <SettingSection id="settings-editor-files" title="Files">
-                <SettingRow title="Exclude From Search" description="Glob patterns hidden from search and file pickers" stack>
+                <SettingRow title="Exclude From Search" description="Hidden from search and pickers" stack>
                     <ExcludePatternsSelect
                         value={settings.files.exclude}
                         onChange={(v) => updateSettingSection("files", { exclude: v })}
@@ -278,37 +280,37 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
                         onChange={(v) => updateSettingSection("tailwindControls", { enable: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Number Scrubbing" description="Alt-drag or scroll over underlined values">
+                <SettingRow title="Number Scrubbing" description="Alt-drag or scroll values">
                     <SettingSwitch
                         checked={settings.tailwindControls.numberScrubbing}
                         onChange={(v) => updateSettingSection("tailwindControls", { numberScrubbing: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Scrub Underlines" description="Show dashed underlines on scrubbable numbers">
+                <SettingRow title="Scrub Underlines" description="Underline scrubbable numbers">
                     <SettingSwitch
                         checked={settings.tailwindControls.scrubDecorations}
                         onChange={(v) => updateSettingSection("tailwindControls", { scrubDecorations: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Cursor Opens Panel" description="Rest cursor on a token to open its control panel">
+                <SettingRow title="Cursor Opens Panel" description="Hover opens the control panel">
                     <SettingSwitch
                         checked={settings.tailwindControls.cursorBindPanel}
                         onChange={(v) => updateSettingSection("tailwindControls", { cursorBindPanel: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Scroll on Panel Inputs" description="Mouse wheel nudges padding/gap values like Figma">
+                <SettingRow title="Scroll on Panel Inputs" description="Scroll to nudge panel values">
                     <SettingSwitch
                         checked={settings.tailwindControls.wheelOnInputs}
                         onChange={(v) => updateSettingSection("tailwindControls", { wheelOnInputs: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Design Blame Hover" description="Plain-language last-change hover on UI tokens">
+                <SettingRow title="Design Blame Hover" description="Hover shows last change">
                     <SettingSwitch
                         checked={settings.designBlame.enable}
                         onChange={(v) => updateSettingSection("designBlame", { enable: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Spacing Scale Refactor" description="Right-click a scale number to replace all in file">
+                <SettingRow title="Spacing Scale Refactor" description="Replace a scale value everywhere">
                     <SettingSwitch
                         checked={settings.spacingRefactor.enable}
                         onChange={(v) => updateSettingSection("spacingRefactor", { enable: v })}
@@ -386,17 +388,17 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
             </SettingRow>
             <SettingRow
                 title="Graph Branch Avatars"
-                description="Show GitHub author avatars on multi-lane Git Graph branches"
+                description="Avatars on graph branches"
             >
                 <SettingSwitch checked={g.graphAvatars} onChange={(v) => updateSettingSection("git", { graphAvatars: v })} />
             </SettingRow>
             <SettingRow
                 title="Graph Show All Branches"
-                description="Include every local and remote branch in the Git Graph. Turn off to show only the current branch"
+                description="Show all branches in the graph"
             >
                 <SettingSwitch checked={g.graphShowAllBranches} onChange={(v) => updateSettingSection("git", { graphShowAllBranches: v })} />
             </SettingRow>
-            <SettingRow title="Inline Git Blame" description="Show author and commit info on the current line in the editor">
+            <SettingRow title="Inline Git Blame" description="Blame on the current line">
                 <SettingSwitch checked={g.blame.enabled} onChange={(v) => updateSettingSection("git", { blame: { enabled: v } })} />
             </SettingRow>
         </SettingSection>
@@ -438,7 +440,7 @@ function LspSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
             <SettingSection id="settings-languages" title="Language Servers">
-                <SettingRow title="TypeScript / JavaScript" description="IntelliSense and diagnostics for TS, TSX, JS, and JSX">
+                <SettingRow title="TypeScript / JavaScript" description="TS/JS IntelliSense">
                     <SettingSwitch checked={lsp.typescript} onChange={(v) => updateSettingSection("lsp", { typescript: v })} />
                 </SettingRow>
                 <SettingRow title="HTML">
@@ -447,15 +449,15 @@ function LspSettings({ settings }: { settings: ShapeSettings }) {
                 <SettingRow title="CSS / SCSS / Less">
                     <SettingSwitch checked={lsp.css} onChange={(v) => updateSettingSection("lsp", { css: v })} />
                 </SettingRow>
-                <SettingRow title="JSON" description="Language support for JSON and JSONC">
+                <SettingRow title="JSON" description="JSON language support">
                     <SettingSwitch checked={lsp.json} onChange={(v) => updateSettingSection("lsp", { json: v })} />
                 </SettingRow>
-                <SettingRow title="Tailwind CSS" description="Class name completions in markup">
+                <SettingRow title="Tailwind CSS" description="Class completions">
                     <SettingSwitch checked={lsp.tailwindcss} onChange={(v) => updateSettingSection("lsp", { tailwindcss: v })} />
                 </SettingRow>
             </SettingSection>
             <SettingSection title="Editor Assistance">
-                <SettingRow title="Emmet" description="HTML/CSS abbreviation expansion in the editor">
+                <SettingRow title="Emmet" description="HTML/CSS abbreviations">
                     <SettingSwitch checked={lsp.emmet} onChange={(v) => updateSettingSection("lsp", { emmet: v })} />
                 </SettingRow>
             </SettingSection>
@@ -500,7 +502,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
             <SettingSection id="settings-node" title="Node.js">
-                <SettingRow title="Coding assistance for Node.js" description="Enable Node.js API completions and documentation">
+                <SettingRow title="Coding assistance for Node.js" description="Node.js completions">
                     <SettingSwitch
                         checked={node.codingAssistance}
                         onChange={(v) => {
@@ -509,7 +511,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Package manager" description="Used for install, update, and npm scripts">
+                <SettingRow title="Package manager" description="For install and scripts">
                     <SettingSelect
                         value={node.packageManager}
                         options={[
@@ -647,7 +649,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
             <SettingSection id="settings-updates" title="Updates">
                 <SettingRow
                     title="Automatic updates"
-                    description="Check for updates in the background and show a prompt in the titlebar when one is ready."
+                    description="Background update checks"
                 >
                     <SettingSwitch
                         checked={u.autoUpdate}
@@ -656,7 +658,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                 </SettingRow>
                 <SettingRow
                     title="Update channel"
-                    description="Pre-release receives newer builds first. Same app - switch anytime in settings."
+                    description="Stable or pre-release builds"
                 >
                     <SettingSelect
                         value={u.channel}
@@ -675,7 +677,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
             <SettingSection title="Startup">
                 <SettingRow
                     title="Show welcome page on startup"
-                    description="Prefer the welcome screen when Shape opens with no project."
+                    description="Welcome when no project is open"
                 >
                     <SettingSwitch
                         checked={p.showWelcomeOnStartup}
@@ -692,7 +694,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
             <SettingSection id="settings-notifications" title="Notifications">
                 <SettingRow
                     title="Desktop notifications"
-                    description="OS notifications when a chat turn finishes or a command needs approval. On by default."
+                    description="OS alerts for chat and approvals"
                 >
                     <SettingSwitch
                         checked={n.desktopEnabled}
@@ -787,7 +789,7 @@ function PythonSettings({ settings }: { settings: ShapeSettings }) {
         <SettingSection id="settings-python" title="Python">
             <SettingRow
                 title="Interpreter"
-                description="Used for Run and the Python language server. Change here or from the status bar."
+                description="Run and Python language server"
             >
                 <div className="flex items-center gap-2">
                     <SettingSelect
@@ -835,7 +837,7 @@ function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
             <SettingSection id="settings-appearance" title="Appearance">
                 <SettingRow
                     title="Theme"
-                    description="Choose light or dark chrome."
+                    description="Light or dark"
                 >
                     <div className="w-full max-w-md">
                         <ThemePicker
@@ -875,6 +877,7 @@ export function SettingsView({
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "mcp") return "settings-ai-mcp";
+        if (section === "integrations") return "settings-integrations";
         if (section === "rules") return "settings-ai-rules";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
@@ -885,16 +888,14 @@ export function SettingsView({
             case "ai":
             case "agents":
                 return "settings-ai-models";
+            case "integrations":
+                return "settings-integrations";
             case "editor":
                 return "settings-editor-font";
             case "terminal":
                 return "settings-terminal";
             case "git":
                 return "settings-git";
-            case "languages":
-                return "settings-languages";
-            case "tools":
-                return "settings-tools-lint";
             case "appearance":
             case "advanced":
             case "application":
@@ -905,6 +906,10 @@ export function SettingsView({
     }, []);
 
     const scrollToTarget = useCallback((targetId: string) => {
+        if (targetId === "settings-integrations") {
+            setActiveLeafId("integrations");
+            return;
+        }
         const el = document.getElementById(targetId);
         if (!el) return;
         scrollingToRef.current = targetId;
@@ -1044,17 +1049,6 @@ export function SettingsView({
                         ) : null}
                         {collapsed ? null : (
                             <>
-                                <div className="p-3 pb-2">
-                                    <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                                        <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                                        <Input
-                                            placeholder="Search settings"
-                                            value={query}
-                                            className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                                            onChange={(e) => setQuery(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
                                 <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-2 pb-2">
                                     {filteredNav.map((group) => {
                                         const open = expandedGroups.has(group.id) || !!query.trim();
@@ -1096,19 +1090,16 @@ export function SettingsView({
                                         );
                                     })}
                                 </nav>
-                                <div className="relative p-3 pt-1">
-                                    <div
-                                        className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-linear-to-t from-sidebar to-transparent"
-                                        aria-hidden
-                                    />
+                                <div className="relative shrink-0 p-2 pt-1">
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="w-full justify-start rounded-md text-sm"
+                                        className="mb-1 w-full justify-start rounded-md text-sm"
                                         onClick={() => setResetConfirmOpen(true)}
                                     >
                                         Reset to Defaults
                                     </Button>
+                                    {navPortalTarget ? <AccountRow /> : null}
                                 </div>
                             </>
                         )}
@@ -1121,18 +1112,37 @@ export function SettingsView({
                     </aside>
                 );
             })()}
-            <section className="min-w-0 flex-1 overflow-hidden bg-panel p-2 pl-0">
-                <div className="h-full overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-sm">
-                    <div className="no-scrollbar mx-auto h-full w-full max-w-5xl space-y-2 overflow-y-auto p-6 pb-24 lg:p-8">
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel p-2 pl-0">
+                <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-sm">
+                    {activeLeafId === "integrations" ? (
+                        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
+                            <IntegrationsView />
+                        </div>
+                    ) : (
+                        <>
+                    <div className="sticky top-0 z-10 shrink-0 border-b border-border-subtle bg-surface-1/95 px-6 pt-4 pb-3 backdrop-blur-sm lg:px-8">
+                        <div className="mx-auto flex h-9 max-w-5xl items-center rounded-lg border border-border bg-transparent px-3">
+                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                            <Input
+                                placeholder="Search settings"
+                                value={query}
+                                className="h-auto! bg-transparent px-2 text-sm shadow-none focus-visible:ring-0 select-text"
+                                onChange={(e) => setQuery(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-6 no-scrollbar lg:p-8">
+                        <div className="mx-auto w-full max-w-5xl space-y-2">
                         <AccountSettingsPanel />
                         <AiSettings settings={settings} />
                         <EditorSettings settings={settings} />
                         <TerminalSettings settings={settings} />
                         <GitSettings settings={settings} />
-                        <LspSettings settings={settings} />
-                        <ToolsSettings settings={settings} />
                         <AdvancedSettings settings={settings} />
+                        </div>
                     </div>
+                        </>
+                    )}
                 </div>
             </section>
 

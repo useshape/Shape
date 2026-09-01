@@ -41,7 +41,7 @@ export function NotificationsMenu() {
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[360px] max-h-[320px] overflow-y-auto custom-scrollbar">
+            <DropdownMenuContent align="end" className="w-[360px]">
                 <DropdownMenuItem disabled className="text-sm text-text-muted">
                     Notifications
                 </DropdownMenuItem>

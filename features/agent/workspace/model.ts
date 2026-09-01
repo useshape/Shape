@@ -1,4 +1,4 @@
-export type TabKind = "changes" | "browser" | "terminal";
+export type TabKind = "changes" | "terminal";
 
 export type WorkspaceTab = {
     id: string;
@@ -18,8 +18,6 @@ export function iconFor(kind: TabKind): string {
     switch (kind) {
         case "changes":
             return "changes";
-        case "browser":
-            return "public";
         case "terminal":
             return "square-terminal";
         default:

@@ -57,7 +57,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
     }, [handleMenuClick]);
 
     return (
-        <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal leading-none text-text-primary">
+        <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal leading-none text-text-primary transition-[background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]">
             <div className="titlebar-drag-region absolute left-0 top-0 z-0 h-full w-full" data-tauri-drag-region />
 
             <div className="titlebar-left relative z-20 flex shrink-0 items-center">

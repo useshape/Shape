@@ -78,6 +78,12 @@ pub struct MessageStats {
     pub credits_charged: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub used_auto: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

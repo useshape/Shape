@@ -10,6 +10,8 @@ import { AgentChrome } from "./chrome";
 import { AgentWorkspace } from "./workspace";
 import { FilesMode } from "./workspace/files-mode";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
+import { DesignStudio } from "@/features/preview/ui/design-studio";
+import { DevRunHost } from "@/features/terminal/dev-run-host";
 
 const MIN_WORKSPACE = 360;
 const MAX_WORKSPACE_RATIO = 0.7;
@@ -26,6 +28,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const [workspaceOpen, setWorkspaceOpen] = useState(true);
     const [filesOpen, setFilesOpen] = useState(false);
     const [overlay, setOverlay] = useState<AgentOverlay>(null);
+    const [designOpen, setDesignOpen] = useState(false);
     const [workspaceWidth, setWorkspaceWidth] = useState(560);
     const [splash, setSplash] = useState(false);
     const [splashVisible, setSplashVisible] = useState(false);
@@ -52,9 +55,9 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-    // Resolve sidebar nav portal target when overlay / files mode needs it.
+    // Resolve sidebar nav portal target when overlay / files / design mode needs it.
     useEffect(() => {
-        if (!overlay && !filesOpen) {
+        if (!overlay && !filesOpen && !designOpen) {
             setNavSlot(null);
             return;
         }
@@ -72,7 +75,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             window.clearInterval(id);
             window.clearTimeout(stop);
         };
-    }, [overlay, filesOpen, sidebarOpen]);
+    }, [overlay, filesOpen, designOpen, sidebarOpen]);
 
     useEffect(() => {
         if (!splash) return;
@@ -196,9 +199,21 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 else if (detail?.value === true) persistWorkspace(true);
                 else toggleWorkspace();
             }
+            if (id === "panel" || id === "terminal") {
+                // Classic bottom-panel / Terminal open → agent workspace Terminal.
+                setDesignOpen(false);
+                setOverlay(null);
+                persistFiles(false);
+                persistWorkspace(true);
+                window.setTimeout(() => {
+                    window.dispatchEvent(
+                        new CustomEvent("shape-set-active-tab", { detail: "terminal" }),
+                    );
+                }, 120);
+            }
             if (id === "files-mode" || id === "explorer") {
                 if (detail?.value === false) persistFiles(false);
-                else                 if (detail?.value === true) {
+                else if (detail?.value === true) {
                     setOverlay(null);
                     persistFiles(true);
                     setSidebarOpen(true);
@@ -260,6 +275,50 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
+    useEffect(() => {
+        if (!project_path) setDesignOpen(false);
+    }, [project_path]);
+
+    useEffect(() => {
+        const onToggle = () => setDesignOpen((v) => !v);
+        const onExit = () => setDesignOpen(false);
+        window.addEventListener("shape-toggle-design-mode", onToggle);
+        window.addEventListener("shape-design-exit", onExit);
+        return () => {
+            window.removeEventListener("shape-toggle-design-mode", onToggle);
+            window.removeEventListener("shape-design-exit", onExit);
+        };
+    }, []);
+
+    /** Always-mounted: open workspace Terminal even when Design Mode / collapsed rail unmounted AgentWorkspace. */
+    const openWorkspaceTerminal = useCallback(() => {
+        setDesignOpen(false);
+        setOverlay(null);
+        persistFiles(false);
+        persistWorkspace(true);
+        setSidebarOpen(true);
+        // Defer so workspace mounts after Design/overlay unmount.
+        window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "terminal" }));
+        }, 120);
+    }, [persistFiles, persistWorkspace]);
+
+    useEffect(() => {
+        const onOpenTerminal = () => openWorkspaceTerminal();
+        const onShortcut = (e: Event) => {
+            const detail = (e as CustomEvent<{ action?: string }>).detail;
+            if (detail?.action === "open" || detail?.action === "toggle" || !detail?.action) {
+                openWorkspaceTerminal();
+            }
+        };
+        window.addEventListener("shape-open-workspace-terminal", onOpenTerminal);
+        window.addEventListener("shape-terminal-shortcut", onShortcut as EventListener);
+        return () => {
+            window.removeEventListener("shape-open-workspace-terminal", onOpenTerminal);
+            window.removeEventListener("shape-terminal-shortcut", onShortcut as EventListener);
+        };
+    }, [openWorkspaceTerminal]);
+
     const handleNewChat = useCallback(() => {
         setOverlay(null);
         persistFiles(false);
@@ -267,12 +326,13 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
     }, [persistFiles]);
 
-    const showFiles = filesOpen && Boolean(project_path) && !overlay;
-    const showWorkspace = Boolean(project_path) && !overlay;
+    const showFiles = filesOpen && Boolean(project_path) && !overlay && !designOpen;
+    const showWorkspace = Boolean(project_path) && !overlay && !designOpen;
     const rightExpanded = workspaceOpen && showWorkspace && !showFiles;
 
     return (
         <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-background">
+            <DevRunHost />
             {splash ? (
                 <div
                     className={cn(
@@ -301,6 +361,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 expanded={sidebarOpen}
                 overlay={overlay}
                 filesOpen={showFiles}
+                designOpen={designOpen}
+                onToggleSidebar={toggleSidebar}
                 onNewChat={handleNewChat}
                 onSearch={() => {
                     window.dispatchEvent(
@@ -315,21 +377,37 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             />
 
             {/* Main column (chrome + content) · expanded workspace is full-height beside it;
-                collapsed Changes/Browser/Terminal rail sits under the top bar only. */}
+                collapsed Changes/Terminal rail sits under the top bar only. */}
             <div className="relative flex min-w-0 flex-1 overflow-hidden rounded-tl-2xl border-l border-t border-border bg-panel">
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                    <AgentChrome
-                        leftOpen={sidebarOpen}
-                        rightOpen={rightExpanded}
-                        filesOpen={showFiles}
-                        onToggleLeft={toggleSidebar}
-                        onToggleRight={toggleWorkspace}
-                        onToggleFiles={toggleFiles}
-                        canToggleRight={Boolean(project_path) && !showFiles && !overlay}
-                        canToggleFiles={Boolean(project_path) && !overlay}
+                {/* Design Mode takes over the entire main panel (not just the chat column). */}
+                {designOpen && project_path ? (
+                    <DesignStudio
+                        onClose={() => setDesignOpen(false)}
+                        navPortalTarget={navSlot}
+                        sidebarExpanded={sidebarOpen}
                     />
+                ) : null}
 
-                    <div className="flex min-h-0 flex-1 overflow-hidden">
+                <div
+                    className={cn(
+                        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+                        designOpen && "invisible pointer-events-none",
+                    )}
+                >
+                    {overlay || designOpen ? null : (
+                        <AgentChrome
+                            rightOpen={rightExpanded}
+                            filesOpen={showFiles}
+                            onToggleRight={toggleWorkspace}
+                            onToggleFiles={toggleFiles}
+                            canToggleRight={Boolean(project_path) && !showFiles && !overlay}
+                            canToggleFiles={Boolean(project_path) && !overlay}
+                            designOpen={designOpen}
+                            onToggleDesign={() => setDesignOpen((v) => !v)}
+                        />
+                    )}
+
+                    <div className="relative flex min-h-0 flex-1 overflow-hidden">
                         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                             {overlay ? (
                                 <AgentOverlayView
@@ -368,24 +446,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                 </div>
                             )}
                         </div>
-
-                        {/* Rail only — under chrome, next to chat */}
-                        {showWorkspace && project_path && !rightExpanded ? (
-                            <div
-                                style={{ width: RAIL_W, flex: "0 0 auto" }}
-                                className={cn(
-                                    "flex h-full overflow-hidden border-l border-border-subtle",
-                                    !isResizing
-                                        && "transition-[width] duration-[var(--transition-base)] ease-[var(--ease-out)]",
-                                )}
-                            >
-                                <AgentWorkspace
-                                    projectPath={project_path}
-                                    expanded={false}
-                                    onExpand={() => persistWorkspace(true)}
-                                />
-                            </div>
-                        ) : null}
                     </div>
                 </div>
 

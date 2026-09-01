@@ -14,6 +14,9 @@ export type MessageUsageStats = {
     usedAuto?: boolean;
     /** @deprecated Account monthly % — do not show as per-message usage. */
     autoPercent?: number;
+    reasoningEffort?: string;
+    mode?: string;
+    latencyMs?: number;
 };
 
 export function isAutoModelId(model?: string | null): boolean {
@@ -48,39 +51,46 @@ function turnPercentOfPool(amount: number, pool: number): number {
     return Math.min(100, Math.round(raw));
 }
 
-/** Per-message usage for the details popover — response % only, never tokens or monthly %. */
+/** Per-message usage for the details popover — one joined line (tests / legacy). */
 export function formatMessageUsageLine(
     stats: MessageUsageStats | undefined,
     model?: string | null,
 ): string {
-    const usedAuto = stats?.usedAuto ?? isAutoModelId(model);
-    const tokens = stats?.tokens ?? 0;
-    const credits = stats?.creditsCharged ?? 0;
+    return formatMessageUsageRows(stats, model)
+        .map((r) => r.value)
+        .join(" · ") || "No charge";
+}
 
-    if (usedAuto) {
-        if (tokens > 0) {
-            return `${turnPercentOfPool(tokens, AUTO_MONTHLY_TOKEN_POOL)}% used`;
-        }
-        return "0% used";
+/** Separate usage fields; omit anything without data. */
+export function formatMessageUsageRows(
+    stats: MessageUsageStats | undefined,
+    model?: string | null,
+): Array<{ label: string; value: string }> {
+    if (!stats) return [];
+    const rows: Array<{ label: string; value: string }> = [];
+    const usedAuto = stats.usedAuto ?? isAutoModelId(model);
+    const tokens = stats.tokens ?? 0;
+    const credits = stats.creditsCharged ?? 0;
+    const input = stats.inputTokens;
+    const output = stats.outputTokens;
+
+    if (usedAuto && tokens > 0) {
+        rows.push({
+            label: "Usage",
+            value: `${turnPercentOfPool(tokens, AUTO_MONTHLY_TOKEN_POOL)}% used`,
+        });
+    } else if (!usedAuto && credits > 0) {
+        rows.push({ label: "Credits", value: credits.toFixed(2) });
     }
 
-    // Paid models: show this response's credit share when we know the turn charge.
-    // Without a pool context here, fall back to a simple percent-from-credits isn't possible —
-    // still avoid token counts. If only credits charged, show response % against a soft scale
-    // is wrong; prefer "N% used" only when we have tokens relative to auto, else credits label
-    // without tokens.
-    if (credits > 0) {
-        // Message details don't have included pool; keep credits as count only if no better %.
-        // Prefer percent when tokens exist against a large context isn't right for credits.
-        return `${credits.toFixed(2)} credits`;
+    if (input != null && input > 0) {
+        rows.push({ label: "Input", value: input.toLocaleString() });
+    }
+    if (output != null && output > 0) {
+        rows.push({ label: "Output", value: output.toLocaleString() });
     }
 
-    if (tokens > 0) {
-        // Non-auto without credits: still avoid raw token spam — show tiny % of auto pool
-        // would be misleading. Show "Used" without tokens.
-        return "Used";
-    }
-    return "No charge";
+    return rows;
 }
 
 export type ChatUsageDisplay = {

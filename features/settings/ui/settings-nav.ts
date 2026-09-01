@@ -31,6 +31,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
             { id: "ai-rules", label: "Rules", targetId: "settings-ai-rules" },
             { id: "ai-context", label: "Context", targetId: "settings-ai-context" },
             { id: "mcp", label: "MCP", targetId: "settings-ai-mcp" },
+            { id: "integrations", label: "Integrations", targetId: "settings-integrations" },
         ],
     },
     {
@@ -51,10 +52,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         children: [
             { id: "terminal", label: "Terminal", targetId: "settings-terminal" },
             { id: "git", label: "Source Control", targetId: "settings-git" },
-            { id: "languages", label: "Language Servers", targetId: "settings-languages" },
-            { id: "node", label: "Node.js", targetId: "settings-node" },
-            { id: "python", label: "Python", targetId: "settings-python" },
-            { id: "tools-lint", label: "ESLint & Prettier", targetId: "settings-tools-lint" },
         ],
     },
     {
@@ -85,7 +82,6 @@ export type SettingsCategoryId =
     | "editor"
     | "terminal"
     | "git"
-    | "languages"
     | "application";
 
 export type SettingsCategory = {
@@ -125,12 +121,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         label: "Git",
         icon: "commit",
         keywords: ["source", "control", "scm"],
-    },
-    {
-        id: "languages",
-        label: "Languages",
-        icon: "language",
-        keywords: ["lsp", "eslint", "prettier", "node", "python"],
     },
     {
         id: "application",

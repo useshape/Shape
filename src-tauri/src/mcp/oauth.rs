@@ -233,10 +233,43 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to reach MCP server: {}", e))?;
 
     if resp.status() != reqwest::StatusCode::UNAUTHORIZED {
-        return Err(
-            "Server did not request authentication. It may already be public — set auth to \"none\" in mcp.json, or check the URL."
-                .to_string(),
-        );
+        // Some public servers accept initialize without auth. Others need OAuth but
+        // don't return 401 on the first probe — try metadata discovery before giving up.
+        let mut can_discover = false;
+        if let Ok(parsed) = url::Url::parse(mcp_url) {
+            let origin = format!(
+                "{}://{}",
+                parsed.scheme(),
+                parsed.host_str().map(|h| match parsed.port() {
+                    Some(p) => format!("{}:{}", h, p),
+                    None => h.to_string(),
+                }).unwrap_or_default()
+            );
+            let path = parsed.path().trim_end_matches('/');
+            let candidates = [
+                format!("{}/.well-known/oauth-protected-resource{}", origin, path),
+                format!("{}/.well-known/oauth-protected-resource", origin),
+            ];
+            for candidate in &candidates {
+                if let Ok(r) = client.get(candidate).send().await {
+                    if r.status().is_success() {
+                        if let Ok(meta) = r.json::<serde_json::Value>().await {
+                            if meta.get("authorization_servers").is_some() {
+                                can_discover = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !can_discover {
+            return Err(
+                "PUBLIC_NO_AUTH: Server did not request authentication."
+                    .to_string(),
+            );
+        }
+        // Fall through and continue discovery using well-known URLs below.
     }
 
     let www = resp
@@ -324,15 +357,12 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         .get("registration_endpoint")
         .and_then(|v| v.as_str())
     {
-        match try_dynamic_client_registration(&client, reg).await {
-            Ok(id) => id,
-            Err(e) => {
-                log::warn!("MCP DCR failed, falling back to shape-desktop: {}", e);
-                "shape-desktop".to_string()
-            }
-        }
+        try_dynamic_client_registration(&client, reg).await?
     } else {
-        "shape-desktop".to_string()
+        return Err(
+            "This MCP server does not support automatic OAuth registration (DCR). Add a bearer token via Custom MCP, or check the server docs."
+                .to_string(),
+        );
     };
 
     // Prefer scopes advertised by the protected resource (RFC 9728), then the
@@ -351,19 +381,16 @@ pub async fn start_oauth(server_id: &str, mcp_url: &str) -> Result<(), String> {
         .unwrap_or_else(|| "openid offline_access".to_string());
 
     let code_verifier = random_urlsafe(64);
-    let state = random_urlsafe(32);
+    // Embed server_id in state so redirect_uri stays exact (many ASes reject query variants).
+    let nonce = random_urlsafe(24);
+    let state = format!("{}:{}", server_id, nonce);
     let challenge = pkce_challenge(&code_verifier);
 
-    let redirect = format!(
-        "{}?server_id={}",
-        MCP_OAUTH_REDIRECT,
-        urlencoding::encode(server_id)
-    );
     let auth_link = format!(
         "{}?response_type=code&client_id={}&redirect_uri={}&code_challenge={}&code_challenge_method=S256&state={}&scope={}&resource={}",
         authorize_url,
         urlencoding::encode(&client_id),
-        urlencoding::encode(&redirect),
+        urlencoding::encode(MCP_OAUTH_REDIRECT),
         challenge,
         urlencoding::encode(&state),
         urlencoding::encode(&scope),
@@ -400,12 +427,19 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
     let state = parsed
         .query_pairs()
         .find(|(k, _)| k == "state")
-        .map(|(_, v)| v.to_string());
-    let server_id = parsed
-        .query_pairs()
-        .find(|(k, _)| k == "server_id")
         .map(|(_, v)| v.to_string())
-        .ok_or("Missing server_id for OAuth callback")?;
+        .ok_or("Missing OAuth state in callback")?;
+
+    let server_id = state
+        .split_once(':')
+        .map(|(id, _)| id.to_string())
+        .or_else(|| {
+            parsed
+                .query_pairs()
+                .find(|(k, _)| k == "server_id")
+                .map(|(_, v)| v.to_string())
+        })
+        .ok_or("Missing server_id in OAuth state")?;
 
     let pending = {
         let mut guard = PENDING.lock().map_err(|e| e.to_string())?;
@@ -417,19 +451,9 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
     if pending.server_id != server_id {
         return Err("OAuth server_id mismatch".to_string());
     }
-    // We always send state, so a callback without a matching one is rejected (CSRF).
-    match state.as_deref() {
-        Some(s) if s == pending.state => {}
-        _ => {
-            return Err("OAuth state mismatch — possible CSRF. Start Connect again.".to_string());
-        }
+    if state != pending.state {
+        return Err("OAuth state mismatch — possible CSRF. Start Connect again.".to_string());
     }
-
-    let redirect = format!(
-        "{}?server_id={}",
-        MCP_OAUTH_REDIRECT,
-        urlencoding::encode(&server_id)
-    );
 
     let client = reqwest::Client::new();
     let token_resp: serde_json::Value = client
@@ -437,7 +461,7 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<String, String>
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code.as_str()),
-            ("redirect_uri", redirect.as_str()),
+            ("redirect_uri", MCP_OAUTH_REDIRECT),
             ("client_id", pending.client_id.as_str()),
             ("code_verifier", pending.code_verifier.as_str()),
             ("resource", pending.resource.as_str()),

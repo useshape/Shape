@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SettingRow, SettingSection } from "./setting-controls";
 import {
-    loginShape,
     logoutShape,
     openShapeBilling,
     refreshShapeAuth,
     useShapeAuth,
 } from "@/lib/shape-auth/store";
+import { requestShapeLogin } from "@/features/workbench/ui/login-prompt-dialog";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { commands } from "@/lib/backend";
 import { cn } from "@/lib/utils";
@@ -69,18 +69,18 @@ export function AccountSettingsPanel() {
 
     if (!auth.loggedIn) {
         return (
-            <SettingSection id="settings-account" title="Account" description="Sign in to manage your plan and usage.">
+            <SettingSection id="settings-account" title="Account" description="Plan and usage">
                 <div className="px-3.5 py-4 space-y-3">
                     <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">
                             <div className="text-sm font-medium text-text-primary">Not signed in</div>
                             <div className="text-sm text-text-muted mt-1">
-                                Connect your Shape account to sync plan, credits, and usage.
+                                Sign in for plan and usage.
                             </div>
                         </div>
                         <Button
                             size="sm"
-                            onClick={() => void loginShape()}
+                            onClick={() => requestShapeLogin()}
                             disabled={auth.isLoggingIn}
                         >
                             {auth.isLoggingIn ? "Waiting…" : "Sign in"}
@@ -122,7 +122,7 @@ export function AccountSettingsPanel() {
 
             <SettingSection
                 title="Usage"
-                description="Auto usage resets monthly. Premium credits refresh with your billing period."
+                description="Monthly auto usage and credits"
             >
                 <div className="px-3.5 py-4 space-y-4">
                     <UsageBar
@@ -161,7 +161,7 @@ export function AccountSettingsPanel() {
                         {auth.revalidating ? "Refreshing…" : "Refresh"}
                     </Button>
                 </SettingRow>
-                <SettingRow title="Open dashboard" description="View billing, usage history, and account settings on the website.">
+                <SettingRow title="Open dashboard" description="Billing and account on the web">
                     <Button
                         variant="secondary"
                         size="sm"

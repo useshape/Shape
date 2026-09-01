@@ -1,15 +1,17 @@
 import React from "react";
 import type { Conversation } from "@/lib/backend/types";
+import { toTimestampMs } from "@/lib/timestamp";
 
 const formatRelative = (timestamp: number) => {
-    const now = Date.now() / 1000;
-    const diff = Math.max(0, now - timestamp);
-    const minutes = Math.floor(diff / 60);
-    const hours = Math.floor(diff / 3600);
-    const days = Math.floor(diff / 86400);
+    const diffMs = Date.now() - toTimestampMs(timestamp);
+    if (!Number.isFinite(diffMs) || diffMs < 0) return "—";
+    const minutes = Math.floor(diffMs / 60_000);
+    const hours = Math.floor(diffMs / 3_600_000);
+    const days = Math.floor(diffMs / 86_400_000);
     if (days >= 1) return `${days}d`;
     if (hours >= 1) return `${hours}h`;
-    return `${Math.max(1, minutes)}m`;
+    if (minutes < 1) return "now";
+    return `${minutes}m`;
 };
 
 export function ChatWelcome({

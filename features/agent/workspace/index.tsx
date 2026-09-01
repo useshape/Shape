@@ -6,19 +6,15 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { WorkspaceTabs } from "./tabs";
 import { ChangesView } from "./changes";
-import { BrowserView } from "./browser";
 import { ToolBtn } from "./tool";
 import {
     DEFAULT_TABS,
-    iconFor,
     uid,
     type TabKind,
     type WorkspaceTab,
 } from "./model";
 
 const Terminal = lazy(() => import("@/features/terminal/ui/terminal"));
-
-const RAIL_KINDS: TabKind[] = ["changes", "browser", "terminal"];
 
 export function AgentWorkspace({
     projectPath,
@@ -56,19 +52,22 @@ export function AgentWorkspace({
                 return;
             }
         }
+        if (kind === "terminal") {
+            const existing = tabs.find((t) => t.kind === "terminal");
+            if (existing) {
+                select(existing.id);
+                onExpand();
+                return;
+            }
+        }
         const tab: WorkspaceTab = {
             id: uid(kind),
             kind,
-            title:
-                kind === "browser"
-                    ? "Browser"
-                    : kind === "terminal"
-                        ? "Terminal"
-                        : "Changes",
+            title: kind === "terminal" ? "Terminal" : "Changes",
         };
         setTabs((p) => [...p, tab]);
         setActiveId(tab.id);
-    }, [select, tabs]);
+    }, [onExpand, select, tabs]);
 
     const openKind = useCallback((kind: TabKind) => {
         addTab(kind);
@@ -103,9 +102,8 @@ export function AgentWorkspace({
                 addTab("changes");
                 onExpand();
             }
-            if (tabId === "preview") {
-                addTab("browser");
-                onExpand();
+            if (tabId === "terminal") {
+                openKind("terminal");
             }
             if (tabId === "files" || tabId === "explorer") {
                 window.dispatchEvent(
@@ -113,9 +111,16 @@ export function AgentWorkspace({
                 );
             }
         };
+        const onOpenTerminal = () => {
+            openKind("terminal");
+        };
         window.addEventListener("shape-set-active-tab", onTab as EventListener);
-        return () => window.removeEventListener("shape-set-active-tab", onTab as EventListener);
-    }, [addTab, onExpand]);
+        window.addEventListener("shape-open-workspace-terminal", onOpenTerminal);
+        return () => {
+            window.removeEventListener("shape-set-active-tab", onTab as EventListener);
+            window.removeEventListener("shape-open-workspace-terminal", onOpenTerminal);
+        };
+    }, [addTab, onExpand, openKind]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -131,10 +136,6 @@ export function AgentWorkspace({
             if (e.key.toLowerCase() === "j" && !e.shiftKey) {
                 e.preventDefault();
                 openKind("terminal");
-            }
-            if (e.key.toLowerCase() === "b" && e.shiftKey) {
-                e.preventDefault();
-                openKind("browser");
             }
         };
         window.addEventListener("keydown", onKey);
@@ -152,26 +153,16 @@ export function AgentWorkspace({
     if (!expanded) {
         return (
             <aside className="flex h-full w-full flex-col items-center gap-1 bg-panel px-1 pt-2">
-                {RAIL_KINDS.map((kind) => {
-                    const activeKind = active?.kind === kind;
-                    return (
-                        <Tooltip key={kind} content={kind[0]!.toUpperCase() + kind.slice(1)} side="left" delayDuration={80}>
-                            <button
-                                type="button"
-                                aria-label={kind}
-                                onClick={() => openKind(kind)}
-                                className={cn(
-                                    "flex size-9 items-center justify-center rounded-md transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-                                    activeKind
-                                        ? "bg-panel-active text-text-primary"
-                                        : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
-                                )}
-                            >
-                                <Icon name={iconFor(kind)} size={18} />
-                            </button>
-                        </Tooltip>
-                    );
-                })}
+                <Tooltip content="Open panel" side="left" delayDuration={80}>
+                    <button
+                        type="button"
+                        aria-label="Open panel"
+                        onClick={onExpand}
+                        className="flex size-9 items-center justify-center rounded-md text-text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary"
+                    >
+                        <Icon name="chevron_left" size={18} />
+                    </button>
+                </Tooltip>
             </aside>
         );
     }
@@ -191,7 +182,7 @@ export function AgentWorkspace({
                     }}
                 />
 
-                {active?.kind === "browser" || active?.kind === "changes" ? null : (
+                {active?.kind === "changes" ? null : (
                     <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border-subtle px-1">
                         <ToolBtn label="Back" disabled={navIndex <= 0} onClick={() => go(-1)}>
                             <Icon name="arrow_back" size={ICON_SIZE_SM} />
@@ -218,11 +209,9 @@ export function AgentWorkspace({
                 <div className="min-h-0 flex-1 overflow-hidden">
                     {active?.kind === "changes" ? (
                         <ChangesView projectPath={projectPath} />
-                    ) : active?.kind === "browser" ? (
-                        <BrowserView />
                     ) : active?.kind === "terminal" ? (
                         <Suspense fallback={<div className="h-full w-full bg-panel" />}>
-                            <Terminal terminalOnly />
+                            <Terminal terminalOnly isOpen />
                         </Suspense>
                     ) : null}
                 </div>

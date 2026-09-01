@@ -28,7 +28,7 @@ describe("modules", () => {
 
     it("settings", async () => {
         const mod = await import("@/lib/settings");
-        expect(mod.getMonacoOptionsFromSettings).toBeTypeOf("function");
+        expect(mod.getEditorOptionsFromSettings).toBeTypeOf("function");
         expect(mod.updateSettingSection).toBeTypeOf("function");
     });
 

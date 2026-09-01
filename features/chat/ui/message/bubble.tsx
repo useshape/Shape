@@ -2,26 +2,23 @@
 
 import { cn } from "@/lib/utils";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { formatMessageModelLabel } from "@/lib/usage-display";
+import { formatMessageModelLabel, isAutoModelId } from "@/lib/usage-display";
 
-/** Apple Messages–style bubble with optional curved tail. */
-export function MsgBubble({
-    side,
-    hasTail = true,
+/** Model id used for Auto UI mark (backend still routes via MODEL_FAST). */
+export const AUTO_DISPLAY_MODEL = "deepseek/deepseek-v4-flash";
+
+/** Grey rounded card for user messages (no blue, no iMessage tail). */
+export function UserMessageCard({
     className,
     children,
 }: {
-    side: "sent" | "recv";
-    hasTail?: boolean;
     className?: string;
     children: React.ReactNode;
 }) {
     return (
         <div
             className={cn(
-                "imsg-bubble",
-                side === "sent" ? "imsg-bubble-sent" : "imsg-bubble-recv",
-                hasTail && "has-tail",
+                "relative max-w-[min(100%,36rem)] rounded-2xl bg-surface-3 px-3.5 py-2.5 chat-text text-text-primary",
                 className,
             )}
         >
@@ -30,7 +27,7 @@ export function MsgBubble({
     );
 }
 
-/** Three-dot typing indicator for the AI bubble. */
+/** Three-dot typing indicator (iMessage style). */
 export function TypingDots({ className }: { className?: string }) {
     return (
         <span className={cn("imsg-typing", className)} aria-label="Typing">
@@ -41,7 +38,18 @@ export function TypingDots({ className }: { className?: string }) {
     );
 }
 
-/** Stack of provider icons (1 = single, 2+ = overlapping grid). */
+/** Compact working dots for sidebar / chat tabs. */
+export function WorkingDots({ className }: { className?: string }) {
+    return (
+        <span className={cn("imsg-typing imsg-typing-sm", className)} aria-hidden>
+            <span />
+            <span />
+            <span />
+        </span>
+    );
+}
+
+/** Stack of provider icons — Auto shows DeepSeek only (not a multi-grid). */
 export function ModelAvatarStack({
     models,
     size = 16,
@@ -51,42 +59,24 @@ export function ModelAvatarStack({
     size?: number;
     className?: string;
 }) {
-    const unique = [...new Set(models.filter(Boolean))];
-    if (unique.length === 0) return null;
+    const raw = models.filter(Boolean);
+    const isAuto = raw.length === 0 || raw.every((m) => isAutoModelId(m));
+    const id = isAuto ? AUTO_DISPLAY_MODEL : raw[0]!;
 
-    if (unique.length === 1) {
-        return (
-            <span className={cn("inline-flex shrink-0 items-center justify-center", className)}>
-                {providerIcon(unique[0]!, size)}
-            </span>
-        );
-    }
-
-    const shown = unique.slice(0, 4);
-    const cell = Math.max(10, Math.round(size * 0.72));
     return (
         <span
             className={cn(
-                "relative inline-grid shrink-0 grid-cols-2 gap-px overflow-hidden rounded-md bg-panel-hover p-px",
+                "inline-flex shrink-0 items-center justify-center overflow-visible",
                 className,
             )}
-            style={{ width: size + 2, height: size + 2 }}
-            title={unique.map((m) => formatMessageModelLabel(m)).join(", ")}
+            title={isAuto ? "Auto" : formatMessageModelLabel(id)}
         >
-            {shown.map((m) => (
-                <span
-                    key={m}
-                    className="flex items-center justify-center overflow-hidden rounded-[3px] bg-surface-3"
-                    style={{ width: cell, height: cell }}
-                >
-                    {providerIcon(m, Math.max(8, cell - 2))}
-                </span>
-            ))}
+            {providerIcon(id, size)}
         </span>
     );
 }
 
-/** Compact mention / tool pill (Corpo-style). */
+/** Compact mention / tool pill. */
 export function EntityPill({
     icon,
     label,
@@ -98,8 +88,25 @@ export function EntityPill({
 }) {
     return (
         <span className={cn("wf-pill", className)}>
-            {icon ? <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span> : null}
+            {icon ? <span className="flex size-5 shrink-0 items-center justify-center">{icon}</span> : null}
             <span className="truncate">{label}</span>
         </span>
     );
+}
+
+/** @deprecated Use UserMessageCard */
+export function MsgBubble({
+    side,
+    className,
+    children,
+}: {
+    side: "sent" | "recv";
+    hasTail?: boolean;
+    className?: string;
+    children: React.ReactNode;
+}) {
+    if (side === "sent") {
+        return <UserMessageCard className={className}>{children}</UserMessageCard>;
+    }
+    return <div className={cn("chat-text! text-text-primary", className)}>{children}</div>;
 }

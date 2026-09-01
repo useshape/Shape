@@ -1,10 +1,8 @@
 import { commands } from "@/lib/backend/commands";
 import { isPopoutPath } from "@/lib/tauri-window";
 
-function openSearchSidebar(mode: "search" | "replace") {
-    window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "search" }));
-    window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar", value: true } }));
-    window.dispatchEvent(new CustomEvent("shape-search-mode", { detail: { mode } }));
+function openSearchSidebar(_mode: "search" | "replace") {
+    window.dispatchEvent(new CustomEvent("shape-command-palette", { detail: { mode: "files", placeholder: "Search files…" } }));
 }
 
 function dispatchEditorAction(action: string) {
@@ -48,20 +46,14 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             void commands.newWindow();
             return true;
         case "Explorer":
-            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "explorer" }));
-            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar", value: true } }));
+            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "files" }));
             return true;
         case "Search":
-            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "search" }));
-            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar", value: true } }));
+            openSearchSidebar("search");
             return true;
         case "Source Control":
             window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "source" }));
             window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar", value: true } }));
-            return true;
-        case "Problems":
-            window.dispatchEvent(new Event("shape-open-problems"));
-            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
             return true;
         case "Terminal":
             window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
@@ -145,7 +137,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
                 const active = state.active_file;
                 if (!active) return;
                 const { getFileExtension, isImageExtension, isFontExtension } = await import(
-                    "@/features/editor/lsp/image-types"
+                    "@/features/editor/lib/image-types"
                 );
                 const ext = getFileExtension(active);
                 if (isImageExtension(ext) || isFontExtension(ext)) {

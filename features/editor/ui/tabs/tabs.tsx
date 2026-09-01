@@ -29,7 +29,7 @@ import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
 import React, { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useEditorView, ViewMode } from "@/core/providers/editor";
 import { Tooltip } from "@/components/ui/tooltip";
-import { getFileExtension, isImageExtension, isFontExtension } from "@/features/editor/lsp/image-types";
+import { getFileExtension, isImageExtension, isFontExtension } from "@/features/editor/lib/image-types";
 
 const AnimatedPanelIcon = ({ mode, size = 16 }: { mode: ViewMode; size?: number }) => {
     return (

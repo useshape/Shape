@@ -80,6 +80,12 @@ pub async fn mcp_complete_oauth(
 }
 
 #[tauri::command]
+pub fn mcp_clear_oauth(id: String) -> Result<(), AppError> {
+    crate::mcp::credentials::delete_token(&id).map_err(AppError::Message)?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn call_mcp_tool(
     qualified_name: String,
     arguments: Value,

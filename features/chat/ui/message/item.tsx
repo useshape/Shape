@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { cn } from "@/lib/utils";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
 import { Icon } from "@/components/ui/icon";
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/context";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
-    formatMessageUsageLine,
+    formatMessageUsageRows,
     formatMessageModelLabel,
     type MessageUsageStats,
 } from "@/lib/usage-display";
@@ -32,7 +32,8 @@ import { useGitHubAuth } from "@/lib/github-auth/store";
 import { useShapeAuth } from "@/lib/shape-auth/store";
 import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { MsgBubble, TypingDots } from "./bubble";
+import { TypingDots, UserMessageCard, AUTO_DISPLAY_MODEL } from "./bubble";
+import { isAutoModelId } from "@/lib/usage-display";
 
 function UserMessageAvatar() {
     const github = useGitHubAuth();
@@ -73,8 +74,6 @@ type ChatMessageItemProps = {
     onRedo?: (index: number) => void;
     onRestore?: (index: number) => void;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
-    /** Apple SMS: only the last bubble in a consecutive run gets a tail. */
-    hasTail?: boolean;
 };
 
 const ATTACHMENT_BLOCK_RE = /<attached_(?:image|file)\b[^>]*>[\s\S]*?<\/attached_(?:image|file)>\n*/g;
@@ -177,7 +176,7 @@ function MentionRichText({ text }: { text: string }) {
                         : undefined
                 }
                 className={cn(
-                    "mx-0.5 inline-flex items-center gap-1 rounded-lg bg-accent-text-bg px-1.5 py-0.5 text-xs font-medium text-accent-text align-middle",
+                    "mx-0.5 inline-flex items-center gap-1 rounded-lg bg-accent-text-bg px-1.5 py-0.5 chat-text font-medium text-accent-text align-middle",
                     openable && "cursor-pointer hover:bg-accent-text/20 transition-colors",
                 )}
             >
@@ -222,7 +221,6 @@ function ChatMessageItemInner({
     onRedo,
     onRestore,
     isFileEditResolved,
-    hasTail = true,
 }: ChatMessageItemProps) {
     const [expanded, setExpanded] = React.useState(false);
     const bodyRef = React.useRef<HTMLDivElement>(null);
@@ -303,58 +301,60 @@ function ChatMessageItemInner({
             <ContextMenu>
             <ContextMenuTrigger asChild>
             <div
-                className="relative mb-1 flex w-full select-text items-end justify-end gap-2 pl-10"
+                className="relative mb-2 flex w-full select-text justify-end pl-10"
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
-                <div className="group flex max-w-[min(100%,36rem)] flex-col items-end gap-1">
-                    <MsgBubble side="sent" hasTail={hasTail} className="text-sm">
-                        <div
-                            role={isLong ? "button" : undefined}
-                            tabIndex={isLong ? 0 : undefined}
-                            onClick={isLong ? () => setExpanded((v) => !v) : undefined}
-                            onKeyDown={isLong ? (e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    setExpanded((v) => !v);
-                                }
-                            } : undefined}
-                            className={cn(isLong && "cursor-pointer")}
-                        >
-                            <div ref={bodyRef} className="min-w-0 wrap-break-word select-text">
-                                {userParts.attachments.length > 0 && (
-                                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                                        {userParts.attachments.map((name, i) => (
-                                            <span
-                                                key={`${name}-${i}`}
-                                                className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-black/15 px-1.5 py-0.5 text-sm"
-                                            >
-                                                <FileIcon name={name} className="h-3.5 w-3.5 shrink-0" />
-                                                <span className="max-w-[160px] truncate">{name}</span>
-                                            </span>
-                                        ))}
+                <div className="group inline-flex max-w-[min(100%,36rem)] items-start gap-2">
+                    <div className="flex min-w-0 flex-col items-end gap-1">
+                        <UserMessageCard>
+                            <div
+                                role={isLong ? "button" : undefined}
+                                tabIndex={isLong ? 0 : undefined}
+                                onClick={isLong ? () => setExpanded((v) => !v) : undefined}
+                                onKeyDown={isLong ? (e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        setExpanded((v) => !v);
+                                    }
+                                } : undefined}
+                                className={cn(isLong && "cursor-pointer")}
+                            >
+                                <div ref={bodyRef} className="min-w-0 wrap-break-word select-text">
+                                    {userParts.attachments.length > 0 && (
+                                        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                                            {userParts.attachments.map((name, i) => (
+                                                <span
+                                                    key={`${name}-${i}`}
+                                                    className="inline-flex items-center gap-1 rounded-md border border-border-subtle bg-panel px-1.5 py-0.5 chat-text text-text-secondary"
+                                                >
+                                                    <FileIcon name={name} className="h-3.5 w-3.5 shrink-0" />
+                                                    <span className="max-w-[160px] truncate">{name}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className={cn(isLong && !expanded && "chat-message-fade-clamp")}>
+                                        <MentionRichText text={displayText} />
                                     </div>
-                                )}
-                                <div className={cn(isLong && !expanded && "chat-message-fade-clamp")}>
-                                    <MentionRichText text={displayText} />
                                 </div>
                             </div>
+                        </UserMessageCard>
+                        <div className="flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
+                            <Tooltip content="Copy Message" side="top">
+                                <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
+                                    <Icon name="content_copy" size={14} />
+                                </button>
+                            </Tooltip>
+                            <Tooltip content="Restore to this checkpoint" side="top">
+                                <button onClick={() => onRestore?.(index)} className="rounded-md p-1 text-text-muted hover:text-text-primary">
+                                    <Icon name="undo" size={14} />
+                                </button>
+                            </Tooltip>
                         </div>
-                    </MsgBubble>
-                    <div className="flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
-                        <Tooltip content="Copy Message" side="top">
-                            <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                <Icon name="content_copy" size={14} />
-                            </button>
-                        </Tooltip>
-                        <Tooltip content="Restore to this checkpoint" side="top">
-                            <button onClick={() => onRestore?.(index)} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                <Icon name="undo" size={14} />
-                            </button>
-                        </Tooltip>
                     </div>
+                    <UserMessageAvatar />
                 </div>
-                <UserMessageAvatar />
             </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
@@ -374,43 +374,42 @@ function ChatMessageItemInner({
 
     const modelLabel = roleLabel || formatMessageModelLabel(model, stats) || "Shape";
     const showTypingOnly = Boolean(isGenerating && !content.trim());
+    const auto = isAutoModelId(model) || Boolean(stats?.usedAuto);
 
     return (
         <ContextMenu>
         <ContextMenuTrigger asChild>
         <div
-            className="group relative z-10 mb-1 flex w-full select-text flex-col gap-1"
+            className="group relative z-10 mb-2 flex w-full select-text flex-col gap-1"
             tabIndex={0}
             onKeyDown={handleKeyDown}
         >
-            <div className="flex items-end gap-2 pr-8">
-                <span className="mb-1 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-3">
-                    {providerIcon(model || "auto", 16)}
+            <div className="flex items-start gap-2.5 pr-6">
+                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-visible rounded-full bg-surface-3 ring-2 ring-panel">
+                    {providerIcon(auto ? AUTO_DISPLAY_MODEL : (model || AUTO_DISPLAY_MODEL), 16)}
                 </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="pl-1 text-xs text-text-muted">{modelLabel}</span>
-                    <MsgBubble side="recv" hasTail={hasTail} className="text-sm">
-                        <div ref={bodyRef} className="min-w-0 select-text overflow-hidden">
-                            {showTypingOnly ? (
-                                <TypingDots />
-                            ) : (
-                                <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
-                                    <MessageRenderer
-                                        content={content}
-                                        isGenerating={isGenerating}
-                                        activityLabel={activityLabel}
-                                        isFileEditResolved={isFileEditResolved}
-                                        durationMs={stats?.timeMs}
-                                    />
-                                    {isGenerating ? (
-                                        <span className="ml-1 inline-flex align-middle">
-                                            <TypingDots />
-                                        </span>
-                                    ) : null}
-                                </div>
-                            )}
-                        </div>
-                    </MsgBubble>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="chat-text text-text-muted">{modelLabel}</span>
+                    <div ref={bodyRef} className="min-w-0 select-text overflow-visible chat-text text-text-primary">
+                        {showTypingOnly ? (
+                            <TypingDots />
+                        ) : (
+                            <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
+                                <MessageRenderer
+                                    content={content}
+                                    isGenerating={isGenerating}
+                                    activityLabel={activityLabel}
+                                    isFileEditResolved={isFileEditResolved}
+                                    durationMs={stats?.timeMs}
+                                />
+                                {isGenerating ? (
+                                    <span className="ml-1 inline-flex align-middle">
+                                        <TypingDots />
+                                    </span>
+                                ) : null}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             {!isGenerating && (
@@ -433,20 +432,50 @@ function ChatMessageItemInner({
                                 <Icon name="more_horiz" size={16} />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-52">
-                            <div className="flex flex-col gap-1.5 text-sm">
-                                <div className="flex items-center justify-between gap-4">
-                                    <span className="text-text-muted">Model</span>
-                                    <span className="truncate font-medium text-text-primary">
-                                        {formatMessageModelLabel(model, stats)}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-4">
-                                    <span className="text-text-muted">Usage</span>
-                                    <span className="font-medium tabular-nums text-text-primary">
-                                        {formatMessageUsageLine(stats, model)}
-                                    </span>
-                                </div>
+                        <DropdownMenuContent align="start" className="w-64">
+                            <div className="flex flex-col gap-2 p-1 chat-text">
+                                {formatMessageModelLabel(model, stats) ? (
+                                    <DetailRow label="Model" value={formatMessageModelLabel(model, stats)} />
+                                ) : null}
+                                {stats || model ? (
+                                    <DetailRow
+                                        label="Routing"
+                                        value={
+                                            stats?.usedAuto || isAutoModelId(model)
+                                                ? "Auto"
+                                                : "Explicit"
+                                        }
+                                    />
+                                ) : null}
+                                {stats?.mode ? <DetailRow label="Mode" value={stats.mode} /> : null}
+                                {stats?.reasoningEffort ? (
+                                    <DetailRow
+                                        label="Reasoning"
+                                        value={
+                                            stats.reasoningEffort.charAt(0).toUpperCase()
+                                            + stats.reasoningEffort.slice(1)
+                                        }
+                                    />
+                                ) : null}
+                                {formatMessageUsageRows(stats, model).map((row) => (
+                                    <DetailRow key={row.label} label={row.label} value={row.value} />
+                                ))}
+                                {stats?.timeMs != null ? (
+                                    <DetailRow
+                                        label="Elapsed"
+                                        value={
+                                            stats.timeMs < 1000
+                                                ? `${Math.round(stats.timeMs)}ms`
+                                                : `${(stats.timeMs / 1000).toFixed(1)}s`
+                                        }
+                                    />
+                                ) : null}
+                                {stats?.latencyMs != null ? (
+                                    <DetailRow
+                                        label="Latency"
+                                        value={`${Math.round(stats.latencyMs)}ms`}
+                                    />
+                                ) : null}
                             </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -467,6 +496,15 @@ function ChatMessageItemInner({
             </ContextMenuItem>
         </ContextMenuContent>
         </ContextMenu>
+    );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="flex items-start justify-between gap-4 px-1">
+            <span className="shrink-0 text-text-muted">{label}</span>
+            <span className="min-w-0 truncate text-right font-medium text-text-primary">{value}</span>
+        </div>
     );
 }
 

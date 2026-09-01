@@ -169,7 +169,7 @@ export function TokensMenu({ activePath }: { activePath: string | null }) {
                         </Button>
                     </DropdownMenuTrigger>
                 </Tooltip>
-                <DropdownMenuContent align="end" className="w-[440px] p-0" onCloseAutoFocus={(e) => e.preventDefault()}>
+                <DropdownMenuContent align="end" className="w-[440px]" onCloseAutoFocus={(e) => e.preventDefault()}>
                     <div className="flex flex-col max-h-[min(70vh,520px)]">
                         <div className="p-2 space-y-1">
                             <div className="text-xs text-text-muted">Edits apply to this file only</div>
