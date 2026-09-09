@@ -11,7 +11,9 @@
       "mcp": {
         "transport": "http",
         "url": "https://api.githubcopilot.com/mcp/",
-        "auth": "oauth"
+        "auth": "token",
+        "tokenLabel": "Personal access token",
+        "tokenHelp": "GitHub’s remote MCP only supports OAuth inside Copilot hosts. Paste a classic or fine-grained PAT with repo access."
       }
     },
     {
@@ -23,7 +25,7 @@
       "popular": true,
       "mcp": {
         "transport": "http",
-        "url": "https://mcp.linear.app/sse",
+        "url": "https://mcp.linear.app/mcp",
         "auth": "oauth"
       }
     },

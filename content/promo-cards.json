@@ -1,0 +1,19 @@
+{
+  "cards": [
+    {
+      "id": "design-mode",
+      "title": "Introducing Design Mode",
+      "body": "Inspect and edit your live preview like a design tool — then apply the changes back to source.",
+      "image": "/promo/paper.jpg",
+      "trigger": {
+        "pages": ["chat"],
+        "webProject": true
+      },
+      "action": {
+        "kind": "try",
+        "label": "Try it out",
+        "event": "shape-toggle-design-mode"
+      }
+    }
+  ]
+}

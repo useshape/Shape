@@ -1,3 +1,4 @@
+import { RiGitBranchLine, RiGitCommitLine, RiPriceTag3Line } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -25,7 +26,7 @@ function RefPillVisual({
     className?: string;
 }) {
     const raw = refInfo.label.replace(/^tag:\s*/i, "");
-    const icon = refInfo.isTag ? "tag" : refInfo.isHead ? "commit" : "account_tree";
+    const icon = refInfo.isTag ? RiPriceTag3Line : refInfo.isHead ? RiGitCommitLine : RiGitBranchLine;
     return (
         <span
             className={cn(
@@ -41,7 +42,7 @@ function RefPillVisual({
                 className="flex h-full w-[16px] shrink-0 items-center justify-center"
                 style={{ backgroundColor: color }}
             >
-                <Icon name={icon} size={11} className="text-[var(--graph-surface,var(--color-panel))]" />
+                <Icon icon={icon} className="text-[var(--graph-surface,var(--color-panel))]" />
             </span>
             <span
                 className={cn(

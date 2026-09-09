@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "@/app/client-layout";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Shape",
@@ -16,10 +21,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${GeistSans.variable} dark h-full overflow-hidden text-sm bg-background text-text-primary`}
+      className={`${inter.variable} dark h-full overflow-hidden text-sm bg-background text-text-primary`}
       suppressHydrationWarning
     >
-      <body className={`${GeistSans.className} h-full flex flex-col overflow-hidden bg-background text-text-primary antialiased`}>
+      <body className={`${inter.className} h-full flex flex-col overflow-hidden bg-background text-text-primary antialiased`}>
         <ClientLayout>
           {children}
         </ClientLayout>

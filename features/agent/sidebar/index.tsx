@@ -1,15 +1,17 @@
 "use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
+import { RiAddLine, RiGithubFill, RiHistoryLine, RiNotification3Line, RiQuillPenAiFill, RiSearchLine, RiSettings3Line } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github-auth/store";
 import { openSettingsWindow } from "@/lib/open-settings";
 import { openGitWindow } from "@/lib/open-git-window";
-import { RepoList } from "./repos";
+import { ChatList } from "./chats";
 import { AccountRow } from "./account";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
+import { AGENT_SIDEBAR_HISTORY_SLOT } from "../chrome";
 import type { AgentOverlay } from "../overlay";
 import {
     notificationStore,
@@ -44,7 +46,7 @@ function SidebarNotificationsCollapsed() {
                     aria-label="Notifications"
                     className="relative flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon name="notifications" size={18} />
+                    <Icon icon={RiNotification3Line} />
                     {unreadCount > 0 ? (
                         <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-1 text-2xs font-medium text-accent-fg">
                             {Math.min(unreadCount, 99)}
@@ -80,7 +82,7 @@ function NavItem({
     collapsed,
 }: {
     label: string;
-    icon: string;
+    icon: RemixiconComponentType;
     onClick: () => void;
     collapsed?: boolean;
 }) {
@@ -95,7 +97,7 @@ function NavItem({
                     aria-label={label}
                     className="size-9 shrink-0 text-text-secondary hover:text-text-primary"
                 >
-                    <Icon name={icon} size={18} />
+                    <Icon icon={icon} />
                 </Button>
             </Tooltip>
         );
@@ -109,7 +111,7 @@ function NavItem({
             onClick={onClick}
             className={cn("flex h-8 w-full items-center gap-3 px-1.5! text-left")}
         >
-            <Icon name={icon} size={16} className="shrink-0 text-text-muted opacity-80" />
+            <Icon icon={icon} className="shrink-0 text-text-muted" />
             <span className="min-w-0 flex-1 truncate">{label}</span>
         </Button>
     );
@@ -120,46 +122,42 @@ export function AgentSidebar({
     onSearch,
     expanded,
     overlay,
-    filesOpen,
-    designOpen,
-    onToggleSidebar,
+    onDesign,
+    showDesign,
 }: {
     onNewChat: () => void;
     onSearch: () => void;
     expanded: boolean;
     overlay: AgentOverlay;
-    filesOpen?: boolean;
-    designOpen?: boolean;
-    onToggleSidebar: () => void;
+    onDesign?: () => void;
+    showDesign?: boolean;
+    onToggleSidebar?: () => void;
 }) {
     const github = useGitHubAuth();
-    // Design / settings / git / files replace nav via portal — never leave design chrome outside design mode.
-    const showHostedNav = Boolean(overlay) || Boolean(filesOpen) || Boolean(designOpen);
+    const showHostedNav = Boolean(overlay);
 
     const items = [
-        { label: "New Chat", icon: "add", onClick: onNewChat },
-        { label: "Search", icon: "search", onClick: onSearch },
+        { label: "New Chat", icon: RiAddLine, onClick: onNewChat },
+        { label: "Search", icon: RiSearchLine, onClick: onSearch },
         {
             label: "GitHub",
-            icon: "github",
+            icon: RiGithubFill,
             onClick: () => void openGitWindow(),
         },
-        {
-            label: "Automations",
-            icon: "bot",
-            onClick: () => void openSettingsWindow({ category: "agents", section: "integrations" }),
-        },
+        ...(showDesign && onDesign
+            ? [{ label: "Dsign", icon: RiQuillPenAiFill, onClick: onDesign }]
+            : []),
         {
             label: "Customize",
-            icon: "tune",
+            icon: RiSettings3Line,
             onClick: () => void openSettingsWindow(),
         },
-    ] as const;
+    ];
 
     return (
         <aside
             className={cn(
-                "flex h-full shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
+                "flex h-full shrink-0 flex-col overflow-hidden bg-sidebar border-r border-border text-text-primary",
                 "transition-[width] duration-[var(--transition-base)] ease-[var(--ease-out)]",
                 expanded ? "w-76" : "w-12",
             )}
@@ -170,14 +168,15 @@ export function AgentSidebar({
                     expanded ? "justify-between px-2" : "justify-center px-1.5",
                 )}
             >
-                <SidebarToggleBtn open={expanded} onToggle={onToggleSidebar} collapsed={!expanded} />
-                {showHostedNav ? (
+                {expanded ? (
                     <div
-                        id={AGENT_SIDEBAR_BACK_SLOT}
-                        className={cn("flex min-h-0 shrink-0 items-center justify-end", expanded ? "min-w-0" : "hidden")}
+                        id={AGENT_SIDEBAR_HISTORY_SLOT}
+                        data-collapsed="false"
+                        className="flex min-h-0 shrink-0 items-center"
                     />
-                ) : expanded ? (
-                    <Tooltip content="History" side="bottom" delayDuration={80}>
+                ) : null}
+            {showHostedNav ? null : (
+                    <Tooltip content="History" side={expanded ? "bottom" : "right"} delayDuration={80}>
                         <button
                             type="button"
                             aria-label="History"
@@ -188,12 +187,15 @@ export function AgentSidebar({
                                     },
                                 );
                             }}
-                            className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                            className={cn(
+                                "flex items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary",
+                                expanded ? "size-7" : "size-9",
+                            )}
                         >
-                            <Icon name="history" size={15} />
+                            <Icon icon={RiHistoryLine} />
                         </button>
                     </Tooltip>
-                ) : null}
+            )}
             </div>
 
             {showHostedNav ? (
@@ -221,46 +223,46 @@ export function AgentSidebar({
                         ))}
                     </nav>
 
-                    {expanded ? <RepoList /> : <div className="min-h-0 flex-1" />}
-
-                    <div
-                        className={cn(
-                            "mt-auto shrink-0",
-                            expanded ? "px-1 pb-1" : "flex flex-col items-center gap-1 px-1 pb-2",
-                        )}
-                    >
-                        {expanded ? (
-                            <>
-                                {!github.loggedIn ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => void loginGitHub()}
-                                        className="mb-1 flex w-full items-center justify-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
-                                    >
-                                        <Icon name="github" size={14} />
-                                        Connect GitHub
-                                    </button>
-                                ) : null}
-                                <AccountRow />
-                            </>
-                        ) : (
-                            <div className="flex flex-col items-center gap-1">
-                                <SidebarNotificationsCollapsed />
-                                <Tooltip content="Settings" side="right" delayDuration={80}>
-                                    <button
-                                        type="button"
-                                        onClick={() => void openSettingsWindow()}
-                                        className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                                        aria-label="Settings"
-                                    >
-                                        <Icon name="settings" size={18} />
-                                    </button>
-                                </Tooltip>
-                            </div>
-                        )}
-                    </div>
+                    {expanded ? <ChatList onNewChat={onNewChat} /> : <div className="min-h-0 flex-1" />}
                 </>
             )}
+
+            <div
+                className={cn(
+                    "mt-auto shrink-0",
+                    expanded ? "px-1 pb-1" : "flex flex-col items-center gap-1 px-1 pb-2",
+                )}
+            >
+                {expanded ? (
+                    <>
+                        {!showHostedNav && !github.loggedIn ? (
+                            <button
+                                type="button"
+                                onClick={() => void loginGitHub()}
+                                className="mb-1 flex w-full items-center justify-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                            >
+                                <Icon icon={RiGithubFill} />
+                                Connect GitHub
+                            </button>
+                        ) : null}
+                        <AccountRow />
+                    </>
+                ) : (
+                    <div className="flex flex-col items-center gap-1">
+                        <SidebarNotificationsCollapsed />
+                        <Tooltip content="Settings" side="right" delayDuration={80}>
+                            <button
+                                type="button"
+                                onClick={() => void openSettingsWindow()}
+                                className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                                aria-label="Settings"
+                            >
+                                <Icon icon={RiSettings3Line} />
+                            </button>
+                        </Tooltip>
+                    </div>
+                )}
+            </div>
         </aside>
     );
 }

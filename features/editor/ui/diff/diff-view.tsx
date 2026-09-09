@@ -1,78 +1,96 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { diffLines } from "diff";
+import { useEffect, useRef } from "react";
+import { EditorState } from "@codemirror/state";
+import { EditorView, lineNumbers } from "@codemirror/view";
+import { MergeView, unifiedMergeView } from "@codemirror/merge";
+import { bracketMatching } from "@codemirror/language";
+import { languageForPath } from "@/features/editor/ui/codemirror/lang";
+import { shapeEditorChrome } from "@/features/editor/ui/codemirror/theme";
 import { cn } from "@/lib/utils";
 
-/** Unified line diff for agent, git, and popout. */
+function baseExtensions(path: string) {
+    const lang = languageForPath(path);
+    return [
+        ...shapeEditorChrome(),
+        lineNumbers(),
+        bracketMatching(),
+        EditorView.editable.of(false),
+        EditorView.lineWrapping,
+        ...(lang ? [lang] : []),
+    ];
+}
+
+/** CodeMirror diff — unified (inline) by default; optional split. */
 export function DiffView({
+    path,
     originalContent,
     content,
+    mode = "unified",
+    className,
 }: {
     path: string;
     originalContent: string;
     content: string;
+    mode?: "split" | "unified";
     getLanguage?: (path: string) => string;
+    className?: string;
 }) {
-    const rows = useMemo(() => {
-        const parts = diffLines(originalContent ?? "", content ?? "");
-        const out: { type: "equal" | "add" | "remove"; text: string; oldNo?: number; newNo?: number }[] = [];
-        let oldNo = 1;
-        let newNo = 1;
-        for (const part of parts) {
-            const lines = part.value.replace(/\n$/, "").split("\n");
-            const cleaned =
-                part.value.endsWith("\n") && lines[lines.length - 1] === ""
-                    ? lines.slice(0, -1)
-                    : lines;
-            for (const line of cleaned) {
-                if (part.added) {
-                    out.push({ type: "add", text: line, newNo: newNo++ });
-                } else if (part.removed) {
-                    out.push({ type: "remove", text: line, oldNo: oldNo++ });
-                } else {
-                    out.push({ type: "equal", text: line, oldNo: oldNo++, newNo: newNo++ });
-                }
-            }
+    const host = useRef<HTMLDivElement>(null);
+    const viewRef = useRef<EditorView | null>(null);
+    const mergeRef = useRef<MergeView | null>(null);
+
+    useEffect(() => {
+        if (!host.current) return;
+        viewRef.current?.destroy();
+        viewRef.current = null;
+        mergeRef.current?.destroy();
+        mergeRef.current = null;
+        host.current.replaceChildren();
+
+        const original = originalContent ?? "";
+        const current = content ?? "";
+
+        if (mode === "split") {
+            mergeRef.current = new MergeView({
+                parent: host.current,
+                orientation: "a-b",
+                highlightChanges: true,
+                gutter: true,
+                collapseUnchanged: { margin: 2, minSize: 4 },
+                a: { doc: original, extensions: baseExtensions(path) },
+                b: { doc: current, extensions: baseExtensions(path) },
+            });
+        } else {
+            const state = EditorState.create({
+                doc: current,
+                extensions: [
+                    ...baseExtensions(path),
+                    unifiedMergeView({
+                        original,
+                        mergeControls: false,
+                        gutter: true,
+                        highlightChanges: true,
+                        collapseUnchanged: { margin: 2, minSize: 4 },
+                    }),
+                ],
+            });
+            viewRef.current = new EditorView({ state, parent: host.current });
         }
-        return out;
-    }, [originalContent, content]);
+
+        return () => {
+            viewRef.current?.destroy();
+            viewRef.current = null;
+            mergeRef.current?.destroy();
+            mergeRef.current = null;
+        };
+    }, [path, originalContent, content, mode]);
 
     return (
-        <div className="h-full min-h-0 overflow-auto bg-editor font-mono text-sm custom-scrollbar">
-            <div className="min-w-full py-2">
-                {rows.map((row, i) => (
-                    <div
-                        key={i}
-                        className={cn(
-                            "flex leading-5",
-                            row.type === "add" && "bg-success/10",
-                            row.type === "remove" && "bg-error/10",
-                        )}
-                    >
-                        <span className="w-10 shrink-0 select-none pr-2 text-right text-text-muted tabular-nums">
-                            {row.oldNo ?? ""}
-                        </span>
-                        <span className="w-10 shrink-0 select-none pr-2 text-right text-text-muted tabular-nums">
-                            {row.newNo ?? ""}
-                        </span>
-                        <span
-                            className={cn(
-                                "w-4 shrink-0 select-none text-center",
-                                row.type === "add" && "text-success",
-                                row.type === "remove" && "text-error",
-                                row.type === "equal" && "text-text-muted",
-                            )}
-                        >
-                            {row.type === "add" ? "+" : row.type === "remove" ? "-" : " "}
-                        </span>
-                        <pre className="min-w-0 flex-1 whitespace-pre-wrap break-all px-1 text-text-primary">
-                            {row.text || " "}
-                        </pre>
-                    </div>
-                ))}
-            </div>
-        </div>
+        <div
+            ref={host}
+            className={cn("h-full min-h-[160px] overflow-hidden bg-panel", className)}
+        />
     );
 }
 

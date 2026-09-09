@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCloseLine } from "@remixicon/react";
 import { useSyncExternalStore } from "react";
 import {
   getUpdateStatus,
@@ -71,7 +72,7 @@ export function TitlebarUpdateButton() {
             dismissAvailableUpdate();
           }}
         >
-          <Icon name="close" size={16} />
+          <Icon icon={RiCloseLine} />
         </button>
       ) : null}
     </div>

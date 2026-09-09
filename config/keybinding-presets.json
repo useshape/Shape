@@ -1,0 +1,58 @@
+{
+    "presets": {
+        "default": {
+            "label": "Default",
+            "overrides": {}
+        },
+        "vscode": {
+            "label": "VS Code",
+            "overrides": {
+                "Command Palette": "Ctrl+Shift+P",
+                "Go to File": "Ctrl+P",
+                "Find": "Ctrl+F",
+                "Find in Files": "Ctrl+Shift+F",
+                "Replace in Files": "Ctrl+H",
+                "Terminal": "Ctrl+`",
+                "Settings": "Ctrl+,",
+                "AI Chat": "Ctrl+L",
+                "Toggle Word Wrap": "Alt+Z",
+                "Format Document": "Alt+Shift+F",
+                "Rename Symbol": "F2",
+                "Quick Fix": "Ctrl+.",
+                "Go to Definition": "F12",
+                "Go to References": "Shift+F12",
+                "Cycle Chat Mode": "Ctrl+Shift+."
+            }
+        },
+        "sublime": {
+            "label": "Sublime Text",
+            "overrides": {
+                "Command Palette": "Ctrl+Shift+P",
+                "Go to File": "Ctrl+P",
+                "Find in Files": "Ctrl+Shift+F",
+                "Save All": "Ctrl+Alt+S",
+                "Close Tab": "Ctrl+W",
+                "New Untitled File": "Ctrl+N",
+                "Go to Line/Column...": "Ctrl+G",
+                "Select All": "Ctrl+A",
+                "AI Chat": "Ctrl+L"
+            }
+        },
+        "vim": {
+            "label": "Vim",
+            "overrides": {
+                "Command Palette": "Ctrl+Shift+P",
+                "Go to File": "Ctrl+P",
+                "Find": "Ctrl+F",
+                "Go to Line/Column...": "Ctrl+G",
+                "Save": "Ctrl+S",
+                "Close Tab": "Ctrl+W",
+                "Terminal": "Ctrl+`",
+                "Explorer": "Ctrl+Shift+E",
+                "Source Control": "Ctrl+Shift+G",
+                "AI Chat": "Ctrl+Shift+A",
+                "Settings": "Ctrl+,"
+            }
+        }
+    }
+}

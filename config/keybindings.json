@@ -1,156 +1,326 @@
 {
     "keybindings": [
         {
+            "id": "file.newUntitled",
             "label": "New Text File",
-            "key": "Ctrl+N"
+            "key": "Ctrl+N",
+            "when": "global",
+            "category": "File"
         },
         {
+            "id": "file.newWindow",
             "label": "New Window",
-            "key": "Ctrl+Shift+N"
+            "key": "Ctrl+Shift+N",
+            "when": "global",
+            "category": "File"
         },
         {
+            "id": "file.open",
             "label": "Open File",
-            "key": "Ctrl+O"
+            "key": "Ctrl+O",
+            "when": "global",
+            "category": "File"
         },
         {
+            "id": "file.openFolder",
             "label": "Open Folder",
-            "key": "Ctrl+K Ctrl+O"
+            "key": "Ctrl+K Ctrl+O",
+            "when": "global",
+            "category": "File"
         },
         {
+            "id": "file.save",
             "label": "Save",
-            "key": "Ctrl+S"
+            "key": "Ctrl+S",
+            "when": "editorFocus",
+            "category": "File"
         },
         {
+            "id": "file.saveAs",
             "label": "Save As",
-            "key": "Ctrl+Shift+S"
+            "key": "Ctrl+Shift+S",
+            "when": "editorFocus",
+            "category": "File"
         },
         {
+            "id": "file.saveAll",
             "label": "Save All",
-            "key": "Ctrl+K S"
+            "key": "Ctrl+K S",
+            "when": "global",
+            "category": "File"
         },
         {
+            "id": "file.close",
             "label": "Close Tab",
-            "key": "Ctrl+W"
+            "key": "Ctrl+W",
+            "when": "editorFocus || terminalFocus",
+            "category": "File"
         },
         {
+            "id": "file.closeAll",
             "label": "Close All Tabs",
-            "key": "Ctrl+K E"
+            "key": "Ctrl+K E",
+            "when": "global",
+            "category": "File"
         },
         {
+            "id": "file.recent",
             "label": "Recent Files",
-            "key": "Ctrl+E"
+            "key": "Ctrl+E",
+            "when": "global",
+            "category": "File"
         },
         {
-            "label": "Close Window",
-            "key": "Alt+F4"
-        },
-        {
-            "label": "Go to File",
-            "key": "Ctrl+P"
-        },
-        {
-            "label": "Find",
-            "key": "Ctrl+F"
-        },
-        {
-            "label": "Command Palette",
-            "key": "Ctrl+Shift+P"
-        },
-        {
-            "label": "Command Palette",
-            "key": "F1"
-        },
-        {
-            "label": "Go to Symbol in Editor...",
-            "key": "Ctrl+Shift+O"
-        },
-        {
-            "label": "Find in Files",
-            "key": "Ctrl+Shift+F"
-        },
-        {
-            "label": "Replace in Files",
-            "key": "Ctrl+H"
-        },
-        {
+            "id": "file.closeFolder",
             "label": "Close Folder",
-            "key": "Ctrl+K Ctrl+W"
+            "key": "Ctrl+K Ctrl+W",
+            "when": "global",
+            "category": "File"
         },
         {
+            "id": "file.closeWindow",
+            "label": "Close Window",
+            "key": "Alt+F4",
+            "when": "global",
+            "category": "File"
+        },
+        {
+            "id": "edit.undo",
             "label": "Undo",
-            "key": "Ctrl+Z"
+            "key": "Ctrl+Z",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
         },
         {
+            "id": "edit.redo",
             "label": "Redo",
-            "key": "Ctrl+Y"
+            "key": "Ctrl+Y",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
         },
         {
+            "id": "edit.cut",
             "label": "Cut",
-            "key": "Ctrl+X"
+            "key": "Ctrl+X",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
         },
         {
+            "id": "edit.copy",
             "label": "Copy",
-            "key": "Ctrl+C"
+            "key": "Ctrl+C",
+            "when": "editorTextFocus",
+            "category": "Edit"
         },
         {
+            "id": "edit.paste",
             "label": "Paste",
-            "key": "Ctrl+V"
+            "key": "Ctrl+V",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
         },
         {
+            "id": "edit.selectAll",
             "label": "Select All",
-            "key": "Ctrl+A"
+            "key": "Ctrl+A",
+            "when": "editorTextFocus",
+            "category": "Edit"
         },
         {
+            "id": "edit.formatDocument",
             "label": "Format Document",
-            "key": "Alt+Shift+F"
+            "key": "Alt+Shift+F",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
         },
         {
-            "label": "Go to Definition",
-            "key": "F12"
+            "id": "edit.renameSymbol",
+            "label": "Rename Symbol",
+            "key": "F2",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
         },
         {
+            "id": "edit.quickFix",
+            "label": "Quick Fix",
+            "key": "Ctrl+.",
+            "when": "editorTextFocus",
+            "category": "Edit"
+        },
+        {
+            "id": "edit.organizeImports",
+            "label": "Organize Imports",
+            "key": "Shift+Alt+O",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
+        },
+        {
+            "id": "edit.formatSelection",
+            "label": "Format Selection",
+            "key": "Ctrl+K Ctrl+F",
+            "when": "editorTextFocus && !editorReadonly",
+            "category": "Edit"
+        },
+        {
+            "id": "view.commandPalette",
+            "label": "Command Palette",
+            "key": "Ctrl+Shift+P",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.commandPaletteAlt",
+            "label": "Command Palette",
+            "key": "F1",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.goToFile",
+            "label": "Go to File",
+            "key": "Ctrl+P",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.find",
+            "label": "Find",
+            "key": "Ctrl+F",
+            "when": "editorFocus",
+            "category": "View"
+        },
+        {
+            "id": "view.findInFiles",
+            "label": "Find in Files",
+            "key": "Ctrl+Shift+F",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.replaceInFiles",
+            "label": "Replace in Files",
+            "key": "Ctrl+H",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.goToSymbol",
+            "label": "Go to Symbol in Editor...",
+            "key": "Ctrl+Shift+O",
+            "when": "editorFocus",
+            "category": "View"
+        },
+        {
+            "id": "view.goToLine",
             "label": "Go to Line/Column...",
-            "key": "Ctrl+G"
+            "key": "Ctrl+G",
+            "when": "editorFocus",
+            "category": "View"
         },
         {
+            "id": "view.goToDefinition",
+            "label": "Go to Definition",
+            "key": "F12",
+            "when": "editorTextFocus",
+            "category": "View"
+        },
+        {
+            "id": "view.goToReferences",
+            "label": "Go to References",
+            "key": "Shift+F12",
+            "when": "editorTextFocus",
+            "category": "View"
+        },
+        {
+            "id": "view.explorer",
             "label": "Explorer",
-            "key": "Ctrl+Shift+E"
+            "key": "Ctrl+Shift+E",
+            "when": "global",
+            "category": "View"
         },
         {
+            "id": "view.sourceControl",
             "label": "Source Control",
-            "key": "Ctrl+Shift+G"
+            "key": "Ctrl+Shift+G",
+            "when": "global",
+            "category": "View"
         },
         {
+            "id": "view.problems",
             "label": "Problems",
-            "key": "Ctrl+Shift+M"
+            "key": "Ctrl+Shift+M",
+            "when": "global",
+            "category": "View"
         },
         {
+            "id": "view.terminal",
             "label": "Terminal",
-            "key": "Ctrl+`"
+            "key": "Ctrl+`",
+            "when": "global",
+            "category": "View"
         },
         {
+            "id": "view.newTerminal",
             "label": "New Terminal",
-            "key": "Ctrl+Shift+`"
+            "key": "Ctrl+Shift+`",
+            "when": "global",
+            "category": "View"
         },
         {
-            "label": "Settings",
-            "key": "Ctrl+,"
-        },
-        {
-            "label": "AI Chat",
-            "key": "Ctrl+L"
-        },
-        {
-            "label": "Toggle Design Mode",
-            "key": "Ctrl+Shift+D"
-        },
-        {
-            "label": "Inline Edit",
-            "key": "Ctrl+K"
-        },
-        {
+            "id": "view.zenMode",
             "label": "Zen Mode",
-            "key": "Ctrl+K Z"
+            "key": "Ctrl+K Z",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.toggleWordWrap",
+            "label": "Toggle Word Wrap",
+            "key": "Alt+Z",
+            "when": "editorFocus",
+            "category": "View"
+        },
+        {
+            "id": "view.settings",
+            "label": "Settings",
+            "key": "Ctrl+,",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "agent.aiChat",
+            "label": "AI Chat",
+            "key": "Ctrl+L",
+            "when": "global",
+            "category": "Agent"
+        },
+        {
+            "id": "agent.newChat",
+            "label": "New Chat",
+            "key": "Ctrl+Shift+L",
+            "when": "global",
+            "category": "Agent"
+        },
+        {
+            "id": "agent.cycleMode",
+            "label": "Cycle Chat Mode",
+            "key": "Ctrl+Shift+.",
+            "when": "chatFocus || global",
+            "category": "Agent"
+        },
+        {
+            "id": "agent.inlineEdit",
+            "label": "Inline Edit",
+            "key": "Ctrl+K",
+            "when": "editorTextFocus",
+            "category": "Agent"
+        },
+        {
+            "id": "agent.toggleDesign",
+            "label": "Toggle Design Mode",
+            "key": "Ctrl+Shift+D",
+            "when": "global",
+            "category": "Agent"
         }
     ]
 }

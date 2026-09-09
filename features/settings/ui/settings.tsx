@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowRightSLine, RiUserLine } from "@remixicon/react";
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
@@ -17,6 +18,7 @@ import { notify } from "@/features/notifications";
 import { appRoute } from "@/lib/app-route";
 import { listen, WebviewWindow } from "@/lib/tauri/client-api";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -26,27 +28,23 @@ import {
     SettingSwitch,
     SettingNumberSelect,
     FontFamilySelect,
-    ExcludePatternsSelect,
-    EDITOR_FONT_PRESETS,
     TERMINAL_FONT_PRESETS,
     FONT_SIZE_PRESETS,
-    TAB_SIZE_PRESETS,
     SCROLLBACK_PRESETS,
-    AUTO_SAVE_DELAY_PRESETS,
     AUTO_FETCH_INTERVAL_PRESETS,
     MAX_CONTEXT_PRESETS,
 } from "./setting-controls";
 import { AiSettingsPanel } from "./ai-settings";
 import { AccountSettingsPanel } from "./account-settings";
-import { IntegrationsView } from "./integrations";
 import { applyTelemetryPreference } from "@/lib/telemetry";
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { SHAPE_API_BASE, dashboardUrl } from "@/lib/shape-auth/api";
 import { Icon } from "@/components/ui/icon";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
-import { AccountRow } from "@/features/agent/sidebar/account";
+import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import { ThemePicker } from "./theme-picker";
 import { normalizeColorTheme } from "@/lib/themes";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
+import { KeyboardShortcutsView } from "./keyboard-shortcuts";
 import { useRouter } from "next/navigation";
 import {
     AlertDialog,
@@ -62,262 +60,14 @@ import {
 function EditorSettings({ settings }: { settings: ShapeSettings }) {
     const e = settings.editor;
     return (
-        <>
-            <SettingSection id="settings-editor-font" title="Font & Display">
-                <SettingRow title="Font Family">
-                    <FontFamilySelect
-                        value={e.fontFamily}
-                        presets={EDITOR_FONT_PRESETS}
-                        onChange={(v) => updateSettingSection("editor", { fontFamily: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Font Size">
-                    <SettingNumberSelect
-                        value={e.fontSize}
-                        options={FONT_SIZE_PRESETS}
-                        onChange={(v) => updateSettingSection("editor", { fontSize: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Font Ligatures">
-                    <SettingSwitch checked={e.fontLigatures} onChange={(v) => updateSettingSection("editor", { fontLigatures: v })} />
-                </SettingRow>
-                <SettingRow title="Minimap">
-                    <SettingSwitch checked={e.minimap} onChange={(v) => updateSettingSection("editor", { minimap: v })} />
-                </SettingRow>
-                <SettingRow title="Line Numbers">
-                    <SettingSelect
-                        value={e.lineNumbers}
-                        options={[
-                            { value: "on", label: "On" },
-                            { value: "off", label: "Off" },
-                            { value: "relative", label: "Relative" },
-                        ]}
-                        onChange={(v) => updateSettingSection("editor", { lineNumbers: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Render Whitespace">
-                    <SettingSelect
-                        value={e.renderWhitespace}
-                        options={[
-                            { value: "none", label: "None" },
-                            { value: "selection", label: "Selection" },
-                            { value: "all", label: "All" },
-                        ]}
-                        onChange={(v) => updateSettingSection("editor", { renderWhitespace: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Line Highlight">
-                    <SettingSelect
-                        value={e.renderLineHighlight}
-                        options={[
-                            { value: "line", label: "Line" },
-                            { value: "gutter", label: "Gutter" },
-                            { value: "all", label: "All" },
-                            { value: "none", label: "None" },
-                        ]}
-                        onChange={(v) => updateSettingSection("editor", { renderLineHighlight: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Bracket Pair Colorization">
-                    <SettingSwitch checked={e.bracketPairColorization} onChange={(v) => updateSettingSection("editor", { bracketPairColorization: v })} />
-                </SettingRow>
-                <SettingRow title="Indent Guides">
-                    <SettingSwitch checked={e.showIndentGuides} onChange={(v) => updateSettingSection("editor", { showIndentGuides: v })} />
-                </SettingRow>
-                <SettingRow title="Bracket Guides">
-                    <SettingSwitch checked={e.showBracketGuides} onChange={(v) => updateSettingSection("editor", { showBracketGuides: v })} />
-                </SettingRow>
-            </SettingSection>
-
-            <SettingSection id="settings-editor-indent" title="Indentation">
-                <SettingRow title="Tab Size">
-                    <SettingNumberSelect
-                        value={e.tabSize}
-                        options={TAB_SIZE_PRESETS}
-                        onChange={(v) => updateSettingSection("editor", { tabSize: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Insert Spaces">
-                    <SettingSwitch checked={e.insertSpaces} onChange={(v) => updateSettingSection("editor", { insertSpaces: v })} />
-                </SettingRow>
-                <SettingRow title="Detect Indentation">
-                    <SettingSwitch checked={e.detectIndentation} onChange={(v) => updateSettingSection("editor", { detectIndentation: v })} />
-                </SettingRow>
-            </SettingSection>
-
-            <SettingSection id="settings-editor-cursor" title="Text Caret & Scrolling">
-                <SettingRow title="Caret Style">
-                    <SettingSelect
-                        value={e.cursorStyle}
-                        options={[
-                            { value: "line", label: "Line" },
-                            { value: "block", label: "Block" },
-                            { value: "underline", label: "Underline" },
-                        ]}
-                        onChange={(v) => updateSettingSection("editor", { cursorStyle: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Caret Blinking">
-                    <SettingSelect
-                        value={e.cursorBlinking}
-                        options={[
-                            { value: "blink", label: "Blink" },
-                            { value: "smooth", label: "Smooth" },
-                            { value: "phase", label: "Phase" },
-                            { value: "expand", label: "Expand" },
-                            { value: "solid", label: "Solid" },
-                        ]}
-                        onChange={(v) => updateSettingSection("editor", { cursorBlinking: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Word Wrap">
-                    <SettingSelect
-                        value={e.wordWrap}
-                        options={[
-                            { value: "off", label: "Off" },
-                            { value: "on", label: "On" },
-                            { value: "bounded", label: "Bounded" },
-                        ]}
-                        onChange={(v) => updateSettingSection("editor", { wordWrap: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Smooth Scrolling">
-                    <SettingSwitch checked={e.smoothScrolling} onChange={(v) => updateSettingSection("editor", { smoothScrolling: v })} />
-                </SettingRow>
-                <SettingRow title="Scroll Beyond Last Line">
-                    <SettingSwitch checked={e.scrollBeyondLastLine} onChange={(v) => updateSettingSection("editor", { scrollBeyondLastLine: v })} />
-                </SettingRow>
-                <SettingRow title="Image Preview on Hover">
-                    <SettingSwitch checked={e.imagePreview ?? true} onChange={(v) => updateSettingSection("editor", { imagePreview: v })} />
-                </SettingRow>
-                <SettingRow title="Compact Tab Bar">
-                    <SettingSwitch checked={e.compactTabs} onChange={(v) => updateSettingSection("editor", { compactTabs: v })} />
-                </SettingRow>
-            </SettingSection>
-
-            <SettingSection id="settings-editor-save" title="Saving">
-                <SettingRow title="Format On Save">
-                    <SettingSwitch checked={e.formatOnSave} onChange={(v) => updateSettingSection("editor", { formatOnSave: v })} />
-                </SettingRow>
-                <SettingRow title="Auto Save">
-                    <SettingSelect
-                        value={e.autoSave}
-                        options={[
-                            { value: "off", label: "Off" },
-                            { value: "afterDelay", label: "After Delay" },
-                            { value: "onFocusChange", label: "On Focus Change" },
-                        ]}
-                        onChange={(v) => updateSettingSection("editor", { autoSave: v })}
-                    />
-                </SettingRow>
-                {e.autoSave === "afterDelay" && (
-                    <SettingRow title="Auto Save Delay">
-                        <SettingNumberSelect
-                            value={e.autoSaveDelay}
-                            options={AUTO_SAVE_DELAY_PRESETS}
-                            formatLabel={(n) => `${n / 1000}s`}
-                            onChange={(v) => updateSettingSection("editor", { autoSaveDelay: v })}
-                        />
-                    </SettingRow>
-                )}
-                <SettingRow title="Trim Trailing Whitespace On Save">
-                    <SettingSwitch checked={e.trimTrailingWhitespace} onChange={(v) => updateSettingSection("editor", { trimTrailingWhitespace: v })} />
-                </SettingRow>
-                <SettingRow title="Insert Final Newline On Save">
-                    <SettingSwitch checked={e.insertFinalNewline} onChange={(v) => updateSettingSection("editor", { insertFinalNewline: v })} />
-                </SettingRow>
-            </SettingSection>
-
-            <SettingSection id="settings-editor-files" title="Files">
-                <SettingRow title="Exclude From Search" description="Hidden from search and pickers" stack>
-                    <ExcludePatternsSelect
-                        value={settings.files.exclude}
-                        onChange={(v) => updateSettingSection("files", { exclude: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Default End of Line">
-                    <SettingSelect
-                        value={settings.files.defaultEol}
-                        options={[
-                            { value: "LF", label: "LF" },
-                            { value: "CRLF", label: "CRLF" },
-                        ]}
-                        onChange={(v) =>
-                            updateSettingSection("files", {
-                                defaultEol: v as ShapeSettings["files"]["defaultEol"],
-                            })
-                        }
-                    />
-                </SettingRow>
-            </SettingSection>
-
-            <SettingSection id="settings-editor-design" title="Design">
-                <SettingRow title="Design Autocomplete">
-                    <SettingSwitch
-                        checked={settings.designAutocomplete.enable}
-                        onChange={(v) => updateSettingSection("designAutocomplete", { enable: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="WCAG Contrast Warnings">
-                    <SettingSwitch
-                        checked={settings.designDiagnostics.enable}
-                        onChange={(v) => updateSettingSection("designDiagnostics", { enable: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Compliance Level">
-                    <SettingSelect
-                        value={settings.designDiagnostics.level}
-                        options={[
-                            { value: "AA", label: "AA" },
-                            { value: "AAA", label: "AAA" },
-                        ]}
-                        onChange={(v) => updateSettingSection("designDiagnostics", { level: v as "AA" | "AAA" })}
-                    />
-                </SettingRow>
-                <SettingRow title="Tailwind Layout Controls">
-                    <SettingSwitch
-                        checked={settings.tailwindControls.enable}
-                        onChange={(v) => updateSettingSection("tailwindControls", { enable: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Number Scrubbing" description="Alt-drag or scroll values">
-                    <SettingSwitch
-                        checked={settings.tailwindControls.numberScrubbing}
-                        onChange={(v) => updateSettingSection("tailwindControls", { numberScrubbing: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Scrub Underlines" description="Underline scrubbable numbers">
-                    <SettingSwitch
-                        checked={settings.tailwindControls.scrubDecorations}
-                        onChange={(v) => updateSettingSection("tailwindControls", { scrubDecorations: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Cursor Opens Panel" description="Hover opens the control panel">
-                    <SettingSwitch
-                        checked={settings.tailwindControls.cursorBindPanel}
-                        onChange={(v) => updateSettingSection("tailwindControls", { cursorBindPanel: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Scroll on Panel Inputs" description="Scroll to nudge panel values">
-                    <SettingSwitch
-                        checked={settings.tailwindControls.wheelOnInputs}
-                        onChange={(v) => updateSettingSection("tailwindControls", { wheelOnInputs: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Design Blame Hover" description="Hover shows last change">
-                    <SettingSwitch
-                        checked={settings.designBlame.enable}
-                        onChange={(v) => updateSettingSection("designBlame", { enable: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Spacing Scale Refactor" description="Replace a scale value everywhere">
-                    <SettingSwitch
-                        checked={settings.spacingRefactor.enable}
-                        onChange={(v) => updateSettingSection("spacingRefactor", { enable: v })}
-                    />
-                </SettingRow>
-            </SettingSection>
-        </>
+        <SettingSection id="settings-editor-font" title="Editor">
+            <SettingRow title="Compact Tab Bar">
+                <SettingSwitch
+                    checked={e.compactTabs}
+                    onChange={(v) => updateSettingSection("editor", { compactTabs: v })}
+                />
+            </SettingRow>
+        </SettingSection>
     );
 }
 
@@ -386,19 +136,13 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
             <SettingRow title="Confirm Before Commit">
                 <SettingSwitch checked={g.confirmBeforeCommit} onChange={(v) => updateSettingSection("git", { confirmBeforeCommit: v })} />
             </SettingRow>
-            <SettingRow
-                title="Graph Branch Avatars"
-                description="Avatars on graph branches"
-            >
+            <SettingRow title="Graph Branch Avatars">
                 <SettingSwitch checked={g.graphAvatars} onChange={(v) => updateSettingSection("git", { graphAvatars: v })} />
             </SettingRow>
-            <SettingRow
-                title="Graph Show All Branches"
-                description="Show all branches in the graph"
-            >
+            <SettingRow title="Graph Show All Branches">
                 <SettingSwitch checked={g.graphShowAllBranches} onChange={(v) => updateSettingSection("git", { graphShowAllBranches: v })} />
             </SettingRow>
-            <SettingRow title="Inline Git Blame" description="Blame on the current line">
+            <SettingRow title="Inline Git Blame">
                 <SettingSwitch checked={g.blame.enabled} onChange={(v) => updateSettingSection("git", { blame: { enabled: v } })} />
             </SettingRow>
         </SettingSection>
@@ -440,7 +184,7 @@ function LspSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
             <SettingSection id="settings-languages" title="Language Servers">
-                <SettingRow title="TypeScript / JavaScript" description="TS/JS IntelliSense">
+                <SettingRow title="TypeScript / JavaScript">
                     <SettingSwitch checked={lsp.typescript} onChange={(v) => updateSettingSection("lsp", { typescript: v })} />
                 </SettingRow>
                 <SettingRow title="HTML">
@@ -449,15 +193,15 @@ function LspSettings({ settings }: { settings: ShapeSettings }) {
                 <SettingRow title="CSS / SCSS / Less">
                     <SettingSwitch checked={lsp.css} onChange={(v) => updateSettingSection("lsp", { css: v })} />
                 </SettingRow>
-                <SettingRow title="JSON" description="JSON language support">
+                <SettingRow title="JSON">
                     <SettingSwitch checked={lsp.json} onChange={(v) => updateSettingSection("lsp", { json: v })} />
                 </SettingRow>
-                <SettingRow title="Tailwind CSS" description="Class completions">
+                <SettingRow title="Tailwind CSS">
                     <SettingSwitch checked={lsp.tailwindcss} onChange={(v) => updateSettingSection("lsp", { tailwindcss: v })} />
                 </SettingRow>
             </SettingSection>
             <SettingSection title="Editor Assistance">
-                <SettingRow title="Emmet" description="HTML/CSS abbreviations">
+                <SettingRow title="Emmet">
                     <SettingSwitch checked={lsp.emmet} onChange={(v) => updateSettingSection("lsp", { emmet: v })} />
                 </SettingRow>
             </SettingSection>
@@ -502,7 +246,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
             <SettingSection id="settings-node" title="Node.js">
-                <SettingRow title="Coding assistance for Node.js" description="Node.js completions">
+                <SettingRow title="Coding assistance for Node.js">
                     <SettingSwitch
                         checked={node.codingAssistance}
                         onChange={(v) => {
@@ -511,7 +255,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Package manager" description="For install and scripts">
+                <SettingRow title="Package manager">
                     <SettingSelect
                         value={node.packageManager}
                         options={[
@@ -527,7 +271,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
                 </SettingRow>
             </SettingSection>
 
-            <SettingSection title="Packages" description={project_path ? `Using ${pm} for ${info?.name ?? "project"}` : "Open a project to manage packages"}>
+            <SettingSection title="Packages" description={project_path ? `Using ${pm} for ${info?.name ?? "project"}` : undefined}>
                 {!project_path ? (
                     <div className="px-3.5 py-4 text-sm text-text-muted">Open a folder to view installed packages.</div>
                 ) : (
@@ -647,19 +391,13 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
             <SettingSection id="settings-updates" title="Updates">
-                <SettingRow
-                    title="Automatic updates"
-                    description="Background update checks"
-                >
+                <SettingRow title="Automatic updates">
                     <SettingSwitch
                         checked={u.autoUpdate}
                         onChange={(v) => updateSettingSection("updates", { autoUpdate: v })}
                     />
                 </SettingRow>
-                <SettingRow
-                    title="Update channel"
-                    description="Stable or pre-release builds"
-                >
+                <SettingRow title="Update channel">
                     <SettingSelect
                         value={u.channel}
                         options={[
@@ -675,10 +413,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                 </SettingRow>
             </SettingSection>
             <SettingSection title="Startup">
-                <SettingRow
-                    title="Show welcome page on startup"
-                    description="Welcome when no project is open"
-                >
+                <SettingRow title="Show welcome page on startup">
                     <SettingSwitch
                         checked={p.showWelcomeOnStartup}
                         onChange={(v) => updateSettingSection("privacy", { showWelcomeOnStartup: v })}
@@ -692,10 +427,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                 </SettingRow>
             </SettingSection>
             <SettingSection id="settings-notifications" title="Notifications">
-                <SettingRow
-                    title="Desktop notifications"
-                    description="OS alerts for chat and approvals"
-                >
+                <SettingRow title="Desktop notifications">
                     <SettingSwitch
                         checked={n.desktopEnabled}
                         onChange={(v) => {
@@ -787,10 +519,7 @@ function PythonSettings({ settings }: { settings: ShapeSettings }) {
 
     return (
         <SettingSection id="settings-python" title="Python">
-            <SettingRow
-                title="Interpreter"
-                description="Run and Python language server"
-            >
+            <SettingRow title="Interpreter">
                 <div className="flex items-center gap-2">
                     <SettingSelect
                         value={selected}
@@ -835,16 +564,11 @@ function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
     return (
         <>
             <SettingSection id="settings-appearance" title="Appearance">
-                <SettingRow
-                    title="Theme"
-                    description="Light or dark"
-                >
-                    <div className="w-full max-w-md">
-                        <ThemePicker
-                            value={normalizeColorTheme(settings.appearance.colorTheme)}
-                            onChange={(id) => updateSettingSection("appearance", { colorTheme: id })}
-                        />
-                    </div>
+                <SettingRow title="Theme">
+                    <ThemePicker
+                        value={normalizeColorTheme(settings.appearance.colorTheme)}
+                        onChange={(id) => updateSettingSection("appearance", { colorTheme: id })}
+                    />
                 </SettingRow>
             </SettingSection>
             <DeveloperSettings settings={settings} />
@@ -860,7 +584,7 @@ export function SettingsView({
 }: {
     /** When set, the settings nav is rendered into this element (agent sidebar). */
     navPortalTarget?: HTMLElement | null;
-    /** Agent sidebar expanded — when false, only Back stays in the rail. */
+    /** Agent sidebar expanded. When false, only Back stays in the rail. */
     sidebarExpanded?: boolean;
     onBack?: () => void;
 } = {}) {
@@ -876,8 +600,8 @@ export function SettingsView({
     const scrollingToRef = React.useRef<string | null>(null);
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
-        if (section === "mcp") return "settings-ai-mcp";
-        if (section === "integrations") return "settings-integrations";
+        if (section === "plugins") return "settings-ai-plugins";
+        if (section === "mcp" || section === "integrations") return "settings-ai-mcp";
         if (section === "rules") return "settings-ai-rules";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
@@ -889,7 +613,7 @@ export function SettingsView({
             case "agents":
                 return "settings-ai-models";
             case "integrations":
-                return "settings-integrations";
+                return "settings-ai-mcp";
             case "editor":
                 return "settings-editor-font";
             case "terminal":
@@ -897,19 +621,20 @@ export function SettingsView({
             case "git":
                 return "settings-git";
             case "appearance":
+                return "settings-appearance";
             case "advanced":
             case "application":
-                return "settings-developer";
+                return "settings-updates";
+            case "keyboard":
+            case "keybindings":
+            case "shortcuts":
+                return "settings-keyboard-shortcuts";
             default:
                 return null;
         }
     }, []);
 
     const scrollToTarget = useCallback((targetId: string) => {
-        if (targetId === "settings-integrations") {
-            setActiveLeafId("integrations");
-            return;
-        }
         const el = document.getElementById(targetId);
         if (!el) return;
         scrollingToRef.current = targetId;
@@ -1025,7 +750,9 @@ export function SettingsView({
         }
         if (leaf.targetId) {
             setActiveLeafId(leaf.id);
-            scrollToTarget(leaf.targetId);
+            if (leaf.id === "keyboard-shortcuts") return;
+            // Keyboard shortcuts is its own page.
+            window.setTimeout(() => scrollToTarget(leaf.targetId!), 40);
         }
     };
 
@@ -1042,64 +769,56 @@ export function SettingsView({
                     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
                         {onBack ? (
                             <HostedSidebarBack
-                                label="Back"
+                                label="Back to app"
                                 onBack={onBack}
                                 collapsed={collapsed}
                             />
                         ) : null}
                         {collapsed ? null : (
                             <>
-                                <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+                                <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
                                     {filteredNav.map((group) => {
                                         const open = expandedGroups.has(group.id) || !!query.trim();
                                         return (
-                                            <div key={group.id} className="space-y-0.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleGroup(group.id)}
-                                                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
-                                                >
-                                                    {group.label}
-                                                </button>
-                                                {open && (
-                                                    <div className="space-y-0.5">
-                                                        {group.children.map((leaf) => (
-                                                            <Button
-                                                                key={leaf.id}
-                                                                variant="ghost"
-                                                                type="button"
-                                                                onClick={() => onLeafClick(leaf)}
-                                                                className={cn(
-                                                                    "h-8 w-full justify-start rounded-md px-2.5",
-                                                                    activeLeafId === leaf.id
-                                                                        ? "bg-panel-hover text-text-primary hover:bg-panel-hover hover:text-text-primary"
-                                                                        : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
-                                                                )}
-                                                            >
-                                                                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-regular">
-                                                                    {leaf.label}
-                                                                    {leaf.href ? (
-                                                                        <Icon name="chevron_right" size={14} className="shrink-0 text-text-muted" />
-                                                                    ) : null}
-                                                                </span>
-                                                            </Button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <CollapsibleNavGroup
+                                                key={group.id}
+                                                label={group.label}
+                                                open={open}
+                                                onToggle={() => toggleGroup(group.id)}
+                                            >
+                                                {group.children.map((leaf) => (
+                                                    <NavLeafButton
+                                                        key={leaf.id}
+                                                        active={activeLeafId === leaf.id}
+                                                        onClick={() => onLeafClick(leaf)}
+                                                    >
+                                                        <Icon icon={leaf.icon} className="shrink-0 text-text-muted" />
+                                                        <span className="min-w-0 flex-1 truncate text-left">{leaf.label}</span>
+                                                        {leaf.href ? (
+                                                            <Icon icon={RiArrowRightSLine} className="shrink-0 text-text-muted" />
+                                                        ) : null}
+                                                    </NavLeafButton>
+                                                ))}
+                                            </CollapsibleNavGroup>
                                         );
                                     })}
                                 </nav>
-                                <div className="relative shrink-0 p-2 pt-1">
+                                <div className="shrink-0 px-2 pb-2">
+                                    <NavLeafButton
+                                        onClick={() => void commands.openUrlExternal(dashboardUrl())}
+                                    >
+                                        <Icon icon={RiUserLine} className="shrink-0 text-text-muted" />
+                                        <span className="min-w-0 flex-1 truncate text-left">Account</span>
+                                        <Icon icon={RiArrowRightSLine} className="shrink-0 text-text-muted" />
+                                    </NavLeafButton>
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="mb-1 w-full justify-start rounded-md text-sm"
+                                        className="mt-0.5 h-8 w-full justify-start px-1.5! text-sm"
                                         onClick={() => setResetConfirmOpen(true)}
                                     >
                                         Reset to Defaults
                                     </Button>
-                                    {navPortalTarget ? <AccountRow /> : null}
                                 </div>
                             </>
                         )}
@@ -1112,35 +831,32 @@ export function SettingsView({
                     </aside>
                 );
             })()}
-            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel p-2 pl-0">
-                <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-sm">
-                    {activeLeafId === "integrations" ? (
-                        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain no-scrollbar">
-                            <IntegrationsView />
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
+                    {activeLeafId === "keyboard-shortcuts" ? (
+                        <div id="settings-keyboard-shortcuts" className="flex h-full min-h-0 flex-col">
+                            <KeyboardShortcutsView />
                         </div>
                     ) : (
                         <>
-                    <div className="sticky top-0 z-10 shrink-0 border-b border-border-subtle bg-surface-1/95 px-6 pt-4 pb-3 backdrop-blur-sm lg:px-8">
-                        <div className="mx-auto flex h-9 max-w-5xl items-center rounded-lg border border-border bg-transparent px-3">
-                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
-                            <Input
-                                placeholder="Search settings"
-                                value={query}
-                                className="h-auto! bg-transparent px-2 text-sm shadow-none focus-visible:ring-0 select-text"
-                                onChange={(e) => setQuery(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-6 no-scrollbar lg:p-8">
-                        <div className="mx-auto w-full max-w-5xl space-y-2">
-                        <AccountSettingsPanel />
-                        <AiSettings settings={settings} />
-                        <EditorSettings settings={settings} />
-                        <TerminalSettings settings={settings} />
-                        <GitSettings settings={settings} />
-                        <AdvancedSettings settings={settings} />
-                        </div>
-                    </div>
+                            <div className="sticky top-0 z-10 shrink-0 px-6 pt-4 pb-3">
+                                <SearchInput
+                                    placeholder="Search settings"
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    className="mx-auto h-12 max-w-full rounded-lg border text-text-muted! font-medium border-border bg-transparent px-3"
+                                />
+                            </div>
+                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-6 no-scrollbar lg:p-8">
+                                <div className="mx-auto w-full max-w-5xl space-y-2">
+                                    <AccountSettingsPanel />
+                                    <AiSettings settings={settings} />
+                                    <EditorSettings settings={settings} />
+                                    <TerminalSettings settings={settings} />
+                                    <GitSettings settings={settings} />
+                                    <AdvancedSettings settings={settings} />
+                                </div>
+                            </div>
                         </>
                     )}
                 </div>
@@ -1151,7 +867,7 @@ export function SettingsView({
                     <AlertDialogHeader>
                         <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This restores editor, agent, and application preferences to their defaults. Your account and project files are not affected.
+                            Account and files stay.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

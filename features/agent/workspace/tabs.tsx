@@ -1,10 +1,12 @@
 "use client";
 
+import { RiAddLine, RiCloseLine, RiFolderLine, RiGitPullRequestLine, RiTerminalBoxLine } from "@remixicon/react";
 import { useCallback } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+import { FileIcon } from "@/components/ui/file-icon";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -78,7 +80,11 @@ function SortableWorkspaceTab({
                 >
                     <div className={cn(WORKBENCH_TAB_CONTENT_CLASS, isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS)}>
                         <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-                            <Icon name={iconFor(tab.kind)} size={14} className="text-text-muted" />
+                            {tab.kind === "file" || tab.kind === "diff" ? (
+                                <FileIcon name={tab.title} className="size-3.5" />
+                            ) : (
+                                <Icon icon={iconFor(tab.kind)} className="text-text-muted" />
+                            )}
                         </div>
                         <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
                             <span className="truncate whitespace-nowrap text-sm">{tab.title}</span>
@@ -94,7 +100,7 @@ function SortableWorkspaceTab({
                                     }}
                                     className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
                                 >
-                                    <Icon name="close" size={12} />
+                                    <Icon icon={RiCloseLine} />
                                 </button>
                             </div>
                         ) : null}
@@ -123,7 +129,7 @@ export function WorkspaceTabs({
     activeId: string;
     onSelect: (id: string) => void;
     onClose: (id: string) => void;
-    onNew: (kind: TabKind | "file") => void;
+    onNew: (kind: TabKind) => void;
     onReorder: (next: WorkspaceTab[]) => void;
 }) {
     const handleDragEnd = useCallback(
@@ -146,22 +152,22 @@ export function WorkspaceTabs({
                     className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
                     aria-label="New tab"
                 >
-                    <Icon name="add" size={ICON_SIZE_SM} />
+                    <Icon icon={RiAddLine} />
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => onNew("file")}>
-                    <Icon name="folder" size={ICON_SIZE_SM} />
-                    <span className="flex-1">Files</span>
-                    <span className="text-2xs text-text-muted">Ctrl+G</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("terminal")}>
-                    <Icon name="terminal" size={ICON_SIZE_SM} />
+                    <Icon icon={RiTerminalBoxLine} />
                     <span className="flex-1">Terminal</span>
                     <span className="text-2xs text-text-muted">Ctrl+J</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onNew("files")}>
+                    <Icon icon={RiFolderLine} />
+                    <span className="flex-1">Files</span>
+                    <span className="text-2xs text-text-muted">Ctrl+G</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("changes")}>
-                    <Icon name="changes" size={ICON_SIZE_SM} />
+                    <Icon icon={RiGitPullRequestLine} />
                     <span className="flex-1">Changes</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>

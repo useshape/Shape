@@ -1,5 +1,7 @@
 "use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
+import { RiArrowRightSLine, RiCheckboxBlankLine, RiFileTextLine, RiImageLine, RiLink } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -12,11 +14,11 @@ import { findLayerPath, flattenLayers } from "../../design-mode/tree";
 import { getDesignBridge, useDesignModeStore } from "../../design-mode/store";
 import { DesignInspectPanel } from "./inspect-panel";
 
-function layerIcon(tag: string): string {
-    if (tag === "img" || tag === "svg") return "image";
-    if (tag === "button" || tag === "a") return "link";
-    if (tag === "p" || tag === "span" || tag === "h1" || tag === "h2" || tag === "h3") return "description";
-    return "crop_square";
+function layerIcon(tag: string): RemixiconComponentType {
+    if (tag === "img" || tag === "svg") return RiImageLine;
+    if (tag === "button" || tag === "a") return RiLink;
+    if (tag === "p" || tag === "span" || tag === "h1" || tag === "h2" || tag === "h3") return RiFileTextLine;
+    return RiCheckboxBlankLine;
 }
 
 function LayerRow({
@@ -54,8 +56,10 @@ function LayerRow({
                 type="button"
                 onClick={() => onSelect(node.id)}
                 className={cn(
-                    "flex h-7 w-full items-center gap-1 rounded-md py-0.5 pr-2 text-left text-xs",
-                    active ? "bg-accent-text-bg text-accent-text" : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                    "flex h-7 w-full items-center gap-1 rounded-md py-0.5 pr-2 text-left text-sm",
+                    active
+                        ? "bg-panel-active text-text-primary"
+                        : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
                     node.hidden && "opacity-50",
                 )}
                 style={{ paddingLeft: 8 + depth * 12 }}
@@ -67,16 +71,19 @@ function LayerRow({
                             e.stopPropagation();
                             onToggle(node.id);
                         }}
-                        className="flex h-4 w-4 shrink-0 items-center justify-center"
+                        className="flex size-4 shrink-0 items-center justify-center"
                     >
-                        <Icon name="chevron_right" size={12} className={cn("opacity-60 transition-transform", open && "rotate-90")} />
+                        <Icon icon={RiArrowRightSLine} className={cn("opacity-60 transition-transform", open && "rotate-90")} />
                     </span>
                 ) : (
                     <span className="w-4 shrink-0" />
                 )}
-                <Icon name={layerIcon(node.tag)} size={12} className="shrink-0 text-text-muted" />
+                <Icon
+                    icon={layerIcon(node.tag)}
+                    className="shrink-0 text-text-muted"
+                />
                 <span className="min-w-0 truncate">{node.label}</span>
-                {failed ? <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" title="Apply failed" /> : null}
+                {failed ? <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-error" title="Apply failed" /> : null}
             </button>
             {hasKids && open
                 ? node.children.map((child) => (
@@ -114,8 +121,11 @@ function layerDepth(nodes: DesignLayerNode[], id: string, depth = 0): number | n
 
 export function DesignLayersPanel({
     onSelectId,
+    treeOnly = false,
 }: {
     onSelectId?: (id: string) => void;
+    /** Hide header / Inspect tab — used inside the Design sidebar. */
+    treeOnly?: boolean;
 }) {
     const { layers, selected, applyFailedIds } = useDesignModeStore();
     const roots = layers.length ? layers : [];
@@ -213,6 +223,88 @@ export function DesignLayersPanel({
         }
     };
 
+    const tree = (
+        <>
+            {!treeOnly ? (
+                <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
+                    <Input
+                        value={layerQuery}
+                        onChange={(e) => setLayerQuery(e.target.value)}
+                        placeholder="Search layers"
+                        className="h-7 min-w-0 flex-1 text-sm"
+                    />
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className={cn(visibleOnly && "bg-panel-active")}
+                        onClick={() => setVisibleOnly((v) => !v)}
+                    >
+                        Visible
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className={cn(interactiveOnly && "bg-panel-active")}
+                        onClick={() => setInteractiveOnly((v) => !v)}
+                    >
+                        Interactive
+                    </Button>
+                </div>
+            ) : null}
+            <div
+                ref={treeRef}
+                tabIndex={0}
+                onKeyDown={onTreeKey}
+                className="min-h-0 flex-1 overflow-y-auto px-1 py-1 custom-scrollbar outline-none"
+            >
+                {roots.length === 0 ? (
+                    <div className="flex flex-col gap-2 px-3 py-4" aria-hidden>
+                        <div className="h-3 w-20 rounded bg-panel-hover" />
+                        <div className="h-3 w-full rounded bg-panel-hover" />
+                        <div className="h-3 w-5/6 rounded bg-input-bg" />
+                        <div className="h-3 w-2/3 rounded bg-input-bg" />
+                    </div>
+                ) : layerQuery || visibleOnly || interactiveOnly ? (
+                    visible.map((node) => (
+                        <LayerRow
+                            key={node.id}
+                            node={{ ...node, children: [] }}
+                            depth={layerDepth(roots, node.id) ?? 0}
+                            selectedId={selectedId}
+                            failedIds={applyFailedIds}
+                            expanded={expanded}
+                            onToggle={onToggle}
+                            onSelect={(id) => onSelectId?.(id)}
+                        />
+                    ))
+                ) : (
+                    roots.map((node) => (
+                        <LayerRow
+                            key={node.id}
+                            node={node}
+                            depth={0}
+                            selectedId={selectedId}
+                            failedIds={applyFailedIds}
+                            expanded={expanded}
+                            onToggle={onToggle}
+                            onSelect={(id) => onSelectId?.(id)}
+                        />
+                    ))
+                )}
+            </div>
+        </>
+    );
+
+    if (treeOnly) {
+        return (
+            <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+                {tree}
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
             <SidebarPanelHeaderFrame title={tab === "layers" ? "Layers" : "Inspect"} />
@@ -228,73 +320,7 @@ export function DesignLayersPanel({
                     </TabsList>
                 </div>
                 <TabsContent value="layers" className="flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
-                    <div className="flex shrink-0 items-center gap-1 border-b border-border-subtle px-2 py-1.5">
-                        <Input
-                            value={layerQuery}
-                            onChange={(e) => setLayerQuery(e.target.value)}
-                            placeholder="Search layers"
-                            className="h-7 min-w-0 flex-1 text-xs"
-                        />
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            className={cn(visibleOnly && "bg-panel-active")}
-                            onClick={() => setVisibleOnly((v) => !v)}
-                        >
-                            Visible
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            className={cn(interactiveOnly && "bg-panel-active")}
-                            onClick={() => setInteractiveOnly((v) => !v)}
-                        >
-                            Interactive
-                        </Button>
-                    </div>
-                    <div
-                        ref={treeRef}
-                        tabIndex={0}
-                        onKeyDown={onTreeKey}
-                        className="min-h-0 flex-1 overflow-y-auto px-1 py-1 custom-scrollbar outline-none"
-                    >
-                        {roots.length === 0 ? (
-                            <div className="flex flex-col gap-2 px-3 py-4" aria-hidden>
-                                <div className="h-3 w-24 rounded bg-panel-hover/60" />
-                                <div className="h-3 w-full rounded bg-panel-hover/40" />
-                                <div className="h-3 w-5/6 rounded bg-panel-hover/30" />
-                                <div className="h-3 w-2/3 rounded bg-panel-hover/25" />
-                            </div>
-                        ) : layerQuery || visibleOnly || interactiveOnly ? (
-                            visible.map((node) => (
-                                <LayerRow
-                                    key={node.id}
-                                    node={{ ...node, children: [] }}
-                                    depth={layerDepth(roots, node.id) ?? 0}
-                                    selectedId={selectedId}
-                                    failedIds={applyFailedIds}
-                                    expanded={expanded}
-                                    onToggle={onToggle}
-                                    onSelect={(id) => onSelectId?.(id)}
-                                />
-                            ))
-                        ) : (
-                            roots.map((node) => (
-                                <LayerRow
-                                    key={node.id}
-                                    node={node}
-                                    depth={0}
-                                    selectedId={selectedId}
-                                    failedIds={applyFailedIds}
-                                    expanded={expanded}
-                                    onToggle={onToggle}
-                                    onSelect={(id) => onSelectId?.(id)}
-                                />
-                            ))
-                        )}
-                    </div>
+                    {tree}
                 </TabsContent>
                 <TabsContent value="inspect" className="flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
                     <DesignInspectPanel

@@ -1,5 +1,6 @@
 "use client";
 
+import { RiExternalLinkLine, RiPriceTag3Line, RiRefreshLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -202,7 +203,7 @@ export function ReleasesPage() {
     const versionsPane = (
         <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden">
             <div className="flex h-9 shrink-0 items-center gap-2 px-3">
-                <Icon name="sell" size={16} className="shrink-0 text-text-muted" />
+                <Icon icon={RiPriceTag3Line} className="shrink-0 text-text-muted" />
                 <FadeTruncate
                     className="min-w-0 flex-1 text-sm font-medium"
                     title={owner && repoName ? `Releases · ${owner}/${repoName}` : "Releases"}
@@ -232,7 +233,7 @@ export function ReleasesPage() {
                     onClick={() => void load()}
                     aria-label="Refresh"
                 >
-                    <Icon name="refresh" size={14} />
+                    <Icon icon={RiRefreshLine} />
                 </Button>
             </div>
             <div className="px-3 pb-1.5 text-xs font-medium text-text-muted">Versions</div>
@@ -265,8 +266,7 @@ export function ReleasesPage() {
                                 >
                                     <span className="flex min-w-0 items-center gap-1.5">
                                         <Icon
-                                            name="sell"
-                                            size={12}
+                                            icon={RiPriceTag3Line}
                                             className="shrink-0 text-text-muted"
                                         />
                                         <span className="truncate font-mono text-sm">{label}</span>
@@ -344,7 +344,7 @@ export function ReleasesPage() {
                                 ) : null}
                                 {selected.tagName ? (
                                     <span className="inline-flex items-center gap-1 font-mono text-text-secondary">
-                                        <Icon name="sell" size={12} />
+                                        <Icon icon={RiPriceTag3Line} />
                                         {selected.tagName}
                                     </span>
                                 ) : null}
@@ -371,7 +371,7 @@ export function ReleasesPage() {
                                         void commands.openUrlExternal(selected.htmlUrl!)
                                     }
                                 >
-                                    <Icon name="open_in_new" size={14} />
+                                    <Icon icon={RiExternalLinkLine} />
                                     GitHub
                                 </Button>
                             ) : null}

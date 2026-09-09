@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { COLOR_THEMES, COLOR_THEME_ORDER, type ColorThemeId } from "@/lib/themes";
 import { ThemeWorkbenchPreview } from "./theme-workbench-preview";
 
-/** Accessible radiogroup of theme cards with a live mini workbench preview. */
+/** Theme cards, side by side. */
 export function ThemePicker({
     value,
     onChange,
@@ -31,7 +31,7 @@ export function ThemePicker({
             ref={groupRef}
             role="radiogroup"
             aria-label={ariaLabel}
-            className={cn("grid grid-cols-2 gap-3", className)}
+            className={cn("flex flex-row flex-nowrap items-start justify-end gap-3", className)}
         >
             {COLOR_THEME_ORDER.map((id, index) => {
                 const theme = COLOR_THEMES[id];
@@ -55,15 +55,17 @@ export function ThemePicker({
                             }
                         }}
                         className={cn(
-                            "overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                            "overflow-hidden rounded-lg border bg-surface-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                             selected
-                                ? "border-accent"
+                                ? "border-border"
                                 : "border-border-subtle hover:border-border",
                         )}
                     >
                         <ThemeWorkbenchPreview theme={id} />
-                        <div className="px-3 py-2">
-                            <span className="text-sm font-medium text-text-primary">{theme.label}</span>
+                        <div className="px-2.5 py-2">
+                            <span className="text-sm font-medium text-text-primary">
+                                {theme.label}
+                            </span>
                         </div>
                     </button>
                 );

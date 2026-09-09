@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowRightSLine, RiPlayFill, RiStopFill } from "@remixicon/react";
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -63,7 +64,7 @@ function Section({
                 onClick={() => setOpen((v) => !v)}
             >
                 {title}
-                <Icon name="chevron_right" size={12} className={cn("text-text-muted transition-transform", open && "rotate-90")} />
+                <Icon icon={RiArrowRightSLine} className={cn("text-text-muted transition-transform", open && "rotate-90")} />
             </button>
             {open ? <div className="px-2 pb-2">{children}</div> : null}
         </div>
@@ -201,7 +202,7 @@ export function DesignInspectPanel({
             <div className="flex shrink-0 items-center gap-1 border-b border-border-subtle px-2 py-1.5">
                 <Input value={styleFilter} onChange={(e) => onStyleFilter(e.target.value)} placeholder="Filter properties, sources, issues" className="h-7 min-w-0 flex-1 text-xs" />
                 <Button type="button" variant="ghost" size="icon" title={paused ? "Resume preview" : "Pause preview"} className={cn(paused && "bg-panel-active text-text-primary")} onClick={() => onPaused(!paused)}>
-                    <Icon name={paused ? "play_arrow" : "pause"} size={14} />
+                    <Icon icon={paused ? RiPlayFill : RiStopFill} />
                 </Button>
                 <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>

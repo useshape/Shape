@@ -108,7 +108,8 @@ const CATALOG: Record<number, ShapeErrorEntry> = {
         code: SHAPE_ERRORS.AI_RATE_LIMITED,
         name: "Rate limited",
         title: "Too many requests",
-        description: "The AI service rate-limited this request. Wait a moment and try again.",
+        description:
+            "This model is busy or your account hit a short rate limit. Wait a moment, try again, or switch models.",
     },
     [SHAPE_ERRORS.UNOFFICIAL_BUILD]: {
         code: SHAPE_ERRORS.UNOFFICIAL_BUILD,
@@ -214,6 +215,8 @@ export function classifyAiError(raw: string): ShapeErrorEntry {
         || lower.includes("rate limit")
         || lower.includes("too many requests")
         || lower.includes("ratelimit")
+        || lower.includes("model_busy")
+        || lower.includes("model is busy")
     ) {
         return getError(SHAPE_ERRORS.AI_RATE_LIMITED);
     }

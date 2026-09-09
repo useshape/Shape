@@ -628,6 +628,17 @@ impl AgentState {
         }
     }
 
+    /// Drop unresolved approval waiters on Stop without wiping Accept/Reject
+    /// decisions that already landed (those should still apply).
+    pub fn dismiss_unresolved_approvals(&self) {
+        if let Ok(mut g) = self.pending_commands.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.pending_edits.lock() {
+            g.clear();
+        }
+    }
+
     pub fn begin_design_turn(&self, _options: Option<DesignAgentOptions>, _user_message: &str) {
         // Visual mode: never hard-gate writes. Previews are opt-in via the tool when
         // the user asks to see a component first; otherwise the agent implements directly.

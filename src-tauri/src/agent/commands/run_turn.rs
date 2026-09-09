@@ -11,10 +11,11 @@ use crate::agent::tools::dispatch::{self, SideEffect, ToolCtx, ToolOutcome};
 use crate::commands::pty::PtyState;
 use crate::core::error::AppError;
 
-pub const MAX_TOOL_LOOPS: usize = 16;
-/// Code/Review can go a bit longer; Visual stays tight so preview requests don't thrash.
-pub const MAX_TOOL_LOOPS_CODE: usize = 20;
-pub const MAX_TOOL_LOOPS_VISUAL: usize = 10;
+pub const MAX_TOOL_LOOPS: usize = 50;
+/// Code/Review: Cursor-scale room for long builds. Soft Continue-style stop only
+/// after this many tool rounds — not a short “task too big” wall.
+pub const MAX_TOOL_LOOPS_CODE: usize = 200;
+pub const MAX_TOOL_LOOPS_VISUAL: usize = 25;
 
 pub fn max_loops_for_mode(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
@@ -58,19 +59,21 @@ or answer in plain prose. You may still read a specific file you need — avoid 
 /// Code tasks routinely need many reads; keep Visual tight (preview thrash).
 fn readonly_nudge_after(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
-        "visual" | "design" => 5,
-        "ask" | "plan" => 10,
-        _ => 12, // code / agent / review
+        "visual" | "design" => 8,
+        "ask" | "plan" => 20,
+        _ => 30, // code / agent / review
     }
 }
 
 /// Hard-stop after extended read-only thrash. Must stay below the mode's max loops,
 /// otherwise the turn dies on the loop cap first and the model never sees this message.
+/// Kept high for Code so long explore→build turns behave like Cursor (minutes–hour),
+/// while still cutting pure search loops that never write.
 fn readonly_hard_stop_after(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
-        "visual" | "design" => 8,
-        "ask" | "plan" => 13,
-        _ => 16,
+        "visual" | "design" => 16,
+        "ask" | "plan" => 40,
+        _ => 120,
     }
 }
 
@@ -84,6 +87,9 @@ const DEDUPED_READONLY_TOOLS: &[&str] = &[
     "search_codebase",
     "web_search",
     "visit_url",
+    "plugin_list",
+    "plugin_search",
+    "plugin_tools",
     "list_terminals",
     "read_lints",
 ];
@@ -432,10 +438,10 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         if loop_count >= config.max_loops {
             logging::warn(
                 "chat",
-                &format!("Hit max tool-loop iterations ({}), stopping", config.max_loops),
+                &format!("Hit max tool-loop iterations ({}), pausing", config.max_loops),
             );
             final_full_response.push_str(
-                "\n<tool_result>\n[chat] Reached the max tool-loop limit. Stopping to avoid runaway tool calls. Ask me to continue if needed.\n</tool_result>\n",
+                "\n\nPaused after a long stretch of tool work (safety checkpoint). Say **continue** and I’ll pick up where I left off.\n",
             );
             break;
         }
@@ -510,10 +516,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         }
 
         if !outcome.content.is_empty() {
-            // Mid-tool narration stays in the API transcript only — the reply bubble
-            // should not accumulate planning essays between tool calls.
-            if outcome.tool_calls.is_empty() {
+            // Final answers always land in the reply. Brief mid-tool checkpoints
+            // (Cursor-style sanity notes) also surface; long essays stay API-only.
+            if outcome.tool_calls.is_empty() || streaming::is_brief_checkpoint(&outcome.content) {
+                if !outcome.tool_calls.is_empty() && !final_full_response.ends_with('\n') {
+                    final_full_response.push('\n');
+                }
                 final_full_response.push_str(&outcome.content);
+                if !outcome.tool_calls.is_empty() {
+                    final_full_response.push_str("\n\n");
+                }
             }
         }
 

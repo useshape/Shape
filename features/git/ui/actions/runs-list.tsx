@@ -18,9 +18,7 @@ function RunStatusIcon({
     const icon = statusIcon(status, conclusion);
     return (
         <Icon
-            name={icon.name}
-            filled={icon.filled}
-            size={16}
+            icon={icon.icon}
             className={cn(
                 "mt-0.5 shrink-0",
                 statusTone(status, conclusion),

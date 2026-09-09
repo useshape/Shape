@@ -13,6 +13,11 @@ const GLOBALS_CSS_CANDIDATES = [
     "src/styles/global.css",
     "styles/global.css",
     "src/app/global.css",
+    "website/app/globals.css",
+    "website/src/app/globals.css",
+    "website/src/index.css",
+    "shape/app/globals.css",
+    "shape/src/app/globals.css",
 ];
 
 let loadPromise: Promise<string> | null = null;

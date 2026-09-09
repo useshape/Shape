@@ -174,9 +174,6 @@ pub(super) async fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
 /// cancelled. Same no-timeout contract as command approvals.
 pub(super) async fn wait_for_edit_decision(edit_id: &str, ctx: &ToolCtx<'_>) -> ApprovalDecision {
     loop {
-        if ctx.cancel.is_cancelled() {
-            return ApprovalDecision::Cancelled;
-        }
         if let Ok(mut decisions) = ctx.agent_state.edit_decisions.lock() {
             if let Some(approved) = decisions.remove(edit_id) {
                 return if approved {
@@ -185,6 +182,9 @@ pub(super) async fn wait_for_edit_decision(edit_id: &str, ctx: &ToolCtx<'_>) -> 
                     ApprovalDecision::Rejected
                 };
             }
+        }
+        if ctx.cancel.is_cancelled() {
+            return ApprovalDecision::Cancelled;
         }
         let still_pending = ctx
             .agent_state
@@ -201,6 +201,9 @@ pub(super) async fn wait_for_edit_decision(edit_id: &str, ctx: &ToolCtx<'_>) -> 
                         ApprovalDecision::Rejected
                     };
                 }
+            }
+            if ctx.cancel.is_cancelled() {
+                return ApprovalDecision::Cancelled;
             }
             return ApprovalDecision::Rejected;
         }

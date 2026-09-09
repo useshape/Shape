@@ -1,0 +1,417 @@
+/* Copied from shape/app/globals.css :root (dark). */
+.shape-demo {
+  color-scheme: dark;
+  font-size: 13px;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+
+  --surface-0: #1a1a1a;
+  --surface-1: #1a1a1a;
+  --surface-2: #242424;
+  --surface-3: #252525;
+  --surface-4: #2a2a2a;
+  --chrome: #1d1d1d;
+  --sidebar: #1d1d1d;
+  --editor: #181818;
+  --base: #f2f2f2;
+  --background: var(--chrome);
+  --foreground: var(--base);
+  --panel: #1f1f1f;
+  --panel-secondary: var(--surface-2);
+  --panel-active: rgba(255, 255, 255, 0.06);
+  --panel-hover: rgba(255, 255, 255, 0.04);
+  --titlebar: var(--chrome);
+  --text-primary: #f2f2f2;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --text-disabled: #525252;
+  --text-active: #ffffff;
+  --border: rgba(255, 255, 255, 0.048);
+  --border-subtle: rgba(255, 255, 255, 0.025);
+  --border-secondary: rgba(255, 255, 255, 0.1);
+  --accent: #3946ff;
+  --accent-hover: #4365ff;
+  --action-label: #ffffff;
+  --accent-fg: var(--action-label);
+  --accent-text: #9eb0ff;
+  --accent-text-bg: color-mix(in srgb, var(--accent-text) 16%, transparent);
+  --success: #4ade80;
+  --danger: #e5484d;
+  --error: var(--danger);
+  --added: #73c991;
+  --modified: #e2c08d;
+  --removed: #e4676b;
+  --git-added: var(--added);
+  --git-modified: var(--modified);
+  --git-deleted: var(--removed);
+  --input-bg: var(--surface-2);
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --titlebar-height: 34px;
+  --chrome-height: 30px;
+  --transition-fast: 120ms;
+  --transition-base: 180ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --chat-text: 15px;
+  --chat-text-lh: 1.45;
+  --color-panel: var(--panel);
+  --color-text-muted: var(--text-muted);
+  --color-text-secondary: var(--text-secondary);
+  --color-success: var(--success);
+  --color-warn: #f5a623;
+  --color-accent-fg: var(--accent-fg);
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --dropdown-open-dur: 250ms;
+  --dropdown-close-dur: 150ms;
+  --dropdown-pre-scale: 0.97;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --stream-fade: 180ms;
+  --stream-blur: 4px;
+  --stream-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --hint-swap: 320ms;
+  --hint-distance: 8px;
+  --hint-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --morph-open-dur: 320ms;
+  --morph-close-dur: 240ms;
+  --morph-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --morph-close-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --morph-fade-dur: 180ms;
+  --morph-fade-delay: 40ms;
+  color: var(--text-primary);
+  background: var(--background);
+}
+
+.shape-demo .h-titlebar {
+  height: var(--titlebar-height);
+}
+
+.shape-demo .h-chrome {
+  height: var(--chrome-height);
+}
+
+.shape-demo .px-sm { padding-inline: var(--space-sm); }
+.shape-demo .px-md { padding-inline: var(--space-md); }
+.shape-demo .px-lg { padding-inline: var(--space-lg); }
+.shape-demo .px-xl { padding-inline: var(--space-xl); }
+
+.shape-demo .chat-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 280ms var(--ease-out),
+    opacity 220ms var(--ease-out);
+}
+.shape-demo .chat-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 240ms var(--ease-out),
+    opacity 180ms var(--ease-out);
+}
+.shape-demo .chat-collapse > .chat-collapse-inner {
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+@keyframes shape-popover-in {
+  from { opacity: 0; transform: scale(var(--dropdown-pre-scale, 0.97)); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes shape-popover-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(var(--dropdown-closing-scale, 0.99)); }
+}
+.shape-demo.shape-popover-content,
+.shape-demo .shape-popover-content {
+  transform-origin: var(--transform-origin, center);
+  will-change: opacity, transform;
+  animation: shape-popover-in var(--dropdown-open-dur, 250ms) var(--dropdown-ease, ease);
+}
+
+.shape-demo .chat-text {
+  font-size: var(--chat-text);
+  line-height: var(--chat-text-lh);
+}
+
+.shape-demo .wf-summary-text {
+  font-size: var(--chat-text);
+  line-height: var(--chat-text-lh);
+  color: var(--color-text-muted);
+}
+
+.shape-demo .wf-summary-text-strong {
+  color: var(--color-text-secondary);
+}
+
+/* Copied from shape/app/globals.css */
+.shape-demo .imsg-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.2rem;
+  min-height: 1.1rem;
+}
+
+.shape-demo .imsg-typing span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--color-text-muted);
+  animation: imsg-dot 1.2s ease-in-out infinite;
+}
+
+.shape-demo .imsg-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.shape-demo .imsg-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.shape-demo .imsg-typing-sm {
+  gap: 0.18rem;
+  padding: 0;
+  min-height: 0;
+}
+
+.shape-demo .imsg-typing-sm span {
+  width: 0.22rem;
+  height: 0.22rem;
+}
+
+@keyframes imsg-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.2rem);
+  }
+}
+
+@keyframes pixel-on {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  40%,
+  60% {
+    opacity: 1;
+  }
+}
+
+.shape-demo .no-scrollbar {
+  scrollbar-width: none;
+}
+.shape-demo .no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Copied from shape/app/globals.css */
+.shape-demo .send-spiral {
+  flex-shrink: 0;
+}
+.shape-demo .send-spiral-dot {
+  width: 18.75%;
+  height: 18.75%;
+  translate: -50% -50%;
+  animation: send-spiral-pulse 1.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  animation-delay: calc(var(--spiral-i, 0) * 0.225s);
+}
+.shape-demo .send-spiral-dot:nth-child(1) { left: 81.25%; top: 50%; }
+.shape-demo .send-spiral-dot:nth-child(2) { left: 72.1%; top: 72.1%; }
+.shape-demo .send-spiral-dot:nth-child(3) { left: 50%; top: 81.25%; }
+.shape-demo .send-spiral-dot:nth-child(4) { left: 27.9%; top: 72.1%; }
+.shape-demo .send-spiral-dot:nth-child(5) { left: 18.75%; top: 50%; }
+.shape-demo .send-spiral-dot:nth-child(6) { left: 27.9%; top: 27.9%; }
+.shape-demo .send-spiral-dot:nth-child(7) { left: 50%; top: 18.75%; }
+.shape-demo .send-spiral-dot:nth-child(8) { left: 72.1%; top: 27.9%; }
+
+@keyframes send-spiral-pulse {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  40% { opacity: 1; transform: scale(1); }
+  60% { opacity: 0.85; transform: scale(0.92); }
+}
+
+/* Copied from shape/app/transitions.css */
+.shape-demo .t-spin-check {
+  position: relative;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+.shape-demo .t-spin-check__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  animation: t-spin-check-spin 0.7s linear infinite;
+}
+@keyframes t-spin-check-spin {
+  to { transform: rotate(360deg); }
+}
+
+.shape-demo .t-composer-hint {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.shape-demo .t-composer-hint__text {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.625;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    opacity var(--hint-swap) var(--hint-ease),
+    transform var(--hint-swap) var(--hint-ease);
+}
+.shape-demo .t-composer-hint__text[data-phase="in"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+.shape-demo .t-composer-hint__text[data-phase="out"] {
+  opacity: 0;
+  transform: translateY(calc(var(--hint-distance) * -1));
+}
+.shape-demo .t-composer-hint__text[data-phase="enter"] {
+  opacity: 0;
+  transform: translateY(var(--hint-distance));
+}
+
+.shape-demo .t-stream-w {
+  opacity: 0;
+  filter: blur(var(--stream-blur));
+  transition:
+    opacity var(--stream-fade) var(--stream-ease),
+    filter var(--stream-fade) var(--stream-ease);
+}
+.shape-demo .t-stream-w.is-in {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.shape-demo .chat-stream-fade-in {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+}
+
+.shape-demo .t-morph {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--morph-w-closed, 40px);
+  height: var(--morph-h-closed, 40px);
+  border-radius: var(--morph-r-closed, 16px);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  transform-origin: bottom left;
+  will-change: width, height, border-radius;
+  transition:
+    width var(--morph-close-dur) var(--morph-close-ease),
+    height var(--morph-close-dur) var(--morph-close-ease),
+    border-radius var(--morph-close-dur) var(--morph-close-ease);
+}
+.shape-demo .t-morph[data-align="end"] {
+  transform-origin: bottom right;
+}
+.shape-demo .t-morph[data-ready="false"] {
+  transition: none !important;
+}
+.shape-demo .t-morph[data-open="true"] {
+  width: var(--morph-w-open, 183px);
+  height: var(--morph-h-open, 172px);
+  border-radius: var(--morph-r-open, 16px);
+  transition:
+    width var(--morph-open-dur) var(--morph-ease),
+    height var(--morph-open-dur) var(--morph-ease),
+    border-radius var(--morph-open-dur) var(--morph-ease);
+}
+.shape-demo .t-morph-plus {
+  position: absolute;
+  inset: auto auto 0 0;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: var(--morph-w-closed, 40px);
+  height: var(--morph-h-closed, 40px);
+  max-height: var(--morph-h-closed, 40px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding-inline: 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity var(--morph-fade-dur) var(--morph-close-ease);
+}
+.shape-demo .t-morph[data-align="end"] .t-morph-plus {
+  inset: auto 0 0 auto;
+}
+.shape-demo .t-morph-plus:hover {
+  color: var(--text-primary);
+}
+.shape-demo .t-morph[data-open="true"] .t-morph-plus {
+  opacity: 0;
+  pointer-events: none;
+}
+.shape-demo .t-morph-menu {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  opacity: 0;
+  transform: none !important;
+  pointer-events: none !important;
+  visibility: hidden;
+  transition:
+    opacity var(--morph-fade-dur) var(--morph-close-ease),
+    visibility 0s linear var(--morph-fade-dur);
+}
+.shape-demo .t-morph[data-open="true"] .t-morph-menu {
+  opacity: 1;
+  pointer-events: auto !important;
+  visibility: visible;
+  transition-delay: var(--morph-fade-delay);
+  transition:
+    opacity var(--morph-fade-dur) var(--morph-close-ease),
+    visibility 0s linear 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shape-demo .t-stream-w {
+    transition: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+  .shape-demo .t-morph,
+  .shape-demo .t-morph-plus,
+  .shape-demo .t-morph-menu {
+    transition: none !important;
+  }
+  .shape-demo .t-composer-hint__text {
+    transition: none !important;
+  }
+}

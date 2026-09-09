@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -51,7 +52,7 @@ export function TitlebarSearch() {
                 aria-label={placeholder}
                 onClick={() => setExpanded(true)}
             >
-                <Icon name="search" size={16} />
+                <Icon icon={RiSearchLine} />
             </button>
         );
     }
@@ -65,7 +66,7 @@ export function TitlebarSearch() {
                 focused && "border-border bg-panel-hover/40",
             )}
         >
-            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+            <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
             <Input
                 ref={inputRef}
                 value={query}
@@ -94,7 +95,7 @@ export function TitlebarSearch() {
                     }}
                     aria-label="Clear search"
                 >
-                    <Icon name="close" size={14} />
+                    <Icon icon={RiCloseLine} />
                 </Button>
             ) : null}
         </div>

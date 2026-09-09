@@ -1,5 +1,6 @@
 "use client";
 
+import { RiAddLine, RiSubtractLine } from "@remixicon/react";
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -71,7 +72,7 @@ export function ExportSection() {
             title="Export"
             action={
                 <IconBtn title="Add export" onClick={() => setPresets((list) => [...list, newPreset()])}>
-                    <Icon name="add" size={14} />
+                    <Icon icon={RiAddLine} />
                 </IconBtn>
             }
         >
@@ -104,9 +105,9 @@ export function ExportSection() {
                     />
                     <Button
                         type="button"
-                        size="sm"
+                        size="xs"
                         variant="secondary"
-                        className="h-8 shrink-0 px-2"
+                        className="h-7 shrink-0 px-2"
                         disabled={busyId === preset.id || !selected}
                         title="Export this element only"
                         onClick={() => void runExport(preset)}
@@ -117,7 +118,7 @@ export function ExportSection() {
                         title="Remove"
                         onClick={() => setPresets((list) => list.filter((p) => p.id !== preset.id))}
                     >
-                        <Icon name="remove" size={13} />
+                        <Icon icon={RiSubtractLine} />
                     </IconBtn>
                 </div>
             ))}

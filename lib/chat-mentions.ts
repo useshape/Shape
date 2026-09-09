@@ -14,7 +14,8 @@ export type MentionKind =
     | "terminal"
     | "chat"
     | "branch"
-    | "browser";
+    | "browser"
+    | "mcp";
 
 export type ChatMention = {
     kind: MentionKind;
@@ -34,7 +35,7 @@ export function resolveBrowserMentionPath(path: string | undefined): string | nu
 
 /** Explicit typed tokens + bare paths / design names (no spaces). */
 const MENTION_PATTERN =
-    /@(?:(file|folder|design|docs|terminal|chat|branch|browser):([^\s]+)|(codebase|selection)\b|((?:[\w.-]+\/)*[\w.-]+\/?))/g;
+    /@(?:(file|folder|design|docs|terminal|chat|branch|browser|mcp):([^\s]+)|(codebase|selection)\b|((?:[\w.-]+\/)*[\w.-]+\/?))/g;
 
 function normalizeDesignKey(value: string): string {
     return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -92,6 +93,9 @@ export function mentionDisplayLabel(mention: ChatMention): string {
             ? mention.label
             : unslugMentionLabel(mention.path || "Branch");
     }
+    if (mention.kind === "mcp") {
+        return mention.label || mention.id || mention.path || "MCP";
+    }
     if (mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs") {
         if (mention.label && !mention.label.includes("/")) return mention.label;
         if (mention.path) return pathBasename(mention.path);
@@ -130,6 +134,8 @@ export function formatMentionToken(mention: ChatMention): string {
             hostnameOf(resolved) ||
             (resolved === "current" || !resolved ? "current" : slugifyMentionLabel(mention.label || "page"));
         token = `@browser:${host}`;
+    } else if (mention.kind === "mcp") {
+        token = `@mcp:${slugifyMentionLabel(mention.id || mention.label || "server")}`;
     } else {
         token = `@${mention.kind}:${mention.path ?? mention.label}`;
     }
@@ -165,6 +171,7 @@ function labelForTypedMention(kind: MentionKind, path: string): string {
     if (kind === "browser") return hostnameOf(path) || path;
     if (kind === "terminal") return unslugMentionLabel(path);
     if (kind === "branch") return unslugMentionLabel(path);
+    if (kind === "mcp") return unslugMentionLabel(path);
     return path;
 }
 
@@ -439,7 +446,8 @@ async function readMentionContext(
         mention.kind === "terminal" ||
         mention.kind === "chat" ||
         mention.kind === "branch" ||
-        mention.kind === "browser"
+        mention.kind === "browser" ||
+        mention.kind === "mcp"
     ) {
         const path = mention.path ?? mention.label;
         const label = mentionDisplayLabel(mention);
@@ -457,6 +465,10 @@ async function readMentionContext(
         }
         if (mention.kind === "chat") {
             return `<mention_context type="chat" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced a past chat titled "${escapeXmlAttr(label)}".</mention_context>`;
+        }
+        if (mention.kind === "mcp") {
+            const id = mention.id || path;
+            return `<mention_context type="mcp" id="${escapeXmlAttr(id)}" label="${escapeXmlAttr(label)}">The user referenced the connected MCP server "${escapeXmlAttr(label)}" (id=${escapeXmlAttr(id)}). Prefer tools from this server when relevant.</mention_context>`;
         }
         return `<mention_context type="${mention.kind}" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">${escapeXmlAttr(label)}</mention_context>`;
     }

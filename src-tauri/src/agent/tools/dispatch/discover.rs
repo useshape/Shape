@@ -204,3 +204,51 @@ pub(super) async fn tool_search_codebase(args: &Value, ctx: &ToolCtx<'_>) -> Too
         Err(e) => error_outcome("search_codebase", &e),
     }
 }
+
+fn plugin_outcome(name: &str, res: String) -> ToolOutcome {
+    let ui = format!(
+        "\n<tool_result name=\"{}\">\n{}\n</tool_result>\n",
+        escape_xml_attr(name),
+        escape_xml_text(&clip(&res, 2500))
+    );
+    ToolOutcome {
+        tool_result: clip(&res, 8000),
+        ui_chunk: ui,
+        side_effect: None,
+    }
+}
+
+pub(super) async fn tool_plugin_list(ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let res = crate::agent::tools::plugins::execute_plugin_list(ctx.api_key).await;
+    plugin_outcome("plugin_list", res)
+}
+
+pub(super) async fn tool_plugin_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let query = match get_str(args, "query") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("plugin_search", &e),
+    };
+    let res = crate::agent::tools::plugins::execute_plugin_search(&query, ctx.api_key).await;
+    plugin_outcome("plugin_search", res)
+}
+
+pub(super) async fn tool_plugin_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let toolkit = match get_str(args, "toolkit") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("plugin_tools", &e),
+    };
+    let query = args.get("query").and_then(|v| v.as_str());
+    let res =
+        crate::agent::tools::plugins::execute_plugin_tools(&toolkit, query, ctx.api_key).await;
+    plugin_outcome("plugin_tools", res)
+}
+
+pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let slug = match get_str(args, "slug") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("plugin_run", &e),
+    };
+    let arguments = args.get("arguments").cloned().unwrap_or(json!({}));
+    let res = crate::agent::tools::plugins::execute_plugin_run(&slug, &arguments, ctx.api_key).await;
+    plugin_outcome("plugin_run", res)
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCheckLine, RiCloseLine } from "@remixicon/react";
 import React, { useMemo } from "react";
 import { diffLines } from "diff";
 import { Icon } from "@/components/ui/icon";
@@ -54,6 +55,7 @@ export function PendingEditsPanel({
         <MorphMenu
             variant="morph"
             aria-label="Changes"
+            align="end"
             openWidth={280}
             openHeight={openH}
             closedHeight={32}
@@ -133,7 +135,7 @@ export function PendingEditsPanel({
                                                     onAccept(edit.id);
                                                 }}
                                             >
-                                                <Icon name="check" size={12} />
+                                                <Icon icon={RiCheckLine} />
                                             </button>
                                         </Tooltip>
                                     ) : null}
@@ -147,7 +149,7 @@ export function PendingEditsPanel({
                                                     onReject(edit.id);
                                                 }}
                                             >
-                                                <Icon name="close" size={12} />
+                                                <Icon icon={RiCloseLine} />
                                             </button>
                                         </Tooltip>
                                     ) : null}

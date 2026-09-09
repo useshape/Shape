@@ -1,5 +1,6 @@
 "use client";
 
+import { RiSearchLine } from "@remixicon/react";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
@@ -29,7 +30,6 @@ import {
     Skeleton,
 } from "@/features/git/ui/shared/skeletons";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
-import { AccountRow } from "@/features/agent/sidebar/account";
 
 export type { GitSectionId } from "@/features/git/types";
 
@@ -220,7 +220,7 @@ function GitEmbedNavChrome() {
     return createPortal(
         <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
             <HostedSidebarBack
-                label="Back"
+                label="Back to app"
                 onBack={onClose}
                 collapsed={collapsed}
             />
@@ -430,7 +430,7 @@ function ManagerShell() {
                         <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
                             {onClose ? (
                                 <HostedSidebarBack
-                                    label="Back"
+                                    label="Back to app"
                                     onBack={onClose}
                                     collapsed={collapsed}
                                 />
@@ -439,7 +439,7 @@ function ManagerShell() {
                                 <>
                                     <div className="p-2">
                                         <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                                            <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
                                             <Input
                                                 placeholder="Search git"
                                                 value={query}
@@ -473,11 +473,6 @@ function ManagerShell() {
                                             );
                                         })}
                                     </nav>
-                                    {navPortalTarget ? (
-                                        <div className="mt-auto shrink-0 px-1 pb-1">
-                                            <AccountRow />
-                                        </div>
-                                    ) : null}
                                 </>
                             )}
                         </div>

@@ -31,6 +31,7 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "write_to_terminal",
     "save_plan",
     "git_stage",
+    "plugin_run",
 ];
 
 const WORKSPACE_UNTRUSTED_MSG: &str =
@@ -97,8 +98,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         return blocked_outcome(name, DESIGN_GATE_BLOCK_MSG);
     }
 
-    if is_read_only_mode(ctx.mode) && name.starts_with("mcp_") {
-        return blocked_outcome(name, "MCP tools are not available in Ask or Plan mode.");
+    if is_read_only_mode(ctx.mode) && (name.starts_with("mcp_") || name == "plugin_run") {
+        return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
     }
 
     if TRUST_GATED_TOOLS.contains(&name) || name.starts_with("mcp_") {
@@ -129,6 +130,10 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "search_codebase" => discover::tool_search_codebase(&args, ctx).await,
         "web_search" => discover::tool_web_search(&args, ctx).await,
         "visit_url" => discover::tool_visit_url(&args, ctx).await,
+        "plugin_list" => discover::tool_plugin_list(ctx).await,
+        "plugin_search" => discover::tool_plugin_search(&args, ctx).await,
+        "plugin_tools" => discover::tool_plugin_tools(&args, ctx).await,
+        "plugin_run" => discover::tool_plugin_run(&args, ctx).await,
         "create_directory" => files::tool_create_directory(&args, ctx),
         "create_file" => files::tool_create_file(&args, ctx).await,
         "edit_file" => files::tool_edit_file(&args, ctx).await,

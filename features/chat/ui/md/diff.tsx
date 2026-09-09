@@ -1,3 +1,4 @@
+import { RiCheckLine, RiCloseLine, RiRefreshLine } from "@remixicon/react";
 import React from 'react';
 import { Icon } from "@/components/ui/icon";
 import { cn } from '@/lib/utils';
@@ -232,7 +233,7 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
                         disabled={!hasChanges || status === "applying" || status === "accepted"}
                     >
                         <span className="flex items-center gap-1">
-                            <Icon name="check" size={12} />
+                            <Icon icon={RiCheckLine} />
                             Apply
                         </span>
                     </button>
@@ -242,7 +243,7 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
                         disabled={status === "applying" || status === "rejected"}
                     >
                         <span className="flex items-center gap-1">
-                            {status === "accepted" ? <Icon name="refresh" size={12} /> : <Icon name="close" size={12} />}
+                            {status === "accepted" ? <Icon icon={RiRefreshLine} /> : <Icon icon={RiCloseLine} />}
                             {status === "accepted" ? "Revert" : "Reject"}
                         </span>
                     </button>

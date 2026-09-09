@@ -172,6 +172,31 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
         case "Inline Edit":
             dispatchEditorAction("inlineEdit");
             return true;
+        case "New Chat":
+            window.dispatchEvent(new Event("shape-chat-new"));
+            return true;
+        case "Cycle Chat Mode":
+            window.dispatchEvent(new Event("shape-chat-cycle-mode"));
+            return true;
+        case "Toggle Word Wrap":
+            dispatchEditorAction("toggleWordWrap");
+            return true;
+        case "Rename Symbol":
+            dispatchEditorAction("rename");
+            return true;
+        case "Quick Fix":
+            dispatchEditorAction("quickFix");
+            return true;
+        case "Organize Imports":
+            dispatchEditorAction("organizeImports");
+            return true;
+        case "Format Selection":
+            dispatchEditorAction("formatSelection");
+            return true;
+        case "Problems":
+            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
+            window.dispatchEvent(new CustomEvent("shape-set-panel-tab", { detail: "problems" }));
+            return true;
         default:
             return false;
     }

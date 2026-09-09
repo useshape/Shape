@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiInformationLine, RiMoreLine, RiTerminalBoxLine } from "@remixicon/react";
 /**
  * Live terminal command UI for the chat transcript.
  *
@@ -25,6 +26,7 @@ import {
 import { commands } from "@/lib/backend/commands";
 import { useSettings, updateSettingSection, type AutoRunModeSetting } from "@/lib/settings";
 import type { Chunk } from "../md/renderer";
+import { Collapse } from "./collapse";
 
 const OUTPUT_CAP = 16_000;
 
@@ -162,18 +164,156 @@ export function LiveTerminalOutput({
             ref={scrollRef}
             onScroll={onScroll}
             style={{ maxHeight }}
-            className="my-1 overflow-y-auto custom-scrollbar rounded-md border border-border-subtle bg-panel/60 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words"
+            className="my-1 overflow-y-auto custom-scrollbar font-mono text-sm leading-relaxed text-text-secondary whitespace-pre-wrap break-words"
         >
             {text}
         </div>
     );
 }
 
-const AUTO_RUN_OPTIONS: Array<{ value: AutoRunModeSetting; label: string }> = [
-    { value: "ask", label: "Ask every time" },
-    { value: "auto", label: "Auto" },
-    { value: "always", label: "Run everything" },
+const AUTO_RUN_OPTIONS: Array<{ value: AutoRunModeSetting; label: string; description: string }> = [
+    { value: "ask", label: "Ask every time", description: "Approve each command before it runs." },
+    { value: "auto", label: "Auto-review", description: "Run commands Auto-review marks as safe." },
+    { value: "always", label: "Run everything", description: "Run all commands without asking." },
 ];
+
+function commandSummary(command: string, max = 56): string {
+    const one = command.replace(/\s+/g, " ").trim();
+    if (!one) return "";
+    if (one.length <= max) return one;
+    return `${one.slice(0, max - 1)}…`;
+}
+
+function TerminalCommandMenu({ command }: { command: string }) {
+    const settings = useSettings();
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    aria-label="Command options"
+                    className="rounded p-1 text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                >
+                    <Icon icon={RiMoreLine} />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5 text-xs font-medium text-text-muted">Auto-run</div>
+                {AUTO_RUN_OPTIONS.map((opt) => {
+                    const selected = settings.ai.autoRunMode === opt.value;
+                    return (
+                        <DropdownMenuItem
+                            key={opt.value}
+                            onClick={() => updateSettingSection("ai", { autoRunMode: opt.value })}
+                            className={cn("flex flex-col items-start gap-0.5 py-2", selected && "bg-panel-hover")}
+                        >
+                            <span className="flex w-full items-center gap-2 text-sm text-text-primary">
+                                <span className="flex-1">{opt.label}</span>
+                                {selected ? <Icon icon={RiCheckLine} /> : null}
+                            </span>
+                            <span className="text-xs text-text-muted leading-snug">{opt.description}</span>
+                        </DropdownMenuItem>
+                    );
+                })}
+                <DropdownMenuItem
+                    onClick={() => void navigator.clipboard.writeText(command)}
+                    className="mt-1 border-t border-border-subtle pt-2"
+                >
+                    Copy command
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+/** Inline text row matching staged/checked arrow UI — action bright, detail muted; expand shows output only. */
+function TerminalCommandRow({
+    command,
+    statusLabel,
+    output,
+    isRunning,
+    failed,
+    exitCode,
+    defaultOpen = false,
+    notice,
+}: {
+    command: string;
+    statusLabel: string;
+    output: string;
+    isRunning?: boolean;
+    failed?: boolean;
+    exitCode?: number | null;
+    defaultOpen?: boolean;
+    notice?: string;
+}) {
+    const [expanded, setExpanded] = useState(defaultOpen);
+    const summary = commandSummary(command);
+    const hasOutput = Boolean(output.trim() || notice);
+    const canExpand = hasOutput || Boolean(command.trim());
+
+    useEffect(() => {
+        if (isRunning && hasOutput) setExpanded(true);
+    }, [isRunning, hasOutput]);
+
+    if (!summary && !statusLabel) return null;
+
+    return (
+        <div className="flex w-full flex-col py-0.5">
+            <button
+                type="button"
+                onClick={() => canExpand && setExpanded((v) => !v)}
+                className={cn(
+                    "flex w-fit max-w-full items-center gap-1.5 text-left chat-text",
+                    "text-text-primary/80 hover:text-text-primary transition-colors",
+                    canExpand && "cursor-pointer",
+                )}
+            >
+                {isRunning ? (
+                    <span className="t-spin-check shrink-0" data-state="spin">
+                        <span className="t-spin-check__ring" />
+                    </span>
+                ) : null}
+                <span>
+                    {statusLabel}
+                    {summary ? (
+                        <>
+                            {" "}
+                            <span className="text-text-secondary">{summary}</span>
+                        </>
+                    ) : null}
+                </span>
+                {failed && typeof exitCode === "number" ? (
+                    <span className="shrink-0 tabular-nums text-error">exit {exitCode}</span>
+                ) : null}
+                {canExpand ? (
+                    <Icon
+                        icon={RiArrowRightSLine}
+                        className={cn(
+                            "shrink-0 text-text-disabled transition-transform duration-200",
+                            expanded && "rotate-90",
+                        )}
+                    />
+                ) : null}
+            </button>
+            <Collapse open={expanded && canExpand}>
+                <div className="relative mt-1 mb-1 pl-0.5">
+                    <div className="absolute right-0 top-0 z-[1]">
+                        <TerminalCommandMenu command={command} />
+                    </div>
+                    {output.trim() ? (
+                        <div className="pr-8">
+                            <LiveTerminalOutput text={output} maxHeight={200} />
+                        </div>
+                    ) : null}
+                    {notice ? (
+                        <div className="pr-8 pt-1 text-xs text-warning">{notice}</div>
+                    ) : null}
+                </div>
+            </Collapse>
+        </div>
+    );
+}
 
 function modKeyLabel(): string {
     if (typeof navigator === "undefined") return "Ctrl";
@@ -222,19 +362,19 @@ export function CommandApprovalCard({
                 {isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
-                    <Icon name="terminal" size={13} className="shrink-0 text-text-muted" />
+                    <Icon icon={RiTerminalBoxLine} className="shrink-0 text-text-muted" />
                 )}
-                <span className="truncate text-xs text-text-muted">
+                <span className="truncate text-sm text-text-muted">
                     Run command{reason ? "" : ""}
                 </span>
                 {reason ? (
                     <Tooltip content={reason} side="top">
-                        <Icon name="info" size={12} className="shrink-0 text-text-disabled" />
+                        <Icon icon={RiInformationLine} className="shrink-0 text-text-disabled" />
                     </Tooltip>
                 ) : null}
             </div>
             <div>
-                <div className="max-h-[96px] pt-2 px-3 min-h-[64px] border-t border-border overflow-y-auto custom-scrollbar font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
+                <div className="max-h-[96px] px-3 pb-2 min-h-[64px] overflow-y-auto custom-scrollbar font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
                     <span className="select-none text-text-disabled">$ </span>
                     {command}
                 </div>
@@ -251,7 +391,7 @@ export function CommandApprovalCard({
                         >
                             {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
                                 ?? "Ask every time"}
-                            <Icon name="expand_more" size={14} className="opacity-70" />
+                            <Icon icon={RiArrowDownSLine} className="opacity-70" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-48">
@@ -270,7 +410,7 @@ export function CommandApprovalCard({
                                 >
                                     <span className="flex-1 text-sm text-text-primary">{opt.label}</span>
                                     {selected ? (
-                                        <Icon name="check" size={16} className="text-text-primary" />
+                                        <Icon icon={RiCheckLine} className="text-text-primary" />
                                     ) : null}
                                 </DropdownMenuItem>
                             );
@@ -301,7 +441,6 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     const chunkStatus = block.commandStatus || "completed";
     const [localStatus, setLocalStatus] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [outputOpen, setOutputOpen] = useState(false);
 
     // Live events can outrun the transcript chunk (approval → start → exit).
     const couldBeLive =
@@ -374,48 +513,30 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     }
 
     if (effectiveStatus === "rejected" || effectiveStatus === "blocked") {
-        const label = effectiveStatus === "rejected" ? "Rejected command" : "Blocked command";
         return (
-            <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
-                <div className="flex items-center gap-2 px-3 py-2">
-                    <Icon name="block" size={13} className="shrink-0 text-text-muted" />
-                    <span className="truncate text-xs text-text-muted">{label}</span>
-                </div>
-                <div className="border-t border-border px-3 py-2">
-                    <span className="font-mono text-sm text-text-disabled line-through whitespace-pre-wrap break-words">
-                        <span className="select-none">$ </span>
-                        {command}
-                    </span>
-                </div>
-            </div>
+            <TerminalCommandRow
+                command={command}
+                statusLabel={effectiveStatus === "rejected" ? "Rejected" : "Blocked"}
+                output=""
+            />
         );
     }
 
     if (effectiveStatus === "running" || effectiveStatus === "background") {
         const liveText = stream.output || stripTerminalChunkOutput(block);
         return (
-            <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
-                <div className="flex items-center gap-2 px-3 py-2">
-                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-                    <span className="truncate text-xs text-text-muted">
-                        {effectiveStatus === "background" ? "Running in background" : "Running command"}
-                    </span>
-                </div>
-                <div className="border-t border-border px-3 py-2">
-                    <div className="font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
-                        <span className="select-none text-text-disabled">$ </span>
-                        {command}
-                    </div>
-                    {stream.waitingForInput ? (
-                        <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-                            Waiting for input — the agent can answer with write_to_terminal, or stop the turn.
-                        </div>
-                    ) : null}
-                    <div className="mt-2">
-                        <LiveTerminalOutput text={liveText} />
-                    </div>
-                </div>
-            </div>
+            <TerminalCommandRow
+                command={command}
+                statusLabel={effectiveStatus === "background" ? "Running in background" : "Running"}
+                output={liveText}
+                isRunning
+                defaultOpen
+                notice={
+                    stream.waitingForInput
+                        ? "Waiting for input — the agent can answer with write_to_terminal, or stop the turn."
+                        : undefined
+                }
+            />
         );
     }
 
@@ -423,54 +544,16 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     const staticOutput = stream.output || stripTerminalChunkOutput(block);
     const failed = effectiveStatus === "failed" || (typeof exitCode === "number" && exitCode !== 0);
     const cancelled = effectiveStatus === "cancelled";
-    const hasOutput = staticOutput.trim().length > 0;
-    const statusLabel = cancelled
-        ? "Cancelled command"
-        : failed
-          ? "Failed command"
-          : "Ran command";
+    const statusLabel = cancelled ? "Cancelled" : failed ? "Failed" : "Ran";
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl border border-border bg-transparent">
-            <button
-                type="button"
-                onClick={() => hasOutput && setOutputOpen((v) => !v)}
-                className={cn(
-                    "flex w-full items-center gap-2 px-3 py-2 text-left",
-                    hasOutput && "cursor-pointer hover:bg-panel-hover/40 transition-colors",
-                )}
-            >
-                <Icon
-                    name={cancelled ? "cancel" : failed ? "error" : "terminal"}
-                    size={13}
-                    className="shrink-0 text-text-muted"
-                />
-                <span className="truncate text-xs text-text-muted">{statusLabel}</span>
-                {failed && !cancelled && typeof exitCode === "number" ? (
-                    <span className="shrink-0 rounded bg-error/15 px-1 py-px text-[10px] font-medium text-error">
-                        exit {exitCode}
-                    </span>
-                ) : null}
-                {hasOutput ? (
-                    <Icon
-                        name={outputOpen ? "expand_less" : "expand_more"}
-                        size={14}
-                        className="ml-auto shrink-0 text-text-muted"
-                    />
-                ) : null}
-            </button>
-            <div className="border-t border-border px-3 py-2">
-                <div className="font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
-                    <span className="select-none text-text-disabled">$ </span>
-                    {command}
-                </div>
-                {outputOpen && hasOutput ? (
-                    <div className="mt-2">
-                        <LiveTerminalOutput text={staticOutput} maxHeight={240} />
-                    </div>
-                ) : null}
-            </div>
-        </div>
+        <TerminalCommandRow
+            command={command}
+            statusLabel={statusLabel}
+            output={staticOutput}
+            failed={failed && !cancelled}
+            exitCode={exitCode}
+        />
     );
 }
 

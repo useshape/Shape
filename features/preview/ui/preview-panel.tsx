@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowLeftLine, RiArrowRightLine, RiExternalLinkLine, RiGlobalLine, RiRefreshLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -156,7 +157,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                             previewBack();
                         }}
                     >
-                        <Icon name="arrow_back" size={14} />
+                        <Icon icon={RiArrowLeftLine} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Forward">
@@ -171,7 +172,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                             previewForward();
                         }}
                     >
-                        <Icon name="arrow_forward" size={14} />
+                        <Icon icon={RiArrowRightLine} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Reload">
@@ -186,7 +187,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                             previewReload();
                         }}
                     >
-                        <Icon name="refresh" size={14} />
+                        <Icon icon={RiRefreshLine} />
                     </Button>
                 </Tooltip>
 
@@ -226,7 +227,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                         disabled={!currentUrl && !urlBar.trim()}
                         onClick={openExternal}
                     >
-                        <Icon name="open_in_new" size={14} />
+                        <Icon icon={RiExternalLinkLine} />
                     </Button>
                 </Tooltip>
             </div>
@@ -262,7 +263,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                     />
                 ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-                        <Icon name="public" size={28} className="text-text-muted" />
+                        <Icon icon={RiGlobalLine} className="text-text-muted" />
                         <p>Preview local sites here (localhost only).</p>
                         <p className="text-xs">
                             Enter a URL and press Go, or open Preview after your dev server starts.

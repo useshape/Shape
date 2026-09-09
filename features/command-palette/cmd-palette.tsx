@@ -1,5 +1,6 @@
 "use client";
 
+import { RiDeleteBinLine, RiRobot2Line, RiSearchLine } from "@remixicon/react";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Icon } from "@/components/ui/icon";
@@ -553,7 +554,7 @@ export function CommandPalette() {
                     <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
                     <Dialog.Description className="sr-only">Search agents, files, and actions</Dialog.Description>
                     <div className="flex h-11 shrink-0 items-center gap-2 px-3">
-                        <Icon name="search" size={15} className="shrink-0 text-text-muted" />
+                        <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
                         <input
                             ref={inputRef}
                             className="h-10 flex-1 border-none bg-transparent px-0 font-sans text-sm text-text-primary outline-none placeholder:text-text-muted"
@@ -635,7 +636,7 @@ export function CommandPalette() {
                                                 <FileIcon name={action.icon || action.label} className="h-4 w-4 shrink-0 opacity-70" />
                                             ) : null}
                                             {browse && action.id.startsWith("agent:") ? (
-                                                <Icon name="agents" size={14} className="shrink-0 text-text-muted" />
+                                                <Icon icon={RiRobot2Line} className="shrink-0 text-text-muted" />
                                             ) : null}
                                             {!browse && action.icon ? (
                                                 <FileIcon name={action.icon} className="h-4 w-4 shrink-0 opacity-70" />
@@ -657,7 +658,7 @@ export function CommandPalette() {
                                                     className="ml-2 shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-error/10 hover:text-error"
                                                     title="Delete"
                                                 >
-                                                    <Icon name="delete" size={14} />
+                                                    <Icon icon={RiDeleteBinLine} />
                                                 </button>
                                             ) : null}
                                         </div>

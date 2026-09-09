@@ -25,6 +25,10 @@ export interface McpServerConfig {
     url?: string;
     auth: "none" | "oauth";
     enabled: boolean;
+    /** Tool names from this server that should not be exposed to the agent. */
+    disabledTools?: string[];
+    /** Pre-registered OAuth client id when the auth server has no DCR. */
+    oauthClientId?: string;
 }
 
 export interface ShapeSettings {
@@ -84,6 +88,8 @@ export interface ShapeSettings {
         customRules: string;
         mcpServers: McpServerConfig[];
         reviewAdversarialEnabled: boolean;
+        /** Compact one-row composer chrome in ongoing chats. */
+        compactComposer: boolean;
         /** Terminal command approval mode (Cursor-style run modes). */
         autoRunMode: AutoRunModeSetting;
         /** Stage agent file edits for approval before they touch disk. */
@@ -153,6 +159,8 @@ export interface ShapeSettings {
         showLoginPromptOnLaunch: boolean;
         /** Show the welcome page when the main window opens with no editor. */
         showWelcomeOnStartup: boolean;
+        /** Skip the confirm dialog when restoring a chat checkpoint (rolls back file edits). */
+        skipCheckpointRestoreConfirm: boolean;
     };
     notifications: {
         /** Master switch for OS/desktop notifications. On by default. */
@@ -230,6 +238,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         customRules: "",
         mcpServers: [],
         reviewAdversarialEnabled: true,
+        compactComposer: false,
         autoRunMode: "auto",
         requireEditApproval: false,
         protectDestructiveGit: true,
@@ -289,6 +298,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         telemetryEnabled: false,
         showLoginPromptOnLaunch: true,
         showWelcomeOnStartup: true,
+        skipCheckpointRestoreConfirm: false,
     },
     notifications: {
         desktopEnabled: true,

@@ -1,10 +1,7 @@
 "use client";
 
+import { RiLayoutRight2Line, RiLayoutLeft2Line, RiPlayFill, RiSparkling2Fill, RiStopFill } from "@remixicon/react";
 import { useEffect, useState } from "react";
-import {
-    AnimatedSecondarySidebarIcon,
-    AnimatedSidebarIcon,
-} from "@/features/activity-bar";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -21,9 +18,32 @@ import {
     type DevCommandInfo,
 } from "@/features/detection/lib/lib";
 import { useDevRunStatus } from "@/features/preview/run-status";
+import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
+import { WindowControls } from "@/features/workbench/titlebar/ui/window-controls";
+import { useShapeAuth } from "@/lib/shape-auth/store";
+import { dashboardUrl } from "@/lib/shape-auth/api";
+import { commands } from "@/lib/backend/commands";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
 export const AGENT_SIDEBAR_BACK_SLOT = "shape-agent-sidebar-back";
+export const AGENT_SIDEBAR_HISTORY_SLOT = "shape-agent-sidebar-history";
+
+function GetPlusButton() {
+    const auth = useShapeAuth();
+    if (!auth.loggedIn || auth.offline || auth.tier !== "free") return null;
+    return (
+        <button
+            type="button"
+            className="mr-1 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[#3a3148] px-2.5 text-sm font-medium text-[#c084fc] transition-colors hover:bg-[#463a58] hover:text-[#d8b4fe]"
+            onClick={() =>
+                void commands.openUrlExternal(`${dashboardUrl()}/settings/billing`)
+            }
+        >
+            <Icon icon={RiSparkling2Fill} />
+            Get Plus
+        </button>
+    );
+}
 
 function Btn({
     label,
@@ -50,7 +70,7 @@ function Btn({
                     "flex size-7 items-center justify-center rounded-md text-text-muted transition-colors",
                     "hover:bg-panel-hover hover:text-text-primary",
                     active && "text-text-primary",
-                    "disabled:pointer-events-none disabled:opacity-30",
+                    "disabled:pointer-events-none disabled:text-text-disabled",
                 )}
             >
                 {children}
@@ -110,7 +130,7 @@ function RunControl({
         return (
             <Btn label={`Run ${command}`} onClick={start}>
                 <span className="relative inline-flex">
-                    <Icon name="play_arrow" size={15} filled />
+                    <Icon icon={RiPlayFill} />
                     <RunStatusDot status={run.status} />
                 </span>
             </Btn>
@@ -129,7 +149,7 @@ function RunControl({
                     )}
                 >
                     <span className="relative inline-flex">
-                        <Icon name={run.status === "starting" ? "play_arrow" : "stop"} size={15} filled />
+                        <Icon icon={run.status === "starting" ? RiPlayFill : RiStopFill} />
                         <RunStatusDot status={run.status} />
                     </span>
                 </button>
@@ -144,28 +164,37 @@ function RunControl({
 
 export function AgentChrome({
     rightOpen,
-    filesOpen,
     onToggleRight,
-    onToggleFiles,
     canToggleRight = true,
-    canToggleFiles = true,
-    designOpen = false,
-    onToggleDesign,
 }: {
     leftOpen?: boolean;
     rightOpen: boolean;
-    filesOpen: boolean;
     onToggleLeft?: () => void;
     onToggleRight: () => void;
-    onToggleFiles: () => void;
     canToggleRight?: boolean;
-    canToggleFiles?: boolean;
-    designOpen?: boolean;
-    onToggleDesign?: () => void;
 }) {
     const { project_path } = useProjectState();
     const [web, setWeb] = useState(false);
     const [dev, setDev] = useState<DevCommandInfo | null>(null);
+    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    useEffect(() => {
+        try {
+            setSidebarOpen(localStorage.getItem("shape-agent-sidebar") !== "false");
+        } catch {
+            /* ignore */
+        }
+        const onToggle = (e: Event) => {
+            const detail = (e as CustomEvent<{ id?: string; value?: boolean }>).detail;
+            if (detail?.id !== "primary-sidebar" && detail?.id !== "agent-sidebar") return;
+            if (detail.value === true) setSidebarOpen(true);
+            else if (detail.value === false) setSidebarOpen(false);
+            else setSidebarOpen((v) => !v);
+        };
+        window.addEventListener("shape-layout-toggle", onToggle as EventListener);
+        return () => window.removeEventListener("shape-layout-toggle", onToggle as EventListener);
+    }, []);
 
     useEffect(() => {
         if (!project_path) {
@@ -191,40 +220,48 @@ export function AgentChrome({
     }, [project_path]);
 
     return (
-        <div className="flex h-titlebar shrink-0 items-stretch bg-titlebar">
+        <div className="relative flex h-titlebar shrink-0 items-stretch bg-panel">
+            <div
+                className="absolute inset-0 z-0"
+                data-tauri-drag-region
+                aria-hidden
+            />
+            <div className="relative z-10 flex h-full shrink-0 items-center pl-1">
+                <SidebarToggleBtn
+                    open={sidebarOpen}
+                    onToggle={() => {
+                        window.dispatchEvent(
+                            new CustomEvent("shape-layout-toggle", {
+                                detail: { id: "primary-sidebar" },
+                            }),
+                        );
+                    }}
+                />
+            </div>
             <div
                 id={AGENT_TABS_SLOT}
-                className="flex h-full min-w-0 flex-1 items-center overflow-hidden pl-2"
-                data-tauri-drag-region
+                className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1"
             />
 
-            <div className="flex items-center gap-0.5 px-2">
+            <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1">
+                <GetPlusButton />
                 {web && dev ? <RunControl command={dev.command} /> : null}
-                {web ? (
-                    <Btn
-                        label={designOpen ? "Exit Design Mode" : "Design Mode"}
-                        active={designOpen}
-                        onClick={() => onToggleDesign?.()}
-                    >
-                        <Icon name="palette" size={15} />
-                    </Btn>
-                ) : null}
-                <Btn
-                    label={filesOpen ? "Close files" : "Open files"}
-                    active={filesOpen}
-                    disabled={!canToggleFiles}
-                    onClick={onToggleFiles}
-                >
-                    <Icon name="folder" size={15} />
-                </Btn>
                 <Btn
                     label={rightOpen ? "Hide panel" : "Show panel"}
-                    active={rightOpen && !filesOpen}
-                    disabled={!canToggleRight || filesOpen}
+                    active={rightOpen}
+                    disabled={!canToggleRight}
                     onClick={onToggleRight}
                 >
-                    <AnimatedSecondarySidebarIcon active={rightOpen && !filesOpen} size={16} />
+                    <Icon icon={RiLayoutRight2Line} />
                 </Btn>
+            </div>
+            <div className="relative z-10 h-full shrink-0">
+                <WindowControls
+                    isMaximized={isMaximized}
+                    onMinimize={minimize}
+                    onToggleMaximize={() => void toggleMaximize()}
+                    onClose={close}
+                />
             </div>
         </div>
     );
@@ -248,7 +285,7 @@ export function SidebarToggleBtn({
                     onClick={onToggle}
                     className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <AnimatedSidebarIcon active={open} size={16} />
+                    <Icon icon={RiLayoutLeft2Line} />
                 </button>
             </Tooltip>
         );
@@ -260,7 +297,7 @@ export function SidebarToggleBtn({
             onClick={onToggle}
             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
         >
-            <AnimatedSidebarIcon active={open} size={16} />
+            <Icon icon={RiLayoutLeft2Line} />
         </button>
     );
 }

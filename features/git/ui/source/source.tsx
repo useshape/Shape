@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine, RiArrowRightSLine, RiArrowUpLine, RiCheckLine, RiClipboardLine, RiCloseLine, RiDeleteBinLine, RiDownloadLine, RiFileTextLine, RiFolderLine, RiGitBranchLine, RiLayoutBottomLine, RiLayoutColumnLine, RiMoreLine, RiPencilLine, RiRefreshLine, RiUploadLine } from "@remixicon/react";
 import React, { useState, useCallback, useEffect } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -813,22 +814,22 @@ export default function Source({
                         <div className="flex shrink-0 items-center gap-0.5">
                         <Tooltip content="Refresh Repository">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={() => void refresh()}>
-                                <Icon name="refresh" size={16} />
+                                <Icon icon={RiRefreshLine} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Pull">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePull}>
-                                <Icon name="download" size={16} />
+                                <Icon icon={RiDownloadLine} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Push">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePush}>
-                                <Icon name="arrow_upward" size={16} />
+                                <Icon icon={RiArrowUpLine} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Sync Changes">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handleSync}>
-                                <Icon name="cloud_upload" size={16} />
+                                <Icon icon={RiUploadLine} />
                             </Button>
                         </Tooltip>
                         {!embedded && project_path ? <GitManagerTrigger /> : null}
@@ -838,7 +839,7 @@ export default function Source({
                                 <DropdownMenu modal={false}>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="w-6 h-6" aria-label="More actions">
-                                            <Icon name="more_horiz" size={16} />
+                                            <Icon icon={RiMoreLine} />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-48">
@@ -959,12 +960,12 @@ export default function Source({
                                 className="h-7 w-full justify-between gap-2 px-2 hover:bg-panel-hover text-text-secondary hover:text-text-primary"
                             >
                                 <span className="flex items-center gap-1.5 min-w-0">
-                                    <Icon name="folder" size={14} className="shrink-0" />
+                                    <Icon icon={RiFolderLine} className="shrink-0" />
                                     <span className="truncate text-sm">
                                         {repos.find((r) => r.path === activeRepoPath)?.name ?? "Repository"}
                                     </span>
                                 </span>
-                                <Icon name="expand_more" size={16} className="shrink-0" />
+                                <Icon icon={RiArrowDownSLine} className="shrink-0" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-56">
@@ -978,7 +979,7 @@ export default function Source({
                                 >
                                     <span className="truncate">{repo.name}</span>
                                     {activeRepoPath === repo.path && (
-                                        <Icon name="check" size={14} className="ml-auto shrink-0" />
+                                        <Icon icon={RiCheckLine} className="ml-auto shrink-0" />
                                     )}
                                 </DropdownMenuItem>
                             ))}
@@ -1078,9 +1079,9 @@ export default function Source({
                             />
                             {lastCommit && (
                                 <div className="flex items-center text-sm text-text-muted gap-0.5 px-2 min-w-0">
-                                    <Icon name="account_tree" size={16} className="shrink-0" />
+                                    <Icon icon={RiGitBranchLine} className="shrink-0" />
                                     <span className="font-medium shrink-0 truncate max-w-[30%]">{currentBranch}</span>
-                                    <Icon name="chevron_right" size={16} className="shrink-0" />
+                                    <Icon icon={RiArrowRightSLine} className="shrink-0" />
                                     <span className="truncate flex-1 min-w-0">
                                         {lastCommit.message.split('\n')[0]}
                                     </span>
@@ -1154,7 +1155,7 @@ export default function Source({
                                             className="gap-1 px-3 h-7 text-xs font-medium"
                                             onClick={() => void handleSync()}
                                         >
-                                            <Icon name="cloud_upload" size={14} />
+                                            <Icon icon={RiUploadLine} />
                                             <span>Push</span>
                                         </Button>
                                     ) : (
@@ -1179,7 +1180,7 @@ export default function Source({
                                                         disabled={!commitTitle.trim()}
                                                         aria-label="Commit options"
                                                     >
-                                                        <Icon name="expand_more" size={14} />
+                                                        <Icon icon={RiArrowDownSLine} />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
@@ -1260,7 +1261,7 @@ export default function Source({
                                     <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
                                         {!diffFile ? (
                                             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-                                                <Icon name="description" size={18} className="text-text-muted" />
+                                                <Icon icon={RiFileTextLine} className="text-text-muted" />
                                                 <p>Select a file to view changes</p>
                                             </div>
                                         ) : (
@@ -1288,12 +1289,11 @@ export default function Source({
                                                             onClick={() => setSideBySide((v) => !v)}
                                                         >
                                                             <Icon
-                                                                name={
+                                                                icon={
                                                                     sideBySide
-                                                                        ? "split_horizontal"
-                                                                        : "vertical_split"
+                                                                        ? RiLayoutBottomLine
+                                                                        : RiLayoutColumnLine
                                                                 }
-                                                                size={15}
                                                             />
                                                         </Button>
                                                     </Tooltip>
@@ -1304,7 +1304,7 @@ export default function Source({
                                                         className="h-6 w-6 shrink-0 p-0"
                                                         onClick={() => setDiffFile(null)}
                                                     >
-                                                        <Icon name="close" size={15} />
+                                                        <Icon icon={RiCloseLine} />
                                                     </Button>
                                                 </div>
                                                 <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -1366,9 +1366,9 @@ export default function Source({
                             />
                             {lastCommit && (
                                 <div className="flex items-center text-sm text-text-muted gap-0.5 px-2 min-w-0">
-                                    <Icon name="account_tree" size={16} className="shrink-0" />
+                                    <Icon icon={RiGitBranchLine} className="shrink-0" />
                                     <span className="font-medium shrink-0 truncate max-w-[30%]">{currentBranch}</span>
-                                    <Icon name="chevron_right" size={16} className="shrink-0" />
+                                    <Icon icon={RiArrowRightSLine} className="shrink-0" />
                                     <span className="truncate flex-1 min-w-0">
                                         {lastCommit.message.split('\n')[0]}
                                     </span>
@@ -1459,17 +1459,17 @@ export default function Source({
                                                 <div className="flex gap-1 shrink-0">
                                                     <Tooltip content="Edit URL">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingRemote(remote)} aria-label="Edit URL">
-                                                            <Icon name="edit" size={14} />
+                                                            <Icon icon={RiPencilLine} />
                                                         </Button>
                                                     </Tooltip>
                                                     <Tooltip content="Copy URL">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => void navigator.clipboard.writeText(remote.url)} aria-label="Copy URL">
-                                                            <Icon name="content_copy" size={14} />
+                                                            <Icon icon={RiClipboardLine} />
                                                         </Button>
                                                     </Tooltip>
                                                     <Tooltip content="Remove">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-error" onClick={() => void handleRemoveRemote(remote.name)} aria-label="Remove remote">
-                                                            <Icon name="delete" size={14} />
+                                                            <Icon icon={RiDeleteBinLine} />
                                                         </Button>
                                                     </Tooltip>
                                                 </div>

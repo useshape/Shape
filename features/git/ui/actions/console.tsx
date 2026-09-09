@@ -1,5 +1,6 @@
 "use client";
 
+import { RiDownloadLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -561,7 +562,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                 disabled={art.expired || downloadingArtifactId === art.id}
                 onClick={() => void downloadArtifact(art)}
             >
-                <Icon name="download" size={12} />
+                <Icon icon={RiDownloadLine} />
                 {downloadingArtifactId === art.id ? "Saving…" : "Download"}
             </Button>
         </li>
@@ -921,9 +922,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                                     );
                                                     return (
                                                         <Icon
-                                                            name={runIcon.name}
-                                                            filled={runIcon.filled}
-                                                            size={18}
+                                                            icon={runIcon.icon}
                                                             className={cn(
                                                                 "shrink-0",
                                                                 statusTone(

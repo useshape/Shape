@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../lib/use-chat-session";
-import { ChatTabBar } from "./shell/tabs";
+import { ChatTitlebar } from "./shell/titlebar";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
 import { ChatEmptyState } from "./shell/empty";
@@ -17,7 +17,7 @@ import { useSyncChatGenerating } from "../lib/generating-chats";
 
 function stickyPromptText(content: string): string {
     const cleaned = content
-        .replace(/<attached_(?:image|file)\b[^>]*>[\s\S]*?<\/attached_(?:image|file)>\n*/g, "")
+        .replace(/<attached_(?:image|file|asset)\b[^>]*>[\s\S]*?<\/attached_(?:image|file|asset)>\n*/g, "")
         .trim()
         .replace(/\s+/g, " ");
     if (cleaned.length <= 120) return cleaned;
@@ -34,7 +34,7 @@ export default function Chat({
     embedWindowControls?: React.ReactNode;
 }) {
     const session = useChatSession();
-    useSyncChatGenerating(session.activeChatTabId, session.isLoading);
+    useSyncChatGenerating(session.conversationId ?? session.activeChatTabId, session.isLoading);
     const [tabsSlot, setTabsSlot] = React.useState<HTMLElement | null>(null);
     React.useEffect(() => {
         const find = () => document.getElementById(AGENT_TABS_SLOT);
@@ -74,19 +74,12 @@ export default function Chat({
         return items;
     }, [session.isLoading, session.messages]);
 
-    const sendRef = React.useRef(session.handleSendMessage);
-    sendRef.current = session.handleSendMessage;
     const newChatRef = React.useRef(session.handleNewChat);
     newChatRef.current = session.handleNewChat;
     const restoreRef = React.useRef(session.handleRestore);
     restoreRef.current = session.handleRestore;
 
     React.useEffect(() => {
-        const onAnswer = (e: Event) => {
-            const answer = (e as CustomEvent<{ answer?: string }>).detail?.answer;
-            if (!answer?.trim()) return;
-            void sendRef.current(answer);
-        };
         const onNewChat = () => {
             void newChatRef.current();
         };
@@ -99,24 +92,27 @@ export default function Chat({
                 }
             }
         };
-        window.addEventListener("shape-question-answer", onAnswer as EventListener);
         window.addEventListener("shape-chat-new", onNewChat);
         window.addEventListener("shape-chat-restore-last", onRestoreLast);
         return () => {
-            window.removeEventListener("shape-question-answer", onAnswer as EventListener);
             window.removeEventListener("shape-chat-new", onNewChat);
             window.removeEventListener("shape-chat-restore-last", onRestoreLast);
         };
     }, [session.messages]);
 
-    const tabBar = (
-        <ChatTabBar
+    const titlebar = (
+        <ChatTitlebar
             title={session.chatTitle}
-            onNewChat={() => void session.handleNewChat()}
-            tabs={session.openChatTabs}
-            activeTabId={session.activeChatTabId}
-            onSelectTab={(id) => void session.handleSelectChatTab(id)}
-            onCloseTab={(id) => void session.handleCloseChatTab(id)}
+            conversationId={session.conversationId}
+            recentIds={(session.recentConvs ?? []).map((c) => c.id)}
+            timestamp={
+                (session.recentConvs ?? []).find((c) => c.id === session.conversationId)?.timestamp
+                ?? session.messages.at(-1)?.timestamp
+                ?? null
+            }
+            onSelect={(id) => {
+                void session.handleSelectChatTab(id);
+            }}
         />
     );
 
@@ -167,30 +163,33 @@ export default function Chat({
             onAcceptEdit={(id) => void session.handleAcceptEdit(id)}
             onRejectEdit={(id) => void session.handleRejectEdit(id)}
             taskItems={isEmpty ? [] : taskItems}
+            queuedMessages={session.messageQueue}
+            onEditQueuedMessage={session.handleEditQueuedMessage}
+            onRemoveQueuedMessage={session.handleRemoveQueuedMessage}
             variant={isEmpty ? "empty" : "default"}
         />
     );
 
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
-            {tabsSlot ? createPortal(tabBar, tabsSlot) : null}
+            {tabsSlot ? createPortal(titlebar, tabsSlot) : null}
 
             <div className="relative flex min-h-0 flex-1 flex-col">
                 <div className="pointer-events-none relative z-20 h-0 shrink-0 overflow-visible">
                     <div
-                        className="absolute inset-x-0 top-0 h-16 transition-opacity duration-200"
+                        className="absolute inset-x-0 top-0 h-40 transition-opacity duration-200"
                         style={{
                             opacity: session.scrolledFromTop ? 1 : 0,
                             background:
-                                "linear-gradient(to bottom, color-mix(in srgb, var(--color-panel) 88%, transparent) 0%, color-mix(in srgb, var(--color-panel) 45%, transparent) 55%, transparent 100%)",
+                                "linear-gradient(to bottom, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 78%, transparent) 28%, color-mix(in srgb, var(--color-panel) 38%, transparent) 62%, transparent 100%)",
                         }}
                         aria-hidden
                     />
                 </div>
 
                 {isEmpty ? (
-                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-8">
-                        <div className="flex w-full max-w-3xl flex-col items-center gap-5">
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 pb-8 md:px-6">
+                        <div className="flex w-full max-w-4xl flex-col items-center gap-5">
                             <ChatEmptyState
                                 onSelectMode={(mode) => {
                                     session.setSelectedMode(mode);
@@ -221,9 +220,9 @@ export default function Chat({
                                     sel?.removeAllRanges();
                                     sel?.addRange(range);
                                 }}
-                                className="absolute inset-0 z-0 flex flex-col overflow-y-auto px-3 no-scrollbar select-text"
+                                className="absolute inset-0 z-0 flex flex-col overflow-y-auto px-5 no-scrollbar select-text md:px-6"
                             >
-                                <div className="mx-auto flex min-h-full w-full min-w-0 max-w-3xl flex-col pb-28 pt-8">
+                                <div className="mx-auto flex min-h-full w-full min-w-0 max-w-4xl flex-col pb-72 pt-8">
                                     <ChatMessageList
                                         messageGroups={session.messageGroups}
                                         messages={session.messages}
@@ -231,6 +230,10 @@ export default function Chat({
                                         activityLabel={session.activityLabel}
                                         sendError={session.sendError}
                                         onDismissError={() => session.setSendError(null)}
+                                        onRetryError={() => {
+                                            session.setSendError(null);
+                                            void session.handleSendMessage();
+                                        }}
                                         messagesEndRef={session.messagesEndRef}
                                         onRedo={session.handleRedo}
                                         onRestore={session.handleRestore}
@@ -240,9 +243,10 @@ export default function Chat({
                                 </div>
                             </div>
                             {turnCount >= 2 ? (
-                                <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 items-center justify-center md:flex lg:right-3">
-                                    <div className="pointer-events-auto">
+                                <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 py-6 md:flex lg:right-3">
+                                    <div className="pointer-events-auto flex h-full w-full items-stretch justify-end">
                                         <ChatHistoryStepper
+                                            className="h-full"
                                             turnCount={turnCount}
                                             activeIndex={activeTurn}
                                             onSelect={selectTurn}
@@ -253,16 +257,18 @@ export default function Chat({
                             ) : null}
                         </div>
 
-                        <div className="relative z-20 mx-auto w-full max-w-3xl shrink-0 overflow-visible">
-                            <div
-                                className="pointer-events-none absolute inset-x-0 bottom-full h-16"
-                                style={{
-                                    background:
-                                        "linear-gradient(to top, color-mix(in srgb, var(--color-panel) 88%, transparent) 0%, color-mix(in srgb, var(--color-panel) 45%, transparent) 55%, transparent 100%)",
-                                }}
-                                aria-hidden
-                            />
-                            {composer}
+                        <div className="relative z-20 w-full shrink-0 overflow-visible px-5 md:px-6">
+                            <div className="relative mx-auto w-full max-w-4xl overflow-visible">
+                                <div
+                                    className="pointer-events-none absolute inset-x-0 bottom-full h-40"
+                                    style={{
+                                        background:
+                                            "linear-gradient(to top, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 78%, transparent) 28%, color-mix(in srgb, var(--color-panel) 38%, transparent) 62%, transparent 100%)",
+                                    }}
+                                    aria-hidden
+                                />
+                                {composer}
+                            </div>
                         </div>
                     </>
                 )}

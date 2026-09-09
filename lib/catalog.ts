@@ -72,6 +72,21 @@ export async function fetchCatalog(token?: string | null): Promise<ShapeCatalog>
   }
 }
 
+/** True only when the Shape API catalog endpoint responds — not a local fallback. */
+export async function isCatalogServerReachable(token?: string | null): Promise<boolean> {
+  try {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${SHAPE_API_BASE}/api/catalog`, {
+      headers,
+      signal: AbortSignal.timeout(4000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function isModelAllowedInCatalog(catalog: ShapeCatalog, modelId: string): boolean {
   const normalized = modelId === "openrouter/auto" ? "auto" : modelId;
   if (catalog.allowedModelIds) {

@@ -28,6 +28,10 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         grep(),
         web_search(),
         visit_url(),
+        plugin_list(),
+        plugin_search(),
+        plugin_tools(),
+        plugin_run(),
         create_directory(),
         create_file(),
     ];
@@ -65,6 +69,9 @@ fn ask_tools() -> Vec<Value> {
         grep(),
         web_search(),
         visit_url(),
+        plugin_list(),
+        plugin_search(),
+        plugin_tools(),
         read_lints(),
         finish(),
     ]
@@ -490,10 +497,10 @@ fn save_plan() -> Value {
 fn update_todos() -> Value {
     tool(
         "update_todos",
-        "Optional live checklist for LONG multi-step implementation only (e.g. building from a saved plan). \
-Skip for ordinary Code/Visual work: single features, UI polish, shadcn installs, refactors of a few files — just do the work. \
+        "Optional live checklist for LONG multi-step implementation only (e.g. building from a saved plan with 5+ phases). \
+Skip for ordinary Code/Visual work — including slightly long prompts, single features, UI polish, installs, and small refactors. Just do the work. \
 When used: 3–5 high-level items (never 8+ granular file-by-file steps). Labels like \"Rebuild homepage\" not \"Add Inter font import to index.css\". \
-Exactly one in_progress, pass the full merged list every call. Not available in Ask/Plan.",
+Exactly one in_progress (auto-healed if missing), pass the full merged list every call. Not available in Ask/Plan.",
         json!({
             "type": "object",
             "properties": {
@@ -572,6 +579,65 @@ fn render_design_previews() -> Value {
     )
 }
 
+fn plugin_list() -> Value {
+    tool(
+        "plugin_list",
+        "List first-party plugins (Slack, GitHub, Linear, Notion, etc.) and whether the user has connected them. Call this before plugin_tools or plugin_run.",
+        json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn plugin_search() -> Value {
+    tool(
+        "plugin_search",
+        "Search connected plugin tools by what you want to do (e.g. 'send a Slack message', 'create a Linear issue'). Returns slugs and argument hints. Prefer this when you are unsure of the exact slug.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language description of the action."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn plugin_tools() -> Value {
+    tool(
+        "plugin_tools",
+        "List tools for one connected plugin (Composio slugs + argument schemas). Use after plugin_list. Then call plugin_run with a slug.",
+        json!({
+            "type": "object",
+            "properties": {
+                "toolkit": {"type": "string", "description": "Plugin id from plugin_list (slack, github, linear, …)."},
+                "query": {"type": "string", "description": "Optional filter, e.g. send message."}
+            },
+            "required": ["toolkit"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn plugin_run() -> Value {
+    tool(
+        "plugin_run",
+        "Execute a connected plugin tool by Composio slug. Blocked in Ask/Plan. User must connect the app in Settings → Plugins first. Costs a tiny credit amount on paid plans.",
+        json!({
+            "type": "object",
+            "properties": {
+                "slug": {"type": "string", "description": "Exact tool slug from plugin_tools or plugin_search (e.g. SLACK_SEND_MESSAGE)."},
+                "arguments": {"type": "object", "description": "Tool arguments as a JSON object.", "additionalProperties": true}
+            },
+            "required": ["slug"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn visit_url() -> Value {
     tool(
         "visit_url",
@@ -630,6 +696,16 @@ mod tests {
         assert!(!names.contains(&"apply_patch".to_string()));
         assert!(!names.contains(&"run_terminal".to_string()));
         assert!(names.contains(&"read_lints".to_string()));
+        assert!(names.contains(&"plugin_list".to_string()));
+        assert!(!names.contains(&"plugin_run".to_string()));
+    }
+
+    #[test]
+    fn code_mode_includes_plugin_run() {
+        let tools = tools_for_mode_and_family("code", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"plugin_run".to_string()));
+        assert!(names.contains(&"plugin_list".to_string()));
     }
 }
 

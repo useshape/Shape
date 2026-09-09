@@ -35,7 +35,6 @@ export function startDevRun(command: string, ptyId?: number | null) {
     clearStartingTimer();
     state = { status: "starting", command, ptyId: ptyId ?? state.ptyId };
     emit();
-    // Don't leave the badge spinning forever if output never matches.
     startingTimer = setTimeout(() => {
         if (state.status === "starting") {
             state = { ...state, status: "running" };
@@ -79,6 +78,10 @@ export function clearDevRun() {
     clearStartingTimer();
     state = { status: "idle", command: null, ptyId: null };
     emit();
+}
+
+export function getDevRunSnapshot(): State {
+    return state;
 }
 
 function subscribe(cb: () => void) {

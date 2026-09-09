@@ -1,7 +1,8 @@
 "use client";
 
+import { RiArrowLeftLine, RiArrowRightLine, RiMoreLine, RiRefreshLine, RiStarLine } from "@remixicon/react";
 import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { commands } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import {
@@ -49,16 +50,16 @@ export function BrowserView() {
         <div className="flex h-full min-h-0 flex-col">
             <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border-subtle px-1">
                 <ToolBtn label="Back" disabled={!canBack} onClick={() => previewBack()}>
-                    <Icon name="arrow_back" size={ICON_SIZE_SM} />
+                    <Icon icon={RiArrowLeftLine} />
                 </ToolBtn>
                 <ToolBtn label="Forward" disabled={!canForward} onClick={() => previewForward()}>
-                    <Icon name="arrow_forward" size={ICON_SIZE_SM} />
+                    <Icon icon={RiArrowRightLine} />
                 </ToolBtn>
                 <ToolBtn label="Reload" onClick={() => previewReload()}>
-                    <Icon name="refresh" size={ICON_SIZE_SM} />
+                    <Icon icon={RiRefreshLine} />
                 </ToolBtn>
                 <ToolBtn label="Bookmark">
-                    <Icon name="star_border" size={ICON_SIZE_SM} />
+                    <Icon icon={RiStarLine} />
                 </ToolBtn>
                 <form onSubmit={go} className="mx-1 min-w-0 flex-1">
                     <input
@@ -82,7 +83,7 @@ export function BrowserView() {
                             className="flex size-7 items-center justify-center rounded text-text-muted hover:bg-panel-hover"
                             aria-label="More"
                         >
-                            <Icon name="more_horiz" size={ICON_SIZE_SM} />
+                            <Icon icon={RiMoreLine} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">

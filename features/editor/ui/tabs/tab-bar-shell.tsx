@@ -88,7 +88,7 @@ export function TabBarShell({
                     </DndContext>
                 </div>
             ) : (
-                <div className="min-w-0 flex-1 self-stretch bg-editor" />
+                <div className="min-w-0 flex-1 self-stretch bg-panel" />
             )}
             {actions ? <div className={WORKBENCH_TAB_ACTIONS_CLASS}>{actions}</div> : null}
         </div>

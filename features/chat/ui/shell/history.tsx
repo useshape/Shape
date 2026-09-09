@@ -1,5 +1,6 @@
 "use client";
 
+import { RiDeleteBinLine, RiHistoryLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -121,7 +122,7 @@ export function ChatHistoryMenu({
             </Button>
         ) : (
             <SidebarPanelActionButton className="h-6 w-6" aria-label={tooltip}>
-                <Icon name="history" size={14} />
+                <Icon icon={RiHistoryLine} />
             </SidebarPanelActionButton>
         );
 
@@ -180,7 +181,7 @@ export function ChatHistoryMenu({
                                             void handleDelete(conversation.id);
                                         }}
                                     >
-                                        <Icon name="delete" size={14} />
+                                        <Icon icon={RiDeleteBinLine} />
                                     </button>
                                 </DropdownMenuItem>
                             );

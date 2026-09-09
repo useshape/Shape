@@ -63,7 +63,8 @@ describe("notification popups", () => {
         const stack = document.querySelector("[data-toast-stack]");
         expect(stack).toBeTruthy();
         expect(stack?.className).toBe(TOAST_STACK_CLASS);
-        expect(stack?.className).toContain("bottom-[calc(var(--statusbar-height)+12px)]");
+        expect(stack?.className).toContain("bottom-4");
+        expect(stack?.className).toContain("right-4");
         expect(stack?.className).not.toContain("items-center");
         expect(stack?.className).not.toContain("inset-0");
     });

@@ -1,5 +1,7 @@
 "use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
+import { RiArrowGoBackLine, RiArrowGoForwardLine, RiArrowRightSLine, RiArrowUpSLine, RiCheckboxBlankCircleLine, RiCloseLine, RiFilterLine, RiFlashlightLine, RiRefreshLine, RiSunLine } from "@remixicon/react";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -95,7 +97,7 @@ function CollapsibleSection({
     children,
 }: {
     title: string;
-    icon: string;
+    icon: RemixiconComponentType;
     defaultOpen?: boolean;
     children: React.ReactNode;
 }) {
@@ -108,9 +110,9 @@ function CollapsibleSection({
                 className="flex w-full items-center gap-2 px-2 py-2 text-left"
                 onClick={() => setOpen((v) => !v)}
             >
-                <Icon name={icon} size={14} className="text-text-secondary shrink-0" />
+                <Icon icon={icon} className="text-text-secondary shrink-0" />
                 <span className="flex-1 text-sm text-text-primary">{title}</span>
-                <Icon name={open ? "expand_less" : "chevron_right"} size={14} className="text-text-muted" />
+                <Icon icon={open ? RiArrowUpSLine : RiArrowRightSLine} className="text-text-muted" />
             </button>
             {open ? (
                 <div className="space-y-3 px-2.5 pb-3">
@@ -195,7 +197,7 @@ export function ImageToolsCard({
                         onClick={resetAdjustments}
                         title="Reset adjustments"
                     >
-                        <Icon name="refresh" size={16} />
+                        <Icon icon={RiRefreshLine} />
                     </Button>
                     <Button
                         variant="ghost"
@@ -205,7 +207,7 @@ export function ImageToolsCard({
                         onClick={() => session.undo()}
                         title="Undo"
                     >
-                        <Icon name="undo" size={16} />
+                        <Icon icon={RiArrowGoBackLine} />
                     </Button>
                     <Button
                         variant="ghost"
@@ -215,7 +217,7 @@ export function ImageToolsCard({
                         onClick={() => session.redo()}
                         title="Redo"
                     >
-                        <Icon name="redo" size={16} />
+                        <Icon icon={RiArrowGoForwardLine} />
                     </Button>
                     <Button
                         variant="ghost"
@@ -225,7 +227,7 @@ export function ImageToolsCard({
                         onClick={() => session.discard()}
                         title="Discard changes"
                     >
-                        <Icon name="close" size={16} />
+                        <Icon icon={RiCloseLine} />
                     </Button>
                     <Button
                         variant="secondary"
@@ -240,7 +242,7 @@ export function ImageToolsCard({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-2">
-                <CollapsibleSection title="White Balance" icon="light_mode">
+                <CollapsibleSection title="White Balance" icon={RiSunLine}>
                     <LabeledSlider
                         label="Temperature"
                         value={adj.temperature}
@@ -261,7 +263,7 @@ export function ImageToolsCard({
                     />
                 </CollapsibleSection>
 
-                <CollapsibleSection title="Tone" icon="zap">
+                <CollapsibleSection title="Tone" icon={RiFlashlightLine}>
                     <LabeledSlider label="Exposure" value={adj.exposure} min={-100} max={100} onChange={(exposure) => preview({ exposure })} onCommit={(exposure) => commit({ exposure })} />
                     <LabeledSlider label="Contrast" value={adj.contrast - 100} min={-100} max={100} onChange={(v) => preview({ contrast: v + 100 })} onCommit={(v) => commit({ contrast: v + 100 })} />
                     <LabeledSlider label="Highlight" value={adj.highlights} min={-100} max={100} onChange={(highlights) => preview({ highlights })} onCommit={(highlights) => commit({ highlights })} />
@@ -269,7 +271,7 @@ export function ImageToolsCard({
                     <LabeledSlider label="Saturation" value={adj.saturation - 100} min={-100} max={100} onChange={(v) => preview({ saturation: v + 100 })} onCommit={(v) => commit({ saturation: v + 100 })} />
                 </CollapsibleSection>
 
-                <CollapsibleSection title="Sharpen" icon="filter">
+                <CollapsibleSection title="Sharpen" icon={RiFilterLine}>
                     <EffectSlider
                         label="Intensity"
                         value={adj.sharpen}
@@ -278,7 +280,7 @@ export function ImageToolsCard({
                     />
                 </CollapsibleSection>
 
-                <CollapsibleSection title="Vignette" icon="radio_button_unchecked">
+                <CollapsibleSection title="Vignette" icon={RiCheckboxBlankCircleLine}>
                     <EffectSlider
                         label="Strength"
                         value={adj.vignette}

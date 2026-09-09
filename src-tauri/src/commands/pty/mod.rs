@@ -48,6 +48,8 @@ pub struct SessionMeta {
     /// Signalled exactly once, when the session's process exits (or is killed).
     pub exit_notify: tokio::sync::Notify,
     pub kind: SessionKind,
+    /// Only `pty_spawn_run` sessions scrape preview URLs from output.
+    pub scrape_preview: AtomicBool,
 }
 
 impl SessionMeta {
@@ -59,6 +61,7 @@ impl SessionMeta {
             exit_code: Mutex::new(None),
             exit_notify: tokio::sync::Notify::new(),
             kind,
+            scrape_preview: AtomicBool::new(false),
         }
     }
 
@@ -140,7 +143,7 @@ pub fn looks_like_input_prompt(output: &str) -> bool {
 
 pub struct PtySession {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: Box<dyn portable_pty::Child + Send>,
     cancellation_token: CancellationToken,
     meta: Arc<SessionMeta>,
@@ -187,6 +190,14 @@ impl PtyState {
             .lock()
             .map(|m| m.keys().copied().collect())
             .unwrap_or_default()
+    }
+
+    pub fn mark_preview_scrape(&self, id: u32) {
+        if let Ok(meta_map) = self.session_meta.lock() {
+            if let Some(meta) = meta_map.get(&id) {
+                meta.scrape_preview.store(true, Ordering::SeqCst);
+            }
+        }
     }
 
     pub fn set_session_command(&self, id: u32, command: String) {
@@ -274,11 +285,11 @@ impl PtyState {
     pub fn write_to_session(&self, id: u32, data: &str) -> Result<(), AppError> {
         if let Ok(mut sessions) = self.sessions.lock() {
             if let Some(session) = sessions.get_mut(&id) {
-                session
-                    .writer
-                    .write_all(data.as_bytes())
-                    .map_err(AppError::Io)?;
-                session.writer.flush().map_err(AppError::Io)?;
+                let mut writer = session.writer.lock().map_err(|e| {
+                    AppError::Message(format!("PTY writer lock poisoned: {e}"))
+                })?;
+                writer.write_all(data.as_bytes()).map_err(AppError::Io)?;
+                writer.flush().map_err(AppError::Io)?;
                 return Ok(());
             }
         }
@@ -381,6 +392,183 @@ struct PtyOutput {
 #[derive(Clone, Serialize)]
 struct PtyExit {
     id: u32,
+}
+
+/// Emitted when a background `pty_spawn_run` (or TCP probe) finds a live preview URL.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewReadyEvent {
+    pub id: u32,
+    pub url: String,
+}
+
+/// Pull a localhost preview URL out of **dev-server** output (Next / Vite / etc.).
+/// Ignores casual mentions of localhost (curl, docs, the marketing site).
+fn scrape_preview_url(text: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let looks_like_listen_banner = lower.contains("local:")
+        || lower.contains("network:")
+        || lower.contains("local url")
+        || (lower.contains("vite") && lower.contains("ready"))
+        || lower.contains("compiled successfully");
+    if !looks_like_listen_banner {
+        return None;
+    }
+    const MARKERS: &[&str] = &[
+        "http://localhost:",
+        "http://127.0.0.1:",
+        "http://0.0.0.0:",
+        "https://localhost:",
+        "https://127.0.0.1:",
+    ];
+    let mut best: Option<(usize, String)> = None;
+    for marker in MARKERS {
+        let mut search_from = 0;
+        while let Some(rel) = lower[search_from..].find(marker) {
+            let start = search_from + rel;
+            let rest = &text[start..];
+            let end = rest
+                .find(|c: char| {
+                    c.is_whitespace()
+                        || c < ' '
+                        || c == '\u{1b}'
+                        || c == '\''
+                        || c == '"'
+                        || c == ')'
+                        || c == ']'
+                        || c == ','
+                        || c == '|'
+                        || c == '<'
+                })
+                .unwrap_or(rest.len());
+            let mut raw = rest[..end].trim_end_matches(['/', '#', '?']).to_string();
+            // Keep path if present; normalize host for the iframe.
+            if let Ok(mut u) = url::Url::parse(&raw) {
+                let host = u.host_str().unwrap_or("127.0.0.1");
+                if host == "0.0.0.0" || host == "localhost" {
+                    let _ = u.set_host(Some("127.0.0.1"));
+                }
+                raw = u.to_string();
+            }
+            if best.as_ref().map(|(i, _)| start >= *i).unwrap_or(true) {
+                best = Some((start, raw));
+            }
+            search_from = start + marker.len();
+        }
+    }
+    best.map(|(_, u)| u)
+}
+
+fn preview_probe_candidates(command: &str) -> Vec<String> {
+    let mut urls = Vec::new();
+    let mut add = |port: u16| {
+        let u = format!("http://127.0.0.1:{port}/");
+        if !urls.contains(&u) {
+            urls.push(u);
+        }
+    };
+    // Explicit --port / -p in the start command.
+    let re_ports = [
+        ("--port", true),
+        ("-p", true),
+        ("--port=", false),
+        ("-p=", false),
+    ];
+    for (flag, spaced) in re_ports {
+        if let Some(idx) = command.find(flag) {
+            let after = &command[idx + flag.len()..];
+            let token = if spaced {
+                after.split_whitespace().next().unwrap_or("")
+            } else {
+                after.split_whitespace().next().unwrap_or(after)
+            };
+            if let Ok(port) = token.trim().parse::<u16>() {
+                add(port);
+            }
+        }
+    }
+    urls
+}
+
+async fn http_preview_serves(url: &str) -> bool {
+    let Ok(client) = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(2))
+        .timeout(std::time::Duration::from_millis(900))
+        .no_proxy()
+        .build()
+    else {
+        return false;
+    };
+    match client.get(url).header("accept", "text/html,*/*").send().await {
+        Ok(res) => {
+            let code = res.status().as_u16();
+            // Port is accepting HTTP. 4xx is still a real server (wrong path).
+            code < 500
+        }
+        Err(_) => false,
+    }
+}
+
+async fn tcp_preview_reachable(url: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    let host = parsed.host_str().unwrap_or("127.0.0.1");
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    let mut addrs = vec![format!("{host}:{port}")];
+    let lower = host.to_ascii_lowercase();
+    if lower == "localhost" || lower == "0.0.0.0" {
+        addrs.push(format!("127.0.0.1:{port}"));
+    }
+    for addr in addrs {
+        let connect = tokio::net::TcpStream::connect(addr);
+        match tokio::time::timeout(std::time::Duration::from_millis(350), connect).await {
+            Ok(Ok(_)) => return true,
+            _ => continue,
+        }
+    }
+    false
+}
+
+async fn probe_preview_until_ready(app: AppHandle, id: u32, command: String) {
+    let candidates = preview_probe_candidates(&command);
+    if candidates.is_empty() {
+        log::info!(
+            "[preview] tcp probe skip id={} (no port in command; wait for this PTY's URL scrape)",
+            id
+        );
+        return;
+    }
+    log::info!(
+        "[preview] tcp probe start id={} candidates={:?}",
+        id,
+        candidates
+    );
+    for attempt in 0..200 {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        for url in &candidates {
+            if tcp_preview_reachable(url).await && http_preview_serves(url).await {
+                log::info!("[preview] http READY id={} url={} attempt={}", id, url, attempt);
+                let _ = app.emit(
+                    "preview-ready",
+                    PreviewReadyEvent {
+                        id,
+                        url: url.clone(),
+                    },
+                );
+                return;
+            }
+        }
+        if attempt % 20 == 0 {
+            log::info!(
+                "[preview] tcp still waiting id={} attempt={} ({}ms)",
+                id,
+                attempt,
+                attempt * 250
+            );
+        }
+    }
+    log::warn!("[preview] tcp probe TIMEOUT id={} after ~50s", id);
 }
 
 #[derive(Clone, Serialize)]
@@ -579,10 +767,56 @@ pub async fn spawn_session(
     .await
 }
 
+/// Ensure Next/Vite-style dev servers bind on IPv4 loopback so TCP probe + iframe
+/// work on Windows. Prefer `--hostname` (never bare `-H` after `--`) so shell
+/// joining cannot collapse `-- -H` into the broken `---H`.
+fn with_ipv4_hostname(command: &str) -> String {
+    let t = command.trim();
+    let lower = t.to_ascii_lowercase();
+    if lower.contains("--hostname")
+        || lower.contains(" -h ")
+        || lower.contains(" -h=")
+        || lower.ends_with(" -h")
+        || lower.contains("---h")
+    {
+        // Repair a previously collapsed `-- -H` → `---H`.
+        if lower.contains("---h") {
+            return t
+                .replace("---H", "-- --hostname")
+                .replace("---h", "-- --hostname");
+        }
+        return t.to_string();
+    }
+    let npm_dev = regex_is_package_dev(t);
+    if npm_dev {
+        return format!("{t} -- --hostname 127.0.0.1");
+    }
+    if lower.contains("next dev") {
+        return format!("{t} --hostname 127.0.0.1");
+    }
+    t.to_string()
+}
+
+fn regex_is_package_dev(command: &str) -> bool {
+    let lower = command.to_ascii_lowercase();
+    for pm in ["npm ", "pnpm ", "yarn ", "bun "] {
+        if let Some(rest) = lower.strip_prefix(pm) {
+            let rest = rest.trim_start();
+            if rest.starts_with("run dev") || rest.starts_with("dev") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Spawn an agent command as the *direct child* of a fresh PTY. Process exit ==
 /// command completion, so `running`/`exit_code` are accurate — unlike the old
 /// approach of writing the command into a `-NoExit` shell whose process never
 /// exited. Used for dev servers / watch tasks that need a TTY and stay alive.
+///
+/// On Windows we use `cmd.exe /D /S /C "<cmd>"` so `npm.cmd` resolves and the
+/// full command string (including `-- --hostname …`) is preserved.
 pub async fn spawn_agent_pty_command(
     app: &AppHandle,
     state: &PtyState,
@@ -590,20 +824,28 @@ pub async fn spawn_agent_pty_command(
     cwd: &str,
     callbacks: Option<AgentSessionCallbacks>,
 ) -> Result<u32, AppError> {
-    let mut cmd = if cfg!(target_os = "windows") {
-        let mut c = CommandBuilder::new("powershell.exe");
-        c.arg("-NoLogo");
-        c.arg("-NoProfile");
-        c.arg("-Command");
-        c.arg(command);
+    let command = with_ipv4_hostname(command);
+    log::info!(
+        "[preview] spawn_agent_pty_command cwd={} cmd={:?} bytes={:?}",
+        cwd,
+        command,
+        command.as_bytes()
+    );
+    let cmd = if cfg!(target_os = "windows") {
+        let mut c = CommandBuilder::new("cmd.exe");
+        // /D = skip AutoRun, /S = strip quotes around /C string predictably
+        c.arg("/D");
+        c.arg("/S");
+        c.arg("/C");
+        // One argument; portable_pty will quote it for CreateProcess.
+        c.arg(&command);
         c
     } else {
         let mut c = CommandBuilder::new("sh");
         c.arg("-c");
-        c.arg(command);
+        c.arg(&command);
         c
     };
-    cmd.env("CI", "1");
     let id = spawn_pty_with_command(
         app,
         state,
@@ -616,9 +858,68 @@ pub async fn spawn_agent_pty_command(
         callbacks,
     )
     .await?;
-    state.set_session_command(id, command.to_string());
+    state.set_session_command(id, command);
     state.prune_finished_sessions();
     Ok(id)
+}
+
+/// Spawn a background run command (dev server) as the PTY child, start TCP
+/// probing in Rust, and return the session id. Used by Run + Design Mode.
+pub async fn pty_spawn_run(
+    app: AppHandle,
+    state: tauri::State<'_, PtyState>,
+    cwd: String,
+    command: String,
+) -> Result<u32, AppError> {
+    let trimmed = with_ipv4_hostname(command.trim());
+    if trimmed.is_empty() {
+        return Err(AppError::Message("Empty run command".into()));
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        let has_node = path
+            .split(';')
+            .any(|p| p.to_ascii_lowercase().contains("node"));
+        let prefix: String = path.chars().take(200).collect();
+        log::info!(
+            "[preview] pty_spawn_run PATH_has_node={} PATH~={}",
+            has_node,
+            prefix
+        );
+    } else {
+        log::warn!("[preview] pty_spawn_run: PATH unset");
+    }
+    log::info!("[preview] pty_spawn_run cwd={} cmd={:?}", cwd, trimmed);
+
+    let id = spawn_agent_pty_command(&app, &state, &trimmed, &cwd, None).await?;
+    state.mark_preview_scrape(id);
+    log::info!("[preview] pty_spawn_run spawned id={}", id);
+
+    let app_probe = app.clone();
+    let cmd_probe = trimmed.clone();
+    tauri::async_runtime::spawn(async move {
+        probe_preview_until_ready(app_probe, id, cmd_probe).await;
+    });
+
+    Ok(id)
+}
+
+/// Return buffered PTY output so the Terminal UI can attach late and still
+/// show everything that printed while the panel was closed.
+pub async fn pty_read_output(
+    state: tauri::State<'_, PtyState>,
+    id: u32,
+    tail_chars: Option<usize>,
+) -> Result<TerminalSessionSnapshot, AppError> {
+    let tail = tail_chars.unwrap_or(SESSION_OUTPUT_CAP).min(SESSION_OUTPUT_CAP);
+    log::info!("[preview] pty_read_output id={} tail={}", id, tail);
+    let snap = state.read_session_output(id, tail)?;
+    log::info!(
+        "[preview] pty_read_output id={} chars={} running={}",
+        id,
+        snap.output_chars,
+        snap.running
+    );
+    Ok(snap)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -663,10 +964,28 @@ async fn spawn_pty_with_command(
         .master
         .try_clone_reader()
         .map_err(|e| AppError::Message(e.to_string()))?;
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|e| AppError::Message(e.to_string()))?;
+    let writer = Arc::new(Mutex::new(
+        pair.master
+            .take_writer()
+            .map_err(|e| AppError::Message(e.to_string()))?,
+    ));
+
+    // portable-pty 0.9 ConPTY uses PSEUDOCONSOLE_INHERIT_CURSOR: it emits
+    // ESC[6n (DSR) on startup and blocks the child until the host replies
+    // with ESC[1;1R (CPR). Without this reply, npm never starts — the only
+    // output is those 4 bytes. See microsoft/terminal#1810, turborepo#11816.
+    #[cfg(windows)]
+    {
+        if let Ok(mut w) = writer.lock() {
+            match w.write_all(b"\x1b[1;1R") {
+                Ok(()) => {
+                    let _ = w.flush();
+                    log::info!("[pty] ConPTY DSR reply ESC[1;1R");
+                }
+                Err(e) => log::warn!("[pty] ConPTY DSR reply failed: {e}"),
+            }
+        }
+    }
 
     let id = state.allocate_id(client_id)?;
 
@@ -681,7 +1000,7 @@ async fn spawn_pty_with_command(
             id,
             PtySession {
                 master: pair.master,
-                writer,
+                writer: writer.clone(),
                 child,
                 cancellation_token: cancellation_token.clone(),
                 meta: meta.clone(),
@@ -693,6 +1012,7 @@ async fn spawn_pty_with_command(
     let session_id = id;
     let token = cancellation_token;
     let app_for_thread = app.clone();
+    let writer_for_reader = writer;
     thread::spawn(move || {
         let mut buf = [0u8; 8192];
         loop {
@@ -711,8 +1031,40 @@ async fn spawn_pty_with_command(
                     break;
                 }
                 Ok(n) => {
+                    #[cfg(windows)]
+                    if buf[..n].windows(4).any(|w| w == b"\x1b[6n") {
+                        if let Ok(mut w) = writer_for_reader.lock() {
+                            let _ = w.write_all(b"\x1b[1;1R");
+                            let _ = w.flush();
+                            log::info!("[pty] ConPTY reactive DSR reply id={}", session_id);
+                        }
+                    }
                     let data = String::from_utf8_lossy(&buf[..n]).to_string();
                     meta.append_output(&data);
+                    if meta.scrape_preview.load(Ordering::SeqCst) {
+                        let preview: String = data.chars().take(160).collect();
+                        let hex: Vec<String> = buf[..n.min(32)]
+                            .iter()
+                            .map(|b| format!("{b:02x}"))
+                            .collect();
+                        log::info!(
+                            "[preview] pty {} out ({}b) hex={} text={}",
+                            session_id,
+                            n,
+                            hex.join(" "),
+                            preview.replace('\n', "\\n").replace('\r', "\\r")
+                        );
+                        if let Some(url) = scrape_preview_url(&data) {
+                            log::info!("[preview] pty {} scraped url {}", session_id, url);
+                            let _ = app_for_thread.emit(
+                                "preview-ready",
+                                PreviewReadyEvent {
+                                    id: session_id,
+                                    url,
+                                },
+                            );
+                        }
+                    }
                     if let Some(cb) = &callbacks {
                         (cb.on_output)(session_id, &data);
                     }
@@ -875,11 +1227,14 @@ pub async fn pty_write(
     let session = sessions
         .get_mut(&id)
         .ok_or(AppError::Message("Session not found".to_string()))?;
-    session
+    let mut writer = session
         .writer
+        .lock()
+        .map_err(|e| AppError::Message(format!("PTY writer lock poisoned: {e}")))?;
+    writer
         .write_all(data.as_bytes())
         .map_err(|e| AppError::Io(e))?;
-    session.writer.flush().map_err(|e| AppError::Io(e))?;
+    writer.flush().map_err(|e| AppError::Io(e))?;
     Ok(())
 }
 
@@ -956,4 +1311,30 @@ pub async fn pty_kill_all(state: tauri::State<'_, PtyState>) -> Result<(), AppEr
         session.meta.mark_exited(Some(-1));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod scrape_tests {
+    use super::*;
+
+    #[test]
+    fn scrape_next_js_banner() {
+        let t = "▲ Next.js 16.3.0 (Turbopack)\r\n- Local:         http://127.0.0.1:3000\r\n- Network:    http://127.0.0.1:3000\r\n";
+        let u = scrape_preview_url(t).expect("url");
+        assert!(u.contains("127.0.0.1:3000"), "{u}");
+    }
+
+    #[test]
+    fn scrape_stops_at_ansi() {
+        let t = "Local: http://127.0.0.1:3000\u{1b}[32mReady";
+        let u = scrape_preview_url(t).expect("url");
+        assert!(u.starts_with("http://127.0.0.1:3000"), "{u}");
+        assert!(!u.contains('\u{1b}'), "{u}");
+    }
+
+    #[test]
+    fn scrape_ignores_casual_localhost_mentions() {
+        assert!(scrape_preview_url("GET http://localhost:3000/api\n").is_none());
+        assert!(scrape_preview_url("open http://127.0.0.1:3000 for the website\n").is_none());
+    }
 }

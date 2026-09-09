@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowLeftSLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Icon } from "@/components/ui/icon";
@@ -64,7 +65,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
                 {!isCompact ? (
                     <>
                         <div className="flex shrink-0 items-center">
-                            <div className="window-appicon flex h-full w-11 shrink-0 items-center justify-center">
+                            <div className="window-appicon flex h-full w-5 ml-3 shrink-0 items-center justify-center">
                                 <Image
                                     src="/logos/logo.svg"
                                     alt="Logo"
@@ -106,7 +107,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
                                 onClick={onBack}
                                 className="-ml-2 -mt-0.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
                             >
-                                <Icon name="chevron_left" size={16} filled />
+                                <Icon icon={RiArrowLeftSLine} />
                             </button>
                         )}
                         <span>{title}</span>

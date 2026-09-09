@@ -1,9 +1,13 @@
 "use client";
 
+import { RiAddLine, RiArrowDownSLine, RiCheckboxBlankLine, RiCloseLine, RiEyeLine, RiEyeOffLine, RiMore2Line, RiSubtractLine } from "@remixicon/react";
 import React from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Checkmark } from "@/components/ui/checkmark";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -12,7 +16,11 @@ import {
 } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ColorPickerPortal, type PickerAnchor } from "@/features/editor/ui/color-picker/portal";
-import { PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
+import {
+    PxInput as PxInputBase,
+    RadiusGlyph,
+    ToggleBtn as ToggleBtnBase,
+} from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import { cn } from "@/lib/utils";
 import {
     colorParts,
@@ -22,6 +30,40 @@ import {
     parsePx,
     toCssColor,
 } from "../../design-mode/css";
+
+/** Dense inspector chrome shared by every control in the Design panel. */
+const FIELD_SHELL =
+    "h-7 gap-1 rounded-lg border-border-subtle bg-input-bg px-1.5 shadow-none focus-within:border-border-focus focus-within:ring-0 hover:border-border";
+const SEGMENT_SHELL = "rounded-lg border border-border-subtle bg-input-bg p-0.5";
+const DIVIDER = "border-border-subtle";
+const FIELD_CONTROL =
+    "flex h-7 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-lg border border-border-subtle bg-input-bg px-1.5 text-sm text-text-primary outline-none transition-colors hover:border-border focus-visible:border-border-focus";
+const ICON_QUIET =
+    "text-text-muted hover:bg-panel-hover hover:text-text-primary";
+
+export function PxInput({ className, ...props }: React.ComponentProps<typeof PxInputBase>) {
+    return <PxInputBase {...props} className={cn(FIELD_SHELL, className)} />;
+}
+
+export function ToggleBtn({ className, ...props }: React.ComponentProps<typeof ToggleBtnBase>) {
+    return (
+        <ToggleBtnBase
+            {...props}
+            className={cn(
+                "h-6 rounded-md",
+                props.active
+                    ? "bg-panel-active text-text-primary"
+                    : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
+                className,
+            )}
+        />
+    );
+}
+
+/** Segmented group wrapper for `ToggleBtn` rows (align, case, style). */
+export function Segment({ className, children }: { className?: string; children: React.ReactNode }) {
+    return <div className={cn("flex min-w-0 flex-1", SEGMENT_SHELL, className)}>{children}</div>;
+}
 
 export function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
     return (
@@ -70,10 +112,10 @@ export function Section({
     children?: React.ReactNode;
 }) {
     return (
-        <div className="flex flex-col gap-2 border-b border-border-subtle px-3 py-3">
-            <div className="flex h-6 items-center justify-between">
-                <span className="text-xs font-medium text-text-primary">{title}</span>
-                {action}
+        <div className={cn("flex flex-col gap-1.5 border-b px-3 py-2.5", DIVIDER)}>
+            <div className="flex h-5 items-center justify-between">
+                <span className="text-sm text-text-secondary">{title}</span>
+                {action ? <div className="flex items-center gap-0.5 text-text-muted">{action}</div> : null}
             </div>
             {children}
         </div>
@@ -83,21 +125,28 @@ export function Section({
 export function AddHeader({
     title,
     onAdd,
+    expanded,
+    onCollapse,
 }: {
     title: string;
-    onAdd: () => void;
+    onAdd?: () => void;
+    expanded?: boolean;
+    onCollapse?: () => void;
 }) {
+    const open = Boolean(expanded && onCollapse);
     return (
-        <div className="flex h-8 items-center justify-between border-b border-border-subtle px-3">
-            <span className="text-xs font-medium text-text-primary">{title}</span>
-            <button
+        <div className={cn("flex h-9 items-center justify-between border-b px-3", DIVIDER)}>
+            <span className="text-sm text-text-secondary">{title}</span>
+            <Button
                 type="button"
-                title={`Add ${title.toLowerCase()}`}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                onClick={onAdd}
+                variant="ghost"
+                size="icon"
+                title={`${open ? "Remove" : "Add"} ${title.toLowerCase()}`}
+                className={ICON_QUIET}
+                onClick={open ? onCollapse : onAdd}
             >
-                <Icon name="add" size={14} />
-            </button>
+                <Icon icon={open ? RiSubtractLine : RiAddLine} />
+            </Button>
         </div>
     );
 }
@@ -124,22 +173,20 @@ export function CompactSelect({
     return (
         <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
                     title={title}
-                    className={cn(
-                        "flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-md bg-panel-hover px-2 text-xs text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50",
-                        className,
-                    )}
+                    className={cn(FIELD_CONTROL, "h-7 font-normal", className)}
                 >
                     <span className="flex min-w-0 items-center gap-1.5">
                         {current?.icon}
                         <span className="truncate" style={current?.style}>{current?.label ?? value}</span>
                     </span>
-                    <Icon name="expand_more" size={12} className="shrink-0 text-text-muted" />
-                </button>
+                    <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-60" />
+                </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[200px]">
+            <DropdownMenuContent align="start" className="min-w-50">
                 {opts.map((opt) => (
                     <DropdownMenuItem
                         key={opt.value}
@@ -157,13 +204,13 @@ export function CompactSelect({
 }
 
 export function Glyph({ children }: { children: string }) {
-    return <span className="min-w-3 text-center text-[10px] font-medium text-text-muted">{children}</span>;
+    return <span className="min-w-3 text-center text-xs font-medium text-text-muted">{children}</span>;
 }
 
 export function MicroLabel({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-[10px] text-text-muted">{label}</span>
+            <span className="text-xs text-text-muted">{label}</span>
             {children}
         </div>
     );
@@ -182,17 +229,21 @@ export function IconBtn({
 }) {
     return (
         <Tooltip content={title} side="top" delayDuration={400}>
-            <button
+            <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 title={title}
                 onClick={onClick}
                 className={cn(
-                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-                    active ? "bg-panel-active text-text-primary" : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
+                    "size-6",
+                    active
+                        ? "bg-panel-active text-text-primary"
+                        : ICON_QUIET,
                 )}
             >
                 {children}
-            </button>
+            </Button>
         </Tooltip>
     );
 }
@@ -244,30 +295,54 @@ export function FlyoutCard({
         <div
             ref={ref}
             data-shape-flyout=""
-            className="fixed z-[80] w-64 rounded-lg border border-border-subtle bg-panel p-3 shadow-lg"
+            className="fixed z-80 w-64 rounded-xl border border-border-subtle bg-panel p-2.5 shadow-xl"
             style={style}
         >
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-text-primary">{title}</span>
-                <button
+                <span className="text-sm text-text-secondary">{title}</span>
+                <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     title="Close"
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                    className={ICON_QUIET}
                     onClick={onClose}
                 >
-                    <Icon name="close" size={14} />
-                </button>
+                    <Icon icon={RiCloseLine} />
+                </Button>
             </div>
-            <div className="flex flex-col gap-2">{children}</div>
+            <div className="flex flex-col gap-1.5">{children}</div>
         </div>,
         document.body,
     );
 }
 
+export function CheckRow({
+    label,
+    checked,
+    onChange,
+    title,
+}: {
+    label: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    title?: string;
+}) {
+    return (
+        <div
+            title={title}
+            className="flex h-6 select-none items-center gap-2 text-sm text-text-muted hover:text-text-primary"
+        >
+            <Checkmark checked={checked} onCheckedChange={(v) => onChange(v === true)} />
+            <span className="cursor-pointer" onClick={() => onChange(!checked)}>{label}</span>
+        </div>
+    );
+}
+
 export function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="flex min-h-8 items-center gap-2">
-            <span className="w-16 shrink-0 text-xs text-text-muted">{label}</span>
+        <div className="flex min-h-7 items-center gap-2">
+            <span className="w-14 shrink-0 text-sm text-text-muted">{label}</span>
             <div className="flex min-w-0 flex-1 items-center gap-1">{children}</div>
         </div>
     );
@@ -319,7 +394,7 @@ export function ColorRow({
                 <button
                     type="button"
                     title="Color"
-                    className="shape-swatch-design flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-panel-hover outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                    className="shape-swatch-design flex size-7 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-input-bg outline-none transition-colors hover:border-border focus-visible:border-border-focus"
                     onClick={(e) => {
                         const r = e.currentTarget.getBoundingClientRect();
                         setAnchor({ x: r.left, y: r.top });
@@ -328,21 +403,21 @@ export function ColorRow({
                     }}
                 >
                     <span
-                        className="h-4 w-4 rounded-[4px] border border-border-subtle"
+                        className="h-4 w-4 rounded-md border border-border-subtle"
                         style={
                             gradient
                                 ? { backgroundImage: display, backgroundSize: "cover" }
                                 : transparent
                                   ? {
                                         backgroundImage:
-                                            "repeating-conic-gradient(var(--border-subtle) 0% 25%, transparent 0% 50%)",
+                                            "repeating-conic-gradient(rgba(255,255,255,0.18) 0% 25%, transparent 0% 50%)",
                                         backgroundSize: "8px 8px",
                                     }
                                   : { backgroundColor: swatch }
                         }
                     />
                 </button>
-                <input
+                <Input
                     type="text"
                     spellCheck={false}
                     aria-label="Hex"
@@ -356,9 +431,9 @@ export function ColorRow({
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                     }}
                     disabled={gradient}
-                    className="h-7 min-w-0 flex-1 rounded-md bg-panel-hover px-1.5 text-xs tabular-nums text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50 disabled:text-text-muted"
+                    className="h-7 min-w-0 flex-1 rounded-lg px-1.5 text-sm tabular-nums"
                 />
-                <div className="w-[72px] shrink-0">
+                <div className="w-16 shrink-0">
                     <PxInput
                         glyph={<span className="text-[9px]">%</span>}
                         title="Opacity"
@@ -374,12 +449,12 @@ export function ColorRow({
                 </div>
                 {onToggleHidden ? (
                     <IconBtn title={hidden ? "Show" : "Hide"} active={hidden} onClick={onToggleHidden}>
-                        <Icon name={hidden ? "visibility_off" : "visibility"} size={13} />
+                        <Icon icon={hidden ? RiEyeOffLine : RiEyeLine} />
                     </IconBtn>
                 ) : null}
                 {onRemove ? (
                     <IconBtn title="Remove" onClick={onRemove}>
-                        <Icon name="remove" size={13} />
+                        <Icon icon={RiSubtractLine} />
                     </IconBtn>
                 ) : null}
             </div>
@@ -416,7 +491,7 @@ export function AlignMatrix({
     const cols = ["flex-start", "center", "flex-end"] as const;
     const rows = ["flex-start", "center", "flex-end"] as const;
     return (
-        <div className="grid h-[52px] w-[52px] shrink-0 grid-cols-3 grid-rows-3 gap-px rounded-md bg-panel-hover p-1">
+        <div className="grid size-13 shrink-0 grid-cols-3 grid-rows-3 gap-px rounded-lg border border-border-subtle bg-input-bg p-1">
             {rows.flatMap((a) =>
                 cols.map((j) => {
                     const active = j === justify && a === align;
@@ -430,8 +505,8 @@ export function AlignMatrix({
                         >
                             <span
                                 className={cn(
-                                    "h-1.5 w-1.5 rounded-full",
-                    active ? "bg-accent-text" : "bg-text-muted opacity-40",
+                                    "size-1.5 rounded-full",
+                                    active ? "bg-accent" : "bg-border",
                                 )}
                             />
                         </button>
@@ -474,7 +549,7 @@ export function PadXY({
                     ))}
                 </div>
                 <IconBtn title="Uniform padding" active onClick={onToggleIndependent}>
-                    <Icon name="crop_square" size={13} />
+                    <Icon icon={RiCheckboxBlankLine} />
                 </IconBtn>
             </div>
         );
@@ -494,12 +569,13 @@ export function PadXY({
                 onCommit={(n) => onChange("y", n)}
             />
             <IconBtn title="Independent padding" onClick={onToggleIndependent}>
-                <Icon name="crop_square" size={13} />
+                <Icon icon={RiCheckboxBlankLine} />
             </IconBtn>
         </div>
     );
 }
 
+/** Paper-style blending row: opacity % + blend mode dropdown (no ruler / no opacity slider). */
 export function OpacityBlendRow({
     opacity,
     blend,
@@ -518,21 +594,13 @@ export function OpacityBlendRow({
     })();
     return (
         <div className="flex items-center gap-1">
-            <div className="w-[72px] shrink-0">
-                <PxInput
-                    glyph={<span className="text-[9px]">%</span>}
-                    title="Opacity"
-                    value={percent}
-                    onCommit={(n) => onOpacity(String(Math.max(0, Math.min(100, n)) / 100))}
-                />
-            </div>
-            <Slider
-                min={0}
+            <PxInput
+                glyph={<span className="text-[9px]">%</span>}
+                title="Opacity"
+                value={percent}
                 max={100}
-                step={1}
-                value={[percent]}
-                onValueChange={(v) => onOpacity(String((v[0] ?? percent) / 100))}
-                className="flex-1"
+                onCommit={(n) => onOpacity(String(Math.max(0, Math.min(100, n)) / 100))}
+                className="min-w-0 flex-1"
             />
             <CompactSelect
                 value={blend || "normal"}
@@ -545,12 +613,13 @@ export function OpacityBlendRow({
                     { value: "lighten", label: "Lighten" },
                 ]}
                 onChange={onBlend}
-                className="max-w-[96px] flex-none"
+                className="min-w-0 flex-1"
             />
         </div>
     );
 }
 
+/** Simple continuous radius slider + numeric field — not a tick/ruler dial. */
 export function RadiusSlider({
     value,
     onChange,
@@ -558,30 +627,29 @@ export function RadiusSlider({
     value: string;
     onChange: (pxValue: string) => void;
 }) {
-    const current = Math.min(64, Math.max(0, parsePx(value) ?? 0));
+    const current = Math.min(999, Math.max(0, parsePx(value) ?? 0));
     return (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
             <Slider
                 min={0}
                 max={64}
                 step={1}
-                value={[current]}
+                value={[Math.min(64, current)]}
                 onValueChange={(v) => onChange(`${v[0] ?? current}px`)}
                 className="flex-1"
             />
             <div className="w-14 shrink-0">
                 <PxInput
-                    glyph={<span className="text-[9px]">px</span>}
                     title="Radius"
                     value={current}
-                    onCommit={(n) => onChange(`${n}px`)}
+                    onCommit={(n) => onChange(`${Math.max(0, n)}px`)}
                 />
             </div>
         </div>
     );
 }
 
-export { ToggleBtn, PxInput };
+export { RadiusGlyph };
 
 export type DesignEffectKind =
     | "drop-shadow"
@@ -699,20 +767,22 @@ export function EffectsSection({
     const shadow = openFx && (openFx.kind === "drop-shadow" || openFx.kind === "inner-shadow");
     const blurKind = openFx && (openFx.kind === "layer-blur" || openFx.kind === "background-blur");
     return (
-        <div className="border-b border-border-subtle">
-            <div className="flex h-8 items-center justify-between px-3">
-                <span className="text-xs font-medium text-text-primary">Effects</span>
+        <div className={cn("border-b", DIVIDER)}>
+            <div className={cn("flex h-9 items-center justify-between px-3", effects.length > 0 && `border-b ${DIVIDER}`)}>
+                <span className="text-sm text-text-secondary">Effects</span>
                 <DropdownMenu modal={false} open={menu} onOpenChange={setMenu}>
                     <DropdownMenuTrigger asChild>
-                        <button
+                        <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             title="Add effect"
-                            className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                            className={ICON_QUIET}
                         >
-                            <Icon name="add" size={14} />
-                        </button>
+                            <Icon icon={RiAddLine} />
+                        </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[200px]">
+                    <DropdownMenuContent align="end" className="min-w-50">
                         {EFFECT_META.map((item) => (
                             <DropdownMenuItem key={item.kind} onSelect={() => add(item.kind)}>
                                 <span className="text-xs">{item.label}</span>
@@ -724,7 +794,7 @@ export function EffectsSection({
             {effects.map((fx) => (
                 <div
                     key={fx.id}
-                    className="flex items-center gap-1 px-2 pb-1"
+                    className="flex items-center gap-1 px-2 py-1 first:pt-1.5 last:pb-1.5"
                     draggable
                     onDragStart={() => {
                         dragId.current = fx.id;
@@ -738,14 +808,16 @@ export function EffectsSection({
                         dragId.current = null;
                     }}
                 >
-                    <span className="cursor-grab text-text-muted" title="Drag to reorder">
-                        <Icon name="more_vert" size={12} />
+                    <span className="cursor-grab text-text-muted hover:text-text-secondary" title="Drag to reorder">
+                        <Icon icon={RiMore2Line} />
                     </span>
                     <button
                         type="button"
                         className={cn(
-                            "flex h-8 min-w-0 flex-1 items-center rounded-md px-2 text-left text-xs text-text-primary",
-                            openId === fx.id ? "bg-panel-active" : "hover:bg-panel-hover",
+                            "flex h-7 min-w-0 flex-1 items-center rounded-lg border px-1.5 text-left text-sm text-text-primary transition-colors",
+                            openId === fx.id
+                                ? "border-border bg-panel-active"
+                                : "border-border-subtle bg-input-bg hover:border-border",
                         )}
                         onClick={(e) => {
                             triggerRef.current = e.currentTarget;
@@ -760,7 +832,7 @@ export function EffectsSection({
                         active={fx.hidden}
                         onClick={() => patch(fx.id, { hidden: !fx.hidden })}
                     >
-                        <Icon name={fx.hidden ? "visibility_off" : "visibility"} size={13} />
+                        <Icon icon={fx.hidden ? RiEyeOffLine : RiEyeLine} />
                     </IconBtn>
                     <IconBtn
                         title="Remove"
@@ -769,7 +841,7 @@ export function EffectsSection({
                             onChange(effects.filter((e) => e.id !== fx.id));
                         }}
                     >
-                        <Icon name="remove" size={13} />
+                        <Icon icon={RiSubtractLine} />
                     </IconBtn>
                 </div>
             ))}
@@ -830,15 +902,11 @@ export function EffectsSection({
                         </FieldRow>
                     ) : null}
                     {blurKind ? (
-                        <label className="flex items-center gap-2 text-xs text-text-secondary">
-                            <input
-                                type="checkbox"
-                                checked={!!openFx.progressive}
-                                onChange={(e) => patch(openFx.id, { progressive: e.target.checked })}
-                                className="accent-accent"
-                            />
-                            Progressive blur
-                        </label>
+                        <CheckRow
+                            label="Progressive blur"
+                            checked={!!openFx.progressive}
+                            onChange={(v) => patch(openFx.id, { progressive: v })}
+                        />
                     ) : null}
                     {blurKind && openFx.progressive ? (
                         <FieldRow label="Direction">
@@ -865,24 +933,37 @@ export function SelectionColors({
     colors: string[];
     onPick: (css: string) => void;
 }) {
-    if (colors.length < 2) return null;
+    if (colors.length === 0) return null;
+    const counts = new Map<string, { css: string; count: number }>();
+    for (const c of colors) {
+        const key = cssColorToHex(c).toUpperCase();
+        const prev = counts.get(key);
+        if (prev) prev.count += 1;
+        else counts.set(key, { css: c, count: 1 });
+    }
+    const rows = [...counts.values()].slice(0, 8);
+    if (rows.length === 0) return null;
     return (
         <Section title="Selection colors">
             <div className="flex flex-col gap-1">
-                {colors.slice(0, 8).map((c, i) => {
-                    const parts = colorParts(c);
+                {rows.map(({ css, count }) => {
+                    const parts = colorParts(css);
                     return (
                         <button
-                            key={`${c}-${i}`}
+                            key={parts.hex}
                             type="button"
-                            className="flex h-8 items-center gap-2 rounded-md bg-panel-hover px-1.5 text-left"
-                            onClick={() => onPick(c)}
+                            className="flex h-7 items-center gap-2 rounded-lg border border-border-subtle bg-input-bg px-1.5 text-left transition-colors hover:border-border"
+                            onClick={() => onPick(css)}
                         >
                             <span
-                                className="h-4 w-4 shrink-0 rounded-[4px] border border-border-subtle"
-                                style={{ backgroundColor: c }}
+                                className="size-4 shrink-0 rounded-md border border-border-subtle"
+                                style={{ backgroundColor: css }}
                             />
-                            <span className="text-xs tabular-nums text-text-primary">{parts.hex}</span>
+                            <span className="min-w-0 flex-1 text-sm tabular-nums text-text-primary">
+                                {parts.hex}
+                            </span>
+                            <span className="text-sm tabular-nums text-text-muted">{parts.alphaPct}%</span>
+                            <span className="text-xs tabular-nums text-text-muted">{count}</span>
                         </button>
                     );
                 })}

@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCheckboxCircleFill, RiCloseCircleFill, RiErrorWarningFill, RiInformationLine, RiNotification3Fill } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +34,7 @@ export function NotificationsMenu() {
                     size="sm"
                     className="relative h-full px-2 shrink-0 text-text-muted hover:text-text-primary"
                 >
-                    <Icon name="notifications" size={14} filled />
+                    <Icon icon={RiNotification3Fill} />
                     {unreadCount > 0 && (
                         <span className="absolute top-1 right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-accent px-1 text-2xs font-medium text-accent-fg">
                             {Math.min(unreadCount, 99)}
@@ -56,16 +57,15 @@ export function NotificationsMenu() {
                         >
                             <div className="flex w-full items-start gap-2">
                                 <Icon
-                                    name={
+                                    icon={
                                         notification.type === "error"
-                                            ? "error"
+                                            ? RiCloseCircleFill
                                             : notification.type === "warning"
-                                                ? "warning"
+                                                ? RiErrorWarningFill
                                                 : notification.type === "success"
-                                                    ? "check_circle"
-                                                    : "info"
+                                                    ? RiCheckboxCircleFill
+                                                    : RiInformationLine
                                     }
-                                    size={14}
                                     className={cn(
                                         "mt-0.5 shrink-0",
                                         notification.type === "error" && "text-error",
@@ -73,7 +73,6 @@ export function NotificationsMenu() {
                                         notification.type === "success" && "text-success",
                                         notification.type === "info" && "text-info",
                                     )}
-                                    filled
                                 />
                                 <div className="min-w-0 flex-1">
                                     <div className="text-sm text-text-primary">{notification.message}</div>

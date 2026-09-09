@@ -1,3 +1,4 @@
+import { RiCheckLine, RiClipboardLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 
@@ -49,7 +50,7 @@ export function SegmentedInput({
                     onClick={() => onCopy(copyValue, copyKey)}
                     className="flex items-center justify-center w-8 h-8 rounded-lg bg-panel-hover text-text-primary hover:text-text-primary hover:bg-panel-hover transition-colors ml-1 cursor-pointer"
                 >
-                    {copiedRow === copyKey ? <Icon name="check" size={16} className="text-success" /> : <Icon name="content_copy" size={16} />}
+                    {copiedRow === copyKey ? <Icon icon={RiCheckLine} className="text-success" /> : <Icon icon={RiClipboardLine} />}
                 </button>
             </div>
             <div className="flex text-2xs text-text-muted font-medium select-none pr-[34px]">

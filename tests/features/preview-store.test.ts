@@ -4,6 +4,7 @@ import {
     normalizePreviewUrl,
     previewUrlsEqual,
 } from "@/features/preview/store";
+import { sameDevCommand } from "@/features/terminal/background-run";
 
 describe("preview store urls", () => {
     it("accepts localhost and loopback only", () => {
@@ -22,5 +23,12 @@ describe("preview store urls", () => {
         expect(previewUrlsEqual("http://localhost:3000", "http://localhost:3000/")).toBe(true);
         expect(previewUrlsEqual("http://localhost:3000/foo", "http://localhost:3000/foo/")).toBe(true);
         expect(previewUrlsEqual("http://localhost:3000/foo", "http://localhost:3000/bar")).toBe(false);
+    });
+});
+
+describe("sameDevCommand", () => {
+    it("ignores hostname flags rust appends", () => {
+        expect(sameDevCommand("npm run dev", "npm run dev -- --hostname 127.0.0.1")).toBe(true);
+        expect(sameDevCommand("npm run dev", "npm run start")).toBe(false);
     });
 });

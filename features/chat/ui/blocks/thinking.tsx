@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -16,8 +17,7 @@ export function ThinkingBlock({ content, isActive }: { content: string; isActive
                 className="flex items-center gap-2 py-1.5 text-sm text-text-muted hover:text-text-primary transition-colors group w-full text-left"
             >
                 <Icon
-                    name="expand_more"
-                    size={14}
+                    icon={RiArrowDownSLine}
                     className={cn(
                         "text-text-muted transition-transform duration-[var(--transition-fast)]",
                         !isOpen && "-rotate-90"

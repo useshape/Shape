@@ -1,16 +1,20 @@
 "use client";
 
 /**
- * Private Design Mode preview runner — not the agent Run / Terminal.
- * Spawns a PTY, scrapes localhost URL from output, kills on stop.
+ * Design Mode preview runner.
+ * Uses the shared background Run (`pty_spawn_run` in Rust) — same process the
+ * Terminal tab attaches to. Ready comes from Rust (`preview-ready` scrape + TCP).
  */
 
-import { getProjectPath } from "@/lib/backend";
-import { resolveDefaultTerminalShell } from "@/lib/settings";
-
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07/g;
-const URL_RE =
-    /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::(\d+))?/gi;
+import { commands } from "@/lib/backend";
+import {
+    ensureBackgroundRun,
+    getBackgroundRunPtyId,
+    getLastPreviewReadyUrl,
+    sameDevCommand,
+    stopBackgroundRun,
+    subscribePreviewReady,
+} from "@/features/terminal/background-run";
 
 export type DesignPreviewPhase =
     | "idle"
@@ -27,25 +31,25 @@ type SessionState = {
     phase: DesignPreviewPhase;
     url: string | null;
     error: string | null;
-    ptyId: number | null;
     command: string | null;
+    /** Kept for API compat; UI no longer shows a console panel. */
+    console: string;
 };
-
-const COMMON_PORTS = [3000, 5173, 4173, 8080, 8000, 4200, 4321, 5000, 24678];
 
 let state: SessionState = {
     phase: "idle",
     url: null,
     error: null,
-    ptyId: null,
     command: null,
+    console: "",
 };
 const listeners = new Set<Listener>();
 let gen = 0;
-let unlistenOut: (() => void) | null = null;
-let unlistenExit: (() => void) | null = null;
 let phaseTimer: ReturnType<typeof setTimeout> | null = null;
-let probeTimer: ReturnType<typeof setInterval> | null = null;
+let readyTimer: ReturnType<typeof setTimeout> | null = null;
+let unReady: (() => void) | null = null;
+/** When true, Exit should kill the background run we started. */
+let ownsRun = false;
 
 function emit() {
     for (const l of listeners) l();
@@ -56,26 +60,31 @@ function setState(patch: Partial<SessionState>) {
     emit();
 }
 
-function clearPhaseTimer() {
+function clearTimers() {
     if (phaseTimer) {
         clearTimeout(phaseTimer);
         phaseTimer = null;
     }
-}
-
-function clearProbeTimer() {
-    if (probeTimer) {
-        clearInterval(probeTimer);
-        probeTimer = null;
+    if (readyTimer) {
+        clearTimeout(readyTimer);
+        readyTimer = null;
     }
 }
 
+function disposeReady() {
+    try {
+        unReady?.();
+    } catch {
+        /* ignore */
+    }
+    unReady = null;
+}
+
 function schedulePhases(myGen: number) {
-    clearPhaseTimer();
     const steps: Array<{ ms: number; phase: DesignPreviewPhase }> = [
-        { ms: 300, phase: "starting" },
+        { ms: 200, phase: "starting" },
         { ms: 900, phase: "compiling" },
-        { ms: 2000, phase: "almost" },
+        { ms: 2800, phase: "almost" },
     ];
     let i = 0;
     const tick = () => {
@@ -84,83 +93,44 @@ function schedulePhases(myGen: number) {
         const step = steps[i++];
         if (!step) return;
         setState({ phase: step.phase });
-        phaseTimer = setTimeout(tick, steps[i] ? steps[i]!.ms - step.ms : 1500);
+        const next = steps[i];
+        phaseTimer = setTimeout(tick, next ? next.ms - step.ms : 1500);
     };
     phaseTimer = setTimeout(tick, steps[0]!.ms);
 }
 
+function scheduleReadyTimeout(myGen: number) {
+    readyTimer = setTimeout(() => {
+        if (myGen !== gen) return;
+        if (state.phase === "ready" || state.phase === "idle") return;
+        clearTimers();
+        setState({
+            phase: "error",
+            error: "Preview never became ready. Check the Run tab for server output.",
+        });
+    }, 50_000);
+}
+
+function normalizeLocal(raw: string): string {
+    try {
+        const u = new URL(raw.includes("://") ? raw : `http://${raw}`);
+        if (u.hostname === "0.0.0.0" || u.hostname === "[::1]" || u.hostname === "::1") {
+            u.hostname = "127.0.0.1";
+        }
+        if (u.hostname === "localhost") u.hostname = "127.0.0.1";
+        let s = u.toString();
+        if (!s.endsWith("/")) s += "/";
+        return s;
+    } catch {
+        return raw;
+    }
+}
+
 function markReady(myGen: number, url: string) {
     if (myGen !== gen) return;
-    clearPhaseTimer();
-    clearProbeTimer();
+    if (state.phase === "ready" && state.url) return;
+    clearTimers();
     setState({ phase: "ready", url: normalizeLocal(url), error: null });
-}
-
-async function disposeListeners() {
-    try {
-        unlistenOut?.();
-    } catch {
-        /* ignore */
-    }
-    try {
-        unlistenExit?.();
-    } catch {
-        /* ignore */
-    }
-    unlistenOut = null;
-    unlistenExit = null;
-}
-
-async function killPty(id: number | null) {
-    if (id == null) return;
-    try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("pty_kill", { id });
-    } catch {
-        /* ignore */
-    }
-}
-
-function scrapeUrl(chunk: string): string | null {
-    const clean = chunk.replace(ANSI_RE, "");
-    const matches = [...clean.matchAll(URL_RE)];
-    if (matches.length === 0) return null;
-    return normalizeLocal(matches[matches.length - 1]![0]!);
-}
-
-async function probeUrl(url: string): Promise<boolean> {
-    try {
-        const { commands } = await import("@/lib/backend");
-        return await commands.probePreviewUrl(url);
-    } catch {
-        return false;
-    }
-}
-
-function startPortProbing(myGen: number, urlHint: string | null) {
-    clearProbeTimer();
-    const candidates: string[] = [];
-    if (urlHint) candidates.push(normalizeLocal(urlHint));
-    for (const port of COMMON_PORTS) {
-        const u = `http://127.0.0.1:${port}`;
-        if (!candidates.includes(u)) candidates.push(u);
-    }
-
-    let idx = 0;
-    const tick = () => {
-        if (myGen !== gen || state.phase === "ready" || state.phase === "error") {
-            clearProbeTimer();
-            return;
-        }
-        const url = candidates[idx % candidates.length]!;
-        idx += 1;
-        void probeUrl(url).then((ok) => {
-            if (ok) markReady(myGen, url);
-        });
-    };
-
-    window.setTimeout(tick, 400);
-    probeTimer = setInterval(tick, 700);
 }
 
 export function getDesignPreviewSnapshot(): SessionState {
@@ -174,128 +144,136 @@ export function subscribeDesignPreview(cb: Listener) {
     };
 }
 
+/** Prefer binding Next to IPv4 so TCP probe + iframe work on Windows. */
+export function preferIpv4DevCommand(command: string): string {
+    const t = command.trim();
+    // Hostname binding is applied in Rust (`pty_spawn_run`). Never append
+    // `-- -H` here — it collapsed to `---H` under Windows cmd.exe.
+    if (/--hostname\b| -H\s| -H$|---H/i.test(t)) return t.replace(/---H/gi, "-- --hostname");
+    return t;
+}
+
+/**
+ * Exit Design Mode tracking. Does not kill a run the user started via Play —
+ * only kills if Design Mode started it.
+ */
 export async function stopDesignPreview() {
     const myGen = ++gen;
-    clearPhaseTimer();
-    clearProbeTimer();
-    await disposeListeners();
-    const id = state.ptyId;
+    clearTimers();
+    disposeReady();
+    const kill = ownsRun;
+    ownsRun = false;
     setState({
         phase: "idle",
         url: null,
         error: null,
-        ptyId: null,
         command: null,
+        console: "",
     });
-    await killPty(id);
+    if (kill) {
+        await stopBackgroundRun();
+    }
     void myGen;
 }
 
-export async function startDesignPreview(command: string, urlHint?: string | null) {
-    const trimmed = command.trim();
+/** Strict remount — keep the background run alive. */
+export function detachDesignPreview() {
+    // no-op
+}
+
+export async function startDesignPreview(command: string, hint?: string | null) {
+    const trimmed = preferIpv4DevCommand(command.trim());
     if (!trimmed) {
-        setState({ phase: "error", error: "No start script found", url: null });
+        setState({ phase: "error", error: "No start script found", url: null, console: "" });
+        return;
+    }
+
+    // Already booting/ready for this command (Strict remount) — do not respawn.
+    if (
+        state.command
+        && sameDevCommand(state.command, trimmed)
+        && (state.phase === "preparing"
+            || state.phase === "starting"
+            || state.phase === "compiling"
+            || state.phase === "almost"
+            || state.phase === "ready")
+    ) {
+        if (state.phase === "ready" && state.url) return;
+        const existing = getLastPreviewReadyUrl();
+        if (existing) {
+            markReady(gen, existing);
+        }
+        return;
+    }
+
+    // Live Run tab / previous Design session — attach, don't spawn a second Next.
+    const liveUrl = getLastPreviewReadyUrl();
+    if (liveUrl && getBackgroundRunPtyId() != null) {
+        const myGen = ++gen;
+        clearTimers();
+        disposeReady();
+        setState({
+            phase: "almost",
+            url: null,
+            error: null,
+            command: trimmed,
+            console: "",
+        });
+        unReady = subscribePreviewReady((url) => {
+            markReady(myGen, url);
+        });
+        markReady(myGen, liveUrl);
         return;
     }
 
     const myGen = ++gen;
-    clearPhaseTimer();
-    clearProbeTimer();
-    await disposeListeners();
-    const prevId = state.ptyId;
+    clearTimers();
+    disposeReady();
+
     setState({
         phase: "preparing",
         url: null,
         error: null,
-        ptyId: null,
         command: trimmed,
+        console: "",
     });
-    await killPty(prevId);
+
+    const hintUrl = hint ? normalizeLocal(hint) : null;
+    void hintUrl;
 
     schedulePhases(myGen);
-    startPortProbing(myGen, urlHint ?? null);
+    scheduleReadyTimeout(myGen);
+
+    unReady = subscribePreviewReady((url) => {
+        markReady(myGen, url);
+    });
 
     try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const { listen } = await import("@tauri-apps/api/event");
-        const cwd = getProjectPath();
-        const shell = resolveDefaultTerminalShell();
-        const clientId = Math.floor(100_000 + Math.random() * 2_000_000_000);
-
-        const ptyId = await invoke<number>("pty_spawn", {
-            cwd: cwd ?? null,
-            shell,
-            clientId,
-            rows: 24,
-            cols: 80,
-        });
-
-        if (myGen !== gen) {
-            await killPty(ptyId);
-            return;
+        const before = getLastPreviewReadyUrl();
+        await ensureBackgroundRun(trimmed);
+        ownsRun = true;
+        const after = getLastPreviewReadyUrl();
+        if (after && after !== before) {
+            markReady(myGen, after);
         }
-
-        setState({ ptyId });
-
-        unlistenOut = await listen<{ id: number; data: string }>("pty-output", (ev) => {
-            if (myGen !== gen || ev.payload.id !== ptyId) return;
-            const found = scrapeUrl(ev.payload.data);
-            if (found) markReady(myGen, found);
-        });
-
-        unlistenExit = await listen<{ id: number; exit_code: number | null }>("pty-exit", (ev) => {
-            if (myGen !== gen || ev.payload.id !== ptyId) return;
-            if (state.phase !== "ready") {
-                clearPhaseTimer();
-                clearProbeTimer();
-                setState({
-                    phase: "error",
-                    error: "Preview process exited",
-                    ptyId: null,
-                });
-            } else {
-                setState({ ptyId: null });
+        void (async () => {
+            for (let i = 0; i < 120; i++) {
+                if (myGen !== gen || state.phase === "ready") return;
+                const owned = getLastPreviewReadyUrl();
+                if (owned && owned !== before) {
+                    markReady(myGen, owned);
+                    return;
+                }
+                await new Promise((r) => setTimeout(r, 400));
             }
-        });
-
-        let wrote = false;
-        for (let attempt = 0; attempt < 10; attempt++) {
-            if (myGen !== gen) return;
-            await new Promise((r) => setTimeout(r, 60 + attempt * 50));
-            try {
-                await invoke("pty_write", { id: ptyId, data: `${trimmed}\r\n` });
-                wrote = true;
-                break;
-            } catch {
-                /* retry */
-            }
-        }
-        if (!wrote && myGen === gen) {
-            clearPhaseTimer();
-            clearProbeTimer();
-            setState({ phase: "error", error: "Could not start preview", ptyId: null });
-            await killPty(ptyId);
-        }
+        })();
     } catch (err) {
         if (myGen !== gen) return;
-        clearPhaseTimer();
-        clearProbeTimer();
+        clearTimers();
         setState({
             phase: "error",
             error: err instanceof Error ? err.message : String(err),
-            ptyId: null,
         });
-    }
-}
-
-function normalizeLocal(raw: string): string {
-    try {
-        const u = new URL(raw.includes("://") ? raw : `http://${raw}`);
-        if (u.hostname === "0.0.0.0" || u.hostname === "[::1]") u.hostname = "127.0.0.1";
-        if (u.hostname === "localhost") u.hostname = "127.0.0.1";
-        return u.toString().replace(/\/$/, "");
-    } catch {
-        return raw;
     }
 }
 

@@ -3,7 +3,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-const EXIT_MS = 220;
+const EXIT_MS = 280;
 
 /**
  * Height-animated expand/collapse wrapper for workflow dropdowns.

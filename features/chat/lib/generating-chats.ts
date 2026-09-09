@@ -59,6 +59,10 @@ export function useSyncChatGenerating(
     useEffect(() => {
         if (!chatId) return;
         setChatGenerating(chatId, isLoading);
-        return () => setChatGenerating(chatId, false);
+        return () => {
+            // Only clear when leaving a non-loading chat. If we unmount mid-generation
+            // (project switch / remount), chat_complete / chat_started own the flag.
+            if (!isLoading) setChatGenerating(chatId, false);
+        };
     }, [chatId, isLoading]);
 }

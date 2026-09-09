@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine, RiGithubFill, RiRefreshLine } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -39,7 +40,7 @@ export function Header({
 
     return (
         <header className="flex h-9 shrink-0 items-center gap-2 px-3">
-            <Icon name="github" size={16} className="shrink-0 text-text-muted" />
+            <Icon icon={RiGithubFill} className="shrink-0 text-text-muted" />
             <FadeTruncate className="min-w-0 flex-1 text-sm font-medium" title={title}>
                 {title}
             </FadeTruncate>
@@ -56,7 +57,7 @@ export function Header({
                             <Button variant="ghost" size="sm" className="h-7 gap-1 px-2">
                                 {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ??
                                     "All runs"}
-                                <Icon name="expand_more" size={14} />
+                                <Icon icon={RiArrowDownSLine} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
@@ -80,7 +81,7 @@ export function Header({
                     onClick={onRefresh}
                     disabled={loadingRuns}
                 >
-                    <Icon name="refresh" size={14} />
+                    <Icon icon={RiRefreshLine} />
                     Refresh
                 </Button>
             </div>

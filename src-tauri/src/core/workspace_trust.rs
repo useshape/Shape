@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 pub struct WorkspaceTrustState(pub Mutex<HashSet<String>>);
@@ -35,28 +34,6 @@ impl WorkspaceTrustState {
             }
         }
     }
-}
-
-pub fn path_is_under_root(path: &Path, root: &Path) -> bool {
-    let Ok(path) = path.canonicalize() else {
-        return false;
-    };
-    let Ok(root) = root.canonicalize() else {
-        return false;
-    };
-    path.starts_with(root)
-}
-
-pub fn command_path_under_project(command: &str, project_cwd: Option<&str>) -> bool {
-    let Some(cwd) = project_cwd else {
-        return false;
-    };
-    let project = PathBuf::from(cwd);
-    let cmd_path = PathBuf::from(command);
-    if cmd_path.is_absolute() {
-        return path_is_under_root(&cmd_path, &project);
-    }
-    false
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 "use client";
 
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import type { RemixiconComponentType } from "@remixicon/react";
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 export function ToolBtn({
@@ -35,6 +36,6 @@ export function ToolBtn({
     );
 }
 
-export function WsIcon({ name }: { name: string }) {
-    return <Icon name={name} size={ICON_SIZE_SM} />;
+export function WsIcon({ icon }: { icon: RemixiconComponentType }) {
+    return <Icon icon={icon} />;
 }

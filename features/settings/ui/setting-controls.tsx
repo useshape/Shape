@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine } from "@remixicon/react";
 import React, { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -28,10 +29,10 @@ export function SettingSection({
     return (
         <div id={id} className="mb-8 last:mb-0 scroll-mt-3">
             <div className="mb-2.5">
-                <h2 className="text-xs font-medium text-text-muted">{title}</h2>
-                {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
+                <h2 className="text-lg font-medium text-text-primary">{title}</h2>
+                {description && <p className="mt-0.5 text-sm font-medium text-text-muted">{description}</p>}
             </div>
-            <div className="flex flex-col gap-0.5 overflow-hidden rounded-2xl border border-border-subtle bg-surface-2 p-1">
+            <div className="flex flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface-2 divide-y divide-border-subtle">
                 {children}
             </div>
         </div>
@@ -51,10 +52,10 @@ export function SettingRow({
 }) {
             if (stack) {
         return (
-            <div className="rounded-xl px-3.5 py-3 space-y-2.5">
+            <div className="px-4 py-3.5 space-y-2.5">
                 <div>
-                    <div className="text-sm font-medium text-text-primary">{title}</div>
-                    {description && <div className="mt-0.5 text-xs text-text-muted">{description}</div>}
+                    <div className="text-md font-medium text-text-primary">{title}</div>
+                    {description && <div className="mt-0.5 text-sm text-text-muted">{description}</div>}
                 </div>
                 {children}
             </div>
@@ -62,10 +63,10 @@ export function SettingRow({
     }
 
     return (
-        <div className="rounded-xl px-3.5 py-3 flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 px-4 py-3.5">
             <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-text-primary">{title}</div>
-                {description && <div className="mt-0.5 text-xs text-text-muted">{description}</div>}
+                <div className="text-md font-medium text-text-primary">{title}</div>
+                {description && <div className="mt-0.5 text-sm text-text-muted">{description}</div>}
             </div>
             <div className="flex items-center shrink-0">{children}</div>
         </div>
@@ -91,10 +92,10 @@ export function SettingSelect<T extends string>({
                 <Button
                     variant="secondary"
                     size="sm"
-                    className={cn("min-w-[180px] justify-between gap-2 font-normal", className)}
+                    className={cn("min-w-[180px] justify-between gap-2 rounded-lg border border-border-subtle bg-input-bg font-normal", className)}
                 >
                     <span className="truncate">{label}</span>
-                    <Icon name="expand_more" className="size-icon-sm shrink-0 text-text-muted" />
+                    <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[180px]">
@@ -281,10 +282,10 @@ export function SettingMultiSelect({
                 <Button
                     variant="secondary"
                     size="sm"
-                    className={cn("min-w-[200px] max-w-[280px] justify-between gap-2 font-normal", className)}
+                    className={cn("min-w-[200px] max-w-[280px] justify-between gap-2 rounded-lg border border-border-subtle bg-input-bg font-normal", className)}
                 >
                     <span className="truncate">{summary}</span>
-                    <Icon name="expand_more" className="size-icon-sm shrink-0 text-text-muted" />
+                    <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[200px]">

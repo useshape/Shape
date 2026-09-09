@@ -1,56 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { RiNotification3Line, RiSettings3Line } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { openSettingsWindow } from "@/lib/open-settings";
 import { useShapeAuth } from "@/lib/shape-auth/store";
 import { useGitHubAuth } from "@/lib/github-auth/store";
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
-import { AccountMenu } from "./menu";
+import { AccountMenu, ProfileAvatar } from "./menu";
+import { Button } from "@/components/ui/button";
 import {
     useNotifications,
     notificationStore,
     useUnreadNotificationCount,
 } from "@/features/notifications";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-
-function AccountAvatar({
-    gitAvatarUrl,
-    shapeUserId,
-    offline,
-    name,
-}: {
-    gitAvatarUrl: string | null;
-    shapeUserId: string | null;
-    offline: boolean;
-    name: string;
-}) {
-    const [failed, setFailed] = useState(false);
-    const imageSrc =
-        gitAvatarUrl
-        ?? (shapeUserId && !offline ? `${SHAPE_API_BASE}/api/avatar/${shapeUserId}` : null);
-
-    if (!imageSrc || failed) return null;
-
-    return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-            src={imageSrc}
-            alt={name}
-            width={28}
-            height={28}
-            className="size-7 shrink-0 rounded-full object-cover"
-            onError={() => setFailed(true)}
-        />
-    );
-}
 
 function SidebarNotifications() {
     const { notifications } = useNotifications();
@@ -68,7 +35,7 @@ function SidebarNotifications() {
                     aria-label="Notifications"
                     className="relative flex size-7 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon name="notifications" size={16} />
+                    <Icon icon={RiNotification3Line} />
                     {unreadCount > 0 ? (
                         <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-1 text-2xs font-medium text-accent-fg">
                             {Math.min(unreadCount, 99)}
@@ -120,24 +87,27 @@ export function AccountRow() {
     const github = useGitHubAuth();
 
     const displayName =
-        (github.loggedIn && github.username ? github.username : null)
-        ?? (auth.name && !/^n\/?a$/i.test(auth.name.trim()) ? auth.name.trim() : null)
+        (auth.name && !/^n\/?a$/i.test(auth.name.trim()) ? auth.name.trim() : null)
+        ?? (github.loggedIn && github.username ? github.username : null)
         ?? "Sign in";
 
     return (
         <div className="flex h-10 items-center gap-1.5 px-2">
-            <AccountAvatar
-                gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
-                shapeUserId={auth.userId}
-                offline={Boolean(auth.offline)}
-                name={displayName}
-            />
             <AccountMenu>
                 <button
                     type="button"
-                    className="min-w-0 flex-1 truncate text-left text-sm text-text-primary"
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:bg-panel-hover"
                 >
-                    {displayName}
+                    <ProfileAvatar
+                        gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
+                        shapeUserId={auth.userId}
+                        offline={Boolean(auth.offline)}
+                        name={displayName}
+                        size={28}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                        {displayName}
+                    </span>
                 </button>
             </AccountMenu>
             <SidebarNotifications />
@@ -149,7 +119,7 @@ export function AccountRow() {
                 className="size-7 shrink-0 text-text-muted hover:text-text-primary"
                 aria-label="Settings"
             >
-                <Icon name="settings" size={16} />
+                <Icon icon={RiSettings3Line} />
             </Button>
         </div>
     );

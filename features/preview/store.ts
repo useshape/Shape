@@ -18,7 +18,7 @@ export type PreviewState = {
     loading: boolean;
 };
 
-const DEFAULT_URL = "http://localhost:3000/";
+const DEFAULT_URL = "";
 
 let state: PreviewState = {
     history: [],
@@ -78,7 +78,7 @@ export function isLocalPreviewUrl(raw: string): boolean {
 /** Normalize typed input into an absolute local URL; rewrite 0.0.0.0 → localhost. */
 export function normalizePreviewUrl(raw: string): string {
     let s = raw.trim();
-    if (!s) return DEFAULT_URL;
+    if (!s) return "";
     if (!/^https?:\/\//i.test(s)) {
         s = `http://${s}`;
     }
@@ -156,6 +156,19 @@ function commitNavigation(url: string, opts?: { replace?: boolean; reload?: bool
         error: null,
         urlBar: url,
     });
+}
+
+/** Set iframe src directly when Rust already confirmed the server is up. */
+export function showPreviewUrl(raw: string) {
+    let url: string;
+    try {
+        url = normalizePreviewUrl(raw);
+    } catch {
+        return;
+    }
+    if (!isLocalPreviewUrl(url)) return;
+    setLastDevUrl(url);
+    commitNavigation(url, { replace: true, reload: true });
 }
 
 export async function navigatePreview(raw: string, opts?: { replace?: boolean }) {

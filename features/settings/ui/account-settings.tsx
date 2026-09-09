@@ -1,5 +1,6 @@
 "use client";
 
+import { RiExternalLinkLine } from "@remixicon/react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -32,13 +33,13 @@ function UsageBar({
     return (
         <div className="space-y-1.5">
             <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="text-text-primary font-medium">{label}</span>
-                <span className="text-text-muted text-xs shrink-0">{detail}</span>
+                <span className="text-text-primary font-medium text-md">{label}</span>
+                <span className="text-text-muted text-sm shrink-0">{detail}</span>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-panel-hover overflow-hidden">
+            <div className="h-3 w-ful bg-panel-hover overflow-hidden">
                 <div
                     className={cn(
-                        "h-full rounded-full transition-all",
+                        "h-full rounded-xs transition-all",
                         clamped >= 90 ? "bg-warning" : "bg-accent",
                     )}
                     style={{ width: `${clamped}%` }}
@@ -62,21 +63,18 @@ export function AccountSettingsPanel() {
     if (auth.isLoading) {
         return (
             <SettingSection id="settings-account" title="Account">
-                <div className="px-3.5 py-4 text-sm text-text-muted">Loading account…</div>
+                <div className="px-3.5 py-4 text-md text-text-muted">Loading account…</div>
             </SettingSection>
         );
     }
 
     if (!auth.loggedIn) {
         return (
-            <SettingSection id="settings-account" title="Account" description="Plan and usage">
+            <SettingSection id="settings-account" title="Account">
                 <div className="px-3.5 py-4 space-y-3">
                     <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">
-                            <div className="text-sm font-medium text-text-primary">Not signed in</div>
-                            <div className="text-sm text-text-muted mt-1">
-                                Sign in for plan and usage.
-                            </div>
+                            <div className="text-md font-medium text-text-primary">Not signed in</div>
                         </div>
                         <Button
                             size="sm"
@@ -114,16 +112,13 @@ export function AccountSettingsPanel() {
                             onClick={() => openShapeBilling()}
                         >
                             Manage billing
-                            <Icon name="open_in_new" size={14} className="text-text-muted" />
+                            <Icon icon={RiExternalLinkLine} className="text-text-muted" />
                         </Button>
                     </div>
                 </div>
             </SettingSection>
 
-            <SettingSection
-                title="Usage"
-                description="Monthly auto usage and credits"
-            >
+            <SettingSection title="Usage">
                 <div className="px-3.5 py-4 space-y-4">
                     <UsageBar
                         label="Auto usage"
@@ -161,7 +156,7 @@ export function AccountSettingsPanel() {
                         {auth.revalidating ? "Refreshing…" : "Refresh"}
                     </Button>
                 </SettingRow>
-                <SettingRow title="Open dashboard" description="Billing and account on the web">
+                <SettingRow title="Open dashboard">
                     <Button
                         variant="secondary"
                         size="sm"
@@ -169,7 +164,7 @@ export function AccountSettingsPanel() {
                         onClick={() => void commands.openUrlExternal(`${SHAPE_API_BASE}/dashboard`)}
                     >
                         Open
-                        <Icon name="open_in_new" size={14} className="text-text-muted" />
+                        <Icon icon={RiExternalLinkLine} className="text-text-muted" />
                     </Button>
                 </SettingRow>
                 <SettingRow title="Sign out">

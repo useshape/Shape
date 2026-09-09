@@ -1,5 +1,6 @@
 "use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
 import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Icon } from "@/components/ui/icon";
@@ -14,7 +15,7 @@ export type QuickPickItem = {
     id: string;
     label: string;
     description?: string;
-    icon?: string;
+    icon?: RemixiconComponentType;
     /** Right-side muted hint */
     hint?: string;
 };
@@ -153,8 +154,7 @@ export function QuickPick({
                                     >
                                         {item.icon ? (
                                             <Icon
-                                                name={item.icon}
-                                                size={16}
+                                                icon={item.icon}
                                                 className="shrink-0 text-text-muted"
                                             />
                                         ) : null}

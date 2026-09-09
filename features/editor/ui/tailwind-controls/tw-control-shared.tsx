@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCloseLine, RiSubtractLine } from "@remixicon/react";
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -38,7 +39,7 @@ export function PanelShell({
                     <span className="text-sm font-medium text-text-primary">{title}</span>
                     {onClose && (
                         <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
-                            <Icon name="close" size={12} />
+                            <Icon icon={RiCloseLine} />
                         </Button>
                     )}
                 </div>
@@ -53,11 +54,13 @@ export function ToggleBtn({
     active,
     onClick,
     children,
+    className,
 }: {
     label: string;
     active: boolean;
     onClick: () => void;
     children: React.ReactNode;
+    className?: string;
 }) {
     return (
         <Tooltip content={label} side="top" delayDuration={400}>
@@ -67,6 +70,7 @@ export function ToggleBtn({
                 className={cn(
                     "flex items-center justify-center h-7 flex-1 rounded-lg transition-colors cursor-pointer",
                     active ? "bg-panel-active text-text-primary" : "text-text-muted hover:bg-panel-hover",
+                    className,
                 )}
             >
                 {children}
@@ -91,6 +95,7 @@ export function PxInput({
     onCommit,
     min = 0,
     max,
+    className,
 }: {
     glyph: React.ReactNode;
     title: string;
@@ -98,6 +103,7 @@ export function PxInput({
     onCommit: (px: number) => void;
     min?: number;
     max?: number;
+    className?: string;
 }) {
     const [text, setText] = useState(value === null ? "0" : String(value));
     const wrapRef = useRef<HTMLDivElement>(null);
@@ -196,7 +202,10 @@ export function PxInput({
     return (
         <div
             ref={wrapRef}
-            className="flex h-9 min-w-0 flex-1 items-center gap-1 rounded-xl border border-border-subtle bg-panel px-2 shadow-sm transition-colors focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20"
+            className={cn(
+                "flex h-9 min-w-0 flex-1 items-center gap-1 rounded-xl border border-border-subtle bg-panel px-2 shadow-sm transition-colors focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20",
+                className,
+            )}
         >
             <span
                 title={`${title} — drag to adjust`}
@@ -239,8 +248,8 @@ export function PxInput({
     );
 }
 
-export const GAP_X_GLYPH = <Icon name="width" size={13} />;
-export const GAP_Y_GLYPH = <Icon name="height" size={13} />;
+export const GAP_X_GLYPH = <Icon icon={RiSubtractLine} />;
+export const GAP_Y_GLYPH = <Icon icon={RiSubtractLine} />;
 
 export function PadGlyph({ side }: { side: keyof PaddingSides }) {
     const rotation = { left: 0, top: 90, right: 180, bottom: 270 }[side];

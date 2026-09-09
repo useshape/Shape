@@ -4,7 +4,8 @@ import { commands } from "@/lib/backend";
 import type { McpServerConfig } from "@/lib/settings";
 
 const DEFAULT_MCP_JSON = `{
-  "mcpServers": {}
+  "mcpServers": {
+  }
 }
 `;
 
@@ -24,6 +25,8 @@ type RawMcpEntry = {
     transport?: "stdio" | "http";
     url?: string;
     auth?: "none" | "oauth";
+    disabledTools?: string[];
+    oauthClientId?: string;
 };
 
 export function parseMcpJson(content: string): McpServerConfig[] {
@@ -42,6 +45,8 @@ export function parseMcpJson(content: string): McpServerConfig[] {
         url: cfg.url,
         auth: cfg.auth ?? (cfg.url ? "oauth" : "none"),
         enabled: cfg.disabled !== true,
+        disabledTools: cfg.disabledTools ?? [],
+        oauthClientId: cfg.oauthClientId,
     }));
 }
 
@@ -67,6 +72,8 @@ export async function saveMcpServers(servers: McpServerConfig[]): Promise<void> 
             url: s.url,
             auth: s.auth,
             disabled: !s.enabled,
+            disabledTools: s.disabledTools?.length ? s.disabledTools : undefined,
+            oauthClientId: s.oauthClientId || undefined,
         };
     }
     const content = JSON.stringify({ mcpServers }, null, 2);
@@ -91,6 +98,8 @@ export async function mergePluginConfig(
             url: cfg.url,
             auth: cfg.auth ?? (cfg.url ? "oauth" : "none"),
             enabled: cfg.disabled !== true,
+            disabledTools: cfg.disabledTools ?? [],
+            oauthClientId: cfg.oauthClientId,
         });
     }
     const list = Array.from(merged.values());

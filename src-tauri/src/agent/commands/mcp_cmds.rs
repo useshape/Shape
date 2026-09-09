@@ -60,11 +60,16 @@ pub fn restart_mcp_server(
 pub async fn mcp_start_oauth(
     id: String,
     mcp_state: tauri::State<'_, McpState>,
-) -> Result<(), AppError> {
-    mcp_state
+) -> Result<String, AppError> {
+    // Blocks until the browser redirects to the loopback callback (or times out).
+    let server_id = mcp_state
         .start_server_oauth(&id)
         .await
-        .map_err(|e| AppError::Message(e))
+        .map_err(|e| AppError::Message(e))?;
+    mcp_state
+        .restart_server(&server_id)
+        .map_err(|e| AppError::Message(e))?;
+    Ok(server_id)
 }
 
 #[tauri::command]
@@ -75,7 +80,9 @@ pub async fn mcp_complete_oauth(
     let server_id = crate::mcp::handle_oauth_callback(&callback_url)
         .await
         .map_err(|e| AppError::Message(e))?;
-    let _ = mcp_state.restart_server(&server_id);
+    mcp_state
+        .restart_server(&server_id)
+        .map_err(|e| AppError::Message(e))?;
     Ok(server_id)
 }
 

@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import type { RemixiconComponentType } from "@remixicon/react";
+import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Icon } from "@/components/ui/icon";
 
@@ -9,106 +11,7 @@ const POP =
     "origin-center animate-in fade-in zoom-in-95 duration-200 ease-[var(--ease-out)]";
 
 const SHELL =
-    "flex h-9 items-center gap-2 rounded-full bg-surface-2 px-3 shadow-sm";
-
-/** Ruler / tick dial — no labels. Blue dot marks the selected tick. */
-export function TickDial({
-    value,
-    min = 0,
-    max = 32,
-    step = 1,
-    majorEvery = 4,
-    onChange,
-    tooltip = (n) => `${n}px`,
-    className,
-}: {
-    value: number;
-    min?: number;
-    max?: number;
-    step?: number;
-    majorEvery?: number;
-    onChange: (n: number) => void;
-    tooltip?: (n: number) => string;
-    className?: string;
-}) {
-    const trackRef = useRef<HTMLDivElement>(null);
-    const ticks = Math.floor((max - min) / step) + 1;
-    const index = Math.round((Math.min(max, Math.max(min, value)) - min) / step);
-
-    const setFromClientX = useCallback(
-        (clientX: number) => {
-            const el = trackRef.current;
-            if (!el) return;
-            const rect = el.getBoundingClientRect();
-            const t = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-            const i = Math.round(t * (ticks - 1));
-            onChange(min + i * step);
-        },
-        [min, onChange, step, ticks],
-    );
-
-    return (
-        <div className={cn(SHELL, POP, "relative min-w-[160px] flex-1", className)}>
-            <div
-                ref={trackRef}
-                role="slider"
-                tabIndex={0}
-                aria-valuemin={min}
-                aria-valuemax={max}
-                aria-valuenow={value}
-                className="relative flex h-6 w-full cursor-ew-resize items-end justify-between px-0.5"
-                onPointerDown={(e) => {
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    setFromClientX(e.clientX);
-                }}
-                onPointerMove={(e) => {
-                    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-                    setFromClientX(e.clientX);
-                }}
-                onKeyDown={(e) => {
-                    if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
-                        e.preventDefault();
-                        onChange(Math.max(min, value - step));
-                    }
-                    if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-                        e.preventDefault();
-                        onChange(Math.min(max, value + step));
-                    }
-                }}
-            >
-                {Array.from({ length: ticks }, (_, i) => {
-                    const major = i % majorEvery === 0;
-                    const active = i === index;
-                    const n = min + i * step;
-                    return (
-                        <Tooltip key={i} content={tooltip(n)} delayDuration={200}>
-                            <span
-                                className={cn(
-                                    "relative flex w-px flex-col items-center",
-                                    major ? "h-3.5" : "h-2.5",
-                                )}
-                            >
-                                {active ? (
-                                    <span className="absolute -top-1.5 size-1.5 rounded-full bg-accent" />
-                                ) : null}
-                                <span
-                                    className={cn(
-                                        "w-px flex-1 rounded-full",
-                                        active
-                                            ? "bg-text-primary"
-                                            : major
-                                              ? "bg-text-muted"
-                                              : "bg-text-muted/35",
-                                    )}
-                                />
-                            </span>
-                        </Tooltip>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
+    "flex h-7 items-center gap-2 rounded-lg border border-border-subtle bg-input-bg px-2 transition-colors hover:border-border";
 
 /** Icon segment row (flex / layout). Dividers, tooltips only. */
 export function IconSegment<T extends string>({
@@ -118,104 +21,38 @@ export function IconSegment<T extends string>({
     className,
 }: {
     value: T;
-    options: { id: T; icon: string; label: string }[];
+    options: { id: T; icon: RemixiconComponentType; label: string }[];
     onChange: (id: T) => void;
     className?: string;
 }) {
     return (
-        <div className={cn(SHELL, POP, "gap-0 px-1", className)}>
+        <div className={cn(SHELL, POP, "gap-0 px-0.5", className)}>
             {options.map((opt, i) => {
                 const active = opt.id === value;
                 return (
-                    <div key={opt.id} className="flex items-center">
-                        {i > 0 ? <span className="mx-0.5 h-4 w-px bg-border-subtle" /> : null}
+                    <div key={opt.id} className="flex flex-1 items-center">
+                        {i > 0 ? <span className="mx-0.5 h-3.5 w-px bg-border-subtle" /> : null}
                         <Tooltip content={opt.label} delayDuration={120}>
-                            <button
+                            <Button
                                 type="button"
+                                variant="ghost"
+                                size="icon"
                                 aria-label={opt.label}
                                 aria-pressed={active}
                                 onClick={() => onChange(opt.id)}
                                 className={cn(
-                                    "flex size-7 items-center justify-center rounded-md text-text-secondary transition-colors",
+                                    "h-6 flex-1 rounded-md",
                                     active
-                                        ? "bg-panel-hover text-text-primary ring-1 ring-border"
-                                        : "hover:text-text-primary",
+                                        ? "bg-panel-active text-text-primary"
+                                        : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
                                 )}
                             >
-                                <Icon name={opt.icon} size={15} />
-                            </button>
+                                <Icon icon={opt.icon} />
+                            </Button>
                         </Tooltip>
                     </div>
                 );
             })}
-        </div>
-    );
-}
-
-/** Discrete stop dots + optional reset. */
-export function DotStops({
-    value,
-    stops,
-    onChange,
-    onReset,
-    labels,
-    className,
-}: {
-    value: number;
-    stops: number[];
-    onChange: (n: number) => void;
-    onReset?: () => void;
-    labels?: string[];
-    className?: string;
-}) {
-    const idx = Math.max(
-        0,
-        stops.findIndex((s) => s === value) >= 0
-            ? stops.findIndex((s) => s === value)
-            : stops.reduce(
-                  (best, s, i) =>
-                      Math.abs(s - value) < Math.abs(stops[best]! - value) ? i : best,
-                  0,
-              ),
-    );
-
-    return (
-        <div className={cn(SHELL, POP, "min-w-[140px] flex-1 justify-between", className)}>
-            <div className="relative mx-1 flex h-5 flex-1 items-center">
-                <span className="absolute inset-x-1 top-1/2 h-px -translate-y-1/2 bg-border" />
-                <div className="relative z-[1] flex w-full items-center justify-between">
-                    {stops.map((s, i) => {
-                        const active = i === idx;
-                        return (
-                            <Tooltip key={s} content={labels?.[i] ?? `${s}`} delayDuration={120}>
-                                <button
-                                    type="button"
-                                    aria-label={labels?.[i] ?? String(s)}
-                                    onClick={() => onChange(s)}
-                                    className={cn(
-                                        "rounded-full transition-transform duration-150",
-                                        active
-                                            ? "size-3 scale-100 bg-text-primary"
-                                            : "size-1.5 bg-text-primary/80 hover:scale-125",
-                                    )}
-                                />
-                            </Tooltip>
-                        );
-                    })}
-                </div>
-            </div>
-            {onReset ? (
-                <Tooltip content="Reset" delayDuration={120}>
-                    <button
-                        type="button"
-                        aria-label="Reset"
-                        onClick={onReset}
-                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-muted hover:text-text-primary"
-                    >
-                        <Icon name="refresh" size={14} />
-                    </button>
-                </Tooltip>
-            ) : null}
         </div>
     );
 }
@@ -363,7 +200,7 @@ export function ColorCapsule({
                         max={360}
                         value={Math.round(hue)}
                         aria-label="Hue"
-                        className="h-1.5 min-w-[100px] flex-1 accent-accent"
+                        className="h-1.5 min-w-25 flex-1 accent-accent"
                         onChange={(e) => {
                             const h = Number(e.target.value);
                             setHue(h);
@@ -391,7 +228,7 @@ export function ColorCapsule({
                         ))}
                     </div>
                     <Tooltip content={display} delayDuration={80}>
-                        <span className="max-w-[88px] truncate font-mono text-[10px] text-text-muted">
+                        <span className="max-w-22 truncate font-mono text-[10px] text-text-muted">
                             {display}
                         </span>
                     </Tooltip>

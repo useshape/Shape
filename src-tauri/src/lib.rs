@@ -168,6 +168,8 @@ pub fn run() {
             // pty
             adapters::terminal::pty_available_shells,
             adapters::terminal::pty_spawn,
+            adapters::terminal::pty_spawn_run,
+            adapters::terminal::pty_read_output,
             adapters::terminal::pty_write,
             adapters::terminal::pty_resize,
             adapters::terminal::pty_kill,

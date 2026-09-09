@@ -5,25 +5,35 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { loginShape, cancelLoginShape, useShapeAuth } from "@/lib/shape-auth/store";
+import { cancelLoginShape, useShapeAuth } from "@/lib/shape-auth/store";
 import { markOnboardingComplete } from "@/features/onboarding/config";
 import { updateSettingSection, useSettings } from "@/lib/settings";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { ThemePicker } from "@/features/settings/ui/theme-picker";
 import type { ColorThemeId } from "@/lib/themes";
 import { normalizeColorTheme } from "@/lib/themes";
+import { isCatalogServerReachable } from "@/lib/catalog";
 import {
     getCatalogDefaultEnabledIds,
     getCatalogModels,
     useShapeCatalog,
 } from "@/lib/catalog-store";
 import { isModelEnabled } from "@/lib/models";
+import { providerIcon } from "@/lib/ui/provider-icon";
 import { OnboardingWindowChrome } from "./window-chrome";
+import { OnboardingInset } from "./inset";
+import { LoginPanel } from "./login-panel";
+import {
+    applyKeybindingPreset,
+    getActiveKeybindingPreset,
+    listKeybindingPresets,
+    type KeybindingPresetId,
+} from "@/lib/ui/shortcuts";
 
 type Phase = "intro" | "content";
 
-const STEPS = ["privacy", "notifications", "theme", "models", "login"] as const;
-type StepId = (typeof STEPS)[number];
+const ALL_STEPS = ["privacy", "notifications", "theme", "keybinds", "models", "login"] as const;
+type StepId = (typeof ALL_STEPS)[number];
 
 function EnterKeyIcon({ size = 14, className }: { size?: number; className?: string }) {
     return (
@@ -56,7 +66,8 @@ export default function Onboarding({
     const [phase, setPhase] = useState<Phase>(loginOnly ? "content" : "intro");
     const [introVisible, setIntroVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(loginOnly);
-    const [step, setStep] = useState(loginOnly ? STEPS.indexOf("login") : 0);
+    const [stepId, setStepId] = useState<StepId>(loginOnly ? "login" : "privacy");
+    const [catalogLive, setCatalogLive] = useState(false);
     const [dir, setDir] = useState<1 | -1>(1);
     const [finishing, setFinishing] = useState(false);
     const [telemetryEnabled, setTelemetryEnabled] = useState(false);
@@ -73,9 +84,19 @@ export default function Onboarding({
             ? [...settings.ai.enabledModels]
             : getCatalogDefaultEnabledIds(),
     );
+    const [keybindPreset, setKeybindPreset] = useState<KeybindingPresetId>(() => {
+        const active = getActiveKeybindingPreset();
+        return active === "custom" ? "default" : active;
+    });
     const shapeAuth = useShapeAuth();
 
-    const stepId: StepId = STEPS[step] ?? "privacy";
+    const steps = useMemo((): StepId[] => {
+        if (loginOnly) return ["login"];
+        if (catalogLive) return [...ALL_STEPS];
+        return ALL_STEPS.filter((id) => id !== "models");
+    }, [loginOnly, catalogLive]);
+
+    const stepIndex = Math.max(0, steps.indexOf(stepId));
     const isLoginStep = stepId === "login";
     const canNext = stepId !== "privacy" || privacyChosen;
 
@@ -107,13 +128,18 @@ export default function Onboarding({
         if (stepId === "models") {
             updateSettingSection("ai", { enabledModels });
         }
+        if (stepId === "keybinds") {
+            applyKeybindingPreset(keybindPreset);
+        }
         setDir(1);
-        setStep((s) => Math.min(s + 1, STEPS.length - 1));
+        const next = steps[stepIndex + 1];
+        if (next) setStepId(next);
     };
 
     const goPrevious = () => {
         setDir(-1);
-        setStep((s) => Math.max(s - 1, 0));
+        const prev = steps[stepIndex - 1];
+        if (prev) setStepId(prev);
     };
 
     const choosePrivacy = (enabled: boolean) => {
@@ -137,6 +163,22 @@ export default function Onboarding({
         setTheme(id);
         updateSettingSection("appearance", { colorTheme: id });
     };
+
+    useEffect(() => {
+        if (loginOnly) return;
+        let cancelled = false;
+        void isCatalogServerReachable().then((ok) => {
+            if (!cancelled) setCatalogLive(ok);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [loginOnly]);
+
+    useEffect(() => {
+        if (steps.includes(stepId)) return;
+        setStepId(steps[Math.min(stepIndex, steps.length - 1)] ?? "privacy");
+    }, [steps, stepId, stepIndex]);
 
     useEffect(() => {
         if (loginOnly) {
@@ -189,7 +231,7 @@ export default function Onboarding({
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [phase, isLoginStep, canNext, step]);
+    }, [phase, isLoginStep, canNext, stepId]);
 
     if (phase === "intro") {
         return (
@@ -224,90 +266,148 @@ export default function Onboarding({
             <OnboardingWindowChrome />
             <div
                 className={cn(
-                    "flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-6 py-10 transition-opacity duration-500 ease-out",
+                    "relative flex min-h-0 flex-1 overflow-hidden transition-opacity duration-500 ease-out",
                     contentVisible ? "opacity-100" : "opacity-0",
+                    isLoginStep ? "flex-row" : "flex-col items-center justify-center px-6 py-10 pb-16",
                 )}
             >
-                <div className="relative flex w-full max-w-md flex-col overflow-hidden">
-                    <div
-                        key={stepId}
-                        className={cn(
-                            "w-full animate-in fade-in duration-300 ease-[var(--ease-out)] fill-mode-both",
-                            dir > 0 ? "slide-in-from-right-6" : "slide-in-from-left-6",
-                        )}
-                    >
-                        {stepId === "privacy" ? (
-                            <PrivacyPanel
-                                chosen={privacyChosen}
-                                enabled={telemetryEnabled}
-                                onAllow={() => choosePrivacy(true)}
-                                onDeny={() => choosePrivacy(false)}
-                            />
-                        ) : null}
-                        {stepId === "notifications" ? (
-                            <NotificationsPanel
-                                desktop={desktopNotifs}
-                                important={importantOnly}
-                                onChange={applyNotifs}
-                            />
-                        ) : null}
-                        {stepId === "theme" ? (
-                            <ThemeStep theme={theme} onChange={applyTheme} />
-                        ) : null}
-                        {stepId === "models" ? (
-                            <ModelsPanel
-                                enabledModels={enabledModels}
-                                onChange={setEnabledModels}
-                            />
-                        ) : null}
-                        {stepId === "login" ? (
-                            <LoginPanel
-                                finishing={finishing}
-                                onSignedIn={() => void finishOnboarding()}
-                                onSkip={() => void finishOnboarding()}
-                            />
-                        ) : null}
-                    </div>
-
-                    {!isLoginStep ? (
-                        <Button
-                            onClick={goNext}
-                            size="lg"
-                            className="mt-8 w-full gap-2 rounded-full"
-                            disabled={!canNext}
-                        >
-                            Next
-                            <EnterKeyIcon size={14} className="opacity-80" />
-                        </Button>
-                    ) : null}
-
-                    {step > 0 && !isLoginStep ? (
-                        <Button
-                            type="button"
-                            onClick={goPrevious}
-                            disabled={finishing}
-                            size="lg"
-                            variant="ghost"
-                            className="mt-3 w-full gap-2 rounded-full"
-                        >
-                            Previous
-                        </Button>
-                    ) : null}
-
-                    {loginOnly ? null : (
-                        <div className="mt-6 flex items-center justify-center gap-1.5" aria-hidden>
-                            {STEPS.map((id, i) => (
-                                <span
-                                    key={id}
-                                    className={cn(
-                                        "h-1.5 rounded-full transition-all duration-300",
-                                        i === step ? "w-4 bg-accent" : "w-1.5 bg-text-muted/30",
-                                    )}
+                {isLoginStep ? (
+                    <>
+                        <div className="relative z-10 flex h-full min-h-0 w-[min(100%,24rem)] shrink-0 flex-col bg-background">
+                            <div className="flex min-h-0 flex-1 flex-col justify-center px-10">
+                                <LoginPanel
+                                    finishing={finishing}
+                                    onSignedIn={() => void finishOnboarding()}
                                 />
-                            ))}
+                            </div>
+                            <div className="shrink-0 px-10 pb-6">
+                                {loginOnly ? null : (
+                                    <div
+                                        className="mb-4 flex items-center justify-center gap-1.5"
+                                        aria-hidden
+                                    >
+                                        {steps.map((id, i) => (
+                                            <span
+                                                key={id}
+                                                className={cn(
+                                                    "h-1.5 rounded-full transition-all duration-300",
+                                                    i === stepIndex
+                                                        ? "w-4 bg-accent"
+                                                        : "w-1.5 bg-text-muted/30",
+                                                )}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="px-0 text-text-muted hover:bg-transparent hover:text-text-primary"
+                                    disabled={finishing}
+                                    onClick={() => {
+                                        cancelLoginShape();
+                                        void finishOnboarding();
+                                    }}
+                                >
+                                    Skip
+                                </Button>
+                            </div>
                         </div>
-                    )}
-                </div>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 w-[min(72%,52rem)] overflow-hidden">
+                            <OnboardingInset
+                                tour
+                                workspace
+                                x={40}
+                                className="h-full min-h-0"
+                            />
+                        </div>
+                    </>
+                ) : (
+                    <div className="relative flex w-full max-w-xl flex-col items-center overflow-hidden">
+                        <div
+                            key={stepId}
+                            className={cn(
+                                "w-full animate-in fade-in duration-300 ease-[var(--ease-out)] fill-mode-both",
+                                stepId === "theme" ? "max-w-xl" : "max-w-md",
+                                dir > 0 ? "slide-in-from-right-6" : "slide-in-from-left-6",
+                            )}
+                        >
+                            {stepId === "privacy" ? (
+                                <PrivacyPanel
+                                    chosen={privacyChosen}
+                                    enabled={telemetryEnabled}
+                                    onAllow={() => choosePrivacy(true)}
+                                    onDeny={() => choosePrivacy(false)}
+                                />
+                            ) : null}
+                            {stepId === "notifications" ? (
+                                <NotificationsPanel
+                                    desktop={desktopNotifs}
+                                    important={importantOnly}
+                                    onChange={applyNotifs}
+                                />
+                            ) : null}
+                            {stepId === "theme" ? (
+                                <ThemeStep theme={theme} onChange={applyTheme} />
+                            ) : null}
+                            {stepId === "keybinds" ? (
+                                <KeybindsPanel
+                                    selected={keybindPreset}
+                                    onSelect={(id) => {
+                                        setKeybindPreset(id);
+                                        applyKeybindingPreset(id);
+                                    }}
+                                />
+                            ) : null}
+                            {stepId === "models" ? (
+                                <ModelsPanel
+                                    enabledModels={enabledModels}
+                                    onChange={setEnabledModels}
+                                />
+                            ) : null}
+                        </div>
+
+                        <div className="mt-8 grid w-full max-w-md grid-cols-2 gap-2">
+                            <Button
+                                type="button"
+                                onClick={goPrevious}
+                                disabled={finishing || stepIndex === 0}
+                                size="lg"
+                                variant="outline"
+                                className="min-w-0 w-full"
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                onClick={goNext}
+                                size="lg"
+                                className="min-w-0 w-full gap-2"
+                                disabled={!canNext}
+                            >
+                                Next
+                                <EnterKeyIcon size={14} className="opacity-80" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {loginOnly || isLoginStep ? null : (
+                    <div
+                        className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex items-center justify-center gap-1.5"
+                        aria-hidden
+                    >
+                        {steps.map((id, i) => (
+                            <span
+                                key={id}
+                                className={cn(
+                                    "h-1.5 rounded-full transition-all duration-300",
+                                    i === stepIndex ? "w-4 bg-accent" : "w-1.5 bg-text-muted/30",
+                                )}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -326,34 +426,27 @@ function PrivacyPanel({
 }) {
     return (
         <div>
-            <div className="mx-auto mb-5 w-full max-w-xs text-text-muted">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/onboarding/privacy.svg" alt="" className="h-auto w-full" />
-            </div>
-            <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
+            <h1 className="text-center text-xl font-medium text-text-primary">
                 Privacy
             </h1>
-            <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                Your code stays private and is only sent to the model you pick.
-            </p>
-            <div className="mt-6 flex flex-col gap-2" role="radiogroup" aria-label="Privacy">
+            <div className="px-1 pt-3 flex flex-col gap-2" role="radiogroup" aria-label="Privacy">
                 <button
                     type="button"
                     role="radio"
                     aria-checked={chosen && enabled}
                     onClick={onAllow}
                     className={cn(
-                        "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                        "w-full rounded-lg px-4 py-3 text-left transition-colors",
                         chosen && enabled
-                            ? "border-accent bg-accent/10"
-                            : "border-border-subtle bg-surface-2 hover:bg-panel-hover",
+                            ? "bg-surface-4"
+                            : "bg-card ring-2 ring-border hover:bg-panel-hover",
                     )}
                 >
                     <div className="text-sm font-medium text-text-primary">
                         Allow anonymous usage data
                     </div>
-                    <div className="mt-0.5 text-xs text-text-muted">
-                        Helps improve Shape. Never includes your code.
+                    <div className="mt-0.5 text-xs font-medium text-text-muted">
+                        Never includes your code.
                     </div>
                 </button>
                 <button
@@ -362,16 +455,13 @@ function PrivacyPanel({
                     aria-checked={chosen && !enabled}
                     onClick={onDeny}
                     className={cn(
-                        "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                        "w-full rounded-lg px-4 py-3  text-left transition-colors",
                         chosen && !enabled
-                            ? "border-accent bg-accent/10"
-                            : "border-border-subtle bg-surface-2 hover:bg-panel-hover",
+                            ? "bg-surface-4"
+                            : "bg-card ring-2 ring-border hover:bg-panel-hover",
                     )}
                 >
                     <div className="text-sm font-medium text-text-primary">Don&apos;t share data</div>
-                    <div className="mt-0.5 text-xs text-text-muted">
-                        You can change this later in Settings.
-                    </div>
                 </button>
             </div>
         </div>
@@ -389,16 +479,9 @@ function NotificationsPanel({
 }) {
     return (
         <div>
-            <div className="mx-auto mb-5 w-full max-w-xs text-text-muted">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/onboarding/notifications.svg" alt="" className="h-auto w-full" />
-            </div>
-            <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
+            <h1 className="text-center text-xl font-medium text-text-primary">
                 Notifications
             </h1>
-            <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                Get notified when generations finish or approval is needed.
-            </p>
             <div className="mt-8 flex flex-col gap-2">
                 <NotifRow
                     label="All notifications"
@@ -431,7 +514,7 @@ function NotifRow({
     onCheckedChange: (v: boolean) => void;
 }) {
     return (
-        <div className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2.5">
+        <div className="flex items-center gap-3 rounded-lg bg-surface-4 px-3 py-2.5">
             <span className="min-w-0 flex-1 text-sm text-text-primary">{label}</span>
             <Switch checked={checked} onCheckedChange={onCheckedChange} />
         </div>
@@ -450,11 +533,45 @@ function ThemeStep({
             <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
                 Pick a look
             </h1>
-            <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                You can change this anytime in Settings.
-            </p>
-            <div className="mt-6">
-                <ThemePicker value={theme} onChange={onChange} />
+            <div className="mt-6 flex justify-center">
+                <ThemePicker value={theme} onChange={onChange} className="justify-center" />
+            </div>
+        </div>
+    );
+}
+
+function KeybindsPanel({
+    selected,
+    onSelect,
+}: {
+    selected: KeybindingPresetId;
+    onSelect: (id: KeybindingPresetId) => void;
+}) {
+    const presets = useMemo(() => listKeybindingPresets(), []);
+
+    return (
+        <div>
+            <h1 className="text-center text-xl font-medium text-text-primary">
+                Keyboard shortcuts
+            </h1>
+            <div className="mt-6 flex flex-col gap-2 p-1" role="radiogroup" aria-label="Keyboard shortcuts">
+                {presets.map((p) => (
+                    <button
+                        key={p.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected === p.id}
+                        onClick={() => onSelect(p.id)}
+                        className={cn(
+                            "w-full rounded-lg px-4 py-3 text-left transition-colors",
+                            selected === p.id
+                                ? "bg-surface-4"
+                                : "bg-card ring-2 ring-border hover:bg-panel-hover",
+                        )}
+                    >
+                        <div className="text-sm font-medium text-text-primary">{p.label}</div>
+                    </button>
+                ))}
             </div>
         </div>
     );
@@ -467,7 +584,8 @@ function ModelsPanel({
     enabledModels: string[];
     onChange: (ids: string[]) => void;
 }) {
-    const models = useMemo(() => getCatalogModels().slice(0, 12), []);
+    const { catalog } = useShapeCatalog();
+    const models = useMemo(() => getCatalogModels().slice(0, 12), [catalog]);
 
     const toggle = (id: string) => {
         const allIds = models.map((m) => m.id);
@@ -481,9 +599,6 @@ function ModelsPanel({
             <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
                 Models
             </h1>
-            <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                Choose which models show up in chat. Toggle anytime in Settings.
-            </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
                 {models.map((model) => {
                     const on = isModelEnabled(model.id, enabledModels);
@@ -493,110 +608,17 @@ function ModelsPanel({
                             type="button"
                             onClick={() => toggle(model.id)}
                             className={cn(
-                                "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
                                 on
                                     ? "border-accent bg-accent/15 text-text-primary"
                                     : "border-border-subtle bg-surface-2 text-text-muted hover:text-text-secondary",
                             )}
                         >
-                            {model.name}
+                            {providerIcon(model.id, 14)}
+                            <span>{model.name}</span>
                         </button>
                     );
                 })}
-            </div>
-            {models.length === 0 ? (
-                <p className="mt-6 text-center text-sm text-text-muted">
-                    Model catalog loads after launch — you can enable models in Settings.
-                </p>
-            ) : null}
-        </div>
-    );
-}
-
-function LoginPanel({
-    finishing,
-    onSignedIn,
-    onSkip,
-}: {
-    finishing: boolean;
-    onSignedIn: () => void;
-    onSkip: () => void;
-}) {
-    const shapeAuth = useShapeAuth();
-    const [waiting, setWaiting] = useState(false);
-    const busy = waiting || shapeAuth.isLoggingIn || finishing;
-
-    useEffect(() => {
-        if (!shapeAuth.isLoggingIn) setWaiting(false);
-    }, [shapeAuth.isLoggingIn]);
-
-    return (
-        <div>
-            <div className="mb-5 flex justify-center">
-                <Image
-                    src="/logos/logo.svg"
-                    alt="Shape"
-                    width={46}
-                    height={56}
-                    priority
-                    style={{ width: 40, height: "auto" }}
-                    className="logo-invert"
-                />
-            </div>
-            <h1 className="text-center text-xl font-medium tracking-tight text-text-primary">
-                Sign in with Shape
-            </h1>
-            <p className="mt-1.5 text-center text-sm leading-normal text-text-muted">
-                Opens your browser. Come back here when you&apos;re done.
-            </p>
-            <div className="mt-8 flex items-center gap-2">
-                <Button
-                    onClick={async () => {
-                        setWaiting(true);
-                        try {
-                            if (await loginShape()) onSignedIn();
-                        } finally {
-                            setWaiting(false);
-                        }
-                    }}
-                    disabled={busy || shapeAuth.loggedIn}
-                    size="lg"
-                    className="min-w-0 flex-[1.6] gap-2 rounded-full"
-                >
-                    <Image
-                        src="/logos/logo.svg"
-                        alt=""
-                        width={16}
-                        height={16}
-                        className="logo-invert size-4 shrink-0"
-                    />
-                    {busy ? "Waiting…" : "Sign in"}
-                </Button>
-                {busy && !finishing ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="lg"
-                        className="shrink-0 rounded-full px-4"
-                        onClick={() => {
-                            cancelLoginShape();
-                            setWaiting(false);
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                ) : (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="lg"
-                        className="shrink-0 rounded-full px-4"
-                        disabled={busy}
-                        onClick={onSkip}
-                    >
-                        Skip
-                    </Button>
-                )}
             </div>
         </div>
     );

@@ -11,10 +11,9 @@ import {
 } from '../blocks/workflow';
 import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
-import { PlanningBlock } from '../blocks/plan';
+import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
 import { ReviewDebatePanel } from '../blocks/debate';
-import { QuestionBlock } from '../blocks/question';
 import { hostnameOf } from '@/lib/favicon';
 
 function hostnameFromUrl(url: string): string {
@@ -107,7 +106,10 @@ export type Chunk = {
     catEndLine?: number;
     designPreviews?: DesignPreviewItem[];
     selectedConcept?: string;
-    questionOptions?: string[];
+    /** Model id used for adversarial review (optional attr on the tag). */
+    reviewModel?: string;
+    /** Inline plan markdown when the saved file is not on disk yet. */
+    planMarkdown?: string;
     todos?: Array<{ id: string; label: string; status: "done" | "active" | "pending" | "cancelled" }>;
     visitUrl?: string;
     visitHost?: string;
@@ -157,13 +159,18 @@ export function parseMessageContent(text: string): Chunk[] {
         };
     };
 
-    const parsePlanSavedBlock = (block: string): Chunk => {
+    const parsePlanSavedBlock = (block: string, innerContent?: string): Chunk => {
         const pathMatch = block.match(/path="([^"]*)"/);
         const titleMatch = block.match(/title="([^"]*)"/);
+        const body =
+            innerContent?.trim()
+            || getInnerTagContent(block, "plan_saved")
+            || undefined;
         return {
             type: 'plan_saved',
             file: pathMatch ? pathMatch[1] : undefined,
             content: titleMatch ? titleMatch[1] : 'Implementation Plan',
+            planMarkdown: body,
         };
     };
 
@@ -282,30 +289,22 @@ export function parseMessageContent(text: string): Chunk[] {
     };
 
     const parseReviewDebateBlock = (block: string): Chunk => {
+        const modelMatch = block.match(/<review_debate[^>]*\bmodel="([^"]*)"/i);
         const inner = block
-            .replace(/^<review_debate>\s*/i, "")
+            .replace(/^<review_debate[^>]*>\s*/i, "")
             .replace(/\s*<\/review_debate>$/i, "")
             .trim();
-        return { type: "review_debate", content: inner };
+        return {
+            type: "review_debate",
+            content: inner,
+            reviewModel: modelMatch?.[1],
+        };
     };
 
     const parseQuestionBlock = (block: string): Chunk => {
-        const options: string[] = [];
-        const optionRe = /<option>([\s\S]*?)<\/option>/gi;
-        let match: RegExpExecArray | null;
-        while ((match = optionRe.exec(block)) !== null) {
-            const opt = match[1].trim();
-            if (opt) options.push(opt);
-        }
-        const inner = block
-            .replace(/^<question[^>]*>/i, "")
-            .replace(/\s*<\/question>$/i, "");
-        const questionText = inner.replace(/<option>[\s\S]*?<\/option>/gi, "").trim();
-        return {
-            type: "question",
-            content: questionText,
-            questionOptions: options,
-        };
+        // Questions feature removed — keep a no-op parser so old transcripts don't break.
+        void block;
+        return { type: "question", content: "" };
     };
 
     const parseWebVisitBlock = (tagFull: string, isGenerating: boolean): Chunk => {
@@ -438,7 +437,7 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'plan') {
                 chunks.push(parsePlanBlock(tagFull));
             } else if (firstMatch.type === 'plan_saved') {
-                chunks.push(parsePlanSavedBlock(tagFull));
+                chunks.push(parsePlanSavedBlock(tagFull, content));
             } else if (firstMatch.type === 'todos') {
                 pushOrReplaceTodos(parseTodosBlock(tagFull));
             } else if (firstMatch.type === 'terminal_command') {
@@ -498,7 +497,7 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'plan') {
                 chunks.push(parsePlanBlock(fullTag));
             } else if (firstMatch.type === 'plan_saved') {
-                chunks.push(parsePlanSavedBlock(fullTag));
+                chunks.push(parsePlanSavedBlock(fullTag, content));
             } else if (firstMatch.type === 'todos') {
                 pushOrReplaceTodos(parseTodosBlock(fullTag));
             } else if (firstMatch.type === 'terminal_command') {
@@ -575,7 +574,7 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'plan') {
                 chunks.push(parsePlanBlock(fullBlock));
             } else if (firstMatch.type === 'plan_saved') {
-                chunks.push(parsePlanSavedBlock(fullBlock));
+                chunks.push(parsePlanSavedBlock(fullBlock, content));
             } else if (firstMatch.type === 'todos') {
                 pushOrReplaceTodos(parseTodosBlock(fullBlock));
             } else if (firstMatch.type === 'terminal_command') {
@@ -715,13 +714,22 @@ export function extractWebSearchResults(content: string): WebSearchResultItem[] 
 
 /**
  * A message is rendered as a chronological sequence of segments: prose text,
- * runs of consecutive tool actions, plans, images. Tool runs stay in place
- * between the prose that surrounds them (like Cursor) instead of being hoisted
- * into one condensed dropdown at the top of the message.
+ * runs of consecutive tool actions, plans, images. Tool runs stay in one
+ * Working accordion; only substantial prose splits the thread.
  */
 type Segment =
     | { kind: 'workflow'; blocks: Chunk[] }
     | { kind: 'chunk'; chunk: Chunk };
+
+/** Short "now let me…" notes belong in Working, not as their own bubbles. */
+function isWorkflowFillerProse(text: string): boolean {
+    const t = text.trim();
+    if (!t) return true;
+    if (t.length < 140) return true;
+    const sentences = t.split(/[.!?](?:\s+|$)/).filter((s) => s.trim().length > 24);
+    if (sentences.length < 2 && t.length < 220) return true;
+    return false;
+}
 
 function buildSegments(chunks: Chunk[]): Segment[] {
     const segments: Segment[] = [];
@@ -733,9 +741,13 @@ function buildSegments(chunks: Chunk[]): Segment[] {
             } else {
                 segments.push({ kind: 'workflow', blocks: [chunk] });
             }
-        } else {
-            segments.push({ kind: 'chunk', chunk });
+            continue;
         }
+        if (chunk.type === 'text' && isWorkflowFillerProse(chunk.content || '')) {
+            const prev = segments[segments.length - 1];
+            if (prev?.kind === 'workflow') continue;
+        }
+        segments.push({ kind: 'chunk', chunk });
     }
     return segments;
 }
@@ -753,49 +765,62 @@ export function MessageRenderer({
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
     durationMs?: number;
 }) {
-    const chunks = useMemo(() => parseMessageContent(content), [content]);
+    const chunks = useMemo(() => {
+        const parsed = parseMessageContent(content);
+        if (isGenerating) return parsed;
+        return parsed.map((c) => (c.isGenerating ? { ...c, isGenerating: false } : c));
+    }, [content, isGenerating]);
 
     // Legacy <subagent_ref> / <subagent> tags are stripped from display.
     const contentChunks = useMemo(() => mergeAdjacentTextChunks(
         chunks.filter((c) => c.type !== 'subagent_ref' && c.type !== 'subagent'),
     ), [chunks]);
 
-    const workflowBlocks = useMemo(
-        () => contentChunks.filter(
-            (c) => WORKFLOW_CHUNK_TYPES.has(c.type) && isRenderableWorkflowBlock(c, isGenerating),
-        ),
+    // Chronological segments so mid-turn prose sits between tool groups (Cursor-style).
+    const segments = useMemo(
+        () =>
+            buildSegments(
+                contentChunks.filter((c) => {
+                    if (WORKFLOW_CHUNK_TYPES.has(c.type)) {
+                        return isRenderableWorkflowBlock(c, isGenerating);
+                    }
+                    return true;
+                }),
+            ),
         [contentChunks, isGenerating],
     );
 
-    const proseChunks = useMemo(
-        () => contentChunks.filter(
-            (c) => !WORKFLOW_CHUNK_TYPES.has(c.type) || !isRenderableWorkflowBlock(c, isGenerating),
-        ),
-        [contentChunks, isGenerating],
-    );
-
-    const segments = useMemo(() => buildSegments(proseChunks), [proseChunks]);
+    const workflowSegments = segments.filter((s): s is Extract<Segment, { kind: "workflow" }> => s.kind === "workflow");
+    const firstWorkflowIndex = segments.findIndex((s) => s.kind === "workflow");
+    const lastWorkflowIndex = (() => {
+        for (let i = segments.length - 1; i >= 0; i--) {
+            if (segments[i]?.kind === "workflow") return i;
+        }
+        return -1;
+    })();
 
     const lastSegment = segments[segments.length - 1];
     const proseIsStreaming =
         lastSegment?.kind === 'chunk'
         && lastSegment.chunk.type === 'text'
         && !!lastSegment.chunk.content?.trim();
-    const hasPendingApproval = workflowBlocks.some(
-        (b) =>
-            (b.type === 'terminal_command' || b.type === 'edit_pending')
-            && b.commandStatus === 'pending',
+    const hasPendingApproval = workflowSegments.some((s) =>
+        s.blocks.some(
+            (b) =>
+                (b.type === 'terminal_command' || b.type === 'edit_pending')
+                && b.commandStatus === 'pending',
+        ),
     );
     const showStatusLine =
         !!isGenerating
-        && workflowBlocks.length === 0
+        && workflowSegments.length === 0
         && (
             hasPendingApproval
             || !!activityLabel?.trim()
             || !proseIsStreaming
         );
 
-    const lastWorkflowBlock = workflowBlocks[workflowBlocks.length - 1];
+    const lastWorkflowBlock = workflowSegments.at(-1)?.blocks.at(-1);
     const isThinking = !!isGenerating
         && (lastWorkflowBlock?.type === 'think' || lastWorkflowBlock?.type === 'thought')
         && !!lastWorkflowBlock.isGenerating;
@@ -807,7 +832,18 @@ export function MessageRenderer({
         const isLastSegment = index === segments.length - 1;
 
         if (segment.kind === 'workflow') {
-            return null;
+            const isFirst = index === firstWorkflowIndex;
+            const isLastWf = index === lastWorkflowIndex;
+            return (
+                <TurnWorkflowSummary
+                    key={`wf-${index}`}
+                    blocks={segment.blocks}
+                    isActive={!!isGenerating && isLastWf}
+                    durationMs={isFirst && !isGenerating ? durationMs : undefined}
+                    activityLabel={isLastWf ? activityLabel : null}
+                    showHeader
+                />
+            );
         }
 
         const chunk = segment.chunk;
@@ -818,7 +854,7 @@ export function MessageRenderer({
                 <div
                     key={`text-${index}`}
                     className={cn(
-                        "text-sm font-normal text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
+                        "text-sm font-medium text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
                         isGenerating && isLastSegment && "animate-in fade-in duration-300",
                     )}
                 >
@@ -828,14 +864,14 @@ export function MessageRenderer({
         }
         if (chunk.type === 'plan_saved') {
             const title = chunk.content || 'Implementation Plan';
+            const path = chunk.file || '';
             return (
-                <div
+                <PlanSavedBlock
                     key={`plan-saved-${index}`}
-                    className="py-0.5 text-sm text-text-muted"
-                >
-                    Saved plan{" "}
-                    <span className="text-text-secondary">{title}</span>
-                </div>
+                    title={title}
+                    path={path}
+                    markdown={chunk.planMarkdown}
+                />
             );
         }
         if (chunk.type === 'plan') {
@@ -877,13 +913,13 @@ export function MessageRenderer({
         }
         if (chunk.type === 'attached_image') {
             const src = chunk.content?.trim() || "";
+            if (!src) return null;
             return (
                 <button
                     key={`image-${index}`}
                     type="button"
                     className="my-2 block w-fit max-w-[240px] overflow-hidden rounded-lg border border-border-subtle"
                     onClick={() => {
-                        if (!src) return;
                         window.dispatchEvent(
                             new CustomEvent("shape-open-media", {
                                 detail: { src, kind: "image", title: "Attached" },
@@ -909,43 +945,19 @@ export function MessageRenderer({
                 <ReviewDebatePanel
                     key={`review-debate-${index}`}
                     content={chunk.content || ''}
+                    model={chunk.reviewModel}
                 />
             );
         }
         if (chunk.type === 'question') {
-            return (
-                <QuestionBlock
-                    key={`question-${index}`}
-                    question={chunk.content || ''}
-                    options={chunk.questionOptions || []}
-                    onAnswer={(answer) => {
-                        window.dispatchEvent(
-                            new CustomEvent("shape-question-answer", { detail: { answer } }),
-                        );
-                    }}
-                />
-            );
+            return null;
         }
         return null;
     });
 
-    const answerContent = <>{renderedSegments}</>;
-
     return (
         <div className="flex flex-col gap-0 overflow-hidden">
-            {workflowBlocks.length > 0 ? (
-                <TurnWorkflowSummary
-                    blocks={workflowBlocks}
-                    isActive={isGenerating}
-                    durationMs={durationMs}
-                    activityLabel={activityLabel}
-                >
-                    {answerContent}
-                </TurnWorkflowSummary>
-            ) : (
-                answerContent
-            )}
-
+            {renderedSegments}
             {showStatusLine && (
                 <GeneratingIndicator label={statusLabel} />
             )}

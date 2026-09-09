@@ -1,5 +1,6 @@
 "use client";
 
+import { RiAddLine, RiArrowDownSLine, RiCheckLine, RiFolderLine, RiGitBranchLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -73,7 +74,7 @@ export function ComposerContextBar({ className }: { className?: string }) {
     const repoLabel = project_path ? getRepoName(project_path) : "Open repo";
 
     return (
-        <div className={cn("flex w-full items-center justify-between gap-2 px-1", className)}>
+        <div className={cn("flex w-full items-center justify-start gap-2 px-1", className)}>
             <DropdownMenu
                 onOpenChange={(open) => {
                     if (!open) setRepoQuery("");
@@ -84,9 +85,9 @@ export function ComposerContextBar({ className }: { className?: string }) {
                         type="button"
                         className="inline-flex max-w-[50%] items-center gap-1.5 rounded-md px-2 py-1 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                     >
-                        <Icon name="folder" size={14} className="shrink-0 opacity-70" />
+                        <Icon icon={RiFolderLine} className="shrink-0 text-text-muted" />
                         <span className="truncate">{repoLabel}</span>
-                        <Icon name="expand_more" size={14} className="shrink-0 opacity-50" />
+                        <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-disabled" />
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-72 p-0">
@@ -112,10 +113,10 @@ export function ComposerContextBar({ className }: { className?: string }) {
                             }}
                             className="gap-2"
                         >
-                            <Icon name="folder" size={14} className="shrink-0 text-text-muted" />
+                            <Icon icon={RiFolderLine} className="shrink-0 text-text-muted" />
                             <span className="min-w-0 flex-1 truncate">{getRepoName(r.path)}</span>
                             {project_path === r.path ? (
-                                <Icon name="check" size={14} className="shrink-0" />
+                                <Icon icon={RiCheckLine} className="shrink-0" />
                             ) : null}
                         </DropdownMenuItem>
                     ))}
@@ -124,7 +125,7 @@ export function ComposerContextBar({ className }: { className?: string }) {
                         onClick={() => window.dispatchEvent(new Event("open-folder-request"))}
                         className="gap-2"
                     >
-                        <Icon name="add" size={14} />
+                        <Icon icon={RiAddLine} />
                         Use Existing / New Folder…
                     </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -139,11 +140,11 @@ export function ComposerContextBar({ className }: { className?: string }) {
                     <button
                         type="button"
                         disabled={!project_path}
-                        className="inline-flex max-w-[50%] items-center gap-1.5 rounded-md px-2 py-1 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary disabled:opacity-40"
+                        className="inline-flex max-w-[50%] items-center gap-1.5 rounded-md px-2 py-1 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary disabled:text-text-disabled"
                     >
-                        <Icon name="git_branch" size={14} className="shrink-0 opacity-70" />
+                        <Icon icon={RiGitBranchLine} className="shrink-0 text-text-muted" />
                         <span className="truncate">{branch ?? "Branch"}</span>
-                        <Icon name="expand_more" size={14} className="shrink-0 opacity-50" />
+                        <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-disabled" />
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64 p-0">
@@ -175,7 +176,7 @@ export function ComposerContextBar({ className }: { className?: string }) {
                             >
                                 <span className="min-w-0 flex-1 truncate">{b}</span>
                                 {branch === b ? (
-                                    <Icon name="check" size={14} className="shrink-0" />
+                                    <Icon icon={RiCheckLine} className="shrink-0" />
                                 ) : null}
                             </DropdownMenuItem>
                         ))}

@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowRightSLine, RiChat3Line, RiCodeLine, RiFileLine, RiFolderLine, RiGitBranchLine, RiGlobalLine, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiTerminalBoxLine } from "@remixicon/react";
 import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
@@ -13,20 +15,20 @@ import { getTextareaCaretViewportRect } from "@/lib/textarea-caret";
 import { hostnameOf } from "@/lib/favicon";
 import { getPreviewCurrentUrl } from "@/features/preview/store";
 
-type CategoryId = "files" | "docs" | "terminals" | "chats" | "branch" | "browser" | "design" | null;
+type CategoryId = "files" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "design" | null;
 
 const CATEGORIES: {
     id: Exclude<CategoryId, null>;
     label: string;
-    icon: string;
+    icon: RemixiconComponentType;
 }[] = [
-    { id: "files", label: "Files & Folders", icon: "folder" },
-    { id: "docs", label: "Docs", icon: "book" },
-    { id: "terminals", label: "Terminals", icon: "terminal" },
-    { id: "chats", label: "Past Chats", icon: "chat" },
-    { id: "branch", label: "Branch (Diff with Main)", icon: "account_tree" },
-    { id: "browser", label: "Browser", icon: "public" },
-    { id: "design", label: "Design concepts", icon: "palette" },
+    { id: "files", label: "Files & Folders", icon: RiFolderLine },
+    { id: "mcp", label: "MCP Servers", icon: RiPuzzle2Line },
+    { id: "terminals", label: "Terminals", icon: RiTerminalBoxLine },
+    { id: "chats", label: "Past Chats", icon: RiChat3Line },
+    { id: "branch", label: "Branch (Diff with Main)", icon: RiGitBranchLine },
+    { id: "browser", label: "Browser", icon: RiGlobalLine },
+    { id: "design", label: "Design concepts", icon: RiPaletteLine },
 ];
 
 function pathDir(path: string): string {
@@ -56,6 +58,7 @@ export function MentionPicker({
     const { project_path } = useProjectState();
     const [files, setFiles] = useState<string[]>([]);
     const [chats, setChats] = useState<{ id: string; title: string }[]>([]);
+    const [mcpServers, setMcpServers] = useState<{ id: string; name: string }[]>([]);
     const [activeCategory, setActiveCategory] = useState<CategoryId>(null);
     const [highlight, setHighlight] = useState(0);
     const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
@@ -142,6 +145,30 @@ export function MentionPicker({
         };
     }, [open, project_path]);
 
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const statuses = await commands.getMcpStatus();
+                if (cancelled) return;
+                setMcpServers(
+                    statuses
+                        .filter((s) => String(s.status || "").toLowerCase() === "connected")
+                        .map((s) => ({
+                            id: s.id,
+                            name: s.name || s.id,
+                        })),
+                );
+            } catch {
+                if (!cancelled) setMcpServers([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
+
     const designItems: ChatMention[] = useMemo(() => {
         const sessions = listDesignPreviewSessions();
         const out: ChatMention[] = [];
@@ -185,17 +212,6 @@ export function MentionPicker({
     const categoryItems: ChatMention[] = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (activeCategory === "files") return fileMentions;
-        if (activeCategory === "docs") {
-            return files
-                .filter((p) => /\.(md|mdx|txt)$/i.test(p))
-                .filter((p) => !q || p.toLowerCase().includes(q))
-                .slice(0, 12)
-                .map((path) => ({
-                    kind: "docs" as const,
-                    path,
-                    label: path.split("/").pop() || path,
-                }));
-        }
         if (activeCategory === "chats") {
             return chats
                 .filter((c) => !q || c.title.toLowerCase().includes(q))
@@ -204,6 +220,16 @@ export function MentionPicker({
                     path: c.id,
                     id: c.id,
                     label: c.title || "Chat",
+                }));
+        }
+        if (activeCategory === "mcp") {
+            return mcpServers
+                .filter((s) => !q || s.id.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+                .map((s) => ({
+                    kind: "mcp" as const,
+                    id: s.id,
+                    path: s.id,
+                    label: s.name || s.id,
                 }));
         }
         if (activeCategory === "design") {
@@ -240,16 +266,25 @@ export function MentionPicker({
             return items;
         }
         return [];
-    }, [activeCategory, fileMentions, files, chats, designItems, query]);
+    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, query]);
 
     const rootItems = useMemo(() => {
         if (activeCategory) return categoryItems;
         const q = query.trim().toLowerCase();
         const designs = designItems
             .filter((d) => !q || d.label.toLowerCase().includes(q))
-            .slice(0, 4);
-        return [...staticTop, ...fileMentions.slice(0, 8), ...designs];
-    }, [activeCategory, categoryItems, staticTop, fileMentions, designItems, query]);
+            .slice(0, 3);
+        const mcps = mcpServers
+            .filter((s) => !q || s.id.toLowerCase().includes(q))
+            .slice(0, 4)
+            .map((s) => ({
+                kind: "mcp" as const,
+                id: s.id,
+                path: s.id,
+                label: s.name || s.id,
+            }));
+        return [...staticTop, ...mcps, ...fileMentions.slice(0, 8), ...designs];
+    }, [activeCategory, categoryItems, staticTop, fileMentions, designItems, mcpServers, query]);
 
     const showCategories = !activeCategory && !query.trim();
 
@@ -297,7 +332,7 @@ export function MentionPicker({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setActiveCategory(null)}
                 >
-                    <Icon name="arrow_back" size={12} />
+                    <Icon icon={RiArrowLeftLine} />
                     {CATEGORIES.find((c) => c.id === activeCategory)?.label ?? "Back"}
                 </button>
             ) : null}
@@ -329,24 +364,25 @@ export function MentionPicker({
                                 <Favicon url={item.path} size={14} />
                             ) : (
                                 <Icon
-                                    name={
+                                    icon={
                                         item.kind === "codebase"
-                                            ? "search"
+                                            ? RiSearchLine
                                             : item.kind === "selection"
-                                              ? "code"
+                                              ? RiCodeLine
                                               : item.kind === "design"
-                                                ? "palette"
+                                                ? RiPaletteLine
                                                 : item.kind === "chat"
-                                                  ? "chat"
+                                                  ? RiChat3Line
                                                   : item.kind === "terminal"
-                                                    ? "terminal"
+                                                    ? RiTerminalBoxLine
                                                     : item.kind === "branch"
-                                                      ? "account_tree"
+                                                      ? RiGitBranchLine
                                                       : item.kind === "browser"
-                                                        ? "public"
-                                                        : "insert_drive_file"
+                                                        ? RiGlobalLine
+                                                        : item.kind === "mcp"
+                                                          ? RiPuzzle2Line
+                                                          : RiFileLine
                                     }
-                                    size={14}
                                     className="shrink-0 text-text-muted"
                                 />
                             )}
@@ -375,9 +411,9 @@ export function MentionPicker({
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => setActiveCategory(cat.id)}
                             >
-                                <Icon name={cat.icon} size={14} className="shrink-0 text-text-muted" />
+                                <Icon icon={cat.icon} className="shrink-0 text-text-muted" />
                                 <span className="flex-1">{cat.label}</span>
-                                <Icon name="chevron_right" size={14} className="text-text-muted" />
+                                <Icon icon={RiArrowRightSLine} className="text-text-muted" />
                             </button>
                         ))}
                     </>

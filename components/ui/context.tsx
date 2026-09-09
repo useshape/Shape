@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowRightSLine, RiCheckLine, RiCheckboxBlankCircleLine } from "@remixicon/react";
 import * as React from "react";
 import { Icon } from "./icon";
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
@@ -48,7 +49,7 @@ const ContextMenuSubTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon name="chevron_right" className="ml-auto size-icon-sm" />
+        <Icon icon={RiArrowRightSLine} className="ml-auto" />
     </ContextMenuPrimitive.SubTrigger>
 ));
 ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
@@ -112,7 +113,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <ContextMenuPrimitive.ItemIndicator>
-                <Icon name="check" className="size-icon-sm" />
+                <Icon icon={RiCheckLine}  />
             </ContextMenuPrimitive.ItemIndicator>
         </span>
         {children}
@@ -127,7 +128,7 @@ const ContextMenuRadioItem = React.forwardRef<
     <ContextMenuPrimitive.RadioItem ref={ref} className={cn(itemClasses, "pr-1", className)} {...props}>
         <span className="flex w-4 shrink-0 items-center justify-center">
             <ContextMenuPrimitive.ItemIndicator>
-                <Icon name="circle" className="size-[8px]" />
+                <Icon icon={RiCheckboxBlankCircleLine} className="size-[8px]" />
             </ContextMenuPrimitive.ItemIndicator>
         </span>
         {children}

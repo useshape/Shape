@@ -1,5 +1,7 @@
 "use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
+import { RiArrowDownSLine, RiArrowLeftLine, RiBugLine, RiCheckboxCircleLine, RiCloudLine, RiExternalLinkLine, RiGitMergeLine, RiGithubFill, RiListCheck3, RiRefreshLine, RiRocketLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -156,34 +158,32 @@ function ItemStatusIcon({ status }: { status?: string }) {
     const icon = statusIcon(status, status);
     return (
         <Icon
-            name={icon.name}
-            filled={icon.filled}
-            size={14}
+            icon={icon.icon}
             className={cn("shrink-0", statusTone(status), icon.spin && "animate-spin")}
         />
     );
 }
 
-function sectionIcon(section: GitHubListSection): string {
+function sectionIcon(section: GitHubListSection): RemixiconComponentType {
     switch (section) {
         case "issues":
-            return "bug_report";
+            return RiBugLine;
         case "pull-requests":
-            return "merge";
+            return RiGitMergeLine;
         case "releases":
-            return "rocket";
+            return RiRocketLine;
         case "check-runs":
-            return "check_circle";
+            return RiCheckboxCircleLine;
         case "check-suites":
-            return "checklist";
+            return RiListCheck3;
         case "commit-statuses":
-            return "check_circle";
+            return RiCheckboxCircleLine;
         case "deployments":
-            return "rocket";
+            return RiRocketLine;
         case "deployment-statuses":
-            return "cloud";
+            return RiCloudLine;
         default:
-            return "github";
+            return RiGithubFill;
     }
 }
 
@@ -404,7 +404,7 @@ function SimpleDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon name="arrow_back" size={16} />
+                            <Icon icon={RiArrowLeftLine} />
                         </Button>
                     </div>
                     <GitDetailSkeleton />
@@ -424,7 +424,7 @@ function SimpleDetailPane({
                                 onClick={onBack}
                                 aria-label="Back to list"
                             >
-                                <Icon name="arrow_back" size={16} />
+                                <Icon icon={RiArrowLeftLine} />
                             </Button>
                             <ItemStatusIcon status={detail?.status} />
                             <div className="min-w-0 flex-1">
@@ -449,7 +449,7 @@ function SimpleDetailPane({
                                         if (detail.url) void commands.openUrlExternal(detail.url);
                                     }}
                                 >
-                                    <Icon name="open_in_new" size={14} />
+                                    <Icon icon={RiExternalLinkLine} />
                                     Open on GitHub
                                 </Button>
                             ) : null}
@@ -710,7 +710,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
         <GitOverlayEnter key={`list-${section}-${issueState}`}>
         <div className="flex h-full min-h-0 flex-col">
             <header className="flex h-9 shrink-0 items-center gap-2 px-3">
-                <Icon name={sectionIcon(section)} size={16} className="shrink-0 text-text-muted" />
+                <Icon icon={sectionIcon(section)} className="shrink-0 text-text-muted" />
                 <FadeTruncate
                     className="min-w-0 flex-1 text-sm font-medium"
                     title={
@@ -737,7 +737,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                     className="h-7 gap-1 px-2 capitalize"
                                 >
                                     {issueState}
-                                    <Icon name="expand_more" size={14} />
+                                    <Icon icon={RiArrowDownSLine} />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -774,7 +774,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                             onClick={() => void load()}
                             aria-label="Refresh"
                         >
-                            <Icon name="refresh" size={14} />
+                            <Icon icon={RiRefreshLine} />
                             Refresh
                         </Button>
                     </Tooltip>
@@ -793,7 +793,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                     {deps.find((d) => d.id === selectedDepId)?.label ??
                                         "Select deployment"}
                                 </span>
-                                <Icon name="expand_more" size={14} className="shrink-0" />
+                                <Icon icon={RiArrowDownSLine} className="shrink-0" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -862,8 +862,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                                 </span>
                                                 {item.url ? (
                                                     <Icon
-                                                        name="open_in_new"
-                                                        size={12}
+                                                        icon={RiExternalLinkLine}
                                                         className="shrink-0 text-text-muted"
                                                     />
                                                 ) : null}

@@ -1,379 +1,45 @@
 "use client";
 
-import type { LucideIcon, LucideProps } from "lucide-react";
-import {
-    ALargeSmall,
-    Activity,
-    AlignCenter,
-    AlignJustify,
-    AlignLeft,
-    AlignRight,
-    AlignVerticalJustifyCenter,
-    AlignVerticalJustifyEnd,
-    AlignVerticalJustifyStart,
-    ArrowDown,
-    ArrowLeft,
-    ArrowLeftRight,
-    ArrowRight,
-    ArrowUp,
-    Ban,
-    Baseline,
-    Bell,
-    Bold,
-    Book,
-    BookCopy,
-    Bot,
-    Bug,
-    Check,
-    CheckCircle2,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    ChevronUp,
-    Circle,
-    CircleAlert,
-    CircleHelp,
-    CircleX,
-    Clipboard,
-    Cloud,
-    CloudOff,
-    Code,
-    Columns2,
-    Command,
-    Copy,
-    Crosshair,
-    Download,
-    ExternalLink,
-    Eye,
-    EyeOff,
-    File,
-    FileText,
-    Filter,
-    Folder,
-    FolderOpen,
-    GitBranch,
-    GitCommitHorizontal,
-    GitCompare,
-    GitGraph,
-    GitMerge,
-    Globe,
-    GripVertical,
-    History,
-    Home,
-    Image,
-    Info,
-    Italic,
-    LayoutGrid,
-    Link,
-    Link2,
-    List,
-    ListChecks,
-    ListOrdered,
-    Lock,
-    Maximize2,
-    Menu,
-    MessageSquare,
-    Minimize2,
-    Minus,
-    Monitor,
-    Moon,
-    MoreHorizontal,
-    Paintbrush,
-    Paperclip,
-    PanelLeftClose,
-    PanelLeftOpen,
-    Pencil,
-    Pin,
-    PinOff,
-    Play,
-    Plus,
-    Radius,
-    Redo2,
-    RefreshCw,
-    Rocket,
-    Rows3,
-    Search,
-    Send,
-    Settings,
-    Shield,
-    Sparkles,
-    Smartphone,
-    Square,
-    SquareTerminal,
-    Star,
-    Strikethrough,
-    Sun,
-    Tablet,
-    Tag,
-    Terminal,
-    Trash2,
-    Type,
-    Underline,
-    Undo2,
-    Unlock,
-    Upload,
-    User,
-    WrapText,
-    X,
-    Zap,
-} from "lucide-react";
+import type { CSSProperties } from "react";
+import type { RemixiconComponentType } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 
-/** Lucide no longer ships brand marks — keep a compact GitHub glyph for UI chrome. */
-function GithubMark({ size = 16, className }: LucideProps) {
-    const numericSize = typeof size === "string" ? Number.parseInt(size, 10) || 16 : size;
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width={numericSize}
-            height={numericSize}
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            className={cn("shrink-0", className)}
-            aria-hidden
-        >
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-        </svg>
-    );
-}
-
-/**
- * Product UI icons: Lucide.
- * File/folder type icons stay on the VS Code set in lib/ui/icons/files.ts.
- */
-const ICONS: Record<string, LucideIcon> = {
-    close: X,
-    clear: X,
-    cancel: X,
-    add: Plus,
-    remove: Minus,
-    error: CircleX,
-    x_circle: CircleX,
-    warning: CircleAlert,
-    info: Info,
-    check: Check,
-    check_circle: CheckCircle2,
-    check_box: Check,
-    check_box_outline_blank: Square,
-    radio_button_unchecked: Circle,
-    circle: Circle,
-    search: Search,
-    brain: Sparkles,
-    my_location: Crosshair,
-    refresh: RefreshCw,
-    sync: RefreshCw,
-    more_horiz: MoreHorizontal,
-    more_vert: GripVertical,
-    description: FileText,
-    note_add: File,
-    file_copy: Copy,
-    content_copy: Clipboard,
-    list: List,
-    format_list_bulleted: List,
-    list_alt: ListChecks,
-    checklist: ListChecks,
-    expand_more: ChevronDown,
-    expand_less: ChevronUp,
-    keyboard_arrow_down: ChevronDown,
-    keyboard_arrow_right: ChevronRight,
-    keyboard_arrow_left: ChevronLeft,
-    keyboard_arrow_up: ChevronUp,
-    chevron_right: ChevronRight,
-    chevron_left: ChevronLeft,
-    terminal: Terminal,
-    "square-terminal": SquareTerminal,
-    square_terminal: SquareTerminal,
-    delete: Trash2,
-    light_mode: Sun,
-    dark_mode: Moon,
-    open_in_new: ExternalLink,
-    merge: GitMerge,
-    commit: GitCommitHorizontal,
-    git_graph: GitGraph,
-    cloud_download: CloudOff,
-    cloud_upload: Upload,
-    download: Download,
-    upload: Upload,
-    account_tree: GitBranch,
-    source_control: BookCopy,
-    tag: Tag,
-    sell: Tag,
-    bookmark: Tag,
-    code: Code,
-    insert_drive_file: File,
-    chat: MessageSquare,
-    forum: MessageSquare,
-    play_arrow: Play,
-    play: Play,
-    stop: Square,
-    bug_report: Bug,
-    folder: Folder,
-    folder_open: FolderOpen,
-    settings: Settings,
-    menu: Menu,
-    three_bars: Menu,
-    edit: Pencil,
-    save: Download,
-    home: Home,
-    undo: Undo2,
-    redo: Redo2,
-    tune: Settings,
-    arrow_back: ArrowLeft,
-    arrow_forward: ArrowRight,
-    arrow_upward: ArrowUp,
-    arrow_downward: ArrowDown,
-    pause: Square,
-    replay: RefreshCw,
-    fast_forward: ChevronRight,
-    double_arrow: ChevronRight,
-    remove_circle_outline: Ban,
-    star: Star,
-    star_border: Star,
-    lock: Lock,
-    lock_open: Unlock,
-    history: History,
-    send: Send,
-    "send-ins": Send,
-    attachment: Paperclip,
-    image: Image,
-    public: Globe,
-    language: Globe,
-    visibility: Eye,
-    visibility_off: EyeOff,
-    palette: Paintbrush,
-    brush: Paintbrush,
-    format_color_fill: Paintbrush,
-    color_lens: Paintbrush,
-    colorize: Crosshair,
-    auto_awesome: Sparkles,
-    desktop_windows: Monitor,
-    monitor: Monitor,
-    smartphone: Smartphone,
-    tablet: Tablet,
-    security: Shield,
-    block: Ban,
-    unfold_more: ChevronDown,
-    push_pin: Pin,
-    keep_off: PinOff,
-    notifications: Bell,
-    notification: Bell,
-    vertical_split: Columns2,
-    split_horizontal: Rows3,
-    create_new_folder: Folder,
-    unfold_less: Minimize2,
-    crop_square: Square,
-    grid_view: Columns2,
-    rotate_left: Undo2,
-    rotate_right: Redo2,
-    swap_horiz: ArrowLeftRight,
-    swap_vert: ArrowLeftRight,
-    width: Minus,
-    height: Minus,
-    font_size: ALargeSmall,
-    line_height: Baseline,
-    letter_spacing: ArrowLeftRight,
-    type: Type,
-    radius: Radius,
-    constrain: Link2,
-    format_align_left: AlignLeft,
-    format_align_center: AlignCenter,
-    format_align_right: AlignRight,
-    format_align_justify: AlignJustify,
-    format_align_top: AlignVerticalJustifyStart,
-    format_align_middle: AlignVerticalJustifyCenter,
-    format_align_bottom: AlignVerticalJustifyEnd,
-    layout_grid: LayoutGrid,
-    format_italic: Italic,
-    format_strikethrough: Strikethrough,
-    format_underlined: Underline,
-    format_list_numbered: ListOrdered,
-    person: User,
-    rocket_launch: Rocket,
-    keyboard: Command,
-    link: Link2,
-    link_off: Link,
-    view_stream: Rows3,
-    wrap_text: WrapText,
-    find_replace: Search,
-    command: Command,
-    rocket: Rocket,
-    user: User,
-    bot: Bot,
-    maximize: Maximize2,
-    minimize: Minimize2,
-    project: Home,
-    structure: List,
-    outline: ListOrdered,
-    git: GitCompare,
-    changes: GitCompare,
-    git_branch: GitBranch,
-    github: GithubMark as LucideIcon,
-    agents: Bot,
-    connected: Activity,
-    disconnected: Link,
-    cloud: Cloud,
-    help: CircleHelp,
-    filter: Filter,
-    puzzle: Book,
-    caret_down: ChevronDown,
-    caret_right: ChevronRight,
-    sidebar_collapse: PanelLeftClose,
-    sidebar_expand: PanelLeftOpen,
-    fold: Minimize2,
-    view_compact: PanelLeftClose,
-    zap: Zap,
-    dependabot: Bot,
-};
-
-const FILLED_ICONS: Partial<Record<string, LucideIcon>> = {
-    warning: CircleAlert,
-    check_circle: CheckCircle2,
-    error: CircleX,
-    x_circle: CircleX,
-    star: Star,
-    notifications: Bell,
-    notification: Bell,
-    brain: Sparkles,
-    auto_awesome: Sparkles,
-    crop_square: Square,
-};
-
-/** Default UI icon size (matches --icon-md). Prefer this over ad-hoc px. */
-export const ICON_SIZE_MD = 16;
+/** Matches `--icon-md`. Call sites should omit `size` unless they must scale (avatar, favicon). */
+export const ICON_SIZE_MD = 17;
 export const ICON_SIZE_SM = 14;
 export const ICON_SIZE_XS = 12;
 
+/** Smaller glyphs need a heavier stroke so they stay readable. */
+function strokeForSize(size: number) {
+    if (size <= 12) return 2.25;
+    if (size <= 14) return 2;
+    if (size <= 16) return 1.75;
+    if (size <= 20) return 1.5;
+    return 1.25;
+}
+
 /**
- * Product UI icons (Lucide). Color via `currentColor` — mute with `text-text-muted`,
- * never with opacity (opacity makes stroke intersections look wrong).
+ * App chrome around a Remix glyph. Pass the real component from `@remixicon/react`
+ * (`RiCloseLine`, `RiSideBarLine`, …) — not a website slug or string name.
  */
 export function Icon({
-    name,
+    icon: Glyph,
     className,
     size = ICON_SIZE_MD,
-    filled = false,
+    style,
 }: {
-    name: string;
+    icon: RemixiconComponentType;
     className?: string;
-    size?: number | string;
-    filled?: boolean;
+    size?: number;
+    style?: CSSProperties;
 }) {
-    const safeName = name ?? "";
-    const key = ICONS[safeName] ? safeName : safeName.replace(/_/g, "-");
-    const IconComponent =
-        (filled && FILLED_ICONS[key]) ||
-        ICONS[key] ||
-        ICONS[safeName] ||
-        Square;
-    const numericSize = typeof size === "string" ? Number.parseInt(size, 10) || ICON_SIZE_MD : size;
-
-    const props: LucideProps = {
-        size: numericSize,
-        strokeWidth: 2.5,
-        className: cn("shape-icon shrink-0 text-current", className),
-        "aria-hidden": true,
-        ...(filled ? { fill: "currentColor" } : null),
-    };
-
-    return <IconComponent {...props} />;
+    return (
+        <Glyph
+            size={size}
+            strokeWidth={strokeForSize(size)}
+            className={cn("shape-icon shrink-0", className)}
+            style={{ ...style, ["--icon-size" as string]: `${size}px` }}
+            aria-hidden
+        />
+    );
 }

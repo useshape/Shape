@@ -13,6 +13,7 @@ import { initSettings } from "@/lib/settings";
 import { initGitHubAuth } from "@/lib/github-auth/store";
 import { LoginPromptDialog } from "@/features/workbench/ui/login-prompt-dialog";
 import { WorkspaceTrustHost } from "@/features/workbench/ui/workspace-trust-dialog";
+import { CheckpointRestoreDialog } from "@/features/chat/ui/shell/checkpoint-restore-dialog";
 import { UpdateBootstrap } from "@/features/workbench/update-bootstrap";
 import { installBenignErrorFilters } from "@/lib/editor/benign-errors";
 import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
@@ -20,6 +21,7 @@ import { FilterProvider } from "@/features/git/ui/manager/filter-context";
 import { SuppressNativeTooltips } from "@/components/ui/suppress-native-tooltips";
 import { CommandPaletteBridge } from "@/features/agent/palette";
 import Onboarding from "@/features/onboarding/ui/view";
+import { PromoCardHost } from "@/features/promo/host";
 
 function pathMatches(pathname: string | null, base: string) {
     if (!pathname) return false;
@@ -42,19 +44,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             initGitHubAuth();
             void import("@/lib/shape-auth/store").then(({ initShapeAuth }) => initShapeAuth());
 
-            // MCP: OAuth deep links + sync tools so the agent sees them without visiting Settings.
-            void import("@/lib/mcp-install").then(({ initMcpOAuthListener }) => {
-                void initMcpOAuthListener(async () => {
-                    try {
-                        const { loadMcpServersFromFile } = await import("@/lib/mcp-config");
-                        const { commands } = await import("@/lib/backend");
-                        const servers = await loadMcpServersFromFile();
-                        await commands.syncMcpServers(servers);
-                    } catch {
-                        /* ignore */
-                    }
-                });
-            });
+            // MCP: sync user mcp.json so the agent sees tools without visiting Settings.
             void (async () => {
                 try {
                     const { loadMcpServersFromFile } = await import("@/lib/mcp-config");
@@ -283,12 +273,13 @@ function Content({ children }: { children: React.ReactNode }) {
             className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background select-none"
         >
             <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col">
-                <Titlebar />
                 <Main>{children}</Main>
                 <LoginPromptDialog />
                 <WorkspaceTrustHost />
+                <CheckpointRestoreDialog />
                 <UpdateBootstrap />
                 <CommandPaletteBridge />
+                <PromoCardHost />
             </div>
             {showOnboarding ? (
                 <div className="absolute inset-0 z-[80] bg-background">

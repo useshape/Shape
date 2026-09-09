@@ -1,5 +1,7 @@
 "use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
+import { RiCheckboxCircleLine, RiCloseCircleLine, RiCloseLine, RiErrorWarningLine, RiInformationLine } from "@remixicon/react";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
@@ -13,13 +15,13 @@ export const TOAST_AUTO_HIDE_MS = 5500;
 const TOAST_EXIT_MS = 380;
 /** Sit above the status bar, bottom-right (react-toastify `bottom-right` style). */
 export const TOAST_STACK_CLASS =
-    "pointer-events-none fixed bottom-[calc(var(--statusbar-height)+16px)] right-4 z-notification flex justify-end outline-none";
+    "pointer-events-none fixed bottom-4 right-4 left-auto z-notification ml-auto w-[min(380px,calc(100vw-2rem))] outline-none";
 
-const typeIcons: Record<Notification["type"], string> = {
-    info: "info",
-    success: "check_circle",
-    warning: "warning",
-    error: "error",
+const typeIcons: Record<Notification["type"], RemixiconComponentType> = {
+    info: RiInformationLine,
+    success: RiCheckboxCircleLine,
+    warning: RiErrorWarningLine,
+    error: RiCloseCircleLine,
 };
 
 const typeIconColor: Record<Notification["type"], string> = {
@@ -74,7 +76,7 @@ function ToastCard({
     return (
         <div
             className={cn(
-                "shape-toast pointer-events-auto absolute inset-x-0 bottom-0 min-h-[72px] w-full origin-bottom rounded-xl border border-border-subtle bg-surface-3 p-3 text-left",
+                "shape-toast pointer-events-auto absolute bottom-0 left-0 right-0 min-h-[72px] w-full origin-bottom rounded-xl border border-border-subtle bg-surface-3 p-3 text-left",
                 clickable && "cursor-pointer",
             )}
             data-mounted={entered ? "true" : undefined}
@@ -109,7 +111,7 @@ function ToastCard({
                         typeIconColor[notification.type],
                     )}
                 >
-                    <Icon name={typeIcons[notification.type]} size={16} />
+                    <Icon icon={typeIcons[notification.type]} />
                 </div>
                 <div className="min-w-0 flex-1 pt-0.5">
                     <div className="text-md font-medium leading-snug text-text-primary">
@@ -134,7 +136,7 @@ function ToastCard({
                     }}
                     aria-label="Dismiss notification"
                 >
-                    <Icon name="close" size={14} />
+                    <Icon icon={RiCloseLine} />
                 </Button>
             </div>
         </div>
@@ -164,7 +166,7 @@ export function NotificationToasts() {
 
     return createPortal(
         <div className={TOAST_STACK_CLASS} data-toast-stack="">
-            <div className="relative w-[min(380px,calc(100vw-2rem))]" style={{ height: 88 + Math.max(0, toasts.length - 1) * 8 }}>
+            <div className="relative h-[88px] w-full" style={{ height: 88 + Math.max(0, toasts.length - 1) * 8 }}>
                 {toasts.map((notification, index) => (
                     <ToastCard
                         key={notification.id}

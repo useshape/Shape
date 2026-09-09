@@ -11,7 +11,7 @@ use super::run_turn;
 use super::streaming;
 use super::titles::{
     estimate_cost_per_token, estimate_credits_charged, maybe_regenerate_title,
-    sanitize_generated_title, title_from_message,
+    sanitize_generated_title, text_for_title, title_from_message,
 };
 use crate::agent::tools::schema;
 use crate::agent::model_router;
@@ -256,6 +256,8 @@ pub async fn send_chat_message(
             "turnId": &turn_id,
             "conversationId": &owned_conversation_id,
             "title": &provisional_title,
+            "model": &model_to_use,
+            "usedAuto": selected_auto,
         }),
     );
     if let Some(path) = &current_proj_path {
@@ -270,16 +272,18 @@ pub async fn send_chat_message(
             json!({ "phase": "title", "label": "Naming chat…" }),
         );
         logging::debug("chat", "Generating title before agent turn");
-        let raw_title = streaming::complete_chat(
+        let title_source = text_for_title(&message);
+        let raw_title = streaming::complete_chat_cancellable(
             &client,
             &auth_token,
             &format!(
                 "Write a short chat title (2-5 words) for a coding assistant conversation that starts with this message. Use nouns and verbs from the user's intent, not filler words like \"and\", \"tell\", or \"please\". Reply with only the title.\n\nUser message: {}",
-                message
+                title_source
             ),
             MODEL_TITLE_GEN,
             &streaming::ProxyContext::new("title")
                 .with_turn(Some(turn_id.clone()), Some(owned_conversation_id.clone())),
+            Some(&cancel),
         )
         .await
         .ok();
@@ -292,13 +296,14 @@ pub async fn send_chat_message(
                     "model": model_to_use,
                     "turnId": &turn_id,
                     "conversationId": &owned_conversation_id,
+                    "error": "Cancelled",
                 }),
             );
             return Ok(String::new());
         }
         let title = raw_title
-            .map(|t| sanitize_generated_title(&t, &message))
-            .unwrap_or_else(|| title_from_message(&message));
+            .map(|t| sanitize_generated_title(&t, &title_source))
+            .unwrap_or_else(|| title_from_message(&title_source));
         owned_title = title.clone();
         let still_viewing = state.current_conversation_id.lock()?.as_deref()
             == Some(owned_conversation_id.as_str());
@@ -681,6 +686,7 @@ pub async fn send_chat_message(
         );
 
         maybe_regenerate_title(
+            &app_handle,
             &state,
             &client,
             &auth_token,

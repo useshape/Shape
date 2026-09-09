@@ -1,5 +1,6 @@
 "use client";
 
+import { RiBold, RiCloseLine, RiCodeLine, RiItalic, RiListCheck, RiListOrdered, RiStrikethrough } from "@remixicon/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -199,29 +200,29 @@ export function MarkdownToolbar({
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Bold" onClick={() => onFormat("bold")}>
-                <Icon name="format_bold" size={16} />
+                <Icon icon={RiBold} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Italic" onClick={() => onFormat("italic")}>
-                <Icon name="format_italic" size={16} />
+                <Icon icon={RiItalic} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Strikethrough" onClick={() => onFormat("strike")}>
-                <Icon name="format_strikethrough" size={16} />
+                <Icon icon={RiStrikethrough} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Inline code" onClick={() => onFormat("code")}>
-                <Icon name="code" size={16} />
+                <Icon icon={RiCodeLine} />
             </Button>
 
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Bullet list" onClick={() => onList(false)}>
-                <Icon name="format_list_bulleted" size={16} />
+                <Icon icon={RiListCheck} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Numbered list" onClick={() => onList(true)}>
-                <Icon name="format_list_numbered" size={16} />
+                <Icon icon={RiListOrdered} />
             </Button>
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 ml-0.5" title="Close" onClick={onClose}>
-                <Icon name="close" size={14} />
+                <Icon icon={RiCloseLine} />
             </Button>
         </div>
     );

@@ -1,3 +1,4 @@
+import { RiArrowGoBackLine, RiClipboardLine, RiMoreLine, RiMusic2Line, RiRefreshLine } from "@remixicon/react";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
@@ -34,6 +35,8 @@ import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { TypingDots, UserMessageCard, AUTO_DISPLAY_MODEL } from "./bubble";
 import { isAutoModelId } from "@/lib/usage-display";
+import { parseUserAttachments } from "../../lib/user-attachments";
+import type { ParsedUserAttachment } from "../../lib/user-attachments";
 
 function UserMessageAvatar() {
     const github = useGitHubAuth();
@@ -76,17 +79,30 @@ type ChatMessageItemProps = {
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
 };
 
-const ATTACHMENT_BLOCK_RE = /<attached_(?:image|file)\b[^>]*>[\s\S]*?<\/attached_(?:image|file)>\n*/g;
-const ATTACHMENT_NAME_RE = /<attached_(?:image|file)\b[^>]*?name="([^"]*)"/g;
-
-/** Split a user message into display text and attachment file names (raw tag payloads are never shown). */
-function splitUserAttachments(content: string): { text: string; attachments: string[] } {
-    if (!content.includes("<attached_")) return { text: content, attachments: [] };
-    const attachments: string[] = [];
-    for (const match of content.matchAll(ATTACHMENT_NAME_RE)) {
-        if (match[1]) attachments.push(match[1]);
-    }
-    return { text: content.replace(ATTACHMENT_BLOCK_RE, "").trim(), attachments: attachments };
+function SentAttachmentPill({ att }: { att: ParsedUserAttachment }) {
+    return (
+        <span
+            className="inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-full border border-border pl-1 pr-2"
+            title={att.name}
+        >
+            <span className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface-3">
+                {att.kind === "image" && att.dataUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={att.dataUrl}
+                        alt=""
+                        className="size-full object-cover"
+                        draggable={false}
+                    />
+                ) : att.kind === "audio" ? (
+                    <Icon icon={RiMusic2Line} className="text-text-muted" />
+                ) : (
+                    <FileIcon name={att.name} className="size-3.5" />
+                )}
+            </span>
+            <span className="min-w-0 truncate text-sm text-text-primary">{att.name}</span>
+        </span>
+    );
 }
 
 function MentionRichText({ text }: { text: string }) {
@@ -227,7 +243,11 @@ function ChatMessageItemInner({
 
     const getCopyText = () => {
         if (role === "user") {
-            return content;
+            const parts = parseUserAttachments(content);
+            const names = parts.attachments.map((a) => a.name).join(", ");
+            if (names && parts.text) return `${parts.text}\n\n[${names}]`;
+            if (names) return `[${names}]`;
+            return parts.text || content;
         }
         return parseMessageContent(content)
             .filter(c => c.type === "text" && c.content?.trim())
@@ -276,7 +296,7 @@ function ChatMessageItemInner({
     const isUser = role === "user";
 
     const userParts = React.useMemo(
-        () => (isUser ? splitUserAttachments(content) : null),
+        () => (isUser ? parseUserAttachments(content) : null),
         [isUser, content],
     );
 
@@ -323,14 +343,8 @@ function ChatMessageItemInner({
                                 <div ref={bodyRef} className="min-w-0 wrap-break-word select-text">
                                     {userParts.attachments.length > 0 && (
                                         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                                            {userParts.attachments.map((name, i) => (
-                                                <span
-                                                    key={`${name}-${i}`}
-                                                    className="inline-flex items-center gap-1 rounded-md border border-border-subtle bg-panel px-1.5 py-0.5 chat-text text-text-secondary"
-                                                >
-                                                    <FileIcon name={name} className="h-3.5 w-3.5 shrink-0" />
-                                                    <span className="max-w-[160px] truncate">{name}</span>
-                                                </span>
+                                            {userParts.attachments.map((att, i) => (
+                                                <SentAttachmentPill key={`${att.name}-${i}`} att={att} />
                                             ))}
                                         </div>
                                     )}
@@ -343,12 +357,12 @@ function ChatMessageItemInner({
                         <div className="flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
                             <Tooltip content="Copy Message" side="top">
                                 <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon name="content_copy" size={14} />
+                                    <Icon icon={RiClipboardLine} />
                                 </button>
                             </Tooltip>
                             <Tooltip content="Restore to this checkpoint" side="top">
                                 <button onClick={() => onRestore?.(index)} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon name="undo" size={14} />
+                                    <Icon icon={RiArrowGoBackLine} />
                                 </button>
                             </Tooltip>
                         </div>
@@ -372,7 +386,7 @@ function ChatMessageItemInner({
         );
     }
 
-    const modelLabel = roleLabel || formatMessageModelLabel(model, stats) || "Shape";
+    const modelLabel = roleLabel || formatMessageModelLabel(model, stats) || "Auto";
     const showTypingOnly = Boolean(isGenerating && !content.trim());
     const auto = isAutoModelId(model) || Boolean(stats?.usedAuto);
 
@@ -384,52 +398,47 @@ function ChatMessageItemInner({
             tabIndex={0}
             onKeyDown={handleKeyDown}
         >
-            <div className="flex items-start gap-2.5 pr-6">
-                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-visible rounded-full bg-surface-3 ring-2 ring-panel">
-                    {providerIcon(auto ? AUTO_DISPLAY_MODEL : (model || AUTO_DISPLAY_MODEL), 16)}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="chat-text text-text-muted">{modelLabel}</span>
-                    <div ref={bodyRef} className="min-w-0 select-text overflow-visible chat-text text-text-primary">
-                        {showTypingOnly ? (
-                            <TypingDots />
-                        ) : (
-                            <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
-                                <MessageRenderer
-                                    content={content}
-                                    isGenerating={isGenerating}
-                                    activityLabel={activityLabel}
-                                    isFileEditResolved={isFileEditResolved}
-                                    durationMs={stats?.timeMs}
-                                />
-                                {isGenerating ? (
-                                    <span className="ml-1 inline-flex align-middle">
-                                        <TypingDots />
-                                    </span>
-                                ) : null}
-                            </div>
-                        )}
-                    </div>
+            <div className="flex min-w-0 flex-col gap-1 pr-6">
+                <div className="flex items-center gap-2">
+                    <span className="flex size-6 shrink-0 items-center justify-center overflow-visible">
+                        {providerIcon(auto ? AUTO_DISPLAY_MODEL : (model || AUTO_DISPLAY_MODEL), 20)}
+                    </span>
+                    <span className="text-sm font-medium text-text-muted">{modelLabel}</span>
+                </div>
+                <div ref={bodyRef} className="min-w-0 select-text overflow-visible chat-text text-text-primary">
+                    {showTypingOnly ? (
+                        <TypingDots />
+                    ) : (
+                        <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
+                            <MessageRenderer
+                                content={content}
+                                isGenerating={isGenerating}
+                                activityLabel={activityLabel}
+                                isFileEditResolved={isFileEditResolved}
+                                durationMs={stats?.timeMs}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
             {!isGenerating && (
-                <div className="ml-9 flex items-center gap-0.5 select-none">
+                <div className="flex items-center gap-0.5 select-none">
                     <Tooltip content="Redo" side="bottom">
                         <Button variant="ghost" size="icon" onClick={() => onRedo?.(index)}>
-                            <Icon name="refresh" size={16} />
+                            <Icon icon={RiRefreshLine} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
-                            <Icon name="content_copy" size={16} />
+                            <Icon icon={RiClipboardLine} />
                         </Button>
                     </Tooltip>
                     {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
-                    {role === "assistant" && (stats || model) && (
+                    {role === "assistant" ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
-                                <Icon name="more_horiz" size={16} />
+                                <Icon icon={RiMoreLine} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-64">
@@ -479,7 +488,7 @@ function ChatMessageItemInner({
                             </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    )}
+                    ) : null}
                 </div>
             )}
         </div>

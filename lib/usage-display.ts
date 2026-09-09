@@ -26,7 +26,7 @@ export function isAutoModelId(model?: string | null): boolean {
 }
 
 export function formatModelLabel(model?: string | null): string {
-    if (!model) return "Unknown";
+    if (!model?.trim()) return "";
     if (isAutoModelId(model)) return "Auto";
     const slug = model.includes("/") ? model.split("/").pop()! : model;
     return slug
@@ -35,7 +35,7 @@ export function formatModelLabel(model?: string | null): string {
         .join(" ");
 }
 
-/** Message details: prefer Auto when the turn used auto routing. */
+/** Message header: Auto when Auto was selected; otherwise the concrete model name. */
 export function formatMessageModelLabel(
     model?: string | null,
     stats?: MessageUsageStats,
@@ -58,7 +58,7 @@ export function formatMessageUsageLine(
 ): string {
     return formatMessageUsageRows(stats, model)
         .map((r) => r.value)
-        .join(" · ") || "No charge";
+        .join(" · ") || "";
 }
 
 /** Separate usage fields; omit anything without data. */

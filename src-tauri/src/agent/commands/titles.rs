@@ -2,9 +2,58 @@
 use super::streaming;
 use crate::agent::model_router;
 use crate::agent::models::AgentState;
+use regex::Regex;
 use reqwest::Client;
+use std::sync::OnceLock;
+use tauri::Emitter;
 
 const MODEL_TITLE_GEN: &str = model_router::MODEL_FAST;
+
+fn attachment_block_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#"(?s)<attached_(?:image|file|asset)\b[^>]*>.*?</attached_(?:image|file|asset)>"#)
+            .expect("attachment strip regex")
+    })
+}
+
+fn attachment_name_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#"<attached_(?:image|file|asset)\b[^>]*?\bname="([^"]*)""#)
+            .expect("attachment name regex")
+    })
+}
+
+/// Strip huge attachment payloads before title gen / heuristics.
+/// Keeps a short `[image: name]` marker so image-only chats still get a usable title.
+pub(crate) fn text_for_title(message: &str) -> String {
+    let names: Vec<&str> = attachment_name_re()
+        .captures_iter(message)
+        .filter_map(|c| c.get(1).map(|m| m.as_str()))
+        .collect();
+    let mut stripped = attachment_block_re().replace_all(message, "").to_string();
+    stripped = stripped.trim().to_string();
+    if stripped.is_empty() && !names.is_empty() {
+        let kind = if message.contains("<attached_image") {
+            "image"
+        } else if message.contains("<attached_asset") {
+            "asset"
+        } else {
+            "file"
+        };
+        let first = names[0];
+        let stem = std::path::Path::new(first)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(first);
+        return format!("{} {}", capitalize_word(kind), capitalize_word(stem));
+    }
+    if stripped.len() > 800 {
+        stripped = stripped.chars().take(800).collect();
+    }
+    stripped
+}
 
 pub(crate) fn estimate_credits_charged(input_tokens: usize, output_tokens: usize) -> f64 {
     const INPUT_COST_PER_M: f64 = 3.0;
@@ -43,9 +92,7 @@ fn capitalize_word(word: &str) -> String {
 }
 
 pub(crate) fn title_from_message(message: &str) -> String {
-    let stripped = message
-        .replace("<attached_image", "")
-        .replace("</attached_image>", "");
+    let stripped = text_for_title(message);
     let first_line = stripped
         .lines()
         .map(str::trim)
@@ -106,6 +153,7 @@ pub(crate) fn title_from_message(message: &str) -> String {
 }
 
 pub(crate) async fn maybe_regenerate_title(
+    app_handle: &tauri::AppHandle,
     state: &tauri::State<'_, AgentState>,
     client: &Client,
     auth_token: &str,
@@ -118,7 +166,9 @@ pub(crate) async fn maybe_regenerate_title(
         .ok()
         .map(|h| h.iter().filter(|m| m.role == "user").count())
         .unwrap_or(0);
-    if user_count < 4 || user_count % 4 != 0 {
+    // Cheap gate: only reconsider after enough turns, and not on every message.
+    // The model still decides KEEP vs RENAME — this just throttles how often we ask.
+    if user_count < 5 || user_count % 5 != 0 {
         return;
     }
 
@@ -134,16 +184,17 @@ pub(crate) async fn maybe_regenerate_title(
             .iter()
             .filter(|m| m.role == "user")
             .rev()
-            .take(3)
-            .map(|m| m.content.chars().take(500).collect())
+            .take(4)
+            .map(|m| text_for_title(&m.content).chars().take(500).collect())
             .collect();
         (title, recent.join("\n---\n"))
     };
 
     let prompt = format!(
-        "Current chat title: \"{}\"\n\nRecent user messages:\n{}\n\nHas the MAIN topic of this conversation shifted to something substantially different? \
-         Do NOT rename for brief side questions while building the same project.\n\
-         Reply with exactly KEEP or RENAME: <new title>",
+        "Current chat title: \"{}\"\n\nRecent user messages:\n{}\n\nDecide if the MAIN topic of this conversation has shifted to something substantially different from the title. \
+         Prefer KEEP. Only RENAME when the title would mislead someone scanning the chat list. \
+         Do NOT rename for brief side questions, follow-ups, or continued work on the same project/feature.\n\
+         Reply with exactly KEEP or RENAME: <new title (2-5 words)>",
         current_title, recent_user
     );
 
@@ -161,12 +212,23 @@ pub(crate) async fn maybe_regenerate_title(
     };
 
     let trimmed = raw.trim();
+    if trimmed.eq_ignore_ascii_case("KEEP") || trimmed.to_ascii_uppercase().starts_with("KEEP") {
+        return;
+    }
     if let Some(rest) = trimmed.strip_prefix("RENAME:").map(str::trim) {
         if !rest.is_empty() && rest.to_lowercase() != current_title.to_lowercase() {
             let new_title = sanitize_generated_title(rest, rest);
             if let Ok(mut t) = state.title.lock() {
-                *t = Some(new_title);
+                *t = Some(new_title.clone());
             }
+            let _ = app_handle.emit(
+                "chat_title",
+                serde_json::json!({
+                    "title": new_title,
+                    "turnId": turn_id,
+                    "conversationId": conversation_id,
+                }),
+            );
         }
     }
 }
@@ -193,7 +255,10 @@ pub(crate) fn sanitize_generated_title(raw: &str, fallback_message: &str) -> Str
         || lower.starts_with("the ")
         || lower.starts_with("to ")
         || lower == "and tell"
-        || lower == "new chat";
+        || lower == "new chat"
+        || lower.contains("nameimage")
+        || lower.contains("data:image")
+        || lower.contains("base64");
 
     if looks_invalid {
         title_from_message(fallback_message)

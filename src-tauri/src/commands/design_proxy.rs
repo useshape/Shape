@@ -328,12 +328,22 @@ pub async fn probe_preview_url(url: String) -> Result<bool, AppError> {
     } else if lower == "127.0.0.1" {
         candidates.push(format!("localhost:{port}"));
     }
+    log::info!("[preview] probe_preview_url {}", url);
     for addr in candidates {
-        let connect = TcpStream::connect(addr);
+        let connect = TcpStream::connect(&addr);
         match tokio::time::timeout(std::time::Duration::from_millis(400), connect).await {
-            Ok(Ok(_stream)) => return Ok(true),
-            _ => continue,
+            Ok(Ok(_stream)) => {
+                log::info!("[preview] probe_preview_url OK {}", addr);
+                return Ok(true);
+            }
+            Ok(Err(err)) => {
+                log::debug!("[preview] probe_preview_url refuse {}: {}", addr, err);
+            }
+            Err(_) => {
+                log::debug!("[preview] probe_preview_url timeout {}", addr);
+            }
         }
     }
+    log::info!("[preview] probe_preview_url FAIL {}", url);
     Ok(false)
 }
