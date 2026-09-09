@@ -30,35 +30,52 @@ pub async fn stop_chat_message(
     if already_cancelled {
         logging::debug("chat", "Stop ignored — generation already stopping");
         return Ok(());
-    } else {
-        logging::info("chat", "Stop requested by user");
-        // Dismiss any approval cards still waiting on the user.
-        state.clear_pending_approvals();
-        state
-            .cancellation_token
-            .lock()
-            .map_err(|e| AppError::Poison(e.to_string()))?
-            .cancel();
-        if let Some(turn_id) = state.in_flight_turn_id() {
-            let conv_id = state
-                .in_flight_conversation_id()
-                .or_else(|| state.current_conversation_id.lock().ok().and_then(|g| g.clone()));
-            let project_path = state.current_project.lock().ok().and_then(|p| p.clone());
-            if let Some(ref project) = project_path {
-                crate::commands::stats::bump_event(project, "chat_stops");
-            }
-            if let Some(conv_id) = conv_id {
-                journals::save_turn_journal(&journals::TurnJournal {
-                    conversation_id: conv_id,
-                    turn_id,
-                    project_path,
-                    status: "interrupted".to_string(),
-                    updated_at: history::now_f64(),
-                    subagent_ids: Vec::new(),
-                    note: Some("Stopped by user".to_string()),
-                });
-            }
+    }
+
+    logging::info("chat", "Stop requested by user");
+    // Cancel first so waiters observe Stop instead of a fake Reject (which
+    // used to look like accepted edits were undone).
+    state
+        .cancellation_token
+        .lock()
+        .map_err(|e| AppError::Poison(e.to_string()))?
+        .cancel();
+    state.dismiss_unresolved_approvals();
+
+    // Unlock the UI immediately — title gen / long HTTP must not leave the
+    // sidebar spinning until the upstream request finishes.
+    let aborted = {
+        let turn_id = state.in_flight_turn_id();
+        let conv_id = state
+            .in_flight_conversation_id()
+            .or_else(|| state.current_conversation_id.lock().ok().and_then(|g| g.clone()));
+        let project_path = state.current_project.lock().ok().and_then(|p| p.clone());
+        if let Some(ref project) = project_path {
+            crate::commands::stats::bump_event(project, "chat_stops");
         }
+        if let (Some(turn_id), Some(conv_id)) = (turn_id.clone(), conv_id.clone()) {
+            journals::save_turn_journal(&journals::TurnJournal {
+                conversation_id: conv_id.clone(),
+                turn_id: turn_id.clone(),
+                project_path,
+                status: "interrupted".to_string(),
+                updated_at: history::now_f64(),
+                subagent_ids: Vec::new(),
+                note: Some("Stopped by user".to_string()),
+            });
+        }
+        turn_id.zip(conv_id)
+    };
+    state.clear_in_flight();
+    if let Some((turn_id, conv_id)) = aborted {
+        let _ = app.emit(
+            "chat_complete",
+            serde_json::json!({
+                "turnId": turn_id,
+                "conversationId": conv_id,
+                "error": "Cancelled",
+            }),
+        );
     }
 
     // Abort any in-flight design-preview capture and give the frontend

@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCloudOffLine, RiCrosshair2Line, RiFullscreenExitLine, RiRefreshLine, RiSearchLine, RiUploadLine } from "@remixicon/react";
 import React, { useState, useCallback, useEffect, useRef, useMemo, useDeferredValue } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -834,7 +835,7 @@ export default function Graph({
                     <>
                     <Tooltip content="Go to HEAD (H)">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
-                            <Icon name="my_location" size={14} />
+                            <Icon icon={RiCrosshair2Line} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fetch From All Remotes">
@@ -848,7 +849,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon name="sync" size={14} />
+                            <Icon icon={RiRefreshLine} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
@@ -862,7 +863,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon name="cloud_download" size={14} />
+                            <Icon icon={RiCloudOffLine} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
@@ -876,12 +877,12 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon name="cloud_upload" size={14} />
+                            <Icon icon={RiUploadLine} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Refresh Graph">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={() => void refresh()}>
-                            <Icon name="refresh" size={14} />
+                            <Icon icon={RiRefreshLine} />
                         </Button>
                     </Tooltip>
                     {!rich && project_path ? <GitManagerTrigger /> : null}
@@ -923,7 +924,7 @@ export default function Graph({
                             data-graph-search
                             className="flex h-8 min-w-[160px] flex-1 items-center gap-2 rounded-lg border border-border bg-transparent px-2.5"
                         >
-                            <Icon name="search" size={14} className="shrink-0 text-text-muted" />
+                            <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
                             <Input
                                 value={localSearch}
                                 onChange={(e) => setLocalSearch(e.target.value)}
@@ -990,7 +991,7 @@ export default function Graph({
                                     className="h-8 w-8 rounded-lg border border-border bg-transparent text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                                     onClick={() => setExpandedCommits(new Set())}
                                 >
-                                    <Icon name="unfold_less" size={16} />
+                                    <Icon icon={RiFullscreenExitLine} />
                                 </Button>
                             </Tooltip>
                         ) : null}

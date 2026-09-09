@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Tooltip } from "@/components/ui/tooltip";
 
-const MAX_TICKS = 9;
+const MAX_TICKS = 40;
 const LOCK_MS = 480;
+const W_IDLE = 8;
 const W_ACTIVE = 14;
-const W_DEFAULT = 3.5;
 
 function truncateTurnLabel(raw: string, maxChars = 90): string {
     const one = raw.replace(/\s+/g, " ").trim();
@@ -19,28 +18,18 @@ function truncateTurnLabel(raw: string, maxChars = 90): string {
     return `${base}…`;
 }
 
-function tickWidth(distance: number): number {
-    const d = Math.abs(distance);
-    if (d === 0) return W_ACTIVE;
-    if (d === 1) return 10;
-    if (d === 2) return 7;
-    if (d === 3) return 5;
-    return W_DEFAULT;
-}
-
-/**
- * Tick window keeps the active turn visually centered in the rail.
- * Only at the first/last messages does the active tick sit at the top/bottom.
- */
-function centeredWindow(turnCount: number, activeIndex: number): number[] {
+/** One tick per turn, capped at MAX_TICKS (evenly sampled when over). */
+function turnTicks(turnCount: number, activeIndex: number): number[] {
+    if (turnCount <= 0) return [];
     if (turnCount <= MAX_TICKS) {
         return Array.from({ length: turnCount }, (_, i) => i);
     }
-    const half = Math.floor(MAX_TICKS / 2);
-    let start = activeIndex - half;
-    if (start < 0) start = 0;
-    if (start + MAX_TICKS > turnCount) start = turnCount - MAX_TICKS;
-    return Array.from({ length: MAX_TICKS }, (_, i) => start + i);
+    const out = new Set<number>();
+    for (let i = 0; i < MAX_TICKS; i++) {
+        out.add(Math.round((i * (turnCount - 1)) / (MAX_TICKS - 1)));
+    }
+    out.add(Math.max(0, Math.min(turnCount - 1, activeIndex)));
+    return [...out].sort((a, b) => a - b).slice(0, MAX_TICKS);
 }
 
 export function ChatHistoryStepper({
@@ -57,7 +46,7 @@ export function ChatHistoryStepper({
     className?: string;
 }) {
     const ticks = useMemo(
-        () => centeredWindow(turnCount, activeIndex),
+        () => turnTicks(turnCount, activeIndex),
         [turnCount, activeIndex],
     );
 
@@ -65,48 +54,34 @@ export function ChatHistoryStepper({
 
     return (
         <div
-            className={cn("flex flex-col items-center gap-1.5 select-none py-1", className)}
+            className={cn(
+                "flex h-full min-h-0 w-4 flex-col items-end justify-center gap-1 select-none",
+                className,
+            )}
             role="navigation"
             aria-label="Chat history"
         >
             {ticks.map((turnIdx) => {
-                const dist = turnIdx - activeIndex;
                 const active = turnIdx === activeIndex;
-                const width = tickWidth(dist);
                 const label = truncateTurnLabel(turnLabels?.[turnIdx] || `Turn ${turnIdx + 1}`);
                 return (
-                    <Tooltip
+                    <button
                         key={turnIdx}
-                        content={
-                            <span className="block max-w-56 whitespace-normal wrap-break-word line-clamp-2 text-left text-sm leading-snug">
-                                {label}
-                            </span>
-                        }
-                        side="left"
-                        delayDuration={120}
+                        type="button"
+                        title={label}
+                        aria-label={label}
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => onSelect(turnIdx)}
+                        className="flex h-1 w-4 shrink-0 items-center justify-end"
                     >
-                        <button
-                            type="button"
-                            aria-label={label}
-                            aria-current={active ? "true" : undefined}
-                            onClick={() => onSelect(turnIdx)}
-                            className="flex h-3 w-4 items-center justify-center"
-                        >
-                            <span
-                                className={cn(
-                                    "block h-0.5 rounded-full",
-                                    active
-                                        ? "bg-text-primary opacity-100"
-                                        : "bg-text-muted/45 hover:bg-text-muted",
-                                )}
-                                style={{
-                                    width,
-                                    transition:
-                                        "width 220ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms ease, opacity 220ms ease",
-                                }}
-                            />
-                        </button>
-                    </Tooltip>
+                        <span
+                            className={cn(
+                                "block h-px rounded-full",
+                                active ? "bg-text-primary" : "bg-text-muted/45 hover:bg-text-muted",
+                            )}
+                            style={{ width: active ? W_ACTIVE : W_IDLE }}
+                        />
+                    </button>
                 );
             })}
         </div>
@@ -115,8 +90,7 @@ export function ChatHistoryStepper({
 
 /**
  * Discrete active turn from scroll position.
- * Hysteresis + center-band picking keeps the rail stable (active stays middle
- * of the viewport) and only moves to ends at top/bottom of the thread.
+ * Hysteresis + center-band picking keeps the rail stable.
  */
 export function useChatTurnActive(
     scrollRoot: React.RefObject<HTMLElement | null>,
@@ -129,6 +103,7 @@ export function useChatTurnActive(
     const activeRef = useRef(0);
     const streamingRef = useRef(!!opts?.streaming);
     streamingRef.current = !!opts?.streaming;
+    const nodesCache = useRef<HTMLElement[]>([]);
 
     useEffect(() => {
         setActive((prev) => {
@@ -136,6 +111,7 @@ export function useChatTurnActive(
             activeRef.current = next;
             return next;
         });
+        nodesCache.current = [];
     }, [turnCount]);
 
     useEffect(() => {
@@ -145,6 +121,12 @@ export function useChatTurnActive(
         const nearTop = () => root.scrollTop < 48;
         const nearBottom = () =>
             root.scrollHeight - root.scrollTop - root.clientHeight < 96;
+
+        const refreshNodes = () => {
+            nodesCache.current = Array.from(
+                root.querySelectorAll<HTMLElement>("[data-chat-turn]"),
+            );
+        };
 
         const compute = () => {
             if (Date.now() < lockUntil.current) return;
@@ -158,7 +140,6 @@ export function useChatTurnActive(
                 return;
             }
 
-            // Pin first/last when scrolled to ends — active leaves visual center.
             if (nearTop()) {
                 if (activeRef.current !== 0) {
                     activeRef.current = 0;
@@ -175,33 +156,33 @@ export function useChatTurnActive(
                 return;
             }
 
-            const nodes = root.querySelectorAll<HTMLElement>("[data-chat-turn]");
-            if (nodes.length === 0) return;
+            if (nodesCache.current.length !== turnCount) refreshNodes();
+            const nodes = nodesCache.current;
+            if (nodes.length === 0) {
+                refreshNodes();
+                if (nodesCache.current.length === 0) return;
+            }
 
-            // Mid-viewport band — turn whose top is closest to center.
             const band = root.getBoundingClientRect().top + root.clientHeight * 0.42;
             let bestIdx = activeRef.current;
             let bestDist = Number.POSITIVE_INFINITY;
 
-            nodes.forEach((node) => {
+            for (const node of nodesCache.current) {
                 const idx = Number(node.dataset.chatTurn);
-                if (!Number.isFinite(idx)) return;
-                const top = node.getBoundingClientRect().top;
-                const dist = Math.abs(top - band);
+                if (!Number.isFinite(idx)) continue;
+                const dist = Math.abs(node.getBoundingClientRect().top - band);
                 if (dist < bestDist) {
                     bestDist = dist;
                     bestIdx = idx;
                 }
-            });
+            }
 
-            // Hysteresis: ignore tiny crossings so the active tick doesn't flicker.
             if (bestIdx === activeRef.current) return;
-            const currentNode = root.querySelector<HTMLElement>(
-                `[data-chat-turn="${activeRef.current}"]`,
+            const currentNode = nodesCache.current.find(
+                (n) => Number(n.dataset.chatTurn) === activeRef.current,
             );
             if (currentNode) {
-                const curTop = currentNode.getBoundingClientRect().top;
-                const curDist = Math.abs(curTop - band);
+                const curDist = Math.abs(currentNode.getBoundingClientRect().top - band);
                 if (curDist < bestDist + 36) return;
             }
 
@@ -217,6 +198,7 @@ export function useChatTurnActive(
             });
         };
 
+        refreshNodes();
         compute();
         root.addEventListener("scroll", onScroll, { passive: true });
         return () => {

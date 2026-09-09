@@ -1,10 +1,21 @@
 "use client";
 
+import { RiAlignBottom, RiAlignCenter, RiAlignLeft, RiAlignRight, RiAlignTop, RiAlignVertically, RiFontSize2, RiItalic, RiMoreLine, RiStrikethrough, RiTextSpacing, RiUnderline } from "@remixicon/react";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Icon } from "@/components/ui/icon";
-import { PxInput, ToggleBtn } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
-import { CompactSelect, FieldRow, FlyoutCard, Glyph, IconBtn, Section } from "./fields";
+import {
+    CheckRow,
+    CompactSelect,
+    FieldRow,
+    FlyoutCard,
+    Glyph,
+    IconBtn,
+    PxInput,
+    Section,
+    Segment,
+    ToggleBtn,
+} from "./fields";
 import { DesignAssetIcon } from "./asset-icon";
 import { FontPickerButton } from "./font-picker";
 import { firstFontFamily } from "../../design-mode/css";
@@ -79,7 +90,7 @@ export function TypographySection({
             <div className="flex gap-1">
                 <CompactSelect value={weight} options={WEIGHT_OPTIONS} onChange={(v) => onPatch({ fontWeight: v })} />
                 <PxInput
-                    glyph={<Icon name="font_size" size={12} />}
+                    glyph={<Icon icon={RiFontSize2} />}
                     title="Size"
                     value={parsePx(s.fontSize)}
                     onCommit={(n) => onPatch({ fontSize: px(n) })}
@@ -87,13 +98,13 @@ export function TypographySection({
             </div>
             <div className="flex gap-1">
                 <PxInput
-                    glyph={<Icon name="line_height" size={12} />}
+                    glyph={<Icon icon={RiTextSpacing} />}
                     title="Line height"
                     value={parsePx(s.lineHeight)}
                     onCommit={(n) => onPatch({ lineHeight: px(n) })}
                 />
                 <PxInput
-                    glyph={<Icon name="letter_spacing" size={12} />}
+                    glyph={<Icon icon={RiTextSpacing} />}
                     title="Letter spacing"
                     value={parsePx(s.letterSpacing) ?? 0}
                     min={-40}
@@ -101,33 +112,33 @@ export function TypographySection({
                 />
             </div>
             <div className="flex items-center gap-1">
-                <div className="flex min-w-0 flex-1 rounded-md bg-panel-hover p-0.5">
+                <Segment>
                     <ToggleBtn label="Left" active={textAlign === "left"} onClick={() => onPatch({ textAlign: "left" })}>
-                        <Icon name="format_align_left" size={14} />
+                        <Icon icon={RiAlignLeft} />
                     </ToggleBtn>
                     <ToggleBtn label="Center" active={textAlign === "center"} onClick={() => onPatch({ textAlign: "center" })}>
-                        <Icon name="format_align_center" size={14} />
+                        <Icon icon={RiAlignCenter} />
                     </ToggleBtn>
                     <ToggleBtn label="Right" active={textAlign === "right"} onClick={() => onPatch({ textAlign: "right" })}>
-                        <Icon name="format_align_right" size={14} />
+                        <Icon icon={RiAlignRight} />
                     </ToggleBtn>
                     <ToggleBtn label="Justify" active={textAlign === "justify"} onClick={() => onPatch({ textAlign: "justify" })}>
                         <DesignAssetIcon name="align-justify" size={14} />
                     </ToggleBtn>
-                </div>
+                </Segment>
             </div>
             <div className="flex items-center gap-1">
-                <div className="flex min-w-0 flex-1 rounded-md bg-panel-hover p-0.5">
+                <Segment>
                     <ToggleBtn label="Top" active={valign === "flex-start"} onClick={() => onPatch({ alignItems: "flex-start" })}>
-                        <Icon name="format_align_top" size={14} />
+                        <Icon icon={RiAlignTop} />
                     </ToggleBtn>
                     <ToggleBtn label="Middle" active={valign === "center"} onClick={() => onPatch({ alignItems: "center" })}>
-                        <Icon name="format_align_middle" size={14} />
+                        <Icon icon={RiAlignVertically} />
                     </ToggleBtn>
                     <ToggleBtn label="Bottom" active={valign === "flex-end"} onClick={() => onPatch({ alignItems: "flex-end" })}>
-                        <Icon name="format_align_bottom" size={14} />
+                        <Icon icon={RiAlignBottom} />
                     </ToggleBtn>
-                </div>
+                </Segment>
                 <div ref={moreRef}>
                 <IconBtn
                     title="Type settings"
@@ -137,39 +148,39 @@ export function TypographySection({
                         setDetails((v) => !v);
                     }}
                 >
-                    <Icon name="more_horiz" size={14} />
+                    <Icon icon={RiMoreLine} />
                 </IconBtn>
                 </div>
             </div>
             {details && anchor ? (
                 <FlyoutCard title="Type" anchor={anchor} trigger={moreRef.current} onClose={() => setDetails(false)}>
                     <FieldRow label="Style">
-                        <div className="flex flex-1 rounded-md bg-panel-hover p-0.5">
+                        <Segment>
                             <ToggleBtn
                                 label="Italic"
                                 active={italic}
                                 onClick={() => onPatch({ fontStyle: italic ? "normal" : "italic" })}
                             >
-                                <Icon name="format_italic" size={13} />
+                                <Icon icon={RiItalic} />
                             </ToggleBtn>
                             <ToggleBtn
                                 label="Underline"
                                 active={deco.includes("underline")}
                                 onClick={() => onPatch({ textDecoration: deco.includes("underline") ? "none" : "underline" })}
                             >
-                                <Icon name="format_underlined" size={13} />
+                                <Icon icon={RiUnderline} />
                             </ToggleBtn>
                             <ToggleBtn
                                 label="Strikethrough"
                                 active={deco.includes("line-through")}
                                 onClick={() => onPatch({ textDecoration: deco.includes("line-through") ? "none" : "line-through" })}
                             >
-                                <Icon name="format_strikethrough" size={13} />
+                                <Icon icon={RiStrikethrough} />
                             </ToggleBtn>
-                        </div>
+                        </Segment>
                     </FieldRow>
                     <FieldRow label="Case">
-                        <div className="flex flex-1 rounded-md bg-panel-hover p-0.5">
+                        <Segment>
                             <ToggleBtn
                                 label="AA"
                                 active={transform === "uppercase"}
@@ -191,7 +202,7 @@ export function TypographySection({
                             >
                                 Aa
                             </ToggleBtn>
-                        </div>
+                        </Segment>
                     </FieldRow>
                     <FieldRow label="Space">
                         <PxInput
@@ -201,19 +212,17 @@ export function TypographySection({
                             onCommit={(n) => onPatch({ marginBottom: px(n) })}
                         />
                     </FieldRow>
-                    <ToggleBtn
+                    <CheckRow
                         label="Truncate"
-                        active={truncated}
-                        onClick={() =>
+                        checked={truncated}
+                        onChange={(v) =>
                             onPatch(
-                                truncated
-                                    ? { overflow: "visible", whiteSpace: "normal", textOverflow: "clip" }
-                                    : { overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" },
+                                v
+                                    ? { overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }
+                                    : { overflow: "visible", whiteSpace: "normal", textOverflow: "clip" },
                             )
                         }
-                    >
-                        Truncate
-                    </ToggleBtn>
+                    />
                 </FlyoutCard>
             ) : null}
             {text ? (
@@ -222,7 +231,7 @@ export function TypographySection({
                     onChange={(e) => onPatch({}, e.target.value)}
                     rows={2}
                     placeholder="Content"
-                    className="min-h-10 resize-y bg-panel-hover text-xs"
+                    className="min-h-10 resize-y text-sm"
                 />
             ) : null}
         </Section>

@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowRightSLine, RiGithubFill, RiTerminalBoxLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -21,9 +22,7 @@ function JobStatusIcon({
     const icon = statusIcon(status, conclusion);
     return (
         <Icon
-            name={icon.name}
-            filled={icon.filled}
-            size={size}
+            icon={icon.icon}
             className={cn(
                 "shrink-0",
                 statusTone(status, conclusion),
@@ -141,8 +140,7 @@ export function JobsPanel({
                                     onClick={() => onToggleJob(job.id)}
                                 >
                                     <Icon
-                                        name="chevron_right"
-                                        size={14}
+                                        icon={RiArrowRightSLine}
                                         className={cn(
                                             "mt-0.5 shrink-0 text-text-muted transition-transform duration-200 ease-[var(--ease-out)]",
                                             open && "rotate-90",
@@ -195,7 +193,7 @@ export function JobsPanel({
                                             className="gap-1"
                                             onClick={() => onViewLogs(job.id)}
                                         >
-                                            <Icon name="terminal" size={12} />
+                                            <Icon icon={RiTerminalBoxLine} />
                                             View logs
                                         </Button>
                                         {job.html_url ? (
@@ -205,7 +203,7 @@ export function JobsPanel({
                                                 className="gap-1"
                                                 onClick={() => onOpenUrl(job.html_url)}
                                             >
-                                                <Icon name="github" size={12} />
+                                                <Icon icon={RiGithubFill} />
                                                 GitHub
                                             </Button>
                                         ) : null}

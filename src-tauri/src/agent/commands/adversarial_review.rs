@@ -72,7 +72,8 @@ pub async fn run_adversarial_review(
     logging::info("review", "Adversarial review synthesis complete");
 
     Ok(format!(
-        "\n<review_debate>\n{}\n</review_debate>\n",
+        "\n<review_debate model=\"{}\">\n{}\n</review_debate>\n",
+        CRITIC_MODEL,
         escape_xml_text(&synthesis)
     ))
 }

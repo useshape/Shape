@@ -1,6 +1,27 @@
+import type { RemixiconComponentType } from "@remixicon/react";
+import {
+    RiBugLine,
+    RiCodeLine,
+    RiDownloadLine,
+    RiFileTextLine,
+    RiGitCommitLine,
+    RiKeyboardLine,
+    RiNotification3Line,
+    RiPaletteLine,
+    RiApps2Line,
+    RiPlugLine,
+    RiSettings3Line,
+    RiShieldLine,
+    RiSparkling2Line,
+    RiStackLine,
+    RiTerminalBoxLine,
+    RiUserLine,
+} from "@remixicon/react";
+
 export type SettingsNavLeaf = {
     id: string;
     label: string;
+    icon: RemixiconComponentType;
     /** DOM id of the scroll target in the main settings page */
     targetId?: string;
     /** Navigate to a separate settings sub-page instead of scrolling */
@@ -21,47 +42,44 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     {
         id: "account",
         label: "Account",
-        children: [{ id: "account-profile", label: "Profile", targetId: "settings-account" }],
+        children: [{ id: "account-profile", label: "Profile", icon: RiUserLine, targetId: "settings-account" }],
     },
     {
         id: "agents",
         label: "Agents",
         children: [
-            { id: "ai-models", label: "Models", targetId: "settings-ai-models" },
-            { id: "ai-rules", label: "Rules", targetId: "settings-ai-rules" },
-            { id: "ai-context", label: "Context", targetId: "settings-ai-context" },
-            { id: "mcp", label: "MCP", targetId: "settings-ai-mcp" },
-            { id: "integrations", label: "Integrations", targetId: "settings-integrations" },
+            { id: "ai-models", label: "Models", icon: RiSparkling2Line, targetId: "settings-ai-models" },
+            { id: "ai-rules", label: "Rules", icon: RiFileTextLine, targetId: "settings-ai-rules" },
+            { id: "ai-context", label: "Context", icon: RiStackLine, targetId: "settings-ai-context" },
+            { id: "plugins", label: "Plugins", icon: RiApps2Line, targetId: "settings-ai-plugins" },
+            { id: "mcp", label: "MCP", icon: RiPlugLine, targetId: "settings-ai-mcp" },
         ],
     },
     {
         id: "editor",
         label: "Editor",
         children: [
-            { id: "editor-font", label: "Font & Display", targetId: "settings-editor-font" },
-            { id: "editor-indent", label: "Indentation", targetId: "settings-editor-indent" },
-            { id: "editor-cursor", label: "Caret & Scrolling", targetId: "settings-editor-cursor" },
-            { id: "editor-save", label: "Saving & Formatting", targetId: "settings-editor-save" },
-            { id: "editor-files", label: "Files", targetId: "settings-editor-files" },
-            { id: "editor-design", label: "Design", targetId: "settings-editor-design" },
+            { id: "editor-font", label: "Editor", icon: RiCodeLine, targetId: "settings-editor-font" },
+            { id: "appearance", label: "Appearance", icon: RiPaletteLine, targetId: "settings-appearance" },
         ],
     },
     {
         id: "features",
         label: "Features",
         children: [
-            { id: "terminal", label: "Terminal", targetId: "settings-terminal" },
-            { id: "git", label: "Source Control", targetId: "settings-git" },
+            { id: "terminal", label: "Terminal", icon: RiTerminalBoxLine, targetId: "settings-terminal" },
+            { id: "git", label: "Git", icon: RiGitCommitLine, targetId: "settings-git" },
         ],
     },
     {
         id: "application",
         label: "Application",
         children: [
-            { id: "updates", label: "Updates", targetId: "settings-updates" },
-            { id: "notifications", label: "Notifications", targetId: "settings-notifications" },
-            { id: "privacy", label: "Privacy & telemetry", targetId: "settings-privacy" },
-            { id: "developer", label: "Developer", targetId: "settings-developer" },
+            { id: "keyboard-shortcuts", label: "Keyboard Shortcuts", icon: RiKeyboardLine, targetId: "settings-keyboard-shortcuts" },
+            { id: "updates", label: "Updates", icon: RiDownloadLine, targetId: "settings-updates" },
+            { id: "notifications", label: "Notifications", icon: RiNotification3Line, targetId: "settings-notifications" },
+            { id: "privacy", label: "Privacy", icon: RiShieldLine, targetId: "settings-privacy" },
+            { id: "developer", label: "Developer", icon: RiBugLine, targetId: "settings-developer" },
         ],
     },
 ];
@@ -87,7 +105,7 @@ export type SettingsCategoryId =
 export type SettingsCategory = {
     id: SettingsCategoryId;
     label: string;
-    icon: string;
+    icon: RemixiconComponentType;
     keywords?: string[];
 };
 
@@ -95,37 +113,37 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     {
         id: "account",
         label: "Account",
-        icon: "person",
+        icon: RiUserLine,
         keywords: ["profile", "billing", "plan", "login"],
     },
     {
         id: "agents",
         label: "Agents",
-        icon: "auto_awesome",
-        keywords: ["ai", "models", "mcp", "rules", "context"],
+        icon: RiSparkling2Line,
+        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context"],
     },
     {
         id: "editor",
         label: "Editor",
-        icon: "code",
+        icon: RiCodeLine,
         keywords: ["font", "indent", "caret", "save", "files", "design"],
     },
     {
         id: "terminal",
         label: "Terminal",
-        icon: "terminal",
+        icon: RiTerminalBoxLine,
         keywords: ["shell", "scrollback"],
     },
     {
         id: "git",
         label: "Git",
-        icon: "commit",
+        icon: RiGitCommitLine,
         keywords: ["source", "control", "scm"],
     },
     {
         id: "application",
         label: "Application",
-        icon: "settings",
-        keywords: ["updates", "notifications", "privacy", "telemetry", "developer", "reset"],
+        icon: RiSettings3Line,
+        keywords: ["updates", "notifications", "privacy", "telemetry", "developer", "reset", "keyboard", "shortcuts", "keybindings"],
     },
 ];

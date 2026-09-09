@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCodeLine, RiRefreshLine } from "@remixicon/react";
 import { useMemo } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -93,7 +94,7 @@ export default function Status() {
                 {latestProgressMessage && (
                     <Tooltip content={progressMessages.join("\n")}>
                         <div className="hidden md:flex items-center gap-1.5 px-2 text-text-secondary max-w-[300px] min-w-0 whitespace-nowrap">
-                            <Icon name="sync" size={14} className="animate-spin shrink-0" />
+                            <Icon icon={RiRefreshLine} className="animate-spin shrink-0" />
                             <span className="truncate text-sm font-light">{latestProgressMessage}</span>
                             {progressMessages.length > 1 && (
                                 <span className="text-2xs text-text-muted shrink-0">
@@ -160,7 +161,7 @@ export default function Status() {
                                 className="hidden lg:flex h-full px-1.5 items-center text-text-primary hover:bg-panel-hover transition-colors"
                                 onClick={() => dispatchEditorAction("format")}
                             >
-                                <Icon name="code" size={14} filled />
+                                <Icon icon={RiCodeLine} />
                             </button>
                         </Tooltip>
 

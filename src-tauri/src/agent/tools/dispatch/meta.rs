@@ -157,6 +157,21 @@ pub(super) fn tool_update_todos(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome 
     }
     ui.push_str("</todos>\n");
 
+    // Soft-heal missing in_progress instead of hard-failing the turn.
+    if in_progress == 0 && pending > 0 {
+        if let Some(pos) = ui.find("status=\"pending\"") {
+            ui.replace_range(pos..pos + "status=\"pending\"".len(), "status=\"in_progress\"");
+            in_progress = 1;
+            pending = pending.saturating_sub(1);
+            for part in summary_parts.iter_mut() {
+                if part.starts_with("[pending]") {
+                    *part = part.replacen("[pending]", "[in_progress]", 1);
+                    break;
+                }
+            }
+        }
+    }
+
     if let Err(msg) = validate_update_todos_in_progress(in_progress, pending) {
         return error_outcome("update_todos", &msg);
     }

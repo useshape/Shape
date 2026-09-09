@@ -8,15 +8,6 @@ pub fn hide_console(cmd: &mut std::process::Command) {
 #[cfg(not(windows))]
 pub fn hide_console(_cmd: &mut std::process::Command) {}
 
-#[cfg(windows)]
-pub fn hide_console_tokio(cmd: &mut tokio::process::Command) {
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    cmd.creation_flags(CREATE_NO_WINDOW);
-}
-
-#[cfg(not(windows))]
-pub fn hide_console_tokio(_cmd: &mut tokio::process::Command) {}
-
 /// Release builds use `windows_subsystem = "windows"` (no console). ConPTY then
 /// allocates a visible fallback console per child shell. Allocate a hidden
 /// console for the parent so PTY children inherit it — same pattern as VS Code /
@@ -59,11 +50,3 @@ pub fn apply_trusted_binary_env(cmd: &mut std::process::Command) {
         cmd.env("NoDefaultCurrentDirectoryInExePath", "1");
     }
 }
-
-#[cfg(windows)]
-pub fn apply_trusted_binary_env_tokio(cmd: &mut tokio::process::Command) {
-    cmd.env("NoDefaultCurrentDirectoryInExePath", "1");
-}
-
-#[cfg(not(windows))]
-pub fn apply_trusted_binary_env_tokio(_cmd: &mut tokio::process::Command) {}

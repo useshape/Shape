@@ -454,9 +454,6 @@ pub(super) async fn intercept_file_inspection_command(
 /// rejected). The Stop button (cancel token) is the escape hatch.
 pub(super) async fn wait_for_command_decision(cmd_id: &str, ctx: &ToolCtx<'_>) -> ApprovalDecision {
     loop {
-        if ctx.cancel.is_cancelled() {
-            return ApprovalDecision::Cancelled;
-        }
         if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
             if let Some(approved) = decisions.remove(cmd_id) {
                 return if approved {
@@ -465,6 +462,9 @@ pub(super) async fn wait_for_command_decision(cmd_id: &str, ctx: &ToolCtx<'_>) -
                     ApprovalDecision::Rejected
                 };
             }
+        }
+        if ctx.cancel.is_cancelled() {
+            return ApprovalDecision::Cancelled;
         }
         // Defensive: pending entry vanished without a decision (e.g. state reset).
         let still_pending = ctx
@@ -482,6 +482,9 @@ pub(super) async fn wait_for_command_decision(cmd_id: &str, ctx: &ToolCtx<'_>) -
                         ApprovalDecision::Rejected
                     };
                 }
+            }
+            if ctx.cancel.is_cancelled() {
+                return ApprovalDecision::Cancelled;
             }
             return ApprovalDecision::Rejected;
         }

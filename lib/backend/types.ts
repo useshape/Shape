@@ -316,6 +316,10 @@ export interface McpServerConfig {
     url?: string;
     auth: "none" | "oauth";
     enabled: boolean;
+    /** Tool names from this server that should not be exposed to the agent. */
+    disabledTools?: string[];
+    /** Pre-registered OAuth client id when the auth server has no DCR. */
+    oauthClientId?: string;
 }
 
 export interface McpStatusEntry {

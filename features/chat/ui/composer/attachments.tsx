@@ -1,10 +1,12 @@
 "use client";
 
+import { RiCloseLine, RiImageLine, RiMusic2Line } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
+import { MorphMenu } from "@/components/ui/morph-menu";
 
 const IMAGE_EXTENSIONS = new Set([
     "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif", "avif", "heic", "heif",
@@ -164,12 +166,12 @@ function useObjectUrl(file: File | null, dataUrl?: string): string | null {
 
 function KindIcon({ kind, name }: { kind: AttachmentKind; name: string }) {
     if (kind === "audio") {
-        return <Icon name="music_note" size={16} className="text-text-muted" />;
+        return <Icon icon={RiMusic2Line} className="text-text-muted" />;
     }
     if (kind === "file") {
         return <FileIcon name={name} className="size-4" />;
     }
-    return <Icon name="image" size={16} className="text-text-muted" />;
+    return <Icon icon={RiImageLine} className="text-text-muted" />;
 }
 
 function AttachmentPill({
@@ -232,7 +234,7 @@ function AttachmentPill({
                         "hover:bg-panel-hover hover:text-text-primary",
                     )}
                 >
-                    <Icon name="close" size={12} />
+                    <Icon icon={RiCloseLine} />
                 </button>
             </Tooltip>
         </div>
@@ -258,5 +260,48 @@ export function ComposerAttachments({
                 />
             ))}
         </div>
+    );
+}
+
+/** Compact-mode media pill — same morph pattern as Changes above the composer. */
+export function ComposerAttachmentsStrip({
+    attachments,
+    onRemove,
+}: {
+    attachments: ComposerAttachment[];
+    onRemove: (id: string) => void;
+}) {
+    if (attachments.length === 0) return null;
+
+    const openH = Math.min(220, 48 + attachments.length * 36);
+    const busy = attachments.some((a) => a.status === "processing");
+
+    return (
+        <MorphMenu
+            variant="morph"
+            aria-label="Attachments"
+            openWidth={280}
+            openHeight={openH}
+            closedHeight={32}
+            trigger={
+                <>
+                    <span>Media</span>
+                    <span className="tabular-nums text-text-muted">
+                        {busy ? "…" : attachments.length}
+                    </span>
+                </>
+            }
+        >
+            <div className="flex flex-col gap-1 p-2">
+                {attachments.map((att) => (
+                    <div key={att.id} className="flex items-center gap-1">
+                        <AttachmentPill
+                            attachment={att}
+                            onRemove={() => onRemove(att.id)}
+                        />
+                    </div>
+                ))}
+            </div>
+        </MorphMenu>
     );
 }

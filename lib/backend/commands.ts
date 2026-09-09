@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+﻿import { invoke } from "@tauri-apps/api/core";
 import { ActivityTotals, ChatGenerationState, ChatMessage, CodebaseSearchHit, ContentSearchResult, Conversation, EslintLintResult, FileEntry, FileInfo, FileSearchResult, GitActivityPoint, GitFileParams, GitRepoInfo, GitHubAuthLoginResult, GitHubAuthStatus, GitLogEntry, GitSyncStatus, GitStashEntry, BlameLine, HistoryEntry, IndexStatus, McpServerConfig, McpStatusEntry, McpToolInfo, PackageInfo, OutlineResponse, ProjectState, ProjectStatsSnapshot, ReplaceResult, SearchOptions, TestDiscoveryResult, TestRunSummaryResult, ContentMatch } from "@/lib/backend/types";
 
 type InvokeLogger = (command: string, durationMs: number) => void;
@@ -492,10 +492,7 @@ export const commands = {
             sessionId: sessionId ?? null,
         }),
     startDesignProxy: (targetUrl: string, bridgeScript: string) =>
-        invokeCommand<{ port: number; src: string }>("start_design_proxy", {
-            targetUrl,
-            bridgeScript,
-        }),
+        invokeCommand<{ port: number; src: string }>("start_design_proxy", { targetUrl, bridgeScript }),
     stopDesignProxy: () => invokeCommand<void>("stop_design_proxy"),
     probePreviewUrl: (url: string) => invokeCommand<boolean>("probe_preview_url", { url }),
     registerDesignBridge: (script: string) =>
@@ -606,7 +603,7 @@ export const commands = {
     getMcpStatus: () => invokeCommand<McpStatusEntry[]>("get_mcp_status"),
     getMcpTools: () => invokeCommand<McpToolInfo[]>("get_mcp_tools"),
     restartMcpServer: (id: string) => invokeCommand<McpStatusEntry>("restart_mcp_server", { id }),
-    mcpStartOAuth: (id: string) => invokeCommand<void>("mcp_start_oauth", { id }),
+    mcpStartOAuth: (id: string) => invokeCommand<string>("mcp_start_oauth", { id }),
     mcpCompleteOAuth: (callbackUrl: string) =>
         invokeCommand<string>("mcp_complete_oauth", { callbackUrl }),
     mcpClearOAuth: (id: string) => invokeCommand<void>("mcp_clear_oauth", { id }),

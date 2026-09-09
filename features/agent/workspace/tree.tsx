@@ -1,8 +1,9 @@
 "use client";
 
+import { RiArrowDownSLine, RiArrowRightSLine, RiFileTextLine, RiFolderLine, RiFolderOpenLine } from "@remixicon/react";
 import { useCallback, useEffect, useState } from "react";
 import { commands, type FileEntry } from "@/lib/backend";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 function sortEntries(list: FileEntry[]) {
@@ -51,13 +52,11 @@ function TreeNode({
                     style={{ paddingLeft: pad }}
                 >
                     <Icon
-                        name={open ? "chevron_down" : "chevron_right"}
-                        size={ICON_SIZE_SM}
+                        icon={open ? RiArrowDownSLine : RiArrowRightSLine}
                         className="shrink-0 text-text-muted"
                     />
                     <Icon
-                        name={open ? "folder_open" : "folder"}
-                        size={ICON_SIZE_SM}
+                        icon={open ? RiFolderOpenLine : RiFolderLine}
                         className="shrink-0 text-text-muted"
                     />
                     <span className="min-w-0 truncate">{entry.name}</span>
@@ -93,7 +92,7 @@ function TreeNode({
             )}
             style={{ paddingLeft: pad + 14 }}
         >
-            <Icon name="description" size={ICON_SIZE_SM} className="shrink-0 text-text-muted" />
+            <Icon icon={RiFileTextLine} className="shrink-0 text-text-muted" />
             <span className="min-w-0 truncate">{entry.name}</span>
         </button>
     );

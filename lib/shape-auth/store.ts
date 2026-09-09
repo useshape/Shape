@@ -8,6 +8,8 @@ import {
   pollOAuthCode,
   revokeToken,
   ShapeApiError,
+  websiteLoginUrl,
+  websiteProviderSignInUrl,
 } from "./api";
 import type { ShapeAuthState, ShapeTier } from "./types";
 import { clearShapeCatalog, refreshShapeCatalog } from "@/lib/catalog-store";
@@ -567,7 +569,11 @@ export async function initShapeAuth() {
   }
 }
 
-export async function loginShape(): Promise<boolean> {
+export type LoginShapeOpen =
+  | { kind?: "login"; email?: string }
+  | { kind: "provider"; provider: "github" | "gitlab" };
+
+export async function loginShape(open?: LoginShapeOpen): Promise<boolean> {
   if (state.loggedIn) return true;
   if (state.isLoggingIn) {
     return new Promise<boolean>((resolve) => {
@@ -581,11 +587,11 @@ export async function loginShape(): Promise<boolean> {
 
   return new Promise<boolean>((resolve) => {
     loginWaiter = resolve;
-    void startLoginShape();
+    void startLoginShape(open);
   });
 }
 
-async function startLoginShape() {
+async function startLoginShape(open?: LoginShapeOpen) {
   clearLoginPoll();
   finishedOAuthCode = null;
   await setupOAuthDeepLinkListener();
@@ -594,7 +600,11 @@ async function startLoginShape() {
   const pkce = await createPkcePair();
   pendingCodeVerifier = pkce.verifier;
   savePendingOAuth(pendingState, pendingCodeVerifier);
-  const url = oauthAuthorizeUrl(pendingState, pkce.challenge);
+  const authorizeUrl = oauthAuthorizeUrl(pendingState, pkce.challenge);
+  const url =
+    open?.kind === "provider"
+      ? websiteProviderSignInUrl(open.provider, authorizeUrl)
+      : websiteLoginUrl({ callbackUrl: authorizeUrl, email: open?.email });
   try {
     await commands.openUrlExternal(url);
   } catch (err) {

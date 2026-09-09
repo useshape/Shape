@@ -526,6 +526,10 @@
   overflow: hidden;
   pointer-events: none;
 }
+.t-composer-hint--compact {
+  display: flex;
+  align-items: center;
+}
 .t-composer-hint__text {
   display: block;
   color: var(--text-muted);
@@ -538,6 +542,9 @@
   transition:
     opacity var(--hint-swap) var(--hint-ease),
     transform var(--hint-swap) var(--hint-ease);
+}
+.t-composer-hint--compact .t-composer-hint__text {
+  line-height: 1.75rem;
 }
 .t-composer-hint__text[data-phase="in"] {
   opacity: 1;

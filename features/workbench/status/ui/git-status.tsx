@@ -1,5 +1,6 @@
 "use client";
 
+import { RiGitBranchLine } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -20,7 +21,7 @@ export function GitStatusButton() {
                     window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "source" }))
                 }
             >
-                <Icon name="account_tree" size={14} className="shrink-0" />
+                <Icon icon={RiGitBranchLine} className="shrink-0" />
                 {branch ? <span className="font-medium">{branch}</span> : null}
             </Button>
         </Tooltip>

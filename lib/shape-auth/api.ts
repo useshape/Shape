@@ -217,3 +217,39 @@ export function oauthAuthorizeUrl(state: string, codeChallenge: string) {
   });
   return `${SHAPE_API_BASE}/oauth/authorize?${params.toString()}`;
 }
+
+function asSitePath(url: string): string {
+  try {
+    const parsed = new URL(url, SHAPE_API_BASE);
+    const base = new URL(SHAPE_API_BASE);
+    if (parsed.origin === base.origin) {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  } catch {
+    /* keep raw */
+  }
+  return url.startsWith("/") ? url : "/dashboard";
+}
+
+export function websiteLoginUrl(opts: { callbackUrl: string; email?: string }) {
+  const params = new URLSearchParams({ callbackUrl: asSitePath(opts.callbackUrl) });
+  const email = opts.email?.trim();
+  if (email) params.set("email", email);
+  return `${SHAPE_API_BASE}/login?${params.toString()}`;
+}
+
+export function websiteForgotPasswordUrl(email?: string) {
+  const trimmed = email?.trim();
+  if (!trimmed) return `${SHAPE_API_BASE}/forgot-password`;
+  return `${SHAPE_API_BASE}/forgot-password?${new URLSearchParams({ email: trimmed }).toString()}`;
+}
+
+export function websiteProviderSignInUrl(
+  provider: "github" | "gitlab",
+  callbackUrl: string,
+) {
+  return `${SHAPE_API_BASE}/login/oauth?${new URLSearchParams({
+    provider,
+    callbackUrl: asSitePath(callbackUrl),
+  }).toString()}`;
+}

@@ -136,6 +136,28 @@ pub(crate) fn emit_stream_token(
     );
 }
 
+/// Mid-tool prose that is worth showing as a break in the thread.
+/// One-liners ("Now let me…") stay inside Working; long essays stay suppressed.
+pub(crate) fn is_brief_checkpoint(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    // Tool/XML markup belongs in structured chunks, not prose.
+    if trimmed.contains('<') && trimmed.contains('>') {
+        return false;
+    }
+    let len = trimmed.chars().count();
+    if len < 160 || len > 900 {
+        return false;
+    }
+    let lines = trimmed.lines().filter(|l| !l.trim().is_empty()).count();
+    if lines > 8 {
+        return false;
+    }
+    true
+}
+
 pub(crate) fn shape_proxy_request(
     client: &Client,
     api_key: &str,
@@ -686,18 +708,21 @@ pub async fn stream_chat(
             .collect()
     };
 
-    // Flush deferred reply text only when this completion is the user-facing answer
-    // (no tool calls). Mid-tool narration stays in `content` for the API, not the UI.
+    // Flush deferred reply text for final answers, or brief mid-tool checkpoints.
     if defer_content_emit && !deferred_content.is_empty() && tool_calls.is_empty() {
         emit_stream_token(app_handle, proxy_ctx, deferred_content);
-    } else if defer_content_emit && !tool_calls.is_empty() && !content.is_empty() {
-        logging::debug(
-            "stream",
-            &format!(
-                "Suppressed {} chars of mid-tool narration from reply UI",
-                content.len()
-            ),
-        );
+    } else if defer_content_emit && !tool_calls.is_empty() && !deferred_content.is_empty() {
+        if is_brief_checkpoint(&deferred_content) {
+            emit_stream_token(app_handle, proxy_ctx, format!("{}\n\n", deferred_content.trim()));
+        } else {
+            logging::debug(
+                "stream",
+                &format!(
+                    "Suppressed {} chars of mid-tool narration from reply UI",
+                    content.len()
+                ),
+            );
+        }
     }
 
     if !tool_calls.is_empty()
@@ -857,10 +882,26 @@ pub async fn complete_chat(
     model: &str,
     proxy_ctx: &ProxyContext,
 ) -> Result<String, AppError> {
+    complete_chat_cancellable(client, api_key, prompt, model, proxy_ctx, None).await
+}
+
+/// Same as [`complete_chat`], but aborts when `cancel` fires (Stop during title gen).
+pub async fn complete_chat_cancellable(
+    client: &Client,
+    api_key: &str,
+    prompt: &str,
+    model: &str,
+    proxy_ctx: &ProxyContext,
+    cancel: Option<&tokio_util::sync::CancellationToken>,
+) -> Result<String, AppError> {
     logging::debug(
         "complete",
         &format!("Non-streaming call: model={}, prompt_len={}", model, prompt.len()),
     );
+
+    if cancel.is_some_and(|t| t.is_cancelled()) {
+        return Err(AppError::Message("Cancelled".to_string()));
+    }
 
     let body = json!({
         "model": model,
@@ -868,11 +909,27 @@ pub async fn complete_chat(
         "max_tokens": 30,
     });
 
-    let resp = shape_proxy_request(client, api_key, proxy_ctx)
+    let send_fut = shape_proxy_request(client, api_key, proxy_ctx)
         .json(&body)
-        .send()
-        .await
-        .map_err(|e| AppError::Message(format!("Title gen failed: {}", e)))?;
+        .send();
+
+    let resp = match cancel {
+        Some(token) => {
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => {
+                    return Err(AppError::Message("Cancelled".to_string()));
+                }
+                result = send_fut => result,
+            }
+        }
+        None => send_fut.await,
+    }
+    .map_err(|e| AppError::Message(format!("Title gen failed: {}", e)))?;
+
+    if cancel.is_some_and(|t| t.is_cancelled()) {
+        return Err(AppError::Message("Cancelled".to_string()));
+    }
 
     let json: Value = resp.json().await.map_err(|e| e.to_string())?;
     let content = json["choices"][0]["message"]["content"]

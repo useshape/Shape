@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { commands } from "@/lib/backend";
-import type { IndexProgress, IndexStatus, McpStatusEntry } from "@/lib/backend/types";
+import type { IndexProgress, IndexStatus } from "@/lib/backend/types";
 import {
     getCatalogDefaultEnabledIds,
     getCatalogModels,
@@ -19,7 +19,9 @@ import {
     updateSettingSection,
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
-import { loadMcpServersFromFile, openMcpConfig, saveMcpServers } from "@/lib/mcp-config";
+import { openMcpConfig } from "@/lib/mcp-config";
+import { PluginsSettings } from "./plugins-settings";
+import { Textarea } from "@/components/ui/textarea";
 import {
     SettingSection,
     SettingRow,
@@ -30,6 +32,32 @@ import {
 } from "./setting-controls";
 
 const FEATURED_COUNT = 4;
+
+function RulesEditor({ value }: { value: string }) {
+    const [draft, setDraft] = React.useState(value);
+    React.useEffect(() => setDraft(value), [value]);
+    const dirty = draft !== value;
+
+    return (
+        <div className="px-4 py-3.5">
+            <div className="mb-2 flex items-center justify-end">
+                <Button
+                    size="sm"
+                    disabled={!dirty}
+                    onClick={() => updateSettingSection("ai", { customRules: draft })}
+                >
+                    Save
+                </Button>
+            </div>
+            <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Add your custom instructions…"
+                className="min-h-32 border-border-subtle bg-input-bg"
+            />
+        </div>
+    );
+}
 
 function ModelRow({
     model,
@@ -43,7 +71,7 @@ function ModelRow({
     unavailableReason?: string;
 }) {
     return (
-        <div className="flex items-start justify-between gap-4 px-3.5 py-3">
+        <div className="flex items-start justify-between gap-4 px-4 py-3.5">
             <div className="min-w-0 space-y-0.5">
                 <div className="text-sm font-medium text-text-primary">{model.name}</div>
                 <div className="text-sm text-text-muted">
@@ -126,8 +154,6 @@ export function AiSettingsPanel({
     const unavailableHint =
         "This model is not available on your plan. Manage models on useshape.org.";
     const [showAllModels, setShowAllModels] = React.useState(false);
-    const [mcpStatus, setMcpStatus] = React.useState<McpStatusEntry[]>([]);
-    const [mcpConnecting, setMcpConnecting] = React.useState<string | null>(null);
     const [indexStatus, setIndexStatus] = React.useState<{
         filesIndexed: number;
         totalFiles: number;
@@ -145,56 +171,6 @@ export function AiSettingsPanel({
     const displayedModels = showAllModels
         ? allModels
         : allModels.filter((m) => featuredIds.has(m.id));
-
-    const syncMcpFromFile = React.useCallback(async () => {
-        try {
-            const servers = await loadMcpServersFromFile();
-            const status = await commands.syncMcpServers(servers);
-            setMcpStatus(status as McpStatusEntry[]);
-        } catch {
-            /* ignore */
-        }
-    }, []);
-
-    React.useEffect(() => {
-        void syncMcpFromFile();
-    }, [syncMcpFromFile]);
-
-    React.useEffect(() => {
-        let unlistenOAuth: (() => void) | undefined;
-        void import("@/lib/mcp-install").then(({ initMcpOAuthListener }) => {
-            void initMcpOAuthListener(async () => {
-                setMcpConnecting(null);
-                await syncMcpFromFile();
-            }).then((fn) => {
-                unlistenOAuth = fn;
-            });
-        });
-        return () => {
-            unlistenOAuth?.();
-        };
-    }, [syncMcpFromFile]);
-
-    const handleMcpConnect = async (serverId: string) => {
-        setMcpConnecting(serverId);
-        try {
-            await commands.mcpStartOAuth(serverId);
-        } catch {
-            setMcpConnecting(null);
-        }
-    };
-
-    const handleMcpRemove = async (serverId: string) => {
-        try {
-            const list = await loadMcpServersFromFile();
-            const next = list.filter((s) => s.id !== serverId);
-            await saveMcpServers(next);
-            const status = await commands.syncMcpServers(next);
-            setMcpStatus(status as McpStatusEntry[]);
-        } catch {
-            /* keep list */
-        }
-    };
 
     React.useEffect(() => {
         void commands.getIndexStatus().then((s) => {
@@ -282,11 +258,7 @@ export function AiSettingsPanel({
 
     return (
         <>
-            <SettingSection
-                id="settings-ai-models"
-                title="Models"
-                description="Models available to the agent"
-            >
+            <SettingSection id="settings-ai-models" title="Models">
                 {displayedModels.map((model) => (
                     <ModelRow
                         key={model.id}
@@ -317,14 +289,8 @@ export function AiSettingsPanel({
                 </SettingRow>
             </SettingSection>
 
-            <SettingSection
-                title="Auto-Run"
-                description="Shell and gated tool policy"
-            >
-                <SettingRow
-                    title="Auto-run mode"
-                    description="Ask, auto-safe, or always"
-                >
+            <SettingSection title="Auto-Run">
+                <SettingRow title="Auto-run mode">
                     <SettingSelect
                         value={a.autoRunMode}
                         options={[
@@ -337,10 +303,7 @@ export function AiSettingsPanel({
                         }
                     />
                 </SettingRow>
-                <SettingRow
-                    title="Protect destructive git"
-                    description="Confirm destructive git"
-                >
+                <SettingRow title="Protect destructive git">
                     <SettingSwitch
                         checked={a.protectDestructiveGit}
                         onChange={(on) => updateSettingSection("ai", { protectDestructiveGit: on })}
@@ -349,19 +312,13 @@ export function AiSettingsPanel({
             </SettingSection>
 
             <SettingSection title="Edits">
-                <SettingRow
-                    title="Require edit approval"
-                    description="Accept before writing edits"
-                >
+                <SettingRow title="Require edit approval">
                     <SettingSwitch
                         checked={a.requireEditApproval}
                         onChange={(on) => updateSettingSection("ai", { requireEditApproval: on })}
                     />
                 </SettingRow>
-                <SettingRow
-                    title="Auto-apply agent edits"
-                    description="Skip the review strip"
-                >
+                <SettingRow title="Auto-apply agent edits">
                     <SettingSwitch
                         checked={a.autoApplyEdits}
                         onChange={(on) => updateSettingSection("ai", { autoApplyEdits: on })}
@@ -369,11 +326,17 @@ export function AiSettingsPanel({
                 </SettingRow>
             </SettingSection>
 
+            <SettingSection title="Composer">
+                <SettingRow title="Compact input">
+                    <SettingSwitch
+                        checked={a.compactComposer}
+                        onChange={(on) => updateSettingSection("ai", { compactComposer: on })}
+                    />
+                </SettingRow>
+            </SettingSection>
+
             <SettingSection title="Review">
-                <SettingRow
-                    title="Adversarial review"
-                    description="Critics after Review"
-                >
+                <SettingRow title="Adversarial review">
                     <SettingSwitch
                         checked={a.reviewAdversarialEnabled}
                         onChange={(on) => updateSettingSection("ai", { reviewAdversarialEnabled: on })}
@@ -382,26 +345,17 @@ export function AiSettingsPanel({
             </SettingSection>
 
             <SettingSection id="settings-ai-context" title="Context">
-                <SettingRow
-                    title="Max context lines per file"
-                    description="Lines when attaching a file"
-                >
+                <SettingRow title="Max context lines per file">
                     <SettingNumberSelect
                         value={a.maxContextLines}
                         options={MAX_CONTEXT_PRESETS}
                         onChange={(v) => updateSettingSection("ai", { maxContextLines: v })}
                     />
                 </SettingRow>
-                <SettingRow
-                    title="Semantic codebase index"
-                    description="Local search index for the agent"
-                >
+                <SettingRow title="Semantic codebase index">
                     <span className="text-xs text-text-muted">Always on</span>
                 </SettingRow>
-                <SettingRow
-                    title="Semantic embeddings"
-                    description="Richer search; needs sign-in"
-                >
+                <SettingRow title="Semantic embeddings">
                     <SettingSwitch
                         checked={a.indexEmbeddings}
                         onChange={(on) => {
@@ -421,7 +375,7 @@ export function AiSettingsPanel({
                                       ? ` · Last indexed ${new Date(indexStatus.lastIndexedAt * 1000).toLocaleString()}`
                                       : ""
                               }`
-                            : "Not indexed yet — opens automatically when you open a project"}
+                            : "Not indexed"}
                     </div>
                     <div className="flex gap-2">
                         <Button variant="secondary" size="sm" disabled={indexing} onClick={() => void handleReindex()}>
@@ -433,41 +387,20 @@ export function AiSettingsPanel({
 
             <SettingSection
                 id="settings-ai-rules"
-                title="Rules"
-                description="Also loads .shape/rules.md"
+                title="Instructions"
+                description="Give Shape extra instructions and context for all chats. Repository instructions may also apply."
             >
-                <textarea
-                    value={a.customRules}
-                    onChange={(e) => updateSettingSection("ai", { customRules: e.target.value })}
-                    placeholder="Style, tone, project conventions…"
-                    className="w-full min-h-28 bg-transparent px-3.5 py-3 text-sm text-text-primary placeholder:text-text-disabled resize-y focus:outline-none select-text"
-                />
+                <RulesEditor value={a.customRules} />
             </SettingSection>
 
+            <PluginsSettings />
+
             <SettingSection id="settings-ai-mcp" title="MCP">
-                <div className="flex flex-col gap-3 px-3.5 py-4">
-                    <p className="text-sm text-text-muted">
-                        Connected tools. Writes to <span className="text-text-secondary">mcp.json</span>.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() =>
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-settings-navigate", {
-                                        detail: { section: "integrations" },
-                                    }),
-                                )
-                            }
-                        >
-                            Open Integrations
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => void openMcpConfig()}>
-                            Edit mcp.json
-                        </Button>
-                    </div>
-                </div>
+                <SettingRow title="Servers">
+                    <Button variant="secondary" size="sm" onClick={() => void openMcpConfig()}>
+                        Edit mcp.json
+                    </Button>
+                </SettingRow>
             </SettingSection>
         </>
     );

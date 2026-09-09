@@ -1,5 +1,6 @@
 "use client";
 
+import { RiAddLine, RiArrowDownSLine, RiArrowUpSLine, RiCloseLine, RiDeleteBinLine, RiLayoutColumnLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import type { TerminalShellProfile } from "@/lib/backend/types";
@@ -111,16 +112,29 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
     const fitAddonRef = useRef<FitAddonType | null>(null);
 
     const waitForVisibleSize = useCallback(async () => {
+        const node = terminalRef.current;
+        if (!node) return false;
         for (let i = 0; i < 40; i++) {
-            const node = terminalRef.current;
-            if (!node) return false;
             const rect = node.getBoundingClientRect();
-            if (isActive && rect.width >= 120 && rect.height >= 80) {
-                return true;
-            }
-            await new Promise(res => setTimeout(res, 50));
+            if (isActive && rect.width >= 120 && rect.height >= 80) return true;
+            await new Promise((res) => setTimeout(res, 50));
         }
-        return false;
+        // Don't give up forever — wait for a real resize if the panel was still settling.
+        return await new Promise<boolean>((resolve) => {
+            let done = false;
+            const finish = (ok: boolean) => {
+                if (done) return;
+                done = true;
+                ro.disconnect();
+                resolve(ok);
+            };
+            const ro = new ResizeObserver(() => {
+                const rect = node.getBoundingClientRect();
+                if (isActive && rect.width >= 120 && rect.height >= 80) finish(true);
+            });
+            ro.observe(node);
+            window.setTimeout(() => finish(false), 5000);
+        });
     }, [isActive]);
 
     useEffect(() => {
@@ -262,7 +276,15 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                     ptyId = spawnedId;
                     lastPtySize.set(ptyId, { cols: Math.max(20, term.cols || 80), rows: Math.max(4, term.rows || 24) });
                 } else {
-                    // Replay buffered output from background Run before live attach.
+                    // Replay Rust-buffered output (source of truth while Terminal was closed),
+                    // then any JS scrollback that arrived after the last Rust read.
+                    try {
+                        const snap = await invoke<{ output?: string }>("pty_read_output", {
+                            id: ptyId,
+                            tailChars: 200_000,
+                        });
+                        if (snap?.output) term.write(snap.output);
+                    } catch { /* ignore */ }
                     try {
                         const { terminalSessionStore } = await import("@/features/terminal/session");
                         const buffered = terminalSessionStore.takePtyScrollback(ptyId);
@@ -799,7 +821,7 @@ export default function Terminal({
                     className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                     title="Terminal profiles"
                 >
-                    <Icon name="expand_more" size={16} />
+                    <Icon icon={RiArrowDownSLine} />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[220px]">
@@ -865,7 +887,7 @@ export default function Terminal({
                             className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
                             aria-label={`Close ${tab.title}`}
                         >
-                            <Icon name="close" size={12} />
+                            <Icon icon={RiCloseLine} />
                         </button>
                     </div>
                 );
@@ -895,7 +917,7 @@ export default function Terminal({
                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                         onClick={() => addTab(resolveAvailableDefaultShell(), group)}
                     >
-                        <Icon name="add" size={16} />
+                        <Icon icon={RiAddLine} />
                     </Button>
                 </Tooltip>
                 {showShellMenu ? shellMenu : null}
@@ -978,7 +1000,7 @@ export default function Terminal({
                                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={clearActiveTerminal}
                                     >
-                                        <Icon name="delete" size={16} />
+                                        <Icon icon={RiDeleteBinLine} />
                                     </Button>
                                 </Tooltip>
                                 <Tooltip content="Split Terminal">
@@ -988,7 +1010,7 @@ export default function Terminal({
                                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={() => splitTerminal()}
                                     >
-                                        <Icon name="vertical_split" size={16} />
+                                        <Icon icon={RiLayoutColumnLine} />
                                     </Button>
                                 </Tooltip>
                             </>
@@ -1000,7 +1022,7 @@ export default function Terminal({
                                 size="icon"
                                 className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                             >
-                                <Icon name="expand_less" size={16} />
+                                <Icon icon={RiArrowUpSLine} />
                             </Button>
                         </Tooltip>
                         <Button
@@ -1009,7 +1031,7 @@ export default function Terminal({
                             size="icon"
                             className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                         >
-                            <Icon name="close" size={16} />
+                            <Icon icon={RiCloseLine} />
                         </Button>
                     </div>
                 </div>

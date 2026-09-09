@@ -12,6 +12,7 @@ export function ChatMessageList({
     activityLabel,
     sendError,
     onDismissError,
+    onRetryError,
     messagesEndRef,
     onRedo,
     onRestore,
@@ -24,6 +25,7 @@ export function ChatMessageList({
     activityLabel: string | null;
     sendError: string | null;
     onDismissError: () => void;
+    onRetryError?: () => void;
     messagesEndRef: RefObject<HTMLDivElement | null>;
     onRedo: (msgIdx: number) => void;
     onRestore: (msgIdx: number) => void;
@@ -80,10 +82,14 @@ export function ChatMessageList({
             )}
             {sendError ? (
                 <div className="mb-4 px-2">
-                    <ChatErrorCard message={sendError} onDismiss={onDismissError} />
+                    <ChatErrorCard
+                        message={sendError}
+                        onDismiss={onDismissError}
+                        onRetry={onRetryError}
+                    />
                 </div>
             ) : null}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="h-10 shrink-0" aria-hidden />
         </>
     );
 }

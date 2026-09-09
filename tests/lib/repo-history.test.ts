@@ -34,8 +34,8 @@ describe("repo-history", () => {
         upsertRepoHistory("C:/b");
         upsertRepoHistory("C:/a");
         const history = loadRepoHistory();
-        expect(history[0]?.path).toBe("C:/a");
-        expect(history).toHaveLength(2);
+        // New paths prepend; revisiting a known path only updates its timestamp in place.
+        expect(history.map((e) => e.path)).toEqual(["C:/b", "C:/a"]);
     });
 
     it("caps history at fifteen entries", () => {

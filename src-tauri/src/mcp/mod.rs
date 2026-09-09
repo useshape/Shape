@@ -136,7 +136,7 @@ impl McpState {
                         name: server.name.clone(),
                         status: McpServerStatus::Connected,
                         tool_count,
-                        error: None,
+                        error: client.last_error(),
                         auth: server.auth.clone(),
                     });
                     clients.insert(server.id.clone(), Arc::new(Mutex::new(client)));
@@ -147,10 +147,8 @@ impl McpState {
                         name: server.name.clone(),
                         status: McpServerStatus::NeedsAuth,
                         tool_count: 0,
-                        error: Some(
-                            "Connect your account in MCP settings (separate from Shape sign-in)."
-                                .to_string(),
-                        ),
+                        // Auth pending is not an error — UI shows a Sign in CTA.
+                        error: None,
                         auth: server.auth.clone(),
                     });
                 }
@@ -194,7 +192,8 @@ impl McpState {
                         name: cfg.name.clone(),
                         status: McpServerStatus::Connected,
                         tool_count: guard.tools().len(),
-                        error: guard.last_error(),
+                        // Don't surface last tool-call failures as connection errors.
+                        error: None,
                         auth: cfg.auth.clone(),
                     }
                 } else if cfg.transport == McpTransport::Http
@@ -206,7 +205,20 @@ impl McpState {
                         name: cfg.name.clone(),
                         status: McpServerStatus::NeedsAuth,
                         tool_count: 0,
-                        error: Some("Not connected".to_string()),
+                        error: None,
+                        auth: cfg.auth.clone(),
+                    }
+                } else if cfg.transport == McpTransport::Http
+                    && cfg.auth == McpAuthType::Oauth
+                    && get_token(&cfg.id).is_some()
+                {
+                    // Token saved but client not loaded yet — avoid yellow "Not connected".
+                    McpStatusEntry {
+                        id: cfg.id.clone(),
+                        name: cfg.name.clone(),
+                        status: McpServerStatus::Error,
+                        tool_count: 0,
+                        error: None,
                         auth: cfg.auth.clone(),
                     }
                 } else {
@@ -234,9 +246,20 @@ impl McpState {
     }
 
     pub fn tools_as_openai_schema(&self) -> Result<Vec<Value>, String> {
+        let configs = self.configs.lock().map_err(|e| e.to_string())?;
+        let disabled: HashMap<&str, &Vec<String>> = configs
+            .iter()
+            .map(|c| (c.id.as_str(), &c.disabled_tools))
+            .collect();
         Ok(self
             .all_tools()?
             .into_iter()
+            .filter(|t| {
+                !disabled
+                    .get(t.server_id.as_str())
+                    .map(|list| list.iter().any(|n| n == &t.name))
+                    .unwrap_or(false)
+            })
             .map(|t| {
                 json!({
                     "type": "function",
@@ -258,16 +281,27 @@ impl McpState {
         // network/stdio round-trip so status/sync/schema are not blocked.
         let target = {
             let clients = self.clients.lock().map_err(|e| e.to_string())?;
+            let configs = self.configs.lock().map_err(|e| e.to_string())?;
             let mut found = None;
             for client in clients.values() {
                 let guard = client.lock().map_err(|e| e.to_string())?;
-                if let Some(name) = guard
+                if let Some(tool) = guard
                     .tools()
                     .iter()
                     .find(|t| t.qualified_name == qualified_name)
-                    .map(|t| t.name.clone())
                 {
-                    found = Some((Arc::clone(client), name));
+                    let blocked = configs
+                        .iter()
+                        .find(|c| c.id == tool.server_id)
+                        .map(|c| c.disabled_tools.iter().any(|n| n == &tool.name))
+                        .unwrap_or(false);
+                    if blocked {
+                        return Err(format!(
+                            "MCP tool is disabled in Integrations: {}",
+                            qualified_name
+                        ));
+                    }
+                    found = Some((Arc::clone(client), tool.name.clone()));
                     break;
                 }
             }
@@ -324,7 +358,7 @@ impl McpState {
                     name: server.name.clone(),
                     status: McpServerStatus::Connected,
                     tool_count: client.tools().len(),
-                    error: None,
+                    error: client.last_error(),
                     auth: server.auth.clone(),
                 };
                 clients.insert(server.id, Arc::new(Mutex::new(client)));
@@ -335,7 +369,7 @@ impl McpState {
                 name: server.name,
                 status: McpServerStatus::NeedsAuth,
                 tool_count: 0,
-                error: Some("Authentication required".to_string()),
+                error: None,
                 auth: server.auth.clone(),
             }),
             Err(e) => Ok(McpStatusEntry {
@@ -349,8 +383,8 @@ impl McpState {
         }
     }
 
-    pub async fn start_server_oauth(&self, server_id: &str) -> Result<(), String> {
-        let (server_id_owned, url) = {
+    pub async fn start_server_oauth(&self, server_id: &str) -> Result<String, String> {
+        let (server_id_owned, url, client_id) = {
             let configs = self.configs.lock().map_err(|e| e.to_string())?;
             let server = configs
                 .iter()
@@ -362,8 +396,9 @@ impl McpState {
                 .as_ref()
                 .ok_or("HTTP MCP server missing url")?
                 .clone();
-            (server.id, url)
+            let client_id = server.oauth_client_id.clone();
+            (server.id, url, client_id)
         };
-        start_oauth(&server_id_owned, &url).await
+        start_oauth(&server_id_owned, &url, client_id.as_deref()).await
     }
 }

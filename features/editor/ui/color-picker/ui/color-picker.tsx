@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine, RiArrowLeftLine, RiArrowRightLine, RiCloseLine, RiCrosshair2Line } from "@remixicon/react";
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { parseTailwindToken, classifyTailwindColorToken } from "../tailwind-utils";
 import { Icon } from "@/components/ui/icon";
@@ -492,12 +493,12 @@ export function ColorPicker({ color, onChange, onClose, layoutWidth }: ColorPick
                 <div className="flex items-center gap-0.5 shrink-0">
                     <Tooltip content="Previous color">
                         <button type="button" disabled={!prevColor} onClick={handleGoBack} className={cn("p-1 rounded-md hover:bg-panel-hover", !prevColor && "opacity-50")}>
-                            <Icon name="arrow_back" size={15} />
+                            <Icon icon={RiArrowLeftLine} />
                         </button>
                     </Tooltip>
                     <Tooltip content="Next color">
                         <button type="button" disabled={!nextColor} onClick={handleGoForward} className={cn("p-1 rounded-md hover:bg-panel-hover", !nextColor && "opacity-50")}>
-                            <Icon name="arrow_forward" size={15} />
+                            <Icon icon={RiArrowRightLine} />
                         </button>
                     </Tooltip>
                 </div>
@@ -510,8 +511,8 @@ export function ColorPicker({ color, onChange, onClose, layoutWidth }: ColorPick
                     ))}
                 </div>
                 <div className="flex items-center shrink-0 text-text-muted">
-                    <button type="button" title="Eyedropper" onClick={handleEyeDropper} className="p-1 hover:bg-panel-hover rounded-md"><Icon name="colorize" size={16} /></button>
-                    {onClose && <button type="button" title="Close" onClick={onClose} className="p-1 hover:bg-panel-hover rounded-md"><Icon name="close" size={16} /></button>}
+                    <button type="button" title="Eyedropper" onClick={handleEyeDropper} className="p-1 hover:bg-panel-hover rounded-md"><Icon icon={RiCrosshair2Line} /></button>
+                    {onClose && <button type="button" title="Close" onClick={onClose} className="p-1 hover:bg-panel-hover rounded-md"><Icon icon={RiCloseLine} /></button>}
                 </div>
             </div>
 
@@ -638,7 +639,7 @@ export function ColorPicker({ color, onChange, onClose, layoutWidth }: ColorPick
                             onClick={cycleFormat}
                             className="flex items-center justify-center w-8 h-8 rounded-lg bg-panel-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer shrink-0"
                         >
-                            <Icon name="unfold_more" size={16} />
+                            <Icon icon={RiArrowDownSLine} />
                         </button>
                     </div>
                 </div>
@@ -668,7 +669,7 @@ export function ColorPicker({ color, onChange, onClose, layoutWidth }: ColorPick
                             onClick={cycleFormat}
                             className="flex items-center justify-center w-8 h-8 rounded-lg bg-panel-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer shrink-0"
                         >
-                            <Icon name="unfold_more" size={16} />
+                            <Icon icon={RiArrowDownSLine} />
                         </button>
                     </div>
                 </div>

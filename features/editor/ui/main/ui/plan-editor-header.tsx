@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowRightSLine, RiFileTextLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -51,8 +52,8 @@ export function PlanEditorHeader({ path }: { path: string }) {
         <div className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-border-subtle bg-editor px-3 min-h-[36px]">
             <div className="flex min-w-0 items-center gap-1.5 text-sm">
                 <span className="shrink-0 text-text-muted">Plans</span>
-                <Icon name="chevron_right" size={14} className="shrink-0 text-text-disabled" />
-                <Icon name="description" size={14} className="shrink-0 text-text-muted" />
+                <Icon icon={RiArrowRightSLine} className="shrink-0 text-text-disabled" />
+                <Icon icon={RiFileTextLine} className="shrink-0 text-text-muted" />
                 <span className="truncate font-mono text-text-secondary">{fileName}</span>
             </div>
             <div className="flex min-w-0 items-center gap-2">

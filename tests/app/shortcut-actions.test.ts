@@ -108,8 +108,14 @@ describe("dispatchShortcutAction", () => {
         tab.off();
     });
 
-    it("ignores removed problems shortcut", () => {
-        expect(dispatchShortcutAction("Problems", "Ctrl+Shift+M")).toBe(false);
+    it("opens problems panel", () => {
+        const layout = listenCustomEvent("shape-layout-toggle");
+        const panel = listenCustomEvent("shape-set-panel-tab");
+        expect(dispatchShortcutAction("Problems", "Ctrl+Shift+M")).toBe(true);
+        expect(layout.events[0]?.detail).toMatchObject({ id: "panel", value: true });
+        expect(panel.events[0]?.detail).toBe("problems");
+        layout.off();
+        panel.off();
     });
 
     it("dispatches find in files via command palette", () => {

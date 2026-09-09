@@ -8,84 +8,39 @@ import {
     lineNumbers,
     highlightActiveLine,
     highlightActiveLineGutter,
+    highlightSpecialChars,
     drawSelection,
     dropCursor,
     rectangularSelection,
     crosshairCursor,
+    scrollPastEnd,
 } from "@codemirror/view";
 import {
     defaultKeymap,
     history,
     historyKeymap,
     indentWithTab,
+    indentMore,
+    indentLess,
 } from "@codemirror/commands";
 import {
     foldGutter,
     foldKeymap,
     bracketMatching,
     indentOnInput,
-    syntaxHighlighting,
-    defaultHighlightStyle,
+    indentUnit,
 } from "@codemirror/language";
-import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { highlightSelectionMatches, searchKeymap, openSearchPanel } from "@codemirror/search";
+import {
+    autocompletion,
+    closeBrackets,
+    closeBracketsKeymap,
+    completionKeymap,
+} from "@codemirror/autocomplete";
+import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { commands } from "@/lib/backend";
 import { languageForPath } from "./lang";
-
-const shapeTheme = EditorView.theme(
-    {
-        "&": {
-            height: "100%",
-            fontSize: "13.5px",
-            backgroundColor: "var(--color-panel)",
-            color: "var(--color-text-primary)",
-        },
-        ".cm-scroller": {
-            fontFamily:
-                "var(--font-geist-mono, var(--font-mono), 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace)",
-            lineHeight: "1.6",
-            overflow: "auto",
-        },
-        ".cm-content": {
-            caretColor: "var(--color-text-primary)",
-            padding: "10px 0 24px",
-            minHeight: "100%",
-        },
-        ".cm-line": {
-            padding: "0 12px 0 4px",
-        },
-        ".cm-cursor, .cm-dropCursor": {
-            borderLeftColor: "var(--color-text-primary)",
-        },
-        "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-            backgroundColor: "color-mix(in srgb, var(--color-accent) 22%, transparent)",
-        },
-        ".cm-activeLine": {
-            backgroundColor: "color-mix(in srgb, var(--color-panel-hover) 55%, transparent)",
-        },
-        ".cm-gutters": {
-            backgroundColor: "var(--color-panel)",
-            color: "var(--color-text-disabled, var(--color-text-muted))",
-            border: "none",
-            borderRight: "1px solid var(--color-border-subtle)",
-            minWidth: "3rem",
-        },
-        ".cm-gutterElement": {
-            padding: "0 8px 0 12px",
-            fontSize: "12px",
-        },
-        ".cm-activeLineGutter": {
-            backgroundColor: "transparent",
-            color: "var(--color-text-secondary)",
-        },
-        ".cm-foldPlaceholder": {
-            backgroundColor: "var(--color-surface-3)",
-            border: "none",
-            color: "var(--color-text-muted)",
-        },
-    },
-    { dark: true },
-);
+import { shapeEditorChrome } from "./theme";
 
 export function CodeMirrorEditor({
     path,
@@ -110,7 +65,6 @@ export function CodeMirrorEditor({
     const setContentRef = useRef(setContent);
     setContentRef.current = setContent;
 
-    // Mount editor once; recreate language when path changes.
     useEffect(() => {
         const host = hostRef.current;
         if (!host) return;
@@ -119,22 +73,45 @@ export function CodeMirrorEditor({
         const state = EditorState.create({
             doc: content,
             extensions: [
+                ...shapeEditorChrome(),
                 lineNumbers(),
                 highlightActiveLineGutter(),
                 highlightActiveLine(),
+                highlightSpecialChars(),
                 history(),
-                foldGutter(),
-                drawSelection(),
+                foldGutter({
+                    openText: "▾",
+                    closedText: "▸",
+                }),
+                drawSelection({ cursorBlinkRate: 1100 }),
                 dropCursor(),
+                scrollPastEnd(),
                 EditorState.allowMultipleSelections.of(true),
+                EditorState.tabSize.of(4),
+                indentUnit.of("    "),
                 indentOnInput(),
-                bracketMatching(),
+                bracketMatching({ brackets: "()[]{}«»‹›" }),
                 closeBrackets(),
-                autocompletion(),
+                autocompletion({
+                    activateOnTyping: true,
+                    maxRenderedOptions: 12,
+                    defaultKeymap: true,
+                }),
                 rectangularSelection(),
                 crosshairCursor(),
-                highlightSelectionMatches(),
-                syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+                highlightSelectionMatches({ highlightWordAroundCursor: true }),
+                indentationMarkers({
+                    highlightActiveBlock: true,
+                    markerType: "codeOnly",
+                    thickness: 1,
+                    activeThickness: 1.5,
+                    colors: {
+                        light: "rgba(0,0,0,0.08)",
+                        dark: "rgba(255,255,255,0.07)",
+                        activeLight: "rgba(0,0,0,0.18)",
+                        activeDark: "rgba(255,255,255,0.16)",
+                    },
+                }),
                 keymap.of([
                     ...closeBracketsKeymap,
                     ...defaultKeymap,
@@ -143,8 +120,13 @@ export function CodeMirrorEditor({
                     ...foldKeymap,
                     ...completionKeymap,
                     indentWithTab,
+                    { key: "Mod-]", run: indentMore },
+                    { key: "Mod-[", run: indentLess },
+                    {
+                        key: "Mod-f",
+                        run: openSearchPanel,
+                    },
                 ]),
-                shapeTheme,
                 ...(lang ? [lang] : []),
                 EditorView.updateListener.of((update) => {
                     if (!update.docChanged) return;
@@ -192,11 +174,9 @@ export function CodeMirrorEditor({
             view.destroy();
             viewRef.current = null;
         };
-        // Recreate when path changes (language + dirty tracking).
         // eslint-disable-next-line react-hooks/exhaustive-deps -- content synced separately
     }, [path]);
 
-    // External content updates (reload / undo from outside).
     useEffect(() => {
         const view = viewRef.current;
         if (!view) return;
@@ -207,5 +187,5 @@ export function CodeMirrorEditor({
         });
     }, [content]);
 
-    return <div ref={hostRef} className="h-full min-h-0 w-full overflow-hidden bg-editor" />;
+    return <div ref={hostRef} className="h-full min-h-0 w-full overflow-hidden bg-panel" />;
 }

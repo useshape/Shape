@@ -10,19 +10,20 @@ function withColorTheme(colorTheme: unknown): ShapeSettings {
 }
 
 describe("theme registry", () => {
-    it("registers dark only", () => {
-        expect(Object.keys(COLOR_THEMES)).toEqual(["dark"]);
+    it("registers dark and light", () => {
+        expect(Object.keys(COLOR_THEMES)).toEqual(["dark", "light"]);
         expect(COLOR_THEMES.dark.label).toBe("Dark");
+        expect(COLOR_THEMES.light.label).toBe("Light");
     });
 
     it("recognizes valid theme ids", () => {
         expect(isColorThemeId("dark")).toBe(true);
-        expect(isColorThemeId("light")).toBe(false);
+        expect(isColorThemeId("light")).toBe(true);
         expect(isColorThemeId("graphite")).toBe(false);
     });
 
-    it("migrates unknown, light, and removed themes to dark", () => {
-        expect(normalizeColorTheme("light")).toBe("dark");
+    it("keeps light and migrates unknown themes to dark", () => {
+        expect(normalizeColorTheme("light")).toBe("light");
         expect(normalizeColorTheme("solarized")).toBe("dark");
         expect(normalizeColorTheme("nord")).toBe("dark");
         expect(normalizeColorTheme("graphite")).toBe("dark");
@@ -39,11 +40,11 @@ describe("applyAppearanceSettings", () => {
         expect(document.documentElement.classList.contains("dark")).toBe(true);
     });
 
-    it("forces dark even when settings still say light", () => {
+    it("applies light when settings say light", () => {
         applyAppearanceSettings(withColorTheme("light"));
-        expect(document.documentElement.dataset.theme).toBeUndefined();
-        expect(document.documentElement.style.colorScheme).toBe("dark");
-        expect(document.documentElement.classList.contains("dark")).toBe(true);
+        expect(document.documentElement.dataset.theme).toBe("light");
+        expect(document.documentElement.style.colorScheme).toBe("light");
+        expect(document.documentElement.classList.contains("dark")).toBe(false);
     });
 
     it("migrates removed accent themes to dark", () => {

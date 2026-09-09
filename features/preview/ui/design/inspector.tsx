@@ -1,10 +1,9 @@
 ﻿"use client";
 
+import { RiArrowDownLine, RiArrowGoBackLine, RiArrowGoForwardLine, RiArrowRightLine, RiCrosshair2Line, RiLink, RiRefreshLine, RiSubtractLine, RiTextWrap } from "@remixicon/react";
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
-import { PxInput } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import { useProjectState } from "@/lib/backend";
 import {
     clearDesignPending,
@@ -33,14 +32,13 @@ import {
     isTransparentColor,
     normalizeAlign,
     normalizeJustify,
-    opacityPercent,
     parsePx,
     px,
 } from "../../design-mode/css";
 import {
     AddHeader,
     AlignMatrix,
-    Collapse,
+    CheckRow,
     ColorRow,
     CompactSelect,
     CornerGlyph,
@@ -49,10 +47,14 @@ import {
     Glyph,
     IconBtn,
     IndependentCornersGlyph,
+    OpacityBlendRow,
+    PadXY,
+    PxInput,
+    RadiusSlider,
     Section,
+    SelectionColors,
     type DesignEffect,
 } from "./fields";
-import { ColorCapsule, DotStops, IconSegment, TickDial } from "./controls";
 import { TypographySection } from "./typography-section";
 import { ExportSection } from "./export-section";
 import { parseEffectsFromStyles } from "./parse-effects";
@@ -241,65 +243,33 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-            <SidebarPanelHeaderFrame
-                title="Design"
-                actions={
-                    <div className="flex items-center gap-0.5">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => applyHistory(historyRedo(), "after")}
-                            title="Redo"
-                        >
-                            <Icon name="redo" size={14} />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => {
-                                bridge?.reset();
-                                clearDesignPending();
-                                clearHistory();
-                            }}
-                            title="Reset"
-                        >
-                            <Icon name="refresh" size={14} />
-                        </Button>
-                    </div>
-                }
-            />
-            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
+            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
                 {selecting && !selected ? (
-                    <div className="flex flex-col gap-2 px-3 py-4">
-                        <div className="h-3 w-24 animate-pulse rounded bg-panel-hover" />
-                        <div className="h-8 w-full animate-pulse rounded-md bg-panel-hover" />
-                        <div className="h-8 w-full animate-pulse rounded-md bg-panel-hover" />
-                        <div className="h-8 w-2/3 animate-pulse rounded-md bg-panel-hover" />
+                    <div className="flex flex-col gap-2 px-3 py-3">
+                        <div className="h-3 w-20 animate-pulse rounded bg-panel-hover" />
+                        <div className="h-7 w-full animate-pulse rounded-md bg-panel-hover" />
+                        <div className="h-7 w-full animate-pulse rounded-md bg-panel-hover" />
                     </div>
                 ) : !selected || !s ? (
-                    <div className="flex flex-col gap-2 px-3 py-4" aria-hidden>
-                        <div className="h-3 w-20 rounded bg-panel-hover/70" />
-                        <div className="h-8 w-full rounded-md bg-panel-hover/50" />
-                        <div className="h-8 w-full rounded-md bg-panel-hover/40" />
-                        <div className="h-8 w-1/2 rounded-md bg-panel-hover/30" />
+                    <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+                        <Icon icon={RiCrosshair2Line} className="text-text-disabled" />
+                        <p className="text-sm leading-relaxed text-text-muted">
+                            Select an element on the canvas
+                        </p>
                     </div>
                 ) : (
                     <>
                         {selection.length > 1 ? (
-                            <p className="border-b border-border-subtle px-3 py-2 text-xs text-text-muted">
+                            <p className="border-b border-border-subtle px-3 py-2 text-sm text-text-muted">
                                 Editing {selection.length} elements
                             </p>
                         ) : null}
                         {applyFailedIds.includes(selected.id) ? (
-                            <div className="mx-3 mt-2 rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-xs text-red-200">
+                            <div className="mx-3 mt-2 rounded-md border border-error/40 bg-error/10 px-2 py-1.5 text-sm text-error">
                                 Apply did not update this element
                             </div>
                         ) : null}
-                        <Section title="Position">
+                        <Section title="Layout">
                             <div className="flex gap-1">
                                 <PxInput
                                     glyph={<Glyph>X</Glyph>}
@@ -325,19 +295,17 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                         })
                                     }
                                 />
+                                <PxInput
+                                    glyph={<Glyph>°</Glyph>}
+                                    title="Rotation"
+                                    value={0}
+                                    min={-360}
+                                    max={360}
+                                    onCommit={() => {
+                                        /* transform rotate not wired yet */
+                                    }}
+                                />
                             </div>
-                        </Section>
-                        <Section title="Layout">
-                            <IconSegment
-                                value={flow}
-                                onChange={(kind) => patch(stylesForFlow(kind))}
-                                options={[
-                                    { id: "block", icon: "crop_square", label: "Block" },
-                                    { id: "row", icon: "arrow_forward", label: "Horizontal" },
-                                    { id: "column", icon: "arrow_downward", label: "Vertical" },
-                                    { id: "grid", icon: "layout_grid", label: "Grid" },
-                                ]}
-                            />
                             <div className="flex gap-1">
                                 <PxInput
                                     glyph={<Glyph>W</Glyph>}
@@ -374,84 +342,106 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     active={lockRatio}
                                     onClick={() => setLockRatio((v) => !v)}
                                 >
-                                    <Icon name="constrain" size={13} />
+                                    <Icon icon={RiLink} />
                                 </IconBtn>
                             </div>
-                            <Collapse open={autoLayout}>
-                                <div className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <AlignMatrix
-                                            justify={justify}
-                                            align={align === "stretch" ? "center" : align}
-                                            onChange={(j, a) => patch({ justifyContent: j, alignItems: a })}
-                                        />
-                                        <DotStops
+                            {!autoLayout ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-full"
+                                    onClick={() => patch(stylesForFlow("row"))}
+                                >
+                                    Wrap in flex
+                                </Button>
+                            ) : null}
+                        </Section>
+
+                        {autoLayout ? (
+                            <Section title="Flex">
+                                <div className="flex items-start gap-2">
+                                    <AlignMatrix
+                                        justify={justify}
+                                        align={align === "stretch" ? "center" : align}
+                                        onChange={(j, a) => patch({ justifyContent: j, alignItems: a })}
+                                    />
+                                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                                        <div className="flex gap-1">
+                                            <IconBtn
+                                                title="Vertical"
+                                                active={flow === "column"}
+                                                onClick={() => patch(stylesForFlow("column"))}
+                                            >
+                                                <Icon icon={RiArrowDownLine} />
+                                            </IconBtn>
+                                            <IconBtn
+                                                title="Horizontal"
+                                                active={flow === "row"}
+                                                onClick={() => patch(stylesForFlow("row"))}
+                                            >
+                                                <Icon icon={RiArrowRightLine} />
+                                            </IconBtn>
+                                            <IconBtn
+                                                title="Wrap"
+                                                active={(s.flexWrap || "nowrap") !== "nowrap"}
+                                                onClick={() =>
+                                                    patch({
+                                                        flexWrap:
+                                                            (s.flexWrap || "nowrap") === "nowrap"
+                                                                ? "wrap"
+                                                                : "nowrap",
+                                                    })
+                                                }
+                                            >
+                                                <Icon icon={RiTextWrap} />
+                                            </IconBtn>
+                                        </div>
+                                        <PxInput
+                                            glyph={<Glyph>G</Glyph>}
+                                            title="Gap"
                                             value={parsePx(s.columnGap || s.gap) ?? parsePx(s.rowGap) ?? 0}
-                                            stops={[0, 4, 8, 16]}
-                                            labels={["0", "4px", "8px", "16px"]}
-                                            onChange={(n) =>
+                                            onCommit={(n) =>
                                                 patch({ gap: px(n), columnGap: px(n), rowGap: px(n) })
-                                            }
-                                            onReset={() =>
-                                                patch({ gap: "0px", columnGap: "0px", rowGap: "0px" })
                                             }
                                         />
                                     </div>
-                                    <TickDial
-                                        value={padX ?? 0}
-                                        min={0}
-                                        max={48}
-                                        step={2}
-                                        majorEvery={4}
-                                        tooltip={(n) => `Padding ${n}px`}
-                                        onChange={(n) => {
-                                            const v = px(n);
-                                            patch({
-                                                paddingLeft: v,
-                                                paddingRight: v,
-                                                paddingTop: v,
-                                                paddingBottom: v,
-                                            });
-                                            setPadIndependent(false);
-                                        }}
-                                    />
                                 </div>
-                            </Collapse>
-                            <label className="flex items-center gap-2 text-xs text-text-secondary" title="Clip overflowing children">
-                                <input
-                                    type="checkbox"
+                                <PadXY
+                                    x={padX}
+                                    y={padY}
+                                    onChange={(axis, n) => {
+                                        const v = px(n);
+                                        if (axis === "x") {
+                                            patch({ paddingLeft: v, paddingRight: v });
+                                        } else {
+                                            patch({ paddingTop: v, paddingBottom: v });
+                                        }
+                                    }}
+                                    independent={padIndependent}
+                                    onToggleIndependent={() => setPadIndependent((v) => !v)}
+                                    values={{
+                                        top: s.paddingTop,
+                                        right: s.paddingRight,
+                                        bottom: s.paddingBottom,
+                                        left: s.paddingLeft,
+                                    }}
+                                    onSide={(side, n) =>
+                                        patch({ [`padding${side}`]: px(n) } as Partial<DesignComputedStyles>)
+                                    }
+                                />
+                                <CheckRow
+                                    label="Clip content"
+                                    title="Clip overflowing children"
                                     checked={overflow === "hidden"}
-                                    onChange={(e) => patch({ overflow: e.target.checked ? "hidden" : "visible" })}
-                                    className="accent-accent"
+                                    onChange={(v) => patch({ overflow: v ? "hidden" : "visible" })}
                                 />
-                                Clip content
-                            </label>
-                        </Section>
+                            </Section>
+                        ) : null}
 
-                        <Section title="Appearance">
-                            <TickDial
-                                value={corners[0] ?? 0}
-                                min={0}
-                                max={32}
-                                step={1}
-                                majorEvery={4}
-                                tooltip={(n) => `Radius ${n}px`}
-                                onChange={(n) =>
-                                    patch({
-                                        borderRadius: radiusIndependent
-                                            ? formatRadiusCorners(n, corners[1], corners[2], corners[3])
-                                            : px(n),
-                                    })
-                                }
-                            />
-                            <div className="flex gap-1">
-                                <PxInput
-                                    glyph={<Glyph>%</Glyph>}
-                                    title="Opacity"
-                                    value={opacityPercent(s.opacity)}
-                                    max={100}
-                                    onCommit={(n) => patch({ opacity: String(Math.max(0, Math.min(100, n)) / 100) })}
-                                />
+                        <Section
+                            title="Radius"
+                            action={
                                 <IconBtn
                                     title="Independent corners"
                                     active={radiusIndependent}
@@ -459,8 +449,9 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                 >
                                     <IndependentCornersGlyph />
                                 </IconBtn>
-                            </div>
-                            <Collapse open={radiusIndependent}>
+                            }
+                        >
+                            {radiusIndependent ? (
                                 <div className="grid grid-cols-2 gap-1">
                                     {(["TL", "TR", "BL", "BR"] as const).map((label, i) => (
                                         <PxInput
@@ -476,7 +467,21 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                         />
                                     ))}
                                 </div>
-                            </Collapse>
+                            ) : (
+                                <RadiusSlider
+                                    value={s.borderRadius || "0"}
+                                    onChange={(v) => patch({ borderRadius: v })}
+                                />
+                            )}
+                        </Section>
+
+                        <Section title="Blending">
+                            <OpacityBlendRow
+                                opacity={s.opacity}
+                                blend={s.mixBlendMode || "normal"}
+                                onOpacity={(v) => patch({ opacity: v })}
+                                onBlend={(v) => patch({ mixBlendMode: v })}
+                            />
                         </Section>
 
                         {showType ? (
@@ -498,11 +503,11 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                             );
                                         }}
                                     >
-                                        <Icon name="remove" size={14} />
+                                        <Icon icon={RiSubtractLine} />
                                     </IconBtn>
                                 }
                             >
-                                <ColorCapsule
+                                <ColorRow
                                     cssValue={
                                         fillKey === "color"
                                             ? s.color
@@ -522,6 +527,8 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                         }
                                         patch({ backgroundColor: c, backgroundImage: "none" });
                                     }}
+                                    hidden={fillHidden}
+                                    onToggleHidden={() => setFillHidden((v) => !v)}
                                 />
                             </Section>
                         ) : (
@@ -540,10 +547,13 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
 
                         {hasStroke ? (
                             <Section
-                                title="Stroke"
+                                title="Outline"
                                 action={
-                                    <IconBtn title="Remove stroke" onClick={() => patch({ borderStyle: "none", borderWidth: "0px" })}>
-                                        <Icon name="remove" size={14} />
+                                    <IconBtn
+                                        title="Remove outline"
+                                        onClick={() => patch({ borderStyle: "none", borderWidth: "0px" })}
+                                    >
+                                        <Icon icon={RiSubtractLine} />
                                     </IconBtn>
                                 }
                             >
@@ -555,7 +565,12 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                         onCommit={(n) =>
                                             patch({
                                                 borderWidth: px(n),
-                                                borderStyle: n === 0 ? "none" : s.borderStyle === "none" ? "solid" : s.borderStyle,
+                                                borderStyle:
+                                                    n === 0
+                                                        ? "none"
+                                                        : s.borderStyle === "none"
+                                                          ? "solid"
+                                                          : s.borderStyle,
                                             })
                                         }
                                     />
@@ -567,22 +582,30 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                             { value: "dotted", label: "Dotted" },
                                         ]}
                                         onChange={(v) =>
-                                            patch({ borderStyle: v, borderWidth: s.borderWidth === "0px" ? "1px" : s.borderWidth })
+                                            patch({
+                                                borderStyle: v,
+                                                borderWidth: s.borderWidth === "0px" ? "1px" : s.borderWidth,
+                                            })
                                         }
                                     />
                                 </div>
                                 <ColorRow
                                     cssValue={s.borderColor}
                                     onChange={(c) =>
-                                        patch({ borderColor: c, borderStyle: s.borderStyle === "none" ? "solid" : s.borderStyle })
+                                        patch({
+                                            borderColor: c,
+                                            borderStyle: s.borderStyle === "none" ? "solid" : s.borderStyle,
+                                        })
                                     }
                                     onRemove={() => patch({ borderStyle: "none", borderWidth: "0px" })}
                                 />
                             </Section>
                         ) : (
                             <AddHeader
-                                title="Stroke"
-                                onAdd={() => patch({ borderStyle: "solid", borderWidth: "1px", borderColor: "#000000" })}
+                                title="Outline"
+                                onAdd={() =>
+                                    patch({ borderStyle: "solid", borderWidth: "1px", borderColor: "#000000" })
+                                }
                             />
                         )}
 
@@ -593,27 +616,74 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                 patch(effectsToStyles(next));
                             }}
                         />
+
+                        <SelectionColors
+                            colors={[
+                                ...(hasFill
+                                    ? [
+                                          fillKey === "color"
+                                              ? s.color
+                                              : /gradient\(/i.test(s.backgroundImage || "")
+                                                ? ""
+                                                : s.backgroundColor,
+                                      ].filter(Boolean)
+                                    : []),
+                                ...(hasStroke ? [s.borderColor] : []),
+                                ...effects
+                                    .filter((e) => e.color && !e.hidden)
+                                    .map((e) => e.color!)
+                                    .filter(Boolean),
+                            ]}
+                            onPick={(c) => {
+                                setFillHidden(false);
+                                if (fillKey === "color") patch({ color: c });
+                                else patch({ backgroundColor: c, backgroundImage: "none" });
+                            }}
+                        />
+
                         <ExportSection />
                     </>
                 )}
             </div>
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-subtle px-3 py-2">
-                {pending.length ? (
-                    <span className="text-sm text-text-muted">{designPendingCountLabel(pending.length)}</span>
-                ) : null}
+            <div className="flex h-11 shrink-0 items-center gap-1 border-t border-border-subtle px-2">
+                <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
+                    {pending.length ? designPendingCountLabel(pending.length) : null}
+                </span>
                 <Button
                     type="button"
-                    size="sm"
-                    variant="secondary"
+                    size="icon"
+                    variant="ghost"
+                    title="Redo"
+                    onClick={() => applyHistory(historyRedo(), "after")}
+                >
+                    <Icon icon={RiArrowGoForwardLine} />
+                </Button>
+                <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    title="Reset"
+                    onClick={() => {
+                        bridge?.reset();
+                        clearDesignPending();
+                        clearHistory();
+                    }}
+                >
+                    <Icon icon={RiRefreshLine} />
+                </Button>
+                <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
                     disabled={!history?.undo.length}
                     onClick={() => applyHistory(historyUndo(), "before")}
                 >
-                    <Icon name="undo" size={14} />
+                    <Icon icon={RiArrowGoBackLine} />
                     Undo
                 </Button>
                 <Button
                     type="button"
-                    size="sm"
+                    size="xs"
                     onClick={() => void apply()}
                     disabled={applying || pending.length === 0}
                 >

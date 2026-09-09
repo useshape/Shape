@@ -1,5 +1,6 @@
 "use client";
 
+import { RiGlobalLine } from "@remixicon/react";
 import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { faviconUrl, hostnameOf } from "@/lib/favicon";
@@ -19,7 +20,7 @@ export function Favicon({
     const host = hostnameOf(url);
 
     if (!src || failed || !host) {
-        return <Icon name="public" size={size} className={cn("shrink-0 text-text-muted", className)} />;
+        return <Icon icon={RiGlobalLine} size={size} className={cn("shrink-0 text-text-muted", className)} />;
     }
 
     return (

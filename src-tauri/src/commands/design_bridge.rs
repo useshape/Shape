@@ -1,10 +1,23 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::Mutex;
 
 use tauri::{AppHandle, Manager};
 
 use crate::core::error::AppError;
 
-static INSTALLED: AtomicBool = AtomicBool::new(false);
+struct BridgeInstall {
+    hash: u64,
+    script_id: Option<String>,
+}
+
+static INSTALL: Mutex<Option<BridgeInstall>> = Mutex::new(None);
+
+fn script_hash(script: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    script.hash(&mut hasher);
+    hasher.finish()
+}
 
 fn wrap_iframe_only(script: &str) -> String {
     format!(
@@ -20,7 +33,15 @@ try {{
   var path = String(loc.pathname || "");
   if (path.indexOf("/_next") === 0 || path.indexOf("/onboarding") === 0) return;
 }} catch (e) {{ return; }}
-{script}
+function boot() {{{script}
+}}
+// DocumentCreated is too early: wrapping fetch/history and appending overlay
+// nodes before React hydrates leaves Next/Vite previews as a white canvas.
+if (document.readyState === "complete") {{
+  setTimeout(boot, 0);
+}} else {{
+  window.addEventListener("load", function () {{ setTimeout(boot, 0); }});
+}}
 }})();"#
     )
 }
@@ -29,24 +50,34 @@ try {{
 /// The preview iframe keeps its real localhost URL — no proxy, no reload-to-proxy.
 #[tauri::command]
 pub fn register_design_bridge(app: AppHandle, script: String) -> Result<(), AppError> {
-    if INSTALLED.swap(true, Ordering::SeqCst) {
-        return Ok(());
-    }
+    let wrapped = wrap_iframe_only(&script);
+    let hash = script_hash(&wrapped);
+    let previous_id = {
+        let mut guard = INSTALL.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.as_ref().is_some_and(|st| st.hash == hash) {
+            return Ok(());
+        }
+        let prev = guard.take().and_then(|st| st.script_id);
+        *guard = Some(BridgeInstall {
+            hash,
+            script_id: None,
+        });
+        prev
+    };
     let Some(win) = app.get_webview_window("main") else {
-        INSTALLED.store(false, Ordering::SeqCst);
+        *INSTALL.lock().unwrap_or_else(|e| e.into_inner()) = None;
         return Ok(());
     };
-    let wrapped = wrap_iframe_only(&script);
     win.with_webview(move |webview| {
         #[cfg(windows)]
-        if let Err(err) = install_on_windows(&webview, &wrapped) {
+        if let Err(err) = install_on_windows(&webview, &wrapped, previous_id) {
             log::warn!("design bridge inject failed: {err}");
-            INSTALLED.store(false, Ordering::SeqCst);
+            *INSTALL.lock().unwrap_or_else(|e| e.into_inner()) = None;
         }
         #[cfg(not(windows))]
         {
-            let _ = (webview, wrapped);
-            INSTALLED.store(false, Ordering::SeqCst);
+            let _ = (webview, wrapped, previous_id);
+            *INSTALL.lock().unwrap_or_else(|e| e.into_inner()) = None;
         }
     })
     .map_err(|e| AppError::Message(e.to_string()))
@@ -67,6 +98,7 @@ pub fn design_mode_log(level: String, message: String) {
 fn install_on_windows(
     webview: &tauri::webview::PlatformWebview,
     script: &str,
+    previous_id: Option<String>,
 ) -> Result<(), String> {
     use webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler;
     use windows_core::HSTRING;
@@ -74,8 +106,22 @@ fn install_on_windows(
     unsafe {
         let controller = webview.controller();
         let core = controller.CoreWebView2().map_err(|e| e.to_string())?;
-        let handler =
-            AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_hr, _id| Ok(())));
+        if let Some(id) = previous_id {
+            let _ = core.RemoveScriptToExecuteOnDocumentCreated(&HSTRING::from(id));
+        }
+        let handler = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(
+            |_hr, id| {
+                let script_id = id.to_string();
+                if !script_id.is_empty() {
+                    if let Ok(mut guard) = INSTALL.lock() {
+                        if let Some(st) = guard.as_mut() {
+                            st.script_id = Some(script_id);
+                        }
+                    }
+                }
+                Ok(())
+            },
+        ));
         core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(script), &handler)
             .map_err(|e| e.to_string())?;
     }

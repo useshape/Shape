@@ -1,3 +1,6 @@
+"use client";
+
+import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiAtLine, RiChat3Line, RiCheckLine, RiCodeLine, RiGitBranchLine, RiListCheck3, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiShieldLine, RiTerminalBoxLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -30,7 +33,8 @@ import {
     ComposerTasksStrip,
     type ComposerTaskItem,
 } from "./activity";
-import { ComposerAttachments, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
+import { QueuedMessagesPanel, type QueuedMessage } from "./queue";
+import { ComposerAttachments, ComposerAttachmentsStrip, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
 import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText } from "@/lib/chat-mentions";
 import { FileIcon } from "@/components/ui/file-icon";
@@ -76,6 +80,9 @@ type ChatInputProps = {
     onAcceptEdit?: (id: string) => void;
     onRejectEdit?: (id: string) => void;
     taskItems?: ComposerTaskItem[];
+    queuedMessages?: QueuedMessage[];
+    onEditQueuedMessage?: (id: string) => void;
+    onRemoveQueuedMessage?: (id: string) => void;
     /** Tighter chrome for empty-chat centered layout */
     variant?: "default" | "empty";
 };
@@ -207,7 +214,7 @@ const ModelItem = ({
                     <span className="flex-1 font-regular text-sm text-text-primary group-hover:text-text-primary transition-colors">
                         {model.name}
                     </span>
-                    {isSelected && <Icon name="check" size={14} className="text-text-primary font-bold" />}
+                    {isSelected && <Icon icon={RiCheckLine} className="text-text-primary font-bold" />}
                 </div>
             </DropdownMenuItem>
         </Tooltip>
@@ -262,11 +269,11 @@ function isAllowedFile(file: File): boolean {
 }
 
 const CHAT_MODES = [
-    { id: "Code", icon: "code", color: "#3B82F6" },
-    { id: "Ask", icon: "chat", color: "#22C55E" },
-    { id: "Plan", icon: "list_alt", color: "#A855F7" },
-    { id: "Visual", icon: "palette", color: "#EC4899" },
-    { id: "Review", icon: "security", color: "#F59E0B" },
+    { id: "Code", icon: RiCodeLine, color: "#3B82F6" },
+    { id: "Ask", icon: RiChat3Line, color: "#22C55E" },
+    { id: "Plan", icon: RiListCheck3, color: "#A855F7" },
+    { id: "Visual", icon: RiPaletteLine, color: "#EC4899" },
+    { id: "Review", icon: RiShieldLine, color: "#F59E0B" },
 ] as const;
 
 const COMPOSER_HINTS = [
@@ -278,7 +285,13 @@ const COMPOSER_HINTS = [
     "Review a PR or file for bugs and edge cases",
 ] as const;
 
-function RotatingComposerHint({ paused }: { paused: boolean }) {
+function RotatingComposerHint({
+    paused,
+    compact = false,
+}: {
+    paused: boolean;
+    compact?: boolean;
+}) {
     const [index, setIndex] = React.useState(0);
     const [phase, setPhase] = React.useState<"in" | "out" | "enter">("in");
     const indexRef = React.useRef(0);
@@ -307,7 +320,10 @@ function RotatingComposerHint({ paused }: { paused: boolean }) {
     }, [paused]);
 
     return (
-        <div className="t-composer-hint" aria-hidden>
+        <div
+            className={cn("t-composer-hint", compact && "t-composer-hint--compact")}
+            aria-hidden
+        >
             <span className="t-composer-hint__text text-sm!" data-phase={phase}>
                 {COMPOSER_HINTS[index]}
             </span>
@@ -339,10 +355,14 @@ export function ChatInput({
     onAcceptEdit,
     onRejectEdit,
     taskItems = [],
+    queuedMessages = [],
+    onEditQueuedMessage,
+    onRemoveQueuedMessage,
     variant = "default",
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
+    const compact = Boolean(settings.ai.compactComposer) && variant !== "empty";
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
     const allModels = getCatalogModels();
@@ -422,9 +442,10 @@ export function ChatInput({
         const textarea = textareaRef.current;
         if (!textarea) return;
         textarea.style.height = "auto";
-        const newHeight = Math.min(textarea.scrollHeight, 200);
+        const max = compact ? 28 : 200;
+        const newHeight = Math.min(Math.max(textarea.scrollHeight, compact ? 28 : 0), max);
         textarea.style.height = `${newHeight}px`;
-    }, [inputValue]);
+    }, [inputValue, compact]);
 
     React.useEffect(() => {
         const onFocusInput = () => textareaRef.current?.focus();
@@ -572,8 +593,8 @@ export function ChatInput({
                 <div
                     className={cn(
                         "relative flex w-full flex-col border border-border-subtle bg-surface-3 transition-colors focus-within:border-border",
-                        "rounded-[1.35rem]",
-                        dragOver && "border-accent bg-accent/5",
+                        compact ? "rounded-full h-12 px-0.5" : "rounded-[1.35rem]",
+                        dragOver && "border-border-subtle bg-surface-3/80",
                         needsSignIn && "opacity-50 cursor-not-allowed pointer-events-none",
                     )}
                     onDrop={needsSignIn ? undefined : handleDrop}
@@ -582,7 +603,7 @@ export function ChatInput({
                     onDragOver={needsSignIn ? undefined : handleDragOver}
                 >
                 {dragOver ? (
-                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-dashed border-accent/60 bg-surface-3/90">
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-border-subtle bg-surface-3/95">
                         <p className="text-sm font-medium text-text-primary">Drop files to attach</p>
                     </div>
                 ) : null}
@@ -594,27 +615,108 @@ export function ChatInput({
                     anchorRef={textareaRef}
                     caretIndex={mentionCaret}
                 />
-                <div className="flex min-h-0 flex-col overflow-hidden rounded-[inherit]">
-                <ComposerAttachments
-                    attachments={uploadedFiles}
-                    onRemove={(id) =>
-                        setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
-                    }
-                />
+                <div
+                    className={cn(
+                        "flex min-h-0 overflow-hidden rounded-[inherit]",
+                        compact ? "flex-row items-center gap-0.5 px-1.5 py-1.5" : "flex-col",
+                    )}
+                >
+                {!compact ? (
+                    <ComposerAttachments
+                        attachments={uploadedFiles}
+                        onRemove={(id) =>
+                            setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
+                        }
+                    />
+                ) : null}
 
-                <div className="relative px-4 py-3">
+                {compact ? (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                        <input
+                            type="file"
+                            id="chat-media-upload"
+                            className="hidden"
+                            multiple
+                            accept={acceptString}
+                            onChange={handleFilteredFileUpload}
+                        />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild disabled={needsSignIn}>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    disabled={needsSignIn}
+                                    className="size-8 justify-center rounded-full px-0 font-medium"
+                                    style={{
+                                        backgroundColor: `${selectedModeInfo.color}22`,
+                                        color: selectedModeInfo.color,
+                                    }}
+                                    aria-label={selectedModeInfo.id}
+                                >
+                                    <Icon icon={selectedModeInfo.icon} />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48">
+                                {CHAT_MODES.map((mode) => (
+                                    <DropdownMenuItem
+                                        key={mode.id}
+                                        onClick={() => setSelectedMode(mode.id)}
+                                    >
+                                        <Icon
+                                            icon={mode.icon}
+                                            style={{ color: mode.color }}
+                                        />
+                                        <span className="flex-1">{mode.id}</span>
+                                        {selectedMode === mode.id ? (
+                                            <Icon icon={RiCheckLine} className="text-text-muted" />
+                                        ) : null}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            disabled={needsSignIn}
+                            onClick={() => document.getElementById("chat-media-upload")?.click()}
+                            className="size-8 ml-1 shrink-0 p-0 rounded-full text-text-muted hover:text-text-primary"
+                            aria-label="Attach file"
+                        >
+                            <Icon icon={RiAddLine} />
+                        </Button>
+                    </div>
+                ) : null}
+
+                <div className={cn("relative", compact ? "flex h-7 min-w-0 flex-1 items-center px-1.5" : "px-4 py-3")}>
                     {!needsSignIn && !inputValue ? (
-                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0">
-                            <RotatingComposerHint paused={false} />
+                        <div
+                            className={cn(
+                                "pointer-events-none absolute z-0",
+                                compact ? "inset-0 flex items-center overflow-hidden" : "inset-x-4 inset-y-3",
+                            )}
+                        >
+                            <RotatingComposerHint paused={false} compact={compact} />
                         </div>
                     ) : needsSignIn && !inputValue ? (
-                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 text-sm font-medium leading-relaxed text-text-muted">
+                        <div
+                            className={cn(
+                                "pointer-events-none absolute z-0 text-sm font-medium text-text-muted",
+                                compact
+                                    ? "inset-0 flex items-center"
+                                    : "inset-x-4 inset-y-3 leading-relaxed",
+                            )}
+                        >
                             Sign in to use the chat
                         </div>
                     ) : null}
                     <div
                         aria-hidden
-                        className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 overflow-hidden whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-text-primary"
+                        className={cn(
+                            "pointer-events-none absolute z-0 overflow-hidden whitespace-pre-wrap break-words text-sm font-medium text-text-primary",
+                            compact
+                                ? "inset-0 leading-7"
+                                : "inset-x-4 inset-y-3 leading-relaxed",
+                        )}
                     >
                         {(() => {
                             const ranges = mentionRanges(inputValue);
@@ -644,22 +746,23 @@ export function ChatInput({
                                                 <Favicon url={mention.path || label} size={12} />
                                             ) : (
                                                 <Icon
-                                                    name={
+                                                    icon={
                                                         mention.kind === "chat"
-                                                            ? "chat"
+                                                            ? RiChat3Line
                                                             : mention.kind === "design"
-                                                              ? "palette"
+                                                              ? RiPaletteLine
                                                               : mention.kind === "terminal"
-                                                                ? "terminal"
+                                                                ? RiTerminalBoxLine
                                                                 : mention.kind === "branch"
-                                                                  ? "account_tree"
+                                                                  ? RiGitBranchLine
                                                                   : mention.kind === "codebase"
-                                                                    ? "search"
+                                                                    ? RiSearchLine
                                                                     : mention.kind === "selection"
-                                                                      ? "code"
-                                                                      : "alternate_email"
+                                                                      ? RiCodeLine
+                                                                      : mention.kind === "mcp"
+                                                                        ? RiPuzzle2Line
+                                                                        : RiAtLine
                                                     }
-                                                    size={12}
                                                 />
                                             )}
                                         </span>
@@ -704,7 +807,10 @@ export function ChatInput({
                                         : COMPOSER_HINTS[0]
                                 }
                                 rows={1}
-                                className="relative z-[1] min-h-7 w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium leading-relaxed text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30"
+                                className={cn(
+                                    "relative z-[1] w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30",
+                                    compact ? "h-7 min-h-7 max-h-7 p-0 leading-7" : "min-h-7 leading-relaxed",
+                                )}
                                 style={{ caretColor: "var(--text-primary)" }}
                             />
                         </ContextMenuTrigger>
@@ -758,7 +864,13 @@ export function ChatInput({
                     </ContextMenu>
                 </div>
 
-                <div className="flex items-center justify-between px-2 pb-2 pt-0">
+                <div
+                    className={cn(
+                        "flex items-center",
+                        compact ? "shrink-0 gap-0.5" : "justify-between px-2 pb-2 pt-0",
+                    )}
+                >
+                    {!compact ? (
                     <div className="flex min-w-0 items-center gap-0.5">
                         <input
                             type="file"
@@ -775,7 +887,7 @@ export function ChatInput({
                             className="size-8 shrink-0 p-0 text-text-muted hover:text-text-primary"
                             aria-label="Attach file"
                         >
-                            <Icon name="add" size={16} />
+                            <Icon icon={RiAddLine} />
                         </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild disabled={needsSignIn}>
@@ -788,11 +900,12 @@ export function ChatInput({
                                         backgroundColor: `${selectedModeInfo.color}22`,
                                         color: selectedModeInfo.color,
                                     }}
+                                    aria-label={selectedModeInfo.id}
                                 >
                                     <div className="flex items-center gap-1.5 text-sm">
-                                        <Icon name={selectedModeInfo.icon} size={14} />
+                                        <Icon icon={selectedModeInfo.icon} />
                                         <span className="truncate">{selectedModeInfo.id}</span>
-                                        <Icon name="expand_more" size={14} className="opacity-70" />
+                                        <Icon icon={RiArrowDownSLine} className="text-text-muted" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
@@ -803,19 +916,19 @@ export function ChatInput({
                                         onClick={() => setSelectedMode(mode.id)}
                                     >
                                         <Icon
-                                            name={mode.icon}
-                                            size={14}
+                                            icon={mode.icon}
                                             style={{ color: mode.color }}
                                         />
                                         <span className="flex-1">{mode.id}</span>
                                         {selectedMode === mode.id ? (
-                                            <Icon name="check" size={14} className="text-text-muted" />
+                                            <Icon icon={RiCheckLine} className="text-text-muted" />
                                         ) : null}
                                     </DropdownMenuItem>
                                 ))}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
+                    ) : null}
 
                     <div className="flex shrink-0 items-center gap-0.5">
                         <DropdownMenu>
@@ -824,22 +937,54 @@ export function ChatInput({
                                     variant="ghost"
                                     size="xs"
                                     disabled={needsSignIn}
-                                    className="h-8 max-w-[200px] rounded-full px-2 font-medium"
+                                    className={cn(
+                                        "h-8 rounded-full font-medium",
+                                        compact
+                                            ? "flex size-8 max-w-none items-center justify-center px-0"
+                                            : "max-w-[200px] px-2",
+                                    )}
+                                    aria-label={
+                                        selectedModel === "auto" || modelInfo.name === "auto"
+                                            ? "Auto"
+                                            : modelInfo.name
+                                    }
                                 >
-                                    <div className="flex min-w-0 items-center gap-1 text-sm">
-                                        {providerIcon(
-                                            selectedModel === "auto" ? AUTO_DISPLAY_MODEL : selectedModel,
-                                            14,
+                                    <div
+                                        className={cn(
+                                            "flex min-w-0 items-center text-sm",
+                                            compact ? "justify-center gap-0" : "gap-1",
                                         )}
-                                        <span className="truncate text-text-primary">
-                                            {selectedModel === "auto" || modelInfo.name === "auto"
-                                                ? "Auto"
-                                                : modelInfo.name}
-                                        </span>
-                                        <span className="shrink-0 text-text-muted">
-                                            {effortFastLabel(reasoningEffort, fastMode)}
-                                        </span>
-                                        <Icon name="expand_more" size={14} className="shrink-0 opacity-70 text-text-muted" />
+                                    >
+                                        {compact ? (
+                                            <span className="inline-flex size-[16px] shrink-0 items-center justify-center [&>svg]:block">
+                                                {providerIcon(
+                                                    selectedModel === "auto"
+                                                        ? AUTO_DISPLAY_MODEL
+                                                        : selectedModel,
+                                                    16,
+                                                )}
+                                            </span>
+                                        ) : (
+                                            providerIcon(
+                                                selectedModel === "auto"
+                                                    ? AUTO_DISPLAY_MODEL
+                                                    : selectedModel,
+                                                14,
+                                            )
+                                        )}
+                                        {!compact ? (
+                                            <>
+                                                <span className="truncate text-text-primary">
+                                                    {selectedModel === "auto" || modelInfo.name === "auto"
+                                                        ? "Auto"
+                                                        : modelInfo.name}
+                                                </span>
+                                                <span className="shrink-0 text-text-muted">
+                                                    {effortFastLabel(reasoningEffort, fastMode)}
+                                                </span>
+                                                <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
+                                            </>
+                                        ) : null}
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
@@ -872,7 +1017,7 @@ export function ChatInput({
                                             >
                                                 <span className="flex-1 text-sm">{opt.label}</span>
                                                 {reasoningEffort === opt.id ? (
-                                                    <Icon name="check" size={14} />
+                                                    <Icon icon={RiCheckLine} />
                                                 ) : null}
                                             </DropdownMenuItem>
                                         ))}
@@ -926,17 +1071,10 @@ export function ChatInput({
                         </DropdownMenu>
 
                         {shapeAuth.loggedIn ? (
-                            <Tooltip
-                                content={
-                                    <span className="whitespace-nowrap text-sm leading-4 text-text-primary">
-                                        {usageDisplay.tooltip}
-                                    </span>
-                                }
-                                className="rounded-xl bg-surface-3 px-2.5 py-1.5"
-                            >
+                            <Tooltip content={usageDisplay.tooltip}>
                                 <button
                                     type="button"
-                                    className="flex size-7 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary"
+                                    className="flex size-8 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary"
                                     onClick={() =>
                                         void import("@/lib/open-settings").then(({ openSettingsWindow }) =>
                                             openSettingsWindow({ category: "general" }),
@@ -944,17 +1082,25 @@ export function ChatInput({
                                     }
                                     aria-label={usageDisplay.tooltip}
                                 >
-                                    <UsageRing percent={usageDisplay.percent} size={14} />
+                                    <UsageRing percent={usageDisplay.percent} size={16} />
                                 </button>
                             </Tooltip>
                         ) : null}
                         <button
                             type="button"
-                            onClick={isLoading ? onStopMessage : () => onSendMessage()}
+                            onClick={() => {
+                                if (isLoading && inputValue.trim()) {
+                                    onSendMessage();
+                                } else if (isLoading) {
+                                    onStopMessage();
+                                } else {
+                                    onSendMessage();
+                                }
+                            }}
                             disabled={
                                 needsSignIn ||
-                                (!isLoading && !inputValue.trim() && uploadedFiles.length === 0) ||
-                                uploadedFiles.some((a) => a.status === "processing")
+                                uploadedFiles.some((a) => a.status === "processing") ||
+                                (!isLoading && !inputValue.trim() && uploadedFiles.length === 0)
                             }
                             className={cn(
                                 "flex size-8 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40",
@@ -963,12 +1109,35 @@ export function ChatInput({
                                     ? "bg-accent text-white hover:opacity-90"
                                     : "bg-panel-hover text-text-muted",
                             )}
-                            aria-label={isLoading ? "Stop" : "Send"}
+                            aria-label={
+                                isLoading && inputValue.trim()
+                                    ? "Queue message"
+                                    : isLoading
+                                      ? "Stop"
+                                      : "Send"
+                            }
                         >
-                            {isLoading ? (
-                                <div className="size-2.5 animate-pulse rounded-[2px] bg-current" />
+                            {isLoading && !inputValue.trim() ? (
+                                <span
+                                    className="send-spiral relative inline-block size-4"
+                                    role="status"
+                                    aria-label="Generating"
+                                >
+                                    {Array.from({ length: 8 }, (_, index) => (
+                                        <span
+                                            key={index}
+                                            aria-hidden
+                                            className="send-spiral-dot absolute inline-block rounded-full bg-current"
+                                            style={
+                                                {
+                                                    "--spiral-i": index,
+                                                } as React.CSSProperties
+                                            }
+                                        />
+                                    ))}
+                                </span>
                             ) : (
-                                <Icon name="arrow_upward" size={16} />
+                                <Icon icon={RiArrowUpLine} />
                             )}
                         </button>
                     </div>
@@ -981,27 +1150,39 @@ export function ChatInput({
         <div
             className={cn(
                 "relative shrink-0 overflow-visible",
-                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-3 pb-3 pt-1",
+                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-1",
             )}
         >
-            {/* Morph pills float above the input (items-end so open morph grows up, never into input). */}
             <div className="relative z-10 overflow-visible">
-                {(pendingEdits.length > 0 || taskItems.length > 0) ? (
-                    <div className="pointer-events-none absolute bottom-full left-2 z-30 mb-2 flex flex-wrap items-end gap-1.5">
-                        <div className="pointer-events-auto flex flex-wrap items-end gap-1.5">
-                            {pendingEdits.length > 0 && onAcceptAllEdits && onRejectAllEdits ? (
-                                <PendingEditsPanel
-                                    edits={pendingEdits}
-                                    onAcceptAll={onAcceptAllEdits}
-                                    onRejectAll={onRejectAllEdits}
-                                    onAccept={onAcceptEdit}
-                                    onReject={onRejectEdit}
-                                />
-                            ) : null}
-                            {taskItems.length > 0 ? (
-                                <ComposerTasksStrip items={taskItems} />
-                            ) : null}
-                        </div>
+                {(pendingEdits.length > 0 || taskItems.length > 0 || queuedMessages.length > 0 || (compact && uploadedFiles.length > 0)) ? (
+                    <div className="mb-2 flex flex-wrap items-end justify-start gap-1.5 pr-1">
+                        {pendingEdits.length > 0 && onAcceptAllEdits && onRejectAllEdits ? (
+                            <PendingEditsPanel
+                                edits={pendingEdits}
+                                onAcceptAll={onAcceptAllEdits}
+                                onRejectAll={onRejectAllEdits}
+                                onAccept={onAcceptEdit}
+                                onReject={onRejectEdit}
+                            />
+                        ) : null}
+                        {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
+                            <QueuedMessagesPanel
+                                items={queuedMessages}
+                                onEdit={onEditQueuedMessage}
+                                onRemove={onRemoveQueuedMessage}
+                            />
+                        ) : null}
+                        {taskItems.length > 0 ? (
+                            <ComposerTasksStrip items={taskItems} />
+                        ) : null}
+                        {compact && uploadedFiles.length > 0 ? (
+                            <ComposerAttachmentsStrip
+                                attachments={uploadedFiles}
+                                onRemove={(id) =>
+                                    setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
+                                }
+                            />
+                        ) : null}
                     </div>
                 ) : null}
                 {needsSignIn ? (

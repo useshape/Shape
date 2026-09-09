@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowLeftLine, RiExternalLinkLine, RiGitCommitLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -362,7 +363,7 @@ export function GitHubDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon name="arrow_back" size={16} />
+                            <Icon icon={RiArrowLeftLine} />
                         </Button>
                     ) : null}
                 </div>
@@ -474,7 +475,7 @@ export function GitHubDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon name="arrow_back" size={16} />
+                            <Icon icon={RiArrowLeftLine} />
                         </Button>
                     ) : null}
                     <div className="min-w-0 flex-1">
@@ -580,7 +581,7 @@ export function GitHubDetailPane({
                                     if (url) void commands.openUrlExternal(url);
                                 }}
                             >
-                                <Icon name="open_in_new" size={14} />
+                                <Icon icon={RiExternalLinkLine} />
                                 Open on GitHub
                             </Button>
                         ) : null}
@@ -689,8 +690,7 @@ export function GitHubDetailPane({
                                                     title="Open commit on GitHub"
                                                 >
                                                     <Icon
-                                                        name="commit"
-                                                        size={14}
+                                                        icon={RiGitCommitLine}
                                                         className="shrink-0 text-text-muted"
                                                     />
                                                     <span className="min-w-0 flex-1 truncate text-sm">
@@ -733,9 +733,7 @@ export function GitHubDetailPane({
                                                         onClick={() => openUrl(run.html_url)}
                                                     >
                                                         <Icon
-                                                            name={icon.name}
-                                                            filled={icon.filled}
-                                                            size={14}
+                                                            icon={icon.icon}
                                                             className={cn(
                                                                 "shrink-0",
                                                                 statusTone(

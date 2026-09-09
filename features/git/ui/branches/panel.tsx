@@ -1,5 +1,6 @@
 "use client";
 
+import { RiAddLine, RiArrowRightSLine, RiCloseLine, RiCloudLine, RiCloudOffLine, RiGitBranchLine, RiLayoutBottomLine, RiLayoutColumnLine, RiRefreshLine, RiUploadLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
@@ -132,8 +133,7 @@ function BranchRow({
                     )}
                 >
                     <Icon
-                        name={item.kind === "remote" ? "cloud" : "account_tree"}
-                        size={15}
+                        icon={item.kind === "remote" ? RiCloudLine : RiGitBranchLine}
                         className={cn("shrink-0", isCurrent ? "text-accent" : "text-text-muted")}
                     />
                     <div className="min-w-0 flex-1">
@@ -192,8 +192,7 @@ function SectionHeader({
             className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
         >
             <Icon
-                name="chevron_right"
-                size={14}
+                icon={RiArrowRightSLine}
                 className={cn(
                     "shrink-0 transition-transform duration-200 ease-[var(--ease-out)]",
                     open && "rotate-90",
@@ -593,22 +592,22 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                 </FadeTruncate>
                 <Tooltip content="Fetch">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitFetch(project_path).then(refresh)} disabled={loading}>
-                        <Icon name="sync" size={15} />
+                        <Icon icon={RiRefreshLine} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Pull">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPull(project_path).then(refresh)} disabled={loading}>
-                        <Icon name="cloud_download" size={15} />
+                        <Icon icon={RiCloudOffLine} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Push">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPush(project_path)} disabled={loading}>
-                        <Icon name="cloud_upload" size={15} />
+                        <Icon icon={RiUploadLine} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Refresh">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={loading}>
-                        <Icon name="refresh" size={15} />
+                        <Icon icon={RiRefreshLine} />
                     </Button>
                 </Tooltip>
             </div>
@@ -616,7 +615,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
             <div className="shrink-0 px-2.5 py-2">
                 <div className="flex items-center gap-2">
                     <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5">
-                        <Icon name="add" size={14} className="shrink-0 text-text-muted" />
+                        <Icon icon={RiAddLine} className="shrink-0 text-text-muted" />
                         <Input
                             value={newBranchName}
                             onChange={(e) => setNewBranchName(e.target.value)}
@@ -718,14 +717,13 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                                                 className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
                                             >
                                                 <Icon
-                                                    name="chevron_right"
-                                                    size={14}
+                                                    icon={RiArrowRightSLine}
                                                     className={cn(
                                                         "transition-transform duration-200 ease-[var(--ease-out)]",
                                                         open && "rotate-90",
                                                     )}
                                                 />
-                                                <Icon name="cloud" size={14} />
+                                                <Icon icon={RiCloudLine} />
                                                 <span className="flex-1 truncate font-medium">{remote}</span>
                                                 <span className="text-xs tabular-nums">{fullCount}</span>
                                             </button>
@@ -775,8 +773,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                 <>
                     <div className="flex h-9 shrink-0 items-center gap-2 px-3">
                         <Icon
-                            name={selectedItem.kind === "remote" ? "cloud" : "account_tree"}
-                            size={15}
+                            icon={selectedItem.kind === "remote" ? RiCloudLine : RiGitBranchLine}
                             className="shrink-0 text-text-muted"
                         />
                         <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
@@ -796,7 +793,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                                     className="h-6 w-6 shrink-0 p-0"
                                     onClick={clearCompare}
                                 >
-                                    <Icon name="close" size={15} />
+                                    <Icon icon={RiCloseLine} />
                                 </Button>
                             </Tooltip>
                         ) : null}
@@ -960,8 +957,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                                                     onClick={() => setSideBySide((v) => !v)}
                                                 >
                                                     <Icon
-                                                        name={sideBySide ? "split_horizontal" : "vertical_split"}
-                                                        size={15}
+                                                        icon={sideBySide ? RiLayoutBottomLine : RiLayoutColumnLine}
                                                     />
                                                 </Button>
                                             </Tooltip>

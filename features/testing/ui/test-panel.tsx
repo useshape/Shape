@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine, RiArrowRightSLine, RiBugLine, RiCheckboxBlankCircleLine, RiCheckboxCircleLine, RiCloseCircleLine, RiFileTextLine, RiPlayFill, RiRefreshLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useProjectState } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
@@ -17,16 +18,16 @@ import type { TestCase, TestStatus } from "../types";
 function StatusIcon({ status }: { status: TestStatus }) {
     switch (status) {
         case "passed":
-            return <Icon name="check_circle" size={14} className="text-success shrink-0" />;
+            return <Icon icon={RiCheckboxCircleLine} className="text-success shrink-0" />;
         case "failed":
-            return <Icon name="error" size={14} className="text-error shrink-0" />;
+            return <Icon icon={RiCloseCircleLine} className="text-error shrink-0" />;
         case "running":
-            return <Icon name="sync" size={14} className="text-info shrink-0 animate-spin" />;
+            return <Icon icon={RiRefreshLine} className="text-info shrink-0 animate-spin" />;
         case "skipped":
         case "pending":
-            return <Icon name="radio_button_unchecked" size={14} className="text-text-muted shrink-0" />;
+            return <Icon icon={RiCheckboxBlankCircleLine} className="text-text-muted shrink-0" />;
         default:
-            return <Icon name="circle" size={14} className="text-text-muted shrink-0" />;
+            return <Icon icon={RiCheckboxBlankCircleLine} className="text-text-muted shrink-0" />;
     }
 }
 
@@ -113,7 +114,7 @@ export default function TestPanel() {
                     disabled={!project_path || !hasFramework || running}
                     onClick={handleRunAll}
                 >
-                    <Icon name="play_arrow" size={14} />
+                    <Icon icon={RiPlayFill} />
                     Run All
                 </Button>
                 <Button
@@ -123,7 +124,7 @@ export default function TestPanel() {
                     disabled={!project_path || !hasFramework || running || !hasFailed}
                     onClick={handleRunFailed}
                 >
-                    <Icon name="bug_report" size={14} />
+                    <Icon icon={RiBugLine} />
                     Run Failed
                 </Button>
                 <div className="flex-1" />
@@ -161,11 +162,10 @@ export default function TestPanel() {
                                 onClick={() => toggleFile(suite.file)}
                             >
                                 <Icon
-                                    name={expanded ? "expand_more" : "chevron_right"}
-                                    size={14}
+                                    icon={expanded ? RiArrowDownSLine : RiArrowRightSLine}
                                     className="text-text-muted shrink-0"
                                 />
-                                <Icon name="description" size={14} className="text-text-muted shrink-0" />
+                                <Icon icon={RiFileTextLine} className="text-text-muted shrink-0" />
                                 <span className="flex-1 truncate text-sm text-text-primary">{suite.name}</span>
                                 <span className="text-xs text-text-muted">
                                     {suite.passed}/{suite.tests.length}

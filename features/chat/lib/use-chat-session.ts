@@ -113,6 +113,10 @@ export function useChatSession() {
             return "";
         }
     });
+    const [messageQueue, setMessageQueue] = React.useState<{ id: string; content: string }[]>([]);
+    const messageQueueRef = React.useRef(messageQueue);
+    messageQueueRef.current = messageQueue;
+    const editingQueueIdRef = React.useRef<string | null>(null);
     const {
         messages,
         setMessages,
@@ -124,6 +128,9 @@ export function useChatSession() {
         setContextSummarized,
         syncFromBackend,
         appendUserOptimistic,
+        setViewingConversation,
+        resumeLiveConversation,
+        stopLiveTurn,
     } = useChatStream();
     const [recentConvs, setRecentConvs] = React.useState<Conversation[]>([]);
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
@@ -255,6 +262,12 @@ export function useChatSession() {
         if (!tabsReady) return;
         writePersistedChatTabs(project_path, openChatTabs, activeChatTabId);
     }, [tabsReady, project_path, openChatTabs, activeChatTabId]);
+
+    React.useEffect(() => {
+        window.dispatchEvent(
+            new CustomEvent("shape-chat-active", { detail: { id: activeChatTabId } }),
+        );
+    }, [activeChatTabId]);
 
     React.useEffect(() => {
         const models = [
@@ -638,24 +651,55 @@ export function useChatSession() {
             window.removeEventListener("shape-editor-edit-action", handleEditorEditAction as EventListener);
     }, []);
 
+    const inputValueRef = React.useRef(inputValue);
     React.useEffect(() => {
-        const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            if (e.ctrlKey && e.key === ".") {
-                e.preventDefault();
-                setSelectedMode((prev) => {
-                    if (prev === "Code") return "Ask";
-                    if (prev === "Ask") return "Plan";
-                    return "Code";
-                });
+        inputValueRef.current = inputValue;
+    }, [inputValue]);
+
+    React.useEffect(() => {
+        const persist = () => {
+            try {
+                localStorage.setItem("shape-chat-input", inputValueRef.current);
+            } catch {
+                /* ignore */
             }
         };
-        window.addEventListener("keydown", handleGlobalKeyDown);
-        return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+        // Keep draft durable across blur / close even if last keystroke missed storage.
+        window.addEventListener("pagehide", persist);
+        window.addEventListener("beforeunload", persist);
+        const onVis = () => {
+            if (document.visibilityState === "hidden") persist();
+        };
+        document.addEventListener("visibilitychange", onVis);
+        return () => {
+            window.removeEventListener("pagehide", persist);
+            window.removeEventListener("beforeunload", persist);
+            document.removeEventListener("visibilitychange", onVis);
+        };
+    }, []);
+
+    // Cycle Chat Mode via global keybinding registry (see config/keybindings.json).
+    React.useEffect(() => {
+        const onCycle = () => {
+            setSelectedMode((prev) => {
+                if (prev === "Code") return "Ask";
+                if (prev === "Ask") return "Plan";
+                return "Code";
+            });
+        };
+        window.addEventListener("shape-chat-cycle-mode", onCycle);
+        return () => window.removeEventListener("shape-chat-cycle-mode", onCycle);
     }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
         setInputValue(val);
+        const editingId = editingQueueIdRef.current;
+        if (editingId) {
+            setMessageQueue((prev) =>
+                prev.map((m) => (m.id === editingId ? { ...m, content: val } : m)),
+            );
+        }
         try {
             localStorage.setItem("shape-chat-input", val);
         } catch {
@@ -665,10 +709,43 @@ export function useChatSession() {
     };
 
     const handleSendMessageRef = React.useRef<(overrideContent?: string) => Promise<boolean>>(async () => false);
+    const handleNewChatRef = React.useRef<() => Promise<void>>(async () => {});
     const sendingInFlightRef = React.useRef(false);
 
     const handleSendMessage = async (overrideContent?: string): Promise<boolean> => {
         const messageContent = typeof overrideContent === "string" ? overrideContent : inputValue;
+        const fromQueue = typeof overrideContent === "string";
+
+        if (!fromQueue && isLoading) {
+            if (!messageContent.trim() && uploadedFiles.length === 0) return false;
+            if (uploadedFiles.length > 0) return false;
+            const editingId = editingQueueIdRef.current;
+            if (editingId) {
+                setMessageQueue((prev) =>
+                    prev.map((m) =>
+                        m.id === editingId ? { ...m, content: messageContent.trim() } : m,
+                    ),
+                );
+                setInputValue("");
+                editingQueueIdRef.current = null;
+                try {
+                    localStorage.removeItem("shape-chat-input");
+                } catch {
+                    /* ignore */
+                }
+                return true;
+            }
+            const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            setMessageQueue((prev) => [...prev, { id, content: messageContent.trim() }]);
+            setInputValue("");
+            try {
+                localStorage.removeItem("shape-chat-input");
+            } catch {
+                /* ignore */
+            }
+            return true;
+        }
+
         if (
             (!messageContent.trim() && uploadedFiles.length === 0) ||
             isLoading ||
@@ -684,6 +761,7 @@ export function useChatSession() {
 
         let userMsg = messageContent;
         setInputValue("");
+        editingQueueIdRef.current = null;
         try {
             localStorage.removeItem("shape-chat-input");
         } catch {
@@ -864,6 +942,50 @@ export function useChatSession() {
     });
 
     React.useEffect(() => {
+        if (isLoading) return;
+        const q = messageQueueRef.current;
+        if (q.length === 0) return;
+        const [next, ...rest] = q;
+        setMessageQueue(rest);
+        void handleSendMessageRef.current(next.content);
+    }, [isLoading]);
+
+    const handleEditQueuedMessage = React.useCallback((id: string) => {
+        setMessageQueue((prev) => {
+            const item = prev.find((m) => m.id === id);
+            if (item) {
+                setInputValue(item.content);
+                editingQueueIdRef.current = id;
+                try {
+                    localStorage.setItem("shape-chat-input", item.content);
+                } catch {
+                    /* ignore */
+                }
+            }
+            return prev;
+        });
+    }, []);
+
+    const handleRemoveQueuedMessage = React.useCallback((id: string) => {
+        if (editingQueueIdRef.current === id) {
+            editingQueueIdRef.current = null;
+            setInputValue("");
+            try {
+                localStorage.removeItem("shape-chat-input");
+            } catch {
+                /* ignore */
+            }
+        }
+        setMessageQueue((prev) => prev.filter((m) => m.id !== id));
+    }, []);
+
+    const handleUpdateQueuedMessage = React.useCallback((id: string, content: string) => {
+        setMessageQueue((prev) =>
+            prev.map((m) => (m.id === id ? { ...m, content: content.trim() } : m)),
+        );
+    }, []);
+
+    React.useEffect(() => {
         const handleBuildPlan = (e: Event) => {
             const custom = e as CustomEvent<{ path: string; title?: string }>;
             if (!custom.detail?.path) return;
@@ -916,9 +1038,60 @@ export function useChatSession() {
                 const msg = messagesRef.current[msgIdx];
                 if (!msg || msg.role !== "user") return;
 
+                const { confirmRestoreCheckpoint } = await import(
+                    "@/features/chat/ui/shell/checkpoint-restore-dialog"
+                );
+                if (!(await confirmRestoreCheckpoint(msgIdx))) return;
+
+                // Reverting the sole user turn empties the thread — drop the chat,
+                // but keep the restored message in the composer on home.
+                const soleUserTurn =
+                    msgIdx === 0
+                    && messagesRef.current.filter((m) => m.role === "user").length === 1;
+                if (soleUserTurn) {
+                    const {
+                        parseUserAttachments,
+                        attachmentsToComposer,
+                    } = await import("@/features/chat/lib/user-attachments");
+                    const parsed = parseUserAttachments(msg.content);
+                    const files = await attachmentsToComposer(parsed.attachments);
+
+                    await commands.restoreCheckpoint(msgIdx);
+                    clearAllDesignPreviewSessions();
+                    const convId = conversationIdRef.current;
+                    if (convId) {
+                        try {
+                            await commands.deleteConversation(convId);
+                        } catch {
+                            /* draft / already gone */
+                        }
+                    }
+                    await handleNewChatRef.current();
+                    setInputValue(parsed.text);
+                    setUploadedFiles(files);
+                    try {
+                        localStorage.setItem("shape-chat-input", parsed.text);
+                    } catch {
+                        /* ignore */
+                    }
+                    return;
+                }
+
+                const {
+                    parseUserAttachments,
+                    attachmentsToComposer,
+                } = await import("@/features/chat/lib/user-attachments");
+                const parsed = parseUserAttachments(msg.content);
+
                 await commands.restoreCheckpoint(msgIdx);
                 clearAllDesignPreviewSessions();
-                setInputValue(msg.content);
+                setInputValue(parsed.text);
+                setUploadedFiles(await attachmentsToComposer(parsed.attachments));
+                try {
+                    localStorage.setItem("shape-chat-input", parsed.text);
+                } catch {
+                    /* ignore */
+                }
                 await refreshHistory();
                 setTimeout(() => {
                     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1027,6 +1200,7 @@ export function useChatSession() {
     const handleNewChat = async () => {
         try {
             // Do not stop background generation; only the Stop button cancels.
+            setViewingConversation(null);
             await commands.newChat();
             void captureTelemetry("chat_new");
             clearAllDesignPreviewSessions();
@@ -1048,6 +1222,10 @@ export function useChatSession() {
         }
     };
 
+    React.useEffect(() => {
+        handleNewChatRef.current = handleNewChat;
+    });
+
     const handleSelectChatTab = async (tabId: string) => {
         if (tabId === activeChatTabId) return;
         setSendError(null);
@@ -1059,8 +1237,16 @@ export function useChatSession() {
             window.dispatchEvent(new CustomEvent("shape-demo-chat"));
             return;
         }
+        if (resumeLiveConversation(tabId)) {
+            setConversationId(tabId);
+            setCurrentConversationId(tabId);
+            const conv = recentConvs.find((c) => c.id === tabId);
+            syncOpenTabs(tabId, conv?.title || "Chat");
+            return;
+        }
         try {
             const conv = recentConvs.find((c) => c.id === tabId);
+            setViewingConversation(tabId);
             await commands.loadConversation(tabId, conv?.project_path ?? project_path);
             clearAllDesignPreviewSessions();
             setContextSummarized(false);
@@ -1131,6 +1317,13 @@ export function useChatSession() {
         async (id: string, options?: { force?: boolean }) => {
             const isSameConversation = id === conversationIdRef.current;
             const hasVisibleMessages = messagesRef.current.length > 0;
+            if (resumeLiveConversation(id)) {
+                setConversationId(id);
+                setCurrentConversationId(id);
+                const liveConv = recentConvs.find((c) => c.id === id);
+                syncOpenTabs(id, liveConv?.title || "Chat");
+                return;
+            }
             if (!options?.force && isSameConversation && hasVisibleMessages) return;
 
             const conv =
@@ -1140,6 +1333,7 @@ export function useChatSession() {
                     : (await commands.getConversations()).find((c) => c.id === id));
 
             try {
+                setViewingConversation(id);
                 await commands.loadConversation(id, conv?.project_path ?? project_path);
                 clearAllDesignPreviewSessions();
                 setContextSummarized(false);
@@ -1154,7 +1348,7 @@ export function useChatSession() {
                 await refreshMetadata();
             }
         },
-        [refreshHistory, recentConvs, project_path, refreshMetadata, setMessages, setContextSummarized],
+        [refreshHistory, recentConvs, project_path, refreshMetadata, setMessages, setContextSummarized, resumeLiveConversation, setViewingConversation, syncOpenTabs],
     );
 
     React.useEffect(() => {
@@ -1211,8 +1405,14 @@ export function useChatSession() {
     const handleStopMessage = async () => {
         if (stoppingRef.current) return;
         stoppingRef.current = true;
+        stopLiveTurn();
         try {
+            const convId = conversationIdRef.current;
             await commands.stopChatMessage();
+            if (convId) {
+                const { setChatGenerating } = await import("@/features/chat/lib/generating-chats");
+                setChatGenerating(convId, false);
+            }
             void captureTelemetry("chat_stopped", {
                 mode: selectedMode,
                 model: selectedModel,
@@ -1275,5 +1475,9 @@ export function useChatSession() {
         handleStopMessage,
         messageGroups,
         refreshHistory,
+        messageQueue,
+        handleEditQueuedMessage,
+        handleRemoveQueuedMessage,
+        handleUpdateQueuedMessage,
     };
 }

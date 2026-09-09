@@ -375,6 +375,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                     path={path}
                     originalContent={diffState.original}
                     content={diffState.replacement}
+                    mode="unified"
                 />
             );
         }
@@ -383,6 +384,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                 path={path}
                 originalContent={originalContent}
                 content={content}
+                mode="unified"
             />
         );
     };

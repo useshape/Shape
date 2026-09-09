@@ -185,10 +185,11 @@ const URL_HINTS: Record<string, string> = {
 };
 
 function detectLockfilePm(names: string[]): PackageManager | null {
+    // Prefer npm when both locks exist — common on Windows and matches package-lock installs.
+    if (names.includes("package-lock.json")) return "npm";
     if (names.includes("bun.lockb") || names.includes("bun.lock")) return "bun";
     if (names.includes("pnpm-lock.yaml") || names.includes("pnpm-workspace.yaml")) return "pnpm";
     if (names.includes("yarn.lock")) return "yarn";
-    if (names.includes("package-lock.json")) return "npm";
     return null;
 }
 

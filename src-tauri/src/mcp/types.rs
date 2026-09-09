@@ -47,6 +47,12 @@ pub struct McpServerConfig {
     pub auth: McpAuthType,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    /// Tool names that should not be exposed to the agent.
+    #[serde(default)]
+    pub disabled_tools: Vec<String>,
+    /// Pre-registered OAuth client id when the auth server has no DCR.
+    #[serde(default)]
+    pub oauth_client_id: Option<String>,
 }
 
 fn default_enabled() -> bool {
@@ -54,6 +60,7 @@ fn default_enabled() -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct McpToolInfo {
     pub server_id: String,
     pub server_name: String,

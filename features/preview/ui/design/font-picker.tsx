@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FlyoutCard } from "./fields";
 import { ADDABLE_FONTS, injectHostFont, normalizeFontName } from "./fonts";
 import { firstFontFamily } from "../../design-mode/css";
@@ -51,11 +53,12 @@ export function FontPickerButton({
 
     return (
         <>
-            <button
+            <Button
                 ref={triggerRef}
                 type="button"
+                variant="ghost"
                 title="Font"
-                className="flex h-8 w-full min-w-0 items-center justify-between rounded-md bg-panel-hover px-2 text-left text-xs text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                className="h-7 w-full min-w-0 justify-between rounded-lg border border-border-subtle bg-input-bg px-1.5 font-normal text-sm text-text-primary hover:border-border"
                 style={{ fontFamily: family }}
                 onClick={(e) => {
                     setAnchor(e.currentTarget.getBoundingClientRect());
@@ -63,7 +66,7 @@ export function FontPickerButton({
                 }}
             >
                 <span className="truncate">{current}</span>
-            </button>
+            </Button>
             {open && anchor ? (
                 <FlyoutCard
                     title="Font"
@@ -71,43 +74,45 @@ export function FontPickerButton({
                     trigger={triggerRef.current}
                     onClose={() => setOpen(false)}
                 >
-                    <input
+                    <Input
                         type="search"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search fonts"
-                        className="h-8 w-full rounded-md bg-panel-hover px-2 text-xs text-text-primary outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                        className="h-7"
                     />
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">In use</p>
+                    <p className="text-xs text-text-muted">In use</p>
                     <div className="max-h-40 overflow-y-auto">
                         {used.length === 0 ? (
-                            <p className="px-1 py-1 text-xs text-text-muted">None detected yet</p>
+                            <p className="px-1.5 py-1 text-sm text-text-muted">None detected yet</p>
                         ) : (
                             used.map((name) => (
-                                <button
+                                <Button
                                     key={name}
                                     type="button"
-                                    className="flex h-8 w-full items-center rounded-md px-2 text-left text-xs text-text-primary hover:bg-panel-hover"
+                                    variant="ghost"
+                                    className="h-7 w-full justify-start rounded-md px-1.5 font-normal text-sm"
                                     style={{ fontFamily: name }}
                                     onClick={() => pick(name, `${name}, ui-sans-serif, system-ui, sans-serif`)}
                                 >
                                     {name}
-                                </button>
+                                </Button>
                             ))
                         )}
                     </div>
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">Addable</p>
+                    <p className="text-xs text-text-muted">Addable</p>
                     <div className="max-h-48 overflow-y-auto">
                         {addable.map((f) => (
-                            <button
+                            <Button
                                 key={f.name}
                                 type="button"
-                                className="flex h-8 w-full items-center rounded-md px-2 text-left text-xs text-text-primary hover:bg-panel-hover"
+                                variant="ghost"
+                                className="h-7 w-full justify-start rounded-md px-1.5 font-normal text-sm"
                                 style={{ fontFamily: f.stack }}
                                 onClick={() => pick(f.name, f.stack, f.google)}
                             >
                                 {f.name}
-                            </button>
+                            </Button>
                         ))}
                     </div>
                 </FlyoutCard>

@@ -1,10 +1,11 @@
 "use client";
 
+import { RiAddLine, RiCloseLine } from "@remixicon/react";
 import { useCallback } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { TabBarShell } from "@/features/editor/ui/tabs/tab-bar-shell";
 import {
@@ -30,6 +31,8 @@ export type ChatTab = {
     title: string;
     /** Models used in this chat — for tab avatar stack. */
     models?: string[];
+    /** Git status letter for file-diff tabs (A/M/D/…). */
+    gitStatus?: string;
 };
 
 /** Draft / unsaved conversation sentinel — still used by the chat session store. */
@@ -101,6 +104,30 @@ function SortableChatTab({
                     >
                         {generating ? (
                             <WorkingDots className="imsg-typing imsg-typing-sm shrink-0" />
+                        ) : tab.gitStatus ? (
+                            <span
+                                className={cn(
+                                    "flex size-3.5 shrink-0 items-center justify-center rounded-[3px] text-[10px] font-semibold leading-none",
+                                    /^(A|\?)/i.test(tab.gitStatus)
+                                        ? "bg-success/25 text-success"
+                                        : /^D/i.test(tab.gitStatus)
+                                          ? "bg-error/25 text-error"
+                                          : "bg-[color-mix(in_srgb,var(--git-modified)_35%,transparent)]",
+                                )}
+                                aria-hidden
+                            >
+                                {/^(A|\?)/i.test(tab.gitStatus)
+                                    ? "+"
+                                    : /^D/i.test(tab.gitStatus)
+                                      ? "−"
+                                      : null}
+                                {!/^(A|\?|D)/i.test(tab.gitStatus) ? (
+                                    <span
+                                        className="size-1.5 rounded-[1px]"
+                                        style={{ background: "var(--git-modified)" }}
+                                    />
+                                ) : null}
+                            </span>
                         ) : tab.models && tab.models.length > 0 ? (
                             <ModelAvatarStack models={tab.models} size={14} />
                         ) : null}
@@ -123,7 +150,7 @@ function SortableChatTab({
                                     }}
                                     className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
                                 >
-                                    <Icon name="close" size={12} />
+                                    <Icon icon={RiCloseLine} />
                                 </button>
                             </div>
                         ) : null}
@@ -222,7 +249,7 @@ export function ChatTabBar({
                     className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "ml-0.5 shrink-0 self-center")}
                     aria-label="New chat"
                 >
-                    <Icon name="add" size={ICON_SIZE_SM} />
+                    <Icon icon={RiAddLine} />
                 </button>
             }
         >

@@ -18,12 +18,18 @@ describe("usage-display", () => {
         expect(formatModelLabel("auto")).toBe("Auto");
         expect(formatModelLabel("openrouter/auto")).toBe("Auto");
         expect(formatModelLabel("anthropic/claude-sonnet-4")).toBe("Claude Sonnet 4");
+        expect(formatModelLabel("")).toBe("");
+        expect(formatModelLabel(null)).toBe("");
     });
 
-    it("shows Auto when the turn used auto routing even if model is resolved", () => {
+    it("shows Auto when Auto was selected, otherwise the concrete model name", () => {
         expect(
-            formatMessageModelLabel("deepseek/deepseek-v4-flash", { usedAuto: true }),
+            formatMessageModelLabel("google/gemini-2.5-flash", { usedAuto: true }),
         ).toBe("Auto");
+        expect(formatMessageModelLabel("auto", { usedAuto: true })).toBe("Auto");
+        expect(formatMessageModelLabel("anthropic/claude-sonnet-4", { usedAuto: false })).toBe(
+            "Claude Sonnet 4",
+        );
         expect(formatMessageModelLabel("deepseek/deepseek-v4-flash", { usedAuto: false })).toBe(
             "Deepseek V4 Flash",
         );
@@ -39,7 +45,7 @@ describe("usage-display", () => {
         expect(
             formatMessageUsageLine({ usedAuto: true, tokens: 100_000 }, "auto"),
         ).toBe("2% used");
-        expect(formatMessageUsageLine({ usedAuto: true }, "auto")).toBe("No charge");
+        expect(formatMessageUsageLine({ usedAuto: true }, "auto")).toBe("");
     });
 
     it("formats credit usage lines without tokens", () => {

@@ -7,22 +7,22 @@
   color-scheme: dark;
 
   /* ── Surface ladder ────────────────────────────────────── */
-  --surface-0: #0c0c0c;
-  --surface-1: #121212;
-  --surface-2: #1a1a1a;
-  --surface-3: #222222;
-  --surface-4: #2a2a2a;
+  --surface-0: #171717;
+  --surface-1: #1a1a1a;
+  --surface-2: #242424;
+  --surface-3: #292929;
+  --surface-4: #292929;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
-  --chrome: #141414;
-  --sidebar: #141414;
-  --editor: #181818;
+  --chrome: #171717;
+  --sidebar: #171717;
+  --editor: #171717;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #141414;
+  --panel: #171717;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.04);
@@ -40,8 +40,8 @@
   --text-active: #ffffff;
 
   /* ── Borders / stroke ──────────────────────────────────── */
-  --border: rgba(255, 255, 255, 0.075);
-  --border-subtle: rgba(255, 255, 255, 0.048);
+  --border: rgba(255, 255, 255, 0.048);
+  --border-subtle: rgba(255, 255, 255, 0.025);
   --border-secondary: rgba(255, 255, 255, 0.1);
   --stroke: 1px;
 
@@ -92,7 +92,7 @@
   --button-bg: var(--accent);
   --button-fg: var(--action-label);
   --button-hover: var(--accent-hover);
-  --button-secondary-bg: var(--surface-2);
+  --button-secondary-bg: var(--surface-1);
   --button-secondary-fg: var(--text-primary);
   --button-secondary-hover: var(--surface-3);
 
@@ -106,8 +106,8 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
-  --radius-2xl: 14px;
-  --radius-3xl: 16px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
   --radius-full: 9999px;
 
   /* Floating workbench panels (Git Manager, graph splits, etc.). */
@@ -128,16 +128,16 @@
   --titlebar-height: 34px;
   --statusbar-height: 33px;
 
-  /* ── Typography (Geist) ── */
-  --font-ui: var(--font-geist-sans), "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ── Typography (Inter) ── */
+  --font-ui: var(--font-inter), Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  /* Font rendering — Conductor-like crispness */
-  --font-smoothing: antialiased;
-  --font-smoothing-moz: grayscale;
+  /* Font rendering: subpixel like VS Code, not grayscale antialiased */
+  --font-smoothing: auto;
+  --font-smoothing-moz: auto;
 
   --text-2xs: 12px;
   --text-xs: 13px;
@@ -224,13 +224,13 @@
 /* Soft light chrome — keeps accent; flips surfaces/text. */
 [data-theme="light"] {
   color-scheme: light;
-  --surface-0: #f7f7f8;
+  --surface-0: #eeeeee;
   --surface-1: #ffffff;
-  --surface-2: #f0f0f2;
-  --surface-3: #e8e8eb;
-  --surface-4: #dedee3;
-  --chrome: #f4f4f5;
-  --sidebar: #f4f4f5;
+  --surface-2: #f5f5f5;
+  --surface-3: #f5f5f5;
+  --surface-4: #ffffff;
+  --chrome: #f8f8f8;
+  --sidebar: #f8f8f8;
   --editor: #ffffff;
   --base: #141414;
   --background: var(--chrome);
@@ -249,8 +249,8 @@
   --text-muted: #737373;
   --text-disabled: #a3a3a3;
   --text-active: #0a0a0a;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border: rgba(0, 0, 0, 0.075);
+  --border-subtle: rgba(0, 0, 0, 0);
   --border-secondary: rgba(0, 0, 0, 0.12);
 }
 
@@ -351,10 +351,13 @@
   --spacing-titlebar: var(--titlebar-height);
   --spacing-statusbar: var(--statusbar-height);
 
-  --radius-sm: var(--radius-sm);
-  --radius-md: var(--radius-md);
-  --radius-lg: var(--radius-lg);
-  --radius-xl: var(--radius-xl);
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
 
   --z-index-dropdown: var(--z-dropdown);
   --z-index-modal: var(--z-modal);
@@ -376,7 +379,8 @@
 @utility rounded-md { border-radius: var(--radius-md); }
 @utility rounded-lg { border-radius: var(--radius-lg); }
 @utility rounded-xl { border-radius: var(--radius-xl); }
-@utility rounded-2xl { border-radius: calc(var(--radius-xl) * 1.5); }
+@utility rounded-2xl { border-radius: var(--radius-2xl); }
+@utility rounded-3xl { border-radius: var(--radius-3xl); }
 @utility rounded-full { border-radius: 9999px; }
 
 /*
@@ -412,9 +416,9 @@ html {
   /* Keep rem root at 13px so Tailwind spacing (p-2, gap-3, …) matches the rest of the IDE. */
   font-size: 13px;
   font-family: var(--font-ui);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
   font-synthesis: none;
   font-synthesis-weight: none;
   font-synthesis-style: none;
@@ -429,9 +433,9 @@ body {
   color: var(--foreground);
   font-family: var(--font-ui);
   font-size: var(--text-base);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
   font-synthesis: none;
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
@@ -475,24 +479,21 @@ body {
 
 /* Monaco fills the editor pane */
 .monaco-editor,
-.monaco-editor * {
+.monaco-editor *,
+.cm-editor,
+.cm-editor * {
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
   text-rendering: auto;
   font-feature-settings: normal;
 }
 
-/* ── Icons: mute via opaque color tokens, never alpha/opacity on glyphs ─ */
 .shape-icon {
   color: inherit;
-  opacity: 1 !important;
-  shape-rendering: geometricPrecision;
-}
-
-/* Parent opacity makes Lucide stroke joins look broken — mute with color instead */
-button:disabled .shape-icon,
-[aria-disabled="true"] .shape-icon {
-  opacity: 1 !important;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ── Scrollbars: thin, no arrows, no layout gutter jump ─ */
@@ -826,12 +827,13 @@ body[data-resizing] .xterm {
 .chat-text {
   font-size: var(--chat-text);
   line-height: var(--chat-text-lh);
+  font-weight: 500;
 }
 
 /* Toast notifications — CSS transitions so stack moves stay interruptible (Sonner/shadcn). */
 .shape-toast {
   opacity: 0;
-  transform: translate3d(12px, 14px, 0) scale(0.92);
+  transform: translate3d(0, 14px, 0) scale(0.96);
   transition:
     transform 400ms cubic-bezier(0.16, 1, 0.3, 1),
     opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -845,7 +847,7 @@ body[data-resizing] .xterm {
 
 .shape-toast[data-leaving="true"] {
   opacity: 0;
-  transform: translate3d(16px, 10px, 0) scale(0.9);
+  transform: translate3d(0, 10px, 0) scale(0.96);
   pointer-events: none;
 }
 
@@ -1067,6 +1069,53 @@ body[data-resizing] .xterm {
   }
 }
 
+/* Send-button spiral loader (CSS port of Spiral; ease matches bubble dots) */
+.send-spiral {
+  flex-shrink: 0;
+}
+
+.send-spiral-dot {
+  width: 18.75%;
+  height: 18.75%;
+  translate: -50% -50%;
+  /* Soft ease matching bubble dots — avoid flat linear scale */
+  animation: send-spiral-pulse 1.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  animation-delay: calc(var(--spiral-i, 0) * 0.225s);
+}
+
+.send-spiral-dot:nth-child(1) { left: 81.25%; top: 50%; }
+.send-spiral-dot:nth-child(2) { left: 72.1%; top: 72.1%; }
+.send-spiral-dot:nth-child(3) { left: 50%; top: 81.25%; }
+.send-spiral-dot:nth-child(4) { left: 27.9%; top: 72.1%; }
+.send-spiral-dot:nth-child(5) { left: 18.75%; top: 50%; }
+.send-spiral-dot:nth-child(6) { left: 27.9%; top: 27.9%; }
+.send-spiral-dot:nth-child(7) { left: 50%; top: 18.75%; }
+.send-spiral-dot:nth-child(8) { left: 72.1%; top: 27.9%; }
+
+@keyframes send-spiral-pulse {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0.85;
+    transform: scale(0.92);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .send-spiral-dot {
+    animation: none;
+    opacity: 0.7;
+    transform: scale(0.85);
+  }
+}
+
 .wf-summary-text {
   font-size: var(--chat-text);
   line-height: var(--chat-text-lh);
@@ -1170,13 +1219,16 @@ body[data-resizing] .xterm {
   grid-template-rows: 0fr;
   opacity: 0;
   transition:
-    grid-template-rows 220ms cubic-bezier(0.33, 1, 0.68, 1),
-    opacity 180ms ease;
+    grid-template-rows 280ms var(--ease-out),
+    opacity 220ms var(--ease-out);
 }
 
 .chat-collapse[data-open="true"] {
   grid-template-rows: 1fr;
   opacity: 1;
+  transition:
+    grid-template-rows 240ms var(--ease-out),
+    opacity 180ms var(--ease-out);
 }
 
 .chat-collapse > .chat-collapse-inner {

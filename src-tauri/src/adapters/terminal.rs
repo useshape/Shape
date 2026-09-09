@@ -1,5 +1,5 @@
 use crate::core::error::AppError;
-use crate::domain::terminal::service::{self, PtyState, ShellProfile};
+use crate::domain::terminal::service::{self, PtyState, ShellProfile, TerminalSessionSnapshot};
 
 #[tauri::command]
 pub async fn pty_available_shells() -> Result<Vec<ShellProfile>, AppError> {
@@ -17,6 +17,25 @@ pub async fn pty_spawn(
     cols: u16,
 ) -> Result<u32, AppError> {
     service::pty_spawn(app, state, cwd, shell, client_id, rows, cols).await
+}
+
+#[tauri::command]
+pub async fn pty_spawn_run(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, PtyState>,
+    cwd: String,
+    command: String,
+) -> Result<u32, AppError> {
+    service::pty_spawn_run(app, state, cwd, command).await
+}
+
+#[tauri::command]
+pub async fn pty_read_output(
+    state: tauri::State<'_, PtyState>,
+    id: u32,
+    tail_chars: Option<usize>,
+) -> Result<TerminalSessionSnapshot, AppError> {
+    service::pty_read_output(state, id, tail_chars).await
 }
 
 #[tauri::command]

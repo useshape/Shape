@@ -1,3 +1,4 @@
+import { RiClipboardLine, RiExternalLinkLine, RiGitMergeLine } from "@remixicon/react";
 import React, { useState, useCallback, useRef, useMemo } from "react";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -228,7 +229,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     </Tooltip>
                                 )
                             )}
-                            {isMerge && <Icon name="merge" size={16} className="text-text-primary shrink-0 opacity-80" />}
+                            {isMerge && <Icon icon={RiGitMergeLine} className="text-text-primary shrink-0 opacity-80" />}
                             {isManager ? (
                                 <span
                                     className={cn(
@@ -300,14 +301,14 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                                 className="flex items-center gap-1.5 cursor-pointer hover:text-text-primary transition-colors py-0.5"
                                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard.writeText(log.hash); notify.success("Copied", "Commit hash copied to clipboard"); }}
                                             >
-                                                <Icon name="content_copy" size={16} />
+                                                <Icon icon={RiClipboardLine} />
                                                 <span className="text-sm font-medium select-text">{log.hash.slice(0, 7)}</span>
                                             </div>
                                             <div
                                                 className="flex items-center gap-1.5 cursor-pointer hover:text-text-primary transition-colors py-0.5"
                                                 onClick={handleOpenGitHub}
                                             >
-                                                <Icon name="open_in_new" size={16} />
+                                                <Icon icon={RiExternalLinkLine} />
                                                 <span className="text-sm">Open in GitHub</span>
                                             </div>
                                         </div>

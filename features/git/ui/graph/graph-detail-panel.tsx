@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowLeftLine, RiCloseLine, RiGitCommitLine, RiLayoutBottomLine, RiLayoutColumnLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -158,7 +159,7 @@ export function GraphDetailPanel({
     if (!selection || !log) {
         return (
             <div className="workbench-panel flex h-full flex-col items-center justify-center gap-2 border border-border-subtle bg-editor px-6 text-center text-sm text-text-muted">
-                <Icon name="commit" size={18} className="text-text-muted" />
+                <Icon icon={RiGitCommitLine} className="text-text-muted" />
                 <p>Select a commit</p>
             </div>
         );
@@ -176,7 +177,7 @@ export function GraphDetailPanel({
                             className="shrink-0"
                             onClick={onClearFile}
                         >
-                            <Icon name="arrow_back" size={14} />
+                            <Icon icon={RiArrowLeftLine} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -202,7 +203,7 @@ export function GraphDetailPanel({
                                 className="shrink-0"
                                 onClick={() => setSideBySide((v) => !v)}
                             >
-                                <Icon name={sideBySide ? "split_horizontal" : "vertical_split"} size={14} />
+                                <Icon icon={sideBySide ? RiLayoutBottomLine : RiLayoutColumnLine} />
                             </Button>
                         </Tooltip>
                     </>
@@ -259,7 +260,7 @@ export function GraphDetailPanel({
                     className="shrink-0"
                     onClick={onClose}
                 >
-                    <Icon name="close" size={14} />
+                    <Icon icon={RiCloseLine} />
                 </Button>
             </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCloseLine, RiLayoutBottomLine, RiPushpinLine, RiSettings3Line, RiSparkling2Line } from "@remixicon/react";
 import { useProjectState, commands, FileInfo, GitFileParams } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
 import { cn, getGitStatusColor } from "@/lib/utils";
@@ -30,62 +31,6 @@ import React, { useEffect, useRef, useCallback, useState, useMemo } from "react"
 import { useEditorView, ViewMode } from "@/core/providers/editor";
 import { Tooltip } from "@/components/ui/tooltip";
 import { getFileExtension, isImageExtension, isFontExtension } from "@/features/editor/lib/image-types";
-
-const AnimatedPanelIcon = ({ mode, size = 16 }: { mode: ViewMode; size?: number }) => {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            width={size}
-            height={size}
-            className={cn("bottom-toggle", mode === "split" && "is-active", mode === "preview" && "is-full")}
-        >
-            <defs>
-                <style>{`
-        .bottom-toggle {
-          cursor: pointer;
-        }
-
-        /* Base frame and line styles */
-        .outer-frame, .divider-line {
-          fill: none;
-          stroke: currentColor;
-          stroke-width: 2;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-        }
-
-        /* The solid animated area */
-        .solid-panel {
-          fill: currentColor;
-          y: 21px;
-          height: 0px; 
-          transition: y 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-
-        /* Fills upward to y=15, landing dead-center under the divider line */
-        .bottom-toggle.is-active .solid-panel {
-          y: 14px;
-          height: 7px; 
-        }
-        
-        .bottom-toggle.is-full .solid-panel {
-          y: 3px;
-          height: 18px;
-        }
-      `}</style>
-                <clipPath id="panel-clip">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                </clipPath>
-            </defs>
-
-            <rect className="solid-panel" x="3" width="18" clipPath="url(#panel-clip)" />
-            <rect className="outer-frame" x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <line className="divider-line" x1="4" y1="14" x2="20" y2="14" />
-        </svg>
-    )
-};
-
 
 import {
     ContextMenu,
@@ -193,7 +138,7 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
     };
 
     const getToggleIcon = (mode: ViewMode) => {
-        return <AnimatedPanelIcon mode={mode} size={14} />;
+        return <Icon icon={RiLayoutBottomLine} />;
     };
 
     const getToggleLabel = () => {
@@ -220,11 +165,11 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
             <div className={cn(WORKBENCH_TAB_CONTENT_CLASS, isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS)}>
             <div className="relative w-4 h-4 shrink-0 flex items-center justify-center">
                 {isDesignPreviewVirtual ? (
-                    <Icon name="auto_awesome" size={14} className="text-text-muted" />
+                    <Icon icon={RiSparkling2Line} className="text-text-muted" />
                 ) : isBrowserVirtual ? (
                     <ChromeBrowserIcon size={14} className="text-text-muted" />
                 ) : isSettingsVirtual ? (
-                    <Icon name="settings" size={14} className="text-accent" />
+                    <Icon icon={RiSettings3Line} className="text-accent" />
                 ) : (
                     <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -278,7 +223,7 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
             <div className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center">
                 {file.is_pinned ? (
                     <>
-                        <Icon name="push_pin" size={12} className="text-accent group-hover:hidden" />
+                        <Icon icon={RiPushpinLine} className="text-accent group-hover:hidden" />
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -286,7 +231,7 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
                             }}
                             className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
                         >
-                            <Icon name="close" size={12} />
+                            <Icon icon={RiCloseLine} />
                         </button>
                     </>
                 ) : (
@@ -301,7 +246,7 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
                             }}
                             className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
                         >
-                            <Icon name="close" size={12} />
+                            <Icon icon={RiCloseLine} />
                         </button>
                     </>
                 )}
@@ -335,7 +280,7 @@ function SortableTab({ file, gitStatus, isActive, onSelect, onClose, project_pat
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => commands.pinFile(file.path, !file.is_pinned)} className="flex items-center gap-2">
-                    {file.is_pinned ? <Icon name="keep_off" size={14} /> : <Icon name="push_pin" size={14} />}
+                    {file.is_pinned ? <Icon icon={RiPushpinLine} /> : <Icon icon={RiPushpinLine} />}
                     {file.is_pinned ? "Unpin" : "Pin"} <span className="ml-auto text-xs opacity-50">Ctrl+K Enter</span>
                 </ContextMenuItem>
                 <ContextMenuSeparator />

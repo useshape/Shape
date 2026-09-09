@@ -1,5 +1,6 @@
 "use client";
 
+import { RiArrowDownSLine, RiGlobalLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { Favicon } from "@/components/ui/favicon";
@@ -29,14 +30,13 @@ export function WebSearchBlock({ query, results, isActive }: {
                 className="flex items-center gap-2 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors group w-full text-left"
             >
                 <Icon
-                    name="expand_more"
-                    size={14}
+                    icon={RiArrowDownSLine}
                     className={cn(
                         "text-text-muted transition-transform duration-[var(--transition-fast)]",
                         !isOpen && "-rotate-90"
                     )}
                 />
-                <Icon name="language" size={14} className="text-text-muted" />
+                <Icon icon={RiGlobalLine} className="text-text-muted" />
                 {isActive ? (
                     <span className="font-medium text-sm web-search-gradient-text">Searching the web...</span>
                 ) : (
@@ -101,7 +101,7 @@ export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
                         className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-md hover:bg-panel-hover"
                         aria-label={`${results.length} web sources`}
                     >
-                        <Icon name="language" size={14} />
+                        <Icon icon={RiGlobalLine} />
                     </button>
                 </DropdownMenuTrigger>
             </Tooltip>
@@ -131,7 +131,7 @@ export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
                                 {host ? (
                                     <Favicon url={result.url || host} size={12} />
                                 ) : (
-                                    <Icon name="language" size={10} className="text-text-muted" />
+                                    <Icon icon={RiGlobalLine} className="text-text-muted" />
                                 )}
                             </div>
                             <div className="min-w-0 flex-1">

@@ -40,7 +40,7 @@ function CodeEditor({ path }: { path: string }) {
         };
     }, []);
 
-    if (!mod) return <div className="h-full bg-editor" />;
+    if (!mod) return <div className="h-full bg-panel" />;
     return <FileEditorInner path={path} mod={mod} />;
 }
 
@@ -66,10 +66,10 @@ function FileEditorInner({
     );
 
     if (error) return <div className="p-4 text-sm text-error">{error}</div>;
-    if (loading) return <div className="h-full bg-editor" />;
+    if (loading) return <div className="h-full bg-panel" />;
     if (isDiff) {
         return (
-            <mod.DiffView path={path} originalContent={originalContent} content={content} />
+            <mod.DiffView path={path} originalContent={originalContent} content={content} mode="unified" />
         );
     }
     return (

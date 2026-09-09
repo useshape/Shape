@@ -1,5 +1,6 @@
 "use client";
 
+import { RiLayoutColumnLine, RiLayoutLeftLine, RiListCheck3, RiMoreLine, RiPlayFill } from "@remixicon/react";
 import { useProjectState, commands } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,7 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                         className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
                         onClick={runPython}
                     >
-                        <Icon name="play_arrow" size={14} filled />
+                        <Icon icon={RiPlayFill} />
                     </button>
                 </Tooltip>
             ) : null}
@@ -72,8 +73,7 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                     onClick={() => updateSettingSection("editor", { compactTabs: !settings.editor.compactTabs })}
                 >
                     <Icon
-                        name={settings.editor.compactTabs ? "list_alt" : "view_compact"}
-                        size={14}
+                        icon={settings.editor.compactTabs ? RiListCheck3 : RiLayoutLeftLine}
                     />
                 </button>
             </Tooltip>
@@ -90,7 +90,7 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                     )}
                     onClick={toggleSplit}
                 >
-                    <Icon name="vertical_split" size={14} />
+                    <Icon icon={RiLayoutColumnLine} />
                 </button>
             </Tooltip>
 
@@ -101,7 +101,7 @@ export function TabBarActions({ compactOnly = false }: { compactOnly?: boolean }
                         className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
                         title="Editor Actions"
                     >
-                        <Icon name="more_horiz" size={14} />
+                        <Icon icon={RiMoreLine} />
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side="bottom">

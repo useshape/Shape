@@ -1,5 +1,6 @@
 "use client";
 
+import { RiPaletteLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,7 +166,7 @@ export function TokensMenu({ activePath }: { activePath: string | null }) {
                 <Tooltip content="Design tokens">
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-text-muted">
-                            <Icon name="palette" size={16} />
+                            <Icon icon={RiPaletteLine} />
                         </Button>
                     </DropdownMenuTrigger>
                 </Tooltip>

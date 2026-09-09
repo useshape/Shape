@@ -1,10 +1,10 @@
 "use client";
 
+import { RiCheckLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { MorphMenu } from "@/components/ui/morph-menu";
-import { QuestionBlock } from "../blocks/question";
 
 export type ComposerTaskItem = {
     id: string;
@@ -12,39 +12,33 @@ export type ComposerTaskItem = {
     status: "running" | "pending" | "done";
 };
 
-export type ComposerQuestionItem = {
-    id: string;
-    question: string;
-    options: string[];
-};
+export type ComposerActivityItem = { kind: "task" } & ComposerTaskItem;
 
-export type ComposerActivityItem =
-    | ({ kind: "task" } & ComposerTaskItem)
-    | ({ kind: "question" } & ComposerQuestionItem);
-
+/** Composer pill for live todos — shows the active step (with spinner), not "Continue Working". */
 export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
     if (items.length === 0) return null;
 
-    const running = items.filter((i) => i.status === "running").length;
-    const label =
-        running > 0
-            ? "Continue Working"
-            : `${items.length} task${items.length === 1 ? "" : "s"}`;
+    const active = items.find((i) => i.status === "running") ?? items[0];
     const openH = Math.min(220, 48 + items.length * 36);
 
     return (
         <MorphMenu
             variant="morph"
             aria-label="Tasks"
+            align="end"
             openWidth={280}
             openHeight={openH}
             closedHeight={32}
             trigger={
                 <>
-                    <span>{label}</span>
-                    {running > 0 ? (
-                        <span className="text-accent-text">{running}</span>
-                    ) : null}
+                    {active.status === "running" ? (
+                        <span className="t-spin-check shrink-0" data-state="spin">
+                            <span className="t-spin-check__ring" />
+                        </span>
+                    ) : (
+                        <span className="size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
+                    )}
+                    <span className="max-w-[180px] truncate">{active.label}</span>
                 </>
             }
         >
@@ -59,13 +53,9 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
                                 <span className="t-spin-check__ring" />
                             </span>
                         ) : item.status === "done" ? (
-                            <Icon name="check" size={14} className="text-success" />
+                            <Icon icon={RiCheckLine} className="text-success" />
                         ) : (
-                            <Icon
-                                name="check_box_outline_blank"
-                                size={14}
-                                className="text-text-disabled"
-                            />
+                            <span className="size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
                         )}
                         <span
                             className={cn(
@@ -84,45 +74,8 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
     );
 }
 
-export function ComposerQuestionsStrip({
-    items,
-    onAnswer,
-}: {
-    items: ComposerQuestionItem[];
-    onAnswer?: (answer: string) => void;
-}) {
-    if (items.length === 0) return null;
-
-    return (
-        <MorphMenu
-            variant="morph"
-            aria-label="Questions"
-            openWidth={320}
-            openHeight={Math.min(280, 80 + items.length * 100)}
-            closedHeight={32}
-            trigger={
-                <span>
-                    {items.length} question{items.length === 1 ? "" : "s"}
-                </span>
-            }
-        >
-            <div className="p-2.5">
-                {items.map((item) => (
-                    <QuestionBlock
-                        key={item.id}
-                        question={item.question}
-                        options={item.options}
-                        onAnswer={onAnswer}
-                    />
-                ))}
-            </div>
-        </MorphMenu>
-    );
-}
-
 export function ComposerActivityStrip({
     items,
-    onAnswerQuestion,
 }: {
     items: ComposerActivityItem[];
     onAnswerQuestion?: (answer: string) => void;
@@ -130,16 +83,8 @@ export function ComposerActivityStrip({
     const tasks = items
         .filter((i): i is Extract<ComposerActivityItem, { kind: "task" }> => i.kind === "task")
         .map(({ id, label, status }) => ({ id, label, status }));
-    const questions = items
-        .filter((i): i is Extract<ComposerActivityItem, { kind: "question" }> => i.kind === "question")
-        .map(({ id, question, options }) => ({ id, question, options }));
 
-    if (tasks.length === 0 && questions.length === 0) return null;
+    if (tasks.length === 0) return null;
 
-    return (
-        <>
-            <ComposerTasksStrip items={tasks} />
-            <ComposerQuestionsStrip items={questions} onAnswer={onAnswerQuestion} />
-        </>
-    );
+    return <ComposerTasksStrip items={tasks} />;
 }

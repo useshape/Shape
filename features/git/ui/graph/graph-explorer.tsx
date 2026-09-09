@@ -1,5 +1,6 @@
 "use client";
 
+import { RiAddLine, RiCrosshair2Line, RiRefreshLine, RiSubtractLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -551,7 +552,7 @@ export function GraphExplorer() {
                                 applyTransform();
                             }}
                         >
-                            <Icon name="remove" size={14} />
+                            <Icon icon={RiSubtractLine} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Zoom in">
@@ -564,12 +565,12 @@ export function GraphExplorer() {
                                 applyTransform();
                             }}
                         >
-                            <Icon name="add" size={14} />
+                            <Icon icon={RiAddLine} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fit">
                         <Button variant="ghost" size="icon" onClick={resetView}>
-                            <Icon name="colorize" size={14} />
+                            <Icon icon={RiCrosshair2Line} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Refresh">
@@ -579,7 +580,7 @@ export function GraphExplorer() {
                             disabled={loading}
                             onClick={() => void refresh()}
                         >
-                            <Icon name="refresh" size={14} />
+                            <Icon icon={RiRefreshLine} />
                         </Button>
                     </Tooltip>
                 </div>

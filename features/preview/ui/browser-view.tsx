@@ -1,5 +1,7 @@
 "use client";
 
+import type { RemixiconComponentType } from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowRightLine, RiComputerLine, RiCrosshair2Line, RiExternalLinkLine, RiEyeLine, RiPaletteLine, RiRefreshLine, RiSmartphoneLine, RiTabletLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -60,21 +62,21 @@ import { enrichSourceIdentity } from "@/features/preview/design-mode/identity";
 type PreviewDevice = {
     id: string;
     label: string;
-    icon: "monitor" | "smartphone" | "tablet";
+    icon: RemixiconComponentType;
     width: number | null;
     height: number | null;
     radius: number;
 };
 
 const PREVIEW_DEVICES: PreviewDevice[] = [
-    { id: "full", label: "Full", icon: "monitor", width: null, height: null, radius: 0 },
-    { id: "iphone-se", label: "iPhone SE", icon: "smartphone", width: 375, height: 667, radius: 14 },
-    { id: "iphone-16", label: "iPhone 16", icon: "smartphone", width: 393, height: 852, radius: 16 },
-    { id: "iphone-16-pro-max", label: "iPhone 16 Pro Max", icon: "smartphone", width: 440, height: 956, radius: 18 },
-    { id: "pixel-8", label: "Pixel 8", icon: "smartphone", width: 412, height: 915, radius: 16 },
-    { id: "galaxy-s24", label: "Galaxy S24", icon: "smartphone", width: 384, height: 824, radius: 16 },
-    { id: "ipad-mini", label: "iPad mini", icon: "tablet", width: 744, height: 1133, radius: 12 },
-    { id: "ipad-11", label: 'iPad 11"', icon: "tablet", width: 820, height: 1180, radius: 12 },
+    { id: "full", label: "Full", icon: RiComputerLine, width: null, height: null, radius: 0 },
+    { id: "iphone-se", label: "iPhone SE", icon: RiSmartphoneLine, width: 375, height: 667, radius: 14 },
+    { id: "iphone-16", label: "iPhone 16", icon: RiSmartphoneLine, width: 393, height: 852, radius: 16 },
+    { id: "iphone-16-pro-max", label: "iPhone 16 Pro Max", icon: RiSmartphoneLine, width: 440, height: 956, radius: 18 },
+    { id: "pixel-8", label: "Pixel 8", icon: RiSmartphoneLine, width: 412, height: 915, radius: 16 },
+    { id: "galaxy-s24", label: "Galaxy S24", icon: RiSmartphoneLine, width: 384, height: 824, radius: 16 },
+    { id: "ipad-mini", label: "iPad mini", icon: RiTabletLine, width: 744, height: 1133, radius: 12 },
+    { id: "ipad-11", label: 'iPad 11"', icon: RiTabletLine, width: 820, height: 1180, radius: 12 },
 ];
 
 function displayHost(raw: string) {
@@ -550,7 +552,7 @@ export function BrowserView() {
                             previewBack();
                         }}
                     >
-                        <Icon name="arrow_back" size={16} />
+                        <Icon icon={RiArrowLeftLine} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Forward">
@@ -565,7 +567,7 @@ export function BrowserView() {
                             previewForward();
                         }}
                     >
-                        <Icon name="arrow_forward" size={16} />
+                        <Icon icon={RiArrowRightLine} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Reload">
@@ -580,7 +582,7 @@ export function BrowserView() {
                             previewReload();
                         }}
                     >
-                        <Icon name="refresh" size={16} />
+                        <Icon icon={RiRefreshLine} />
                     </Button>
                 </Tooltip>
 
@@ -616,7 +618,7 @@ export function BrowserView() {
                         disabled={!iframeSrc && !urlBar.trim()}
                         onClick={() => void toggleDesignMode()}
                     >
-                        <Icon name="palette" size={16} />
+                        <Icon icon={RiPaletteLine} />
                     </Button>
                 </Tooltip>
                 {design.enabled ? (
@@ -635,7 +637,7 @@ export function BrowserView() {
                                 postToFrame(iframeRef.current, { type: "shape-design-inspect", enabled: next });
                             }}
                         >
-                            <Icon name={design.inspect ? "colorize" : "visibility"} size={16} />
+                            <Icon icon={design.inspect ? RiCrosshair2Line : RiEyeLine} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -651,7 +653,7 @@ export function BrowserView() {
                                     className="h-7 w-7 text-text-muted hover:text-text-primary"
                                     aria-label="Preview device"
                                 >
-                                    <Icon name={previewDevice.icon} size={16} />
+                                    <Icon icon={previewDevice.icon} />
                                 </Button>
                             </DropdownMenuTrigger>
                         </Tooltip>
@@ -663,7 +665,7 @@ export function BrowserView() {
                                     onSelect={() => setPreviewDeviceId(device.id)}
                                     className={cn(previewDeviceId === device.id && "bg-panel-hover")}
                                 >
-                                    <Icon name={device.icon} size={14} />
+                                    <Icon icon={device.icon} />
                                     <span className="flex-1">{device.label}</span>
                                     {device.width ? (
                                         <span className="text-[11px] text-text-muted">
@@ -685,7 +687,7 @@ export function BrowserView() {
                         disabled={!currentUrl && !urlBar.trim()}
                         onClick={openExternal}
                     >
-                        <Icon name="open_in_new" size={16} />
+                        <Icon icon={RiExternalLinkLine} />
                     </Button>
                 </Tooltip>
             </div>

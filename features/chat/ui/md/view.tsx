@@ -1,5 +1,6 @@
 "use client";
 
+import { RiCheckLine, RiClipboardLine } from "@remixicon/react";
 import React, { lazy, Suspense, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -26,21 +27,21 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
     };
 
     return (
-        <div className="my-4 overflow-hidden rounded-lg border border-border-subtle bg-panel">
-            <div className="flex items-center justify-between gap-2 border-b border-border-subtle bg-panel px-3 py-1.5">
-                <span className="chat-text font-medium text-text-muted">{language}</span>
+        <div className="my-1 overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                <span className="text-sm font-medium text-text-muted">{language}</span>
                 <button
                     type="button"
                     onClick={copy}
                     aria-label={copied ? "Copied" : "Copy code"}
                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon name={copied ? "check" : "content_copy"} size={14} />
+                    <Icon icon={copied ? RiCheckLine : RiClipboardLine} />
                 </button>
             </div>
             <Suspense
                 fallback={
-                    <pre className="m-0 overflow-x-auto p-4 chat-text font-mono text-text-primary">
+                    <pre className="m-0 overflow-x-auto px-3 pb-3 chat-text font-mono text-text-primary">
                         <code>{code}</code>
                     </pre>
                 }
@@ -49,7 +50,7 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
                     style={getShapeSyntaxTheme()}
                     language={language}
                     PreTag="div"
-                    customStyle={{ margin: 0, padding: "1rem", background: "transparent" }}
+                    customStyle={{ margin: 0, padding: "0 0.75rem 0.75rem", background: "transparent" }}
                     {...rest}
                 >
                     {code}
@@ -81,7 +82,7 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
 
             if (isBlock) {
                 return (
-                    <pre className="my-3 overflow-x-auto rounded-lg border border-border-subtle bg-panel p-3 chat-text font-mono leading-relaxed">
+                    <pre className="my-1 overflow-x-auto rounded-xl border border-border-subtle bg-surface-3 p-3 chat-text font-mono leading-relaxed">
                         <code className="block whitespace-pre-wrap text-text-primary" {...rest}>
                             {children}
                         </code>

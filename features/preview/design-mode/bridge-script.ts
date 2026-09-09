@@ -36,7 +36,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
     labelEl = document.createElement("div");
     labelEl.style.cssText = "position:absolute;left:-1.5px;top:-18px;height:16px;padding:0 6px;font:11px/16px ui-sans-serif,system-ui,sans-serif;background:#9eb0ff;color:#111;white-space:nowrap;border-radius:3px 3px 0 0;";
     overlay.appendChild(labelEl);
-    document.documentElement.appendChild(overlay);
+    (document.body || document.documentElement).appendChild(overlay);
   }
 
   // SVG elements expose className as an SVGAnimatedString, not a string.
@@ -255,7 +255,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
           layer.style.cssText = "position:absolute;inset:0;";
           root.appendChild(layer);
         }
-        document.documentElement.appendChild(root);
+        (document.body || document.documentElement).appendChild(root);
         progLayers[id] = root;
       }
       root.style.left = r.left + "px";
@@ -286,9 +286,9 @@ export const DESIGN_BRIDGE_SCRIPT = `
       guideRoot = document.createElement("div");
       guideRoot.id = "shape-guides";
       guideRoot.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483645;";
-      document.documentElement.appendChild(guideRoot);
+      (document.body || document.documentElement).appendChild(guideRoot);
     }
-    if (!guideRoot.isConnected) document.documentElement.appendChild(guideRoot);
+    if (!guideRoot.isConnected) (document.body || document.documentElement).appendChild(guideRoot);
     guideRoot.innerHTML = "";
     var xs = (g && g.xs) ? g.xs : (g && g.x != null ? [g.x] : []);
     var ys = (g && g.ys) ? g.ys : (g && g.y != null ? [g.y] : []);
@@ -947,9 +947,56 @@ export const DESIGN_BRIDGE_SCRIPT = `
     paintOverlay(el, false);
   }
 
+  function sendViews() {
+    var views = [];
+    var seen = {};
+    function add(label, path) {
+      var lab = String(label || "").replace(/\\s+/g, " ").trim();
+      lab = lab.replace(/\\s+\\d+$/, "");
+      if (!lab || lab.length < 2 || lab.length > 28) return;
+      if (/^(search|settings|notifications|learn more|see all|browse all|cancel|close|back|edit avatar|edit profile)$/i.test(lab)) return;
+      var key = String(path || lab).toLowerCase();
+      if (seen[key]) return;
+      seen[key] = 1;
+      views.push({ label: lab, path: path || "" });
+    }
+    try {
+      var as = document.querySelectorAll("a[href]");
+      for (var i = 0; i < as.length; i++) {
+        var a = as[i];
+        var u = new URL(a.href, location.href);
+        if (u.origin !== location.origin) continue;
+        var p = u.pathname || "/";
+        if (p.indexOf("/api/") === 0 || p.indexOf("/_next") === 0) continue;
+        add((a.innerText || a.getAttribute("aria-label") || p), p);
+      }
+    } catch (e) {}
+    try {
+      var roots = document.querySelectorAll("nav, aside, [role=navigation], header");
+      for (var r = 0; r < roots.length; r++) {
+        var els = roots[r].querySelectorAll("a, button");
+        for (var j = 0; j < els.length; j++) {
+          var el = els[j];
+          var t = (el.innerText || el.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim();
+          t = t.replace(/\\s+\\d+$/, "");
+          add(t, "");
+        }
+      }
+    } catch (e2) {}
+    post({ type: "shape-design-pages", views: views });
+  }
+
   function sendTree() {
-    var roots = walk(document.body, []);
-    post({ type: "shape-design-tree", nodes: [{ id: "root", tag: "html", label: "Root", children: roots }] });
+    var roots = [];
+    if (document.body) {
+      for (var i = 0; i < document.body.children.length; i++) {
+        var kid = document.body.children[i];
+        if (SKIP[kid.tagName] || skipChrome(kid)) continue;
+        walk(kid, roots);
+      }
+    }
+    post({ type: "shape-design-tree", nodes: roots });
+    sendViews();
   }
 
   function inlineClone(el) {
@@ -1168,6 +1215,21 @@ export const DESIGN_BRIDGE_SCRIPT = `
       }
     }
     if (data.type === "shape-design-request-tree") sendTree();
+    if (data.type === "shape-design-open-view") {
+      var want = String(data.label || "").replace(/\\s+/g, " ").trim().toLowerCase();
+      if (want) {
+        var nodes = document.querySelectorAll("nav a, nav button, aside a, aside button, header a, header button");
+        for (var vi = 0; vi < nodes.length; vi++) {
+          var vt = (nodes[vi].innerText || nodes[vi].getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim().toLowerCase();
+          vt = vt.replace(/\\s+\\d+$/, "");
+          if (vt === want || vt.indexOf(want) === 0) {
+            try { nodes[vi].click(); } catch (ce) {}
+            break;
+          }
+        }
+      }
+      sendTree();
+    }
     if (data.type === "shape-design-pause") {
       paused = !!data.enabled;
       if (data.resumeAfterEdit != null) resumeAfterEdit = !!data.resumeAfterEdit;
