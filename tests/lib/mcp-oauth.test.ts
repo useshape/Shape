@@ -7,7 +7,7 @@ import {
     parseOAuthCallbackParams,
     serverIdFromOAuthState,
     truncateOAuthScopes,
-} from "@/lib/mcp-oauth";
+} from "@/lib/mcp/oauth";
 
 describe("mcp-oauth helpers", () => {
     it("builds RFC 8252 loopback redirect URIs", () => {

@@ -14,7 +14,7 @@ import {
     buildReactSandboxHtml,
     escapeScriptClosers,
     normalizePreviewJsx,
-} from "@/lib/design-preview-sandbox";
+} from "@/lib/agent-preview/sandbox";
 
 const runtimeBundle = readFileSync(
     join(process.cwd(), "src-tauri", "preview-runtime", "bundle.js"),

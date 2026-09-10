@@ -10,8 +10,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { openSettingsWindow } from "@/lib/open-settings";
-import { openMcpConfig } from "@/lib/mcp-config";
+import { openSettingsWindow } from "@/lib/window/open-settings";
+import { openMcpConfig } from "@/lib/mcp/config";
 import { notify } from "@/features/notifications";
 
 async function downloadDiagnostics() {

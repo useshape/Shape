@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 import { FileIcon } from "@/components/ui/file-icon";
 
 export type GitMarkdownCtx = {

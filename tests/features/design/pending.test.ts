@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { serializeDesignEdits, upsertDesignPending, clearDesignPending, setDesignSelected, designPendingCountLabel } from "@/features/preview/design-mode/store";
-import { findLayerPath } from "@/features/preview/design-mode/tree";
-import type { DesignLayerNode } from "@/features/preview/design-mode/types";
+import { serializeDesignEdits, upsertDesignPending, clearDesignPending, setDesignSelected, designPendingCountLabel } from "@/features/preview/design/store";
+import { findLayerPath } from "@/features/preview/design/tree";
+import type { DesignLayerNode } from "@/features/preview/design/types";
 import {
     historyKey,
     initHistory,
@@ -10,17 +10,17 @@ import {
     shouldCoalesce,
     switchHistory,
     type HistoryEntry,
-} from "@/features/preview/design-mode/history";
+} from "@/features/preview/design/history";
 import {
     stylesToClassTokens,
     mergeClassTokens,
-} from "@/features/preview/design-mode/apply/class-tokens";
-import { patchOpeningTag, patchInlineStyles } from "@/features/preview/design-mode/apply/patch-tag";
-import { findOpeningTag, classSearchNeedles, scoreSourceLine, cssModuleLocal } from "@/features/preview/design-mode/apply/locate-html";
-import { isBundledGeneratedPath, isProjectSourcePath, isResolvedSource, normalizeOriginalSourcePath, pathFromGeneratedChunk, enrichSourceIdentity } from "@/features/preview/design-mode/identity";
-import { locateJsxByHint, locateJsxElement, locateJsxFromSearchLine } from "@/features/preview/design-mode/apply/locate-jsx";
-import { patchCssClass } from "@/features/preview/design-mode/apply/patch-css";
-import { formatLinearGradient, parseLinearGradient } from "@/features/preview/design-mode/css";
+} from "@/features/preview/design/apply/class-tokens";
+import { patchOpeningTag, patchInlineStyles } from "@/features/preview/design/apply/patch-tag";
+import { findOpeningTag, classSearchNeedles, scoreSourceLine, cssModuleLocal } from "@/features/preview/design/apply/locate-html";
+import { isBundledGeneratedPath, isProjectSourcePath, isResolvedSource, normalizeOriginalSourcePath, pathFromGeneratedChunk, enrichSourceIdentity } from "@/features/preview/design/identity";
+import { locateJsxByHint, locateJsxElement, locateJsxFromSearchLine } from "@/features/preview/design/apply/locate-jsx";
+import { patchCssClass } from "@/features/preview/design/apply/patch-css";
+import { formatLinearGradient, parseLinearGradient } from "@/features/preview/design/css";
 
 describe("design mode pending edits", () => {
     it("serializes style and text edits for Apply", () => {

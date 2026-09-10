@@ -3,7 +3,7 @@ import {
     DESIGN_LOG_SESSION,
     formatDesignLog,
     summarizePendingEdit,
-} from "@/features/preview/design-mode/log";
+} from "@/features/preview/design/log";
 
 describe("design log format", () => {
     it("emits a paste-friendly block with session and end marker", () => {

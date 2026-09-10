@@ -10,7 +10,7 @@ import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { formatMentionToken, type ChatMention } from "@/lib/chat-mentions";
-import { listDesignPreviewSessions } from "@/lib/design-preview-store";
+import { listDesignPreviewSessions } from "@/lib/agent-preview/store";
 import { getTextareaCaretViewportRect } from "@/lib/textarea-caret";
 import { hostnameOf } from "@/lib/favicon";
 import { getPreviewCurrentUrl } from "@/features/preview/store";

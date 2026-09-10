@@ -1,4 +1,4 @@
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 
 export type CatalogModel = {
   id: string;

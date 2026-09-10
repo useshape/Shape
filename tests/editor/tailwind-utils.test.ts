@@ -6,7 +6,7 @@ import {
     getTailwindDocsUrl,
     isDecoratableColorToken,
     parseTailwindToken,
-} from "@/features/editor/ui/color-picker/tailwind-utils";
+} from "@/features/preview/design/controls/color-picker/tailwind-utils";
 
 describe("tailwind-utils", () => {
     it("parses tailwind color token", () => {

@@ -25,14 +25,14 @@ import {
 } from "@/lib/usage-display";
 import { parseShapeContinueAction } from "@/lib/shape-continue-action";
 import { mentionRanges, mentionDisplayLabel } from "@/lib/chat-mentions";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 import { Favicon } from "@/components/ui/favicon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { WebSourcesMenu } from "../blocks/search";
 import { Button } from "@/components/ui/button";
-import { useGitHubAuth } from "@/lib/github-auth/store";
-import { useShapeAuth } from "@/lib/shape-auth/store";
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { useGitHubAuth } from "@/lib/github/store";
+import { useShapeAuth } from "@/lib/cloud/store";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { TypingDots, UserMessageCard, AUTO_DISPLAY_MODEL } from "./bubble";
 import { isAutoModelId } from "@/lib/usage-display";

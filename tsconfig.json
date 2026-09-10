@@ -37,12 +37,6 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules",
-    "features/editor/ui/main/ui/editor-view.tsx",
-    "features/editor/ui/main/ui/diff.tsx",
-    "features/editor/ui/main/hooks/use-emmet.ts",
-    "features/editor/ui/main/hooks/use-eslint.ts",
-    "features/editor/ui/main/hooks/use-design-diagnostics.ts",
-    "features/editor/ui/layout.tsx"
+    "node_modules"
   ]
 }

@@ -1,5 +1,5 @@
 import { commands } from "@/lib/backend/commands";
-import { isPopoutPath } from "@/lib/tauri-window";
+import { isPopoutPath } from "@/lib/window/tauri-window";
 
 function openSearchSidebar(_mode: "search" | "replace") {
     window.dispatchEvent(new CustomEvent("shape-command-palette", { detail: { mode: "files", placeholder: "Search files…" } }));
@@ -64,7 +64,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(new CustomEvent("shape-terminal-shortcut", { detail: { action: "new" } }));
             return true;
         case "Settings":
-            void import("@/lib/open-settings").then(({ openSettingsWindow }) => openSettingsWindow());
+            void import("@/lib/window/open-settings").then(({ openSettingsWindow }) => openSettingsWindow());
             return true;
         case "AI Chat":
             window.dispatchEvent(

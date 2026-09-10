@@ -12,10 +12,10 @@ import { parseApi } from "@/features/git/ui/actions/utils";
 import { statusIcon, statusTone } from "@/features/git/ui/actions/utils";
 import { GitMarkdown, type GitMarkdownCtx } from "../markdown";
 import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
-import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 import {
     type CheckRun,
     type Comment,
@@ -418,7 +418,7 @@ export function GitHubDetailPane({
                 token,
             );
             setAiSummary(summary.trim());
-            void import("@/lib/shape-auth/store")
+            void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {
                     void refreshShapeAuth();
                 })
@@ -442,7 +442,7 @@ export function GitHubDetailPane({
         try {
             const summary = await commands.summarizeIssue(owner, repo, item.number, token);
             setAiSummary(summary.trim());
-            void import("@/lib/shape-auth/store")
+            void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {
                     void refreshShapeAuth();
                 })

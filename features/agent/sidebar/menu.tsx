@@ -3,11 +3,11 @@
 import { RiUserLine } from "@remixicon/react";
 import { useCallback, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
-import { logoutShape, useShapeAuth } from "@/lib/shape-auth/store";
+import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/workbench/ui/login-prompt-dialog";
-import { logoutGitHub, useGitHubAuth } from "@/lib/github-auth/store";
-import { openSettingsWindow } from "@/lib/open-settings";
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { logoutGitHub, useGitHubAuth } from "@/lib/github/store";
+import { openSettingsWindow } from "@/lib/window/open-settings";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { notify } from "@/features/notifications";
 import {
     DropdownMenu,

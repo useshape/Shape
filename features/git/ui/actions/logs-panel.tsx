@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll";
 import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
-import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 import type { WorkflowJob } from "./types";
 
 export function LogsPanel({
@@ -82,7 +82,7 @@ export function LogsPanel({
             ].filter(Boolean);
             const text = await commands.explainCiLog(logs, parts.join("\n") || null, token);
             setAiText(text.trim());
-            void import("@/lib/shape-auth/store")
+            void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {
                     void refreshShapeAuth();
                 })

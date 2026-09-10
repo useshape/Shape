@@ -51,7 +51,7 @@ import {
     useShapeCatalog,
 } from "@/lib/catalog-store";
 import { useSettings } from "@/lib/settings";
-import { useShapeAuth } from "@/lib/shape-auth/store";
+import { useShapeAuth } from "@/lib/cloud/store";
 
 type ChatInputProps = {
     inputValue: string;
@@ -1096,7 +1096,7 @@ export function ChatInput({
                                     type="button"
                                     className="flex size-8 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary"
                                     onClick={() =>
-                                        void import("@/lib/open-settings").then(({ openSettingsWindow }) =>
+                                        void import("@/lib/window/open-settings").then(({ openSettingsWindow }) =>
                                             openSettingsWindow({ category: "general" }),
                                         )
                                     }

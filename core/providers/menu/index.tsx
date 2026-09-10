@@ -9,7 +9,7 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context";
 import { useSettings } from "@/lib/settings";
-import { isTauriRuntime, toggleDevTools } from "@/lib/tauri-window";
+import { isTauriRuntime, toggleDevTools } from "@/lib/window/tauri-window";
 
 async function toggleFullscreen() {
     if (!isTauriRuntime()) return;

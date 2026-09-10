@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useShapeAuth } from "@/lib/shape-auth/store";
+import { useShapeAuth } from "@/lib/cloud/store";
 import { getSettings, updateSettingSection } from "@/lib/settings";
 
 /**

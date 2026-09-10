@@ -28,15 +28,15 @@ import {
 import { getSettings } from "@/lib/settings";
 import { getVisibleModels } from "@/lib/models";
 import { getCatalogModels } from "@/lib/catalog-store";
-import { useShapeAuth } from "@/lib/shape-auth/store";
+import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
-import { messageLengthBucket } from "@/lib/telemetry-sanitize";
+import { messageLengthBucket } from "@/lib/telemetry/sanitize";
 import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat-mentions";
 import { buildPlanBuildMessage } from "@/lib/shape-continue-action";
 import { loadProjectRules } from "@/lib/project-rules";
 import { isWorkspaceTrusted } from "@/lib/workspace-trust";
-import { clearAllDesignPreviewSessions } from "@/lib/design-preview-store";
+import { clearAllDesignPreviewSessions } from "@/lib/agent-preview/store";
 import {
     createPendingAttachment,
     processAttachment,

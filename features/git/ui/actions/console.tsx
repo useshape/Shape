@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll";
 import { commands, useProjectState } from "@/lib/backend";
-import { loginGitHub, useGitHubAuth } from "@/lib/github-auth/store";
+import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { cn } from "@/lib/utils";
 import { Panel } from "@/features/panels";
 import { useFilter } from "../manager/filter-context";

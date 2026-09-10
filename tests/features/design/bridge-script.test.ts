@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseEffectsFromStyles } from "@/features/preview/ui/design/parse-effects";
-import { ADDABLE_FONTS } from "@/features/preview/ui/design/fonts";
-import { DESIGN_BRIDGE_SCRIPT } from "@/features/preview/design-mode/bridge-script";
+import { parseEffectsFromStyles } from "@/features/preview/design/ui/shared/parse-effects";
+import { ADDABLE_FONTS } from "@/features/preview/design/ui/fonts/catalog";
+import { DESIGN_BRIDGE_SCRIPT } from "@/features/preview/design/bridge-script";
 
 describe("parseEffectsFromStyles", () => {
     it("seeds drop shadows from computed box-shadow", () => {

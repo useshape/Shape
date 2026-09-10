@@ -1,6 +1,6 @@
 import { commands } from "@/lib/backend";
 import { HELP_LINKS } from "@/lib/help-links";
-import { isPopoutPath } from "@/lib/tauri-window";
+import { isPopoutPath } from "@/lib/window/tauri-window";
 import { notifyWorkspaceClosed, notifyWorkspaceOpened } from "@/lib/workspace-trust";
 import { clearExtraWorkspaceFolders } from "@/lib/workspace-folders";
 import type { MenuActionContext } from "./types";
@@ -215,7 +215,7 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "changes" }));
                 break;
             case "Git Manager":
-                void import("@/lib/open-git-window").then(({ openGitWindow }) => openGitWindow());
+                void import("@/lib/window/open-git-window").then(({ openGitWindow }) => openGitWindow());
                 break;
             case "Open View...":
             case "Go to File...":
@@ -281,7 +281,7 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 break;
             }
             case "Settings":
-                void import("@/lib/open-settings").then(({ openSettingsWindow }) => openSettingsWindow());
+                void import("@/lib/window/open-settings").then(({ openSettingsWindow }) => openSettingsWindow());
                 break;
             case "Release Notes":
                 void commands.openUrlExternal(HELP_LINKS.changelog);

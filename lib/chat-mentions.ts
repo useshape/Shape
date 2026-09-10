@@ -1,5 +1,5 @@
 import { commands } from "@/lib/backend/commands";
-import { listDesignPreviewSessions } from "@/lib/design-preview-store";
+import { listDesignPreviewSessions } from "@/lib/agent-preview/store";
 import { hostnameOf } from "@/lib/favicon";
 import { lookupMentionToken, registerMentionToken } from "@/lib/mention-registry";
 import { getPreviewCurrentUrl } from "@/features/preview/store";

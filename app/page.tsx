@@ -10,7 +10,7 @@ import {
     WelcomeSshDialog,
 } from "./welcome-dialogs";
 import { WelcomeScreen, useRecentFolders } from "./welcome-screen";
-import { loginGitHub } from "@/lib/github-auth/store";
+import { loginGitHub } from "@/lib/github/store";
 import { getProjectSnapshot } from "@/lib/backend";
 
 /**

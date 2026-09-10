@@ -3,7 +3,7 @@ import {
     isSettingsTab,
     isVirtualEditorTab,
     SETTINGS_TAB_PATH,
-} from "@/lib/settings-tab";
+} from "@/lib/settings/tab";
 
 describe("settings-tab", () => {
     it("detects settings tab", () => {

@@ -3,11 +3,11 @@
 import { useCallback, useState } from "react";
 import { commands } from "@/lib/backend/commands";
 import { getSettings } from "@/lib/settings";
-import { checkUsage } from "@/lib/shape-auth/api";
-import { getShapeAccessToken, refreshShapeAuth, useShapeAuth } from "@/lib/shape-auth/store";
+import { checkUsage } from "@/lib/cloud/api";
+import { getShapeAccessToken, refreshShapeAuth, useShapeAuth } from "@/lib/cloud/store";
 import { notificationStore } from "@/features/notifications";
 import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
-import { messageLengthBucket } from "@/lib/telemetry-sanitize";
+import { messageLengthBucket } from "@/lib/telemetry/sanitize";
 
 export type TextRewriteAction =
     | "rewrite"

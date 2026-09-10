@@ -1,4 +1,4 @@
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 
 export const HELP_LINKS = {
     documentation: `${SHAPE_API_BASE}/docs/introduction/quick-start`,

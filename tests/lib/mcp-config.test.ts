@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMcpJson } from "@/lib/mcp-config";
+import { parseMcpJson } from "@/lib/mcp/config";
 
 describe("mcp-config", () => {
     it("parses empty config", () => {
