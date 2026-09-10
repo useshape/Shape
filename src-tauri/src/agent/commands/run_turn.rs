@@ -485,6 +485,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         record_usage(&config, outcome.input_tokens, outcome.output_tokens);
         total_input_tokens += outcome.input_tokens;
         total_output_tokens += outcome.output_tokens;
+        append_persisted_think(&mut final_full_response, outcome.reasoning.as_deref());
 
         if config.cancel.is_cancelled() {
             break;
@@ -1165,6 +1166,20 @@ fn push_tool_result(api_messages: &mut Vec<Value>, id: &str, name: &str, content
         "name": name,
         "content": content,
     }));
+}
+
+/// Keep `<think>` in the saved transcript so Worked-for still shows thoughts after
+/// reload. API history strips these before the next model request.
+fn append_persisted_think(accumulated: &mut String, reasoning: Option<&str>) {
+    let Some(text) = reasoning.map(str::trim).filter(|s| !s.is_empty()) else {
+        return;
+    };
+    if accumulated.contains(text) {
+        return;
+    }
+    accumulated.push_str("<think>\n");
+    accumulated.push_str(text);
+    accumulated.push_str("\n</think>\n");
 }
 
 fn track_stream_chunk(config: &AgentTurnConfig<'_>, chunk: &str, activity_label: Option<&str>) {

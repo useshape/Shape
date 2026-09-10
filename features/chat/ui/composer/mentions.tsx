@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import type { RemixiconComponentType } from "@remixicon/react";
-import { RiArrowLeftLine, RiArrowRightSLine, RiChat3Line, RiCodeLine, RiFileLine, RiFolderLine, RiGitBranchLine, RiGlobalLine, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiTerminalBoxLine } from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowRightSLine, RiChat3Line, RiCodeLine, RiFileLine, RiFolderLine, RiGitBranchLine, RiGlobalLine, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiTerminalBoxLine, RiApps2Line } from "@remixicon/react";
 import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
@@ -14,8 +14,10 @@ import { listDesignPreviewSessions } from "@/lib/design-preview-store";
 import { getTextareaCaretViewportRect } from "@/lib/textarea-caret";
 import { hostnameOf } from "@/lib/favicon";
 import { getPreviewCurrentUrl } from "@/features/preview/store";
+import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins-api";
+import { PluginLogo } from "@/components/ui/plugin-logo";
 
-type CategoryId = "files" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "design" | null;
+type CategoryId = "files" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "plugins" | "design" | null;
 
 const CATEGORIES: {
     id: Exclude<CategoryId, null>;
@@ -23,6 +25,7 @@ const CATEGORIES: {
     icon: RemixiconComponentType;
 }[] = [
     { id: "files", label: "Files & Folders", icon: RiFolderLine },
+    { id: "plugins", label: "Plugins", icon: RiApps2Line },
     { id: "mcp", label: "MCP Servers", icon: RiPuzzle2Line },
     { id: "terminals", label: "Terminals", icon: RiTerminalBoxLine },
     { id: "chats", label: "Past Chats", icon: RiChat3Line },
@@ -59,6 +62,7 @@ export function MentionPicker({
     const [files, setFiles] = useState<string[]>([]);
     const [chats, setChats] = useState<{ id: string; title: string }[]>([]);
     const [mcpServers, setMcpServers] = useState<{ id: string; name: string }[]>([]);
+    const [plugins, setPlugins] = useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
     const [activeCategory, setActiveCategory] = useState<CategoryId>(null);
     const [highlight, setHighlight] = useState(0);
     const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
@@ -169,6 +173,23 @@ export function MentionPicker({
         };
     }, [open]);
 
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        const cached = peekPluginsCache()?.plugins;
+        if (cached) setPlugins(cached);
+        void fetchPlugins()
+            .then((data) => {
+                if (!cancelled) setPlugins(data.plugins);
+            })
+            .catch(() => {
+                if (!cancelled && !cached) setPlugins([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
+
     const designItems: ChatMention[] = useMemo(() => {
         const sessions = listDesignPreviewSessions();
         const out: ChatMention[] = [];
@@ -209,9 +230,29 @@ export function MentionPicker({
         ].filter((m) => !q || m.label.toLowerCase().includes(q));
     }, [query]);
 
+    const pluginMentions: ChatMention[] = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return plugins
+            .filter((p) =>
+                !q
+                || p.name.toLowerCase().includes(q)
+                || p.toolkit.toLowerCase().includes(q)
+                || p.description.toLowerCase().includes(q),
+            )
+            .sort((a, b) => Number(b.connected) - Number(a.connected))
+            .slice(0, 20)
+            .map((p) => ({
+                kind: "plugin" as const,
+                id: p.toolkit,
+                path: p.toolkit,
+                label: p.name,
+            }));
+    }, [plugins, query]);
+
     const categoryItems: ChatMention[] = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (activeCategory === "files") return fileMentions;
+        if (activeCategory === "plugins") return pluginMentions;
         if (activeCategory === "chats") {
             return chats
                 .filter((c) => !q || c.title.toLowerCase().includes(q))
@@ -266,7 +307,7 @@ export function MentionPicker({
             return items;
         }
         return [];
-    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, query]);
+    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, query]);
 
     const rootItems = useMemo(() => {
         if (activeCategory) return categoryItems;
@@ -283,8 +324,9 @@ export function MentionPicker({
                 path: s.id,
                 label: s.name || s.id,
             }));
-        return [...staticTop, ...mcps, ...fileMentions.slice(0, 8), ...designs];
-    }, [activeCategory, categoryItems, staticTop, fileMentions, designItems, mcpServers, query]);
+        const pluginHits = pluginMentions.slice(0, 4);
+        return [...staticTop, ...pluginHits, ...mcps, ...fileMentions.slice(0, 8), ...designs];
+    }, [activeCategory, categoryItems, staticTop, fileMentions, designItems, mcpServers, pluginMentions, query]);
 
     const showCategories = !activeCategory && !query.trim();
 
@@ -360,6 +402,13 @@ export function MentionPicker({
                         >
                             {item.kind === "file" || item.kind === "folder" || item.kind === "docs" ? (
                                 <FileIcon name={item.label} className="h-3.5 w-3.5 shrink-0" />
+                            ) : item.kind === "plugin" ? (
+                                <PluginLogo
+                                    toolkit={item.id || item.path || item.label}
+                                    name={item.label}
+                                    size={14}
+                                    className="rounded-sm"
+                                />
                             ) : item.kind === "browser" && item.path && item.path !== "current" ? (
                                 <Favicon url={item.path} size={14} />
                             ) : (
@@ -381,6 +430,8 @@ export function MentionPicker({
                                                         ? RiGlobalLine
                                                         : item.kind === "mcp"
                                                           ? RiPuzzle2Line
+                                                          : item.kind === "plugin"
+                                                            ? RiApps2Line
                                                           : RiFileLine
                                     }
                                     className="shrink-0 text-text-muted"

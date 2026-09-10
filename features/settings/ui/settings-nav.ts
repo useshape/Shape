@@ -41,7 +41,7 @@ export type SettingsNavGroup = {
 export const SETTINGS_NAV: SettingsNavGroup[] = [
     {
         id: "account",
-        label: "Account",
+        label: "You",
         children: [{ id: "account-profile", label: "Profile", icon: RiUserLine, targetId: "settings-account" }],
     },
     {
@@ -49,7 +49,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Agents",
         children: [
             { id: "ai-models", label: "Models", icon: RiSparkling2Line, targetId: "settings-ai-models" },
-            { id: "ai-rules", label: "Rules", icon: RiFileTextLine, targetId: "settings-ai-rules" },
+            { id: "ai-rules", label: "Instructions", icon: RiFileTextLine, targetId: "settings-ai-rules" },
             { id: "ai-context", label: "Context", icon: RiStackLine, targetId: "settings-ai-context" },
             { id: "plugins", label: "Plugins", icon: RiApps2Line, targetId: "settings-ai-plugins" },
             { id: "mcp", label: "MCP", icon: RiPlugLine, targetId: "settings-ai-mcp" },
@@ -59,7 +59,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         id: "editor",
         label: "Editor",
         children: [
-            { id: "editor-font", label: "Editor", icon: RiCodeLine, targetId: "settings-editor-font" },
+            { id: "editor-font", label: "Tabs", icon: RiCodeLine, targetId: "settings-editor-font" },
             { id: "appearance", label: "Appearance", icon: RiPaletteLine, targetId: "settings-appearance" },
         ],
     },
@@ -88,6 +88,8 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
 export function allSettingsLeaves(): SettingsNavLeaf[] {
     return SETTINGS_NAV.flatMap((g) => g.children);
 }
+
+export const SETTINGS_PAGE_LEAF_IDS = new Set(["keyboard-shortcuts", "plugins"]);
 
 export function findLeafByTarget(targetId: string): SettingsNavLeaf | undefined {
     return allSettingsLeaves().find((l) => l.targetId === targetId);

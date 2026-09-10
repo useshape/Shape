@@ -20,7 +20,6 @@ import {
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/shape-auth/store";
 import { openMcpConfig } from "@/lib/mcp-config";
-import { PluginsSettings } from "./plugins-settings";
 import { Textarea } from "@/components/ui/textarea";
 import {
     SettingSection,
@@ -39,23 +38,29 @@ function RulesEditor({ value }: { value: string }) {
     const dirty = draft !== value;
 
     return (
-        <div className="px-4 py-3.5">
-            <div className="mb-2 flex items-center justify-end">
+        <SettingSection
+            id="settings-ai-rules"
+            title="Instructions"
+            description="Give Shape extra instructions and context for all chats. Repository instructions may also apply."
+            action={
                 <Button
                     size="sm"
+                    variant="secondary"
                     disabled={!dirty}
                     onClick={() => updateSettingSection("ai", { customRules: draft })}
                 >
                     Save
                 </Button>
-            </div>
+            }
+            card={false}
+        >
             <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Add your custom instructions…"
-                className="min-h-32 border-border-subtle bg-input-bg"
+                className="min-h-40 rounded-xl border-border-subtle bg-surface-2 px-4 py-3.5 text-md"
             />
-        </div>
+        </SettingSection>
     );
 }
 
@@ -385,15 +390,7 @@ export function AiSettingsPanel({
                 </div>
             </SettingSection>
 
-            <SettingSection
-                id="settings-ai-rules"
-                title="Instructions"
-                description="Give Shape extra instructions and context for all chats. Repository instructions may also apply."
-            >
-                <RulesEditor value={a.customRules} />
-            </SettingSection>
-
-            <PluginsSettings />
+            <RulesEditor value={a.customRules} />
 
             <SettingSection id="settings-ai-mcp" title="MCP">
                 <SettingRow title="Servers">

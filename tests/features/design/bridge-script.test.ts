@@ -39,15 +39,31 @@ describe("design bridge script", () => {
         expect(DESIGN_BRIDGE_SCRIPT).toContain('styles.borderStyle = "none"');
     });
 
-    it("applies progressive blur as stacked overlay bands", () => {
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("syncProgOverlays");
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("shape-prog-");
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("bandMask");
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("--shape-prog-start");
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("snapSize");
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("shape-guides");
-        expect(DESIGN_BRIDGE_SCRIPT).not.toContain("shape-noise");
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("__nextjs_source-map");
-        expect(DESIGN_BRIDGE_SCRIPT).toContain("cleanSourcePath");
+    it("posts marquee, move, resize, reorder, text edit, and live CSS var messages", () => {
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('type: "shape-design-area"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('type: "shape-design-moved"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('type: "shape-design-resized"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('type: "shape-design-reordered"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('type: "shape-design-text-edited"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('data.type === "shape-design-set-var"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('data.type === "shape-design-reselect"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('mode: "marquee"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('mode: "reorder"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("promoteToRelative");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("contentEditable");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('e.key === "ArrowLeft"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("document.documentElement.style.setProperty");
+    });
+
+    it("starts move on selected or descendant hits and promotes static", () => {
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("selected.contains(hit)");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("promoteToRelative");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("isFlowParent");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("shouldReorder");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("snapMove");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain('left: "0px"');
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("isPageRoot");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("isPageShell");
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("refineHit");
     });
 });

@@ -40,18 +40,27 @@ const EDIT_PENDING_STATUS_RANK: Record<string, number> = {
     applied: 4,
 };
 
+const PLUGIN_STATUS_RANK: Record<string, number> = {
+    pending: 1,
+    rejected: 4,
+    cancelled: 4,
+    error: 4,
+    ok: 5,
+};
+
 /** Keep one terminal_command / edit_pending block per id (or per command when pending). Prefer higher status. */
 export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
     const skip = new Set<number>();
 
-    const rank = (chunk: Chunk) =>
-        (chunk.type === 'edit_pending' ? EDIT_PENDING_STATUS_RANK : TERMINAL_STATUS_RANK)[
-            chunk.commandStatus || ''
-        ] ?? 0;
+    const rank = (chunk: Chunk) => {
+        if (chunk.type === 'edit_pending') return EDIT_PENDING_STATUS_RANK[chunk.commandStatus || ''] ?? 0;
+        if (chunk.type === 'plugin_call') return PLUGIN_STATUS_RANK[chunk.commandStatus || ''] ?? 0;
+        return TERMINAL_STATUS_RANK[chunk.commandStatus || ''] ?? 0;
+    };
 
     const byId = new Map<string, number>();
     chunks.forEach((chunk, index) => {
-        if ((chunk.type !== 'terminal_command' && chunk.type !== 'edit_pending') || !chunk.commandId) return;
+        if ((chunk.type !== 'terminal_command' && chunk.type !== 'edit_pending' && chunk.type !== 'plugin_call') || !chunk.commandId) return;
         const key = `${chunk.type}:${chunk.commandId}`;
         const existing = byId.get(key);
         if (existing === undefined) {
@@ -85,7 +94,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'plugin_call';
     content?: string;
     file?: string;
     query?: string;
@@ -114,6 +123,9 @@ export type Chunk = {
     visitUrl?: string;
     visitHost?: string;
     visitTitle?: string;
+    pluginToolkit?: string;
+    pluginSlug?: string;
+    pluginLabel?: string;
 };
 
 export function parseMessageContent(text: string): Chunk[] {
@@ -307,6 +319,21 @@ export function parseMessageContent(text: string): Chunk[] {
         return { type: "question", content: "" };
     };
 
+    const parsePluginCallBlock = (tagFull: string, content: string, isGenerating: boolean): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        const status = get("status") || "ok";
+        return {
+            type: "plugin_call",
+            content,
+            pluginToolkit: get("toolkit") || undefined,
+            pluginSlug: get("slug") || undefined,
+            pluginLabel: get("label") || undefined,
+            commandId: get("id") || undefined,
+            commandStatus: status,
+            isGenerating,
+        };
+    };
+
     const parseWebVisitBlock = (tagFull: string, isGenerating: boolean): Chunk => {
         const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
         const url = get("url");
@@ -343,6 +370,7 @@ export function parseMessageContent(text: string): Chunk[] {
             { type: 'todos', start: '<todos', end: '</todos>' },
             { type: 'web_result', start: '<web_result', end: '</web_result>' },
             { type: 'web_visit', start: '<web_visit', end: '</web_visit>' },
+            { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
             { type: 'ls', start: '<ls', end: '</ls>' },
             { type: 'cat', start: '<cat', end: '</cat>' },
             { type: 'run', start: '<run', end: '</run>' },
@@ -477,6 +505,8 @@ export function parseMessageContent(text: string): Chunk[] {
                 });
             } else if (firstMatch.type === 'web_visit') {
                 chunks.push(parseWebVisitBlock(tagFull, false));
+            } else if (firstMatch.type === 'plugin_call') {
+                chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -555,6 +585,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'web_visit') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseWebVisitBlock(tagFull, true));
+            } else if (firstMatch.type === 'plugin_call') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parsePluginCallBlock(tagFull, content, true));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -632,6 +665,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'web_visit') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseWebVisitBlock(tagFull, false));
+            } else if (firstMatch.type === 'plugin_call') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -807,7 +843,7 @@ export function MessageRenderer({
     const hasPendingApproval = workflowSegments.some((s) =>
         s.blocks.some(
             (b) =>
-                (b.type === 'terminal_command' || b.type === 'edit_pending')
+                (b.type === 'terminal_command' || b.type === 'edit_pending' || b.type === 'plugin_call')
                 && b.commandStatus === 'pending',
         ),
     );
@@ -839,7 +875,7 @@ export function MessageRenderer({
                     key={`wf-${index}`}
                     blocks={segment.blocks}
                     isActive={!!isGenerating && isLastWf}
-                    durationMs={isFirst && !isGenerating ? durationMs : undefined}
+                    durationMs={isFirst ? durationMs : undefined}
                     activityLabel={isLastWf ? activityLabel : null}
                     showHeader
                 />

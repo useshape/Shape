@@ -143,7 +143,7 @@
   --text-xs: 13px;
   --text-sm: 14px;
   --text-base: 15px;
-  --text-md: var(--text-base);
+  --text-md: 15.5px;
   --text-lg: 16px;
   --text-xl: 17px;
   --text-2xl: 18px;
@@ -719,7 +719,9 @@ body[data-resizing] .xterm {
   user-select: none !important;
 }
 
-/* Window chrome: entire title strip drags; controls opt out. */
+/* Window chrome: title strip drags; interactive controls must opt out.
+   Prefer putting data-tauri-drag-region on the bar itself (not a full-bleed
+   sibling overlay) so descendant no-drag rects are respected by the OS. */
 [data-tauri-drag-region] {
   -webkit-app-region: drag;
   app-region: drag;
@@ -732,7 +734,9 @@ body[data-resizing] .xterm {
 [data-tauri-drag-region] select,
 [data-tauri-drag-region] [role="button"],
 [data-tauri-drag-region] [role="menuitem"],
-[data-tauri-drag-region] [data-radix-collection-item] {
+[data-tauri-drag-region] [data-radix-collection-item],
+[data-tauri-drag-region] .titlebar-window-controls,
+[data-tauri-drag-region] .control-button {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }

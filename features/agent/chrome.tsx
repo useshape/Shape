@@ -220,13 +220,8 @@ export function AgentChrome({
     }, [project_path]);
 
     return (
-        <div className="relative flex h-titlebar shrink-0 items-stretch bg-panel">
-            <div
-                className="absolute inset-0 z-0"
-                data-tauri-drag-region
-                aria-hidden
-            />
-            <div className="relative z-10 flex h-full shrink-0 items-center pl-1">
+        <div className="relative flex h-titlebar shrink-0 items-stretch bg-panel" data-tauri-drag-region>
+            <div className="relative z-10 flex h-full shrink-0 items-center pl-1" data-no-drag>
                 <SidebarToggleBtn
                     open={sidebarOpen}
                     onToggle={() => {
@@ -241,9 +236,10 @@ export function AgentChrome({
             <div
                 id={AGENT_TABS_SLOT}
                 className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1"
+                data-no-drag
             />
 
-            <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1">
+            <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
                 <GetPlusButton />
                 {web && dev ? <RunControl command={dev.command} /> : null}
                 <Btn
@@ -255,7 +251,7 @@ export function AgentChrome({
                     <Icon icon={RiLayoutRight2Line} />
                 </Btn>
             </div>
-            <div className="relative z-10 h-full shrink-0">
+            <div className="relative z-10 h-full shrink-0" data-no-drag>
                 <WindowControls
                     isMaximized={isMaximized}
                     onMinimize={minimize}

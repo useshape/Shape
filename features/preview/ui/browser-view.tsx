@@ -46,6 +46,7 @@ import {
     useDesignModeStore,
     getDesignModeState,
 } from "@/features/preview/design-mode/store";
+import { designLog, DESIGN_LOG_SESSION, ingestDesignBridgeLog } from "@/features/preview/design-mode/log";
 import {
     getHistorySession,
     historyKey,
@@ -239,8 +240,16 @@ export function BrowserView() {
         const onMessage = (event: MessageEvent) => {
             const data = event.data;
             if (!data || data.source !== "shape-design") return;
+            if (data.type === "shape-design-log") {
+                ingestDesignBridgeLog(data);
+                return;
+            }
             if (data.type === "shape-design-ready") {
                 setDesignReady(true);
+                designLog("INFO", "host:bridge-ready", {
+                    session: DESIGN_LOG_SESSION,
+                    surface: "browser-view",
+                });
                 if (!getDesignModeState().enabled) return;
                 postToFrame(iframeRef.current, {
                     type: "shape-design-enable",
@@ -345,6 +354,7 @@ export function BrowserView() {
         window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar", value: true } }));
         window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "secondary-sidebar", value: true } }));
         setDesignModeEnabled(true);
+        designLog("INFO", "host:enable", { session: DESIGN_LOG_SESSION, surface: "browser-view" });
         try {
             postToFrame(iframeRef.current, {
                 type: "shape-design-enable",
@@ -352,6 +362,11 @@ export function BrowserView() {
                 tool: getDesignModeState().tool,
             });
         } catch (err) {
+            designLog("ERROR", "host:enable-failed", {
+                why: err instanceof Error ? err.message : String(err),
+                error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err),
+                tip: "Paste this ── shape/design block into chat",
+            });
             console.error("[design-mode] failed to start", err);
             setDesignModeEnabled(false);
         }

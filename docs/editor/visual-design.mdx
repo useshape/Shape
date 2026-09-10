@@ -27,9 +27,14 @@ The **inspect** control (eyedropper) is on while you select elements. Click the 
 
 | Action | What it does |
 | --- | --- |
-| Click | Select one element |
+| Click | Select the deepest control under the cursor (buttons/links preferred). Full-page layout shells are ignored |
 | **Ctrl+click** | Add to the selection |
-| **Shift-drag** | Select a region |
+| **Shift-drag** | Select a region (marquee) |
+| **Drag** (positioned) | Move by `left`/`top` with snap guides. `static` elements promote to `relative` at `0,0` (no jump). Hold **Alt** to force free-move instead of flex reorder |
+| **Drag** (flex/grid child) | Reorder siblings inside an auto-layout parent (not under `body` / `#__next`) with an insertion line |
+| **Resize handles** | Change width and height on the selection |
+| **Double-click text** | Edit text content on the canvas (also available in the Typography panel) |
+| **Arrow keys** | Nudge offsets (positioned) or sibling index (flex/grid). Shift = larger step |
 | **Ctrl+I** | Toggle inspect vs interacting with the page |
 | **Escape** | Clear the selection |
 
@@ -43,13 +48,18 @@ After you select an element, the sidebar shows:
 | --- | --- |
 | **Position** | X and Y offsets |
 | **Layout** | Block, horizontal, vertical, or grid; width and height |
-| **Appearance** | Radius, padding, overflow |
+| **Appearance** | Radius (scrubbable input), padding, overflow |
 | **Fill** | Background or text color, opacity |
 | **Stroke** | Border width, style, and color |
 | **Effects** | Shadows and similar |
+| **Styles** | **Color tokens** (CSS variables ≈ Figma variables) and **Text styles** (composite size/weight/line-height ≈ Figma text styles). **+** opens a side flyout (color token or text style); defaults to `:root`, optional `@theme` utilities when the file already uses `@theme` |
 | **Export** | Copy or export related assets |
 
-Changes preview live in the iframe. They are pending until you apply.
+Fill colors owned by `var(--token)` can **Edit token** (patch the shared variable) or **Detach** (write a plain color on the element).
+
+If the selection comes from a React component, use **Apply to component** to retarget the write to the component root; leave it off to patch the instance element.
+
+Changes preview live in the iframe. They are pending until you apply. Canvas moves, resizes, reorders, and text edits participate in the same undo stack as inspector changes.
 
 ## Apply to source
 
@@ -66,6 +76,12 @@ Apply needs an open project folder and a local preview it can map back to source
 ## Device frames
 
 With design mode on, the device control frames the preview at phone and tablet sizes (iPhone, Pixel, iPad, and Full). Full uses the whole tab.
+
+## Troubleshooting logs
+
+When design mode misbehaves, check the **Shape** terminal (the one running `tauri:dev`), not the project app logs.
+
+Look for blocks that start with `shape/design` and end with `end`. Copy that whole block into chat — it includes session id, event name, and structured context so the failure is diagnosable.
 
 ## Related
 

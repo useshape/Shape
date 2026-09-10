@@ -18,7 +18,7 @@ export function UserMessageCard({
     return (
         <div
             className={cn(
-                "relative max-w-[min(100%,36rem)] rounded-2xl bg-surface-3 px-3.5 py-2.5 chat-text text-text-primary",
+                "relative max-w-[min(100%,36rem)] rounded-xl bg-surface-3 px-3.5 py-2.5 chat-text text-text-primary",
                 className,
             )}
         >

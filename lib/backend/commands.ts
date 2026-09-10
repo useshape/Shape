@@ -450,6 +450,9 @@ export const commands = {
             autoRunMode?: string;
             requireEditApproval?: boolean;
             protectDestructiveGit?: boolean;
+            pluginApprovalDefault?: string;
+            pluginApprovals?: Record<string, string>;
+            pluginDisabledActions?: Record<string, string[]>;
         },
         reasoningEffort?: string,
         serviceTier?: string | null,
@@ -465,6 +468,9 @@ export const commands = {
             autoRunMode: executionPolicy?.autoRunMode ?? null,
             requireEditApproval: executionPolicy?.requireEditApproval ?? null,
             protectDestructiveGit: executionPolicy?.protectDestructiveGit ?? null,
+            pluginApprovalDefault: executionPolicy?.pluginApprovalDefault ?? null,
+            pluginApprovals: executionPolicy?.pluginApprovals ?? null,
+            pluginDisabledActions: executionPolicy?.pluginDisabledActions ?? null,
             reasoningEffort: reasoningEffort ?? null,
             serviceTier: serviceTier ?? null,
         }),

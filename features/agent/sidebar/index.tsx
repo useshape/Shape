@@ -145,7 +145,7 @@ export function AgentSidebar({
             onClick: () => void openGitWindow(),
         },
         ...(showDesign && onDesign
-            ? [{ label: "Dsign", icon: RiQuillPenAiFill, onClick: onDesign }]
+            ? [{ label: "Design", icon: RiQuillPenAiFill, onClick: onDesign }]
             : []),
         {
             label: "Customize",
@@ -162,6 +162,7 @@ export function AgentSidebar({
                 expanded ? "w-76" : "w-12",
             )}
         >
+            {showHostedNav ? null : (
             <div
                 className={cn(
                     HEADER_CLASS,
@@ -175,7 +176,6 @@ export function AgentSidebar({
                         className="flex min-h-0 shrink-0 items-center"
                     />
                 ) : null}
-            {showHostedNav ? null : (
                     <Tooltip content="History" side={expanded ? "bottom" : "right"} delayDuration={80}>
                         <button
                             type="button"
@@ -195,8 +195,8 @@ export function AgentSidebar({
                             <Icon icon={RiHistoryLine} />
                         </button>
                     </Tooltip>
-            )}
             </div>
+            )}
 
             {showHostedNav ? (
                 <div

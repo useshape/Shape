@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowRightSLine, RiUserLine } from "@remixicon/react";
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
@@ -37,14 +36,15 @@ import {
 import { AiSettingsPanel } from "./ai-settings";
 import { AccountSettingsPanel } from "./account-settings";
 import { applyTelemetryPreference } from "@/lib/telemetry";
-import { SHAPE_API_BASE, dashboardUrl } from "@/lib/shape-auth/api";
-import { Icon } from "@/components/ui/icon";
+import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import { ThemePicker } from "./theme-picker";
 import { normalizeColorTheme } from "@/lib/themes";
-import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
+import { SETTINGS_NAV, SETTINGS_PAGE_LEAF_IDS, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
 import { KeyboardShortcutsView } from "./keyboard-shortcuts";
+import { PluginsSettingsView } from "./plugins-settings";
+import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import { useRouter } from "next/navigation";
 import {
     AlertDialog,
@@ -213,7 +213,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
     const node = settings.node;
     const { project_path } = useProjectState();
     const [info, setInfo] = useState<PackageInfo | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(() => Boolean(project_path));
     const [installName, setInstallName] = useState("");
 
     const pm = resolvePackageManager(project_path);
@@ -221,6 +221,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
     const loadPackages = useCallback(async () => {
         if (!project_path) {
             setInfo(null);
+            setLoading(false);
             return;
         }
         setLoading(true);
@@ -327,9 +328,20 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {loading && (
-                                        <tr><td colSpan={3} className="px-3.5 py-4 text-text-muted">Loading...</td></tr>
-                                    )}
+                                    {loading &&
+                                        Array.from({ length: 6 }, (_, i) => (
+                                            <tr key={i} aria-hidden>
+                                                <td className="px-3.5 py-2">
+                                                    <Skeleton className="h-4 w-36" />
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <Skeleton className="h-4 w-14" />
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <Skeleton className="ml-auto h-4 w-12" />
+                                                </td>
+                                            </tr>
+                                        ))}
                                     {!loading && allDeps.length === 0 && (
                                         <tr><td colSpan={3} className="px-3.5 py-4 text-text-muted">No packages found.</td></tr>
                                     )}
@@ -650,6 +662,11 @@ export function SettingsView({
         (category?: string | null, section?: string | null) => {
             const target = resolveTargetFromDeepLink(category, section);
             if (!target) return;
+            const leaf = allSettingsLeaves().find((l) => l.targetId === target);
+            if (leaf && SETTINGS_PAGE_LEAF_IDS.has(leaf.id)) {
+                setActiveLeafId(leaf.id);
+                return;
+            }
             window.setTimeout(() => scrollToTarget(target), 80);
         },
         [resolveTargetFromDeepLink, scrollToTarget],
@@ -750,8 +767,7 @@ export function SettingsView({
         }
         if (leaf.targetId) {
             setActiveLeafId(leaf.id);
-            if (leaf.id === "keyboard-shortcuts") return;
-            // Keyboard shortcuts is its own page.
+            if (SETTINGS_PAGE_LEAF_IDS.has(leaf.id)) return;
             window.setTimeout(() => scrollToTarget(leaf.targetId!), 40);
         }
     };
@@ -776,6 +792,14 @@ export function SettingsView({
                         ) : null}
                         {collapsed ? null : (
                             <>
+                                <div className="shrink-0 px-2 pb-2">
+                                    <SearchInput
+                                        placeholder="Search settings"
+                                        value={query}
+                                        onChange={(e) => setQuery(e.target.value)}
+                                        className="h-9 w-full rounded-full border border-border-subtle bg-input-bg px-3 text-text-muted! font-medium"
+                                    />
+                                </div>
                                 <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
                                     {filteredNav.map((group) => {
                                         const open = expandedGroups.has(group.id) || !!query.trim();
@@ -792,11 +816,7 @@ export function SettingsView({
                                                         active={activeLeafId === leaf.id}
                                                         onClick={() => onLeafClick(leaf)}
                                                     >
-                                                        <Icon icon={leaf.icon} className="shrink-0 text-text-muted" />
                                                         <span className="min-w-0 flex-1 truncate text-left">{leaf.label}</span>
-                                                        {leaf.href ? (
-                                                            <Icon icon={RiArrowRightSLine} className="shrink-0 text-text-muted" />
-                                                        ) : null}
                                                     </NavLeafButton>
                                                 ))}
                                             </CollapsibleNavGroup>
@@ -804,13 +824,6 @@ export function SettingsView({
                                     })}
                                 </nav>
                                 <div className="shrink-0 px-2 pb-2">
-                                    <NavLeafButton
-                                        onClick={() => void commands.openUrlExternal(dashboardUrl())}
-                                    >
-                                        <Icon icon={RiUserLine} className="shrink-0 text-text-muted" />
-                                        <span className="min-w-0 flex-1 truncate text-left">Account</span>
-                                        <Icon icon={RiArrowRightSLine} className="shrink-0 text-text-muted" />
-                                    </NavLeafButton>
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -837,17 +850,12 @@ export function SettingsView({
                         <div id="settings-keyboard-shortcuts" className="flex h-full min-h-0 flex-col">
                             <KeyboardShortcutsView />
                         </div>
+                    ) : activeLeafId === "plugins" ? (
+                        <div id="settings-ai-plugins" className="flex h-full min-h-0 flex-col">
+                            <PluginsSettingsView />
+                        </div>
                     ) : (
-                        <>
-                            <div className="sticky top-0 z-10 shrink-0 px-6 pt-4 pb-3">
-                                <SearchInput
-                                    placeholder="Search settings"
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    className="mx-auto h-12 max-w-full rounded-lg border text-text-muted! font-medium border-border bg-transparent px-3"
-                                />
-                            </div>
-                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-6 no-scrollbar lg:p-8">
+                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-8 pb-8 no-scrollbar lg:px-8">
                                 <div className="mx-auto w-full max-w-5xl space-y-2">
                                     <AccountSettingsPanel />
                                     <AiSettings settings={settings} />
@@ -857,7 +865,6 @@ export function SettingsView({
                                     <AdvancedSettings settings={settings} />
                                 </div>
                             </div>
-                        </>
                     )}
                 </div>
             </section>

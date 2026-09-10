@@ -16,6 +16,7 @@ use super::titles::{
 use crate::agent::tools::schema;
 use crate::agent::model_router;
 use crate::agent::models::{AgentState, AutoRunMode, ChatMessage, TurnPolicy};
+use std::collections::HashMap;
 use crate::agent::prompts;
 use crate::app_state::AppState;
 use crate::commands::pty::PtyState;
@@ -42,6 +43,9 @@ pub async fn send_chat_message(
     auto_run_mode: Option<String>,
     require_edit_approval: Option<bool>,
     protect_destructive_git: Option<bool>,
+    plugin_approval_default: Option<String>,
+    plugin_approvals: Option<HashMap<String, String>>,
+    plugin_disabled_actions: Option<HashMap<String, Vec<String>>>,
     reasoning_effort: Option<String>,
     service_tier: Option<String>,
     state: tauri::State<'_, AgentState>,
@@ -188,6 +192,19 @@ pub async fn send_chat_message(
         auto_run_mode: AutoRunMode::from_setting(auto_run_mode.as_deref()),
         require_edit_approval: require_edit_approval.unwrap_or(false),
         protect_destructive_git: protect_destructive_git.unwrap_or(true),
+        plugin_approval_default: AutoRunMode::from_setting(
+            plugin_approval_default.as_deref().or(Some("ask")),
+        ),
+        plugin_approvals: plugin_approvals
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k.to_ascii_lowercase(), AutoRunMode::from_setting(Some(&v))))
+            .collect(),
+        plugin_disabled_actions: plugin_disabled_actions
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k.to_ascii_lowercase(), v))
+            .collect(),
     });
     if !state.try_begin_in_flight(turn_id.clone(), Some(owned_conversation_id.clone())) {
         // Roll back the optimistic user message we just pushed.

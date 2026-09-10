@@ -1,13 +1,69 @@
 //! Shared helpers for tool dispatch.
 
-use serde_json::Value;
+use serde_json::{json, Value};
+use tauri::Emitter;
 
-use super::ToolOutcome;
+use super::{ToolCtx, ToolOutcome};
 
 pub(super) enum ApprovalDecision {
     Approved,
     Rejected,
     Cancelled,
+}
+
+pub(super) async fn wait_for_command_decision(cmd_id: &str, ctx: &ToolCtx<'_>) -> ApprovalDecision {
+    loop {
+        if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
+            if let Some(approved) = decisions.remove(cmd_id) {
+                return if approved {
+                    ApprovalDecision::Approved
+                } else {
+                    ApprovalDecision::Rejected
+                };
+            }
+        }
+        if ctx.cancel.is_cancelled() {
+            return ApprovalDecision::Cancelled;
+        }
+        let still_pending = ctx
+            .agent_state
+            .pending_commands
+            .lock()
+            .map(|p| p.contains_key(cmd_id))
+            .unwrap_or(false);
+        if !still_pending {
+            if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
+                if let Some(approved) = decisions.remove(cmd_id) {
+                    return if approved {
+                        ApprovalDecision::Approved
+                    } else {
+                        ApprovalDecision::Rejected
+                    };
+                }
+            }
+            if ctx.cancel.is_cancelled() {
+                return ApprovalDecision::Cancelled;
+            }
+            return ApprovalDecision::Rejected;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
+}
+
+pub(super) fn cleanup_pending_command(cmd_id: &str, ctx: &ToolCtx<'_>) {
+    if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
+        pendings.remove(cmd_id);
+    }
+    if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
+        decisions.remove(cmd_id);
+    }
+}
+
+pub(super) fn emit_command_resolved(ctx: &ToolCtx<'_>, cmd_id: &str, approved: bool) {
+    let _ = ctx.app_handle.emit(
+        "agent-command-resolved",
+        json!({ "id": cmd_id, "approved": approved }),
+    );
 }
 
 pub(super) fn is_read_only_mode(mode: &str) -> bool {

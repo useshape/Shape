@@ -23,9 +23,25 @@ export const DESIGN_BRIDGE_SCRIPT = `
   var emulateFocus = false;
   var watchId = null;
   var watchSnap = null;
+  var marqueeEl = null;
+  var interact = null;
+  var handles = {};
+  var insertLine = null;
+  var textEdit = null;
+
+  var TEXT_LIKE = {
+    H1:1, H2:1, H3:1, H4:1, H5:1, H6:1,
+    P:1, SPAN:1, A:1, BUTTON:1, LABEL:1, LI:1,
+    TD:1, TH:1, FIGCAPTION:1, BLOCKQUOTE:1,
+    STRONG:1, EM:1, SMALL:1, CODE:1
+  };
 
   function post(msg) {
     try { parent.postMessage(Object.assign({ source: "shape-design" }, msg), "*"); } catch (e) {}
+  }
+
+  function bridgeLog(level, event, fields) {
+    post({ type: "shape-design-log", level: level, event: event, fields: fields || {} });
   }
 
   function ensureOverlay() {
@@ -36,7 +52,364 @@ export const DESIGN_BRIDGE_SCRIPT = `
     labelEl = document.createElement("div");
     labelEl.style.cssText = "position:absolute;left:-1.5px;top:-18px;height:16px;padding:0 6px;font:11px/16px ui-sans-serif,system-ui,sans-serif;background:#9eb0ff;color:#111;white-space:nowrap;border-radius:3px 3px 0 0;";
     overlay.appendChild(labelEl);
+    var edges = [
+      { k: "n", css: "left:50%;top:-4px;margin-left:-4px;cursor:ns-resize;" },
+      { k: "e", css: "right:-4px;top:50%;margin-top:-4px;cursor:ew-resize;" },
+      { k: "s", css: "left:50%;bottom:-4px;margin-left:-4px;cursor:ns-resize;" },
+      { k: "w", css: "left:-4px;top:50%;margin-top:-4px;cursor:ew-resize;" }
+    ];
+    for (var hi = 0; hi < edges.length; hi++) {
+      var h = document.createElement("div");
+      h.setAttribute("data-shape-handle", edges[hi].k);
+      h.style.cssText = "position:absolute;width:8px;height:8px;background:#9eb0ff;border:1px solid #111;box-sizing:border-box;pointer-events:auto;display:none;z-index:1;" + edges[hi].css;
+      overlay.appendChild(h);
+      handles[edges[hi].k] = h;
+    }
     (document.body || document.documentElement).appendChild(overlay);
+  }
+
+  function ensureMarquee() {
+    if (marqueeEl && marqueeEl.isConnected) return;
+    marqueeEl = document.createElement("div");
+    marqueeEl.id = "shape-design-marquee";
+    marqueeEl.style.cssText = "position:fixed;pointer-events:none;z-index:2147483647;border:1px solid #9eb0ff;background:rgba(158,176,255,0.15);display:none;box-sizing:border-box;";
+    (document.body || document.documentElement).appendChild(marqueeEl);
+  }
+
+  function paintMarquee(x0, y0, x1, y1) {
+    ensureMarquee();
+    var left = Math.min(x0, x1);
+    var top = Math.min(y0, y1);
+    marqueeEl.style.display = "block";
+    marqueeEl.style.left = left + "px";
+    marqueeEl.style.top = top + "px";
+    marqueeEl.style.width = Math.abs(x1 - x0) + "px";
+    marqueeEl.style.height = Math.abs(y1 - y0) + "px";
+  }
+
+  function hideMarquee() {
+    if (marqueeEl) marqueeEl.style.display = "none";
+  }
+
+  function syncHandles(show) {
+    var keys = ["n", "e", "s", "w"];
+    for (var i = 0; i < keys.length; i++) {
+      if (handles[keys[i]]) handles[keys[i]].style.display = show ? "block" : "none";
+    }
+  }
+
+  function parsePx(v) {
+    var n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function isPositioned(el) {
+    if (!el) return false;
+    var p = getComputedStyle(el).position;
+    return p === "absolute" || p === "fixed" || p === "sticky" || p === "relative";
+  }
+
+  function isFlowParent(el) {
+    if (!el) return false;
+    var d = getComputedStyle(el).display;
+    return d === "flex" || d === "inline-flex" || d === "grid" || d === "inline-grid";
+  }
+
+  function isNormalFlowChild(el) {
+    if (!el) return false;
+    var cs = getComputedStyle(el);
+    return cs.position === "static" || cs.position === "relative";
+  }
+
+  function flowChildren(parent) {
+    var out = [];
+    if (!parent) return out;
+    for (var i = 0; i < parent.children.length; i++) {
+      var c = parent.children[i];
+      if (skipChrome(c) || SKIP[c.tagName]) continue;
+      if (!isNormalFlowChild(c)) continue;
+      out.push(c);
+    }
+    return out;
+  }
+
+  function ensureInsertionLine() {
+    if (insertLine && insertLine.isConnected) return insertLine;
+    insertLine = document.createElement("div");
+    insertLine.id = "shape-design-insert";
+    insertLine.style.cssText = "position:fixed;pointer-events:none;z-index:2147483646;background:#9eb0ff;display:none;";
+    (document.body || document.documentElement).appendChild(insertLine);
+    return insertLine;
+  }
+
+  function hideInsertionLine() {
+    if (insertLine) insertLine.style.display = "none";
+  }
+
+  function paintInsertionLine(parent, index, vertical) {
+    var kids = flowChildren(parent);
+    ensureInsertionLine();
+    var rect;
+    if (kids.length === 0) {
+      rect = parent.getBoundingClientRect();
+      insertLine.style.left = rect.left + "px";
+      insertLine.style.top = rect.top + "px";
+      insertLine.style.width = vertical ? "2px" : Math.max(2, rect.width) + "px";
+      insertLine.style.height = vertical ? Math.max(2, rect.height) + "px" : "2px";
+      insertLine.style.display = "block";
+      return;
+    }
+    if (index <= 0) {
+      rect = kids[0].getBoundingClientRect();
+      if (vertical) {
+        insertLine.style.left = rect.left + "px";
+        insertLine.style.top = rect.top + "px";
+        insertLine.style.width = "2px";
+        insertLine.style.height = rect.height + "px";
+      } else {
+        insertLine.style.left = rect.left + "px";
+        insertLine.style.top = rect.top + "px";
+        insertLine.style.width = rect.width + "px";
+        insertLine.style.height = "2px";
+      }
+    } else if (index >= kids.length) {
+      rect = kids[kids.length - 1].getBoundingClientRect();
+      if (vertical) {
+        insertLine.style.left = (rect.right - 2) + "px";
+        insertLine.style.top = rect.top + "px";
+        insertLine.style.width = "2px";
+        insertLine.style.height = rect.height + "px";
+      } else {
+        insertLine.style.left = rect.left + "px";
+        insertLine.style.top = (rect.bottom - 2) + "px";
+        insertLine.style.width = rect.width + "px";
+        insertLine.style.height = "2px";
+      }
+    } else {
+      var a = kids[index - 1].getBoundingClientRect();
+      var b = kids[index].getBoundingClientRect();
+      if (vertical) {
+        var x = (a.right + b.left) / 2;
+        insertLine.style.left = (x - 1) + "px";
+        insertLine.style.top = Math.min(a.top, b.top) + "px";
+        insertLine.style.width = "2px";
+        insertLine.style.height = Math.max(a.height, b.height) + "px";
+      } else {
+        var y = (a.bottom + b.top) / 2;
+        insertLine.style.left = Math.min(a.left, b.left) + "px";
+        insertLine.style.top = (y - 1) + "px";
+        insertLine.style.width = Math.max(a.width, b.width) + "px";
+        insertLine.style.height = "2px";
+      }
+    }
+    insertLine.style.display = "block";
+  }
+
+  function reorderIndexAt(parent, clientX, clientY, vertical) {
+    var kids = flowChildren(parent);
+    if (!kids.length) return 0;
+    for (var i = 0; i < kids.length; i++) {
+      var r = kids[i].getBoundingClientRect();
+      var mid = vertical ? (r.left + r.right) / 2 : (r.top + r.bottom) / 2;
+      var v = vertical ? clientX : clientY;
+      if (v < mid) return i;
+    }
+    return kids.length;
+  }
+
+  function isPageRoot(el) {
+    if (!el || el === document.documentElement || el === document.body) return true;
+    var id = (el.id || "").toLowerCase();
+    return id === "__next" || id === "root" || id === "app" || id === "__nuxt";
+  }
+
+  /** Full-viewport wrappers (min-h-screen, layout shells) — never select/drag these as “the page”. */
+  function isPageShell(el) {
+    if (!el || el.nodeType !== 1) return true;
+    if (isPageRoot(el)) return true;
+    var tag = el.tagName;
+    if (tag === "HTML" || tag === "BODY") return true;
+    var role = el.getAttribute && el.getAttribute("role");
+    if (role === "dialog" || role === "alertdialog" || role === "menu") return false;
+    var r = el.getBoundingClientRect();
+    var vw = window.innerWidth || 1;
+    var vh = window.innerHeight || 1;
+    if (r.width >= vw * 0.9 && r.height >= vh * 0.85) {
+      if (
+        tag === "MAIN" || tag === "DIV" || tag === "SECTION" || tag === "ARTICLE" ||
+        tag === "FORM" || tag === "UL" || tag === "NAV" || tag === "HEADER" ||
+        tag === "FOOTER" || tag === "ASIDE"
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function isInteractive(el) {
+    if (!el || el.nodeType !== 1) return false;
+    var tag = el.tagName;
+    if (
+      tag === "BUTTON" || tag === "A" || tag === "INPUT" || tag === "TEXTAREA" ||
+      tag === "SELECT" || tag === "LABEL" || tag === "SUMMARY" || tag === "OPTION" ||
+      tag === "IMG" || tag === "SVG" || tag === "VIDEO" || tag === "AUDIO" ||
+      tag === "CANVAS" || tag === "IFRAME"
+    ) return true;
+    var role = el.getAttribute && el.getAttribute("role");
+    if (
+      role === "button" || role === "link" || role === "menuitem" || role === "tab" ||
+      role === "checkbox" || role === "switch" || role === "textbox" || role === "combobox" ||
+      role === "option" || role === "slider" || role === "img"
+    ) return true;
+    if (el.isContentEditable) return true;
+    try {
+      if (getComputedStyle(el).cursor === "pointer") return true;
+    } catch (errCursor) {}
+    return false;
+  }
+
+  /** Prefer a real UI control over a full-page layout wrapper. */
+  function refineHit(el) {
+    if (!el || el.nodeType !== 1) return null;
+    if (el.ownerSVGElement) el = el.ownerSVGElement;
+    var cur = el;
+    var strong = null;
+    var media = null;
+    var candidate = el;
+    while (cur && cur !== document.documentElement) {
+      if (isPageShell(cur)) break;
+      var tag = cur.tagName;
+      var role = cur.getAttribute && cur.getAttribute("role");
+      var isStrong =
+        tag === "BUTTON" || tag === "A" || tag === "INPUT" || tag === "TEXTAREA" ||
+        tag === "SELECT" || tag === "LABEL" || tag === "SUMMARY" ||
+        role === "button" || role === "link" || role === "menuitem" || role === "tab" ||
+        role === "checkbox" || role === "switch" || role === "textbox" || role === "combobox" ||
+        role === "option" || role === "slider" || cur.isContentEditable;
+      if (!isStrong) {
+        try { if (getComputedStyle(cur).cursor === "pointer") isStrong = true; } catch (ePtr) {}
+      }
+      if (isStrong) { strong = cur; break; }
+      if (!media && (tag === "IMG" || tag === "SVG" || tag === "VIDEO" || tag === "AUDIO" || tag === "CANVAS" || tag === "IFRAME" || role === "img")) {
+        media = cur;
+      }
+      candidate = cur;
+      cur = cur.parentElement;
+    }
+    if (strong) return strong;
+    if (media) return media;
+    if (isPageShell(candidate)) return null;
+    return candidate;
+  }
+
+  function shouldReorder(el) {
+    var parent = el.parentElement;
+    if (!parent || !isFlowParent(parent) || !isNormalFlowChild(el)) return false;
+    var pos = getComputedStyle(el).position;
+    if (pos === "absolute" || pos === "fixed") return false;
+    // Top-level page shells: free-move with snap instead of reshuffling the whole document.
+    if (isPageRoot(parent) || isPageShell(parent)) return false;
+    return true;
+  }
+
+  function promoteToRelative(el) {
+    var cs = getComputedStyle(el);
+    if (cs.position !== "static") {
+      return {
+        position: cs.position,
+        left: parsePx(cs.left),
+        top: parsePx(cs.top)
+      };
+    }
+    // relative left/top are offsets from normal flow — seed at 0, never offsetLeft/Top
+    // (those are layout coordinates and would jump the element by its full inset).
+    applyStyles(el, {
+      position: "relative",
+      left: "0px",
+      top: "0px"
+    });
+    return { position: "relative", left: 0, top: 0 };
+  }
+
+  function isEditableFocus() {
+    var ae = document.activeElement;
+    if (!ae || ae === document.body || ae === document.documentElement) return false;
+    var tag = ae.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (ae.isContentEditable) return true;
+    return false;
+  }
+
+  function isTextLike(el) {
+    return !!(el && TEXT_LIKE[el.tagName]);
+  }
+
+  function endTextEdit(commit) {
+    if (!textEdit) return;
+    var el = textEdit.el;
+    var id = textEdit.id;
+    var original = textEdit.original;
+    el.removeEventListener("keydown", textEdit.onKey);
+    el.removeEventListener("blur", textEdit.onBlur);
+    el.contentEditable = "false";
+    el.removeAttribute("contenteditable");
+    var text = el.textContent || "";
+    textEdit = null;
+    if (!commit) {
+      el.textContent = original;
+    } else if (text !== original) {
+      pending[id] = Object.assign(pending[id] || {}, { __text: text });
+      post({ type: "shape-design-text-edited", id: id, text: text });
+    }
+    if (el.isConnected) emitSelected(el, false);
+  }
+
+  function beginTextEdit(el) {
+    if (!el || !isTextLike(el) || textEdit) return;
+    var id = el.getAttribute(ATTR) || idFor(el);
+    if (!el.getAttribute(ATTR)) el.setAttribute(ATTR, id);
+    var original = el.textContent || "";
+    var onKey = function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        endTextEdit(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        endTextEdit(false);
+      }
+    };
+    var onBlur = function () {
+      endTextEdit(true);
+    };
+    textEdit = { el: el, id: id, original: original, onKey: onKey, onBlur: onBlur };
+    el.contentEditable = "true";
+    el.focus();
+    try {
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    } catch (err) {}
+    el.addEventListener("keydown", onKey);
+    el.addEventListener("blur", onBlur);
+  }
+
+  function onDblClick(e) {
+    if (!enabled || !inspect) return;
+    if (textEdit) return;
+    var el = selectedId ? byId(selectedId) : null;
+    if (!el || !isTextLike(el)) return;
+    var hit = elFromPoint(e.clientX, e.clientY) || e.target;
+    if (!hit || (hit !== el && !el.contains(hit))) return;
+    e.preventDefault();
+    e.stopPropagation();
+    interact = null;
+    beginTextEdit(el);
   }
 
   // SVG elements expose className as an SVGAnimatedString, not a string.
@@ -102,7 +475,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
     if (!node || node.nodeType !== 1) return acc;
     var el = node;
     var tag = el.tagName;
-    if (SKIP[tag] || el.id === "shape-design-overlay" || el.id === "shape-guides" || (el.id && el.id.indexOf("shape-prog-") === 0)) return acc;
+    if (SKIP[tag] || el.id === "shape-design-overlay" || el.id === "shape-guides" || el.id === "shape-design-marquee" || (el.id && el.id.indexOf("shape-prog-") === 0)) return acc;
     var id = idFor(el);
     var label = tag.toLowerCase();
     if (el.id) label += "#" + el.id;
@@ -185,8 +558,10 @@ export const DESIGN_BRIDGE_SCRIPT = `
 
   function skipChrome(node) {
     if (!node || node.nodeType !== 1) return true;
-    if (node.id === "shape-design-overlay" || node.id === "shape-guides") return true;
+    if (node.id === "shape-design-overlay" || node.id === "shape-guides" || node.id === "shape-design-marquee") return true;
     if (node.id && node.id.indexOf("shape-prog-") === 0) return true;
+    if (node.getAttribute && node.getAttribute("data-shape-handle")) return true;
+    if (overlay && overlay.contains && overlay.contains(node)) return true;
     return false;
   }
 
@@ -194,7 +569,11 @@ export const DESIGN_BRIDGE_SCRIPT = `
     try {
       var stack = document.elementsFromPoint(x, y);
       for (var i = 0; i < stack.length; i++) {
-        if (!skipChrome(stack[i]) && !SKIP[stack[i].tagName]) return stack[i];
+        var n = stack[i];
+        if (skipChrome(n) || SKIP[n.tagName]) continue;
+        if (isPageShell(n)) continue;
+        var refined = refineHit(n);
+        if (refined && !isPageShell(refined) && !skipChrome(refined)) return refined;
       }
     } catch (err) {}
     return null;
@@ -202,7 +581,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
 
   function paintOverlay(el, selected) {
     ensureOverlay();
-    if (!el) { overlay.style.display = "none"; return; }
+    if (!el) { overlay.style.display = "none"; syncHandles(false); return; }
     var r = el.getBoundingClientRect();
     overlay.style.display = "block";
     overlay.style.left = r.left + "px";
@@ -213,6 +592,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
     overlay.style.background = selected ? "rgba(158,176,255,0.10)" : "rgba(158,176,255,0.06)";
     var tag = el.tagName.toLowerCase();
     labelEl.textContent = tag + (el.id ? "#" + el.id : "");
+    syncHandles(!!selected);
   }
 
   var progLayers = {};
@@ -360,6 +740,109 @@ export const DESIGN_BRIDGE_SCRIPT = `
     snapGuideTimer = window.setTimeout(function () { paintGuides({}); }, 900);
   }
 
+  /** Snap proposed relative left/top so the element's edges/centers align with siblings/parent. */
+  function snapMove(el, styles) {
+    if (!styles || styles.left == null || styles.top == null) return;
+    var left = parseFloat(styles.left);
+    var top = parseFloat(styles.top);
+    if (isNaN(left) || isNaN(top)) return;
+    var r = el.getBoundingClientRect();
+    var cs = getComputedStyle(el);
+    var curLeft = parsePx(cs.left);
+    var curTop = parsePx(cs.top);
+    var dx0 = left - curLeft;
+    var dy0 = top - curTop;
+    var box = {
+      left: r.left + dx0,
+      top: r.top + dy0,
+      right: r.right + dx0,
+      bottom: r.bottom + dy0,
+      width: r.width,
+      height: r.height
+    };
+    var cx = (box.left + box.right) / 2;
+    var cy = (box.top + box.bottom) / 2;
+    var boxes = collectSnapBoxes(el);
+    var parent = el.parentElement;
+    if (parent && !isPageRoot(parent)) {
+      var pr = parent.getBoundingClientRect();
+      boxes.push({ left: pr.left, top: pr.top, width: pr.width, height: pr.height, right: pr.right, bottom: pr.bottom });
+    }
+    var THRESH = 6;
+    var bestDx = 0;
+    var bestDy = 0;
+    var errX = THRESH + 1;
+    var errY = THRESH + 1;
+    var guideXs = [];
+    var guideYs = [];
+    function considerX(target, source) {
+      var d = target - source;
+      var ad = Math.abs(d);
+      if (ad <= THRESH && ad < errX) {
+        errX = ad;
+        bestDx = d;
+      }
+    }
+    function considerY(target, source) {
+      var d = target - source;
+      var ad = Math.abs(d);
+      if (ad <= THRESH && ad < errY) {
+        errY = ad;
+        bestDy = d;
+      }
+    }
+    for (var i = 0; i < boxes.length; i++) {
+      var b = boxes[i];
+      var bcx = (b.left + b.right) / 2;
+      var bcy = (b.top + b.bottom) / 2;
+      considerX(b.left, box.left);
+      considerX(b.right, box.right);
+      considerX(b.left, box.right);
+      considerX(b.right, box.left);
+      considerX(bcx, cx);
+      considerY(b.top, box.top);
+      considerY(b.bottom, box.bottom);
+      considerY(b.top, box.bottom);
+      considerY(b.bottom, box.top);
+      considerY(bcy, cy);
+    }
+    if (errX <= THRESH) {
+      left += bestDx;
+      var snappedL = box.left + bestDx;
+      var snappedR = box.right + bestDx;
+      var snappedCx = cx + bestDx;
+      for (var gx = 0; gx < boxes.length; gx++) {
+        var bx = boxes[gx];
+        var bxcx = (bx.left + bx.right) / 2;
+        if (Math.abs(bx.left - snappedL) <= 1 || Math.abs(bx.right - snappedL) <= 1) guideXs.push(bx.left);
+        if (Math.abs(bx.left - snappedR) <= 1 || Math.abs(bx.right - snappedR) <= 1) guideXs.push(bx.right);
+        if (Math.abs(bxcx - snappedCx) <= 1) guideXs.push(bxcx);
+      }
+    }
+    if (errY <= THRESH) {
+      top += bestDy;
+      var snappedT = box.top + bestDy;
+      var snappedB = box.bottom + bestDy;
+      var snappedCy = cy + bestDy;
+      for (var gy = 0; gy < boxes.length; gy++) {
+        var by = boxes[gy];
+        var bycy = (by.top + by.bottom) / 2;
+        if (Math.abs(by.top - snappedT) <= 1 || Math.abs(by.bottom - snappedT) <= 1) guideYs.push(by.top);
+        if (Math.abs(by.top - snappedB) <= 1 || Math.abs(by.bottom - snappedB) <= 1) guideYs.push(by.bottom);
+        if (Math.abs(bycy - snappedCy) <= 1) guideYs.push(bycy);
+      }
+    }
+    styles.left = Math.round(left) + "px";
+    styles.top = Math.round(top) + "px";
+    if (guideXs.length || guideYs.length) {
+      paintGuides({ xs: guideXs, ys: guideYs });
+      window.clearTimeout(snapGuideTimer);
+      snapGuideTimer = window.setTimeout(function () { paintGuides({}); }, 600);
+    } else {
+      paintGuides({});
+    }
+  }
+
   function snapshot(el) {
     if (!el) return;
     var id = el.getAttribute(ATTR);
@@ -414,13 +897,14 @@ export const DESIGN_BRIDGE_SCRIPT = `
     syncProgOverlays();
   }
 
-  function applyStyles(el, styles) {
+  function applyStyles(el, styles, opts) {
     snapshot(el);
     if (!el.getAttribute(ATTR)) el.setAttribute(ATTR, idFor(el));
     var id = el.getAttribute(ATTR);
     liveProps[id] = liveProps[id] || {};
     styles = styles || {};
-    snapSize(el, styles);
+    if (opts && opts.snapMove) snapMove(el, styles);
+    else snapSize(el, styles);
     if (styles.borderStyle === "none" && (styles.borderWidth == null || styles.borderWidth === "")) styles.borderWidth = "0px";
     if ((styles.borderWidth === "0px" || styles.borderWidth === "0") && (styles.borderStyle == null || styles.borderStyle === "")) styles.borderStyle = "none";
     Object.keys(styles).forEach(function (k) {
@@ -909,6 +1393,16 @@ export const DESIGN_BRIDGE_SCRIPT = `
     var payload = elementPayload(el);
     selectedId = payload.id;
     paintOverlay(el, true);
+    bridgeLog("INFO", "select", {
+      id: payload.id,
+      tag: payload.tag,
+      label: payload.label,
+      className: payload.className ? String(payload.className).slice(0, 120) : "",
+      additive: !!additive,
+      source: payload.source
+        ? (String(payload.source.fileName || "").split("/").pop().split(String.fromCharCode(92)).pop() + ":" + payload.source.lineNumber)
+        : null
+    });
     post({ type: "shape-design-selected", element: payload, additive: !!additive });
     resolveIdentity(payload.source, function (src) {
       payload.source = src;
@@ -920,31 +1414,498 @@ export const DESIGN_BRIDGE_SCRIPT = `
     });
   }
 
+  function pushUndoFor(id) {
+    undoStack.push({ id: id, live: JSON.parse(JSON.stringify(liveProps[id] || {})) });
+    redoStack = [];
+  }
+
+  function postMoved(el) {
+    if (!el) return;
+    var id = el.getAttribute(ATTR) || idFor(el);
+    var cs = getComputedStyle(el);
+    var live = liveProps[id] || {};
+    var left = live.left || cs.left;
+    var top = live.top || cs.top;
+    var position = live.position || cs.position;
+    pending[id] = Object.assign(pending[id] || {}, { left: left, top: top, position: position });
+    post({ type: "shape-design-moved", id: id, left: left, top: top, position: position });
+  }
+
+  function postResized(el) {
+    if (!el) return;
+    var id = el.getAttribute(ATTR) || idFor(el);
+    var cs = getComputedStyle(el);
+    var live = liveProps[id] || {};
+    var width = live.width || cs.width;
+    var height = live.height || cs.height;
+    pending[id] = Object.assign(pending[id] || {}, { width: width, height: height });
+    post({ type: "shape-design-resized", id: id, width: width, height: height });
+  }
+
+  function sourceKeyOf(el) {
+    var src = reactSource(el);
+    if (!src) return "";
+    var file = cleanSourcePath(src.fileName || "");
+    if (!file && src.generated) file = String(src.generated.fileName || "");
+    var key = (file || "") + ":" + (src.lineNumber || 0) + ":" + (src.columnNumber || 1);
+    if (src.nodeId) return String(src.nodeId);
+    return key;
+  }
+
+  function findBySourceKey(want) {
+    if (!want) return null;
+    var key = String(want);
+    var parts = key.split(":");
+    var wantFile = parts.length >= 3 ? parts.slice(0, -2).join(":") : key;
+    var wantLine = parts.length >= 3 ? +parts[parts.length - 2] : 0;
+    var wantCol = parts.length >= 3 ? +parts[parts.length - 1] : 0;
+    var nodes = document.body ? document.body.getElementsByTagName("*") : [];
+    var soft = null;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (skipChrome(el) || SKIP[el.tagName]) continue;
+      var sk = sourceKeyOf(el);
+      if (sk && sk === key) return el;
+      var src = reactSource(el);
+      if (!src) continue;
+      var file = cleanSourcePath(src.fileName || "");
+      if (!file && src.generated) file = cleanSourcePath(src.generated.fileName || "");
+      if (file && wantFile && (file === wantFile || file.indexOf(wantFile) >= 0 || wantFile.indexOf(file) >= 0)) {
+        if (wantLine && src.lineNumber === wantLine) {
+          if (!wantCol || src.columnNumber === wantCol || !soft) soft = el;
+          if (wantCol && src.columnNumber === wantCol) return el;
+        } else if (!soft && !wantLine) soft = el;
+      }
+    }
+    return soft;
+  }
+
+  function elementsInRect(x0, y0, x1, y1) {
+    var left = Math.min(x0, x1);
+    var top = Math.min(y0, y1);
+    var right = Math.max(x0, x1);
+    var bottom = Math.max(y0, y1);
+    var hits = [];
+    var nodes = document.body ? document.body.getElementsByTagName("*") : [];
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (skipChrome(el) || SKIP[el.tagName]) continue;
+      if (el === document.body || el === document.documentElement) continue;
+      var r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      var cx = r.left + r.width / 2;
+      var cy = r.top + r.height / 2;
+      if (cx < left || cx > right || cy < top || cy > bottom) continue;
+      hits.push(el);
+    }
+    var filtered = [];
+    for (var a = 0; a < hits.length; a++) {
+      var keep = true;
+      for (var b = 0; b < hits.length; b++) {
+        if (a !== b && hits[a].contains(hits[b])) { keep = false; break; }
+      }
+      if (keep) filtered.push(hits[a]);
+    }
+    return filtered;
+  }
+
+  function startMove(el, e) {
+    if (isPageRoot(el) || isPageShell(el)) {
+      bridgeLog("WARN", "move:refused", {
+        why: isPageRoot(el) ? "page-root" : "page-shell",
+        tag: el && el.tagName,
+        id: el && el.id
+      });
+      return false;
+    }
+    var id = idFor(el);
+    if (!el.getAttribute(ATTR)) el.setAttribute(ATTR, id);
+    pushUndoFor(id);
+    var promoted = promoteToRelative(el);
+    interact = {
+      mode: "move",
+      el: el,
+      id: id,
+      startX: e.clientX,
+      startY: e.clientY,
+      origLeft: promoted.left,
+      origTop: promoted.top,
+      position: promoted.position,
+      moved: false,
+      pointerId: e.pointerId
+    };
+    return true;
+  }
+
+  function startReorder(el, e) {
+    var parent = el.parentElement;
+    if (!parent || !isFlowParent(parent)) return false;
+    var kids = flowChildren(parent);
+    var fromIndex = kids.indexOf(el);
+    if (fromIndex < 0) return false;
+    var id = idFor(el);
+    if (!el.getAttribute(ATTR)) el.setAttribute(ATTR, id);
+    pushUndoFor(id);
+    var dir = getComputedStyle(parent).flexDirection || "";
+    var vertical = dir.indexOf("row") === 0 || getComputedStyle(parent).display.indexOf("grid") >= 0 && false;
+    // row / row-reverse → vertical insertion line (reorder along x); column → horizontal line
+    vertical = dir.indexOf("column") !== 0;
+    if (getComputedStyle(parent).display === "grid" || getComputedStyle(parent).display === "inline-grid") {
+      vertical = true;
+    }
+    interact = {
+      mode: "reorder",
+      el: el,
+      id: id,
+      parent: parent,
+      fromIndex: fromIndex,
+      toIndex: fromIndex,
+      vertical: vertical,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      parentSelector: cssPath(parent)
+    };
+    return true;
+  }
+
+  function startResize(el, edge, e) {
+    var cs = getComputedStyle(el);
+    var r = el.getBoundingClientRect();
+    var id = idFor(el);
+    if (!el.getAttribute(ATTR)) el.setAttribute(ATTR, id);
+    pushUndoFor(id);
+    interact = {
+      mode: "resize",
+      el: el,
+      id: id,
+      edge: edge,
+      startX: e.clientX,
+      startY: e.clientY,
+      origW: r.width,
+      origH: r.height,
+      origLeft: parsePx(cs.left),
+      origTop: parsePx(cs.top),
+      position: cs.position,
+      positioned: isPositioned(el),
+      moved: false
+    };
+  }
+
   function pick(e) {
     if (!enabled || !inspect) return;
     if (e.button != null && e.button !== 0) return;
     lastPtr.x = e.clientX;
     lastPtr.y = e.clientY;
-    var el = elFromPoint(e.clientX, e.clientY) || e.target;
-    if (!el || skipChrome(el)) return;
+    var el = elFromPoint(e.clientX, e.clientY);
+    if (!el) {
+      el = e.target;
+      if (el && el.nodeType === 1) el = refineHit(el);
+    }
+    if (!el || skipChrome(el) || isPageShell(el)) return;
     while (el && SKIP[el.tagName]) el = el.parentElement;
-    if (!el || el.nodeType !== 1) return;
+    if (!el || el.nodeType !== 1 || isPageShell(el) || skipChrome(el)) return;
     e.preventDefault();
     e.stopPropagation();
     post({ type: "shape-design-selecting" });
     emitSelected(el, !!(e.metaKey || e.ctrlKey));
   }
 
-  function onMove(e) {
+  function onPointerDown(e) {
     if (!enabled || !inspect) return;
+    if (e.button != null && e.button !== 0) return;
     lastPtr.x = e.clientX;
     lastPtr.y = e.clientY;
+
+    if (textEdit) {
+      var te = textEdit.el;
+      if (te && (e.target === te || te.contains(e.target))) return;
+      endTextEdit(true);
+    }
+
+    var handle = e.target && e.target.getAttribute ? e.target.getAttribute("data-shape-handle") : null;
+    if (handle && selectedId) {
+      var handleEl = byId(selectedId);
+      if (handleEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        startResize(handleEl, handle, e);
+        return;
+      }
+    }
+
+    if (e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      interact = {
+        mode: "marquee",
+        x0: e.clientX,
+        y0: e.clientY,
+        x1: e.clientX,
+        y1: e.clientY,
+        additive: !!(e.metaKey || e.ctrlKey)
+      };
+      paintMarquee(e.clientX, e.clientY, e.clientX, e.clientY);
+      return;
+    }
+
+    var hit = elFromPoint(e.clientX, e.clientY);
+    if (!hit && e.target && e.target.nodeType === 1 && !skipChrome(e.target)) {
+      hit = refineHit(e.target);
+    }
+    if (hit && !skipChrome(hit) && !isPageShell(hit) && selectedId) {
+      var selected = byId(selectedId);
+      if (selected && (hit === selected || selected.contains(hit))) {
+        // Clicking a more specific control inside a large/shell selection should re-target.
+        if (hit !== selected && (isPageShell(selected) || isInteractive(hit))) {
+          pick(e);
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          if (e.currentTarget && e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+          else if (e.target && e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
+        } catch (errCap) {}
+        // Flex/grid children: reorder (unless Alt forces free-move). Page roots free-move.
+        if (!e.altKey && shouldReorder(selected)) {
+          if (startReorder(selected, e)) return;
+        }
+        if (!startMove(selected, e)) {
+          pick(e);
+        }
+        return;
+      }
+    }
+
+    pick(e);
+  }
+
+  function onPointerMove(e) {
+    lastPtr.x = e.clientX;
+    lastPtr.y = e.clientY;
+    if (!enabled || !inspect) return;
+
+    if (interact) {
+      e.preventDefault();
+      if (interact.mode === "marquee") {
+        interact.x1 = e.clientX;
+        interact.y1 = e.clientY;
+        paintMarquee(interact.x0, interact.y0, interact.x1, interact.y1);
+        return;
+      }
+      if (interact.mode === "move") {
+        var mdx = e.clientX - interact.startX;
+        var mdy = e.clientY - interact.startY;
+        if (Math.abs(mdx) > 2 || Math.abs(mdy) > 2) interact.moved = true;
+        if (!interact.moved) return;
+        applyStyles(interact.el, {
+          position: interact.position,
+          left: Math.round(interact.origLeft + mdx) + "px",
+          top: Math.round(interact.origTop + mdy) + "px"
+        }, { snapMove: true });
+        paintOverlay(interact.el, true);
+        return;
+      }
+      if (interact.mode === "reorder") {
+        var rdx = e.clientX - interact.startX;
+        var rdy = e.clientY - interact.startY;
+        if (Math.abs(rdx) > 2 || Math.abs(rdy) > 2) interact.moved = true;
+        if (!interact.moved) return;
+        var nextIdx = reorderIndexAt(interact.parent, e.clientX, e.clientY, interact.vertical);
+        // Adjust for removing the dragged item from the list when computing insert slot
+        var from = interact.fromIndex;
+        var adjusted = nextIdx;
+        if (adjusted > from) adjusted -= 1;
+        interact.toIndex = adjusted;
+        var kids = flowChildren(interact.parent);
+        var placeholder = kids[adjusted] || null;
+        if (placeholder === interact.el) {
+          // no-op
+        } else if (placeholder) {
+          interact.parent.insertBefore(interact.el, placeholder);
+        } else {
+          interact.parent.appendChild(interact.el);
+        }
+        // Recompute toIndex from live DOM
+        interact.toIndex = flowChildren(interact.parent).indexOf(interact.el);
+        paintInsertionLine(interact.parent, interact.toIndex, interact.vertical);
+        paintOverlay(interact.el, true);
+        return;
+      }
+      if (interact.mode === "resize") {
+        var rdx = e.clientX - interact.startX;
+        var rdy = e.clientY - interact.startY;
+        if (Math.abs(rdx) > 1 || Math.abs(rdy) > 1) interact.moved = true;
+        if (!interact.moved) return;
+        var styles = {};
+        var w = interact.origW;
+        var h = interact.origH;
+        var left = interact.origLeft;
+        var top = interact.origTop;
+        var edge = interact.edge;
+        if (edge === "e") w = interact.origW + rdx;
+        if (edge === "w") { w = interact.origW - rdx; left = interact.origLeft + rdx; }
+        if (edge === "s") h = interact.origH + rdy;
+        if (edge === "n") { h = interact.origH - rdy; top = interact.origTop + rdy; }
+        w = Math.max(1, Math.round(w));
+        h = Math.max(1, Math.round(h));
+        styles.width = w + "px";
+        styles.height = h + "px";
+        if (interact.positioned && (edge === "n" || edge === "w")) {
+          styles.position = interact.position;
+          if (edge === "w") styles.left = Math.round(left) + "px";
+          if (edge === "n") styles.top = Math.round(top) + "px";
+        }
+        applyStyles(interact.el, styles);
+        paintOverlay(interact.el, true);
+        return;
+      }
+    }
+
     var el = elFromPoint(e.clientX, e.clientY) || e.target;
     if (!el || skipChrome(el)) return;
     var id = idFor(el);
     hoverId = id;
     if (selectedId && id === selectedId) { paintOverlay(el, true); return; }
     paintOverlay(el, false);
+  }
+
+  function onPointerUp(e) {
+    if (!interact) return;
+    var state = interact;
+    interact = null;
+    paintGuides({});
+    try {
+      if (e && e.currentTarget && e.currentTarget.releasePointerCapture && state.pointerId != null) {
+        e.currentTarget.releasePointerCapture(state.pointerId);
+      }
+    } catch (errRel) {}
+    if (state.mode === "marquee") {
+      hideMarquee();
+      var dx = Math.abs((state.x1 || state.x0) - state.x0);
+      var dy = Math.abs((state.y1 || state.y0) - state.y0);
+      if (dx < 4 && dy < 4) {
+        var tiny = elFromPoint(state.x0, state.y0);
+        if (tiny && !skipChrome(tiny)) {
+          while (tiny && SKIP[tiny.tagName]) tiny = tiny.parentElement;
+          if (tiny && tiny.nodeType === 1) {
+            post({ type: "shape-design-selecting" });
+            emitSelected(tiny, true);
+          }
+        }
+        return;
+      }
+      var els = elementsInRect(state.x0, state.y0, state.x1, state.y1);
+      var payloads = [];
+      for (var i = 0; i < els.length; i++) payloads.push(elementPayload(els[i]));
+      if (payloads.length) {
+        selectedId = payloads[0].id;
+        paintOverlay(els[0], true);
+      } else {
+        syncHandles(!!selectedId);
+      }
+      post({ type: "shape-design-area", elements: payloads, additive: !!state.additive });
+      return;
+    }
+    if (state.mode === "move") {
+      if (!state.moved) {
+        emitSelected(state.el, !!(e && (e.metaKey || e.ctrlKey)));
+        return;
+      }
+      postMoved(state.el);
+      emitSelected(state.el, false);
+      return;
+    }
+    if (state.mode === "reorder") {
+      hideInsertionLine();
+      if (!state.moved || state.fromIndex === state.toIndex) {
+        emitSelected(state.el, !!(e && (e.metaKey || e.ctrlKey)));
+        return;
+      }
+      post({
+        type: "shape-design-reordered",
+        id: state.id,
+        parentSelector: state.parentSelector,
+        fromIndex: state.fromIndex,
+        toIndex: state.toIndex
+      });
+      emitSelected(state.el, false);
+      return;
+    }
+    if (state.mode === "resize") {
+      if (state.moved) {
+        postResized(state.el);
+        emitSelected(state.el, false);
+      }
+    }
+  }
+
+  function onKeyDown(e) {
+    if (!enabled || !inspect || !selectedId) return;
+    if (isEditableFocus()) return;
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    var el = byId(selectedId);
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Flex/grid: nudge sibling index with arrows when in normal flow
+    if (!e.altKey && shouldReorder(el)) {
+      var kids = flowChildren(el.parentElement);
+      var idx = kids.indexOf(el);
+      if (idx < 0) return;
+      var delta = 0;
+      var parentCs = getComputedStyle(el.parentElement);
+      var alongMain =
+        parentCs.display.indexOf("grid") >= 0 ||
+        (parentCs.flexDirection || "").indexOf("column") !== 0;
+      if (alongMain) {
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") delta = -1;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") delta = 1;
+      } else {
+        if (e.key === "ArrowUp" || e.key === "ArrowLeft") delta = -1;
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") delta = 1;
+      }
+      var next = Math.max(0, Math.min(kids.length - 1, idx + delta));
+      if (next === idx) return;
+      pushUndoFor(idFor(el));
+      var target = kids[next];
+      if (next > idx) {
+        if (target.nextSibling) el.parentElement.insertBefore(el, target.nextSibling);
+        else el.parentElement.appendChild(el);
+      } else {
+        el.parentElement.insertBefore(el, target);
+      }
+      post({
+        type: "shape-design-reordered",
+        id: idFor(el),
+        parentSelector: cssPath(el.parentElement),
+        fromIndex: idx,
+        toIndex: next
+      });
+      emitSelected(el, false);
+      return;
+    }
+    if (!isPositioned(el)) {
+      promoteToRelative(el);
+    }
+    var step = e.shiftKey ? 10 : 1;
+    var cs = getComputedStyle(el);
+    var left = parsePx(cs.left);
+    var top = parsePx(cs.top);
+    if (e.key === "ArrowLeft") left -= step;
+    if (e.key === "ArrowRight") left += step;
+    if (e.key === "ArrowUp") top -= step;
+    if (e.key === "ArrowDown") top += step;
+    var id = el.getAttribute(ATTR) || idFor(el);
+    pushUndoFor(id);
+    applyStyles(el, {
+      position: cs.position === "static" ? "relative" : cs.position,
+      left: Math.round(left) + "px",
+      top: Math.round(top) + "px"
+    }, { snapMove: true });
+    paintOverlay(el, true);
+    postMoved(el);
   }
 
   function sendViews() {
@@ -1101,6 +2062,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
       ensureOverlay();
       hookNetwork();
       sendTree();
+      bridgeLog("INFO", "bridge:enabled", { inspect: inspect, tool: tool, href: String(location.href || "") });
       var under = elFromPoint(lastPtr.x, lastPtr.y);
       if (selectedId) emitSelected(byId(selectedId));
       else if (under) paintOverlay(under, false);
@@ -1109,8 +2071,12 @@ export const DESIGN_BRIDGE_SCRIPT = `
     if (data.type === "shape-design-disable") {
       enabled = false;
       hoverId = null;
+      interact = null;
+      hideMarquee();
       overlay && (overlay.style.display = "none");
+      syncHandles(false);
       paintGuides({});
+      bridgeLog("INFO", "bridge:disabled", {});
     }
     if (data.type === "shape-design-inspect") inspect = !!data.enabled;
     if (data.type === "shape-design-select") {
@@ -1263,6 +2229,25 @@ export const DESIGN_BRIDGE_SCRIPT = `
     if (data.type === "shape-design-pseudo" && data.pseudo) {
       forcePseudo(resolveTarget(data) || byId(selectedId), data.pseudo, !!data.enabled);
     }
+    if (data.type === "shape-design-set-var") {
+      var varName = String(data.name || "");
+      if (varName) {
+        if (data.value == null || String(data.value).trim() === "") {
+          document.documentElement.style.removeProperty(varName);
+        } else {
+          document.documentElement.style.setProperty(varName, String(data.value));
+        }
+      }
+    }
+    if (data.type === "shape-design-reselect") {
+      var found = null;
+      if (data.id) found = byId(data.id);
+      if (!found && data.selector) {
+        try { found = document.querySelector(data.selector); } catch (re) { found = null; }
+      }
+      if (!found && data.sourceKey) found = findBySourceKey(data.sourceKey);
+      if (found) emitSelected(found);
+    }
   });
 
   var treeTimer = null;
@@ -1385,11 +2370,19 @@ export const DESIGN_BRIDGE_SCRIPT = `
     forceSheetEl.textContent = acc.join("\\n");
   }
 
-  document.addEventListener("pointerdown", pick, true);
-  document.addEventListener("click", function (e) {
+  document.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("pointermove", onPointerMove, true);
+  document.addEventListener("pointerup", onPointerUp, true);
+  document.addEventListener("pointercancel", onPointerUp, true);
+  document.addEventListener("dragstart", function (e) {
     if (enabled && inspect) { e.preventDefault(); e.stopPropagation(); }
   }, true);
-  document.addEventListener("mousemove", onMove, true);
+  document.addEventListener("keydown", onKeyDown, true);
+  document.addEventListener("dblclick", onDblClick, true);
+  document.addEventListener("click", function (e) {
+    if (textEdit) return;
+    if (enabled && inspect) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
   window.addEventListener("scroll", function () {
     if (selectedId) paintOverlay(byId(selectedId), true);
     syncProgOverlays();
@@ -1404,7 +2397,7 @@ export const DESIGN_BRIDGE_SCRIPT = `
       var mine = true;
       for (var i = 0; i < records.length; i++) {
         var t = records[i].target;
-        if (t && t.id !== "shape-design-overlay" && t.id !== "shape-guides") { mine = false; break; }
+        if (t && t.id !== "shape-design-overlay" && t.id !== "shape-guides" && t.id !== "shape-design-marquee") { mine = false; break; }
       }
       if (mine) return;
       if (!overlay || !overlay.isConnected) ensureOverlay();

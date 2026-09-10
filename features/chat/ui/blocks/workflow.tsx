@@ -25,6 +25,7 @@ export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
     "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
+    "plugin_call",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -638,6 +639,13 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                     const href = block.visitUrl;
                     if (href) void commands.openUrlExternal(href);
                 },
+            };
+        case "plugin_call":
+            return {
+                label: block.pluginLabel || "Plugin",
+                query: block.pluginToolkit,
+                expandable: false,
+                content: block.content,
             };
         case "grep":
             return {

@@ -149,6 +149,10 @@ export function upsertDesignPending(edit: DesignPendingEdit) {
                         classToggles: edit.classToggles
                             ? { ...p.classToggles, ...edit.classToggles }
                             : p.classToggles,
+                        tokenUpdates: edit.tokenUpdates
+                            ? { ...p.tokenUpdates, ...edit.tokenUpdates }
+                            : p.tokenUpdates,
+                        siblingReorder: edit.siblingReorder ?? p.siblingReorder,
                     }
                   : p,
           )

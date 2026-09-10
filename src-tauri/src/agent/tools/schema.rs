@@ -630,6 +630,7 @@ fn plugin_run() -> Value {
             "type": "object",
             "properties": {
                 "slug": {"type": "string", "description": "Exact tool slug from plugin_tools or plugin_search (e.g. SLACK_SEND_MESSAGE)."},
+                "toolkit": {"type": "string", "description": "Plugin id (slack, github, …). Optional if the slug prefix is enough."},
                 "arguments": {"type": "object", "description": "Tool arguments as a JSON object.", "additionalProperties": true}
             },
             "required": ["slug"],

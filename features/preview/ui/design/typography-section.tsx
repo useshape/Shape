@@ -40,15 +40,21 @@ const WEIGHT_OPTIONS = [
     { value: "900", label: "Black", style: { fontWeight: 900 as const } },
 ];
 
+const TEXT_CONTENT_TAGS =
+    /^(h[1-6]|p|span|a|button|label|li|td|th|figcaption|blockquote|strong|em|small|code)$/i;
+
 export function TypographySection({
     s,
     text,
+    tag,
     onPatch,
 }: {
     s: DesignComputedStyles;
     text?: string;
+    tag?: string;
     onPatch: (styles: Partial<DesignComputedStyles>, text?: string) => void;
 }) {
+    const showContent = TEXT_CONTENT_TAGS.test(tag ?? "");
     const [details, setDetails] = React.useState(false);
     const [anchor, setAnchor] = React.useState<DOMRect | null>(null);
     const [inUse, setInUse] = React.useState<string[]>(() => {
@@ -87,7 +93,7 @@ export function TypographySection({
                 inUse={inUse}
                 onChange={(stack) => onPatch({ fontFamily: stack })}
             />
-            <div className="flex gap-1">
+            <div className="flex gap-2">
                 <CompactSelect value={weight} options={WEIGHT_OPTIONS} onChange={(v) => onPatch({ fontWeight: v })} />
                 <PxInput
                     glyph={<Icon icon={RiFontSize2} />}
@@ -96,7 +102,7 @@ export function TypographySection({
                     onCommit={(n) => onPatch({ fontSize: px(n) })}
                 />
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-2">
                 <PxInput
                     glyph={<Icon icon={RiTextSpacing} />}
                     title="Line height"
@@ -111,7 +117,7 @@ export function TypographySection({
                     onCommit={(n) => onPatch({ letterSpacing: px(n) })}
                 />
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
                 <Segment>
                     <ToggleBtn label="Left" active={textAlign === "left"} onClick={() => onPatch({ textAlign: "left" })}>
                         <Icon icon={RiAlignLeft} />
@@ -127,7 +133,7 @@ export function TypographySection({
                     </ToggleBtn>
                 </Segment>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
                 <Segment>
                     <ToggleBtn label="Top" active={valign === "flex-start"} onClick={() => onPatch({ alignItems: "flex-start" })}>
                         <Icon icon={RiAlignTop} />
@@ -225,9 +231,9 @@ export function TypographySection({
                     />
                 </FlyoutCard>
             ) : null}
-            {text ? (
+            {showContent ? (
                 <Textarea
-                    value={text}
+                    value={text ?? ""}
                     onChange={(e) => onPatch({}, e.target.value)}
                     rows={2}
                     placeholder="Content"

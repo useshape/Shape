@@ -44,6 +44,12 @@ pub struct TurnPolicy {
     /// Destructive git commands (reset/clean/restore…) always ask, even in
     /// "run everything" mode.
     pub protect_destructive_git: bool,
+    /// Default approval mode for plugin_run (safest: Ask).
+    pub plugin_approval_default: AutoRunMode,
+    /// Per-toolkit override of plugin_approval_default.
+    pub plugin_approvals: HashMap<String, AutoRunMode>,
+    /// Disabled Composio slugs per toolkit.
+    pub plugin_disabled_actions: HashMap<String, Vec<String>>,
 }
 
 impl Default for TurnPolicy {
@@ -52,6 +58,9 @@ impl Default for TurnPolicy {
             auto_run_mode: AutoRunMode::Auto,
             require_edit_approval: false,
             protect_destructive_git: true,
+            plugin_approval_default: AutoRunMode::Ask,
+            plugin_approvals: HashMap::new(),
+            plugin_disabled_actions: HashMap::new(),
         }
     }
 }

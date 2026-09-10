@@ -120,7 +120,7 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
     *conv_id_guard = Some(id.clone());
 
     let mut convs = state.conversations.lock()?;
-    let list = convs.entry(proj_path.to_string()).or_insert_with(Vec::new);
+    let list = project_conversation_list(&mut convs, proj_path);
     if let Some(existing) = list.iter_mut().find(|c| c.id == id) {
         existing.history = history;
         existing.title = title;
@@ -153,7 +153,7 @@ pub fn upsert_conversation_snapshot(
         return Ok(());
     }
     let mut convs = state.conversations.lock()?;
-    let list = convs.entry(proj_path.to_string()).or_insert_with(Vec::new);
+    let list = project_conversation_list(&mut convs, proj_path);
     if let Some(existing) = list.iter_mut().find(|c| c.id == id) {
         existing.history = history;
         existing.title = title.to_string();
@@ -169,4 +169,22 @@ pub fn upsert_conversation_snapshot(
     }
     save_conversations(proj_path, list);
     Ok(())
+}
+
+/// Load disk history before mutating so a cold in-memory cache cannot overwrite
+/// every other chat in the project file.
+fn project_conversation_list<'a>(
+    convs: &'a mut std::collections::HashMap<String, Vec<Conversation>>,
+    proj_path: &str,
+) -> &'a mut Vec<Conversation> {
+    let list = convs
+        .entry(proj_path.to_string())
+        .or_insert_with(|| load_conversations(proj_path));
+    if list.is_empty() {
+        let disk = load_conversations(proj_path);
+        if !disk.is_empty() {
+            *list = disk;
+        }
+    }
+    list
 }

@@ -27,6 +27,7 @@ import { parseShapeContinueAction } from "@/lib/shape-continue-action";
 import { mentionRanges, mentionDisplayLabel } from "@/lib/chat-mentions";
 import { openProjectFile } from "@/lib/open-project-file";
 import { Favicon } from "@/components/ui/favicon";
+import { PluginLogo } from "@/components/ui/plugin-logo";
 import { WebSourcesMenu } from "../blocks/search";
 import { Button } from "@/components/ui/button";
 import { useGitHubAuth } from "@/lib/github-auth/store";
@@ -199,6 +200,15 @@ function MentionRichText({ text }: { text: string }) {
                 {mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs" ? (
                     <span className="chat-link-favicon">
                         <FileIcon name={label} className="h-3 w-3 shrink-0" />
+                    </span>
+                ) : mention.kind === "plugin" ? (
+                    <span className="chat-link-favicon">
+                        <PluginLogo
+                            toolkit={mention.id || mention.path || label}
+                            name={label}
+                            size={12}
+                            className="rounded-sm"
+                        />
                     </span>
                 ) : mention.kind === "browser" ? (
                     <span className="chat-link-favicon">

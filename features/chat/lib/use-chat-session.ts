@@ -907,6 +907,9 @@ export function useChatSession() {
                     autoRunMode: settings.ai.autoRunMode,
                     requireEditApproval: settings.ai.requireEditApproval,
                     protectDestructiveGit: settings.ai.protectDestructiveGit,
+                    pluginApprovalDefault: settings.ai.pluginApprovalDefault ?? "ask",
+                    pluginApprovals: settings.ai.pluginApprovals,
+                    pluginDisabledActions: settings.ai.pluginDisabledActions,
                 },
                 reasoningEffort,
                 fastMode ? "priority" : null,
@@ -1181,6 +1184,7 @@ export function useChatSession() {
                 const convId = event.payload?.conversationId?.trim();
                 if (!title || !convId) return;
                 syncOpenTabs(convId, title);
+                window.dispatchEvent(new CustomEvent("shape-chats-changed"));
                 const current = conversationIdRef.current;
                 // Never steal a background chat's id/title onto an idle New Chat draft.
                 if (current && current !== convId) return;

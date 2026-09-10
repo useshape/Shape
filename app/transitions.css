@@ -51,9 +51,9 @@
   --reason-fade: 28px;
   --reason-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --stream-fade: 180ms;
+  --stream-fade: 350ms;
   --stream-gap: 60ms;
-  --stream-blur: 4px;
+  --stream-blur: 1px;
   --stream-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   --hint-swap: 320ms;

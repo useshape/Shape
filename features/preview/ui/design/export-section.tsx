@@ -77,7 +77,7 @@ export function ExportSection() {
             }
         >
             {presets.map((preset) => (
-                <div key={preset.id} className="flex items-center gap-1">
+                <div key={preset.id} className="flex items-center gap-2">
                     <CompactSelect
                         title="Format"
                         value={preset.format}

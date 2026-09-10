@@ -357,7 +357,7 @@ export function CommandApprovalCard({
     }, [isProcessing, onRun]);
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl bg-transparent border border-border">
+        <div className="my-1 overflow-hidden rounded-xl bg-surface-3  border border-border-subtle">
             <div className="flex items-center gap-2 px-3 pt-2 pb-2">
                 {isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />

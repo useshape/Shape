@@ -1,11 +1,7 @@
 ﻿"use client";
 
-import { RiCloseLine, RiCrosshair2Line, RiEyeLine, RiRefreshLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { Tooltip } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import {
     getDesignBridge,
@@ -20,15 +16,33 @@ import {
     setDesignTool,
     useDesignModeStore,
 } from "@/features/preview/design-mode/store";
+import { designLog, DESIGN_LOG_SESSION, ingestDesignBridgeLog } from "@/features/preview/design-mode/log";
 import type {
     DesignBridgeApi,
     DesignLayerNode,
     DesignSelectedElement,
 } from "@/features/preview/design-mode/types";
 import type { DesignExportPayload } from "@/features/preview/design-mode/export-file";
-import { DesignInspectorPanel } from "@/features/preview/ui/design/inspector";
+import { applyDesignHistory, DesignInspectorPanel } from "@/features/preview/ui/design/inspector";
 import { DesignSidebar } from "@/features/preview/ui/design/sidebar";
-import { SidebarPanelHeaderFrame } from "@/features/panels/ui/sidebar-panel-header";
+import { DesignChrome } from "@/features/preview/ui/design/chrome";
+import { DesignStylesSection } from "@/features/preview/ui/design/styles-section";
+import {
+    clampWidth,
+    DESIGN_LEFT_MAX,
+    DESIGN_LEFT_MIN,
+    DESIGN_RIGHT_MAX,
+    DESIGN_RIGHT_MIN,
+    persistDesignLeftOpen,
+    persistDesignLeftWidth,
+    persistDesignRightOpen,
+    persistDesignRightWidth,
+    readDesignPanelPrefs,
+} from "@/features/preview/ui/design/design-layout";
+import { cn } from "@/lib/utils";
+import { upsertDesignPending } from "@/features/preview/design-mode/store";
+import { recordChange, setHistoryPending } from "@/features/preview/design-mode/history";
+import type { DesignTextStyle } from "@/features/preview/ui/design/styles-model";
 import {
     detectDevCommand,
     type DevCommandInfo,
@@ -61,6 +75,66 @@ function postToFrame(frame: HTMLIFrameElement | null, msg: Record<string, unknow
     }
 }
 
+function replayDesignPending(frame: HTMLIFrameElement | null) {
+    const pending = getDesignModeState().pending;
+    for (const edit of pending) {
+        if (edit.styles && Object.keys(edit.styles).length) {
+            postToFrame(frame, {
+                type: "shape-design-style",
+                id: edit.id,
+                selector: edit.selector,
+                styles: edit.styles,
+            });
+        }
+        if (edit.text != null) {
+            postToFrame(frame, {
+                type: "shape-design-content",
+                id: edit.id,
+                selector: edit.selector,
+                text: edit.text,
+            });
+        }
+        if (edit.tokenUpdates) {
+            for (const [name, value] of Object.entries(edit.tokenUpdates)) {
+                postToFrame(frame, { type: "shape-design-set-var", name, value });
+            }
+        }
+    }
+}
+
+function syncHistoryPending() {
+    setHistoryPending(
+        getDesignModeState().pending.map((p) => ({
+            id: p.id,
+            selector: p.selector,
+            className: p.className,
+            tag: p.tag,
+            locateText: p.locateText,
+            source: p.source,
+            label: p.label,
+            styles: Object.fromEntries(
+                Object.entries(p.styles).filter(([, v]) => v != null),
+            ) as Record<string, string>,
+            text: p.text,
+        })),
+    );
+}
+
+function recordCanvasStyles(
+    el: DesignSelectedElement,
+    before: Record<string, string>,
+    after: Record<string, string>,
+) {
+    recordChange({
+        id: el.id,
+        selector: el.selector,
+        label: el.label,
+        before,
+        after,
+    });
+    syncHistoryPending();
+}
+
 function useDesignPreview() {
     return useSyncExternalStore(
         subscribeDesignPreview,
@@ -69,48 +143,10 @@ function useDesignPreview() {
     );
 }
 
-function ToolBtn({
-    label,
-    active,
-    onClick,
-    disabled,
-    children,
-}: {
-    label: string;
-    active?: boolean;
-    onClick: () => void;
-    disabled?: boolean;
-    children: React.ReactNode;
-}) {
-    return (
-        <Tooltip content={label}>
-            <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={label}
-                aria-pressed={active}
-                disabled={disabled}
-                onClick={onClick}
-                className={cn(
-                    "size-9 rounded-lg text-text-secondary",
-                    active
-                        ? "bg-accent-text-bg text-accent-text hover:bg-accent-text-bg hover:text-accent-text"
-                        : "hover:bg-panel-hover hover:text-text-primary",
-                )}
-            >
-                {children}
-            </Button>
-        </Tooltip>
-    );
-}
-
 function DesignLoadingScreen({
     phase,
-    onExit,
 }: {
     phase: DesignPreviewPhase;
-    onExit: () => void;
 }) {
     const label = designPhaseLabel(phase);
     const [shown, setShown] = useState(label);
@@ -131,39 +167,25 @@ function DesignLoadingScreen({
     }, [phase, shown]);
 
     return (
-        <div className="absolute inset-0 z-20 flex flex-col bg-background">
-            <div className="h-titlebar shrink-0" data-tauri-drag-region />
-            <div className="flex min-h-0 flex-1 items-center justify-center px-10">
-                <div className="flex items-center gap-3">
-                    <WorkingDots className="imsg-typing" />
-                    <div className="relative h-6 w-40 overflow-hidden">
-                        <span
-                            className="absolute inset-x-0 top-0 text-sm font-medium text-text-secondary transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                            style={{
-                                opacity: anim === "in" ? 1 : 0,
-                                transform:
-                                    anim === "in"
-                                        ? "translateY(0)"
-                                        : anim === "out"
-                                          ? "translateY(-8px)"
-                                          : "translateY(8px)",
-                            }}
-                        >
-                            {shown}…
-                        </span>
-                    </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center px-10">
+            <div className="flex items-center gap-3">
+                <WorkingDots className="imsg-typing" />
+                <div className="relative h-6 w-40 overflow-hidden">
+                    <span
+                        className="absolute inset-x-0 top-0 text-sm font-medium text-text-secondary transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                        style={{
+                            opacity: anim === "in" ? 1 : 0,
+                            transform:
+                                anim === "in"
+                                    ? "translateY(0)"
+                                    : anim === "out"
+                                      ? "translateY(-8px)"
+                                      : "translateY(8px)",
+                        }}
+                    >
+                        {shown}…
+                    </span>
                 </div>
-            </div>
-            <div className="pointer-events-none flex shrink-0 justify-center pb-6">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="pointer-events-auto rounded-full px-5"
-                    onClick={onExit}
-                >
-                    Exit
-                </Button>
             </div>
         </div>
     );
@@ -171,7 +193,7 @@ function DesignLoadingScreen({
 
 
 /**
- * Design Mode — full-bleed takeover. Loading is centered; no agent sidebar/chat chrome.
+ * Design Mode — full-bleed canvas under a dedicated chrome bar.
  */
 export function DesignStudio({ onClose }: { onClose: () => void }) {
     const { project_path } = useProjectState();
@@ -337,6 +359,7 @@ export function DesignStudio({ onClose }: { onClose: () => void }) {
         setDesignModeEnabled(true);
         setDesignInspect(true);
         setDesignTool("select");
+        designLog("INFO", "host:enable", { session: DESIGN_LOG_SESSION, surface: "design-studio" });
         postToFrame(iframeRef.current, {
             type: "shape-design-enable",
             inspect: true,
@@ -363,14 +386,37 @@ export function DesignStudio({ onClose }: { onClose: () => void }) {
         const onMessage = (event: MessageEvent) => {
             const data = event.data;
             if (!data || data.source !== "shape-design") return;
+            if (data.type === "shape-design-log") {
+                ingestDesignBridgeLog(data);
+                return;
+            }
             if (data.type === "shape-design-ready") {
                 setDesignReady(true);
+                designLog("INFO", "host:bridge-ready", {
+                    session: DESIGN_LOG_SESSION,
+                    href: typeof data.href === "string" ? data.href : undefined,
+                });
                 if (!getDesignModeState().enabled) return;
                 postToFrame(iframeRef.current, {
                     type: "shape-design-enable",
                     inspect: getDesignModeState().inspect,
                     tool: "select",
                 });
+                // HMR: reselect by source loc / selector, not only data-shape-id
+                const prev = getDesignModeState().selected;
+                if (prev) {
+                    const sourceKey = prev.source
+                        ? `${prev.source.fileName}:${prev.source.lineNumber}:${prev.source.columnNumber ?? 1}`
+                        : undefined;
+                    postToFrame(iframeRef.current, {
+                        type: "shape-design-reselect",
+                        id: prev.id,
+                        selector: prev.selector,
+                        sourceKey,
+                    });
+                }
+                // Replay pending live styles after HMR / reload
+                window.setTimeout(() => replayDesignPending(iframeRef.current), 40);
             }
             if (data.type === "shape-design-tree" && Array.isArray(data.nodes)) {
                 setDesignLayers(data.nodes as DesignLayerNode[]);
@@ -383,6 +429,124 @@ export function DesignStudio({ onClose }: { onClose: () => void }) {
             }
             if (data.type === "shape-design-area" && Array.isArray(data.elements)) {
                 setDesignSelection(data.elements as DesignSelectedElement[]);
+            }
+            if (data.type === "shape-design-moved" && data.id) {
+                const el = getDesignModeState().selected;
+                if (el && el.id === data.id) {
+                    const after = {
+                        position: String(data.position || el.styles.position || "relative"),
+                        left: String(data.left ?? el.styles.left),
+                        top: String(data.top ?? el.styles.top),
+                    };
+                    const before = {
+                        position: String(el.styles.position || "static"),
+                        left: String(el.styles.left || "0px"),
+                        top: String(el.styles.top || "0px"),
+                    };
+                    upsertDesignPending({
+                        id: el.id,
+                        tag: el.tag,
+                        selector: el.selector,
+                        className: el.className,
+                        locateText: el.locateText,
+                        source: el.source,
+                        label: el.label,
+                        styles: after,
+                        inspect: el.inspect,
+                    });
+                    setDesignSelected({
+                        ...el,
+                        styles: { ...el.styles, ...after },
+                    });
+                    recordCanvasStyles(el, before, after);
+                }
+            }
+            if (data.type === "shape-design-resized" && data.id) {
+                const el = getDesignModeState().selected;
+                if (el && el.id === data.id) {
+                    const after = {
+                        width: String(data.width ?? el.styles.width),
+                        height: String(data.height ?? el.styles.height),
+                    };
+                    const before = {
+                        width: String(el.styles.width || ""),
+                        height: String(el.styles.height || ""),
+                    };
+                    upsertDesignPending({
+                        id: el.id,
+                        tag: el.tag,
+                        selector: el.selector,
+                        className: el.className,
+                        locateText: el.locateText,
+                        source: el.source,
+                        label: el.label,
+                        styles: after,
+                        inspect: el.inspect,
+                    });
+                    setDesignSelected({
+                        ...el,
+                        styles: { ...el.styles, ...after },
+                    });
+                    recordCanvasStyles(el, before, after);
+                }
+            }
+            if (data.type === "shape-design-reordered" && data.id) {
+                const el = getDesignModeState().selected;
+                if (el && el.id === data.id) {
+                    upsertDesignPending({
+                        id: el.id,
+                        tag: el.tag,
+                        selector: el.selector,
+                        className: el.className,
+                        locateText: el.locateText,
+                        source: el.source,
+                        label: el.label,
+                        styles: {},
+                        inspect: el.inspect,
+                        siblingReorder: {
+                            parentSelector: String(data.parentSelector || ""),
+                            fromIndex: Number(data.fromIndex) || 0,
+                            toIndex: Number(data.toIndex) || 0,
+                        },
+                    });
+                    recordChange({
+                        id: el.id,
+                        selector: el.selector,
+                        label: el.label,
+                        before: { __reorder: String(data.fromIndex ?? 0) },
+                        after: { __reorder: String(data.toIndex ?? 0) },
+                    });
+                    syncHistoryPending();
+                }
+            }
+            if (data.type === "shape-design-text-edited" && data.id) {
+                const el = getDesignModeState().selected;
+                if (el && el.id === data.id) {
+                    const text = String(data.text ?? "");
+                    upsertDesignPending({
+                        id: el.id,
+                        tag: el.tag,
+                        selector: el.selector,
+                        className: el.className,
+                        locateText: el.locateText,
+                        source: el.source,
+                        label: el.label,
+                        styles: {},
+                        text,
+                        inspect: el.inspect,
+                    });
+                    recordChange({
+                        id: el.id,
+                        selector: el.selector,
+                        label: el.label,
+                        before: {},
+                        after: {},
+                        textBefore: el.text,
+                        textAfter: text,
+                    });
+                    setDesignSelected({ ...el, text });
+                    syncHistoryPending();
+                }
             }
             if (data.type === "shape-design-fonts" && typeof data.req === "string") {
                 const wait = fontWaiters.current.get(data.req);
@@ -461,6 +625,10 @@ export function DesignStudio({ onClose }: { onClose: () => void }) {
                 }),
             injectFont: (family) =>
                 postToFrame(iframeRef.current, { type: "shape-design-inject-font", family }),
+            setCssVar: (name, value) =>
+                postToFrame(iframeRef.current, { type: "shape-design-set-var", name, value }),
+            reselect: (opts) =>
+                postToFrame(iframeRef.current, { type: "shape-design-reselect", ...opts }),
             exportElement: (id, opts) =>
                 new Promise((resolve, reject) => {
                     const req = `${Date.now().toString(36)}`;
@@ -510,48 +678,215 @@ export function DesignStudio({ onClose }: { onClose: () => void }) {
     const showError = Boolean(bootError) || preview.phase === "error";
     const shellReady = showCanvas && !showLoading;
 
+    const prefs = useRef(readDesignPanelPrefs());
+    const [leftOpen, setLeftOpen] = useState(prefs.current.leftOpen);
+    const [rightOpen, setRightOpen] = useState(prefs.current.rightOpen);
+    const [leftWidth, setLeftWidth] = useState(prefs.current.leftWidth);
+    const [rightWidth, setRightWidth] = useState(prefs.current.rightWidth);
+    const [resizing, setResizing] = useState<"left" | "right" | null>(null);
+    const leftWidthRef = useRef(leftWidth);
+    const rightWidthRef = useRef(rightWidth);
+    leftWidthRef.current = leftWidth;
+    rightWidthRef.current = rightWidth;
+
+    useEffect(() => {
+        if (!resizing) return;
+        const onMove = (e: MouseEvent) => {
+            if (resizing === "left") {
+                const next = clampWidth(e.clientX, DESIGN_LEFT_MIN, DESIGN_LEFT_MAX);
+                leftWidthRef.current = next;
+                setLeftWidth(next);
+            } else {
+                const next = clampWidth(window.innerWidth - e.clientX, DESIGN_RIGHT_MIN, DESIGN_RIGHT_MAX);
+                rightWidthRef.current = next;
+                setRightWidth(next);
+            }
+        };
+        const onUp = () => {
+            if (resizing === "left") persistDesignLeftWidth(leftWidthRef.current);
+            else persistDesignRightWidth(rightWidthRef.current);
+            setResizing(null);
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+        };
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+        return () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        };
+    }, [resizing]);
+
+    const toggleLeft = useCallback(() => {
+        setLeftOpen((v) => {
+            const next = !v;
+            persistDesignLeftOpen(next);
+            return next;
+        });
+    }, []);
+    const toggleRight = useCallback(() => {
+        setRightOpen((v) => {
+            const next = !v;
+            persistDesignRightOpen(next);
+            return next;
+        });
+    }, []);
+
+    const applyColorVar = useCallback(
+        (cssVar: string) => {
+            const el = getDesignModeState().selected;
+            if (!el || !bridge) return;
+            const isText = /^(h[1-6]|p|span|a|button|label|li|td|th)$/i.test(el.tag) || !!(el.text || "").trim();
+            const styles: Record<string, string> = isText
+                ? { color: `var(${cssVar})` }
+                : { backgroundColor: `var(${cssVar})`, backgroundImage: "none" };
+            bridge.style(el.id, styles, el.selector);
+            upsertDesignPending({
+                id: el.id,
+                tag: el.tag,
+                selector: el.selector,
+                className: el.className,
+                locateText: el.locateText,
+                source: el.source,
+                label: el.label,
+                styles,
+                inspect: el.inspect,
+            });
+        },
+        [bridge],
+    );
+
+    const applyTextStyle = useCallback(
+        (style: DesignTextStyle) => {
+            const el = getDesignModeState().selected;
+            if (!el || !bridge) return;
+            const styles: Record<string, string> = {};
+            if (style.vars.fontSize) styles.fontSize = `var(${style.vars.fontSize})`;
+            if (style.vars.lineHeight) styles.lineHeight = `var(${style.vars.lineHeight})`;
+            if (style.vars.fontWeight) styles.fontWeight = `var(${style.vars.fontWeight})`;
+            if (style.vars.fontFamily) styles.fontFamily = `var(${style.vars.fontFamily})`;
+            if (!Object.keys(styles).length) return;
+            bridge.style(el.id, styles, el.selector);
+            upsertDesignPending({
+                id: el.id,
+                tag: el.tag,
+                selector: el.selector,
+                className: el.className,
+                locateText: el.locateText,
+                source: el.source,
+                label: el.label,
+                styles,
+                inspect: el.inspect,
+            });
+        },
+        [bridge],
+    );
+
+    const handleSelectTool = useCallback(() => {
+        setDesignTool("select");
+        setDesignInspect(true);
+        postToFrame(iframeRef.current, {
+            type: "shape-design-enable",
+            inspect: true,
+            tool: "select",
+        });
+    }, []);
+
+    const handleInteractTool = useCallback(() => {
+        setDesignInspect(false);
+        postToFrame(iframeRef.current, {
+            type: "shape-design-inspect",
+            enabled: false,
+        });
+    }, []);
+
+    const pageLabel = pagePath.startsWith("view:") ? pagePath.slice(5) : pagePath;
+
     return (
         <div
-            className="absolute inset-0 z-50 flex min-h-0 w-full overflow-hidden bg-editor"
+            className="absolute inset-0 z-50 flex min-h-0 w-full flex-col overflow-hidden bg-editor"
             role="main"
             aria-label="Design Mode"
         >
-            {shellReady ? (
-                <DesignSidebar
-                    projectPath={project_path}
-                    activePath={pagePath}
-                    liveViews={liveViews}
-                    onSelectPage={onSelectPage}
-                    onSelectLayer={selectLayer}
-                    onExit={handleClose}
-                />
-            ) : null}
+            <DesignChrome
+                pageLabel={shellReady ? pageLabel : undefined}
+                inspect={design.inspect}
+                toolsEnabled={shellReady}
+                leftOpen={leftOpen}
+                rightOpen={rightOpen}
+                onToggleLeft={toggleLeft}
+                onToggleRight={toggleRight}
+                onBack={handleClose}
+                onSelect={handleSelectTool}
+                onInteract={handleInteractTool}
+                onReload={() => setReloadKey((k) => k + 1)}
+                onUndo={() => applyDesignHistory(bridge, "before")}
+                onRedo={() => applyDesignHistory(bridge, "after")}
+            />
 
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-editor">
-                {showLoading ? (
-                    <DesignLoadingScreen
-                        phase={preview.phase}
-                        onExit={handleClose}
-                    />
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                {shellReady ? (
+                    <>
+                        <div
+                            style={{
+                                width: leftOpen ? leftWidth : 0,
+                                flex: "0 0 auto",
+                            }}
+                            className={cn(
+                                "h-full overflow-hidden",
+                                !resizing && "transition-[width] duration-200 ease-[var(--ease-out)]",
+                            )}
+                        >
+                            <div style={{ width: leftWidth }} className="flex h-full">
+                                <DesignSidebar
+                                    projectPath={project_path}
+                                    activePath={pagePath}
+                                    liveViews={liveViews}
+                                    onSelectPage={onSelectPage}
+                                    onSelectLayer={selectLayer}
+                                />
+                            </div>
+                        </div>
+                        <div
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize left panel"
+                            className={cn(
+                                "group relative z-30 w-0 shrink-0",
+                                !leftOpen && "pointer-events-none opacity-0",
+                            )}
+                            onMouseDown={(e) => {
+                                if (!leftOpen) return;
+                                e.preventDefault();
+                                setResizing("left");
+                            }}
+                        >
+                            <div className="absolute inset-y-0 -left-1.5 w-3 cursor-col-resize" />
+                            <div className="pointer-events-none absolute inset-y-0 left-0 w-px transition-colors group-hover:bg-border-secondary group-active:bg-text-muted" />
+                        </div>
+                    </>
                 ) : null}
 
-                {showCanvas ? (
-                    <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-editor">
-                        <iframe
-                            ref={iframeRef}
-                            key={`${frameSrc}-${reloadKey}`}
-                            title={`Design preview ${pagePath}`}
-                            src={frameSrc ?? undefined}
-                            className="absolute inset-0 h-full w-full border-0 bg-editor"
-                            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
-                            onLoad={() => enableInspect()}
-                        />
-                    </div>
-                ) : null}
+                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-editor">
+                    {showLoading ? <DesignLoadingScreen phase={preview.phase} /> : null}
 
-                {showError && !showCanvas ? (
-                    <div className="absolute inset-0 z-20 flex flex-col bg-background">
-                        <div className="h-titlebar shrink-0" data-tauri-drag-region />
+                    {showCanvas ? (
+                        <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-editor">
+                            <iframe
+                                ref={iframeRef}
+                                key={`${frameSrc}-${reloadKey}`}
+                                title={`Design preview ${pagePath}`}
+                                src={frameSrc ?? undefined}
+                                className="absolute inset-0 h-full w-full border-0 bg-editor"
+                                sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
+                                onLoad={() => enableInspect()}
+                            />
+                        </div>
+                    ) : null}
+
+                    {showError && !showCanvas ? (
                         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8">
                             <p className="max-w-md whitespace-pre-wrap text-center text-sm text-text-muted">
                                 {bootError || preview.error || "Could not open preview"}
@@ -562,76 +897,57 @@ export function DesignStudio({ onClose }: { onClose: () => void }) {
                                 </Button>
                             ) : null}
                         </div>
-                        <div className="pointer-events-none flex shrink-0 justify-center pb-6">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="pointer-events-auto rounded-full px-5"
-                                onClick={handleClose}
-                            >
-                                Exit
-                            </Button>
-                        </div>
-                    </div>
-                ) : null}
+                    ) : null}
+                </div>
 
-                {showCanvas ? (
-                    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center">
-                        <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-border-subtle bg-panel p-1 shadow-sm">
-                            <ToolBtn
-                                label="Select"
-                                active={design.inspect}
-                                onClick={() => {
-                                    setDesignTool("select");
-                                    setDesignInspect(true);
-                                    postToFrame(iframeRef.current, {
-                                        type: "shape-design-enable",
-                                        inspect: true,
-                                        tool: "select",
-                                    });
-                                }}
-                            >
-                                <Icon icon={RiCrosshair2Line} />
-                            </ToolBtn>
-                            <ToolBtn
-                                label="Interact"
-                                active={!design.inspect}
-                                onClick={() => {
-                                    setDesignInspect(false);
-                                    postToFrame(iframeRef.current, {
-                                        type: "shape-design-inspect",
-                                        enabled: false,
-                                    });
-                                }}
-                            >
-                                <Icon icon={RiEyeLine} />
-                            </ToolBtn>
-                            <div className="px-2 text-xs tabular-nums text-text-muted">
-                                {pagePath.startsWith("view:") ? pagePath.slice(5) : pagePath}
-                            </div>
-                            <ToolBtn
-                                label="Reload"
-                                onClick={() => setReloadKey((k) => k + 1)}
-                            >
-                                <Icon icon={RiRefreshLine} />
-                            </ToolBtn>
-                            <ToolBtn label="Exit Design Mode" onClick={handleClose}>
-                                <Icon icon={RiCloseLine} />
-                            </ToolBtn>
+                {shellReady ? (
+                    <>
+                        <div
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize right panel"
+                            className={cn(
+                                "group relative z-30 w-0 shrink-0",
+                                !rightOpen && "pointer-events-none opacity-0",
+                            )}
+                            onMouseDown={(e) => {
+                                if (!rightOpen) return;
+                                e.preventDefault();
+                                setResizing("right");
+                            }}
+                        >
+                            <div className="absolute inset-y-0 -left-1.5 w-3 cursor-col-resize" />
+                            <div className="pointer-events-none absolute inset-y-0 left-0 w-px transition-colors group-hover:bg-border-secondary group-active:bg-text-muted" />
                         </div>
-                    </div>
+                        <div
+                            style={{
+                                width: rightOpen ? rightWidth : 0,
+                                flex: "0 0 auto",
+                            }}
+                            className={cn(
+                                "h-full overflow-hidden",
+                                !resizing && "transition-[width] duration-200 ease-[var(--ease-out)]",
+                            )}
+                        >
+                            <aside
+                                style={{ width: rightWidth }}
+                                className="flex h-full flex-col border-l border-border-subtle bg-panel"
+                            >
+                                <div className="flex h-10 shrink-0 items-center border-b border-border-subtle px-4">
+                                    <span className="text-sm font-medium text-text-primary">Properties</span>
+                                </div>
+                                <div className="min-h-0 flex-1 overflow-hidden">
+                                    <DesignInspectorPanel bridge={bridge} />
+                                </div>
+                                <DesignStylesSection
+                                    onApplyColorVar={applyColorVar}
+                                    onApplyTextStyle={applyTextStyle}
+                                />
+                            </aside>
+                        </div>
+                    </>
                 ) : null}
             </div>
-
-            {shellReady ? (
-                <aside className="flex w-70 shrink-0 flex-col border-l border-border-subtle bg-panel">
-                    <SidebarPanelHeaderFrame title="Properties" />
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                        <DesignInspectorPanel bridge={bridge} />
-                    </div>
-                </aside>
-            ) : null}
         </div>
     );
 }

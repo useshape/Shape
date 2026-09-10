@@ -10,8 +10,8 @@ use crate::agent::tools::files;
 use crate::commands::pty::SessionKind;
 
 use super::common::{
-    blocked_outcome, clip, error_outcome, escape_xml_text, get_str, is_read_only_mode,
-    ApprovalDecision,
+    blocked_outcome, cleanup_pending_command, clip, emit_command_resolved, error_outcome,
+    escape_xml_text, get_str, is_read_only_mode, wait_for_command_decision, ApprovalDecision,
 };
 use super::discover::tool_grep;
 use super::files::{cat_ui_chunk, tool_list_dir, tool_read_file};
@@ -444,68 +444,6 @@ pub(super) async fn intercept_file_inspection_command(
         "test-path" => steer("Use `list_dir` to check whether a path exists."),
         _ => None,
     }
-}
-
-/// Outcome of waiting for a user decision on a pending approval.
-/// Wait until the user approves/rejects the pending command, or the turn is
-/// cancelled. There is deliberately NO timeout: silently converting "no answer
-/// yet" into a rejection desynced the model from reality (the user could
-/// approve later and the command would run with the model believing it was
-/// rejected). The Stop button (cancel token) is the escape hatch.
-pub(super) async fn wait_for_command_decision(cmd_id: &str, ctx: &ToolCtx<'_>) -> ApprovalDecision {
-    loop {
-        if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
-            if let Some(approved) = decisions.remove(cmd_id) {
-                return if approved {
-                    ApprovalDecision::Approved
-                } else {
-                    ApprovalDecision::Rejected
-                };
-            }
-        }
-        if ctx.cancel.is_cancelled() {
-            return ApprovalDecision::Cancelled;
-        }
-        // Defensive: pending entry vanished without a decision (e.g. state reset).
-        let still_pending = ctx
-            .agent_state
-            .pending_commands
-            .lock()
-            .map(|p| p.contains_key(cmd_id))
-            .unwrap_or(false);
-        if !still_pending {
-            if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
-                if let Some(approved) = decisions.remove(cmd_id) {
-                    return if approved {
-                        ApprovalDecision::Approved
-                    } else {
-                        ApprovalDecision::Rejected
-                    };
-                }
-            }
-            if ctx.cancel.is_cancelled() {
-                return ApprovalDecision::Cancelled;
-            }
-            return ApprovalDecision::Rejected;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-    }
-}
-
-pub(super) fn cleanup_pending_command(cmd_id: &str, ctx: &ToolCtx<'_>) {
-    if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
-        pendings.remove(cmd_id);
-    }
-    if let Ok(mut decisions) = ctx.agent_state.command_decisions.lock() {
-        decisions.remove(cmd_id);
-    }
-}
-
-pub(super) fn emit_command_resolved(ctx: &ToolCtx<'_>, cmd_id: &str, approved: bool) {
-    let _ = ctx.app_handle.emit(
-        "agent-command-resolved",
-        json!({ "id": cmd_id, "approved": approved }),
-    );
 }
 
 pub(super) async fn run_git_commit_with_approval(

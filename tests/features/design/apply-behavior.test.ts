@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { mergeClassTokens, stylesToClassTokens } from "@/features/preview/design-mode/apply/class-tokens";
-import { splitVarAndPlain } from "@/features/preview/design-mode/apply/commit-edits";
+import {
+    isCssInJsOwned,
+    looksLikeCssInJsClass,
+    splitVarAndPlain,
+} from "@/features/preview/design-mode/apply/commit-edits";
 import type { DesignPendingEdit } from "@/features/preview/design-mode/types";
 
 describe("flex wrap / unwrap tokens", () => {
@@ -80,5 +84,72 @@ describe("CSS variables vs a picked color", () => {
         });
         expect(plain.color).toBe("#ff0000");
         expect(variables).toHaveLength(0);
+    });
+});
+
+describe("CSS-in-JS ownership", () => {
+    it("detects emotion / styled-components hashes", () => {
+        expect(looksLikeCssInJsClass("css-1a2b3c4")).toBe(true);
+        expect(looksLikeCssInJsClass("Button-css-abc")).toBe(true);
+        expect(looksLikeCssInJsClass("sc-bdVaJa")).toBe(true);
+        expect(looksLikeCssInJsClass("Title-sc-1xyz")).toBe(true);
+        expect(looksLikeCssInJsClass("Hero_title__xK3p")).toBe(false);
+        expect(looksLikeCssInJsClass("flex")).toBe(false);
+    });
+
+    it("fails closed when hashes own styles without a patchable origin", () => {
+        expect(
+            isCssInJsOwned(
+                {
+                    id: "x",
+                    label: "div",
+                    tag: "div",
+                    className: "css-1abcde",
+                    styles: { color: "#fff" },
+                    inspect: {
+                        origins: {
+                            color: {
+                                property: "color",
+                                computed: "rgb(255, 255, 255)",
+                                authored: "rgb(255, 255, 255)",
+                                source: { kind: "computed", label: "computed" },
+                                inherited: false,
+                                overridden: false,
+                                inactive: false,
+                            },
+                        },
+                    } as DesignPendingEdit["inspect"],
+                },
+                ["color"],
+            ),
+        ).toBe(true);
+    });
+
+    it("does not treat token-backed or utility origins as CSS-in-JS", () => {
+        expect(
+            isCssInJsOwned(
+                {
+                    id: "x",
+                    label: "div",
+                    tag: "div",
+                    className: "css-1abcde flex",
+                    styles: { color: "#fff" },
+                    inspect: {
+                        origins: {
+                            color: {
+                                property: "color",
+                                computed: "#fff",
+                                authored: "var(--fg)",
+                                source: { kind: "variable", label: "var(--fg)" },
+                                inherited: false,
+                                overridden: false,
+                                inactive: false,
+                            },
+                        },
+                    } as DesignPendingEdit["inspect"],
+                },
+                ["color"],
+            ),
+        ).toBe(false);
     });
 });
