@@ -5,7 +5,6 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Checkmark } from "@/components/ui/checkmark";
 import {
@@ -22,6 +21,7 @@ import {
     ToggleBtn as ToggleBtnBase,
 } from "@/features/editor/ui/tailwind-controls/tw-control-shared";
 import { cn } from "@/lib/utils";
+import { getCachedProjectColorVariables } from "@/lib/css-variables";
 import {
     colorParts,
     cssColorToHex,
@@ -30,14 +30,18 @@ import {
     parsePx,
     toCssColor,
 } from "../../design-mode/css";
+import {
+    colorStylesFromVariables,
+    nearestColorToken,
+} from "./styles-model";
 
-/** Dense inspector chrome shared by every control in the Design panel. */
+/** Inspector chrome — one input height, even gutters. */
 const FIELD_SHELL =
-    "h-7 gap-1 rounded-lg border-border-subtle bg-input-bg px-1.5 shadow-none focus-within:border-border-focus focus-within:ring-0 hover:border-border";
+    "h-8 gap-1.5 rounded-lg border-border-subtle bg-input-bg px-2 shadow-none focus-within:border-border-focus focus-within:ring-0 hover:border-border";
 const SEGMENT_SHELL = "rounded-lg border border-border-subtle bg-input-bg p-0.5";
 const DIVIDER = "border-border-subtle";
 const FIELD_CONTROL =
-    "flex h-7 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-lg border border-border-subtle bg-input-bg px-1.5 text-sm text-text-primary outline-none transition-colors hover:border-border focus-visible:border-border-focus";
+    "flex h-8 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-border-subtle bg-input-bg px-2 text-sm text-text-primary outline-none transition-colors hover:border-border focus-visible:border-border-focus";
 const ICON_QUIET =
     "text-text-muted hover:bg-panel-hover hover:text-text-primary";
 
@@ -50,7 +54,7 @@ export function ToggleBtn({ className, ...props }: React.ComponentProps<typeof T
         <ToggleBtnBase
             {...props}
             className={cn(
-                "h-6 rounded-md",
+                "h-8 rounded-md",
                 props.active
                     ? "bg-panel-active text-text-primary"
                     : "text-text-muted hover:bg-panel-hover hover:text-text-primary",
@@ -112,10 +116,10 @@ export function Section({
     children?: React.ReactNode;
 }) {
     return (
-        <div className={cn("flex flex-col gap-1.5 border-b px-3 py-2.5", DIVIDER)}>
-            <div className="flex h-5 items-center justify-between">
-                <span className="text-sm text-text-secondary">{title}</span>
-                {action ? <div className="flex items-center gap-0.5 text-text-muted">{action}</div> : null}
+        <div className={cn("flex flex-col gap-2.5 border-b px-4 py-3.5", DIVIDER)}>
+            <div className="flex h-6 items-center justify-between">
+                <span className="text-sm font-medium text-text-secondary">{title}</span>
+                {action ? <div className="flex items-center gap-1 text-text-muted">{action}</div> : null}
             </div>
             {children}
         </div>
@@ -135,7 +139,7 @@ export function AddHeader({
 }) {
     const open = Boolean(expanded && onCollapse);
     return (
-        <div className={cn("flex h-9 items-center justify-between border-b px-3", DIVIDER)}>
+        <div className={cn("flex h-11 items-center justify-between border-b px-4", DIVIDER)}>
             <span className="text-sm text-text-secondary">{title}</span>
             <Button
                 type="button"
@@ -177,7 +181,7 @@ export function CompactSelect({
                     type="button"
                     variant="ghost"
                     title={title}
-                    className={cn(FIELD_CONTROL, "h-7 font-normal", className)}
+                    className={cn(FIELD_CONTROL, "font-normal", className)}
                 >
                     <span className="flex min-w-0 items-center gap-1.5">
                         {current?.icon}
@@ -236,7 +240,7 @@ export function IconBtn({
                 title={title}
                 onClick={onClick}
                 className={cn(
-                    "size-6",
+                    "size-8 rounded-lg",
                     active
                         ? "bg-panel-active text-text-primary"
                         : ICON_QUIET,
@@ -253,20 +257,50 @@ export function FlyoutCard({
     anchor,
     onClose,
     trigger,
+    className,
     children,
 }: {
     title: string;
     anchor: DOMRect;
     onClose: () => void;
     trigger?: EventTarget | null;
+    className?: string;
     children: React.ReactNode;
 }) {
     const ref = React.useRef<HTMLDivElement>(null);
-    const onRight = anchor.left > (typeof window === "undefined" ? 0 : window.innerWidth * 0.45);
-    const top = Math.max(12, Math.min(anchor.top, (typeof window === "undefined" ? 400 : window.innerHeight) - 24));
-    const style: React.CSSProperties = onRight
-        ? { top, right: Math.max(12, window.innerWidth - anchor.left + 8) }
-        : { top, left: anchor.right + 8 };
+    const [style, setStyle] = React.useState<React.CSSProperties>(() => {
+        if (typeof window === "undefined") return { top: 12, left: 12 };
+        const gap = 8;
+        const spaceLeft = anchor.left;
+        const spaceRight = window.innerWidth - anchor.right;
+        // Prefer the side with more room so right-panel triggers open over the canvas.
+        if (spaceLeft >= spaceRight) {
+            return { top: Math.max(12, anchor.top), right: Math.max(12, window.innerWidth - anchor.left + gap) };
+        }
+        return { top: Math.max(12, anchor.top), left: anchor.right + gap };
+    });
+
+    React.useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el || typeof window === "undefined") return;
+        const gap = 8;
+        const w = el.offsetWidth || 288;
+        const h = el.offsetHeight || 240;
+        const spaceLeft = anchor.left;
+        const spaceRight = window.innerWidth - anchor.right;
+        const placeLeft = spaceLeft >= Math.max(spaceRight, w + gap);
+        let top = anchor.top;
+        if (top + h > window.innerHeight - 12) {
+            top = Math.max(12, window.innerHeight - h - 12);
+        }
+        top = Math.max(12, Math.min(top, window.innerHeight - 48));
+        if (placeLeft) {
+            setStyle({ top, right: Math.max(12, window.innerWidth - anchor.left + gap) });
+        } else {
+            const left = Math.min(anchor.right + gap, window.innerWidth - w - 12);
+            setStyle({ top, left: Math.max(12, left) });
+        }
+    }, [anchor]);
 
     React.useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -288,14 +322,17 @@ export function FlyoutCard({
             window.removeEventListener("keydown", onKey);
             window.removeEventListener("mousedown", onDown);
         };
-    }, [onClose]);
+    }, [onClose, trigger]);
 
     if (typeof document === "undefined") return null;
     return createPortal(
         <div
             ref={ref}
             data-shape-flyout=""
-            className="fixed z-80 w-64 rounded-xl border border-border-subtle bg-panel p-2.5 shadow-xl"
+            className={cn(
+                "fixed z-80 w-72 max-h-[min(480px,calc(100vh-24px))] overflow-y-auto rounded-xl border border-border-subtle bg-panel p-2.5 shadow-xl",
+                className,
+            )}
             style={style}
         >
             <div className="mb-2 flex items-center justify-between">
@@ -331,7 +368,7 @@ export function CheckRow({
     return (
         <div
             title={title}
-            className="flex h-6 select-none items-center gap-2 text-sm text-text-muted hover:text-text-primary"
+            className="flex h-8 select-none items-center gap-2.5 text-sm text-text-muted hover:text-text-primary"
         >
             <Checkmark checked={checked} onCheckedChange={(v) => onChange(v === true)} />
             <span className="cursor-pointer" onClick={() => onChange(!checked)}>{label}</span>
@@ -339,11 +376,15 @@ export function CheckRow({
     );
 }
 
+export function DimGrid({ children }: { children: React.ReactNode }) {
+    return <div className="grid grid-cols-2 gap-2">{children}</div>;
+}
+
 export function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="flex min-h-7 items-center gap-2">
-            <span className="w-14 shrink-0 text-sm text-text-muted">{label}</span>
-            <div className="flex min-w-0 flex-1 items-center gap-1">{children}</div>
+        <div className="flex min-h-8 items-center gap-3">
+            <span className="w-16 shrink-0 text-sm leading-none text-text-muted">{label}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
         </div>
     );
 }
@@ -355,12 +396,15 @@ export function ColorRow({
     onRemove,
     hidden,
     onToggleHidden,
+    /** When true (default), exact/near token matches commit as `var(--token)` instead of a raw color. */
+    snapToTokens = true,
 }: {
     cssValue: string;
     onChange: (cssColor: string) => void;
     onRemove?: () => void;
     hidden?: boolean;
     onToggleHidden?: () => void;
+    snapToTokens?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
     const [anchor, setAnchor] = React.useState<PickerAnchor>({ x: 0, y: 0 });
@@ -372,6 +416,25 @@ export function ColorRow({
     const hex = cssColorToHex(display);
     const parts = colorParts(display);
     const swatch = transparent || gradient ? undefined : hex.length > 7 ? hex.slice(0, 7) : hex;
+
+    const emitColor = (raw: string, opts?: { snap?: boolean }) => {
+        const shouldSnap = opts?.snap !== false && snapToTokens;
+        if (!shouldSnap || isGradient(raw) || isTransparentColor(raw)) {
+            onChange(raw);
+            return;
+        }
+        try {
+            const tokens = colorStylesFromVariables(getCachedProjectColorVariables());
+            const hit = nearestColorToken(raw, tokens, { maxDistance: 8 });
+            if (hit) {
+                onChange(`var(${hit.cssVar})`);
+                return;
+            }
+        } catch {
+            /* ignore cache misses */
+        }
+        onChange(raw);
+    };
 
     const commitHex = (raw: string) => {
         const cleaned = raw.replace(/[^0-9a-fA-F]/g, "").slice(0, 8);
@@ -385,16 +448,16 @@ export function ColorRow({
                 : cleaned;
         const next = `#${full.toUpperCase()}`;
         setHexDraft(null);
-        onChange(toCssColor(next));
+        emitColor(toCssColor(next), { snap: true });
     };
 
     return (
         <>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1.5">
                 <button
                     type="button"
                     title="Color"
-                    className="shape-swatch-design flex size-7 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-input-bg outline-none transition-colors hover:border-border focus-visible:border-border-focus"
+                    className="shape-swatch-design flex size-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-input-bg outline-none transition-colors hover:border-border focus-visible:border-border-focus"
                     onClick={(e) => {
                         const r = e.currentTarget.getBoundingClientRect();
                         setAnchor({ x: r.left, y: r.top });
@@ -431,7 +494,7 @@ export function ColorRow({
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                     }}
                     disabled={gradient}
-                    className="h-7 min-w-0 flex-1 rounded-lg px-1.5 text-sm tabular-nums"
+                    className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm tabular-nums"
                 />
                 <div className="w-16 shrink-0">
                     <PxInput
@@ -443,7 +506,7 @@ export function ColorRow({
                             const a = Math.max(0, Math.min(100, n)) / 100;
                             const body = parts.hex.padStart(6, "0").slice(0, 6);
                             const aa = Math.round(a * 255).toString(16).padStart(2, "0");
-                            onChange(toCssColor(a >= 1 ? `#${body}` : `#${body}${aa}`));
+                            emitColor(toCssColor(a >= 1 ? `#${body}` : `#${body}${aa}`), { snap: true });
                         }}
                     />
                 </div>
@@ -467,9 +530,10 @@ export function ColorRow({
                     onChange={(c) => {
                         const css = toCssColor(c);
                         setLive(css);
-                        onChange(css);
+                        emitColor(css, { snap: false });
                     }}
                     onClose={() => {
+                        if (live) emitColor(live, { snap: true });
                         setOpen(false);
                         setLive(null);
                     }}
@@ -491,7 +555,7 @@ export function AlignMatrix({
     const cols = ["flex-start", "center", "flex-end"] as const;
     const rows = ["flex-start", "center", "flex-end"] as const;
     return (
-        <div className="grid size-13 shrink-0 grid-cols-3 grid-rows-3 gap-px rounded-lg border border-border-subtle bg-input-bg p-1">
+        <div className="grid size-18 shrink-0 grid-cols-3 grid-rows-3 gap-0.5 rounded-lg border border-border-subtle bg-input-bg p-1.5">
             {rows.flatMap((a) =>
                 cols.map((j) => {
                     const active = j === justify && a === align;
@@ -505,7 +569,7 @@ export function AlignMatrix({
                         >
                             <span
                                 className={cn(
-                                    "size-1.5 rounded-full",
+                                    "size-2 rounded-full",
                                     active ? "bg-accent" : "bg-border",
                                 )}
                             />
@@ -536,8 +600,8 @@ export function PadXY({
 }) {
     if (independent) {
         return (
-            <div className="flex min-w-0 flex-1 items-start gap-1">
-                <div className="grid min-w-0 flex-1 grid-cols-2 gap-1">
+            <div className="flex min-w-0 flex-1 items-start gap-2">
+                <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
                     {(["left", "top", "right", "bottom"] as const).map((side) => (
                         <PxInput
                             key={side}
@@ -555,7 +619,7 @@ export function PadXY({
         );
     }
     return (
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
             <PxInput
                 glyph={<Glyph>X</Glyph>}
                 title="Horizontal padding"
@@ -593,7 +657,7 @@ export function OpacityBlendRow({
         return n > 1 ? Math.round(n) : Math.round(n * 100);
     })();
     return (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
             <PxInput
                 glyph={<span className="text-[9px]">%</span>}
                 title="Opacity"
@@ -615,36 +679,6 @@ export function OpacityBlendRow({
                 onChange={onBlend}
                 className="min-w-0 flex-1"
             />
-        </div>
-    );
-}
-
-/** Simple continuous radius slider + numeric field — not a tick/ruler dial. */
-export function RadiusSlider({
-    value,
-    onChange,
-}: {
-    value: string;
-    onChange: (pxValue: string) => void;
-}) {
-    const current = Math.min(999, Math.max(0, parsePx(value) ?? 0));
-    return (
-        <div className="flex items-center gap-2">
-            <Slider
-                min={0}
-                max={64}
-                step={1}
-                value={[Math.min(64, current)]}
-                onValueChange={(v) => onChange(`${v[0] ?? current}px`)}
-                className="flex-1"
-            />
-            <div className="w-14 shrink-0">
-                <PxInput
-                    title="Radius"
-                    value={current}
-                    onCommit={(n) => onChange(`${Math.max(0, n)}px`)}
-                />
-            </div>
         </div>
     );
 }
@@ -768,7 +802,7 @@ export function EffectsSection({
     const blurKind = openFx && (openFx.kind === "layer-blur" || openFx.kind === "background-blur");
     return (
         <div className={cn("border-b", DIVIDER)}>
-            <div className={cn("flex h-9 items-center justify-between px-3", effects.length > 0 && `border-b ${DIVIDER}`)}>
+            <div className={cn("flex h-11 items-center justify-between px-4", effects.length > 0 && `border-b ${DIVIDER}`)}>
                 <span className="text-sm text-text-secondary">Effects</span>
                 <DropdownMenu modal={false} open={menu} onOpenChange={setMenu}>
                     <DropdownMenuTrigger asChild>
@@ -794,7 +828,7 @@ export function EffectsSection({
             {effects.map((fx) => (
                 <div
                     key={fx.id}
-                    className="flex items-center gap-1 px-2 py-1 first:pt-1.5 last:pb-1.5"
+                    className="flex items-center gap-1.5 px-3 py-1.5 first:pt-2 last:pb-2"
                     draggable
                     onDragStart={() => {
                         dragId.current = fx.id;
@@ -814,7 +848,7 @@ export function EffectsSection({
                     <button
                         type="button"
                         className={cn(
-                            "flex h-7 min-w-0 flex-1 items-center rounded-lg border px-1.5 text-left text-sm text-text-primary transition-colors",
+                            "flex h-8 min-w-0 flex-1 items-center rounded-lg border px-2 text-left text-sm text-text-primary transition-colors",
                             openId === fx.id
                                 ? "border-border bg-panel-active"
                                 : "border-border-subtle bg-input-bg hover:border-border",
@@ -952,7 +986,7 @@ export function SelectionColors({
                         <button
                             key={parts.hex}
                             type="button"
-                            className="flex h-7 items-center gap-2 rounded-lg border border-border-subtle bg-input-bg px-1.5 text-left transition-colors hover:border-border"
+                            className="flex h-8 items-center gap-2 rounded-lg border border-border-subtle bg-input-bg px-2 text-left transition-colors hover:border-border"
                             onClick={() => onPick(css)}
                         >
                             <span

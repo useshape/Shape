@@ -1,5 +1,49 @@
 use serde_json::{json, Value};
 
+fn strip_urls(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    loop {
+        let http = rest.find("http://");
+        let https = rest.find("https://");
+        let idx = match (http, https) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        };
+        let Some(i) = idx else {
+            out.push_str(rest);
+            break;
+        };
+        out.push_str(&rest[..i]);
+        let after = &rest[i..];
+        let end = after
+            .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ')' | '<' | '>' | ']' | ','))
+            .unwrap_or(after.len());
+        rest = &after[end..];
+    }
+    out
+}
+
+fn sanitize_plugin_error(raw: &str) -> String {
+    if let Ok(v) = serde_json::from_str::<Value>(raw) {
+        if let Some(e) = v.get("error").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            return strip_urls(e).chars().take(240).collect();
+        }
+        if let Some(e) = v.get("message").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            return strip_urls(e).chars().take(240).collect();
+        }
+    }
+    let cleaned = strip_urls(raw);
+    let first = cleaned.lines().next().unwrap_or("Plugin request failed.").trim();
+    if first.is_empty() {
+        "Plugin request failed.".to_string()
+    } else {
+        first.chars().take(240).collect()
+    }
+}
+
 async fn plugin_request(method: &str, path: &str, access_token: &str, body: Option<Value>) -> Result<Value, String> {
     let base = crate::core::website_url::shape_website_base();
     let url = format!("{}{}", base.trim_end_matches('/'), path);
@@ -19,21 +63,18 @@ async fn plugin_request(method: &str, path: &str, access_token: &str, body: Opti
     let resp = req
         .send()
         .await
-        .map_err(|e| format!("Plugin request failed: {}", e))?;
+        .map_err(|_| "Plugin request failed.".to_string())?;
 
     if resp.status().as_u16() == 401 {
         return Err("Sign in to Shape to use plugins.".to_string());
     }
     if !resp.status().is_success() {
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "Plugin error: {}",
-            text.chars().take(400).collect::<String>()
-        ));
+        return Err(sanitize_plugin_error(&text));
     }
     resp.json::<Value>()
         .await
-        .map_err(|e| format!("Failed to parse plugin response: {}", e))
+        .map_err(|_| "Failed to parse plugin response.".to_string())
 }
 
 pub async fn execute_plugin_list(access_token: &str) -> String {

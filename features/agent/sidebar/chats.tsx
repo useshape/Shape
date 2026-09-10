@@ -263,7 +263,13 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
         void loadChats();
         const onRefresh = () => void loadChats();
         window.addEventListener("shape-chat-refresh", onRefresh);
-        return () => window.removeEventListener("shape-chat-refresh", onRefresh);
+        window.addEventListener("shape-chats-changed", onRefresh);
+        window.addEventListener("shape-chat-active", onRefresh);
+        return () => {
+            window.removeEventListener("shape-chat-refresh", onRefresh);
+            window.removeEventListener("shape-chats-changed", onRefresh);
+            window.removeEventListener("shape-chat-active", onRefresh);
+        };
     }, [loadChats]);
 
     useEffect(() => {

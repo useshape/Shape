@@ -117,13 +117,34 @@ pub fn build_api_history(history: &[ChatMessage]) -> Vec<ChatMessage> {
     trim_middle_history(&stripped, API_HISTORY_SOFT_BUDGET)
 }
 
+fn strip_think_blocks(content: &str) -> String {
+    let mut out = content.to_string();
+    for (open, close) in [("<think", "</think>"), ("<thought", "</thought>")] {
+        loop {
+            let Some(start) = out.find(open) else { break };
+            let after_gt = out[start..]
+                .find('>')
+                .map(|i| start + i + 1)
+                .unwrap_or(out.len());
+            if let Some(rel_end) = out[after_gt..].find(close) {
+                let end = after_gt + rel_end + close.len();
+                out.replace_range(start..end, "");
+            } else {
+                out.replace_range(start.., "");
+                break;
+            }
+        }
+    }
+    out
+}
+
 fn strip_tool_markup_for_api(content: &str) -> String {
     let tags = [
         "<cat>", "</cat>", "<ls>", "</ls>", "<edit>", "</edit>",
         "<status>", "</status>", "<tool_result>", "</tool_result>",
         "<search_result", "<terminal_command", "</terminal_command>",
     ];
-    let mut out = content.to_string();
+    let mut out = strip_think_blocks(content);
     for tag in tags {
         while let Some(start) = out.find(tag) {
             if tag.starts_with('<') && !tag.ends_with('>') {

@@ -11,10 +11,10 @@ export const ICON_SIZE_XS = 12;
 
 /** Smaller glyphs need a heavier stroke so they stay readable. */
 function strokeForSize(size: number) {
-    if (size <= 12) return 2.25;
-    if (size <= 14) return 2;
-    if (size <= 16) return 1.75;
-    if (size <= 20) return 1.5;
+    if (size <= 12) return 0.7;
+    if (size <= 14) return 0.5;
+    if (size <= 16) return 0.3;
+    if (size <= 20) return 0.3;
     return 1.25;
 }
 
@@ -37,7 +37,7 @@ export function Icon({
         <Glyph
             size={size}
             strokeWidth={strokeForSize(size)}
-            className={cn("shape-icon shrink-0", className)}
+            className={cn("shape-icon shrink-0 rounded-xl", className)}
             style={{ ...style, ["--icon-size" as string]: `${size}px` }}
             aria-hidden
         />

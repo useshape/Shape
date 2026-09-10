@@ -1,4 +1,6 @@
 import { commands } from "@/lib/backend";
+import { setCachedGlobalsCssContent } from "@/lib/css-variables";
+import { invalidateGlobalsCssCache } from "@/lib/css-variables-loader";
 import { patchCssClass, validateCssSource } from "./patch-css";
 import {
     canParseJsx,
@@ -28,6 +30,8 @@ import {
     resolveRelative,
     resolveSourcePath,
 } from "./source-files";
+import { applyTokenUpdates } from "./token-updates";
+import { reorderSiblingElements } from "./sibling-reorder";
 
 export type ApplyEditsResult = {
     files: string[];
@@ -45,8 +49,43 @@ export function pendingEditHasWork(edit: DesignPendingEdit): boolean {
     const hasStyles = Object.values(edit.styles).some((v) => v != null && String(v).trim() !== "");
     const hasText = edit.text != null && edit.text !== "";
     const hasClass = !!edit.classToggles && Object.keys(edit.classToggles).length > 0;
-    return hasStyles || hasText || hasClass;
+    const hasTokens = !!edit.tokenUpdates && Object.keys(edit.tokenUpdates).length > 0;
+    const hasReorder =
+        !!edit.siblingReorder &&
+        edit.siblingReorder.fromIndex !== edit.siblingReorder.toIndex &&
+        !!edit.siblingReorder.parentSelector;
+    return hasStyles || hasText || hasClass || hasTokens || hasReorder;
 }
+
+/** Emotion / styled-components runtime hashes (not CSS modules). */
+export function looksLikeCssInJsClass(name: string): boolean {
+    if (/^css-[a-zA-Z0-9_-]+$/.test(name)) return true;
+    if (/^[A-Za-z][\w]*-css-[a-zA-Z0-9_-]+$/.test(name)) return true;
+    if (/^sc-[a-zA-Z0-9]+$/i.test(name)) return true;
+    if (/^[A-Za-z][\w]*-sc-[a-zA-Z0-9]+$/i.test(name)) return true;
+    return false;
+}
+
+const PATCHABLE_STYLE_KINDS = new Set(["stylesheet", "module", "utility", "inline", "class"]);
+
+/** Fail-closed when styles come from CSS-in-JS with no editable stylesheet/module/utility origin. */
+export function isCssInJsOwned(edit: DesignPendingEdit, styleKeys: string[]): boolean {
+    const classes = (edit.className || "").split(/\s+/).filter(Boolean);
+    if (!classes.some(looksLikeCssInJsClass)) return false;
+    const keys = styleKeys.filter((k) => {
+        const v = edit.styles[k as keyof typeof edit.styles];
+        return v != null && String(v).trim() !== "";
+    });
+    if (!keys.length) return false;
+    return keys.every((key) => {
+        const kind = originOf(edit, key)?.source.kind;
+        // Token-backed props are editable via tokenUpdates, not CSS-in-JS.
+        if (kind === "variable") return false;
+        return !kind || !PATCHABLE_STYLE_KINDS.has(kind);
+    });
+}
+
+const DYNAMIC_CLASS_KINDS = new Set(["expression", "template", "spread"]);
 
 let applyEpoch = 0;
 let lastLocatedPath = "";
@@ -415,6 +454,72 @@ async function applyOne(
     const { plain, variables } = splitVarAndPlain(edit);
     const tag = (edit.tag || edit.label.split(/[.#]/)[0] || "div").toLowerCase();
     edit = { ...edit, source: enrichSourceIdentity(edit.source) };
+    const touched = new Set<string>();
+
+    const tokenEntries = Object.entries(edit.tokenUpdates ?? {})
+        .filter(([, v]) => v != null && String(v).trim() !== "")
+        .map(([name, value]) => ({ name, value: String(value) }));
+    if (tokenEntries.length) {
+        const tokenResult = await applyTokenUpdates(projectPath, tokenEntries, writes);
+        if (tokenResult.errors.length) {
+            return { error: tokenResult.errors[0]! };
+        }
+        for (const path of tokenResult.files) touched.add(path);
+    }
+
+    const reorder = edit.siblingReorder;
+    if (
+        reorder &&
+        reorder.fromIndex !== reorder.toIndex &&
+        reorder.parentSelector.trim()
+    ) {
+        const candidates = await resolveCandidateFiles(projectPath, edit, writes, reads);
+        if (!candidates.length) {
+            return { error: `Couldn't find <${tag}> to reorder siblings in source.` };
+        }
+        let applied = false;
+        let lastErr = "Sibling reorder failed.";
+        for (const cand of candidates) {
+            const content = writes.get(cand.path) ?? cand.content;
+            const result = reorderSiblingElements(content, {
+                parentHint: reorder.parentSelector,
+                fromIndex: reorder.fromIndex,
+                toIndex: reorder.toIndex,
+                nearLine: edit.source?.lineNumber,
+            });
+            if ("error" in result) {
+                lastErr = result.error;
+                continue;
+            }
+            if (result.content !== content) {
+                writes.set(cand.path, result.content);
+                touched.add(cand.path);
+                applied = true;
+                break;
+            }
+        }
+        if (!applied) return { error: lastErr };
+    }
+
+    const hasElementWork =
+        Object.values(plain).some((v) => v != null && String(v).trim() !== "") ||
+        (edit.text != null && edit.text !== "") ||
+        (!!edit.classToggles && Object.keys(edit.classToggles).length > 0);
+
+    if (!hasElementWork) {
+        if (touched.size) return { paths: [...touched] };
+        return { error: "Nothing to apply." };
+    }
+
+    if (isCssInJsOwned(edit, Object.keys(plain))) {
+        designLog("WARN", "css-in-js ownership", {
+            className: edit.className,
+            keys: Object.keys(plain),
+        });
+        return {
+            error: "Runtime styles (CSS-in-JS) — edit the component source or a CSS token",
+        };
+    }
 
     const candidates = await resolveCandidateFiles(projectPath, edit, writes, reads);
     if (!candidates.length) {
@@ -517,8 +622,6 @@ async function applyOne(
     const originMedia = mediaFor(cssStyles);
     const originLayer = layerFor(cssStyles);
 
-    const touched = new Set<string>();
-
     const tryCss = async (
         local: string,
         ident: string | undefined,
@@ -572,6 +675,7 @@ async function applyOne(
     const twTokens = tokensForEdit(edit, twStyles);
 
     if (twTokens.length) {
+        const classKind = jsxClassExpressionKind(hit.text);
         const classPatch = attemptClassPatch(next, hit, twTokens, html, "");
         if (classPatch) {
             designLog("INFO", "patched className", { tokens: twTokens });
@@ -579,8 +683,16 @@ async function applyOne(
             mutated = true;
         } else if (openingTagHasTokens(hit.text, twTokens)) {
             mutated = true;
+        } else if (DYNAMIC_CLASS_KINDS.has(classKind)) {
+            designLog("WARN", "className patch blocked; dynamic expression", {
+                tokens: twTokens,
+                kind: classKind,
+            });
+            return {
+                error: "This className is computed and cannot be patched safely",
+            };
         } else {
-            designLog("WARN", "className patch made no change", { tokens: twTokens, kind: jsxClassExpressionKind(hit.text) });
+            designLog("WARN", "className patch made no change", { tokens: twTokens, kind: classKind });
             for (const [k, v] of Object.entries(twStyles)) {
                 if (k === "fontFamily") continue;
                 if (inlineOnly[k] == null) inlineOnly[k] = v;
@@ -736,6 +848,11 @@ export async function applyEditsToProject(
             const persist = await persistWrite(path, content);
             if (persist) throw new Error(`${path.split(/[/\\]/).pop()}: ${persist}`);
             persisted.push(path);
+            if (/\.(css|scss|sass|less)$/i.test(path) && content.includes("--")) {
+                setCachedGlobalsCssContent(content);
+                invalidateGlobalsCssCache();
+                setCachedGlobalsCssContent(content);
+            }
         }
     } catch (e) {
         for (const path of persisted) {

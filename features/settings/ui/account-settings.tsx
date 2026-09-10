@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SettingRow, SettingSection } from "./setting-controls";
+import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import {
     logoutShape,
     openShapeBilling,
@@ -62,15 +63,49 @@ export function AccountSettingsPanel() {
 
     if (auth.isLoading) {
         return (
-            <SettingSection id="settings-account" title="Account">
-                <div className="px-3.5 py-4 text-md text-text-muted">Loading account…</div>
-            </SettingSection>
+            <div aria-busy aria-label="Loading account">
+                <SettingSection id="settings-account" title="Plan">
+                    <div className="px-3.5 py-4 space-y-3">
+                        <Skeleton className="h-5 w-24 rounded-full" />
+                        <Skeleton className="h-6 w-28" />
+                        <Skeleton className="h-4 w-48" />
+                    </div>
+                </SettingSection>
+                <SettingSection title="Usage">
+                    <div className="px-3.5 py-4 space-y-4">
+                        <div className="space-y-1.5">
+                            <div className="flex justify-between">
+                                <Skeleton className="h-4 w-24" />
+                                <Skeleton className="h-4 w-32" />
+                            </div>
+                            <Skeleton className="h-3 w-full rounded-xs" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <div className="flex justify-between">
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-4 w-40" />
+                            </div>
+                            <Skeleton className="h-3 w-full rounded-xs" />
+                        </div>
+                    </div>
+                </SettingSection>
+                <SettingSection title="Profile">
+                    <div className="space-y-0">
+                        {Array.from({ length: 3 }, (_, i) => (
+                            <div key={i} className="flex items-center justify-between gap-4 px-3.5 py-3.5">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-8 w-20 rounded-lg" />
+                            </div>
+                        ))}
+                    </div>
+                </SettingSection>
+            </div>
         );
     }
 
     if (!auth.loggedIn) {
         return (
-            <SettingSection id="settings-account" title="Account">
+            <SettingSection id="settings-account" title="Profile">
                 <div className="px-3.5 py-4 space-y-3">
                     <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">
@@ -145,7 +180,7 @@ export function AccountSettingsPanel() {
                 </div>
             </SettingSection>
 
-            <SettingSection title="Account">
+            <SettingSection title="Profile">
                 <SettingRow title="Email" description={auth.email ?? undefined}>
                     <Button
                         variant="secondary"

@@ -96,6 +96,12 @@ export interface ShapeSettings {
         requireEditApproval: boolean;
         /** Destructive git commands always ask, even in "run everything". */
         protectDestructiveGit: boolean;
+        /** Default plugin action approval (safest: ask every time). */
+        pluginApprovalDefault: AutoRunModeSetting;
+        /** Per-plugin override of pluginApprovalDefault. */
+        pluginApprovals: Record<string, AutoRunModeSetting>;
+        /** Tool slugs the agent must not call, keyed by toolkit. */
+        pluginDisabledActions: Record<string, string[]>;
         /** Semantic embeddings for codebase search (BM25 always on). */
         indexEmbeddings: boolean;
     };
@@ -242,6 +248,9 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         autoRunMode: "auto",
         requireEditApproval: false,
         protectDestructiveGit: true,
+        pluginApprovalDefault: "ask",
+        pluginApprovals: {},
+        pluginDisabledActions: {},
         indexEmbeddings: true,
     },
     files: {
@@ -352,6 +361,19 @@ function mergeAiSettings(
     patch: Partial<ShapeSettings["ai"]> | undefined,
 ): ShapeSettings["ai"] {
     const merged = { ...DEFAULT_SETTINGS.ai, ...base, ...patch };
+    merged.pluginApprovals = {
+        ...DEFAULT_SETTINGS.ai.pluginApprovals,
+        ...(base?.pluginApprovals ?? {}),
+        ...(patch?.pluginApprovals ?? {}),
+    };
+    merged.pluginDisabledActions = {
+        ...DEFAULT_SETTINGS.ai.pluginDisabledActions,
+        ...(base?.pluginDisabledActions ?? {}),
+        ...(patch?.pluginDisabledActions ?? {}),
+    };
+    merged.pluginApprovalDefault = patch?.pluginApprovalDefault
+        ?? base?.pluginApprovalDefault
+        ?? DEFAULT_SETTINGS.ai.pluginApprovalDefault;
     // Legacy "System Instructions" fold into Rules — one concept for user guidance.
     const legacy = merged.customSystemPrompt?.trim();
     if (legacy) {

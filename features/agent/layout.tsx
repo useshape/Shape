@@ -383,13 +383,11 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             {/* Main column (chrome + content) · expanded workspace is full-height beside it;
                 collapsed Changes/Terminal rail sits under the top bar only. */}
             <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-                    {overlay ? null : (
-                        <AgentChrome
-                            rightOpen={rightExpanded}
-                            onToggleRight={toggleWorkspace}
-                            canToggleRight={Boolean(project_path) && !overlay}
-                        />
-                    )}
+                    <AgentChrome
+                        rightOpen={rightExpanded}
+                        onToggleRight={toggleWorkspace}
+                        canToggleRight={Boolean(project_path) && !overlay}
+                    />
                     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
                         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                             {overlay ? (

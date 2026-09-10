@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { RiArrowDownLine, RiArrowGoBackLine, RiArrowGoForwardLine, RiArrowRightLine, RiCrosshair2Line, RiLink, RiRefreshLine, RiSubtractLine, RiTextWrap } from "@remixicon/react";
+import { RiAlignBottom, RiAlignCenter, RiAlignLeft, RiAlignRight, RiAlignTop, RiAlignVertically, RiArrowDownLine, RiArrowRightLine, RiCrosshair2Line, RiLink, RiSubtractLine, RiTextWrap } from "@remixicon/react";
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -16,12 +16,10 @@ import {
 } from "../../design-mode/store";
 import {
     clearHistory,
-    getHistorySession,
     historyRedo,
     historyUndo,
     recordChange,
     setHistoryPending,
-    subscribeHistory,
 } from "../../design-mode/history";
 import { commitDesignEdits } from "../../design-mode/commit";
 import { designLog } from "../../design-mode/log";
@@ -42,6 +40,7 @@ import {
     ColorRow,
     CompactSelect,
     CornerGlyph,
+    DimGrid,
     EffectsSection,
     effectsToStyles,
     Glyph,
@@ -50,9 +49,11 @@ import {
     OpacityBlendRow,
     PadXY,
     PxInput,
-    RadiusSlider,
+    RadiusGlyph,
     Section,
+    Segment,
     SelectionColors,
+    ToggleBtn,
     type DesignEffect,
 } from "./fields";
 import { TypographySection } from "./typography-section";
@@ -73,7 +74,17 @@ type Bridge = {
     undo: () => void;
     redo: () => void;
     reset: () => void;
+    setCssVar?: (name: string, value: string) => void;
 };
+
+export function applyDesignHistory(bridge: Bridge | null, side: "before" | "after") {
+    const entry = side === "before" ? historyUndo() : historyRedo();
+    if (!entry || !bridge) return;
+    const styles = side === "before" ? entry.before : entry.after;
+    if (Object.keys(styles).length) bridge.style(entry.id, styles, entry.selector);
+    const text = side === "before" ? entry.textBefore : entry.textAfter;
+    if (text != null) bridge.content(entry.id, text, entry.selector);
+}
 
 export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
     const { selected, pending, selection, selecting, applyFailedIds } = useDesignModeStore();
@@ -84,17 +95,27 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
     const [radiusIndependent, setRadiusIndependent] = React.useState(false);
     const [effects, setEffects] = React.useState<DesignEffect[]>([]);
     const [applying, setApplying] = React.useState(false);
-    const history = React.useSyncExternalStore(subscribeHistory, getHistorySession, getHistorySession);
+    /** When fill is owned by var(--token), prefer editing the token unless user detaches. */
+    const [fillDetach, setFillDetach] = React.useState(false);
+    /** Default OFF — apply to the selected element, not the component definition. */
+    const [applyToComponent, setApplyToComponent] = React.useState(false);
 
     React.useEffect(() => {
         setFillHidden(false);
         setPadIndependent(false);
         setRadiusIndependent(false);
+        setFillDetach(false);
+        setApplyToComponent(false);
         setEffects(selected ? parseEffectsFromStyles(selected.styles) : []);
     }, [selected?.id]);
 
     const patch = React.useCallback(
-        (styles: Partial<DesignComputedStyles>, text?: string, silent = false) => {
+        (
+            styles: Partial<DesignComputedStyles>,
+            text?: string,
+            silent = false,
+            tokenUpdates?: Record<string, string>,
+        ) => {
             const targets = getDesignModeState().selection.length
                 ? getDesignModeState().selection
                 : getDesignModeState().selected
@@ -109,6 +130,11 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
             }
             if ((clean.borderWidth === "0px" || clean.borderWidth === "0") && !clean.borderStyle) {
                 clean.borderStyle = "none";
+            }
+            if (tokenUpdates) {
+                for (const [name, value] of Object.entries(tokenUpdates)) {
+                    bridge.setCssVar?.(name, value);
+                }
             }
             for (const el of targets) {
                 if (!silent) {
@@ -141,6 +167,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                     styles,
                     text: text ?? el.text,
                     inspect: el.inspect,
+                    tokenUpdates,
                 });
             }
             setHistoryPending(
@@ -168,13 +195,18 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
         }
         setApplying(true);
         try {
-            const result = await commitDesignEdits(project_path, edits);
+            const scope = applyToComponent && edits.some((e) => e.source?.componentName)
+                ? "component"
+                : "element";
+            const result = await commitDesignEdits(project_path, edits, scope);
             const { notify } = await import("@/features/notifications");
             setDesignApplyFailedIds(result.failedIds);
             if (result.errors.length) {
                 const msg = result.errors.join(" ");
                 if (result.appliedIds.length) notify.warn("Some edits were not applied", msg);
                 else notify.error("Apply failed", msg);
+            } else if (!result.appliedIds.length) {
+                notify.error("Apply failed", "Nothing was written to source.");
             }
             if (result.appliedIds.length || result.failedIds.length) {
                 const remain = edits.filter((e) => !result.appliedIds.includes(e.id));
@@ -200,19 +232,15 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
             const msg = err instanceof Error ? err.message : "Couldn't patch source.";
             const { notify } = await import("@/features/notifications");
             notify.error("Apply failed", msg);
-            designLog("ERROR", "apply threw", { error: msg });
+            designLog("ERROR", "apply threw", {
+                why: msg,
+                error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err),
+                tip: "Paste the ── shape/design … ── end block from the Shape terminal into chat",
+            });
             setDesignApplyFailedIds(edits.map((e) => e.id));
         } finally {
             setApplying(false);
         }
-    };
-
-    const applyHistory = (entry: ReturnType<typeof historyUndo>, side: "before" | "after") => {
-        if (!entry || !bridge) return;
-        const styles = side === "before" ? entry.before : entry.after;
-        if (Object.keys(styles).length) bridge.style(entry.id, styles, entry.selector);
-        const text = side === "before" ? entry.textBefore : entry.textAfter;
-        if (text != null) bridge.content(entry.id, text, entry.selector);
     };
 
     const pendingStyles = selected ? (pending.find((p) => p.id === selected.id)?.styles ?? {}) : {};
@@ -229,6 +257,11 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
     const heightPx = parsePx(s?.height) ?? parsePx(computed?.height);
     const showType = isDesignTextElement(selected?.tag, selected?.text);
     const fillKey = designFillTarget(showType);
+    const fillOriginKey = fillKey === "color" ? "color" : "backgroundColor";
+    const fillOrigin = selected?.inspect?.origins?.[fillOriginKey];
+    const fillAuthored = fillOrigin?.authored?.trim() ?? "";
+    const fillVarMatch = fillAuthored.match(/^var\(\s*(--[a-zA-Z0-9-_]+)/);
+    const fillTokenName = fillVarMatch?.[1] ?? null;
     const hasFill =
         !!s &&
         !fillHidden &&
@@ -245,10 +278,11 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
             <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
                 {selecting && !selected ? (
-                    <div className="flex flex-col gap-2 px-3 py-3">
-                        <div className="h-3 w-20 animate-pulse rounded bg-panel-hover" />
-                        <div className="h-7 w-full animate-pulse rounded-md bg-panel-hover" />
-                        <div className="h-7 w-full animate-pulse rounded-md bg-panel-hover" />
+                    <div className="flex flex-col gap-3 px-4 py-4">
+                        <div className="h-3 w-24 animate-pulse rounded bg-panel-hover" />
+                        <div className="h-8 w-full animate-pulse rounded-lg bg-panel-hover" />
+                        <div className="h-8 w-full animate-pulse rounded-lg bg-panel-hover" />
+                        <div className="h-8 w-full animate-pulse rounded-lg bg-panel-hover" />
                     </div>
                 ) : !selected || !s ? (
                     <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
@@ -260,17 +294,89 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                 ) : (
                     <>
                         {selection.length > 1 ? (
-                            <p className="border-b border-border-subtle px-3 py-2 text-sm text-text-muted">
+                            <p className="border-b border-border-subtle px-4 py-2.5 text-sm text-text-muted">
                                 Editing {selection.length} elements
                             </p>
                         ) : null}
+                        {selected.source?.componentName ? (
+                            <div className="flex flex-col gap-2 border-b border-border-subtle px-4 py-2.5">
+                                <div className="flex items-center gap-2">
+                                    <span className="rounded-md bg-panel-hover px-2 py-0.5 text-xs font-medium text-text-secondary">
+                                        {selected.source.componentName}
+                                    </span>
+                                    <span className="truncate text-xs text-text-muted">
+                                        {selected.tag}
+                                        {selected.label ? ` · ${selected.label}` : ""}
+                                    </span>
+                                </div>
+                                <CheckRow
+                                    label="Apply to component"
+                                    title="Write on the component definition instead of this element instance"
+                                    checked={applyToComponent}
+                                    onChange={setApplyToComponent}
+                                />
+                            </div>
+                        ) : (
+                            <div className="border-b border-border-subtle px-4 py-2 text-xs text-text-muted">
+                                <span className="font-medium text-text-secondary">{selected.tag}</span>
+                                {selected.label ? ` · ${selected.label}` : ""}
+                            </div>
+                        )}
                         {applyFailedIds.includes(selected.id) ? (
-                            <div className="mx-3 mt-2 rounded-md border border-error/40 bg-error/10 px-2 py-1.5 text-sm text-error">
+                            <div className="mx-4 mt-3 rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
                                 Apply did not update this element
                             </div>
                         ) : null}
-                        <Section title="Layout">
-                            <div className="flex gap-1">
+                        {autoLayout ? (
+                            <Section title="Alignment">
+                                <Segment>
+                                    <ToggleBtn
+                                        label="Align left"
+                                        active={justify === "flex-start"}
+                                        onClick={() => patch({ justifyContent: "flex-start" })}
+                                    >
+                                        <Icon icon={RiAlignLeft} />
+                                    </ToggleBtn>
+                                    <ToggleBtn
+                                        label="Align center"
+                                        active={justify === "center"}
+                                        onClick={() => patch({ justifyContent: "center" })}
+                                    >
+                                        <Icon icon={RiAlignCenter} />
+                                    </ToggleBtn>
+                                    <ToggleBtn
+                                        label="Align right"
+                                        active={justify === "flex-end"}
+                                        onClick={() => patch({ justifyContent: "flex-end" })}
+                                    >
+                                        <Icon icon={RiAlignRight} />
+                                    </ToggleBtn>
+                                    <ToggleBtn
+                                        label="Align top"
+                                        active={align === "flex-start"}
+                                        onClick={() => patch({ alignItems: "flex-start" })}
+                                    >
+                                        <Icon icon={RiAlignTop} />
+                                    </ToggleBtn>
+                                    <ToggleBtn
+                                        label="Align middle"
+                                        active={align === "center"}
+                                        onClick={() => patch({ alignItems: "center" })}
+                                    >
+                                        <Icon icon={RiAlignVertically} />
+                                    </ToggleBtn>
+                                    <ToggleBtn
+                                        label="Align bottom"
+                                        active={align === "flex-end"}
+                                        onClick={() => patch({ alignItems: "flex-end" })}
+                                    >
+                                        <Icon icon={RiAlignBottom} />
+                                    </ToggleBtn>
+                                </Segment>
+                            </Section>
+                        ) : null}
+                        <Section title="Position">
+                            <DimGrid>
                                 <PxInput
                                     glyph={<Glyph>X</Glyph>}
                                     title="X"
@@ -295,18 +401,8 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                         })
                                     }
                                 />
-                                <PxInput
-                                    glyph={<Glyph>°</Glyph>}
-                                    title="Rotation"
-                                    value={0}
-                                    min={-360}
-                                    max={360}
-                                    onCommit={() => {
-                                        /* transform rotate not wired yet */
-                                    }}
-                                />
-                            </div>
-                            <div className="flex gap-1">
+                            </DimGrid>
+                            <DimGrid>
                                 <PxInput
                                     glyph={<Glyph>W</Glyph>}
                                     title="Width"
@@ -337,6 +433,18 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                         patch({ height: px(n) });
                                     }}
                                 />
+                            </DimGrid>
+                            <div className="flex items-center gap-2">
+                                <PxInput
+                                    glyph={<Glyph>°</Glyph>}
+                                    title="Rotation"
+                                    value={0}
+                                    min={-360}
+                                    max={360}
+                                    onCommit={() => {
+                                        /* transform rotate not wired yet */
+                                    }}
+                                />
                                 <IconBtn
                                     title="Constrain proportions"
                                     active={lockRatio}
@@ -350,7 +458,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-7 w-full"
+                                    className="h-8 w-full"
                                     onClick={() => patch(stylesForFlow("row"))}
                                 >
                                     Wrap in flex
@@ -359,14 +467,14 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                         </Section>
 
                         {autoLayout ? (
-                            <Section title="Flex">
-                                <div className="flex items-start gap-2">
+                            <Section title="Auto layout">
+                                <div className="flex items-center gap-3">
                                     <AlignMatrix
                                         justify={justify}
                                         align={align === "stretch" ? "center" : align}
                                         onChange={(j, a) => patch({ justifyContent: j, alignItems: a })}
                                     />
-                                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                                    <div className="flex min-w-0 flex-1 flex-col gap-2">
                                         <div className="flex gap-1">
                                             <IconBtn
                                                 title="Vertical"
@@ -452,7 +560,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                             }
                         >
                             {radiusIndependent ? (
-                                <div className="grid grid-cols-2 gap-1">
+                                <div className="grid grid-cols-2 gap-2">
                                     {(["TL", "TR", "BL", "BR"] as const).map((label, i) => (
                                         <PxInput
                                             key={label}
@@ -468,9 +576,11 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     ))}
                                 </div>
                             ) : (
-                                <RadiusSlider
-                                    value={s.borderRadius || "0"}
-                                    onChange={(v) => patch({ borderRadius: v })}
+                                <PxInput
+                                    glyph={<RadiusGlyph />}
+                                    title="Radius"
+                                    value={parsePx(s.borderRadius) ?? 0}
+                                    onCommit={(n) => patch({ borderRadius: px(Math.max(0, n)) })}
                                 />
                             )}
                         </Section>
@@ -485,7 +595,12 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                         </Section>
 
                         {showType ? (
-                            <TypographySection s={s} text={selected.text} onPatch={patch} />
+                            <TypographySection
+                                s={s}
+                                text={selected.text}
+                                tag={selected.tag}
+                                onPatch={patch}
+                            />
                         ) : null}
 
                         {hasFill ? (
@@ -507,6 +622,33 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     </IconBtn>
                                 }
                             >
+                                {fillTokenName && !fillDetach ? (
+                                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                                        <span className="truncate rounded-md bg-panel-hover px-2 py-0.5 font-mono text-[11px] text-text-secondary">
+                                            {fillTokenName}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="rounded-md px-2 py-0.5 text-[11px] text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                                            onClick={() => setFillDetach(true)}
+                                            title="Write a plain color on this element instead of editing the token"
+                                        >
+                                            Detach
+                                        </button>
+                                    </div>
+                                ) : fillTokenName && fillDetach ? (
+                                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                                        <span className="text-[11px] text-text-muted">Detached from token</span>
+                                        <button
+                                            type="button"
+                                            className="rounded-md px-2 py-0.5 text-[11px] text-accent hover:bg-panel-hover"
+                                            onClick={() => setFillDetach(false)}
+                                            title="Edit the shared CSS variable instead"
+                                        >
+                                            Edit token
+                                        </button>
+                                    </div>
+                                ) : null}
                                 <ColorRow
                                     cssValue={
                                         fillKey === "color"
@@ -515,8 +657,13 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                               ? s.backgroundImage
                                               : s.backgroundColor
                                     }
+                                    snapToTokens={!(fillTokenName && !fillDetach)}
                                     onChange={(c) => {
                                         setFillHidden(false);
+                                        if (fillTokenName && !fillDetach) {
+                                            patch({}, undefined, false, { [fillTokenName]: c });
+                                            return;
+                                        }
                                         if (fillKey === "color") {
                                             patch({ color: c });
                                             return;
@@ -557,7 +704,7 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                                     </IconBtn>
                                 }
                             >
-                                <div className="flex gap-1">
+                                <div className="flex gap-2">
                                     <PxInput
                                         glyph={<Glyph>S</Glyph>}
                                         title="Thickness"
@@ -645,22 +792,13 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                     </>
                 )}
             </div>
-            <div className="flex h-11 shrink-0 items-center gap-1 border-t border-border-subtle px-2">
-                <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
+            <div className="flex h-12 shrink-0 items-center gap-2 border-t border-border-subtle px-3">
+                <span className="min-w-0 flex-1 truncate text-sm text-text-muted">
                     {pending.length ? designPendingCountLabel(pending.length) : null}
                 </span>
                 <Button
                     type="button"
-                    size="icon"
-                    variant="ghost"
-                    title="Redo"
-                    onClick={() => applyHistory(historyRedo(), "after")}
-                >
-                    <Icon icon={RiArrowGoForwardLine} />
-                </Button>
-                <Button
-                    type="button"
-                    size="icon"
+                    size="sm"
                     variant="ghost"
                     title="Reset"
                     onClick={() => {
@@ -669,21 +807,11 @@ export function DesignInspectorPanel({ bridge }: { bridge: Bridge | null }) {
                         clearHistory();
                     }}
                 >
-                    <Icon icon={RiRefreshLine} />
+                    Reset
                 </Button>
                 <Button
                     type="button"
-                    size="xs"
-                    variant="ghost"
-                    disabled={!history?.undo.length}
-                    onClick={() => applyHistory(historyUndo(), "before")}
-                >
-                    <Icon icon={RiArrowGoBackLine} />
-                    Undo
-                </Button>
-                <Button
-                    type="button"
-                    size="xs"
+                    size="sm"
                     onClick={() => void apply()}
                     disabled={applying || pending.length === 0}
                 >

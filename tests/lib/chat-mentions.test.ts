@@ -76,14 +76,21 @@ describe("chat-mentions: formatMentionToken / round-trip", () => {
         ).toBe("@chat:Project-setup");
     });
 
-    it("formats browser tokens with the hostname", () => {
+    it("formats plugin tokens with the toolkit slug", () => {
         expect(
             formatMentionToken({
-                kind: "browser",
-                path: "https://shape.com/docs",
-                label: "shape.com",
+                kind: "plugin",
+                id: "slack",
+                path: "slack",
+                label: "Slack",
             }),
-        ).toBe("@browser:shape.com");
+        ).toBe("@plugin:slack");
+    });
+
+    it("parses @plugin:slack", () => {
+        expect(parseMentionTokens("use @plugin:slack to post")).toEqual([
+            { kind: "plugin", path: "slack", id: "slack", label: "slack" },
+        ]);
     });
 
     it("parses chat tokens into friendly labels", () => {

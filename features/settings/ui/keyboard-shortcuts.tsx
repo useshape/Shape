@@ -287,7 +287,7 @@ export function KeyboardShortcutsView() {
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 lg:px-8">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-6 lg:px-8">
                 <div className="mx-auto w-full max-w-5xl">
                     <h1 className="text-2xl font-medium text-text-primary">Keyboard shortcuts</h1>
                     <div className="mt-4 flex flex-wrap items-center gap-2">

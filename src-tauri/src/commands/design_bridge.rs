@@ -89,8 +89,9 @@ pub fn design_mode_log(level: String, message: String) {
     match level.to_ascii_uppercase().as_str() {
         "ERROR" => log::error!(target: "design", "{message}"),
         "WARN" => log::warn!(target: "design", "{message}"),
+        "INFO" => log::info!(target: "design", "{message}"),
         "DEBUG" => log::debug!(target: "design", "{message}"),
-        _ => log::debug!(target: "design", "{message}"),
+        _ => log::info!(target: "design", "{message}"),
     }
 }
 

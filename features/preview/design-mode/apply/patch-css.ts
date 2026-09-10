@@ -128,3 +128,66 @@ export function patchCustomProperty(
     hits[0]!.value = value;
     return { css: root.toResult({ map: false }).css };
 }
+
+export function cssHasThemeDirective(css: string): boolean {
+    return /@theme\b/.test(css);
+}
+
+/**
+ * Insert a new custom property.
+ * - `into: "theme"` appends inside the first `@theme` block (creates utilities in TW v4).
+ * - `into: "root"` (default) appends inside `:root` / `html`, or creates a `:root` block.
+ */
+export function insertCustomProperty(
+    css: string,
+    name: string,
+    value: string,
+    opts?: { into?: "root" | "theme"; comment?: string },
+): { css: string } | { error: string } {
+    const into = opts?.into ?? "root";
+    let root;
+    try {
+        root = postcss.parse(css);
+    } catch (e) {
+        return { error: e instanceof Error ? e.message : "CSS parse failed." };
+    }
+
+    const existing: Declaration[] = [];
+    root.walkDecls(name, (decl) => {
+        existing.push(decl);
+    });
+    if (existing.length > 0) {
+        return { error: `${name} is already declared.` };
+    }
+
+    const declNodes: Node[] = [];
+    if (opts?.comment?.trim()) {
+        declNodes.push(postcss.comment({ text: ` ${opts.comment.trim()} ` }));
+    }
+    declNodes.push(postcss.decl({ prop: name, value }));
+
+    if (into === "theme") {
+        let themeAt: AtRule | undefined;
+        root.walkAtRules("theme", (at) => {
+            if (!themeAt) themeAt = at;
+        });
+        if (!themeAt) {
+            return { error: "No @theme block found; use :root insert or add @theme first." };
+        }
+        for (const n of declNodes) themeAt.append(n);
+        return { css: root.toResult({ map: false }).css };
+    }
+
+    let target: Rule | undefined;
+    root.walkRules((rule) => {
+        if (target) return;
+        const sels = rule.selectors.map((s) => s.trim());
+        if (sels.includes(":root") || sels.includes("html")) target = rule;
+    });
+    if (!target) {
+        target = postcss.rule({ selector: ":root" });
+        root.prepend(target);
+    }
+    for (const n of declNodes) target.append(n);
+    return { css: root.toResult({ map: false }).css };
+}

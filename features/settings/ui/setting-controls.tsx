@@ -19,22 +19,35 @@ export function SettingSection({
     id,
     title,
     description,
+    action,
+    card = true,
     children,
 }: {
     id?: string;
     title: string;
     description?: string;
+    /** Control aligned with the title (e.g. Save). */
+    action?: React.ReactNode;
+    /** When false, children are the card (full-bleed field). */
+    card?: boolean;
     children: React.ReactNode;
 }) {
     return (
         <div id={id} className="mb-8 last:mb-0 scroll-mt-3">
-            <div className="mb-2.5">
-                <h2 className="text-lg font-medium text-text-primary">{title}</h2>
-                {description && <p className="mt-0.5 text-sm font-medium text-text-muted">{description}</p>}
+            <div className="mb-2.5 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h2 className="text-lg font-medium text-text-primary">{title}</h2>
+                    {description && <p className="mt-0.5 text-sm font-medium text-text-muted">{description}</p>}
+                </div>
+                {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
             </div>
-            <div className="flex flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface-2 divide-y divide-border-subtle">
-                {children}
-            </div>
+            {card ? (
+                <div className="flex flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface-2 divide-y divide-border-subtle">
+                    {children}
+                </div>
+            ) : (
+                children
+            )}
         </div>
     );
 }

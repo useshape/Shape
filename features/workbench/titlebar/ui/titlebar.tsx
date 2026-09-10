@@ -58,10 +58,11 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
     }, [handleMenuClick]);
 
     return (
-        <div className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal leading-none text-text-primary transition-[background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]">
-            <div className="titlebar-drag-region absolute left-0 top-0 z-0 h-full w-full" data-tauri-drag-region />
-
-            <div className="titlebar-left relative z-20 flex shrink-0 items-center">
+        <div
+            className="titlebar-container relative flex h-titlebar w-full shrink-0 select-none items-center bg-background text-sm font-normal leading-none text-text-primary transition-[background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            data-tauri-drag-region
+        >
+            <div className="titlebar-left relative z-20 flex shrink-0 items-center" data-no-drag>
                 {!isCompact ? (
                     <>
                         <div className="flex shrink-0 items-center">
@@ -117,7 +118,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
 
             <div className="pointer-events-none min-w-0 flex-1" aria-hidden />
 
-            <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1">
+            <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1" data-no-drag>
                 {settings && title === "Git" ? <TitlebarSearch /> : null}
                 {!isCompact && !isFocus ? <TitlebarUpdateButton /> : null}
                 <WindowControls

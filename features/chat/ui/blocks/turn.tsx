@@ -22,13 +22,16 @@ import {
     parseGitStagePath,
     getWorkflowActionConfig,
 } from "./workflow";
+import { PluginLogo } from "@/components/ui/plugin-logo";
+import { ShapeLogo } from "@/components/ui/shape-logo";
 import { Favicon } from "@/components/ui/favicon";
+import { isShapePluginMeta } from "@/lib/plugin-logos";
 import { parseWebResults } from "../md/renderer";
 import { TypingDots } from "../message/bubble";
 import { humanizeToolName } from "@/lib/mcp-oauth";
 
 function formatDuration(ms?: number): string {
-    if (!ms || ms < 1000) return "< 1s";
+    if (!ms || ms < 1000) return "1s";
     const totalSec = Math.round(ms / 1000);
     if (totalSec < 60) return `${totalSec}s`;
     const min = Math.floor(totalSec / 60);
@@ -548,6 +551,102 @@ function StepRowAppliedEdit({ block }: { block: Chunk }) {
     );
 }
 
+function PluginCallStep({ block }: { block: Chunk }) {
+    const [localStatus, setLocalStatus] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const status = localStatus ?? block.commandStatus ?? "ok";
+    const toolkit = block.pluginToolkit || "plugins";
+    const label = block.pluginLabel || "Plugin";
+
+    useEffect(() => {
+        if (status !== "pending" || !block.commandId) return;
+        let disposed = false;
+        const unlistenPromise = listen<{ id?: string; approved?: boolean }>(
+            "agent-command-resolved",
+            (event) => {
+                if (disposed || event.payload?.id !== block.commandId) return;
+                setLocalStatus(event.payload?.approved ? "ok" : "rejected");
+            },
+        );
+        return () => {
+            disposed = true;
+            void unlistenPromise.then((unlisten) => unlisten()).catch(() => undefined);
+        };
+    }, [status, block.commandId]);
+
+    const handleAccept = useCallback(() => {
+        if (!block.commandId || isProcessing) return;
+        setIsProcessing(true);
+        void commands
+            .approveTerminalCommand(block.commandId)
+            .then(() => setLocalStatus("ok"))
+            .catch(() => setLocalStatus("error"))
+            .finally(() => setIsProcessing(false));
+    }, [block.commandId, isProcessing]);
+
+    const handleReject = useCallback(() => {
+        if (!block.commandId || isProcessing) return;
+        setIsProcessing(true);
+        void commands
+            .rejectTerminalCommand(block.commandId)
+            .then(() => setLocalStatus("rejected"))
+            .catch(() => setLocalStatus("error"))
+            .finally(() => setIsProcessing(false));
+    }, [block.commandId, isProcessing]);
+
+    if (status === "pending") {
+        return (
+            <div className="flex min-w-0 items-center gap-2 py-1 px-2 chat-text font-sans bg-surface-4 border border-border-subtle rounded-[10px]">
+                {isProcessing ? (
+                    <div className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
+                ) : isShapePluginMeta(toolkit, block.pluginSlug) ? (
+                    <ShapeLogo size={12} />
+                ) : (
+                    <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={14} className="rounded-sm" />
+                )}
+                <span className="min-w-0 truncate font-sans text-text-muted">
+                    Allow <span className="text-text-primary">{label}</span>
+                </span>
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                    <Button type="button" variant="ghost" size="xs" disabled={isProcessing} onClick={handleReject}>
+                        Reject
+                    </Button>
+                    <Button type="button" size="xs" disabled={isProcessing} onClick={handleAccept}>
+                        Allow
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    const verb =
+        status === "rejected"
+            ? "Rejected"
+            : status === "cancelled"
+              ? "Cancelled"
+              : status === "error"
+                ? "Failed"
+                : label;
+    return (
+        <div className="flex items-center gap-1.5 py-0.5 chat-text font-regular font-sans text-text-primary/80 min-w-0">
+            {isShapePluginMeta(toolkit, block.pluginSlug) ? (
+                <ShapeLogo size={12} />
+            ) : (
+                <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={14} className="rounded-sm" />
+            )}
+            <span className="truncate">
+                {verb}
+                {status === "ok" || status === "error" ? null : (
+                    <>
+                        {" "}
+                        <span className="text-text-secondary">{label}</span>
+                    </>
+                )}
+            </span>
+        </div>
+    );
+}
+
 function StepRow({ block }: { block: Chunk }) {
     const [diffOpen, setDiffOpen] = useState(false);
 
@@ -578,6 +677,10 @@ function StepRow({ block }: { block: Chunk }) {
                 ) : null}
             </div>
         );
+    }
+
+    if (block.type === "plugin_call") {
+        return <PluginCallStep block={block} />;
     }
 
     if (block.type === "cat") {
@@ -827,18 +930,25 @@ export function TurnWorkflowSummary({
     const visible = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
     const pendingBlocks = visible.filter(
         (b) =>
-            (b.type === "terminal_command" || b.type === "edit_pending")
+            (b.type === "terminal_command" || b.type === "edit_pending" || b.type === "plugin_call")
             && b.commandStatus === "pending",
     );
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(() => !!isActive);
     const [prevActive, setPrevActive] = useState(isActive);
+    const startedAtRef = React.useRef<number | null>(isActive ? Date.now() : null);
+    const [tick, setTick] = useState(0);
 
     if (isActive !== prevActive) {
         setPrevActive(isActive);
-        if (!isActive) {
-            setOpen(false);
-        }
+        setOpen(!!isActive);
+        startedAtRef.current = isActive ? Date.now() : null;
     }
+
+    useEffect(() => {
+        if (!isActive) return;
+        const id = window.setInterval(() => setTick((n) => n + 1), 250);
+        return () => window.clearInterval(id);
+    }, [isActive]);
 
     if (visible.length === 0) return <>{children}</>;
 
@@ -846,7 +956,7 @@ export function TurnWorkflowSummary({
     const rows = groupWorkflowRows(
         visible.filter(
             (b) =>
-                !((b.type === "terminal_command" || b.type === "edit_pending")
+                !((b.type === "terminal_command" || b.type === "edit_pending" || b.type === "plugin_call")
                     && b.commandStatus === "pending"),
         ),
     );
@@ -858,15 +968,22 @@ export function TurnWorkflowSummary({
         const cmd = (b.command || b.content || "").trim();
         return isLintCommand(cmd) && lintStatusFromOutput(b.content || "") === "clean";
     });
+    const elapsedMs = (isActive && startedAtRef.current
+        ? Date.now() - startedAtRef.current
+        : durationMs) ?? 0;
+    void tick;
     const headerLabel = isActive
         ? liveActivityLabel(visible, activityLabel)
         : null;
+    const workedLabel = formatDuration(elapsedMs);
 
     const pendingApprovalRows = (
         <div className="flex flex-col gap-1 my-1">
             {pendingBlocks.map((b, i) =>
                 b.type === "edit_pending" ? (
                     <EditApprovalRow key={b.commandId || `pending-edit-${i}`} block={b} />
+                ) : b.type === "plugin_call" ? (
+                    <PluginCallStep key={b.commandId || `pending-plugin-${i}`} block={b} />
                 ) : (
                     <TerminalCommandStep key={b.commandId || `pending-${i}`} block={b} />
                 ),
@@ -883,18 +1000,19 @@ export function TurnWorkflowSummary({
                 className="flex w-fit max-w-full items-center gap-1 py-0.5 chat-text font-medium text-text-muted hover:text-text-primary transition-colors"
             >
                 <span className="wf-summary-text">
-                    {isActive ? (
+                    Worked for{" "}
+                    <span className="wf-summary-text-strong">{workedLabel}</span>
+                    {isActive && headerLabel ? (
                         <>
-                            <span className="wf-summary-text-strong">{headerLabel}</span>
-                            {headerLabel && !/[.…]$/.test(headerLabel) ? "…" : null}
+                            {" "}
+                            · <span className="wf-summary-text-strong">{headerLabel}</span>
                         </>
-                    ) : (
-                        <>
-                            Worked for{" "}
-                            <span className="wf-summary-text-strong">{formatDuration(durationMs)}</span>
-                        </>
-                    )}
+                    ) : null}
                 </span>
+                <Icon
+                    icon={RiArrowRightSLine}
+                    className={cn("shrink-0 opacity-50 transition-transform duration-200", open && "rotate-90")}
+                />
             </button>
             ) : null}
 

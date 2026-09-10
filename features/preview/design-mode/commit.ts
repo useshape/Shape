@@ -1,6 +1,6 @@
 import { abortDesignApply, applyEditsToProject } from "./apply/commit-edits";
 import { revertSourceWrites } from "./apply/source-files";
-import { designLog } from "./log";
+import { beginDesignOp, designLog, summarizePendingEdit } from "./log";
 import type { DesignPendingEdit } from "./types";
 
 export { abortDesignApply };
@@ -45,42 +45,68 @@ function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => void):
     });
 }
 
-export async function commitDesignEdits(projectPath: string, edits: DesignPendingEdit[]) {
+export async function commitDesignEdits(
+    projectPath: string,
+    edits: DesignPendingEdit[],
+    scope: "element" | "component" = "element",
+) {
     const run = async () => {
-        designLog("INFO", "apply", {
+        const op = beginDesignOp("apply", {
             count: edits.length,
-            items: edits.map((e) => ({
-                label: e.label,
-                tag: e.tag,
-                keys: Object.keys(e.styles),
-                className: e.className,
-                source: e.source
-                    ? {
-                          file: `${e.source.fileName.split(/[/\\]/).pop()}:${e.source.lineNumber}`,
-                          mapped: e.source.mapped ?? false,
-                          generated: e.source.generated?.fileName?.split(/[/\\]/).pop() ?? null,
-                      }
-                    : null,
-            })),
+            scope,
+            project: projectPath.split(/[/\\]/).pop(),
+            edits: edits.map(summarizePendingEdit),
+            tip: "If this fails, paste the whole block from shape/design through end into chat",
         });
-        const result = await applyEditsToProject(projectPath, edits, "element");
-        if (result.reverts.length) {
-            stack.push(result.reverts);
-            emit();
+        try {
+            const result = await applyEditsToProject(projectPath, edits, scope);
+            if (result.reverts.length) {
+                stack.push(result.reverts);
+                emit();
+            }
+            const files = result.files.map((f) => f.split(/[/\\]/).pop());
+            if (result.errors.length && result.files.length) {
+                op.warn("apply:partial", {
+                    why: "Some edits wrote to disk; others failed",
+                    errors: result.errors,
+                    files,
+                    appliedIds: result.appliedIds,
+                    failedIds: result.failedIds,
+                });
+                op.done({ outcome: "partial", files, errors: result.errors });
+            } else if (result.errors.length) {
+                op.fail({
+                    why: result.errors[0] ?? "Apply failed",
+                    errors: result.errors,
+                    files,
+                    failedIds: result.failedIds,
+                });
+            } else if (!result.appliedIds.length) {
+                op.fail({
+                    why: "Nothing was written to source",
+                    errors: result.errors,
+                    files,
+                });
+            } else {
+                op.done({ outcome: "ok", files, appliedIds: result.appliedIds });
+            }
+            return result;
+        } catch (err) {
+            op.fail({
+                why: err instanceof Error ? err.message : String(err),
+                error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err,
+            });
+            throw err;
         }
-        if (result.errors.length && result.files.length) {
-            designLog("WARN", "apply partial", { errors: result.errors, files: result.files });
-        } else if (result.errors.length) {
-            designLog("ERROR", "apply failed", { errors: result.errors, files: result.files });
-        } else {
-            designLog("INFO", "apply ok", { files: result.files.map((f) => f.split(/[/\\]/).pop()) });
-        }
-        return result;
     };
     const budgeted = () =>
         withTimeout(run(), APPLY_BUDGET_MS, () => {
             abortDesignApply();
-            designLog("ERROR", "apply timed out", { count: edits.length });
+            designLog("ERROR", "apply:timeout", {
+                count: edits.length,
+                why: "Apply exceeded budget; aborted in-flight writes",
+                budgetMs: APPLY_BUDGET_MS,
+            });
         });
     const next = queue.then(budgeted, budgeted);
     queue = next.then(
@@ -98,16 +124,19 @@ export async function revertLastDesignCommit() {
     const last = stack.pop();
     emit();
     if (!last?.length) {
-        designLog("WARN", "revert skipped; nothing to restore");
+        designLog("WARN", "revert:skipped", { why: "Nothing to restore" });
         return { ok: false as const, error: "Nothing to revert." };
     }
-    designLog("INFO", "revert", { files: last.map((e) => e.path.split(/[/\\]/).pop()) });
+    const op = beginDesignOp("revert", {
+        files: last.map((e) => e.path.split(/[/\\]/).pop()),
+    });
     const err = await revertSourceWrites(last);
     if (err) {
         stack.push(last);
         emit();
-        designLog("ERROR", "revert failed", { error: err });
+        op.fail({ why: err });
         return { ok: false as const, error: err };
     }
+    op.done();
     return { ok: true as const };
 }

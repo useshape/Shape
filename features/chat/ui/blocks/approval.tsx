@@ -36,6 +36,8 @@ export type ApprovalBarProps = {
     onAccept: () => void;
     onReject: () => void;
     className?: string;
+    /** Shown before the subject. Pass empty string to hide (plugin actions). */
+    promptPrefix?: string;
 };
 
 /** Inline chat approval bar for pending terminal commands. */
@@ -48,6 +50,7 @@ export function ApprovalBar({
     onAccept,
     onReject,
     className,
+    promptPrefix = "$ ",
 }: ApprovalBarProps) {
     const mod = modKeyLabel();
 
@@ -86,7 +89,9 @@ export function ApprovalBar({
             <div className="p-3">
                 <Tooltip content={subject} side="top">
                     <span className="block truncate font-mono text-sm text-text-primary">
-                        <span className="select-none text-text-disabled">$ </span>
+                        {promptPrefix ? (
+                            <span className="select-none text-text-disabled">{promptPrefix}</span>
+                        ) : null}
                         {subject}
                     </span>
                 </Tooltip>

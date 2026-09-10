@@ -7,9 +7,9 @@ import remarkGfm from "remark-gfm";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
 import { openProjectFile } from "@/lib/open-project-file";
-import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
+import { StreamInline } from "./stream-words";
 import { ChatLinkChip } from "./link-chip";
 
 const SyntaxHighlighter = lazy(() =>
@@ -62,6 +62,7 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
 
 function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: boolean; isLast?: boolean }) {
     const nested = options?.nested;
+    const streaming = !!options?.isGenerating && !!options?.isLast;
 
     return {
         pre: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
@@ -123,7 +124,7 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
         },
         p: ({ children }: { children?: React.ReactNode }) => (
             <p className="mb-2 font-sans chat-text font-medium text-text-primary last:mb-0">
-                {children}
+                <StreamInline streaming={streaming}>{children}</StreamInline>
             </p>
         ),
         ul: ({ children }: { children?: React.ReactNode }) => (
@@ -133,19 +134,34 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
             <ol className="mb-2 ml-4 list-outside list-decimal space-y-1 font-sans chat-text">{children}</ol>
         ),
         li: ({ children }: { children?: React.ReactNode }) => (
-            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">{children}</li>
+            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">
+                <StreamInline streaming={streaming}>{children}</StreamInline>
+            </li>
         ),
         h1: ({ children }: { children?: React.ReactNode }) => (
-            <h1 className="mb-2 mt-4 font-sans chat-text font-medium text-text-primary">{children}</h1>
+            <h1 className="mb-2 mt-4 font-sans chat-text font-medium text-text-primary">
+                <StreamInline streaming={streaming}>{children}</StreamInline>
+            </h1>
         ),
         h2: ({ children }: { children?: React.ReactNode }) => (
-            <h2 className="mb-1.5 mt-3 font-sans chat-text font-medium text-text-primary">{children}</h2>
+            <h2 className="mb-1.5 mt-3 font-sans chat-text font-medium text-text-primary">
+                <StreamInline streaming={streaming}>{children}</StreamInline>
+            </h2>
         ),
         h3: ({ children }: { children?: React.ReactNode }) => (
-            <h3 className="mb-1 mt-2 font-sans chat-text font-medium text-text-primary">{children}</h3>
+            <h3 className="mb-1 mt-2 font-sans chat-text font-medium text-text-primary">
+                <StreamInline streaming={streaming}>{children}</StreamInline>
+            </h3>
         ),
         strong: ({ children }: { children?: React.ReactNode }) => (
-            <strong className="chat-text font-medium text-text-primary">{children}</strong>
+            <strong className="chat-text font-medium text-text-primary">
+                <StreamInline streaming={streaming}>{children}</StreamInline>
+            </strong>
+        ),
+        em: ({ children }: { children?: React.ReactNode }) => (
+            <em>
+                <StreamInline streaming={streaming}>{children}</StreamInline>
+            </em>
         ),
         hr: () => null,
         a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
@@ -170,44 +186,19 @@ export const ChatMarkdown = React.memo(({
     isGenerating?: boolean;
     isLast?: boolean;
 }) => {
-    const [displayed, setDisplayed] = React.useState(content);
-    const lastUpdateRef = React.useRef(0);
-
-    React.useEffect(() => {
-        if (!isGenerating) {
-            setDisplayed(content);
-            return;
-        }
-        if (!lastUpdateRef.current) lastUpdateRef.current = Date.now();
-        const now = Date.now();
-        if (now - lastUpdateRef.current > 80 || content.length - displayed.length > 400) {
-            setDisplayed(content);
-            lastUpdateRef.current = now;
-        } else {
-            const t = setTimeout(() => {
-                setDisplayed(content);
-                lastUpdateRef.current = Date.now();
-            }, 80);
-            return () => clearTimeout(t);
-        }
-    }, [content, isGenerating, displayed.length]);
+    const components = React.useMemo(
+        () => createMarkdownComponents({ nested, isGenerating, isLast }),
+        [nested, isGenerating, isLast],
+    );
 
     const processed = React.useMemo(
-        () => preprocessChatMarkdown(displayed, { streaming: !!isGenerating, trim: !isGenerating }),
-        [displayed, isGenerating],
+        () => preprocessChatMarkdown(content, { streaming: !!isGenerating, trim: !isGenerating }),
+        [content, isGenerating],
     );
 
     return (
-        <div
-            className={cn(
-                "font-sans chat-markdown-body",
-                isGenerating && isLast && "chat-stream-fade-in",
-            )}
-        >
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={createMarkdownComponents({ nested, isGenerating, isLast })}
-            >
+        <div className="font-sans chat-markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
                 {processed}
             </ReactMarkdown>
         </div>

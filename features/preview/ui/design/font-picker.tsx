@@ -58,7 +58,7 @@ export function FontPickerButton({
                 type="button"
                 variant="ghost"
                 title="Font"
-                className="h-7 w-full min-w-0 justify-between rounded-lg border border-border-subtle bg-input-bg px-1.5 font-normal text-sm text-text-primary hover:border-border"
+                className="h-8 w-full min-w-0 justify-between rounded-lg border border-border-subtle bg-input-bg px-2 font-normal text-sm text-text-primary hover:border-border"
                 style={{ fontFamily: family }}
                 onClick={(e) => {
                     setAnchor(e.currentTarget.getBoundingClientRect());

@@ -43,25 +43,31 @@ export function WindowControls({
     onClose: () => void;
 }) {
     return (
-        <div className="titlebar-window-controls flex h-full shrink-0 items-stretch">
-            <div
-                className="control-button flex items-center justify-center w-[46px] h-full hover:bg-panel-hover cursor-default transition-colors active:bg-panel-active"
+        <div className="titlebar-window-controls flex h-full shrink-0 items-stretch" data-no-drag>
+            <button
+                type="button"
+                aria-label="Minimize"
+                className="control-button flex h-full w-[46px] cursor-default items-center justify-center transition-colors hover:bg-panel-hover active:bg-panel-active"
                 onClick={onMinimize}
             >
                 <IconMinimize />
-            </div>
-            <div
-                className="control-button flex items-center justify-center w-[46px] h-full hover:bg-panel-hover cursor-default transition-colors active:bg-panel-active"
+            </button>
+            <button
+                type="button"
+                aria-label={isMaximized ? "Restore" : "Maximize"}
+                className="control-button flex h-full w-[46px] cursor-default items-center justify-center transition-colors hover:bg-panel-hover active:bg-panel-active"
                 onClick={onToggleMaximize}
             >
                 {isMaximized ? <IconRestore /> : <IconMaximize />}
-            </div>
-            <div
-                className="control-button close-button flex items-center justify-center w-[46px] h-full hover:bg-[#e81123] hover:text-white cursor-default transition-colors active:bg-[#b00d1b]"
+            </button>
+            <button
+                type="button"
+                aria-label="Close"
+                className="control-button close-button flex h-full w-[46px] cursor-default items-center justify-center transition-colors hover:bg-[#e81123] hover:text-white active:bg-[#b00d1b]"
                 onClick={onClose}
             >
                 <IconClose />
-            </div>
+            </button>
         </div>
     );
 }

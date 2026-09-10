@@ -1,6 +1,6 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiAtLine, RiChat3Line, RiCheckLine, RiCodeLine, RiGitBranchLine, RiListCheck3, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiShieldLine, RiTerminalBoxLine } from "@remixicon/react";
+import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiChat3Line, RiCheckLine, RiCodeLine, RiGitBranchLine, RiListCheck3, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiShieldLine, RiTerminalBoxLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -36,9 +36,10 @@ import {
 import { QueuedMessagesPanel, type QueuedMessage } from "./queue";
 import { ComposerAttachments, ComposerAttachmentsStrip, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
-import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText } from "@/lib/chat-mentions";
+import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText, type ChatMention } from "@/lib/chat-mentions";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
+import { PluginLogo } from "@/components/ui/plugin-logo";
 import { resolveChatUsageDisplay } from "@/lib/usage-display";
 import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/last-turn-usage";
 import { UsageRing } from "./usage";
@@ -268,6 +269,51 @@ function isAllowedFile(file: File): boolean {
     return isImageFile(file) || isCodeFile(file) || isAudioFile(file) || isAssetFile(file);
 }
 
+function ComposerMentionChip({ raw, mention }: { raw: string; mention: ChatMention }) {
+    const label = mentionDisplayLabel(mention);
+    return (
+        <span className="relative">
+            <span className="invisible">{raw}</span>
+            <span className="absolute inset-0 inline-flex min-w-0 items-center gap-1 overflow-hidden rounded-md bg-accent-text-bg px-1 text-accent-text">
+                {mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs" ? (
+                    <FileIcon name={label} className="h-3 w-3 shrink-0" />
+                ) : mention.kind === "plugin" ? (
+                    <PluginLogo
+                        toolkit={mention.id || mention.path || label}
+                        name={label}
+                        size={12}
+                        className="rounded-sm"
+                    />
+                ) : mention.kind === "browser" ? (
+                    <Favicon url={mention.path || label} size={12} />
+                ) : (
+                    <Icon
+                        icon={
+                            mention.kind === "chat"
+                                ? RiChat3Line
+                                : mention.kind === "design"
+                                  ? RiPaletteLine
+                                  : mention.kind === "terminal"
+                                    ? RiTerminalBoxLine
+                                    : mention.kind === "branch"
+                                      ? RiGitBranchLine
+                                      : mention.kind === "codebase"
+                                        ? RiSearchLine
+                                        : mention.kind === "selection"
+                                          ? RiCodeLine
+                                          : mention.kind === "mcp"
+                                            ? RiPuzzle2Line
+                                            : RiChat3Line
+                        }
+                        className="shrink-0"
+                    />
+                )}
+                <span className="min-w-0 truncate">@{label}</span>
+            </span>
+        </span>
+    );
+}
+
 const CHAT_MODES = [
     { id: "Code", icon: RiCodeLine, color: "#3B82F6" },
     { id: "Ask", icon: RiChat3Line, color: "#22C55E" },
@@ -324,7 +370,7 @@ function RotatingComposerHint({
             className={cn("t-composer-hint", compact && "t-composer-hint--compact")}
             aria-hidden
         >
-            <span className="t-composer-hint__text text-sm!" data-phase={phase}>
+            <span className="t-composer-hint__text text-[14.5px]!" data-phase={phase}>
                 {COMPOSER_HINTS[index]}
             </span>
         </div>
@@ -367,6 +413,7 @@ export function ChatInput({
     const { catalog } = useShapeCatalog();
     const allModels = getCatalogModels();
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const mentionOverlayRef = React.useRef<HTMLDivElement>(null);
     const [mentionOpen, setMentionOpen] = React.useState(false);
     const [mentionQuery, setMentionQuery] = React.useState("");
     const [mentionCaret, setMentionCaret] = React.useState(0);
@@ -710,9 +757,10 @@ export function ChatInput({
                         </div>
                     ) : null}
                     <div
+                        ref={mentionOverlayRef}
                         aria-hidden
                         className={cn(
-                            "pointer-events-none absolute z-0 overflow-hidden whitespace-pre-wrap break-words text-sm font-medium text-text-primary",
+                            "pointer-events-none absolute z-0 overflow-y-auto whitespace-pre-wrap break-words text-sm font-medium text-text-primary no-scrollbar",
                             compact
                                 ? "inset-0 leading-7"
                                 : "inset-x-4 inset-y-3 leading-relaxed",
@@ -730,44 +778,12 @@ export function ChatInput({
                                     nodes.push(inputValue.slice(cursor, range.start));
                                 }
                                 const raw = inputValue.slice(range.start, range.end);
-                                const { mention } = range;
-                                const label = mentionDisplayLabel(mention);
                                 nodes.push(
-                                    <span
+                                    <ComposerMentionChip
                                         key={`m-${i}`}
-                                        className="relative inline rounded-lg bg-accent-text-bg text-xs text-accent-text p-1"
-                                    >
-                                        <span className="pointer-events-none absolute left-[2px] top-1/2 z-[1] -translate-y-1/2 opacity-95">
-                                            {mention.kind === "file" ||
-                                            mention.kind === "folder" ||
-                                            mention.kind === "docs" ? (
-                                                <FileIcon name={label} className="h-3 w-3" />
-                                            ) : mention.kind === "browser" ? (
-                                                <Favicon url={mention.path || label} size={12} />
-                                            ) : (
-                                                <Icon
-                                                    icon={
-                                                        mention.kind === "chat"
-                                                            ? RiChat3Line
-                                                            : mention.kind === "design"
-                                                              ? RiPaletteLine
-                                                              : mention.kind === "terminal"
-                                                                ? RiTerminalBoxLine
-                                                                : mention.kind === "branch"
-                                                                  ? RiGitBranchLine
-                                                                  : mention.kind === "codebase"
-                                                                    ? RiSearchLine
-                                                                    : mention.kind === "selection"
-                                                                      ? RiCodeLine
-                                                                      : mention.kind === "mcp"
-                                                                        ? RiPuzzle2Line
-                                                                        : RiAtLine
-                                                    }
-                                                />
-                                            )}
-                                        </span>
-                                        {raw}
-                                    </span>,
+                                        raw={raw}
+                                        mention={range.mention}
+                                    />,
                                 );
                                 cursor = range.end;
                             });
@@ -798,6 +814,10 @@ export function ChatInput({
                                     } else {
                                         setMentionOpen(false);
                                     }
+                                }}
+                                onScroll={(e) => {
+                                    const overlay = mentionOverlayRef.current;
+                                    if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
                                 }}
                                 readOnly={needsSignIn}
                                 placeholder=""
@@ -952,7 +972,7 @@ export function ChatInput({
                                     <div
                                         className={cn(
                                             "flex min-w-0 items-center text-sm",
-                                            compact ? "justify-center gap-0" : "gap-1",
+                                            compact ? "justify-center gap-0 " : "gap-2",
                                         )}
                                     >
                                         {compact ? (

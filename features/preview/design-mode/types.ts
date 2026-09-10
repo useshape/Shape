@@ -208,6 +208,14 @@ export type DesignPendingEdit = {
     text?: string;
     inspect?: DesignInspect;
     classToggles?: Record<string, boolean>;
+    /** Custom properties to patch in globals CSS (`--name` → value). */
+    tokenUpdates?: Record<string, string>;
+    /** Flex/grid sibling reorder within a parent (AST apply). */
+    siblingReorder?: {
+        parentSelector: string;
+        fromIndex: number;
+        toIndex: number;
+    };
 };
 
 export type DesignBridgeApi = {
@@ -229,6 +237,14 @@ export type DesignBridgeApi = {
         id: string,
         opts: { format: string; scale: number; selector?: string },
     ) => Promise<import("./export-file").DesignExportPayload>;
+    /** Set a CSS custom property on the preview documentElement (iframe). */
+    setCssVar?: (name: string, value: string) => void;
+    /** Re-select by source location / selector after HMR. */
+    reselect?: (opts: {
+        id?: string;
+        selector?: string;
+        sourceKey?: string;
+    }) => void;
 };
 
 export const DESIGN_STYLE_KEYS: (keyof DesignComputedStyles)[] = [
