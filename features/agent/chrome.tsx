@@ -20,8 +20,8 @@ import {
 import { useDevRunStatus } from "@/features/preview/run-status";
 import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
 import { WindowControls } from "@/features/workbench/titlebar/ui/window-controls";
-import { useShapeAuth } from "@/lib/shape-auth/store";
-import { dashboardUrl } from "@/lib/shape-auth/api";
+import { useShapeAuth } from "@/lib/cloud/store";
+import { dashboardUrl } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend/commands";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
@@ -233,11 +233,13 @@ export function AgentChrome({
                     }}
                 />
             </div>
+            {/* Title/tabs content — no data-no-drag so empty chrome stays draggable.
+                Interactive children opt out via data-no-drag / button CSS rules. */}
             <div
                 id={AGENT_TABS_SLOT}
-                className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1"
-                data-no-drag
+                className="relative z-10 flex h-full min-w-0 shrink-0 items-center overflow-hidden pl-1"
             />
+            <div className="min-w-8 flex-1" aria-hidden />
 
             <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
                 <GetPlusButton />

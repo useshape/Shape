@@ -7,7 +7,7 @@ import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
 import { invalidateGitRepoCache } from "@/lib/git/repos";
 import { getRepoName, type RepoHistoryEntry } from "@/lib/repo-history";
-import { loginGitHub } from "@/lib/github-auth/store";
+import { loginGitHub } from "@/lib/github/store";
 
 async function pickDirectory(title: string): Promise<string | null> {
     const { open: pick } = await import("@tauri-apps/plugin-dialog");

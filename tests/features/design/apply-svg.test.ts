@@ -6,9 +6,9 @@ import {
     locateJsxBySelector,
     locateJsxElement,
     selectorAtSvgRoot,
-} from "@/features/preview/design-mode/apply/locate-jsx";
-import { patchOpeningTag } from "@/features/preview/design-mode/apply/patch-tag";
-import { stylesToClassTokens } from "@/features/preview/design-mode/apply/class-tokens";
+} from "@/features/preview/design/apply/locate-jsx";
+import { patchOpeningTag } from "@/features/preview/design/apply/patch-tag";
+import { stylesToClassTokens } from "@/features/preview/design/apply/class-tokens";
 
 /**
  * Clicking an icon in the preview selects the rendered <svg> (or a <path> inside it),

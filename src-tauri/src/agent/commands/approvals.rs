@@ -66,6 +66,16 @@ pub async fn stop_chat_message(
         }
         turn_id.zip(conv_id)
     };
+    // Commit streamed assistant text into history *before* clearing in-flight.
+    // Otherwise Stop + frontend history resync wipes the bubble the user saw.
+    if let Ok(merged) = state.history_for_persistence() {
+        if let Ok(mut hist) = state.history.lock() {
+            *hist = merged;
+        }
+    }
+    if let Some(path) = state.current_project.lock().ok().and_then(|p| p.clone()) {
+        let _ = history::save_current_conversation(&state, &path);
+    }
     state.clear_in_flight();
     if let Some((turn_id, conv_id)) = aborted {
         let _ = app.emit(

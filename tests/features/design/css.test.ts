@@ -15,7 +15,7 @@ import {
     px,
     shadowPresetId,
     toCssColor,
-} from "@/features/preview/design-mode/css";
+} from "@/features/preview/design/css";
 
 describe("design mode css helpers", () => {
     it("parses px lengths including negatives and rem", () => {

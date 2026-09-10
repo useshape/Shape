@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { getSettings } from "@/lib/settings";
 import { installUpdateAndRelaunch, startAutoUpdateChecks } from "@/lib/updater";
 import { UpgradeRequiredDialog } from "@/features/workbench/titlebar/ui/update-button";

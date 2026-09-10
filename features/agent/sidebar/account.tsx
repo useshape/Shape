@@ -2,9 +2,9 @@
 
 import { RiNotification3Line, RiSettings3Line } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
-import { openSettingsWindow } from "@/lib/open-settings";
-import { useShapeAuth } from "@/lib/shape-auth/store";
-import { useGitHubAuth } from "@/lib/github-auth/store";
+import { openSettingsWindow } from "@/lib/window/open-settings";
+import { useShapeAuth } from "@/lib/cloud/store";
+import { useGitHubAuth } from "@/lib/github/store";
 import { AccountMenu, ProfileAvatar } from "./menu";
 import { Button } from "@/components/ui/button";
 import {

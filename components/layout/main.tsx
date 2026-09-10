@@ -8,7 +8,7 @@ import { dispatchShortcutAction } from "@/lib/ui/shortcut-actions";
 import { upsertRepoHistory } from "@/lib/repo-history";
 import { saveLastProject, loadLastProject } from "@/lib/last-project";
 import { clearClosedTabs } from "@/lib/closed-tabs";
-import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
+import { isMainTauriWindow, isTauriRuntime } from "@/lib/window/tauri-window";
 
 function TauriShortcutBridge() {
     useEffect(() => {
@@ -87,7 +87,7 @@ export default function Main({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         const handleOpenSettings = () => {
-            void import("@/lib/open-settings").then(({ openSettingsWindow }) => openSettingsWindow());
+            void import("@/lib/window/open-settings").then(({ openSettingsWindow }) => openSettingsWindow());
         };
         const handleOpenFileRequest = async () => {
             const { open } = await import("@tauri-apps/plugin-dialog");

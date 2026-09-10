@@ -14,7 +14,7 @@ import { commands, useProjectState } from "@/lib/backend";
 import type { PackageDep, PackageInfo } from "@/lib/backend/types";
 import { resolvePackageManager } from "@/lib/package-manager";
 import { notify } from "@/features/notifications";
-import { appRoute } from "@/lib/app-route";
+import { appRoute } from "@/lib/window/app-route";
 import { listen, WebviewWindow } from "@/lib/tauri/client-api";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/search";
@@ -32,18 +32,18 @@ import {
     SCROLLBACK_PRESETS,
     AUTO_FETCH_INTERVAL_PRESETS,
     MAX_CONTEXT_PRESETS,
-} from "./setting-controls";
-import { AiSettingsPanel } from "./ai-settings";
-import { AccountSettingsPanel } from "./account-settings";
+} from "./shared/controls";
+import { AiSettingsPanel } from "./sections/ai";
+import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
-import { ThemePicker } from "./theme-picker";
+import { ThemePicker } from "./theme/picker";
 import { normalizeColorTheme } from "@/lib/themes";
-import { SETTINGS_NAV, SETTINGS_PAGE_LEAF_IDS, allSettingsLeaves, type SettingsNavLeaf } from "./settings-nav";
-import { KeyboardShortcutsView } from "./keyboard-shortcuts";
-import { PluginsSettingsView } from "./plugins-settings";
+import { SETTINGS_NAV, SETTINGS_PAGE_LEAF_IDS, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
+import { KeyboardShortcutsView } from "./sections/shortcuts";
+import { PluginsSettingsView } from "./sections/plugins";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import { useRouter } from "next/navigation";
 import {

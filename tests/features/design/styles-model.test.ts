@@ -6,14 +6,14 @@ import {
     nearestColorToken,
     slugToCssVarName,
     textStylesFromVariables,
-} from "@/features/preview/ui/design/styles-model";
+} from "@/features/preview/design/ui/shared/styles-model";
 import {
     clampWidth,
     parseStoredOpen,
     parseStoredWidth,
     DESIGN_LEFT_MIN,
     DESIGN_LEFT_MAX,
-} from "@/features/preview/ui/design/design-layout";
+} from "@/features/preview/design/ui/shared/layout";
 
 const vars = (rows: Array<Partial<CssVariable> & { name: string; value: string }>): CssVariable[] =>
     rows.map((r) => ({

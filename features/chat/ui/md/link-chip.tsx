@@ -4,7 +4,7 @@ import React from "react";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
 import { commands } from "@/lib/backend";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 import { cn } from "@/lib/utils";
 
 export function ChatLinkChip({

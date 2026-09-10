@@ -14,7 +14,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { useProjectState, commands } from "@/lib/backend";
-import { loginGitHub, useGitHubAuth } from "@/lib/github-auth/store";
+import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { cn } from "@/lib/utils";
 import type { GitSectionId } from "@/features/git/types";
 import { useFilter } from "@/features/git/ui/manager/filter-context";

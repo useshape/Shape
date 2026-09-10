@@ -395,10 +395,11 @@ pub async fn stream_chat(
     let mut reasoning_acc = String::new();
     let mut reasoning_details_acc: Vec<Value> = Vec::new();
     let mut finish_reason: Option<String> = None;
-    // When tools are available, buffer normal content until we know whether this
-    // completion also issued tool calls. Models (esp. Gemini) often narrate into
-    // `content` while thinking+tooling — that chatter belongs out of the reply.
-    let defer_content_emit = !tools.is_empty();
+    // Stream reply text live. Only start deferring once tool-call deltas appear
+    // (Gemini often narrates into `content` while tooling — that chatter stays out).
+    // Previously we deferred whenever tools were *registered*, which meant every
+    // agent turn buffered the final answer until SSE ended — text popped in at once.
+    let mut defer_content_emit = false;
     let mut deferred_content = String::new();
 
     // Tool calls are streamed as deltas keyed by `index`. We accumulate by index.
@@ -583,6 +584,17 @@ pub async fn stream_chat(
             }
 
             if let Some(tool_calls) = delta["tool_calls"].as_array() {
+                if !tool_calls.is_empty() {
+                    // Flush any pending live tokens, then hold further prose.
+                    if !defer_content_emit {
+                        if !token_buffer.is_empty() {
+                            emit_stream_token(app_handle, proxy_ctx, token_buffer.clone());
+                            token_buffer.clear();
+                            last_emit = Instant::now();
+                        }
+                        defer_content_emit = true;
+                    }
+                }
                 for tc in tool_calls {
                     let index = tc["index"].as_u64().unwrap_or(0) as usize;
                     while tool_call_buf.len() <= index {

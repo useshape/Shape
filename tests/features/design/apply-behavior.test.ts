@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { mergeClassTokens, stylesToClassTokens } from "@/features/preview/design-mode/apply/class-tokens";
+import { mergeClassTokens, stylesToClassTokens } from "@/features/preview/design/apply/class-tokens";
 import {
     isCssInJsOwned,
     looksLikeCssInJsClass,
     splitVarAndPlain,
-} from "@/features/preview/design-mode/apply/commit-edits";
-import type { DesignPendingEdit } from "@/features/preview/design-mode/types";
+} from "@/features/preview/design/apply/commit-edits";
+import type { DesignPendingEdit } from "@/features/preview/design/types";
 
 describe("flex wrap / unwrap tokens", () => {
     it("adds flex tokens when wrapping", () => {

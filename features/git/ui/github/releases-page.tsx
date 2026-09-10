@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
 import { cn } from "@/lib/utils";
 import { useProjectState, commands } from "@/lib/backend";
-import { loginGitHub, useGitHubAuth } from "@/lib/github-auth/store";
-import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { GitMarkdown } from "./markdown";
@@ -188,7 +188,7 @@ export function ReleasesPage() {
                 token,
             );
             setAiSummary(text.trim());
-            void import("@/lib/shape-auth/store")
+            void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {
                     void refreshShapeAuth();
                 })

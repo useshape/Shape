@@ -9,7 +9,7 @@ import { AgentSidebar, AGENT_SIDEBAR_NAV_SLOT } from "./sidebar";
 import { AgentChrome } from "./chrome";
 import { AgentWorkspace } from "./workspace";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
-import { DesignStudio } from "@/features/preview/ui/design-studio";
+import { DesignStudio } from "@/features/preview/design/shell";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
 
 const MIN_WORKSPACE = 360;

@@ -11,7 +11,7 @@ import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { renderCommitMessage, getRelativeTime } from "./utils";
 import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
 import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
-import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -236,7 +236,7 @@ export function GraphDetailPanel({
                                         accessToken: token,
                                     });
                                     setAiExplain(text.trim());
-                                    void import("@/lib/shape-auth/store")
+                                    void import("@/lib/cloud/store")
                                         .then(({ refreshShapeAuth }) => {
                                             void refreshShapeAuth();
                                         })

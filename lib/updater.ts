@@ -3,7 +3,7 @@
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { getSettings, type UpdateChannel } from "@/lib/settings";
-import { isTauriRuntime } from "@/lib/tauri-window";
+import { isTauriRuntime } from "@/lib/window/tauri-window";
 
 export type UpdateStatus =
   | { kind: "idle" }

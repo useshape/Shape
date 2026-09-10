@@ -323,7 +323,14 @@ async fn execute_plugin_run_ui(
     ctx: &ToolCtx<'_>,
     cmd_id: Option<&str>,
 ) -> ToolOutcome {
-    let res = crate::agent::tools::plugins::execute_plugin_run(slug, arguments, ctx.api_key).await;
+    let res = crate::agent::tools::plugins::execute_plugin_run(
+        slug,
+        arguments,
+        ctx.api_key,
+        ctx.turn_id.as_deref(),
+        ctx.conversation_id.as_deref(),
+    )
+    .await;
     let err = res.starts_with("ERROR")
         || res.starts_with("Sign in")
         || res.starts_with("Plugin request")

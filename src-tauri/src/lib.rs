@@ -17,6 +17,8 @@ fn emit_shape_deep_link(app: &AppHandle, url: &str) {
     } else if url.contains("shape://auth") || url.contains("/auth/callback") {
         let _ = app.emit("shape-oauth-callback", url);
         focus_shape_windows(app);
+    } else {
+        focus_shape_windows(app);
     }
 }
 

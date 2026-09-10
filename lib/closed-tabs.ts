@@ -1,6 +1,6 @@
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
-import { isDesignPreviewTab } from "@/lib/design-preview-tab";
+import { isDesignPreviewTab } from "@/lib/agent-preview/tab";
 
 const stack: { path: string; name: string }[] = [];
 

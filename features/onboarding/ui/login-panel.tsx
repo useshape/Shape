@@ -8,8 +8,8 @@ import { commands } from "@/lib/backend/commands";
 import {
     loginShape,
     useShapeAuth,
-} from "@/lib/shape-auth/store";
-import { websiteForgotPasswordUrl } from "@/lib/shape-auth/api";
+} from "@/lib/cloud/store";
+import { websiteForgotPasswordUrl } from "@/lib/cloud/api";
 
 function GitHubIcon() {
     return (

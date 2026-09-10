@@ -10,7 +10,7 @@ import { diffLines } from "diff";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import type { Chunk } from "../md/renderer";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 import { commands } from "@/lib/backend/commands";
 import { Collapse } from "./collapse";
 import { TerminalCommandStep } from "./terminal-live";
@@ -28,7 +28,7 @@ import { Favicon } from "@/components/ui/favicon";
 import { isShapePluginMeta } from "@/lib/plugin-logos";
 import { parseWebResults } from "../md/renderer";
 import { TypingDots } from "../message/bubble";
-import { humanizeToolName } from "@/lib/mcp-oauth";
+import { humanizeToolName } from "@/lib/mcp/oauth";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "1s";

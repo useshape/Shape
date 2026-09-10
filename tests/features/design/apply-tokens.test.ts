@@ -3,7 +3,7 @@ import {
     cssHasThemeDirective,
     insertCustomProperty,
     patchCustomProperty,
-} from "@/features/preview/design-mode/apply/patch-css";
+} from "@/features/preview/design/apply/patch-css";
 
 describe("patchCustomProperty", () => {
     it("updates a single declaration", () => {

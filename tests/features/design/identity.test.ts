@@ -5,7 +5,7 @@ import {
     isProjectSourcePath,
     normalizeOriginalSourcePath,
     pathFromGeneratedChunk,
-} from "@/features/preview/design-mode/identity";
+} from "@/features/preview/design/identity";
 
 describe("source identity", () => {
     it("recognizes project source paths", () => {

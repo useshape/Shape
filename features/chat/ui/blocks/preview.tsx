@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useDesignPreviewSession } from "@/lib/design-preview-store";
+import { useDesignPreviewSession } from "@/lib/agent-preview/store";
 
 function isHtmlPreview(path: string, kind?: string): boolean {
     if (kind === "html") return true;

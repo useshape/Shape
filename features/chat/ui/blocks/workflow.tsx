@@ -17,7 +17,7 @@ import {
 import { Chunk } from "../md/renderer";
 import { ChatMarkdown } from "../md/view";
 import { looksLikeProseMarkdown } from "../md/stream";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
 import { TerminalCommandStep } from "./terminal-live";
 
@@ -214,9 +214,10 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
             readPaths.push(block.content);
             continue;
         }
+        // Keep web_search / web_result / web_visit as individual rows so the UI
+        // can show host + favicon (not "Searched N times").
         if (
-            (block.type === "search" || block.type === "grep" || block.type === "search_result"
-                || block.type === "web_search" || block.type === "web_result")
+            (block.type === "search" || block.type === "grep" || block.type === "search_result")
             && !block.isGenerating
         ) {
             flushStages();

@@ -10,13 +10,13 @@ import { NotificationProvider } from "@/components/ui/notification";
 import { GlobalContextMenu } from "@/core/providers/menu";
 import { ChatStreamProvider } from "@/features/chat/lib/chat-stream-store";
 import { initSettings } from "@/lib/settings";
-import { initGitHubAuth } from "@/lib/github-auth/store";
+import { initGitHubAuth } from "@/lib/github/store";
 import { LoginPromptDialog } from "@/features/workbench/ui/login-prompt-dialog";
 import { WorkspaceTrustHost } from "@/features/workbench/ui/workspace-trust-dialog";
 import { CheckpointRestoreDialog } from "@/features/chat/ui/shell/checkpoint-restore-dialog";
 import { UpdateBootstrap } from "@/features/workbench/update-bootstrap";
 import { installBenignErrorFilters } from "@/lib/editor/benign-errors";
-import { isMainTauriWindow, isTauriRuntime } from "@/lib/tauri-window";
+import { isMainTauriWindow, isTauriRuntime } from "@/lib/window/tauri-window";
 import { FilterProvider } from "@/features/git/ui/manager/filter-context";
 import { SuppressNativeTooltips } from "@/components/ui/suppress-native-tooltips";
 import { CommandPaletteBridge } from "@/features/agent/palette";
@@ -42,12 +42,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const bootstrap = async () => {
             void initSettings();
             initGitHubAuth();
-            void import("@/lib/shape-auth/store").then(({ initShapeAuth }) => initShapeAuth());
+            void import("@/lib/cloud/store").then(({ initShapeAuth }) => initShapeAuth());
 
             // MCP: sync user mcp.json so the agent sees tools without visiting Settings.
             void (async () => {
                 try {
-                    const { loadMcpServersFromFile } = await import("@/lib/mcp-config");
+                    const { loadMcpServersFromFile } = await import("@/lib/mcp/config");
                     const { commands } = await import("@/lib/backend");
                     const servers = await loadMcpServersFromFile();
                     if (servers.length > 0) await commands.syncMcpServers(servers);

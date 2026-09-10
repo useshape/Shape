@@ -15,7 +15,7 @@ export function GitManagerTrigger({ className }: { className?: string }) {
                 size="icon"
                 aria-label="Open Git Manager"
                 className={cn("text-text-primary hover:bg-panel-hover", className)}
-                onClick={() => void import("@/lib/open-git-window").then(({ openGitWindow }) => openGitWindow())}
+                onClick={() => void import("@/lib/window/open-git-window").then(({ openGitWindow }) => openGitWindow())}
             >
                 {/* Never max-h/w-full here — padded icon buttons shrink that to 0 and the logo vanishes. */}
                 <ShapeLogo size={14} className="pointer-events-none" />

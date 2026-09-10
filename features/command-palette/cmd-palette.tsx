@@ -9,9 +9,9 @@ import { FileIcon } from "@/components/ui/file-icon";
 import { getShortcutForLabel } from "@/lib/ui/shortcuts";
 import { SHAPE_MODAL_PANEL_CLASS, SHAPE_OVERLAY_CLASS, SHAPE_OVERLAY_CONTENT_CLASS } from "@/lib/ui/modal-overlay";
 import { cn } from "@/lib/utils";
-import { isPopoutPath } from "@/lib/tauri-window";
-import { SETTINGS_CATEGORIES } from "@/features/settings/ui/settings-nav";
-import { openSettingsWindow } from "@/lib/open-settings";
+import { isPopoutPath } from "@/lib/window/tauri-window";
+import { SETTINGS_CATEGORIES } from "@/features/settings/ui/shared/nav";
+import { openSettingsWindow } from "@/lib/window/open-settings";
 import { toTimestampMs } from "@/lib/timestamp";
 
 interface EditorAction {
@@ -832,7 +832,7 @@ function getAppCommands(): EditorAction[] {
                     if (!enabled) {
                         updateSettingSection("developer", { enableDevTools: true });
                     }
-                    void import("@/lib/tauri-window").then(({ toggleDevTools }) => {
+                    void import("@/lib/window/tauri-window").then(({ toggleDevTools }) => {
                         void toggleDevTools();
                     });
                 });

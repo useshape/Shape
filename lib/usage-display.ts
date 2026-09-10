@@ -1,4 +1,4 @@
-import type { ShapeAuthState } from "@/lib/shape-auth/types";
+import type { ShapeAuthState } from "@/lib/cloud/types";
 import type { LastTurnUsage } from "@/lib/last-turn-usage";
 
 /** Matches website Auto monthly pool — used only for turn-delta % display. */
@@ -95,13 +95,13 @@ export function formatMessageUsageRows(
 
 export type ChatUsageDisplay = {
     mode: "auto" | "credits";
-    /** Ring fill for *this turn's* share of the allowance (not lifetime/month total). */
+    /** Ring fill for monthly account usage (switches with Auto vs premium model). */
     percent: number;
-    /** Short primary line, e.g. "2% used". */
+    /** Short primary line, e.g. "18% used". */
     title: string;
     /** Secondary line — kept for API compat; prefer empty / same as title. */
     detail: string;
-    /** Single-line tooltip: response % only. */
+    /** Single-line tooltip. */
     tooltip: string;
 };
 
@@ -111,7 +111,7 @@ export function resolveChatUsageDisplay(
         ShapeAuthState,
         "loggedIn" | "tier" | "freeAutoPercent" | "creditsIncluded" | "creditsRemaining"
     >,
-    lastTurn?: LastTurnUsage | null,
+    _lastTurn?: LastTurnUsage | null,
 ): ChatUsageDisplay {
     if (!auth.loggedIn) {
         return {
@@ -123,33 +123,31 @@ export function resolveChatUsageDisplay(
         };
     }
 
-    const usingAuto = selectedModel === "auto" || auth.tier === "free";
-    const turn = lastTurn;
+    const usingAuto = selectedModel === "auto" || isAutoModelId(selectedModel) || auth.tier === "free";
 
     if (usingAuto) {
-        const tokens = turn?.tokens ?? 0;
-        const percent = turnPercentOfPool(tokens, AUTO_MONTHLY_TOKEN_POOL);
+        const percent = Math.max(0, Math.min(100, Math.round(auth.freeAutoPercent ?? 0)));
         const title = `${percent}% used`;
         return {
             mode: "auto",
             percent,
             title,
             detail: title,
-            tooltip: title,
+            tooltip: `${title} this month (Auto)`,
         };
     }
 
     const included = auth.creditsIncluded;
-    const charged = turn?.creditsCharged ?? 0;
     if (included > 0) {
-        const percent = turnPercentOfPool(charged, included);
+        const used = Math.max(0, included - Math.max(0, auth.creditsRemaining));
+        const percent = Math.max(0, Math.min(100, Math.round((used / included) * 100)));
         const title = `${percent}% used`;
         return {
             mode: "credits",
             percent,
             title,
             detail: title,
-            tooltip: title,
+            tooltip: `${title} this month`,
         };
     }
 

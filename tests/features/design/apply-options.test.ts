@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { mergeClassTokens, stylesToClassTokens } from "@/features/preview/design-mode/apply/class-tokens";
+import { mergeClassTokens, stylesToClassTokens } from "@/features/preview/design/apply/class-tokens";
 import {
     openingTagHasTokens,
     patchInlineStyles,
     patchOpeningTag,
     wrapClassLiteral,
-} from "@/features/preview/design-mode/apply/patch-tag";
-import { validateJsxSource } from "@/features/preview/design-mode/apply/locate-jsx";
-import type { DesignComputedStyles } from "@/features/preview/design-mode/types";
-import { effectsToStyles, type DesignEffect, type DesignEffectKind } from "@/features/preview/ui/design/fields";
+} from "@/features/preview/design/apply/patch-tag";
+import { validateJsxSource } from "@/features/preview/design/apply/locate-jsx";
+import type { DesignComputedStyles } from "@/features/preview/design/types";
+import { effectsToStyles, type DesignEffect, type DesignEffectKind } from "@/features/preview/design/ui/shared/fields";
 import {
     DESIGN_EXPORT_FORMATS,
     DESIGN_EXPORT_SCALES,
@@ -20,7 +20,7 @@ import {
     parseRadiusCorners,
     stylesForFlow,
     type DesignFlow,
-} from "@/features/preview/ui/design/panel-layout";
+} from "@/features/preview/design/ui/shared/panel-layout";
 
 function page(tag: string) {
     return `export default function Page() {\n  return (\n    ${tag}\n  );\n}\n`;

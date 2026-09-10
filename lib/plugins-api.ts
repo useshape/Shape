@@ -1,5 +1,5 @@
-import { ShapeApiError, shapeApiFetch } from "@/lib/shape-auth/api";
-import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import { ShapeApiError, shapeApiFetch } from "@/lib/cloud/api";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 
 export type PluginRow = {
     id: string;

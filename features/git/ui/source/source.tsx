@@ -29,7 +29,7 @@ import {
 import { notify } from "@/features/notifications";
 import { statusProgress } from "@/lib/status-progress";
 import { getSettings, useSettings } from "@/lib/settings";
-import { getShapeAccessToken } from "@/lib/shape-auth/store";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     SidebarPanelHeaderFrame,
@@ -664,7 +664,7 @@ export default function Source({
             setCommitDescription(description);
             setCommitSuggestionStatus("idle");
             // Commit AI bills Shape credits — refresh account balance.
-            void import("@/lib/shape-auth/store").then(({ refreshShapeAuth }) => {
+            void import("@/lib/cloud/store").then(({ refreshShapeAuth }) => {
                 void refreshShapeAuth();
             }).catch(() => undefined);
         } catch (err) {
@@ -691,7 +691,7 @@ export default function Source({
                 accessToken: token,
             });
             setWorkingExplain(text.trim());
-            void import("@/lib/shape-auth/store")
+            void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {
                     void refreshShapeAuth();
                 })
@@ -717,7 +717,7 @@ export default function Source({
                 accessToken: token,
             });
             setConflictHelp(text.trim());
-            void import("@/lib/shape-auth/store")
+            void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {
                     void refreshShapeAuth();
                 })

@@ -1,15 +1,14 @@
 "use client";
 
 import { RiCheckLine, RiClipboardLine } from "@remixicon/react";
-import React, { lazy, Suspense, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 import { Icon } from "@/components/ui/icon";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
-import { StreamInline } from "./stream-words";
 import { ChatLinkChip } from "./link-chip";
 
 const SyntaxHighlighter = lazy(() =>
@@ -60,9 +59,8 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
     );
 }
 
-function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: boolean; isLast?: boolean }) {
+function createMarkdownComponents(options?: { nested?: boolean }) {
     const nested = options?.nested;
-    const streaming = !!options?.isGenerating && !!options?.isLast;
 
     return {
         pre: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
@@ -123,9 +121,7 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
             );
         },
         p: ({ children }: { children?: React.ReactNode }) => (
-            <p className="mb-2 font-sans chat-text font-medium text-text-primary last:mb-0">
-                <StreamInline streaming={streaming}>{children}</StreamInline>
-            </p>
+            <p className="mb-2 font-sans chat-text font-medium text-text-primary last:mb-0">{children}</p>
         ),
         ul: ({ children }: { children?: React.ReactNode }) => (
             <ul className="mb-2 ml-4 list-outside list-disc space-y-1 font-sans chat-text">{children}</ul>
@@ -134,35 +130,21 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
             <ol className="mb-2 ml-4 list-outside list-decimal space-y-1 font-sans chat-text">{children}</ol>
         ),
         li: ({ children }: { children?: React.ReactNode }) => (
-            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">
-                <StreamInline streaming={streaming}>{children}</StreamInline>
-            </li>
+            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">{children}</li>
         ),
         h1: ({ children }: { children?: React.ReactNode }) => (
-            <h1 className="mb-2 mt-4 font-sans chat-text font-medium text-text-primary">
-                <StreamInline streaming={streaming}>{children}</StreamInline>
-            </h1>
+            <h1 className="mb-2 mt-4 font-sans chat-text font-medium text-text-primary">{children}</h1>
         ),
         h2: ({ children }: { children?: React.ReactNode }) => (
-            <h2 className="mb-1.5 mt-3 font-sans chat-text font-medium text-text-primary">
-                <StreamInline streaming={streaming}>{children}</StreamInline>
-            </h2>
+            <h2 className="mb-1.5 mt-3 font-sans chat-text font-medium text-text-primary">{children}</h2>
         ),
         h3: ({ children }: { children?: React.ReactNode }) => (
-            <h3 className="mb-1 mt-2 font-sans chat-text font-medium text-text-primary">
-                <StreamInline streaming={streaming}>{children}</StreamInline>
-            </h3>
+            <h3 className="mb-1 mt-2 font-sans chat-text font-medium text-text-primary">{children}</h3>
         ),
         strong: ({ children }: { children?: React.ReactNode }) => (
-            <strong className="chat-text font-medium text-text-primary">
-                <StreamInline streaming={streaming}>{children}</StreamInline>
-            </strong>
+            <strong className="chat-text font-medium text-text-primary">{children}</strong>
         ),
-        em: ({ children }: { children?: React.ReactNode }) => (
-            <em>
-                <StreamInline streaming={streaming}>{children}</StreamInline>
-            </em>
-        ),
+        em: ({ children }: { children?: React.ReactNode }) => <em>{children}</em>,
         hr: () => null,
         a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
             <ChatLinkChip href={href}>{children}</ChatLinkChip>
@@ -173,6 +155,53 @@ function createMarkdownComponents(options?: { nested?: boolean; isGenerating?: b
             </blockquote>
         ),
     };
+}
+
+/** Fast catch-up typewriter over the raw markdown string (survives re-parses). */
+function useRevealText(full: string, live: boolean): string {
+    const len = full.length;
+    const [shown, setShown] = useState(() => (live ? Math.min(24, len) : len));
+    const shownRef = useRef(shown);
+    shownRef.current = shown;
+    const wasLive = useRef(live);
+    if (live) wasLive.current = true;
+
+    useEffect(() => {
+        // Finished message that never streamed in this mount — show fully.
+        if (!live && !wasLive.current) {
+            setShown(len);
+            return;
+        }
+        if (shownRef.current > len) {
+            setShown(len);
+            return;
+        }
+        if (shownRef.current >= len) return;
+
+        let raf = 0;
+        let last = performance.now();
+        const tick = (now: number) => {
+            const cur = shownRef.current;
+            if (cur >= len) return;
+            const dt = Math.min(32, now - last);
+            last = now;
+            const behind = len - cur;
+            // Sprint on dumps; cruise near the tip. Stay under ~0.5s for big chunks.
+            let cps: number;
+            if (behind > 800) cps = 1400;
+            else if (behind > 300) cps = 900;
+            else if (behind > 80) cps = 480;
+            else cps = live ? 180 : 320;
+            const step = Math.max(1, Math.ceil((cps * dt) / 1000));
+            const next = Math.min(len, cur + step);
+            setShown(next);
+            if (next < len) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [len, live, shown < len]);
+
+    return full.slice(0, shown);
 }
 
 export const ChatMarkdown = React.memo(({
@@ -186,14 +215,29 @@ export const ChatMarkdown = React.memo(({
     isGenerating?: boolean;
     isLast?: boolean;
 }) => {
+    // Keep revealing briefly after generation ends so a late dump still types in.
+    const [hold, setHold] = useState(false);
+    useEffect(() => {
+        if (isGenerating && isLast) {
+            setHold(true);
+            return;
+        }
+        if (!hold) return;
+        const t = window.setTimeout(() => setHold(false), 700);
+        return () => window.clearTimeout(t);
+    }, [isGenerating, isLast, hold]);
+
+    const live = !nested && !!isLast && (!!isGenerating || hold);
+    const visible = useRevealText(content, live);
+
     const components = React.useMemo(
-        () => createMarkdownComponents({ nested, isGenerating, isLast }),
-        [nested, isGenerating, isLast],
+        () => createMarkdownComponents({ nested }),
+        [nested],
     );
 
     const processed = React.useMemo(
-        () => preprocessChatMarkdown(content, { streaming: !!isGenerating, trim: !isGenerating }),
-        [content, isGenerating],
+        () => preprocessChatMarkdown(visible, { streaming: live, trim: !live }),
+        [visible, live],
     );
 
     return (

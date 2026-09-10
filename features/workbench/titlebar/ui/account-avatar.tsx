@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { SHAPE_API_BASE } from "@/lib/shape-auth/api";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 
 /** Initials fallback when the avatar image is unavailable. */
 export function accountInitials(name: string | null, email: string | null): string {

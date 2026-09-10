@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGradient, parseGradient, stringifyGradient } from "@/features/editor/ui/color-picker/ui/gradient-utils";
+import { isGradient, parseGradient, stringifyGradient } from "@/features/preview/design/controls/color-picker/ui/gradient-utils";
 
 describe("gradient-utils", () => {
     it("detects gradients", () => {

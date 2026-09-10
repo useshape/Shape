@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveShapeApiBase, SHAPE_PRODUCTION_ORIGIN } from "@/lib/shape-auth/api";
+import { resolveShapeApiBase, SHAPE_PRODUCTION_ORIGIN } from "@/lib/cloud/api";
 
 describe("resolveShapeApiBase", () => {
     it("pins production builds to www.useshape.org", () => {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { locateJsxByHint, locateJsxBySelector, locateJsxElement, jsxClassExpressionKind, parseCssPathSelector } from "@/features/preview/design-mode/apply/locate-jsx";
+import { locateJsxByHint, locateJsxBySelector, locateJsxElement, jsxClassExpressionKind, parseCssPathSelector } from "@/features/preview/design/apply/locate-jsx";
 import {
     findOpeningTags,
     cssModuleLocal,
-} from "@/features/preview/design-mode/apply/locate-html";
-import { patchInlineStyles, patchOpeningTag } from "@/features/preview/design-mode/apply/patch-tag";
-import { stylesToClassTokens } from "@/features/preview/design-mode/apply/class-tokens";
-import { layoutPathsNear } from "@/features/preview/design-mode/apply/source-files";
+} from "@/features/preview/design/apply/locate-html";
+import { patchInlineStyles, patchOpeningTag } from "@/features/preview/design/apply/patch-tag";
+import { stylesToClassTokens } from "@/features/preview/design/apply/class-tokens";
+import { layoutPathsNear } from "@/features/preview/design/apply/source-files";
 
 type Hint = { className?: string; tag?: string; locateText?: string; lineNumber?: number };
 

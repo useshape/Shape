@@ -7,7 +7,7 @@ import { DiffView } from "@/features/editor/ui/diff/diff-view";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
-import { openProjectFile } from "@/lib/open-project-file";
+import { openProjectFile } from "@/lib/window/open-project-file";
 
 export type FileDiffTabInfo = {
     id: string;

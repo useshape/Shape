@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
     isCssInJsOwned,
     looksLikeCssInJsClass,
-} from "@/features/preview/design-mode/apply/commit-edits";
-import type { DesignPendingEdit } from "@/features/preview/design-mode/types";
+} from "@/features/preview/design/apply/commit-edits";
+import type { DesignPendingEdit } from "@/features/preview/design/types";
 
 function edit(
     partial: Partial<DesignPendingEdit> & Pick<DesignPendingEdit, "styles">,

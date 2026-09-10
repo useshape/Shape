@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseToRgba, rgbaToHex, rgbaToHsva, hsvaToRgba } from "@/features/editor/ui/color-picker/ui/color-utils";
+import { parseToRgba, rgbaToHex, rgbaToHsva, hsvaToRgba } from "@/features/preview/design/controls/color-picker/ui/color-utils";
 
 describe("color-utils", () => {
     it("parses hex colors", () => {

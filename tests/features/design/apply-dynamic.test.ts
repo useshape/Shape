@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jsxClassExpressionKind } from "@/features/preview/design-mode/apply/locate-jsx";
+import { jsxClassExpressionKind } from "@/features/preview/design/apply/locate-jsx";
 
 describe("dynamic className detection", () => {
     it("classifies literal and helper forms as patchable kinds", () => {

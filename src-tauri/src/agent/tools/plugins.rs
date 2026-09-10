@@ -44,7 +44,14 @@ fn sanitize_plugin_error(raw: &str) -> String {
     }
 }
 
-async fn plugin_request(method: &str, path: &str, access_token: &str, body: Option<Value>) -> Result<Value, String> {
+async fn plugin_request(
+    method: &str,
+    path: &str,
+    access_token: &str,
+    body: Option<Value>,
+    turn_id: Option<&str>,
+    conversation_id: Option<&str>,
+) -> Result<Value, String> {
     let base = crate::core::website_url::shape_website_base();
     let url = format!("{}{}", base.trim_end_matches('/'), path);
 
@@ -56,6 +63,12 @@ async fn plugin_request(method: &str, path: &str, access_token: &str, body: Opti
     req = req
         .header("Authorization", format!("Bearer {}", access_token))
         .header("Content-Type", "application/json");
+    if let Some(turn_id) = turn_id.filter(|s| !s.is_empty()) {
+        req = req.header("X-Shape-Turn-Id", turn_id);
+    }
+    if let Some(conversation_id) = conversation_id.filter(|s| !s.is_empty()) {
+        req = req.header("X-Shape-Conversation-Id", conversation_id);
+    }
     if let Some(body) = body {
         req = req.json(&body);
     }
@@ -78,7 +91,7 @@ async fn plugin_request(method: &str, path: &str, access_token: &str, body: Opti
 }
 
 pub async fn execute_plugin_list(access_token: &str) -> String {
-    match plugin_request("GET", "/api/plugins", access_token, None).await {
+    match plugin_request("GET", "/api/plugins", access_token, None, None, None).await {
         Ok(data) => {
             if data.get("configured") == Some(&json!(false)) {
                 return "Plugins are not configured on the Shape server.".to_string();
@@ -99,7 +112,7 @@ pub async fn execute_plugin_tools(toolkit: &str, query: Option<&str>, access_tok
         path.push_str("&query=");
         path.push_str(&urlencoding::encode(q));
     }
-    match plugin_request("GET", &path, access_token, None).await {
+    match plugin_request("GET", &path, access_token, None, None, None).await {
         Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "{}".to_string()),
         Err(e) => e,
     }
@@ -107,18 +120,26 @@ pub async fn execute_plugin_tools(toolkit: &str, query: Option<&str>, access_tok
 
 pub async fn execute_plugin_search(query: &str, access_token: &str) -> String {
     let path = format!("/api/plugins/search?query={}", urlencoding::encode(query));
-    match plugin_request("GET", &path, access_token, None).await {
+    match plugin_request("GET", &path, access_token, None, None, None).await {
         Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "{}".to_string()),
         Err(e) => e,
     }
 }
 
-pub async fn execute_plugin_run(slug: &str, arguments: &Value, access_token: &str) -> String {
+pub async fn execute_plugin_run(
+    slug: &str,
+    arguments: &Value,
+    access_token: &str,
+    turn_id: Option<&str>,
+    conversation_id: Option<&str>,
+) -> String {
     match plugin_request(
         "POST",
         "/api/plugins/execute",
         access_token,
         Some(json!({ "slug": slug, "arguments": arguments })),
+        turn_id,
+        conversation_id,
     )
     .await
     {

@@ -6,7 +6,7 @@ import {
     relFromRoot,
     type DesignPage,
 } from "@/features/preview/lib/discover-routes";
-import { DESIGN_BRIDGE_SCRIPT } from "@/features/preview/design-mode/bridge-script";
+import { DESIGN_BRIDGE_SCRIPT } from "@/features/preview/design/bridge-script";
 
 describe("relFromRoot", () => {
     it("strips a Windows project root case-insensitively", () => {

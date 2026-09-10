@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reorderSiblingElements } from "@/features/preview/design-mode/apply/sibling-reorder";
+import { reorderSiblingElements } from "@/features/preview/design/apply/sibling-reorder";
 
 describe("reorderSiblingElements", () => {
     it("swaps two JSX siblings inside a parent", () => {
