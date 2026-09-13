@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FileIcon } from "@/components/ui/file-icon";
-import { ShapeLogo } from "@/components/ui/shape-logo";
-import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
+import {
+    GenerateStarButton,
+    streamTextInto,
+} from "@/features/git/ui/shared/generate-star";
+import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { Panel } from "@/features/panels";
 import {
     ContextMenu,
@@ -52,6 +55,7 @@ import {
 } from "@/components/ui/dropdown";
 import { useLoading } from "@/features/loading/context";
 import { GitManagerTrigger } from "@/features/git/ui/manager/git-manager-trigger";
+import { GitChromeActions } from "@/features/git/ui/manager/chrome";
 import { useGitRepos } from "@/lib/git/repos";
 
 function isBenignGitError(err: unknown): boolean {
@@ -274,8 +278,6 @@ export default function Source({
     const [commitTitle, setCommitTitle] = useState("");
     const [commitDescription, setCommitDescription] = useState("");
     const [commitSuggestionStatus, setCommitSuggestionStatus] = useState<"idle" | "loading">("idle");
-    const [workingExplain, setWorkingExplain] = useState<string | null>(null);
-    const [workingExplainLoading, setWorkingExplainLoading] = useState(false);
     const [conflictHelp, setConflictHelp] = useState<string | null>(null);
     const [conflictHelpLoading, setConflictHelpLoading] = useState(false);
     const [diffFile, setDiffFile] = useState<{ path: string; staged: boolean } | null>(null);
@@ -643,54 +645,29 @@ export default function Source({
             notify.error("AI Error", "Open a project to generate a commit message.");
             return;
         }
-        const stagedChanges = changes.filter(c => c.staged);
+        const stagedChanges = changes.filter((c) => c.staged);
         if (stagedChanges.length === 0) {
-            notify.error("AI Error", "You must check at least one change to generate a commit message.");
+            notify.error("AI Error", "Stage at least one change to generate a commit message.");
             return;
         }
         setCommitSuggestionStatus("loading");
         try {
             const token = getShapeAccessToken();
             if (!token) {
-                notify.error("AI Error", "Sign in to Shape to use AI chat.");
+                notify.error("AI Error", "Sign in to Shape to use AI.");
                 setCommitSuggestionStatus("idle");
                 return;
             }
             const message = await commands.generateCommitMessage(token, gitRepo);
-            const lines = message.trim().split('\n');
-            const title = lines[0];
-            const description = lines.slice(1).join('\n').trim();
-            setCommitTitle(title);
-            setCommitDescription(description);
-            setCommitSuggestionStatus("idle");
-            // Commit AI bills Shape credits — refresh account balance.
-            void import("@/lib/cloud/store").then(({ refreshShapeAuth }) => {
-                void refreshShapeAuth();
-            }).catch(() => undefined);
-        } catch (err) {
-            notify.error("AI Error", err instanceof Error ? err.message : String(err));
-            setCommitSuggestionStatus("idle");
-        }
-    };
-
-    const runExplainWorking = async () => {
-        if (!gitRepo) return;
-        const token = getShapeAccessToken();
-        if (!token) {
-            notify.error("AI Error", "Sign in to Shape to explain changes.");
-            return;
-        }
-        if (changes.filter((c) => c.staged).length === 0) {
-            notify.error("AI Error", "Stage files first to explain them.");
-            return;
-        }
-        setWorkingExplainLoading(true);
-        try {
-            const text = await commands.explainGitChanges("working", {
-                repoPath: gitRepo,
-                accessToken: token,
-            });
-            setWorkingExplain(text.trim());
+            const lines = message.trim().split("\n");
+            const title = lines[0] ?? "";
+            const description = lines.slice(1).join("\n").trim();
+            setCommitTitle("");
+            setCommitDescription("");
+            await streamTextInto(title, setCommitTitle);
+            if (description) {
+                await streamTextInto(description, setCommitDescription, { msPerChar: 4 });
+            }
             void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {
                     void refreshShapeAuth();
@@ -699,7 +676,7 @@ export default function Source({
         } catch (err) {
             notify.error("AI Error", err instanceof Error ? err.message : String(err));
         } finally {
-            setWorkingExplainLoading(false);
+            setCommitSuggestionStatus("idle");
         }
     };
 
@@ -806,6 +783,31 @@ export default function Source({
 
     const sourceChrome = (
         <>
+            {embedded && active && isGitRepo ? (
+                <GitChromeActions>
+                    <Tooltip content="Refresh">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} aria-label="Refresh">
+                            <Icon icon={RiRefreshLine} />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip content="Pull">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePull} aria-label="Pull">
+                            <Icon icon={RiDownloadLine} />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip content="Push">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePush} aria-label="Push">
+                            <Icon icon={RiArrowUpLine} />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip content="Sync">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSync} aria-label="Sync">
+                            <Icon icon={RiUploadLine} />
+                        </Button>
+                    </Tooltip>
+                </GitChromeActions>
+            ) : null}
+            {embedded ? null : (
             <SidebarPanelHeaderFrame
                 title="Source Control"
                 className={embedded ? "bg-editor" : undefined}
@@ -911,6 +913,7 @@ export default function Source({
                     ) : undefined
                 }
             />
+            )}
 
             {changes.some((c) => c.status === "C") && gitRepo ? (
                 <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--git-conflict)]/40 bg-[color:var(--git-conflict)]/10 px-2 py-1.5 text-xs text-text-primary">
@@ -1091,19 +1094,28 @@ export default function Source({
                             <div className={cn(
                                 "flex flex-col gap-0.5 relative overflow-hidden m-2 border border-border rounded-xl",
                                 embedded ? "bg-transparent" : "bg-transparent",
+                                commitSuggestionStatus === "loading" && "git-generate-shimmer",
                             )}>
-                                <Input
-                                    placeholder="Commit title"
-                                    value={commitTitle}
-                                    onChange={(e) => setCommitTitle(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                                            e.preventDefault();
-                                            void handleCommit(false, { promptSyncAfter: true });
-                                        }
-                                    }}
-                                    className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-2 bg-transparent"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        placeholder="Commit title"
+                                        value={commitTitle}
+                                        onChange={(e) => setCommitTitle(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                                e.preventDefault();
+                                                void handleCommit(false, { promptSyncAfter: true });
+                                            }
+                                        }}
+                                        className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent py-2 pl-2 pr-9"
+                                    />
+                                    <GenerateStarButton
+                                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                                        loading={commitSuggestionStatus === "loading"}
+                                        disabled={changes.filter((c) => c.staged).length === 0}
+                                        onClick={() => void handleGenerateCommitMessage()}
+                                    />
+                                </div>
                                 <Textarea
                                     placeholder="Add description..."
                                     value={commitDescription}
@@ -1120,33 +1132,7 @@ export default function Source({
                             </div>
 
                             <div className="flex w-full flex-col gap-1.5 px-2">
-                                <div className="flex w-full items-center justify-between gap-1">
-                                    <div className="flex min-w-0 items-center gap-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-chrome gap-1.5 px-md"
-                                            disabled={
-                                                commitSuggestionStatus === "loading"
-                                                || changes.filter((c) => c.staged).length === 0
-                                            }
-                                            onClick={() => void handleGenerateCommitMessage()}
-                                        >
-                                            <ShapeLogo size={12} />
-                                            {commitSuggestionStatus === "loading"
-                                                ? "Generating…"
-                                                : "Generate"}
-                                        </Button>
-                                        <GitAiAction
-                                            label="Explain staged"
-                                            title="Staged changes"
-                                            content={workingExplain}
-                                            loading={workingExplainLoading}
-                                            disabled={changes.filter((c) => c.staged).length === 0}
-                                            onRun={runExplainWorking}
-                                        />
-                                    </div>
-
+                                <div className="flex w-full items-center justify-end gap-1">
                                 <div className="flex items-center gap-1.5">
                                     {needsSync && changes.length === 0 ? (
                                         <Button
@@ -1374,13 +1360,26 @@ export default function Source({
                                     </span>
                                 </div>
                             )}
-                            <div className="flex flex-col gap-0.5 relative overflow-hidden m-2 border border-border rounded-xl bg-transparent">
-                                <Input
-                                    placeholder="Commit title"
-                                    value={commitTitle}
-                                    onChange={(e) => setCommitTitle(e.target.value)}
-                                    className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-2 bg-transparent"
-                                />
+                            <div
+                                className={cn(
+                                    "flex flex-col gap-0.5 relative overflow-hidden m-2 border border-border rounded-xl bg-transparent",
+                                    commitSuggestionStatus === "loading" && "git-generate-shimmer",
+                                )}
+                            >
+                                <div className="relative">
+                                    <Input
+                                        placeholder="Commit title"
+                                        value={commitTitle}
+                                        onChange={(e) => setCommitTitle(e.target.value)}
+                                        className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent py-2 pl-2 pr-9"
+                                    />
+                                    <GenerateStarButton
+                                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                                        loading={commitSuggestionStatus === "loading"}
+                                        disabled={changes.filter((c) => c.staged).length === 0}
+                                        onClick={() => void handleGenerateCommitMessage()}
+                                    />
+                                </div>
                                 <Textarea
                                     placeholder="Add description..."
                                     value={commitDescription}
@@ -1389,21 +1388,7 @@ export default function Source({
                                     rows={2}
                                 />
                             </div>
-                            <div className="flex w-full items-center justify-between gap-1 px-2">
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={
-                                        commitSuggestionStatus === "loading"
-                                        || changes.filter((c) => c.staged).length === 0
-                                    }
-                                    onClick={() => void handleGenerateCommitMessage()}
-                                >
-                                    <ShapeLogo size={12} />
-                                    {commitSuggestionStatus === "loading"
-                                        ? "Generating…"
-                                        : "Generate"}
-                                </Button>
+                            <div className="flex w-full items-center justify-end gap-1 px-2">
                                 <Button
                                     variant="default"
                                     size="sm"

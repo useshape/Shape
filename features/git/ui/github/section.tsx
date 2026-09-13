@@ -1,9 +1,8 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiArrowDownSLine, RiArrowLeftLine, RiBugLine, RiCheckboxCircleLine, RiCloudLine, RiExternalLinkLine, RiGitMergeLine, RiGithubFill, RiListCheck3, RiRefreshLine, RiRocketLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiArrowLeftLine, RiExternalLinkLine, RiGitPullRequestLine, RiRefreshLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
 import {
@@ -16,17 +15,17 @@ import {
 import { useProjectState, commands } from "@/lib/backend";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { cn } from "@/lib/utils";
-import type { GitSectionId } from "@/features/git/types";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { statusIcon } from "@/features/git/ui/actions/utils";
 import { formatCommandError } from "@/lib/format-error";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
-import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { GitHubDetailPane } from "./detail";
 import { GitMarkdown } from "./markdown";
 import { GitDetailSkeleton, GitListSkeleton } from "@/features/git/ui/shared/skeletons";
-import { GitOverlayEnter } from "@/features/git/ui/shared/motion";
+import { GitChromeActions } from "@/features/git/ui/manager/chrome";
+import { CreatePullRequestDialog } from "./create-pr-dialog";
+import { Panel } from "@/features/panels";
 
 type IssueStateFilter = "open" | "closed" | "all";
 
@@ -52,20 +51,7 @@ type GhDetail = {
     meta?: string;
 };
 
-export type GitHubListSection = Exclude<
-    GitSectionId,
-    | "source"
-    | "graph"
-    | "branches"
-    | "tags"
-    | "workflow-runs"
-    | "workflow-definitions"
-    | "jobs"
-    | "steps"
-    | "live-status"
-    | "logs"
-    | "artifacts"
->;
+export type GitHubListSection = "issues" | "pull-requests";
 
 const SECTION_META: Record<
     GitHubListSection,
@@ -96,36 +82,6 @@ const SECTION_META: Record<
                   : "No open pull requests",
         endpoint: (o, r, state = "open") =>
             `/repos/${o}/${r}/pulls?state=${state}&per_page=50`,
-    },
-    releases: {
-        title: "Releases",
-        empty: () => "No releases",
-        endpoint: (o, r) => `/repos/${o}/${r}/releases?per_page=40`,
-    },
-    "check-runs": {
-        title: "Check runs",
-        empty: () => "No check runs for HEAD",
-        endpoint: (o, r) => `/repos/${o}/${r}/commits/HEAD/check-runs?per_page=50`,
-    },
-    "check-suites": {
-        title: "Check suites",
-        empty: () => "No check suites for HEAD",
-        endpoint: (o, r) => `/repos/${o}/${r}/commits/HEAD/check-suites?per_page=30`,
-    },
-    deployments: {
-        title: "Deployments",
-        empty: () => "No deployments",
-        endpoint: (o, r) => `/repos/${o}/${r}/deployments?per_page=40`,
-    },
-    "deployment-statuses": {
-        title: "Deployment statuses",
-        empty: () => "No deployment statuses",
-        endpoint: (o, r) => `/repos/${o}/${r}/deployments?per_page=20`,
-    },
-    "commit-statuses": {
-        title: "Commit statuses",
-        empty: () => "No commit statuses for HEAD",
-        endpoint: (o, r) => `/repos/${o}/${r}/commits/HEAD/status`,
     },
 };
 
@@ -164,186 +120,47 @@ function ItemStatusIcon({ status }: { status?: string }) {
     );
 }
 
-function sectionIcon(section: GitHubListSection): RemixiconComponentType {
-    switch (section) {
-        case "issues":
-            return RiBugLine;
-        case "pull-requests":
-            return RiGitMergeLine;
-        case "releases":
-            return RiRocketLine;
-        case "check-runs":
-            return RiCheckboxCircleLine;
-        case "check-suites":
-            return RiListCheck3;
-        case "commit-statuses":
-            return RiCheckboxCircleLine;
-        case "deployments":
-            return RiRocketLine;
-        case "deployment-statuses":
-            return RiCloudLine;
-        default:
-            return RiGithubFill;
-    }
-}
-
 function supportsStateFilter(section: GitHubListSection): boolean {
     return section === "issues" || section === "pull-requests";
 }
 
 function normalize(section: GitHubListSection, data: unknown): GhItem[] {
-    if (section === "check-runs") {
-        const runs = (data as { check_runs?: unknown[] })?.check_runs ?? asArr(data);
-        return runs.map((raw) => {
-            const c = raw as Record<string, unknown>;
-            return {
-                id: String(c.id ?? Math.random()),
-                title: String(c.name ?? "Check"),
-                subtitle: String((c.app as { name?: string } | undefined)?.name ?? ""),
-                url: typeof c.html_url === "string" ? c.html_url : undefined,
-                status: String(c.conclusion ?? c.status ?? ""),
-                meta: formatRelative(c.completed_at ?? c.started_at),
-                body: typeof c.output === "object" && c.output
-                    ? String((c.output as { summary?: string; title?: string }).summary
-                        ?? (c.output as { title?: string }).title
-                        ?? "")
-                    : undefined,
-            };
-        });
-    }
-    if (section === "check-suites") {
-        const suites = (data as { check_suites?: unknown[] })?.check_suites ?? asArr(data);
-        return suites.map((raw) => {
-            const c = raw as Record<string, unknown>;
-            return {
-                id: String(c.id ?? Math.random()),
-                title: String((c.app as { name?: string } | undefined)?.name ?? "Check suite"),
-                subtitle: String(c.head_branch ?? ""),
-                status: String(c.conclusion ?? c.status ?? ""),
-            };
-        });
-    }
-    if (section === "commit-statuses") {
-        const statuses = (data as { statuses?: unknown[] })?.statuses ?? asArr(data);
-        return statuses.map((raw) => {
-            const s = raw as Record<string, unknown>;
-            return {
-                id: String(s.id ?? s.context ?? Math.random()),
-                title: String(s.context ?? "Status"),
-                subtitle: String(s.description ?? ""),
-                url: typeof s.target_url === "string" ? s.target_url : undefined,
-                status: String(s.state ?? ""),
-                meta: formatRelative(s.updated_at),
-                body: typeof s.description === "string" ? s.description : undefined,
-            };
-        });
-    }
-    if (section === "releases") {
-        return asArr(data).map((raw) => {
-            const r = raw as Record<string, unknown>;
-            return {
-                id: String(r.id ?? r.tag_name ?? Math.random()),
-                title: String(r.name || r.tag_name || "Release"),
-                subtitle: [
-                    r.tag_name,
-                    r.draft ? "draft" : null,
-                    r.prerelease ? "pre-release" : null,
-                ]
-                    .filter(Boolean)
-                    .join(" · "),
-                url: typeof r.html_url === "string" ? r.html_url : undefined,
-                meta: formatRelative(r.published_at ?? r.created_at),
-                author:
-                    r.author && typeof r.author === "object"
-                        ? (r.author as { login?: string }).login
-                        : undefined,
-                body: typeof r.body === "string" ? r.body : undefined,
-            };
-        });
-    }
-    if (section === "issues" || section === "pull-requests") {
-        return asArr(data)
-            .filter((raw) => {
-                const i = raw as Record<string, unknown>;
-                if (section === "issues" && i.pull_request) return false;
-                return true;
-            })
-            .map((raw) => {
-                const i = raw as Record<string, unknown>;
-                const user =
-                    i.user && typeof i.user === "object"
-                        ? (i.user as { login?: string }).login
-                        : undefined;
-                const labels = Array.isArray(i.labels)
-                    ? i.labels
-                          .map((l) =>
-                              typeof l === "object" && l && "name" in l
-                                  ? String((l as { name?: string }).name)
-                                  : null,
-                          )
-                          .filter(Boolean)
-                          .slice(0, 3)
-                          .join(", ")
-                    : "";
-                const number = typeof i.number === "number" ? i.number : Number(i.number);
-                return {
-                    id: String(i.id ?? i.number ?? Math.random()),
-                    title: String(i.title ?? `#${i.number}`),
-                    subtitle: [`#${i.number}`, user, labels].filter(Boolean).join(" · "),
-                    url: typeof i.html_url === "string" ? i.html_url : undefined,
-                    status: String(i.state ?? ""),
-                    meta: formatRelative(i.updated_at ?? i.created_at),
-                    number: Number.isFinite(number) ? number : undefined,
-                    author: user,
-                    body: typeof i.body === "string" ? i.body : undefined,
-                };
-            });
-    }
-    if (section === "deployment-statuses") {
-        return asArr(data).map((raw) => {
-            const s = raw as Record<string, unknown>;
-            return {
-                id: String(s.id ?? Math.random()),
-                title: String(s.state ?? "status"),
-                subtitle: String(s.description ?? s.environment ?? ""),
-                url: typeof s.log_url === "string" ? s.log_url : undefined,
-                status: String(s.state ?? ""),
-                meta: formatRelative(s.created_at),
-                body: typeof s.description === "string" ? s.description : undefined,
-            };
-        });
-    }
-    return asArr(data).map((raw) => {
-        const i = raw as Record<string, unknown>;
-        return {
-            id: String(i.id ?? i.number ?? Math.random()),
-            title: String(i.title ?? i.environment ?? i.ref ?? i.name ?? `#${i.number}`),
-            subtitle: [
-                i.number != null ? `#${i.number}` : null,
-                i.state,
+    return asArr(data)
+        .filter((raw) => {
+            const i = raw as Record<string, unknown>;
+            if (section === "issues" && i.pull_request) return false;
+            return true;
+        })
+        .map((raw) => {
+            const i = raw as Record<string, unknown>;
+            const user =
                 i.user && typeof i.user === "object"
                     ? (i.user as { login?: string }).login
-                    : null,
-            ]
-                .filter(Boolean)
-                .join(" · "),
-            url: typeof i.html_url === "string" ? i.html_url : undefined,
-            status: typeof i.state === "string" ? i.state : undefined,
-            meta: formatRelative(i.updated_at ?? i.created_at),
-            author:
-                i.creator && typeof i.creator === "object"
-                    ? (i.creator as { login?: string }).login
-                    : i.user && typeof i.user === "object"
-                      ? (i.user as { login?: string }).login
-                      : undefined,
-            body:
-                typeof i.description === "string"
-                    ? i.description
-                    : typeof i.payload === "object" && i.payload
-                      ? JSON.stringify(i.payload, null, 2)
-                      : undefined,
-        };
-    });
+                    : undefined;
+            const labels = Array.isArray(i.labels)
+                ? i.labels
+                      .map((l) =>
+                          typeof l === "object" && l && "name" in l
+                              ? String((l as { name?: string }).name)
+                              : null,
+                      )
+                      .filter(Boolean)
+                      .slice(0, 3)
+                      .join(", ")
+                : "";
+            const number = typeof i.number === "number" ? i.number : Number(i.number);
+            return {
+                id: String(i.id ?? i.number ?? Math.random()),
+                title: String(i.title ?? `#${i.number}`),
+                subtitle: [`#${i.number}`, user, labels].filter(Boolean).join(" · "),
+                url: typeof i.html_url === "string" ? i.html_url : undefined,
+                status: String(i.state ?? ""),
+                meta: formatRelative(i.updated_at ?? i.created_at),
+                number: Number.isFinite(number) ? number : undefined,
+                author: user,
+                body: typeof i.body === "string" ? i.body : undefined,
+            };
+        });
 }
 
 async function resolveOwnerRepo(
@@ -483,8 +300,6 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
     const auth = useGitHubAuth();
     const { query } = useFilter();
     const [items, setItems] = useState<GhItem[]>([]);
-    const [deps, setDeps] = useState<{ id: number; label: string }[]>([]);
-    const [selectedDepId, setSelectedDepId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [repo, setRepo] = useState<{ owner: string; repo: string } | null>(null);
@@ -492,6 +307,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
     const [selectedId, setSelectedId] = useState<string | number | null>(null);
     const [detail, setDetail] = useState<GhDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [createPrOpen, setCreatePrOpen] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -510,39 +326,6 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                 return;
             }
 
-            if (section === "deployment-statuses") {
-                const list = asArr(await parseApi(meta.endpoint(resolved.owner, resolved.repo)));
-                const options = list
-                    .map((raw) => {
-                        const d = raw as Record<string, unknown>;
-                        return {
-                            id: Number(d.id),
-                            label: `#${d.id} · ${String(d.environment ?? "deploy")} · ${String(d.ref ?? "")}`,
-                        };
-                    })
-                    .filter((d) => Number.isFinite(d.id));
-                setDeps(options);
-                const depId =
-                    (selectedDepId != null && options.some((d) => d.id === selectedDepId)
-                        ? selectedDepId
-                        : options[0]?.id) ?? null;
-                if (depId == null) {
-                    setSelectedDepId(null);
-                    setItems([]);
-                    return;
-                }
-                if (selectedDepId !== depId) {
-                    setSelectedDepId(depId);
-                    return;
-                }
-                const statuses = await parseApi(
-                    `/repos/${resolved.owner}/${resolved.repo}/deployments/${depId}/statuses`,
-                );
-                setItems(normalize("deployment-statuses", statuses));
-                return;
-            }
-
-            setDeps([]);
             const state = supportsStateFilter(section) ? issueState : undefined;
             setItems(
                 normalize(
@@ -560,7 +343,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
         } finally {
             setLoading(false);
         }
-    }, [auth.loggedIn, issueState, meta, project_path, section, selectedDepId]);
+    }, [auth.loggedIn, issueState, meta, project_path, section]);
 
     useEffect(() => {
         void load();
@@ -677,205 +460,187 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
         return () => window.removeEventListener("keydown", onKey);
     }, [selectedItem, closeDetail]);
 
-    // Detail overlays the list (back arrow / Escape) — no side-by-side split.
-    if (selectedItem && repo) {
-        const rich =
-            section === "issues" ||
-            section === "pull-requests" ||
-            section === "releases";
-        return (
-            <div className="flex h-full min-h-0 flex-col">
-                <GitOverlayEnter key={String(selectedItem.id)}>
-                    {rich ? (
-                        <GitHubDetailPane
-                            section={section}
-                            item={selectedItem}
-                            owner={repo.owner}
-                            repo={repo.repo}
-                            onBack={closeDetail}
-                        />
-                    ) : (
-                        <SimpleDetailPane
-                            detail={detail}
-                            loading={detailLoading}
-                            onBack={closeDetail}
-                        />
-                    )}
-                </GitOverlayEnter>
-            </div>
-        );
-    }
+
+    const listPane = (
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
+            <ScrollArea className="h-full min-h-0 p-2" fadeFrom="from-panel">
+                {loading && items.length === 0 ? (
+                    <GitListSkeleton rows={10} />
+                ) : error && items.length === 0 ? (
+                    <div className="flex flex-col gap-2 px-2 py-3">
+                        <p className="text-sm text-text-muted">{error}</p>
+                        {!auth.loggedIn ? (
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                className="w-fit"
+                                onClick={() => void loginGitHub()}
+                            >
+                                Sign in with GitHub
+                            </Button>
+                        ) : null}
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <p className="px-2 py-3 text-sm text-text-muted">{emptyLabel}</p>
+                ) : (
+                    <ul className="flex flex-col gap-0.5">
+                        {filtered.map((item) => (
+                            <li key={item.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedId(item.id)}
+                                    className={cn(
+                                        "flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left hover:bg-panel-hover/60",
+                                        selectedId === item.id && "bg-panel-hover",
+                                    )}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <span className="flex min-w-0 items-start gap-2 text-sm leading-snug text-text-primary">
+                                            <ItemStatusIcon status={item.status} />
+                                            <span className="line-clamp-2">{item.title}</span>
+                                        </span>
+                                        {item.meta ? (
+                                            <span className="shrink-0 text-2xs text-text-muted">
+                                                {item.meta}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    {item.subtitle ? (
+                                        <div className="flex items-center gap-2 pl-6">
+                                            <span className="truncate text-xs text-text-muted">
+                                                {item.subtitle}
+                                            </span>
+                                            {item.url ? (
+                                                <Icon
+                                                    icon={RiExternalLinkLine}
+                                                    className="shrink-0 text-text-muted"
+                                                />
+                                            ) : null}
+                                        </div>
+                                    ) : null}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </ScrollArea>
+        </div>
+    );
+
+    const detailPane = selectedItem && repo ? (
+        <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-panel">
+            <GitHubDetailPane
+                section={section}
+                item={selectedItem}
+                owner={repo.owner}
+                repo={repo.repo}
+                onBack={closeDetail}
+            />
+        </div>
+    ) : (
+        <div className="workbench-panel flex h-full items-center justify-center border border-border-subtle bg-panel px-4 text-sm text-text-muted">
+            Select an item to open it in this panel.
+        </div>
+    );
 
     return (
-        <GitOverlayEnter key={`list-${section}-${issueState}`}>
         <div className="flex h-full min-h-0 flex-col">
-            <header className="flex h-9 shrink-0 items-center gap-2 px-3">
-                <Icon icon={sectionIcon(section)} className="shrink-0 text-text-muted" />
-                <FadeTruncate
-                    className="min-w-0 flex-1 text-sm font-medium"
-                    title={
-                        repo
-                            ? `${meta.title} · ${repo.owner}/${repo.repo}`
-                            : meta.title
-                    }
-                >
-                    {meta.title}
-                    {repo ? (
-                        <span className="font-normal text-text-muted">
-                            {" "}
-                            · {repo.owner}/{repo.repo}
-                        </span>
-                    ) : null}
-                </FadeTruncate>
-                <div className="flex shrink-0 items-center gap-1">
-                    {supportsStateFilter(section) ? (
-                        <DropdownMenu modal={false}>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 gap-1 px-2 capitalize"
-                                >
-                                    {issueState}
-                                    <Icon icon={RiArrowDownSLine} />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuRadioGroup
-                                    value={issueState}
-                                    onValueChange={(v) =>
-                                        setIssueState(v as IssueStateFilter)
-                                    }
-                                >
-                                    <DropdownMenuRadioItem value="open">Open</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="closed">
-                                        Closed
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                                </DropdownMenuRadioGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    ) : null}
-                    {!auth.loggedIn ? (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-7 gap-1 px-2"
-                            onClick={() => void loginGitHub()}
-                        >
-                            Sign in
-                        </Button>
-                    ) : null}
-                    <Tooltip content="Refresh">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1 px-2"
-                            onClick={() => void load()}
-                            aria-label="Refresh"
-                        >
-                            <Icon icon={RiRefreshLine} />
-                            Refresh
-                        </Button>
-                    </Tooltip>
-                </div>
-            </header>
-            {section === "deployment-statuses" && deps.length > 0 ? (
-                <div className="shrink-0 px-3 pb-2">
+            <GitChromeActions>
+                {supportsStateFilter(section) ? (
                     <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-full justify-between gap-2 px-2 font-normal"
+                                className="h-7 gap-1 px-2 capitalize"
                             >
-                                <span className="truncate">
-                                    {deps.find((d) => d.id === selectedDepId)?.label ??
-                                        "Select deployment"}
-                                </span>
-                                <Icon icon={RiArrowDownSLine} className="shrink-0" />
+                                {issueState}
+                                <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            align="start"
-                            
-                        >
+                        <DropdownMenuContent align="end">
                             <DropdownMenuRadioGroup
-                                value={selectedDepId != null ? String(selectedDepId) : undefined}
-                                onValueChange={(v) => setSelectedDepId(Number(v) || null)}
+                                value={issueState}
+                                onValueChange={(v) =>
+                                    setIssueState(v as IssueStateFilter)
+                                }
                             >
-                                {deps.map((dep) => (
-                                    <DropdownMenuRadioItem key={dep.id} value={String(dep.id)}>
-                                        {dep.label}
-                                    </DropdownMenuRadioItem>
-                                ))}
+                                <DropdownMenuRadioItem value="open">Open</DropdownMenuRadioItem>
+                                <DropdownMenuRadioItem value="closed">
+                                    Closed
+                                </DropdownMenuRadioItem>
+                                <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                </div>
-            ) : null}
+                ) : null}
+                {section === "pull-requests" ? (
+                    <Tooltip content="Create pull request">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setCreatePrOpen(true)}
+                            aria-label="Create pull request"
+                        >
+                            <Icon icon={RiGitPullRequestLine} size={ICON_SIZE_SM} />
+                        </Button>
+                    </Tooltip>
+                ) : null}
+                {!auth.loggedIn ? (
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => void loginGitHub()}
+                    >
+                        Sign in
+                    </Button>
+                ) : null}
+                <Tooltip content="Refresh">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => void load()}
+                        aria-label="Refresh"
+                    >
+                        <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                    </Button>
+                </Tooltip>
+            </GitChromeActions>
+            <CreatePullRequestDialog
+                open={createPrOpen}
+                onOpenChange={setCreatePrOpen}
+                owner={repo?.owner ?? null}
+                repo={repo?.repo ?? null}
+                onCreated={() => void load()}
+            />
 
-            <div className="workbench-panel min-h-0 flex-1 overflow-hidden border border-border-subtle bg-panel">
-                <ScrollArea className="h-full min-h-0 p-2" fadeFrom="from-panel">
-                    {loading && items.length === 0 ? (
-                        <GitListSkeleton rows={10} />
-                    ) : error && items.length === 0 ? (
-                        <div className="flex flex-col gap-2 px-2 py-3">
-                            <p className="text-sm text-text-muted">{error}</p>
-                            {!auth.loggedIn ? (
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="w-fit"
-                                    onClick={() => void loginGitHub()}
-                                >
-                                    Sign in with GitHub
-                                </Button>
-                            ) : null}
-                        </div>
-                    ) : filtered.length === 0 ? (
-                        <p className="px-2 py-3 text-sm text-text-muted">{emptyLabel}</p>
-                    ) : (
-                        <ul className="flex flex-col gap-0.5">
-                            {filtered.map((item) => (
-                                <li key={item.id}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedId(item.id)}
-                                        className="flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left hover:bg-panel-hover/60"
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <span className="flex min-w-0 items-start gap-2 text-sm leading-snug text-text-primary">
-                                                <ItemStatusIcon status={item.status} />
-                                                <span className="line-clamp-2">{item.title}</span>
-                                            </span>
-                                            {item.meta ? (
-                                                <span className="shrink-0 text-2xs text-text-muted">
-                                                    {item.meta}
-                                                </span>
-                                            ) : null}
-                                        </div>
-                                        {item.subtitle ? (
-                                            <div className="flex items-center gap-2 pl-6">
-                                                <span className="truncate text-xs text-text-muted">
-                                                    {item.subtitle}
-                                                </span>
-                                                {item.url ? (
-                                                    <Icon
-                                                        icon={RiExternalLinkLine}
-                                                        className="shrink-0 text-text-muted"
-                                                    />
-                                                ) : null}
-                                            </div>
-                                        ) : null}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </ScrollArea>
-            </div>
+            <Panel
+                direction="horizontal"
+                paneGap="var(--workbench-gap)"
+                storageKey={`git-github-${section}-split`}
+                hideSeparator
+                className="h-full min-h-0 flex-1"
+                panes={[
+                    {
+                        id: "github-list",
+                        preferredSize: 320,
+                        minSize: 220,
+                        maxSize: 480,
+                        snap: true,
+                        children: listPane,
+                    },
+                    {
+                        id: "github-detail",
+                        flexible: true,
+                        minSize: 360,
+                        visible: Boolean(selectedItem),
+                        children: detailPane,
+                    },
+                ]}
+            />
         </div>
-        </GitOverlayEnter>
     );
 }

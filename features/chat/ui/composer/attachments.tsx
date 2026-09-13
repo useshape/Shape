@@ -56,7 +56,7 @@ function newId() {
         : `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Downscale large images so vision tokens stay cheap (native multimodal, no OCR model). */
+/** Downscale large images so vision tokens stay cheap. */
 async function compressImageFile(file: File): Promise<{ dataUrl: string; mimeType: string }> {
     const ext = getFileExtension(file.name);
     // Keep animated / vector as-is (or read raw).

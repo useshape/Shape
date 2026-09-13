@@ -954,7 +954,7 @@ export function MessageRenderer({
                 <button
                     key={`image-${index}`}
                     type="button"
-                    className="my-2 block w-fit max-w-[240px] overflow-hidden rounded-lg border border-border-subtle"
+                    className="my-2 block w-[min(100%,28rem)] overflow-hidden rounded-lg border border-border-subtle"
                     onClick={() => {
                         window.dispatchEvent(
                             new CustomEvent("shape-open-media", {
@@ -967,7 +967,7 @@ export function MessageRenderer({
                     <img
                         src={src}
                         alt="Attached"
-                        className="max-h-[160px] w-auto max-w-full object-contain block"
+                        className="h-auto w-full max-h-[22rem] object-contain object-left block"
                         draggable={false}
                     />
                 </button>

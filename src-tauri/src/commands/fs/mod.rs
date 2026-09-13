@@ -293,6 +293,7 @@ fn start_watcher(app: AppHandle, path: &str) {
 }
 
 pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     let path_clone = path.clone();
     tokio::task::spawn_blocking(move || {
         let entries = fs::read_dir(&path_clone).map_err(|e| AppError::Io(e))?;
@@ -320,27 +321,32 @@ pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
 }
 
 pub async fn read_file(path: String) -> Result<String, AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     let bytes = tokio::fs::read(&path).await.map_err(AppError::Io)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 pub async fn read_file_bytes(path: String) -> Result<Vec<u8>, AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     tokio::fs::read(&path).await.map_err(AppError::Io)
 }
 
 pub async fn create_file(path: String) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     tokio::fs::write(&path, "").await.map_err(|e| AppError::Io(e))?;
     clear_cache();
     Ok(())
 }
 
 pub async fn create_dir(path: String) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     tokio::fs::create_dir_all(&path).await.map_err(|e| AppError::Io(e))?;
     clear_cache();
     Ok(())
 }
 
 pub async fn delete_path(path: String) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     let p = PathBuf::from(path);
     tokio::task::spawn_blocking(move || {
         if p.is_dir() {
@@ -357,6 +363,7 @@ pub async fn delete_path(path: String) -> Result<(), AppError> {
 }
 
 pub async fn trash_path(path: String) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     let for_trash = path.clone();
     let trash_err = tokio::task::spawn_blocking(move || {
         trash::delete(&for_trash).map_err(|e| e.to_string())
@@ -388,6 +395,8 @@ pub async fn rename_path(
     old_path: String,
     new_path: String,
 ) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&old_path)?;
+    crate::agent::security::paths::assert_ipc_path_allowed(&new_path)?;
     tokio::fs::rename(&old_path, &new_path).await.map_err(|e| AppError::Io(e))?;
     
     let mut state = state.0.lock()?;
@@ -494,6 +503,8 @@ pub async fn close_saved(
 }
 
 pub async fn copy_path(old_path: String, new_path: String) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&old_path)?;
+    crate::agent::security::paths::assert_ipc_path_allowed(&new_path)?;
     let old_p = PathBuf::from(old_path);
     let new_p = PathBuf::from(new_path);
     tokio::task::spawn_blocking(move || {
@@ -559,6 +570,7 @@ pub async fn reveal_path(path: String) -> Result<(), AppError> {
 }
 
 pub async fn save_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     match tokio::fs::write(&path, &content).await {
         Ok(_) => {
             let state_mutex = app.state::<AppState>();
@@ -584,6 +596,7 @@ pub async fn save_file(app: tauri::AppHandle, path: String, content: String) -> 
 }
 
 pub async fn save_file_bytes(app: tauri::AppHandle, path: String, bytes: Vec<u8>) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     tokio::fs::write(&path, &bytes)
         .await
         .map_err(AppError::Io)?;

@@ -1,5 +1,3 @@
-import type { GitSectionId } from "@/features/git/types";
-
 export const STATUS_FILTERS = [
     { value: "all", label: "All runs" },
     { value: "in_progress", label: "In progress" },
@@ -7,14 +5,7 @@ export const STATUS_FILTERS = [
     { value: "failure", label: "Failed" },
 ] as const;
 
-export type ActionsFocus =
-    | "workflow-runs"
-    | "workflow-definitions"
-    | "jobs"
-    | "steps"
-    | "live-status"
-    | "logs"
-    | "artifacts";
+export type ActionsFocus = "workflow-runs" | "jobs";
 
 export type WorkflowRun = {
     id: number;
@@ -73,60 +64,20 @@ export type Artifact = {
 
 export type DetailTab = "jobs" | "artifacts" | "workflows";
 
-function isActionsFocus(id: GitSectionId): id is ActionsFocus {
-    return (
-        id === "workflow-runs" ||
-        id === "workflow-definitions" ||
-        id === "jobs" ||
-        id === "steps" ||
-        id === "live-status" ||
-        id === "logs" ||
-        id === "artifacts"
-    );
-}
-
-export function isActionsSection(id: GitSectionId): id is ActionsFocus {
-    return isActionsFocus(id);
+export function isActionsSection(id: string): id is ActionsFocus {
+    return id === "workflow-runs" || id === "jobs";
 }
 
 export function defaultTabForFocus(focus: ActionsFocus): DetailTab {
-    if (focus === "artifacts") return "artifacts";
-    if (focus === "workflow-definitions") return "workflows";
+    if (focus === "jobs") return "jobs";
     return "jobs";
 }
 
-/** Which detail tabs matter for this nav focus (hide the rest). */
 export function tabsForFocus(focus: ActionsFocus): DetailTab[] {
-    switch (focus) {
-        case "workflow-definitions":
-            return ["workflows", "jobs"];
-        case "artifacts":
-            return ["artifacts"];
-        case "logs":
-        case "jobs":
-        case "steps":
-        case "live-status":
-            return ["jobs"];
-        default:
-            return ["jobs", "artifacts", "workflows"];
-    }
+    if (focus === "jobs") return ["jobs"];
+    return ["jobs", "artifacts", "workflows"];
 }
 
 export function focusTitle(focus: ActionsFocus): string {
-    switch (focus) {
-        case "workflow-runs":
-            return "Workflow runs";
-        case "workflow-definitions":
-            return "Workflow definitions";
-        case "jobs":
-            return "Jobs";
-        case "steps":
-            return "Steps";
-        case "live-status":
-            return "Live status";
-        case "logs":
-            return "Logs";
-        case "artifacts":
-            return "Artifacts";
-    }
+    return focus === "jobs" ? "Jobs" : "Workflow runs";
 }

@@ -1,6 +1,13 @@
 "use client";
 
-import { RiAddLine, RiCloseLine, RiFolderLine, RiGitPullRequestLine, RiTerminalBoxLine } from "@remixicon/react";
+import {
+    RiAddLine,
+    RiCloseLine,
+    RiFolderLine,
+    RiGitCommitLine,
+    RiGitPullRequestLine,
+    RiTerminalBoxLine,
+} from "@remixicon/react";
 import { useCallback } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -169,6 +176,10 @@ export function WorkspaceTabs({
                 <DropdownMenuItem onClick={() => onNew("changes")}>
                     <Icon icon={RiGitPullRequestLine} />
                     <span className="flex-1">Changes</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onNew("graph")}>
+                    <Icon icon={RiGitCommitLine} />
+                    <span className="flex-1">Graph</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

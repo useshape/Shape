@@ -1,7 +1,14 @@
 import type { RemixiconComponentType } from "@remixicon/react";
-import { RiFileTextLine, RiFolderLine, RiGitBranchLine, RiGitPullRequestLine, RiTerminalBoxLine } from "@remixicon/react";
+import {
+    RiFileTextLine,
+    RiFolderLine,
+    RiGitBranchLine,
+    RiGitCommitLine,
+    RiGitPullRequestLine,
+    RiTerminalBoxLine,
+} from "@remixicon/react";
 
-export type TabKind = "changes" | "terminal" | "plan" | "file" | "diff" | "files";
+export type TabKind = "changes" | "graph" | "terminal" | "plan" | "file" | "diff" | "files";
 
 export type WorkspaceTab = {
     id: string;
@@ -15,6 +22,8 @@ export type WorkspaceTab = {
         status: string;
         staged: boolean;
         repo: string;
+        commit?: string;
+        parent?: string;
     };
 };
 
@@ -24,6 +33,7 @@ export function uid(prefix: string) {
 
 export const DEFAULT_TABS: WorkspaceTab[] = [
     { id: "changes", kind: "changes", title: "Changes" },
+    { id: "graph", kind: "graph", title: "Graph" },
     { id: "files", kind: "files", title: "Files" },
 ];
 
@@ -31,6 +41,8 @@ export function iconFor(kind: TabKind): RemixiconComponentType {
     switch (kind) {
         case "changes":
             return RiGitPullRequestLine;
+        case "graph":
+            return RiGitCommitLine;
         case "terminal":
             return RiTerminalBoxLine;
         case "plan":

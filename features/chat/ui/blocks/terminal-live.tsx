@@ -205,7 +205,10 @@ function TerminalCommandMenu({ command }: { command: string }) {
                     return (
                         <DropdownMenuItem
                             key={opt.value}
-                            onClick={() => updateSettingSection("ai", { autoRunMode: opt.value })}
+                            onClick={() => {
+                                updateSettingSection("ai", { autoRunMode: opt.value });
+                                void commands.updateTurnPolicy({ autoRunMode: opt.value });
+                            }}
                             className={cn("flex flex-col items-start gap-0.5 py-2", selected && "bg-panel-hover")}
                         >
                             <span className="flex w-full items-center gap-2 text-sm text-text-primary">
@@ -400,9 +403,10 @@ export function CommandApprovalCard({
                             return (
                                 <DropdownMenuItem
                                     key={opt.value}
-                                    onClick={() =>
-                                        updateSettingSection("ai", { autoRunMode: opt.value })
-                                    }
+                                    onClick={() => {
+                                        updateSettingSection("ai", { autoRunMode: opt.value });
+                                        void commands.updateTurnPolicy({ autoRunMode: opt.value });
+                                    }}
                                     className={cn(
                                         "flex w-full cursor-pointer items-center",
                                         selected && "bg-panel-hover",

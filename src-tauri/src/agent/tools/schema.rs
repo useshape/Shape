@@ -55,6 +55,7 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         wait(),
         read_lints(),
         update_todos(),
+        screenshot_page(),
         finish(),
     ]);
     tools
@@ -90,7 +91,17 @@ pub fn tools_for_mode_and_family(
     family: ModelFamily,
     extra: Vec<Value>,
 ) -> Vec<Value> {
-    match mode.to_ascii_lowercase().as_str() {
+    tools_for_mode_family_and_memory(mode, family, extra, false)
+}
+
+/// Like [`tools_for_mode_and_family`], optionally including past-chat memory tools.
+pub fn tools_for_mode_family_and_memory(
+    mode: &str,
+    family: ModelFamily,
+    extra: Vec<Value>,
+    chat_memory_enabled: bool,
+) -> Vec<Value> {
+    let mut tools = match mode.to_ascii_lowercase().as_str() {
         "plan" => {
             let mut tools = ask_tools();
             tools.insert(tools.len().saturating_sub(1), save_plan());
@@ -109,6 +120,25 @@ pub fn tools_for_mode_and_family(
         }
         // Fail closed: unknown mode strings get read-only Ask tools.
         _ => ask_tools(),
+    };
+    if chat_memory_enabled {
+        insert_before_finish(&mut tools, list_chats());
+        insert_before_finish(&mut tools, read_chat());
+    }
+    tools
+}
+
+fn insert_before_finish(tools: &mut Vec<Value>, tool: Value) {
+    let finish_idx = tools.iter().position(|t| {
+        t.get("function")
+            .and_then(|f| f.get("name"))
+            .and_then(|n| n.as_str())
+            == Some("finish")
+    });
+    if let Some(i) = finish_idx {
+        tools.insert(i, tool);
+    } else {
+        tools.push(tool);
     }
 }
 
@@ -545,6 +575,37 @@ fn finish() -> Value {
     )
 }
 
+fn list_chats() -> Value {
+    tool(
+        "list_chats",
+        "List past chats in this project (id, title, message count). Use when earlier conversations may hold decisions, preferences, or context missing from the current thread. Then call read_chat for details. Do not call on every turn.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Optional filter matched against chat title or id."},
+                "limit": {"type": "integer", "description": "Max chats to return (default 20, max 50)."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn read_chat() -> Value {
+    tool(
+        "read_chat",
+        "Load messages from a past chat in this project by id (from list_chats). Prefer recent messages; raise max_messages only when needed.",
+        json!({
+            "type": "object",
+            "properties": {
+                "conversation_id": {"type": "string", "description": "Chat id from list_chats."},
+                "max_messages": {"type": "integer", "description": "How many recent messages to include (default 40, max 80)."}
+            },
+            "required": ["conversation_id"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 #[allow(dead_code)]
 fn render_design_previews() -> Value {
     tool(
@@ -639,6 +700,26 @@ fn plugin_run() -> Value {
     )
 }
 
+fn screenshot_page() -> Value {
+    tool(
+        "screenshot_page",
+        "Capture a screenshot of the running local website preview and show it in your chat reply. \
+Website/UI tasks only — never for CLIs, APIs, tests, or anything that has no webpage. \
+Do NOT call on every edit. Call once after a new site/page first comes up, or after a large layout/structure change (new page, rebuilt hero, major grid/nav change). \
+Skip copy tweaks, color/spacing nits, hover states, and small component polish. \
+Pass `path` or `url` for the specific route you changed (e.g. /pricing, /login) — never assume the homepage if you worked on another page. \
+If capture is impossible (no preview, not a website), skip it and continue. At most one screenshot per turn unless you changed two distinct routes.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Route on the local preview, e.g. /pricing or /login. Preferred when the origin is already running."},
+                "url": {"type": "string", "description": "Full local preview URL (http://localhost:…/that-page). Use when you know the exact page."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn visit_url() -> Value {
     tool(
         "visit_url",
@@ -707,6 +788,30 @@ mod tests {
         let names = tool_names(&tools);
         assert!(names.contains(&"plugin_run".to_string()));
         assert!(names.contains(&"plugin_list".to_string()));
+        assert!(names.contains(&"screenshot_page".to_string()));
+    }
+
+    #[test]
+    fn ask_mode_has_no_screenshot_page() {
+        let tools = tools_for_mode_and_family("ask", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(!names.contains(&"screenshot_page".to_string()));
+    }
+
+    #[test]
+    fn chat_memory_tools_only_when_enabled() {
+        let off = tools_for_mode_family_and_memory("code", ModelFamily::OpenAi, vec![], false);
+        let on = tools_for_mode_family_and_memory("code", ModelFamily::OpenAi, vec![], true);
+        let off_names = tool_names(&off);
+        let on_names = tool_names(&on);
+        assert!(!off_names.contains(&"list_chats".to_string()));
+        assert!(!off_names.contains(&"read_chat".to_string()));
+        assert!(on_names.contains(&"list_chats".to_string()));
+        assert!(on_names.contains(&"read_chat".to_string()));
+        let ask_on = tools_for_mode_family_and_memory("ask", ModelFamily::OpenAi, vec![], true);
+        let ask_names = tool_names(&ask_on);
+        assert!(ask_names.contains(&"list_chats".to_string()));
+        assert!(ask_names.contains(&"read_chat".to_string()));
     }
 }
 

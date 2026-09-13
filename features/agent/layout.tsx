@@ -184,7 +184,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 persistWorkspace(true);
                 return;
             }
-            if (["preview", "changes", "source"].includes(tabId)) {
+            if (["preview", "changes", "source", "graph", "git"].includes(tabId)) {
                 setOverlay(null);
                 persistWorkspace(true);
             }
@@ -225,6 +225,17 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             const detail = (e as CustomEvent<AgentOverlay>).detail;
             if (!detail || !detail.type) {
                 setOverlay(null);
+                return;
+            }
+            // Git Manager overlay removed — Graph lives in the right workspace tab.
+            if (detail.type === "git") {
+                setOverlay(null);
+                persistWorkspace(true);
+                window.setTimeout(() => {
+                    window.dispatchEvent(
+                        new CustomEvent("shape-set-active-tab", { detail: "graph" }),
+                    );
+                }, 80);
                 return;
             }
             setOverlay(detail);

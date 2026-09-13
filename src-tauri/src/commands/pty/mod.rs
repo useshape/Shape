@@ -1056,6 +1056,7 @@ async fn spawn_pty_with_command(
                         );
                         if let Some(url) = scrape_preview_url(&data) {
                             log::info!("[preview] pty {} scraped url {}", session_id, url);
+                            crate::agent::tools::page_shot::remember_preview_url(&url);
                             let _ = app_for_thread.emit(
                                 "preview-ready",
                                 PreviewReadyEvent {

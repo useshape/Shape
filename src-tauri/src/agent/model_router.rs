@@ -11,8 +11,6 @@
 /// Fast included model used for Auto and auxiliary work (titles, explore, etc.).
 pub const MODEL_FAST: &str = "deepseek/deepseek-v4-flash";
 
-/// Cheap vision-capable model when Auto is selected *and* the turn has images.
-/// Native multimodal (image_url parts) — not a separate OCR / recognition API.
 pub const MODEL_FAST_VISION: &str = "google/gemini-2.5-flash";
 
 /// Provider family used to select prompts and edit tools.
@@ -53,8 +51,6 @@ pub fn normalize_model(model: &str) -> String {
     }
 }
 
-/// Like [`normalize_model`], but when Auto + images, use a cheap vision model so
-/// screenshots are actually seen (still included-tier pricing intent).
 pub fn normalize_model_with_images(model: &str, has_images: bool) -> String {
     if has_images && is_auto_selection(model) {
         return MODEL_FAST_VISION.to_string();
@@ -62,9 +58,41 @@ pub fn normalize_model_with_images(model: &str, has_images: bool) -> String {
     normalize_model(model)
 }
 
-/// True when the user selected Shape's Auto option (included usage), not a paid pick.
 pub fn is_auto_selection(model: &str) -> bool {
     matches!(model.trim(), "auto" | "openrouter/auto")
+}
+
+pub fn mode_wants_vision(mode: &str) -> bool {
+    matches!(
+        mode.trim().to_ascii_lowercase().as_str(),
+        "visual" | "design" | "code" | "review" | "agent"
+    )
+}
+
+/// True when content has an `<attached_image>` tag that carries a `data:` URL.
+pub fn content_has_images(content: &str) -> bool {
+    let Some(start) = content.find("<attached_image") else {
+        return false;
+    };
+    content[start..].contains("data:")
+}
+
+pub fn model_accepts_images(model: &str) -> bool {
+    let m = model.trim().to_ascii_lowercase();
+    if m.is_empty() || m == MODEL_FAST {
+        return false;
+    }
+    if m == MODEL_FAST_VISION || m.contains("vision") {
+        return true;
+    }
+    m.starts_with("google/")
+        || m.starts_with("anthropic/")
+        || m.starts_with("openai/")
+        || m.starts_with("x-ai/")
+        || m.contains("gemini")
+        || m.contains("claude")
+        || m.contains("gpt-4")
+        || m.contains("gpt-5")
 }
 
 /// Classify a normalized OpenRouter model slug into a harness family.
@@ -190,5 +218,60 @@ mod tests {
     fn switch_hint_when_families_differ() {
         assert!(mid_chat_switch_hint(ModelFamily::DeepSeek, ModelFamily::OpenAi).is_some());
         assert!(mid_chat_switch_hint(ModelFamily::OpenAi, ModelFamily::OpenAi).is_none());
+    }
+
+    #[test]
+    fn auto_with_images_uses_vision_model_not_deepseek() {
+        assert_eq!(
+            normalize_model_with_images("auto", true),
+            MODEL_FAST_VISION
+        );
+        assert_ne!(MODEL_FAST_VISION, MODEL_FAST);
+        assert!(!model_accepts_images(MODEL_FAST));
+        assert!(model_accepts_images(MODEL_FAST_VISION));
+        assert!(content_has_images(
+            "see <attached_image name=\"x.png\">data:image/png;base64,aa</attached_image>"
+        ));
+        assert!(!content_has_images("plain text"));
+    }
+
+    #[test]
+    fn vision_exp_slug_is_not_rejected_as_text_only() {
+        assert!(model_accepts_images("deepseek/deepseek-v4-flash-vision-exp"));
+        assert!(!model_accepts_images("deepseek/deepseek-v4-flash"));
+        assert_eq!(
+            model_accepts_images("deepseek/deepseek-v4-flash "),
+            false
+        );
+    }
+
+    #[test]
+    fn path_only_attachment_is_not_image_content() {
+        assert!(!content_has_images(
+            "<attached_image name=\"demo.png\">/images/demo/pricing.png</attached_image>"
+        ));
+        assert!(!content_has_images("<attached_image></attached_image>"));
+        assert!(!content_has_images(
+            "data:image/png;base64,aa then later <attached_image>path.png</attached_image>"
+        ));
+    }
+
+    #[test]
+    fn modes_with_screenshot_tool_want_vision_for_auto() {
+        assert!(mode_wants_vision("code"));
+        assert!(mode_wants_vision("Visual"));
+        assert!(mode_wants_vision("design"));
+        assert!(mode_wants_vision("review"));
+        assert!(mode_wants_vision("agent"));
+        assert!(!mode_wants_vision("ask"));
+        assert!(!mode_wants_vision("plan"));
+        assert_eq!(
+            normalize_model_with_images("auto", mode_wants_vision("code")),
+            MODEL_FAST_VISION
+        );
+        assert_eq!(
+            normalize_model_with_images("auto", mode_wants_vision("ask")),
+            MODEL_FAST
+        );
     }
 }

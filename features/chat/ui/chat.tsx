@@ -54,8 +54,6 @@ export default function Chat({
     }, []);
 
     const taskItems = useMemo((): ComposerTaskItem[] => {
-        if (!session.isLoading) return [];
-
         const lastAssistant = [...session.messages].reverse().find((m) => m.role === "assistant");
         if (!lastAssistant) return [];
 
@@ -72,7 +70,7 @@ export default function Chat({
             });
         }
         return items;
-    }, [session.isLoading, session.messages]);
+    }, [session.messages]);
 
     const newChatRef = React.useRef(session.handleNewChat);
     newChatRef.current = session.handleNewChat;

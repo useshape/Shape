@@ -227,6 +227,29 @@ pub fn is_sensitive_path(path: &Path) -> bool {
     false
 }
 
+/// Block UI/IPC access to credential and secrets paths (even outside the project).
+/// Does not require a project root — used for desktop FS commands the IDE invokes.
+pub fn assert_ipc_path_allowed(path: &str) -> Result<(), AppError> {
+    let p = PathBuf::from(path);
+    if is_sensitive_path(&p) {
+        return Err(AppError::Message(format!(
+            "Access denied: '{}' looks like a secrets or credential path.",
+            path
+        )));
+    }
+    // Soft block for home SSH / AWS even when the leaf name alone is not listed.
+    let lower = path.replace('\\', "/").to_ascii_lowercase();
+    for marker in ["/.ssh/", "/.aws/", "/.gnupg/", "/.kube/"] {
+        if lower.contains(marker) {
+            return Err(AppError::Message(format!(
+                "Access denied: '{}' is under a protected credentials directory.",
+                path
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Validate a path for read operations. Ensures it's within project and not sensitive.
 pub fn validate_read_path(user_path: &str, project_root: &str) -> Result<PathBuf, AppError> {
     let resolved = resolve_safe_path(user_path, project_root)?;

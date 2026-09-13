@@ -1,5 +1,6 @@
 //! Tool execution entry point (split by concern — files/discover/terminal/git/meta).
 
+mod chats;
 mod common;
 mod discover;
 mod files;
@@ -91,6 +92,7 @@ pub enum SideEffect {
     },
     FileDeleted { path: String },
     Finished { summary: Option<String> },
+    PageScreenshot { tag: String },
 }
 
 pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
@@ -128,6 +130,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "search_files" => discover::tool_search_files(&args, ctx).await,
         "grep" => discover::tool_grep(&args, ctx).await,
         "search_codebase" => discover::tool_search_codebase(&args, ctx).await,
+        "list_chats" => chats::tool_list_chats(&args, ctx),
+        "read_chat" => chats::tool_read_chat(&args, ctx),
         "web_search" => discover::tool_web_search(&args, ctx).await,
         "visit_url" => discover::tool_visit_url(&args, ctx).await,
         "plugin_list" => discover::tool_plugin_list(ctx).await,
@@ -153,6 +157,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "wait" => terminal::tool_wait(&args, ctx).await,
         "save_plan" => meta::tool_save_plan(&args, ctx),
         "update_todos" => meta::tool_update_todos(&args, ctx),
+        "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
         other => {

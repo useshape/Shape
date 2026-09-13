@@ -67,6 +67,16 @@ pub fn set_index_embeddings(
     Ok(())
 }
 
+/// Toggle past-chat memory tools (`list_chats` / `read_chat`). Off by default.
+#[tauri::command]
+pub fn set_chat_memory_enabled(
+    enabled: bool,
+    state: tauri::State<'_, crate::agent::models::AgentState>,
+) -> Result<(), AppError> {
+    state.set_chat_memory_enabled(enabled);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_index_status(
     project_path: Option<String>,

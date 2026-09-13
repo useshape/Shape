@@ -1,31 +1,23 @@
 ---
 title: Git Manager
-description: Issues, pull requests, Actions, and checks in a dedicated Git window.
+description: Source control, graph, pull requests, issues, and workflow runs.
 order: 4
 icon: ri-layout-grid-line
 ---
 
-**Git Manager** is a separate window for local Git and GitHub work: source control, the graph, pull requests, Actions, and checks. Use it when you want PRs and CI next to the repo without leaving Shape.
+**Git Manager** is Shape's Git workspace: local source control, the commit graph, pull requests, issues, and Actions. Open it from **Window → Git Manager** or the Shape logo in the Source Control sidebar.
 
 Day-to-day stage and commit still live in the [Source Control](/docs/git/source-control) sidebar.
 
-## Open Git Manager
-
-- **Window → Git Manager**
-- Shape logo in the [Source Control](/docs/git/source-control) or [Git Graph](/docs/git/git-graph) sidebar header
-
-The window remembers the last section you had open.
+The window remembers the last section you had open. The current section title lives in the top bar with search and actions.
 
 ## Local
 
 | Section | Purpose |
 | --- | --- |
 | **Source Control** | Stage, commit, pull, and push |
-| **Git Graph** | Commit history as a lane diagram |
+| **Git Graph** | Commit history as a lane diagram — open a commit, then a file, to review the diff in a side panel |
 | **Branches** | Local and remote branches |
-| **Tags** | Local tags |
-
-These match the sidebar views, with more room for lists and diffs.
 
 ## GitHub
 
@@ -33,26 +25,22 @@ Sign in with [GitHub](/docs/git/github-sign-in) to load remote data for the open
 
 | Section | Purpose |
 | --- | --- |
+| **Pull requests** | PR list, conversation, commits, files, and checks. **Create pull request** drafts title and body with AI from your branch diff, then publishes when you confirm. Opening a PR starts an AI review and surfaces failed checks. |
 | **Issues** | Open and closed issues, conversation, and details |
-| **Pull requests** | PR list, conversation threads, commits, files, and checks |
-| **Releases** | Published releases and notes |
 
 On a pull request or issue you can:
 
-- Read the conversation (authors, associations, review comments)
+- Read the conversation
 - Switch tabs for commits, files, and check runs
-- **Summarize** with AI (needs a [Shape account](/docs/introduction/accounts))
+- **Review** or **Summarize** with AI (needs a [Shape account](/docs/introduction/accounts))
 - **Open on GitHub** in your system browser
 
-## Actions, checks, and deploy
+## Actions
 
-| Group | What you see |
+| Section | Purpose |
 | --- | --- |
-| **Actions** | Workflow runs, definitions, jobs, steps, live status, logs, artifacts |
-| **Checks** | Check runs, suites, and commit statuses |
-| **Deploy** | Deployments and deployment statuses |
-
-Use these when you need CI status without opening github.com.
+| **Workflow runs** | Recent CI runs, jobs, logs, and artifacts |
+| **Jobs** | Jobs and logs for the selected run |
 
 ## Related
 

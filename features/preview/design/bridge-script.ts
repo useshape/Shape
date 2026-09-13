@@ -2051,6 +2051,37 @@ export const DESIGN_BRIDGE_SCRIPT = `
     }
   }
 
+  function captureViewport(maxW, maxH) {
+    if (overlay) overlay.style.display = "none";
+    if (marqueeEl) marqueeEl.style.display = "none";
+    var vw = Math.max(1, Math.round(window.innerWidth || maxW || 1280));
+    var vh = Math.max(1, Math.round(window.innerHeight || maxH || 800));
+    var w = Math.min(vw, maxW || 1280);
+    var h = Math.min(vh, maxH || 800);
+    var clone = inlineClone(document.documentElement);
+    clone.style.margin = "0";
+    clone.style.position = "relative";
+    clone.style.left = "0";
+    clone.style.top = (-(window.scrollY || 0)) + "px";
+    clone.style.right = "auto";
+    clone.style.bottom = "auto";
+    clone.style.transform = "none";
+    clone.style.width = vw + "px";
+    var wrap = document.createElement("div");
+    wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+    wrap.style.cssText = "width:" + w + "px;height:" + h + "px;overflow:hidden;background:#fff;";
+    wrap.appendChild(clone);
+    var inner = new XMLSerializer().serializeToString(wrap);
+    if (inner.indexOf("xmlns") < 0) {
+      inner = inner.replace("<div", '<div xmlns="http://www.w3.org/1999/xhtml"');
+    }
+    if (overlay) overlay.style.display = "";
+    var svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '">' +
+      '<foreignObject width="100%" height="100%">' + inner + "</foreignObject></svg>";
+    return rasterizeSvg(svg, w, h);
+  }
+
   window.addEventListener("message", function (ev) {
     var data = ev.data;
     if (!data || data.source !== "shape-design-host") return;
@@ -2159,6 +2190,21 @@ export const DESIGN_BRIDGE_SCRIPT = `
         }
       } catch (e) {}
       post({ type: "shape-design-fonts", req: data.req, fonts: names });
+    }
+    if (data.type === "shape-preview-screenshot") {
+      var shotReq = data.req;
+      var maxW = Number(data.maxWidth) || 1280;
+      var maxH = Number(data.maxHeight) || 800;
+      var failShot = function (err) {
+        post({ type: "shape-preview-screenshot-result", req: shotReq, error: (err && err.message) || String(err) || "Screenshot failed." });
+      };
+      try {
+        captureViewport(maxW, maxH).then(function (out) {
+          post({ type: "shape-preview-screenshot-result", req: shotReq, dataUrl: out.dataUrl, width: out.width, height: out.height });
+        }, failShot);
+      } catch (err) {
+        failShot(err);
+      }
     }
     if (data.type === "shape-design-export") {
       var expEl = resolveTarget(data);

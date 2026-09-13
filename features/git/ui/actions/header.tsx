@@ -1,9 +1,9 @@
 "use client";
 
-import { RiArrowDownSLine, RiGithubFill, RiRefreshLine } from "@remixicon/react";
-import { Icon } from "@/components/ui/icon";
+import { RiArrowDownSLine, RiPulseLine, RiRefreshLine } from "@remixicon/react";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -12,11 +12,10 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import type { ActionsFocus } from "./types";
-import { STATUS_FILTERS, focusTitle } from "./types";
-import { FadeTruncate } from "@/components/ui/fade-truncate";
+import { STATUS_FILTERS } from "./types";
+import { GitChromeActions } from "@/features/git/ui/manager/chrome";
 
 export function Header({
-    repoSlug,
     focus,
     live,
     onLiveChange,
@@ -36,55 +35,60 @@ export function Header({
     onRefresh: () => void;
     showStatusFilter?: boolean;
 }) {
-    const title = `${focusTitle(focus)} · ${repoSlug ?? "No repository"}`;
-
     return (
-        <header className="flex h-9 shrink-0 items-center gap-2 px-3">
-            <Icon icon={RiGithubFill} className="shrink-0 text-text-muted" />
-            <FadeTruncate className="min-w-0 flex-1 text-sm font-medium" title={title}>
-                {title}
-            </FadeTruncate>
-            <div className="flex shrink-0 items-center gap-2">
-                {(focus === "live-status" || focus === "workflow-runs" || focus === "logs") && (
-                    <label className="flex items-center gap-2 text-xs text-text-secondary">
-                        <Switch checked={live} onCheckedChange={onLiveChange} />
-                        Live
-                    </label>
-                )}
-                {showStatusFilter ? (
-                    <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2">
-                                {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ??
-                                    "All runs"}
-                                <Icon icon={RiArrowDownSLine} />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuRadioGroup
-                                value={statusFilter}
-                                onValueChange={onStatusFilterChange}
-                            >
-                                {STATUS_FILTERS.map((f) => (
-                                    <DropdownMenuRadioItem key={f.value} value={f.value}>
-                                        {f.label}
-                                    </DropdownMenuRadioItem>
-                                ))}
-                            </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                ) : null}
+        <GitChromeActions>
+            {focus === "workflow-runs" ? (
+                <Tooltip content={live ? "Pause live updates" : "Live updates"}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onLiveChange(!live)}
+                        aria-label={live ? "Pause live updates" : "Live updates"}
+                        aria-pressed={live}
+                    >
+                        <Icon
+                            icon={RiPulseLine}
+                            size={ICON_SIZE_SM}
+                            className={live ? "text-success" : "text-text-muted"}
+                        />
+                    </Button>
+                </Tooltip>
+            ) : null}
+            {showStatusFilter ? (
+                <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 gap-1 px-2">
+                            {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ?? "All runs"}
+                            <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuRadioGroup
+                            value={statusFilter}
+                            onValueChange={onStatusFilterChange}
+                        >
+                            {STATUS_FILTERS.map((f) => (
+                                <DropdownMenuRadioItem key={f.value} value={f.value}>
+                                    {f.label}
+                                </DropdownMenuRadioItem>
+                            ))}
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ) : null}
+            <Tooltip content="Refresh">
                 <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 px-2"
+                    size="icon"
+                    className="h-7 w-7"
                     onClick={onRefresh}
                     disabled={loadingRuns}
+                    aria-label="Refresh"
                 >
-                    <Icon icon={RiRefreshLine} />
-                    Refresh
+                    <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                 </Button>
-            </div>
-        </header>
+            </Tooltip>
+        </GitChromeActions>
     );
 }

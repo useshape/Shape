@@ -104,6 +104,11 @@ export interface ShapeSettings {
         pluginDisabledActions: Record<string, string[]>;
         /** Semantic embeddings for codebase search (BM25 always on). */
         indexEmbeddings: boolean;
+        /**
+         * When on, the agent can call tools to look up past chats in this project.
+         * Off by default — memories are never injected into every prompt.
+         */
+        chatMemoryEnabled: boolean;
     };
     files: {
         exclude: string;
@@ -252,6 +257,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         pluginApprovals: {},
         pluginDisabledActions: {},
         indexEmbeddings: true,
+        chatMemoryEnabled: false,
     },
     files: {
         exclude: "**/node_modules,**/.git,**/dist,**/build,**/.next",
@@ -575,11 +581,14 @@ export async function initSettings(): Promise<void> {
     applyAppearanceSettings(currentSettings);
     emit();
     // Keep the Rust indexer embeddings flag in sync with persisted settings.
-    void import("@/lib/backend").then(({ commands }) =>
+    void import("@/lib/backend").then(({ commands }) => {
         commands.setIndexEmbeddings(currentSettings.ai.indexEmbeddings).catch(() => {
             /* desktop bridge may not be ready yet */
-        }),
-    );
+        });
+        commands.setChatMemoryEnabled(currentSettings.ai.chatMemoryEnabled).catch(() => {
+            /* desktop bridge may not be ready yet */
+        });
+    });
 }
 
 export function getSettings(): ShapeSettings {

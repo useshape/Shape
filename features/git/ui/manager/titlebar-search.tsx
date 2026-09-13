@@ -2,7 +2,7 @@
 
 import { RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,7 @@ export function TitlebarSearch() {
                 aria-label={placeholder}
                 onClick={() => setExpanded(true)}
             >
-                <Icon icon={RiSearchLine} />
+                <Icon icon={RiSearchLine} size={ICON_SIZE_SM} className="text-input-placeholder" />
             </button>
         );
     }
@@ -62,11 +62,15 @@ export function TitlebarSearch() {
             ref={wrapRef}
             data-git-titlebar-search
             className={cn(
-                "flex h-7 w-[min(220px,32vw)] items-center gap-1 rounded-md border border-border-subtle bg-editor px-2 transition-colors",
-                focused && "border-border bg-panel-hover/40",
+                "flex h-7 w-[min(220px,32vw)] items-center gap-1.5 rounded-md border border-border-subtle bg-input-bg px-2",
+                focused && "border-border-focus",
             )}
         >
-            <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
+            <Icon
+                icon={RiSearchLine}
+                size={ICON_SIZE_SM}
+                className="pointer-events-none text-input-placeholder"
+            />
             <Input
                 ref={inputRef}
                 value={query}
@@ -80,7 +84,7 @@ export function TitlebarSearch() {
                     }
                 }}
                 placeholder={placeholder}
-                className="h-auto! min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none"
                 aria-label={placeholder}
             />
             {query ? (
@@ -88,14 +92,14 @@ export function TitlebarSearch() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5 shrink-0 text-text-muted hover:text-text-primary"
+                    className="h-5 w-5 shrink-0 text-input-placeholder hover:text-text-primary"
                     onClick={() => {
                         setQuery("");
                         inputRef.current?.focus();
                     }}
                     aria-label="Clear search"
                 >
-                    <Icon icon={RiCloseLine} />
+                    <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
                 </Button>
             ) : null}
         </div>

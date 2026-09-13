@@ -64,9 +64,21 @@ pub async fn send_chat_message(
 
     let raw_model = model.unwrap_or_else(|| MODEL_DEFAULT.to_string());
     let selected_auto = model_router::is_auto_selection(&raw_model);
-    let has_images = message.contains("<attached_image");
-    let model_to_use = model_router::normalize_model_with_images(&raw_model, has_images);
+    let history_has_images = state
+        .history
+        .lock()
+        .map(|h| {
+            h.iter().any(|m| {
+                m.role == "user" && model_router::content_has_images(&m.content)
+            })
+        })
+        .unwrap_or(false);
+    let has_images = model_router::content_has_images(&message) || history_has_images;
     let mode_to_use = mode.unwrap_or_else(|| "Ask".to_string());
+    let model_to_use = model_router::normalize_model_with_images(
+        &raw_model,
+        has_images || model_router::mode_wants_vision(&mode_to_use),
+    );
     let effort_raw = reasoning_effort
         .as_deref()
         .map(str::trim)
@@ -468,7 +480,12 @@ pub async fn send_chat_message(
         messages::build_messages_json(&final_system_prompt, &messages::build_api_history(&history_snapshot), &model_to_use);
 
     let mcp_tools = mcp_state.tools_as_openai_schema().unwrap_or_default();
-    let tools = schema::tools_for_mode_and_family(&mode_to_use, family, mcp_tools);
+    let tools = schema::tools_for_mode_family_and_memory(
+        &mode_to_use,
+        family,
+        mcp_tools,
+        state.chat_memory_enabled(),
+    );
 
     let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());
     let conversation_json =
@@ -699,6 +716,7 @@ pub async fn send_chat_message(
                 "turnId": &turn_id,
                 "conversationId": &owned_conversation_id,
                 "error": interrupt_error,
+                "content": final_full_response,
             }),
         );
 
@@ -802,6 +820,27 @@ pub async fn send_chat_message(
     journals::clear_turn_journal(&owned_conversation_id, &turn_id);
 
     Ok(final_full_response)
+}
+
+#[tauri::command]
+pub fn update_turn_policy(
+    state: tauri::State<'_, AgentState>,
+    auto_run_mode: Option<String>,
+    require_edit_approval: Option<bool>,
+    protect_destructive_git: Option<bool>,
+) -> Result<(), String> {
+    let mut policy = state.turn_policy();
+    if let Some(mode) = auto_run_mode.as_deref() {
+        policy.auto_run_mode = AutoRunMode::from_setting(Some(mode));
+    }
+    if let Some(v) = require_edit_approval {
+        policy.require_edit_approval = v;
+    }
+    if let Some(v) = protect_destructive_git {
+        policy.protect_destructive_git = v;
+    }
+    state.set_turn_policy(policy);
+    Ok(())
 }
 
 // ----- helpers --------------------------------------------------------------------------

@@ -130,6 +130,8 @@ function commitNavigation(url: string, opts?: { replace?: boolean; reload?: bool
     let history = state.history.slice();
     let index = state.index;
 
+    void commands.rememberPreviewUrl(url).catch(() => {});
+
     if (replace && index >= 0) {
         history[index] = url;
     } else if (index >= 0 && previewUrlsEqual(history[index]!, url)) {
@@ -283,6 +285,7 @@ export function recordPreviewLocation(raw: string) {
     }
     const history = state.history.slice(0, state.index + 1);
     history.push(url);
+    void commands.rememberPreviewUrl(url).catch(() => {});
     setState({
         history,
         index: history.length - 1,
@@ -339,6 +342,7 @@ export function getLastDevUrl() {
 
 export function setLastDevUrl(url: string) {
     globalLastDevUrl = url;
+    void commands.rememberPreviewUrl(url).catch(() => {});
     seedPreviewFromDevUrl(url);
 }
 

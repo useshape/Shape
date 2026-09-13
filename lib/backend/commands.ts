@@ -493,6 +493,29 @@ export const commands = {
             projectPath: options.projectPath ?? null,
             useProjectTokens: options.useProjectTokens ?? true,
         }),
+    capturePagePreview: (url: string, width?: number, height?: number) =>
+        invokeCommand<{
+            pngPath: string;
+            width: number;
+            height: number;
+            renderMs: number;
+        }>("capture_page_preview", {
+            url,
+            width: width ?? null,
+            height: height ?? null,
+        }),
+    rememberPreviewUrl: (url: string) =>
+        invokeCommand<void>("remember_preview_url_cmd", { url }),
+    updateTurnPolicy: (policy: {
+        autoRunMode?: string;
+        requireEditApproval?: boolean;
+        protectDestructiveGit?: boolean;
+    }) =>
+        invokeCommand<void>("update_turn_policy", {
+            autoRunMode: policy.autoRunMode ?? null,
+            requireEditApproval: policy.requireEditApproval ?? null,
+            protectDestructiveGit: policy.protectDestructiveGit ?? null,
+        }),
     cleanupDesignSandbox: (sessionId?: string) =>
         invokeCommand<void>("cleanup_design_sandbox", {
             sessionId: sessionId ?? null,
@@ -535,6 +558,29 @@ export const commands = {
             repo,
             number,
             accessToken: accessToken ?? null,
+        }),
+    reviewPullRequest: (
+        owner: string,
+        repo: string,
+        number: number,
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("review_pull_request", {
+            owner,
+            repo,
+            number,
+            accessToken: accessToken ?? null,
+        }),
+    draftPullRequest: (
+        base: string,
+        compare: string,
+        opts?: { repoPath?: string | null; accessToken?: string },
+    ) =>
+        invokeCommand<string>("draft_pull_request", {
+            base,
+            compare,
+            repoPath: opts?.repoPath ?? null,
+            accessToken: opts?.accessToken ?? null,
         }),
     summarizeIssue: (
         owner: string,
@@ -623,6 +669,8 @@ export const commands = {
         invokeCommand<void>("resolve_edit_approval", { id, approved }),
     setIndexEmbeddings: (enabled: boolean) =>
         invokeCommand<void>("set_index_embeddings", { enabled }),
+    setChatMemoryEnabled: (enabled: boolean) =>
+        invokeCommand<void>("set_chat_memory_enabled", { enabled }),
     setDiagnostics: (path: string, diagnostics: unknown[]) => invokeCommand<void>("set_diagnostics", { path, diagnostics }),
     ptyAvailableShells: () =>
         invokeCommand<import("./types").TerminalShellProfile[]>("pty_available_shells"),
