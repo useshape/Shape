@@ -89,34 +89,16 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
     const [dispatchInputs, setDispatchInputs] = useState<WorkflowInputDef[]>([]);
     const [dispatchRef, setDispatchRef] = useState("main");
     const [dispatchBusy, setDispatchBusy] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<string>(
-        focus === "live-status" ? "in_progress" : "all",
-    );
+    const [statusFilter, setStatusFilter] = useState<string>("all");
     const [detailTab, setDetailTab] = useState<DetailTab>(defaultTabForFocus(focus));
-    const [live, setLive] = useState(focus === "live-status");
+    const [live, setLive] = useState(false);
     const logRef = useRef<HTMLPreElement | null>(null);
     const allowedTabs = useMemo(() => tabsForFocus(focus), [focus]);
 
     useEffect(() => {
         setDetailTab(defaultTabForFocus(focus));
-        if (focus === "live-status") {
-            setStatusFilter("in_progress");
-            setLive(true);
-        } else if (focus === "logs") {
-            setDetailTab("jobs");
-            setStatusFilter("failure");
-        } else if (focus === "artifacts") {
-            setDetailTab("artifacts");
-            setStatusFilter("all");
-        } else if (focus === "workflow-definitions") {
-            setDetailTab("workflows");
-            setStatusFilter("all");
-            setLive(false);
-            setSelectedWorkflowId(null);
-        } else {
-            setLive(false);
-            if (focus === "jobs" || focus === "steps") setStatusFilter("all");
-        }
+        setLive(false);
+        setStatusFilter("all");
         setLogs("");
         setLogHighlight(null);
         setStepFilterActive(true);
@@ -211,7 +193,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
             const workflowsPath = `/repos/${resolved.owner}/${resolved.repo}/actions/workflows?per_page=50`;
 
             let nextRuns: WorkflowRun[] = [];
-            if (statusFilter === "in_progress" || focus === "live-status") {
+            if (statusFilter === "in_progress") {
                 // GitHub allows one status per request — merge queued + in_progress.
                 const [progressRaw, queuedRaw, workflowsRaw] = await Promise.all([
                     parseApi(`${base}&status=in_progress`),
@@ -260,10 +242,6 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
             setRuns(nextRuns);
             setSelectedRunId((prev) => {
                 if (prev && nextRuns.some((r) => r.id === prev)) return prev;
-                if (focus === "logs") {
-                    const failed = nextRuns.find((r) => r.conclusion === "failure");
-                    return failed?.id ?? nextRuns[0]?.id ?? null;
-                }
                 return nextRuns[0]?.id ?? null;
             });
         } catch (e) {
@@ -298,16 +276,13 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                 setJobs(nextJobs);
                 setArtifacts(nextArts);
 
-                const preferFailed = focus === "logs" || focus === "steps";
                 const pick =
-                    (preferFailed
-                        ? nextJobs.find((j) => j.conclusion === "failure")
-                        : null) ??
+                    nextJobs.find((j) => j.conclusion === "failure") ??
                     nextJobs.find((j) => j.status === "in_progress") ??
                     nextJobs[0] ??
                     null;
                 setSelectedJobId(pick?.id ?? null);
-                if (focus === "jobs" || focus === "steps") {
+                if (focus === "jobs") {
                     setExpandedJobs(new Set(nextJobs.map((j) => j.id)));
                 } else if (pick) {
                     setExpandedJobs(new Set([pick.id]));
@@ -386,17 +361,15 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
 
     useEffect(() => {
         if (!selectedRunId || detailTab !== "jobs") return;
-        // Live status: don't auto-spam gh log on incomplete runs.
-        if (focus === "live-status") return;
-        if (focus === "logs" || selectedJobId != null) {
-            const job = selectedJobId != null ? jobs.find((j) => j.id === selectedJobId) : null;
+        if (selectedJobId != null) {
+            const job = jobs.find((j) => j.id === selectedJobId);
             if (job && !jobLogsReady(job)) {
                 setLogs(
                     `Logs will be available when “${job.name}” finishes (status: ${job.status}).`,
                 );
                 return;
             }
-            void loadLogs(selectedRunId, selectedJobId, focus === "logs" && !selectedJobId);
+            void loadLogs(selectedRunId, selectedJobId, false);
         }
         // Intentionally omit loadLogs from deps to avoid refetch loops when highlight changes.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -568,10 +541,10 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
         </li>
     );
 
-    const showWorkflowList = focus === "workflow-definitions";
-    const jobsMode = focus === "steps" ? "steps" : "jobs";
-    const logsPreferred = focus === "logs" ? 320 : 200;
-    const jobsPreferred = focus === "logs" ? 160 : 220;
+    const showWorkflowList = false;
+    const jobsMode = "jobs" as const;
+    const logsPreferred = 200;
+    const jobsPreferred = 220;
 
     if (!auth.loggedIn) {
         return (
@@ -668,91 +641,10 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
         <Panel
             direction="vertical"
             paneGap="var(--workbench-gap)"
-            storageKey={
-                focus === "logs" ? "git-actions-logs-first-v1" : "git-actions-jobs-logs-v3"
-            }
+            storageKey="git-actions-jobs-logs-v3"
             hideSeparator
             className="h-full min-h-0"
-            panes={
-                focus === "logs"
-                    ? [
-                          {
-                              id: "actions-logs",
-                              flexible: true,
-                              minSize: 140,
-                              children: (
-                                  <LogsPanel
-                                      selectedJob={selectedJob}
-                                      selectedRunId={selectedRunId}
-                                      logs={displayLogs}
-                                      loadingLogs={loadingLogs}
-                                      logRef={logRef}
-                                      highlight={logHighlight}
-                                      stepFilterActive={!!logHighlight && stepFilterActive}
-                                      explainContext={
-                                          repoSlug
-                                              ? [
-                                                    `Repo: ${repoSlug}`,
-                                                    selectedRun?.name
-                                                        ? `Workflow: ${selectedRun.name}`
-                                                        : null,
-                                                    selectedRun?.display_title
-                                                        ? `Title: ${selectedRun.display_title}`
-                                                        : null,
-                                                    selectedRun?.conclusion
-                                                        ? `Run conclusion: ${selectedRun.conclusion}`
-                                                        : null,
-                                                ]
-                                                    .filter(Boolean)
-                                                    .join("\n")
-                                              : null
-                                      }
-                                      onToggleStepFilter={() => setStepFilterActive((v) => !v)}
-                                      onReload={() => {
-                                          if (selectedRunId) {
-                                              void loadLogs(
-                                                  selectedRunId,
-                                                  selectedJobId,
-                                                  false,
-                                              );
-                                          }
-                                      }}
-                                      onFailedOnly={() => {
-                                          if (selectedRunId) {
-                                              void loadLogs(selectedRunId, null, true);
-                                          }
-                                      }}
-                                  />
-                              ),
-                          },
-                          {
-                              id: "actions-jobs",
-                              preferredSize: jobsPreferred,
-                              minSize: 100,
-                              maxSize: 360,
-                              snap: true,
-                              children: (
-                                  <JobsPanel
-                                      jobs={jobs}
-                                      selectedJobId={selectedJobId}
-                                      expandedJobs={expandedJobs}
-                                      loading={loadingDetail}
-                                      mode={jobsMode}
-                                      onToggleJob={toggleJob}
-                                      onSelectStep={selectStep}
-                                      onViewLogs={(jobId) => {
-                                          setSelectedJobId(jobId);
-                                          setLogHighlight(null);
-                                          if (selectedRunId) {
-                                              void loadLogs(selectedRunId, jobId, false);
-                                          }
-                                      }}
-                                      onOpenUrl={openUrl}
-                                  />
-                              ),
-                          },
-                      ]
-                    : [
+            panes={[
                           {
                               id: "actions-jobs",
                               // Flexible so the pane shrinks with the window instead of clipping.
@@ -829,8 +721,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                   />
                               ),
                           },
-                      ]
-            }
+                      ]}
         />
     );
 
@@ -845,7 +736,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                 onStatusFilterChange={setStatusFilter}
                 loadingRuns={loadingRuns}
                 onRefresh={() => void loadRuns()}
-                showStatusFilter={focus !== "workflow-definitions"}
+                showStatusFilter
             />
 
             <Panel
@@ -861,9 +752,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                         minSize: 180,
                         maxSize: 340,
                         snap: true,
-                        children: showWorkflowList ? (
-                            workflowsListPane
-                        ) : (
+                        children: (
                             <RunsList
                                 runs={filteredRuns}
                                 selectedRunId={selectedRunId}
@@ -883,33 +772,9 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                         children: (
                             <GitOverlayEnter key={selectedRunId ?? "empty"}>
                             <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden">
-                                {!selectedRun && focus !== "workflow-definitions" ? (
+                                {!selectedRun ? (
                                     <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
                                         Select a workflow run
-                                    </div>
-                                ) : !selectedRun && focus === "workflow-definitions" ? (
-                                    <div className="flex h-full flex-col">
-                                        <ScrollArea className="min-h-0 flex-1 p-2">
-                                            <p className="px-2 py-3 text-sm text-text-muted">
-                                                Select a workflow to see its recent runs, or open it
-                                                on GitHub.
-                                            </p>
-                                            {selectedWorkflowId != null ? (
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="mx-2"
-                                                    onClick={() => {
-                                                        const wf = workflows.find(
-                                                            (w) => w.id === selectedWorkflowId,
-                                                        );
-                                                        openUrl(wf?.html_url);
-                                                    }}
-                                                >
-                                                    Open workflow on GitHub
-                                                </Button>
-                                            ) : null}
-                                        </ScrollArea>
                                     </div>
                                 ) : (
                                     <>
@@ -1084,9 +949,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                                                     <TabsList>
                                                         {allowedTabs.includes("jobs") ? (
                                                             <TabsTrigger value="jobs">
-                                                                {focus === "steps"
-                                                                    ? "Steps & logs"
-                                                                    : "Jobs & logs"}
+                                                                Jobs & logs
                                                             </TabsTrigger>
                                                         ) : null}
                                                         {allowedTabs.includes("artifacts") ? (

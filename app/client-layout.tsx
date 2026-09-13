@@ -22,6 +22,7 @@ import { SuppressNativeTooltips } from "@/components/ui/suppress-native-tooltips
 import { CommandPaletteBridge } from "@/features/agent/palette";
 import Onboarding from "@/features/onboarding/ui/view";
 import { PromoCardHost } from "@/features/promo/host";
+import { DesignPreviewCaptureHost } from "@/features/chat/ui/design-capture";
 
 function pathMatches(pathname: string | null, base: string) {
     if (!pathname) return false;
@@ -280,6 +281,7 @@ function Content({ children }: { children: React.ReactNode }) {
                 <UpdateBootstrap />
                 <CommandPaletteBridge />
                 <PromoCardHost />
+                <DesignPreviewCaptureHost />
             </div>
             {showOnboarding ? (
                 <div className="absolute inset-0 z-[80] bg-background">

@@ -183,6 +183,24 @@ const STATIC: Record<
   Exclude<DemoChatId, "review" | "emails" | "ops">,
   { files: DemoFile[]; turns: DoneTurn[] }
 > = {
+  pricing: {
+    files: [
+      { name: "app/pricing/page.tsx", add: 84, del: 31, status: "M" },
+      { name: "components/pricing.tsx", add: 52, del: 40, status: "M" },
+    ],
+    turns: [
+      {
+        prompt: "Rebuild the pricing page. Two columns, keep the rest of the site.",
+        reply:
+          "The /pricing page is a two-column layout now — plans on the left, FAQ on the right.\n\n{{page}}\n\nAnnual billing is the default. I left the homepage alone.",
+        tools: [
+          { action: "Explored", detail: "app/pricing" },
+          { action: "Edited", detail: "app/pricing/page.tsx" },
+          { action: "Edited", detail: "components/pricing.tsx" },
+        ],
+      },
+    ],
+  },
   stripe: {
     files: [
       { name: "src/app/api/webhooks/stripe/route.ts", add: 62, del: 0, status: "A" },
@@ -793,16 +811,38 @@ function EmailApprovalRow({
   );
 }
 
+/** Screenshot: public/images/demo/pricing.png */
+const DEMO_PAGE_SHOT = "/images/demo/pricing.png";
+
+function DemoPageShot() {
+  return (
+    <span className="my-2 block w-[min(100%,28rem)] overflow-hidden rounded-lg border border-border-subtle">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={DEMO_PAGE_SHOT}
+        alt="Pricing page"
+        className="block h-auto max-h-[22rem] w-full object-contain object-left"
+      />
+    </span>
+  );
+}
+
+const STREAM_SPLIT = /(\{\{page\}\}|\s+)/;
+
 function StreamText({ text, count, streaming }: { text: string; count: number; streaming: boolean }) {
-  const tokens = useMemo(() => text.split(/(\s+)/), [text]);
+  const tokens = useMemo(() => text.split(STREAM_SPLIT), [text]);
   const shown = tokens.slice(0, count);
   return (
     <div className={cn("chat-markdown prose-compact max-w-none min-w-0", streaming && "chat-stream-fade-in")}>
-      {shown.map((w, i) => (
-        <span key={i} className="t-stream-w is-in">
-          {w}
-        </span>
-      ))}
+      {shown.map((w, i) =>
+        w === "{{page}}" ? (
+          <DemoPageShot key={i} />
+        ) : (
+          <span key={i} className="t-stream-w is-in">
+            {w}
+          </span>
+        ),
+      )}
     </div>
   );
 }
@@ -1027,7 +1067,7 @@ export function DemoChat({
     const streamReply = async (text: string) => {
       setPhase("streaming");
       setReply(text);
-      const tokens = text.split(/(\s+)/);
+      const tokens = text.split(/(\{\{page\}\}|\s+)/);
       for (let i = 1; i <= tokens.length; i++) {
         if (cancelled) return;
         setStreamCount(i);
@@ -1403,7 +1443,7 @@ export function DemoChat({
                   approval={null}
                   onResolve={() => undefined}
                   reply={turn.reply}
-                  streamCount={turn.reply.split(/(\s+)/).length}
+                  streamCount={turn.reply.split(/(\{\{page\}\}|\s+)/).length}
                 />
               </div>
             ))}

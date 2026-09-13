@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 export const DEMO_CHATS = [
   { id: "review", title: "Adversarial review", ago: "now" },
+  { id: "pricing", title: "Rebuild the pricing page", ago: "12m" },
   { id: "emails", title: "Send the follow-up", ago: "8m" },
   { id: "ops", title: "Launch follow-through", ago: "4m" },
   { id: "stripe", title: "Connect billing events", ago: "32m" },

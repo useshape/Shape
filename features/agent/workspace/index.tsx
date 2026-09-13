@@ -12,6 +12,7 @@ import { PlanTabView } from "./plan-tab";
 import { FileEditor } from "./editor";
 import { FileTree } from "./tree";
 import { SingleFileDiffEditor, type FileDiffTabInfo } from "./file-diff";
+import { GraphTab } from "./graph-tab";
 import { ToolBtn } from "./tool";
 import {
     DEFAULT_TABS,
@@ -53,37 +54,30 @@ export function AgentWorkspace({
 
     const addTab = useCallback((kind: TabKind) => {
         if (kind === "plan" || kind === "file" || kind === "diff") return;
-        if (kind === "changes") {
-            const existing = tabs.find((t) => t.kind === "changes");
+        if (kind === "changes" || kind === "files" || kind === "terminal" || kind === "graph") {
+            const existing = tabs.find((t) => t.kind === kind);
             if (existing) {
                 select(existing.id);
+                if (kind === "files" || kind === "terminal" || kind === "graph") onExpand();
                 return;
             }
         }
-        if (kind === "files") {
-            const existing = tabs.find((t) => t.kind === "files");
-            if (existing) {
-                select(existing.id);
-                onExpand();
-                return;
-            }
-        }
-        if (kind === "terminal") {
-            const existing = tabs.find((t) => t.kind === "terminal");
-            if (existing) {
-                select(existing.id);
-                onExpand();
-                return;
-            }
-        }
+        const title =
+            kind === "terminal"
+                ? "Terminal"
+                : kind === "files"
+                  ? "Files"
+                  : kind === "graph"
+                    ? "Graph"
+                    : "Changes";
         const tab: WorkspaceTab = {
-            id: uid(kind),
+            id: kind === "graph" ? "graph" : uid(kind),
             kind,
-            title:
-                kind === "terminal" ? "Terminal" : kind === "files" ? "Files" : "Changes",
+            title,
         };
         setTabs((p) => [...p, tab]);
         setActiveId(tab.id);
+        if (kind === "files" || kind === "terminal" || kind === "graph") onExpand();
     }, [onExpand, select, tabs]);
 
     const openFile = useCallback(
@@ -178,6 +172,10 @@ export function AgentWorkspace({
             if (!tabId) return;
             if (tabId === "changes" || tabId === "source") {
                 addTab("changes");
+                onExpand();
+            }
+            if (tabId === "graph" || tabId === "git") {
+                addTab("graph");
                 onExpand();
             }
             if (tabId === "terminal") {
@@ -278,7 +276,7 @@ export function AgentWorkspace({
                     }}
                 />
 
-                {active?.kind === "changes" || active?.kind === "files" ? null : (
+                {active?.kind === "changes" || active?.kind === "files" || active?.kind === "graph" ? null : (
                     <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border-subtle px-1">
                         <ToolBtn label="Back" disabled={navIndex <= 0} onClick={() => go(-1)}>
                             <Icon icon={RiArrowLeftLine} />
@@ -305,6 +303,8 @@ export function AgentWorkspace({
                 <div className="min-h-0 flex-1 overflow-hidden">
                     {active?.kind === "changes" ? (
                         <ChangesView projectPath={projectPath} />
+                    ) : active?.kind === "graph" ? (
+                        <GraphTab projectPath={projectPath} />
                     ) : active?.kind === "files" ? (
                         <FileTree
                             projectPath={projectPath}

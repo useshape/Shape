@@ -11,31 +11,46 @@ import {
 } from "react";
 import type { GitSectionId } from "@/features/git/types";
 
-const PLACEHOLDERS: Partial<Record<GitSectionId, string>> = {
+const PLACEHOLDERS: Record<GitSectionId, string> = {
     source: "Search changes…",
     graph: "Search commits…",
     branches: "Filter branches…",
-    tags: "Filter tags…",
-    issues: "Filter issues…",
-    "pull-requests": "Filter pull requests…",
-    releases: "Filter releases…",
-    "workflow-runs": "Filter runs…",
-    "workflow-definitions": "Filter workflows…",
-    jobs: "Filter runs…",
-    steps: "Filter runs…",
-    "live-status": "Filter runs…",
-    logs: "Filter runs…",
-    artifacts: "Filter runs…",
-    "check-runs": "Filter check runs…",
-    "check-suites": "Filter check suites…",
-    "commit-statuses": "Filter statuses…",
-    deployments: "Filter deployments…",
-    "deployment-statuses": "Filter statuses…",
+};
+
+export const GIT_SECTION_TITLES: Record<GitSectionId, string> = {
+    source: "Source Control",
+    graph: "Git Graph",
+    branches: "Branches",
 };
 
 const SECTION_STORAGE_KEY = "shape-git-manager-section";
 
 const KNOWN_SECTIONS = new Set<string>(Object.keys(PLACEHOLDERS));
+
+const LEGACY_SECTIONS: Record<string, GitSectionId> = {
+    tags: "branches",
+    releases: "graph",
+    issues: "graph",
+    "pull-requests": "graph",
+    "workflow-runs": "graph",
+    jobs: "graph",
+    "workflow-definitions": "graph",
+    steps: "graph",
+    "live-status": "graph",
+    logs: "graph",
+    artifacts: "graph",
+    "check-runs": "graph",
+    "check-suites": "graph",
+    "commit-statuses": "graph",
+    deployments: "graph",
+    "deployment-statuses": "graph",
+};
+
+export function coerceGitSection(value: string | null | undefined): GitSectionId | null {
+    if (!value) return null;
+    if (KNOWN_SECTIONS.has(value)) return value as GitSectionId;
+    return LEGACY_SECTIONS[value] ?? null;
+}
 
 export function isGitSectionId(value: string | null | undefined): value is GitSectionId {
     return !!value && KNOWN_SECTIONS.has(value);
@@ -45,9 +60,10 @@ export function readStoredGitSection(): GitSectionId | null {
     if (typeof window === "undefined") return null;
     try {
         const fromQuery = new URLSearchParams(window.location.search).get("section");
-        if (isGitSectionId(fromQuery)) return fromQuery;
+        const fromQueryMapped = coerceGitSection(fromQuery);
+        if (fromQueryMapped) return fromQueryMapped;
         const stored = localStorage.getItem(SECTION_STORAGE_KEY);
-        if (isGitSectionId(stored)) return stored;
+        return coerceGitSection(stored);
     } catch {
         /* ignore */
     }
@@ -77,7 +93,7 @@ type FilterContextValue = {
     section: GitSectionId;
     setSection: (id: GitSectionId) => void;
     placeholder: string;
-    /** Sections that don't use the titlebar filter yet. */
+    sectionTitle: string;
     searchEnabled: boolean;
 };
 
@@ -90,60 +106,50 @@ export function FilterProvider({
     children: ReactNode;
     initialSection?: GitSectionId;
 }) {
-    // Keep SSR + first client paint identical — hydrate from URL/storage after mount.
     const [query, setQueryState] = useState("");
     const [section, setSectionState] = useState<GitSectionId>(initialSection);
     const [hydrated, setHydrated] = useState(false);
 
     useEffect(() => {
         const stored = readStoredGitSection();
-        if (stored) {
-            setSectionState(stored);
-            persistGitSection(stored);
-        }
+        if (stored) setSectionState(stored);
         setHydrated(true);
-    }, []);
-
-    const setSection = useCallback((id: GitSectionId) => {
-        setSectionState(id);
-        setQueryState("");
-        persistGitSection(id);
     }, []);
 
     const setQuery = useCallback((value: string) => {
         setQueryState(value);
     }, []);
 
-    const placeholder = PLACEHOLDERS[section] ?? "Search…";
-    // Avoid titlebar search flashing before section hydrate (prevents hydration mismatch).
-    const searchEnabled = hydrated && section !== "source";
+    const setSection = useCallback((id: GitSectionId) => {
+        setSectionState(id);
+        persistGitSection(id);
+        setQueryState("");
+    }, []);
 
-    const value = useMemo(
+    const value = useMemo<FilterContextValue>(
         () => ({
             query,
             setQuery,
             section,
             setSection,
-            placeholder,
-            searchEnabled,
+            placeholder: PLACEHOLDERS[section],
+            sectionTitle: GIT_SECTION_TITLES[section],
+            searchEnabled: true,
         }),
-        [placeholder, query, searchEnabled, section, setQuery, setSection],
+        [query, section, setQuery, setSection],
     );
+
+    if (!hydrated) {
+        return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
+    }
 
     return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
 }
 
-export function useFilter(): FilterContextValue {
+export function useFilter() {
     const ctx = useContext(FilterContext);
     if (!ctx) {
-        return {
-            query: "",
-            setQuery: () => {},
-            section: "source",
-            setSection: () => {},
-            placeholder: "Search…",
-            searchEnabled: false,
-        };
+        throw new Error("useFilter must be used within FilterProvider");
     }
     return ctx;
 }

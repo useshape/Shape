@@ -8,11 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll";
 import { cn } from "@/lib/utils";
 import { useProjectState, commands } from "@/lib/backend";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
-import { getShapeAccessToken } from "@/lib/cloud/store";
-import { notify } from "@/features/notifications";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { GitMarkdown } from "./markdown";
-import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { formatRelative } from "@/features/git/ui/actions/utils";
 import { GitListSkeleton } from "@/features/git/ui/shared/skeletons";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
@@ -66,8 +63,6 @@ export function ReleasesPage() {
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [aiSummary, setAiSummary] = useState<string | null>(null);
-    const [aiLoading, setAiLoading] = useState(false);
 
     const owner = repo?.owner;
     const repoName = repo?.repo;
@@ -157,8 +152,7 @@ export function ReleasesPage() {
     }, [filtered, selectedId]);
 
     useEffect(() => {
-        setAiSummary(null);
-        setAiLoading(false);
+        // Reset selection-linked UI when the chosen release changes.
     }, [selectedId]);
 
     const selected = useMemo(
@@ -170,35 +164,6 @@ export function ReleasesPage() {
         const firstStable = releases.find((r) => !r.prerelease && !r.draft);
         return firstStable?.id ?? releases[0]?.id ?? null;
     }, [releases]);
-
-    const runSummarize = async () => {
-        if (!owner || !repoName || !selected) return;
-        const token = getShapeAccessToken();
-        if (!token) {
-            notify.error("AI Error", "Sign in to Shape to summarize releases.");
-            return;
-        }
-        setAiLoading(true);
-        try {
-            const text = await commands.summarizeRelease(
-                owner,
-                repoName,
-                selected.id,
-                "summarize",
-                token,
-            );
-            setAiSummary(text.trim());
-            void import("@/lib/cloud/store")
-                .then(({ refreshShapeAuth }) => {
-                    void refreshShapeAuth();
-                })
-                .catch(() => undefined);
-        } catch (err) {
-            notify.error("AI Error", err instanceof Error ? err.message : String(err));
-        } finally {
-            setAiLoading(false);
-        }
-    };
 
     const versionsPane = (
         <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden">
@@ -351,17 +316,6 @@ export function ReleasesPage() {
                             </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                            <GitAiAction
-                                label="Summarize"
-                                title="Release brief"
-                                content={aiSummary}
-                                loading={aiLoading}
-                                onRun={runSummarize}
-                                mdCtx={{
-                                    owner: owner ?? undefined,
-                                    repo: repoName ?? undefined,
-                                }}
-                            />
                             {selected.htmlUrl ? (
                                 <Button
                                     variant="outline"

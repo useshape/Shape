@@ -7,6 +7,7 @@ use super::logging;
 use super::streaming::{self, ProxyContext};
 use crate::agent::model_router;
 use crate::agent::models::AgentState;
+use crate::agent::tools::page_shot;
 use crate::agent::tools::dispatch::{self, SideEffect, ToolCtx, ToolOutcome};
 use crate::commands::pty::PtyState;
 use crate::core::error::AppError;
@@ -426,6 +427,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut consecutive_readonly_rounds = 0usize;
     let mut explore_nudge_sent = false;
     let mut last_round_failed = false;
+    let mut page_shots: Vec<String> = Vec::new();
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
@@ -747,13 +749,21 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 if tool_result_looks_failed(&tool_outcome.tool_result) {
                     round_failed = true;
                 }
-                if let Some(SideEffect::FileRead { path, content }) = tool_outcome.side_effect {
-                    let abs = resolve_abs(&path, config.project_path);
+                if let Some(SideEffect::FileRead { path, content }) = &tool_outcome.side_effect {
+                    let abs = resolve_abs(path, config.project_path);
                     read_paths.insert(abs.clone());
-                    file_cache.insert(abs.clone(), content);
+                    file_cache.insert(abs.clone(), content.clone());
                     edit_counts.remove(&abs);
                     edit_fail_counts.remove(&abs);
                     needs_reread.remove(&abs);
+                }
+                if let Some(SideEffect::PageScreenshot { tag }) = &tool_outcome.side_effect {
+                    page_shots.push(tag.clone());
+                    super::messages::push_page_screenshot_followup(
+                        config.api_messages,
+                        tag,
+                        config.model,
+                    );
                 }
             }
 
@@ -1053,6 +1063,14 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     SideEffect::Finished { summary } => {
                         finished_signal = Some(summary.unwrap_or_default());
                     }
+                    SideEffect::PageScreenshot { tag } => {
+                        super::messages::push_page_screenshot_followup(
+                            config.api_messages,
+                            &tag,
+                            config.model,
+                        );
+                        page_shots.push(tag);
+                    }
                 }
             }
         }
@@ -1131,6 +1149,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 NUDGE_CONCISE_USER_REPLY,
             )
             .await;
+    }
+
+    if !page_shots.is_empty() {
+        final_full_response = page_shot::place_page_screenshots(&final_full_response, &page_shots);
+    } else if final_full_response.contains("<attached_image") {
+        final_full_response = page_shot::place_page_screenshots(&final_full_response, &[]);
     }
 
     // `chat_complete` (with stats) is emitted from `send_chat_message` after the turn returns.

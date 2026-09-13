@@ -1,15 +1,19 @@
 "use client";
 
-import { RiCloudOffLine, RiCrosshair2Line, RiFullscreenExitLine, RiRefreshLine, RiSearchLine, RiUploadLine } from "@remixicon/react";
+import { RiCloudOffLine, RiCrosshair2Line, RiFilter3Line, RiFullscreenExitLine, RiRefreshLine, RiUploadLine } from "@remixicon/react";
 import React, { useState, useCallback, useEffect, useRef, useMemo, useDeferredValue } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 import { Input } from "@/components/ui/input";
 import {
     commands,
     useProjectState,
-    GitActivityPoint,
     GitFileParams,
     GitLogEntry,
 } from "@/lib/backend";
@@ -24,16 +28,15 @@ import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { useGitRepos } from "@/lib/git/repos";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { useSettings } from "@/lib/settings";
-import { graphCache, activityCacheKey } from "./cache";
+import { graphCache } from "./cache";
 import { EMPTY_ARRAY, EMPTY_NODE, commitIsHead } from "./constants";
 import { FilterMenu } from "./filter-menu";
-import { CommitActivitySparkline } from "./activity-sparkline";
 import { GraphCommitRow } from "./commit-row";
 import { GraphDetailPanel, type GraphDetailSelection } from "./graph-detail-panel";
-import { GitOverlayEnter } from "@/features/git/ui/shared/motion";
 import type { RefInfo } from "./ref-pill";
 import { Panel } from "@/features/panels";
 import { GitManagerTrigger } from "@/features/git/ui/manager/git-manager-trigger";
+import { GitChromeActions } from "@/features/git/ui/manager/chrome";
 
 // ── VIRTUAL SCROLL CONSTANTS ──
 const OVERSCAN_PX = GRAPH_OVERSCAN_PX;
@@ -46,7 +49,7 @@ export default function Graph({
 }: {
     className?: string;
     surface?: "panel" | "editor";
-    /** Manager-only chrome: activity sparkline + author/branch filters. */
+    /** Manager-only chrome: author/branch filters and richer titlebar. */
     rich?: boolean;
     /** When false (keep-alive pane hidden), unmount Monaco so it cannot overlay other pages. */
     active?: boolean;
@@ -66,7 +69,6 @@ export default function Graph({
     const [localSearch, setLocalSearch] = useState("");
     const deferredLocalSearch = useDeferredValue(localSearch);
     const deferredCommitSearch = useDeferredValue(commitSearch);
-    const [activityPoints, setActivityPoints] = useState<GitActivityPoint[]>([]);
     const [selectedHash, setSelectedHash] = useState<string | null>(null);
     const [detail, setDetail] = useState<GraphDetailSelection | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -108,8 +110,6 @@ export default function Graph({
                 expanded: expandedCommits,
                 filesCache: commitFilesCache,
                 scrollTop: scrollTop,
-                activityPoints: prev?.activityPoints,
-                activityKey: prev?.activityKey,
             };
         }
     }, [cacheKey, gitLogs, expandedCommits, commitFilesCache, scrollTop]);
@@ -301,75 +301,6 @@ export default function Graph({
         return Array.from(set).sort((a, b) => a.localeCompare(b)).slice(0, 80);
     }, [gitLogs]);
 
-    // Full-history activity (timestamp+hash only) — independent of virtualized list.
-    useEffect(() => {
-        if (!rich || !gitRepo || !cacheKey) {
-            setActivityPoints([]);
-            return;
-        }
-        const key = activityCacheKey(gitRepo, branchFilter, authorFilter);
-        const cachedEntry = graphCache[cacheKey];
-        if (cachedEntry?.activityKey === key && cachedEntry.activityPoints?.length) {
-            setActivityPoints(cachedEntry.activityPoints);
-            return;
-        }
-        let cancelled = false;
-        const load = async () => {
-            try {
-                const points = await commands.gitActivityTimeline(gitRepo, {
-                    // Always full-repo history unless a specific branch/tag filter is set.
-                    allRefs: branchFilter === "all",
-                    rev: branchFilter === "all" ? null : branchFilter,
-                    author: authorFilter === "all" ? null : authorFilter,
-                });
-                if (cancelled) return;
-                setActivityPoints(points);
-                const prev = graphCache[cacheKey] ?? {
-                    logs: [],
-                    expanded: new Set<string>(),
-                    filesCache: {},
-                    scrollTop: 0,
-                };
-                graphCache[cacheKey] = {
-                    ...prev,
-                    activityPoints: points,
-                    activityKey: key,
-                };
-            } catch {
-                if (!cancelled) setActivityPoints([]);
-            }
-        };
-        void load();
-        return () => {
-            cancelled = true;
-        };
-    }, [rich, gitRepo, branchFilter, authorFilter, cacheKey]);
-
-    const activityBuckets = useMemo(() => {
-        const bucketCount = 80;
-        if (activityPoints.length === 0) {
-            return { buckets: Array.from({ length: bucketCount }, () => 0), firstTs: 0, lastTs: 0, total: 0 };
-        }
-        let minTs = Infinity;
-        let maxTs = -Infinity;
-        for (const p of activityPoints) {
-            if (p.timestamp < minTs) minTs = p.timestamp;
-            if (p.timestamp > maxTs) maxTs = p.timestamp;
-        }
-        if (!Number.isFinite(minTs) || !Number.isFinite(maxTs) || maxTs < minTs) {
-            return { buckets: Array.from({ length: bucketCount }, () => 0), firstTs: 0, lastTs: 0, total: 0 };
-        }
-        const span = Math.max(1, maxTs - minTs);
-        const buckets = Array.from({ length: bucketCount }, () => 0);
-        for (const p of activityPoints) {
-            const t = (p.timestamp - minTs) / span;
-            // Map onto [0, bucketCount-1] with inclusive end so newest commits land in the last bucket.
-            const idx = Math.min(bucketCount - 1, Math.max(0, Math.round(t * (bucketCount - 1))));
-            buckets[idx] += 1;
-        }
-        return { buckets, firstTs: minTs, lastTs: maxTs, total: activityPoints.length };
-    }, [activityPoints]);
-
     /** Match predicate — used to mute rows, not drop them (preserves lane topology). */
     const commitMatchesFilter = useCallback((log: GitLogEntry) => {
         const q = (rich ? (deferredLocalSearch || deferredCommitSearch) : deferredCommitSearch).trim().toLowerCase();
@@ -497,90 +428,6 @@ export default function Graph({
         }
         scrollToIndex(headIndex, { select: true, flash: true });
     }, [scrollToIndex, headIndex, gitLogs, mutedHashes]);
-
-    const jumpToActivityBucket = useCallback((bucketIndex: number) => {
-        const { buckets, firstTs, lastTs } = activityBuckets;
-        if (!activityPoints.length || !firstTs || !lastTs) return;
-        const span = Math.max(1, buckets.length - 1);
-        const clamped = Math.min(span, Math.max(0, bucketIndex));
-        // Same timestamp mapping as the sparkline hover label.
-        const targetSec = firstTs + ((lastTs - firstTs) * clamped) / span;
-        const bucketW = (lastTs - firstTs) / Math.max(1, buckets.length);
-        const bStart = firstTs + clamped * bucketW;
-        const bEnd = bStart + bucketW;
-
-        let best = activityPoints[0];
-        let bestScore = Infinity;
-        for (const p of activityPoints) {
-            const inBucket =
-                clamped === buckets.length - 1
-                    ? p.timestamp >= bStart && p.timestamp <= lastTs
-                    : p.timestamp >= bStart && p.timestamp < bEnd;
-            const dist = Math.abs(p.timestamp - targetSec);
-            const score = inBucket ? dist * 0.05 : dist;
-            if (score < bestScore) {
-                bestScore = score;
-                best = p;
-            }
-        }
-
-        const hashMatch = (logs: GitLogEntry[]) =>
-            logs.findIndex(
-                (l) =>
-                    l.hash.startsWith(best.hash)
-                    || best.hash.startsWith(l.hash.slice(0, Math.min(best.hash.length, l.hash.length))),
-            );
-
-        const nearestByDate = (logs: GitLogEntry[]) => {
-            let idx = 0;
-            let dist = Infinity;
-            for (let i = 0; i < logs.length; i++) {
-                if (mutedHashes?.has(logs[i].hash)) continue;
-                const ts = parseInt(logs[i].date, 10);
-                if (!Number.isFinite(ts)) continue;
-                const d = Math.abs(ts - targetSec);
-                if (d < dist) {
-                    dist = d;
-                    idx = i;
-                }
-            }
-            return idx;
-        };
-
-        const go = (logs: GitLogEntry[]) => {
-            const exact = hashMatch(logs);
-            scrollToIndex(exact >= 0 ? exact : nearestByDate(logs), { select: true, flash: true });
-        };
-
-        const exactNow = hashMatch(gitLogs);
-        if (exactNow >= 0) {
-            scrollToIndex(exactNow, { select: true, flash: true });
-            return;
-        }
-
-        // Stream older commits until the target hash (or past its date) is loaded.
-        void (async () => {
-            let logs = gitLogs;
-            for (let i = 0; i < 50; i++) {
-                if (!streamActiveRef.current) break;
-                if (logs.length >= GRAPH_LOG_SOFT_CAP) break;
-                const more = await commands.gitLogStreamNext("graph", 400);
-                if (!more.length) break;
-                const room = GRAPH_LOG_SOFT_CAP - logs.length;
-                const chunk = more.length <= room ? more : more.slice(0, room);
-                logs = [...logs, ...chunk];
-                setGitLogs(logs);
-                if (hashMatch(logs) >= 0) {
-                    // layout updates next paint
-                    requestAnimationFrame(() => go(logs));
-                    return;
-                }
-                const oldest = parseInt(logs[logs.length - 1]?.date ?? "", 10);
-                if (Number.isFinite(oldest) && oldest <= targetSec) break;
-            }
-            requestAnimationFrame(() => go(logs));
-        })();
-    }, [activityBuckets, activityPoints, gitLogs, mutedHashes, scrollToIndex]);
 
     const jumpToNextMatch = useCallback((dir: 1 | -1) => {
         if (!gitLogs.length) return;
@@ -821,6 +668,162 @@ export default function Graph({
 
     const graphChrome = (
         <>
+            {rich && active ? (
+                <GitChromeActions>
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                aria-label="Filter commits"
+                            >
+                                <Icon icon={RiFilter3Line} size={ICON_SIZE_SM} />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-auto p-2">
+                            <div className="flex flex-col gap-1.5">
+                                <FilterMenu
+                                    label="All authors"
+                                    value={authorFilter}
+                                    onChange={setAuthorFilter}
+                                    options={[
+                                        { value: "all", label: "All authors" },
+                                        ...authors.map((a) => ({ value: a, label: a })),
+                                    ]}
+                                />
+                                <FilterMenu
+                                    label="All commits"
+                                    value={kindFilter}
+                                    onChange={(v) => setKindFilter(v as typeof kindFilter)}
+                                    options={[
+                                        { value: "all", label: "All commits" },
+                                        { value: "merges", label: "Merges only" },
+                                        { value: "non-merges", label: "No merges" },
+                                    ]}
+                                />
+                                <FilterMenu
+                                    label="Any time"
+                                    value={dateFilter}
+                                    onChange={(v) => setDateFilter(v as typeof dateFilter)}
+                                    options={[
+                                        { value: "all", label: "Any time" },
+                                        { value: "7d", label: "Last 7 days" },
+                                        { value: "30d", label: "Last 30 days" },
+                                        { value: "90d", label: "Last 90 days" },
+                                    ]}
+                                />
+                                {hasActiveFilter ? (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8"
+                                        onClick={() => {
+                                            setAuthorFilter("all");
+                                            setBranchFilter("all");
+                                            setKindFilter("all");
+                                            setRefKindFilter("all");
+                                            setDateFilter("all");
+                                            setLocalSearch("");
+                                        }}
+                                    >
+                                        Clear filters
+                                    </Button>
+                                ) : null}
+                            </div>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Tooltip content="Go to HEAD">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={jumpToHead} aria-label="Go to HEAD">
+                            <Icon icon={RiCrosshair2Line} size={ICON_SIZE_SM} />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip content="Fetch">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={async () => {
+                                if (!gitRepo) return;
+                                startLoading();
+                                try {
+                                    await commands.gitFetch(gitRepo);
+                                    notify.info("Git", "Fetched from all remotes.");
+                                    await refresh({ track: false });
+                                } catch (e) {
+                                    notify.error("Git Error", String(e));
+                                } finally {
+                                    stopLoading();
+                                }
+                            }}
+                            aria-label="Fetch"
+                        >
+                            <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip content="Pull">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={async () => {
+                                if (!gitRepo) return;
+                                startLoading();
+                                try {
+                                    await commands.gitPull(gitRepo);
+                                    notify.info("Git", "Pulled successfully.");
+                                    await refresh({ track: false });
+                                } catch (e) {
+                                    notify.error("Git Error", String(e));
+                                } finally {
+                                    stopLoading();
+                                }
+                            }}
+                            aria-label="Pull"
+                        >
+                            <Icon icon={RiCloudOffLine} size={ICON_SIZE_SM} />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip content="Push">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={async () => {
+                                if (!gitRepo) return;
+                                startLoading();
+                                try {
+                                    await commands.gitPush(gitRepo);
+                                    notify.info("Git", "Pushed successfully.");
+                                    await refresh({ track: false });
+                                } catch (e) {
+                                    notify.error("Git Error", String(e));
+                                } finally {
+                                    stopLoading();
+                                }
+                            }}
+                            aria-label="Push"
+                        >
+                            <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
+                        </Button>
+                    </Tooltip>
+                    {expandedCommits.size > 0 ? (
+                        <Tooltip content="Collapse all">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => setExpandedCommits(new Set())}
+                                aria-label="Collapse all"
+                            >
+                                <Icon icon={RiFullscreenExitLine} size={ICON_SIZE_SM} />
+                            </Button>
+                        </Tooltip>
+                    ) : null}
+                </GitChromeActions>
+            ) : (
             <SidebarPanelHeaderFrame
                 title="Git Graph"
                 className={rich ? "bg-editor" : undefined}
@@ -889,134 +892,7 @@ export default function Graph({
                     </>
                 }
             />
-
-            {rich ? (
-                <div className="relative z-20 shrink-0 px-3 pb-2 pt-1 space-y-2">
-                    <CommitActivitySparkline
-                        buckets={activityBuckets.buckets}
-                        firstTs={activityBuckets.firstTs}
-                        lastTs={activityBuckets.lastTs}
-                        onJump={jumpToActivityBucket}
-                    />
-                    {activityBuckets.total > 0 ? (
-                        <div className="flex justify-between px-0.5 text-[10px] text-text-muted tabular-nums">
-                            <span>
-                                {activityBuckets.firstTs
-                                    ? new Date(activityBuckets.firstTs * 1000).toLocaleDateString(undefined, {
-                                        month: "short",
-                                        year: "numeric",
-                                    })
-                                    : ""}
-                            </span>
-                            <span>{activityBuckets.total.toLocaleString()} commits</span>
-                            <span>
-                                {activityBuckets.lastTs
-                                    ? new Date(activityBuckets.lastTs * 1000).toLocaleDateString(undefined, {
-                                        month: "short",
-                                        year: "numeric",
-                                    })
-                                    : ""}
-                            </span>
-                        </div>
-                    ) : null}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div
-                            data-graph-search
-                            className="flex h-8 min-w-[160px] flex-1 items-center gap-2 rounded-lg border border-border bg-transparent px-2.5"
-                        >
-                            <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
-                            <Input
-                                value={localSearch}
-                                onChange={(e) => setLocalSearch(e.target.value)}
-                                placeholder="Search commits…"
-                                className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                            />
-                        </div>
-                        <FilterMenu
-                            label="All authors"
-                            value={authorFilter}
-                            onChange={setAuthorFilter}
-                            options={[
-                                { value: "all", label: "All authors" },
-                                ...authors.map((a) => ({ value: a, label: a })),
-                            ]}
-                        />
-                        <FilterMenu
-                            label="All branches / tags"
-                            value={branchFilter}
-                            onChange={setBranchFilter}
-                            options={[
-                                { value: "all", label: "All branches / tags" },
-                                ...branchHints.map((b) => ({ value: b, label: b })),
-                            ]}
-                        />
-                        <FilterMenu
-                            label="All commits"
-                            value={kindFilter}
-                            onChange={(v) => setKindFilter(v as typeof kindFilter)}
-                            options={[
-                                { value: "all", label: "All commits" },
-                                { value: "merges", label: "Merges only" },
-                                { value: "non-merges", label: "No merges" },
-                            ]}
-                        />
-                        <FilterMenu
-                            label="All refs"
-                            value={refKindFilter}
-                            onChange={(v) => setRefKindFilter(v as typeof refKindFilter)}
-                            options={[
-                                { value: "all", label: "All refs" },
-                                { value: "branches", label: "Local branches" },
-                                { value: "remotes", label: "Remotes" },
-                                { value: "tags", label: "Tags" },
-                            ]}
-                        />
-                        <FilterMenu
-                            label="Any time"
-                            value={dateFilter}
-                            onChange={(v) => setDateFilter(v as typeof dateFilter)}
-                            options={[
-                                { value: "all", label: "Any time" },
-                                { value: "7d", label: "Last 7 days" },
-                                { value: "30d", label: "Last 30 days" },
-                                { value: "90d", label: "Last 90 days" },
-                            ]}
-                        />
-                        {expandedCommits.size > 0 ? (
-                            <Tooltip content="Collapse all">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-lg border border-border bg-transparent text-text-secondary hover:bg-panel-hover hover:text-text-primary"
-                                    onClick={() => setExpandedCommits(new Set())}
-                                >
-                                    <Icon icon={RiFullscreenExitLine} />
-                                </Button>
-                            </Tooltip>
-                        ) : null}
-                        {hasActiveFilter && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 gap-1 rounded-lg border border-border bg-transparent px-2.5 text-sm font-regular text-text-secondary hover:bg-panel-hover hover:text-text-primary"
-                                onClick={() => {
-                                    setAuthorFilter("all");
-                                    setBranchFilter("all");
-                                    setKindFilter("all");
-                                    setRefKindFilter("all");
-                                    setDateFilter("all");
-                                    setLocalSearch("");
-                                }}
-                            >
-                                Clear
-                            </Button>
-                        )}
-                    </div>
-                    <div className="h-px bg-border-subtle/70" />
-                </div>
-            ) : null}
+            )}
 
             <div
                 className="shrink-0 pointer-events-none relative z-10 transition-opacity duration-200"
@@ -1062,32 +938,50 @@ export default function Graph({
                         },
                         {
                             id: "graph-detail",
-                            // Always mounted so opening a commit doesn't shrink lanes / shift SVG.
-                            preferredSize: 420,
-                            minSize: 300,
-                            maxSize: 720,
-                            visible: true,
+                            preferredSize: 360,
+                            minSize: 260,
+                            maxSize: 560,
+                            snap: true,
+                            visible: Boolean(detail),
                             children: (
-                                <GitOverlayEnter
-                                    key={
+                                <GraphDetailPanel
+                                    selection={
                                         detail
-                                            ? `${detail.kind}-${detail.log.hash}${detail.kind === "file" ? `-${detail.file.path}` : ""}`
-                                            : "empty"
+                                            ? { kind: "commit", log: detail.log }
+                                            : null
                                     }
-                                >
-                                    <GraphDetailPanel
-                                        selection={detail}
-                                        repoPath={gitRepo}
-                                        active={active}
-                                        onClose={() => setDetail(null)}
-                                        onClearFile={() => {
-                                            if (detail?.log) setDetail({ kind: "commit", log: detail.log });
-                                        }}
-                                        onOpenFile={(file) => {
-                                            if (detail?.log) setDetail({ kind: "file", log: detail.log, file });
-                                        }}
-                                    />
-                                </GitOverlayEnter>
+                                    repoPath={gitRepo}
+                                    active={active}
+                                    forceCommit
+                                    onClose={() => {
+                                        setDetail(null);
+                                        setSelectedHash(null);
+                                    }}
+                                    onOpenFile={(file) => {
+                                        if (detail?.log) setDetail({ kind: "file", log: detail.log, file });
+                                    }}
+                                />
+                            ),
+                        },
+                        {
+                            id: "graph-diff",
+                            preferredSize: 480,
+                            minSize: 280,
+                            maxSize: 900,
+                            snap: true,
+                            visible: detail?.kind === "file",
+                            children: (
+                                <GraphDetailPanel
+                                    selection={detail?.kind === "file" ? detail : null}
+                                    repoPath={gitRepo}
+                                    active={active && detail?.kind === "file"}
+                                    onClose={() => {
+                                        if (detail?.log) setDetail({ kind: "commit", log: detail.log });
+                                    }}
+                                    onClearFile={() => {
+                                        if (detail?.log) setDetail({ kind: "commit", log: detail.log });
+                                    }}
+                                />
                             ),
                         },
                     ]}

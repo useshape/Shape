@@ -111,13 +111,18 @@ pub async fn apply_file_edit(
     logging::info("edit", &format!("Manual apply_file_edit: path={}", path));
     let proj_path = state.0.lock()?.project_path.clone().unwrap_or_default();
     let abs_path = if std::path::Path::new(&path).is_absolute() {
-        path
+        path.clone()
     } else {
         std::path::Path::new(&proj_path)
             .join(&path)
             .to_string_lossy()
             .into_owned()
     };
+    if !proj_path.is_empty() {
+        crate::agent::security::paths::resolve_safe_path(&path, &proj_path)?;
+    } else {
+        crate::agent::security::paths::assert_ipc_path_allowed(&abs_path)?;
+    }
 
     // For manual edits from the UI we use a deterministic full-overwrite path: if the
     // caller provided an `original` block we honour it (search-and-replace), otherwise

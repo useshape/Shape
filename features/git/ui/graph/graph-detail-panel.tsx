@@ -10,8 +10,6 @@ import { commands, type GitFileParams, type GitLogEntry } from "@/lib/backend";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { renderCommitMessage, getRelativeTime } from "./utils";
 import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
-import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
-import { getShapeAccessToken } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -67,6 +65,7 @@ export function GraphDetailPanel({
     selection,
     repoPath,
     active = true,
+    forceCommit = false,
     onClose,
     onClearFile,
     onOpenFile,
@@ -75,12 +74,14 @@ export function GraphDetailPanel({
     repoPath: string | null;
     /** Unmount Monaco while the graph pane is keep-alive-hidden. */
     active?: boolean;
+    /** File list only — diff opens in a sibling panel. */
+    forceCommit?: boolean;
     onClose: () => void;
     onClearFile?: () => void;
     onOpenFile?: (file: GitFileParams) => void;
 }) {
     const log = selection?.log ?? null;
-    const file = selection?.kind === "file" ? selection.file : null;
+    const file = !forceCommit && selection?.kind === "file" ? selection.file : null;
 
     const [original, setOriginal] = useState("");
     const [modified, setModified] = useState("");
@@ -88,13 +89,6 @@ export function GraphDetailPanel({
     const [sideBySide, setSideBySide] = useState(false);
     const [commitFiles, setCommitFiles] = useState<GitFileParams[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
-    const [aiExplain, setAiExplain] = useState<string | null>(null);
-    const [aiLoading, setAiLoading] = useState(false);
-
-    useEffect(() => {
-        setAiExplain(null);
-        setAiLoading(false);
-    }, [log?.hash]);
 
     useEffect(() => {
         if (!log || !repoPath || file) {
@@ -214,43 +208,6 @@ export function GraphDetailPanel({
                             {log.hash.slice(0, 7)}
                         </span>
                         <span className="shrink-0 text-xs text-text-muted">{getRelativeTime(log.date)}</span>
-                        <GitAiAction
-                            compact
-                            label="Explain"
-                            title="Commit explanation"
-                            content={aiExplain}
-                            loading={aiLoading}
-                            disabled={!repoPath}
-                            onRun={async () => {
-                                if (!repoPath) return;
-                                const token = getShapeAccessToken();
-                                if (!token) {
-                                    notify.error("AI Error", "Sign in to Shape to explain commits.");
-                                    return;
-                                }
-                                setAiLoading(true);
-                                try {
-                                    const text = await commands.explainGitChanges("commit", {
-                                        hash: log.hash,
-                                        repoPath,
-                                        accessToken: token,
-                                    });
-                                    setAiExplain(text.trim());
-                                    void import("@/lib/cloud/store")
-                                        .then(({ refreshShapeAuth }) => {
-                                            void refreshShapeAuth();
-                                        })
-                                        .catch(() => undefined);
-                                } catch (err) {
-                                    notify.error(
-                                        "AI Error",
-                                        err instanceof Error ? err.message : String(err),
-                                    );
-                                } finally {
-                                    setAiLoading(false);
-                                }
-                            }}
-                        />
                     </>
                 )}
                 <Button

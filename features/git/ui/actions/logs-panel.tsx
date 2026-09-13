@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
-import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
 import { getShapeAccessToken } from "@/lib/cloud/store";
@@ -37,10 +36,12 @@ export function LogsPanel({
 }) {
     const [aiText, setAiText] = useState<string | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
+    const autoKey = useRef<string | null>(null);
 
     useEffect(() => {
         setAiText(null);
         setAiLoading(false);
+        autoKey.current = null;
     }, [selectedRunId, selectedJob?.id, highlight, stepFilterActive]);
 
     const jobIncomplete =
@@ -64,36 +65,59 @@ export function LogsPanel({
         !logs.startsWith("Loading") &&
         !jobIncomplete;
 
-    const handleExplain = async () => {
-        if (!canExplain) return;
+    const jobFailed = selectedJob?.conclusion === "failure";
+
+    useEffect(() => {
+        if (!jobFailed || !canExplain) return;
+        const key = `${selectedRunId}:${selectedJob?.id}:${highlight ?? ""}:${stepFilterActive ? 1 : 0}`;
+        if (autoKey.current === key) return;
         const token = getShapeAccessToken();
-        if (!token) {
-            notify.error("AI Error", "Sign in to Shape to explain CI logs.");
-            return;
-        }
+        if (!token) return;
+        autoKey.current = key;
+        let cancelled = false;
         setAiLoading(true);
-        try {
-            const parts = [
-                explainContext?.trim(),
-                selectedJob ? `Job: ${selectedJob.name}` : null,
-                selectedJob?.conclusion ? `Conclusion: ${selectedJob.conclusion}` : null,
-                highlight ? `Step focus: ${highlight}` : null,
-                selectedRunId != null ? `Run id: ${selectedRunId}` : null,
-            ].filter(Boolean);
-            const text = await commands.explainCiLog(logs, parts.join("\n") || null, token);
-            setAiText(text.trim());
-            void import("@/lib/cloud/store")
-                .then(({ refreshShapeAuth }) => {
-                    void refreshShapeAuth();
-                })
-                .catch(() => undefined);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            notify.error("AI Error", msg);
-        } finally {
-            setAiLoading(false);
-        }
-    };
+        void (async () => {
+            try {
+                const parts = [
+                    explainContext?.trim(),
+                    selectedJob ? `Job: ${selectedJob.name}` : null,
+                    selectedJob?.conclusion ? `Conclusion: ${selectedJob.conclusion}` : null,
+                    highlight ? `Step focus: ${highlight}` : null,
+                    selectedRunId != null ? `Run id: ${selectedRunId}` : null,
+                ].filter(Boolean);
+                const text = await commands.explainCiLog(
+                    logs,
+                    parts.join("\n") || null,
+                    token,
+                );
+                if (!cancelled) setAiText(text.trim());
+                void import("@/lib/cloud/store")
+                    .then(({ refreshShapeAuth }) => {
+                        void refreshShapeAuth();
+                    })
+                    .catch(() => undefined);
+            } catch (err) {
+                if (!cancelled) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    notify.error("AI Error", msg);
+                }
+            } finally {
+                if (!cancelled) setAiLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        jobFailed,
+        canExplain,
+        logs,
+        selectedJob,
+        selectedRunId,
+        highlight,
+        stepFilterActive,
+        explainContext,
+    ]);
 
     return (
         <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden">
@@ -105,15 +129,6 @@ export function LogsPanel({
                     {stepFilterActive ? " (step only)" : ""}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                    <GitAiAction
-                        compact
-                        label="Explain failure"
-                        title="AI explanation"
-                        content={aiText}
-                        loading={aiLoading}
-                        disabled={!canExplain}
-                        onRun={handleExplain}
-                    />
                     {highlight && onToggleStepFilter ? (
                         <Button
                             variant="ghost"
@@ -145,10 +160,22 @@ export function LogsPanel({
                     </Button>
                 </div>
             </div>
+            {jobFailed && (aiLoading || aiText) ? (
+                <div className="mx-3 mb-2 shrink-0 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-text-primary">
+                    <div className="mb-1 text-2xs font-medium uppercase tracking-wide text-error">
+                        Failure summary
+                    </div>
+                    {aiLoading && !aiText ? (
+                        <p className="text-text-muted">Analyzing log…</p>
+                    ) : (
+                        <p className="whitespace-pre-wrap leading-relaxed">{aiText}</p>
+                    )}
+                </div>
+            ) : null}
             <ScrollArea className="min-h-0 flex-1">
                 <pre
                     ref={logRef}
-                    className="break-all px-3 py-2 font-sans text-sm leading-relaxed whitespace-pre-wrap text-text-secondary"
+                    className="whitespace-pre-wrap break-all px-3 py-2 font-mono text-2xs leading-relaxed text-text-secondary"
                 >
                     {body}
                 </pre>

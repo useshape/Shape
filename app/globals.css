@@ -1196,6 +1196,27 @@ body[data-resizing] .xterm {
   mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
 }
 
+/* Commit / PR title while AI is writing into the field. */
+@keyframes git-generate-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.git-generate-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-accent) 18%, transparent) 45%,
+    transparent 90%
+  );
+  background-size: 200% 100%;
+  animation: git-generate-shimmer 1.1s linear infinite;
+}
+
 /* ── Pixel grid loader (LoadingState) ── */
 @keyframes pixel-on {
   0%,

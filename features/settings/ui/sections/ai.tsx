@@ -303,15 +303,19 @@ export function AiSettingsPanel({
                             { value: "auto", label: "Auto (safe commands)" },
                             { value: "always", label: "Run everything" },
                         ] satisfies Array<{ value: AutoRunModeSetting; label: string }>}
-                        onChange={(v) =>
-                            updateSettingSection("ai", { autoRunMode: v as AutoRunModeSetting })
-                        }
+                        onChange={(v) => {
+                            updateSettingSection("ai", { autoRunMode: v as AutoRunModeSetting });
+                            void commands.updateTurnPolicy({ autoRunMode: v });
+                        }}
                     />
                 </SettingRow>
                 <SettingRow title="Protect destructive git">
                     <SettingSwitch
                         checked={a.protectDestructiveGit}
-                        onChange={(on) => updateSettingSection("ai", { protectDestructiveGit: on })}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { protectDestructiveGit: on });
+                            void commands.updateTurnPolicy({ protectDestructiveGit: on });
+                        }}
                     />
                 </SettingRow>
             </SettingSection>
@@ -320,7 +324,10 @@ export function AiSettingsPanel({
                 <SettingRow title="Require edit approval">
                     <SettingSwitch
                         checked={a.requireEditApproval}
-                        onChange={(on) => updateSettingSection("ai", { requireEditApproval: on })}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { requireEditApproval: on });
+                            void commands.updateTurnPolicy({ requireEditApproval: on });
+                        }}
                     />
                 </SettingRow>
                 <SettingRow title="Auto-apply agent edits">
@@ -366,6 +373,18 @@ export function AiSettingsPanel({
                         onChange={(on) => {
                             updateSettingSection("ai", { indexEmbeddings: on });
                             void commands.setIndexEmbeddings(on).catch(() => { /* ignore */ });
+                        }}
+                    />
+                </SettingRow>
+                <SettingRow
+                    title="Chat memory"
+                    description="Let the agent fetch past chats in this project only when needed (tools, not every prompt)."
+                >
+                    <SettingSwitch
+                        checked={a.chatMemoryEnabled}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { chatMemoryEnabled: on });
+                            void commands.setChatMemoryEnabled(on).catch(() => { /* ignore */ });
                         }}
                     />
                 </SettingRow>

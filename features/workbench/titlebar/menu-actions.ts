@@ -215,7 +215,12 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "changes" }));
                 break;
             case "Git Manager":
-                void import("@/lib/window/open-git-window").then(({ openGitWindow }) => openGitWindow());
+                window.dispatchEvent(
+                    new CustomEvent("shape-layout-toggle", {
+                        detail: { id: "secondary-sidebar", value: true },
+                    }),
+                );
+                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "graph" }));
                 break;
             case "Open View...":
             case "Go to File...":

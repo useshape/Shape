@@ -6,7 +6,6 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
-import { openGitWindow } from "@/lib/window/open-git-window";
 import { ChatList } from "./chats";
 import { AccountRow } from "./account";
 import { Button } from "@/components/ui/button";
@@ -139,11 +138,6 @@ export function AgentSidebar({
     const items = [
         { label: "New Chat", icon: RiAddLine, onClick: onNewChat },
         { label: "Search", icon: RiSearchLine, onClick: onSearch },
-        {
-            label: "GitHub",
-            icon: RiGithubFill,
-            onClick: () => void openGitWindow(),
-        },
         ...(showDesign && onDesign
             ? [{ label: "Design", icon: RiQuillPenAiFill, onClick: onDesign }]
             : []),

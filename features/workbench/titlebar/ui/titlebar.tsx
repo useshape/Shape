@@ -14,7 +14,7 @@ import { useEditorBuffer } from "../hooks/use-editor-buffer";
 import { TitlebarMenubar } from "../ui/app-menu";
 import { WindowControls } from "../ui/window-controls";
 import { TitlebarUpdateButton } from "../ui/update-button";
-import { TitlebarSearch } from "@/features/git/ui/manager/titlebar-search";
+import { GIT_WINDOW_TITLE_SLOT } from "@/features/git/ui/manager/chrome";
 
 // logo.svg is 46x56 — width must scale with height to avoid Next Image's
 // aspect-ratio warning (and the visual squish into a square icon).
@@ -96,7 +96,12 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
                                 className="logo-invert rounded-sm"
                             />
                         </div>
-                        {title ? (
+                        {title === "Git" ? (
+                            <div
+                                id={GIT_WINDOW_TITLE_SLOT}
+                                className="flex min-w-0 items-center pr-2"
+                            />
+                        ) : title ? (
                             <span className="pr-2 text-sm font-normal text-text-primary">{title}</span>
                         ) : null}
                     </div>
@@ -119,7 +124,6 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
             <div className="pointer-events-none min-w-0 flex-1" aria-hidden />
 
             <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1" data-no-drag>
-                {settings && title === "Git" ? <TitlebarSearch /> : null}
                 {!isCompact && !isFocus ? <TitlebarUpdateButton /> : null}
                 <WindowControls
                     isMaximized={isMaximized}

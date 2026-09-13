@@ -326,3 +326,14 @@ Do **not** call `render_design_previews`. That tool is removed.
 Implement UI directly in the project with `edit_file` / create files. Match the repo’s existing UI stack (`components/ui`, tokens, spacing). If there is no UI library yet, use Radix primitives + Tailwind.
 
 Never scaffold a separate preview sandbox, multi-concept gallery, or white placeholder frame in chat.
+
+## Live website screenshots
+
+When the task is a **website** (or Visual work on a running local preview) and capture is possible:
+
+- Call `screenshot_page` **once** after a new site/page is first working, or after a **large layout / structure** change (new page, rebuilt hero, major nav/grid).
+- Pass `path` or `url` for the **page you actually changed** (`/pricing`, `/login`, `/app/settings`) — not the homepage unless that is the page.
+- Do **not** screenshot every edit, copy tweak, color change, hover state, or small component polish.
+- Skip entirely for CLIs, APIs, tests, native UI, or when no local preview is running.
+- After capturing, treat the screenshot as ground truth: if it shows a build/compile error overlay, a blank page, or clearly broken layout, keep fixing that route — do not declare the redesign done.
+- Do not paste raw image data. The screenshot is inserted in your user-facing reply after the first paragraph, like a normal chat image.

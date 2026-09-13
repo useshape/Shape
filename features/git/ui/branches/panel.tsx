@@ -3,7 +3,8 @@
 import { RiAddLine, RiArrowRightSLine, RiCloseLine, RiCloudLine, RiCloudOffLine, RiGitBranchLine, RiLayoutBottomLine, RiLayoutColumnLine, RiRefreshLine, RiUploadLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
-import { Icon } from "@/components/ui/icon";
+import { GitChromeActions } from "@/features/git/ui/manager/chrome";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShapeLogo } from "@/components/ui/shape-logo";
@@ -22,8 +23,6 @@ import {
 import { Tooltip } from "@/components/ui/tooltip";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
-import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
-import { getShapeAccessToken } from "@/lib/cloud/store";
 import { useGitRepos } from "@/lib/git/repos";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { QuickPick } from "@/components/ui/quick-pick";
@@ -240,8 +239,6 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
     const [compareModified, setCompareModified] = useState("");
     const [sideBySide, setSideBySide] = useState(false);
     const [compareDiffLoading, setCompareDiffLoading] = useState(false);
-    const [branchExplain, setBranchExplain] = useState<string | null>(null);
-    const [branchExplainLoading, setBranchExplainLoading] = useState(false);
 
     const [renameTarget, setRenameTarget] = useState<string | null>(null);
     const [renameQuery, setRenameQuery] = useState("");
@@ -474,37 +471,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
         setCompareModified("");
         setCompareLoading(false);
         setCompareDiffLoading(false);
-        setBranchExplain(null);
-        setBranchExplainLoading(false);
     }, []);
-
-    const handleExplainBranch = async (branch: string) => {
-        if (!project_path || !currentBranch) return;
-        const token = getShapeAccessToken();
-        if (!token) {
-            notify.error("AI Error", "Sign in to Shape to explain branch diffs.");
-            return;
-        }
-        setBranchExplainLoading(true);
-        try {
-            const text = await commands.explainGitChanges("branch", {
-                base: currentBranch,
-                compare: branch,
-                repoPath: project_path,
-                accessToken: token,
-            });
-            setBranchExplain(text.trim());
-            void import("@/lib/cloud/store")
-                .then(({ refreshShapeAuth }) => {
-                    void refreshShapeAuth();
-                })
-                .catch(() => undefined);
-        } catch (err) {
-            notify.error("AI Error", err instanceof Error ? err.message : String(err));
-        } finally {
-            setBranchExplainLoading(false);
-        }
-    };
 
     const handleCompare = async (branch: string) => {
         if (!project_path || !currentBranch) return;
@@ -586,31 +553,30 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
 
     const listPane = (
         <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <div className="flex h-9 shrink-0 items-center gap-1 px-2">
-                <FadeTruncate className="min-w-0 flex-1 px-1 text-sm font-medium" title="Branches">
-                    Branches
-                </FadeTruncate>
+            {active ? (
+            <GitChromeActions>
                 <Tooltip content="Fetch">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitFetch(project_path).then(refresh)} disabled={loading}>
-                        <Icon icon={RiRefreshLine} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitFetch(project_path).then(refresh)} disabled={loading} aria-label="Fetch">
+                        <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Pull">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPull(project_path).then(refresh)} disabled={loading}>
-                        <Icon icon={RiCloudOffLine} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPull(project_path).then(refresh)} disabled={loading} aria-label="Pull">
+                        <Icon icon={RiCloudOffLine} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Push">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPush(project_path)} disabled={loading}>
-                        <Icon icon={RiUploadLine} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPush(project_path)} disabled={loading} aria-label="Push">
+                        <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Refresh">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={loading}>
-                        <Icon icon={RiRefreshLine} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={loading} aria-label="Refresh">
+                        <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
-            </div>
+            </GitChromeActions>
+            ) : null}
 
             <div className="shrink-0 px-2.5 py-2">
                 <div className="flex items-center gap-2">
@@ -832,18 +798,6 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                         >
                             Compare
                         </Button>
-                        <GitAiAction
-                            label="Explain"
-                            title={`vs ${currentBranch}`}
-                            content={branchExplain}
-                            loading={branchExplainLoading}
-                            disabled={
-                                !currentBranch
-                                || selectedItem.name === currentBranch
-                                || selectedItem.name.split("/").slice(-1)[0] === currentBranch
-                            }
-                            onRun={() => handleExplainBranch(selectedItem.name)}
-                        />
                         <Button
                             size="sm"
                             variant="outline"
@@ -1003,7 +957,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                 panes={[
                     {
                         id: "branches-list",
-                        preferredSize: 280,
+                        flexible: true,
                         minSize: 200,
                         maxSize: 420,
                         snap: true,
@@ -1011,8 +965,10 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                     },
                     {
                         id: "branches-detail",
-                        flexible: true,
+                        preferredSize: 420,
                         minSize: 280,
+                        snap: true,
+                        visible: Boolean(selectedItem),
                         children: detailPane,
                     },
                 ]}

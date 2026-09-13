@@ -184,6 +184,87 @@ pub async fn capture_html_preview(
     capture_html_preview_inner(&app, req).await
 }
 
+#[tauri::command]
+pub fn remember_preview_url_cmd(url: String) {
+    crate::agent::tools::page_shot::remember_preview_url(&url);
+}
+
+#[tauri::command]
+pub async fn capture_page_preview(
+    app: AppHandle,
+    url: String,
+    width: Option<u32>,
+    height: Option<u32>,
+) -> Result<CapturedPreview, AppError> {
+    crate::agent::tools::page_shot::remember_preview_url(&url);
+    let width = width.unwrap_or(1280).min(MAX_WIDTH).max(320);
+    let height = height.unwrap_or(720).min(MAX_HEIGHT).max(240);
+    let started = Instant::now();
+    let request_id = uuid::Uuid::new_v4().to_string();
+    let preview_id = uuid::Uuid::new_v4().to_string();
+
+    let preview_dir = std::env::temp_dir().join("shape-design-previews");
+    tokio::fs::create_dir_all(&preview_dir)
+        .await
+        .map_err(|e| AppError::Env(format!("Failed to create preview dir: {e}")))?;
+    let png_path = preview_dir.join(format!("{preview_id}.jpg"));
+
+    logging::debug(
+        "page_preview",
+        &format!(
+            "Capture page {url} {width}x{height} → {}",
+            png_path.to_string_lossy()
+        ),
+    );
+
+    let state = app.state::<PreviewCaptureState>();
+    let (tx, rx) = oneshot::channel();
+    state
+        .pending
+        .lock()
+        .map_err(|e| AppError::Env(format!("Preview capture lock poisoned: {e}")))?
+        .insert(request_id.clone(), tx);
+
+    let emit_result = app.emit(
+        "design-preview-capture",
+        serde_json::json!({
+            "requestId": request_id,
+            "url": url,
+            "width": width,
+            "height": height,
+            "pngPath": png_path.to_string_lossy(),
+        }),
+    );
+    if let Err(e) = emit_result {
+        let _ = state.pending.lock().map(|mut g| g.remove(&request_id));
+        return Err(AppError::Env(format!("Failed to emit page capture request: {e}")));
+    }
+
+    let timeout_ms = CAPTURE_TIMEOUT_MS + 8_000;
+    let capture_result = match tokio::time::timeout(Duration::from_millis(timeout_ms), rx).await {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(msg))) => Err(AppError::Env(msg)),
+        Ok(Err(_)) => Err(AppError::Env(
+            "Page capture channel closed before result".to_string(),
+        )),
+        Err(_) => Err(AppError::Env(format!(
+            "Page capture timed out after {timeout_ms}ms"
+        ))),
+    };
+
+    if capture_result.is_err() {
+        let _ = state.pending.lock().map(|mut g| g.remove(&request_id));
+    }
+    capture_result?;
+
+    Ok(CapturedPreview {
+        png_path: png_path.to_string_lossy().into_owned(),
+        width,
+        height,
+        render_ms: started.elapsed().as_millis() as u64,
+    })
+}
+
 pub async fn capture_html_preview_inner(
     app: &AppHandle,
     req: CaptureHtmlPreviewRequest,

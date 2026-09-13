@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
@@ -202,6 +203,11 @@ pub struct AgentState {
     /// history index of the user turn that produced them. Restoring a checkpoint
     /// replays these (most recent first) back onto disk.
     pub file_checkpoints: Mutex<Vec<TurnCheckpoint>>,
+    /// When true, `list_chats` / `read_chat` tools are offered to the model.
+    pub chat_memory_enabled: AtomicBool,
+    /// Optional user OpenRouter / OpenAI keys (BYOK). When set, chat skips the Shape proxy.
+    pub byok_openrouter_key: Mutex<Option<String>>,
+    pub byok_openai_key: Mutex<Option<String>>,
 }
 
 impl Default for AgentState {
@@ -231,7 +237,49 @@ impl AgentState {
             in_flight_last_save: Mutex::new(0.0),
             design_preview: Mutex::new(DesignPreviewState::default()),
             file_checkpoints: Mutex::new(Vec::new()),
+            chat_memory_enabled: AtomicBool::new(false),
+            byok_openrouter_key: Mutex::new(None),
+            byok_openai_key: Mutex::new(None),
         }
+    }
+
+    pub fn chat_memory_enabled(&self) -> bool {
+        self.chat_memory_enabled.load(Ordering::SeqCst)
+    }
+
+    pub fn set_chat_memory_enabled(&self, enabled: bool) {
+        self.chat_memory_enabled.store(enabled, Ordering::SeqCst);
+    }
+
+    pub fn set_byok_keys(&self, openrouter: Option<String>, openai: Option<String>) {
+        let clean = |v: Option<String>| {
+            v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+        };
+        if let Ok(mut g) = self.byok_openrouter_key.lock() {
+            *g = clean(openrouter);
+        }
+        if let Ok(mut g) = self.byok_openai_key.lock() {
+            *g = clean(openai);
+        }
+    }
+
+    /// Prefer OpenRouter key, then OpenAI. `None` → use Shape proxy + session token.
+    pub fn byok_provider(&self) -> Option<crate::agent::commands::streaming::LlmProvider> {
+        if let Ok(g) = self.byok_openrouter_key.lock() {
+            if let Some(key) = g.as_ref().filter(|k| !k.is_empty()) {
+                return Some(crate::agent::commands::streaming::LlmProvider::OpenRouter {
+                    api_key: key.clone(),
+                });
+            }
+        }
+        if let Ok(g) = self.byok_openai_key.lock() {
+            if let Some(key) = g.as_ref().filter(|k| !k.is_empty()) {
+                return Some(crate::agent::commands::streaming::LlmProvider::OpenAi {
+                    api_key: key.clone(),
+                });
+            }
+        }
+        None
     }
 
     /// Atomically claim the in-flight slot. Returns false if a turn is already running.
@@ -702,5 +750,37 @@ impl AgentState {
             .lock()
             .ok()
             .and_then(|g| g.sandbox_session_id.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_run_mode_from_setting_aliases() {
+        assert_eq!(AutoRunMode::from_setting(Some("ask")), AutoRunMode::Ask);
+        assert_eq!(
+            AutoRunMode::from_setting(Some("ask_every_time")),
+            AutoRunMode::Ask
+        );
+        assert_eq!(AutoRunMode::from_setting(Some("always")), AutoRunMode::Always);
+        assert_eq!(
+            AutoRunMode::from_setting(Some("run_everything")),
+            AutoRunMode::Always
+        );
+        assert_eq!(AutoRunMode::from_setting(Some("auto")), AutoRunMode::Auto);
+        assert_eq!(AutoRunMode::from_setting(None), AutoRunMode::Auto);
+    }
+
+    #[test]
+    fn turn_policy_can_flip_mid_turn_fields() {
+        let mut policy = TurnPolicy::default();
+        policy.auto_run_mode = AutoRunMode::from_setting(Some("ask"));
+        policy.require_edit_approval = true;
+        policy.protect_destructive_git = false;
+        assert_eq!(policy.auto_run_mode, AutoRunMode::Ask);
+        assert!(policy.require_edit_approval);
+        assert!(!policy.protect_destructive_git);
     }
 }

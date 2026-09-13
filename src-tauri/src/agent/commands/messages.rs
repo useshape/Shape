@@ -11,15 +11,29 @@ use super::super::models::ChatMessage;
 pub fn build_messages_json(system_prompt: &str, history: &[ChatMessage], model: &str) -> Vec<Value> {
     let image_re = Regex::new(r#"(?s)<attached_image[^>]*>(data:[^<]+)</attached_image>"#).unwrap();
     let is_anthropic = model.starts_with("anthropic/");
+    let accepts_images = crate::agent::model_router::model_accepts_images(model);
 
     logging::debug("messages", &format!(
-        "Building messages: {} history items, model={}, is_anthropic={}",
-        history.len(), model, is_anthropic
+        "Building messages: {} history items, model={}, is_anthropic={}, accepts_images={}",
+        history.len(), model, is_anthropic, accepts_images
     ));
 
     let mut msgs = vec![json!({"role": "system", "content": system_prompt})];
     for msg in history {
         if msg.content.trim().is_empty() {
+            continue;
+        }
+
+        if msg.role == "user" && image_re.is_match(&msg.content) && !accepts_images {
+            let stripped = image_re
+                .replace_all(
+                    &msg.content,
+                    "
+[image attachment omitted — this model cannot view images]
+",
+                )
+                .to_string();
+            msgs.push(json!({"role": msg.role, "content": stripped}));
             continue;
         }
 
@@ -84,6 +98,69 @@ pub fn build_messages_json(system_prompt: &str, history: &[ChatMessage], model: 
 
     logging::debug("messages", &format!("Built {} API messages", msgs.len()));
     msgs
+}
+
+fn attached_image_data_urls(tag_or_content: &str) -> Vec<String> {
+    let image_re = Regex::new(r#"(?s)<attached_image[^>]*>(data:[^<]+)</attached_image>"#).unwrap();
+    image_re
+        .captures_iter(tag_or_content)
+        .filter_map(|caps| caps.get(1).map(|m| m.as_str().to_string()))
+        .collect()
+}
+
+pub fn push_page_screenshot_followup(api_messages: &mut Vec<Value>, tag: &str, model: &str) {
+    let accepts = crate::agent::model_router::model_accepts_images(model);
+    let data_urls = attached_image_data_urls(tag);
+    if accepts {
+        if data_urls.is_empty() {
+            api_messages.push(json!({
+                "role": "user",
+                "content": "screenshot_page ran but no image data was available. Do not claim the UI looks correct. Check the preview for Build Error overlays, blank pages, or broken layout another way (terminal, lints, reading the file).",
+            }));
+            return;
+        }
+        let is_anthropic = model.starts_with("anthropic/");
+        let mut parts: Vec<Value> = vec![json!({
+            "type": "text",
+            "text": "screenshot_page captured this page. Look at the image(s) below before claiming success. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+        })];
+        for data_url in data_urls {
+            if is_anthropic {
+                if let Some(comma_pos) = data_url.find(',') {
+                    let prefix = &data_url[..comma_pos];
+                    let data = &data_url[comma_pos + 1..];
+                    let media_type = if prefix.contains("image/png") {
+                        "image/png"
+                    } else if prefix.contains("image/gif") {
+                        "image/gif"
+                    } else if prefix.contains("image/webp") {
+                        "image/webp"
+                    } else {
+                        "image/jpeg"
+                    };
+                    parts.push(json!({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": data
+                        }
+                    }));
+                    continue;
+                }
+            }
+            parts.push(json!({
+                "type": "image_url",
+                "image_url": { "url": data_url }
+            }));
+        }
+        api_messages.push(json!({ "role": "user", "content": parts }));
+    } else {
+        api_messages.push(json!({
+            "role": "user",
+            "content": "screenshot_page captured a page for the user UI, but this model cannot see image pixels. Do not claim the UI looks correct from the screenshot. Verify via terminal output, Build Error text, lints, or reading the broken file instead.",
+        }));
+    }
 }
 
 const CLEARED_TOOL_RESULT: &str = "[cleared to save context — re-call the tool only if you still need this]";
@@ -366,6 +443,7 @@ fn now_f64() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::model_router::{MODEL_FAST, MODEL_FAST_VISION};
 
     #[test]
     fn trim_middle_history_preserves_recent_turns() {
@@ -390,5 +468,90 @@ mod tests {
         let out = truncate_with_ellipsis(&text, 40);
         assert!(out.contains("chars omitted"));
         assert!(out.starts_with("line0"));
+    }
+
+    fn msg(role: &str, content: &str) -> ChatMessage {
+        ChatMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+            timestamp: 0.0,
+            stats: None,
+            model: None,
+        }
+    }
+
+    #[test]
+    fn build_messages_strips_images_for_text_only_model() {
+        let history = vec![msg(
+            "user",
+            "look <attached_image name=\"a.png\">data:image/png;base64,aaa</attached_image>",
+        )];
+        let out = build_messages_json("sys", &history, MODEL_FAST);
+        assert_eq!(out.len(), 2);
+        let content = out[1].get("content").and_then(|c| c.as_str()).unwrap();
+        assert!(content.contains("cannot view images") || content.contains("omitted"));
+        assert!(!content.contains("data:image"));
+        let serialized = serde_json::to_string(&out).unwrap();
+        assert!(!serialized.contains("image_url"));
+    }
+
+    #[test]
+    fn build_messages_emits_image_url_for_vision_model() {
+        let history = vec![msg(
+            "user",
+            "look <attached_image name=\"a.png\">data:image/png;base64,aaa</attached_image>",
+        )];
+        let out = build_messages_json("sys", &history, MODEL_FAST_VISION);
+        let content = out[1].get("content").unwrap();
+        assert!(content.is_array());
+        let parts = content.as_array().unwrap();
+        assert!(parts
+            .iter()
+            .any(|p| p.get("type").and_then(|t| t.as_str()) == Some("image_url")));
+        assert!(parts.iter().any(|p| {
+            p.pointer("/image_url/url")
+                .and_then(|u| u.as_str())
+                .is_some_and(|u| u.starts_with("data:image/png"))
+        }));
+    }
+
+    #[test]
+    fn build_messages_ignores_assistant_image_tags_as_multipart() {
+        let history = vec![msg(
+            "assistant",
+            "done <attached_image name=\"a.png\">data:image/png;base64,aaa</attached_image>",
+        )];
+        let out = build_messages_json("sys", &history, MODEL_FAST_VISION);
+        let content = out[1].get("content").and_then(|c| c.as_str()).unwrap();
+        assert!(content.contains("<attached_image"));
+        let serialized = serde_json::to_string(&out).unwrap();
+        assert!(!serialized.contains("\"type\":\"image_url\""));
+    }
+
+    #[test]
+    fn screenshot_followup_injects_user_image_for_vision() {
+        let mut api = Vec::new();
+        let tag = "<attached_image name=\"page.png\" type=\"image/png\">data:image/png;base64,abc</attached_image>";
+        push_page_screenshot_followup(&mut api, tag, MODEL_FAST_VISION);
+        assert_eq!(api.len(), 1);
+        assert_eq!(api[0]["role"], "user");
+        let parts = api[0]["content"].as_array().unwrap();
+        assert!(parts.iter().any(|p| p["type"] == "image_url"));
+        assert_eq!(
+            parts.iter().find(|p| p["type"] == "image_url").unwrap()["image_url"]["url"],
+            "data:image/png;base64,abc"
+        );
+    }
+
+    #[test]
+    fn screenshot_followup_text_only_when_model_rejects_images() {
+        let mut api = Vec::new();
+        let tag = "<attached_image name=\"page.png\" type=\"image/png\">data:image/png;base64,abc</attached_image>";
+        push_page_screenshot_followup(&mut api, tag, MODEL_FAST);
+        assert_eq!(api.len(), 1);
+        assert_eq!(api[0]["role"], "user");
+        let text = api[0]["content"].as_str().unwrap();
+        assert!(text.contains("cannot see image"));
+        assert!(!serde_json::to_string(&api).unwrap().contains("image_url"));
     }
 }

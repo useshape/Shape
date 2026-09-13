@@ -6,6 +6,7 @@ import { commands } from "@/lib/backend";
 import type { ChatMessage } from "@/lib/backend/types";
 import { setChatGenerating } from "./generating-chats";
 import { NEW_CHAT_TAB_ID } from "../ui/shell/tabs";
+import { upsertTaggedBlockInContent } from "./upsert-stream-blocks";
 
 const TOOL_LABELS: Record<string, string> = {
     read_file: "Reading file",
@@ -86,7 +87,7 @@ function appendAssistantChunk(prev: ChatMessage[], chunk: string): ChatMessage[]
         const updated = [...prev];
         updated[updated.length - 1] = {
             ...latest,
-            content: latest.content + chunk,
+            content: upsertTaggedBlockInContent(latest.content, chunk),
         };
         return updated;
     }
@@ -388,8 +389,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 error?: string;
                 conversationId?: string;
                 turnId?: string;
+                content?: string;
             }>("chat_complete", (event) => {
-                const { stats, model, error, conversationId, turnId: completeTurnId } =
+                const { stats, model, error, conversationId, turnId: completeTurnId, content } =
                     event.payload ?? {};
                 if (!error && stats) {
                     void import("@/lib/last-turn-usage").then(({ setLastTurnUsage }) => {
@@ -509,6 +511,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     const updated = [...prev];
                     updated[updated.length - 1] = {
                         ...latest,
+                        content: typeof content === "string" && content.length > 0 ? content : latest.content,
                         stats: stats ?? latest.stats,
                         model: model ?? latest.model,
                     };

@@ -6,7 +6,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 
 type CaptureRequestPayload = {
     requestId: string;
-    htmlPath: string;
+    htmlPath?: string;
+    url?: string;
     width: number;
     height: number;
     pngPath: string;
@@ -55,6 +56,131 @@ async function rasterizeIframe(iframe: HTMLIFrameElement, width: number, height:
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!blob) throw new Error("Failed to encode preview capture as PNG");
     return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function dataUrlToJpegBytes(dataUrl: string, maxWidth: number): Promise<Uint8Array> {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Failed to decode page screenshot"));
+        img.src = dataUrl;
+    });
+    const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context unavailable for page capture");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob) throw new Error("Failed to encode page capture as JPEG");
+    return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function captureLivePage(req: CaptureRequestPayload, container: HTMLDivElement) {
+    const url = req.url!.trim();
+    const iframe = document.createElement("iframe");
+    iframe.width = String(req.width);
+    iframe.height = String(req.height);
+    iframe.style.border = "0";
+    iframe.style.width = `${req.width}px`;
+    iframe.style.height = `${req.height}px`;
+    iframe.setAttribute(
+        "sandbox",
+        "allow-scripts allow-same-origin allow-forms allow-modals allow-popups",
+    );
+
+    let done = false;
+    let asked = false;
+    let onMessage: ((event: MessageEvent) => void) | null = null;
+
+    const report = (result: { pngPath?: string; error?: string }) => {
+        if (done) return;
+        done = true;
+        if (onMessage) window.removeEventListener("message", onMessage);
+        void emit("design-preview-capture-result", {
+            requestId: req.requestId,
+            pngPath: result.pngPath ?? null,
+            error: result.error ?? null,
+        }).catch(() => {});
+        iframe.remove();
+    };
+
+    const timeoutId = setTimeout(() => {
+        report({ error: "Page capture timed out waiting for the preview to render" });
+    }, CAPTURE_READY_TIMEOUT_MS);
+
+    const finish = async (dataUrl: string) => {
+        try {
+            const bytes = await dataUrlToJpegBytes(dataUrl, 960);
+            const { commands } = await import("@/lib/backend");
+            await commands.saveFileBytes(req.pngPath, Array.from(bytes));
+            clearTimeout(timeoutId);
+            report({ pngPath: req.pngPath });
+        } catch (err) {
+            clearTimeout(timeoutId);
+            report({ error: err instanceof Error ? err.message : String(err) });
+        }
+    };
+
+    const ask = () => {
+        if (asked || done) return;
+        asked = true;
+        window.setTimeout(() => {
+            try {
+                iframe.contentWindow?.postMessage(
+                    {
+                        source: "shape-design-host",
+                        type: "shape-preview-screenshot",
+                        req: req.requestId,
+                        maxWidth: req.width,
+                        maxHeight: req.height,
+                    },
+                    "*",
+                );
+            } catch {
+                /* ignore */
+            }
+        }, 2200);
+    };
+
+    onMessage = (event: MessageEvent) => {
+        if (event.source !== iframe.contentWindow) return;
+        const data = event.data;
+        if (!data || typeof data !== "object") return;
+        const type = (data as { type?: string }).type;
+        if (type === "shape-preview-screenshot-result" && (data as { req?: string }).req === req.requestId) {
+            const err = (data as { error?: string }).error;
+            const dataUrl = (data as { dataUrl?: string }).dataUrl;
+            if (err || !dataUrl) {
+                clearTimeout(timeoutId);
+                report({ error: err || "Page sent no screenshot" });
+                return;
+            }
+            void finish(dataUrl);
+            return;
+        }
+        if (type === "shape-design-ready" || type === "shape-preview-ready") {
+            ask();
+        }
+    };
+    window.addEventListener("message", onMessage);
+    iframe.addEventListener("load", () => ask());
+
+    try {
+        const { commands } = await import("@/lib/backend");
+        const { DESIGN_BRIDGE_SCRIPT } = await import("@/features/preview/design/bridge-script");
+        const info = await commands.startDesignProxy(url, DESIGN_BRIDGE_SCRIPT);
+        iframe.src = info.src;
+        container.appendChild(iframe);
+    } catch (err) {
+        clearTimeout(timeoutId);
+        report({ error: err instanceof Error ? err.message : String(err) });
+    }
 }
 
 /**
@@ -113,7 +239,7 @@ export function DesignPreviewCaptureHost() {
 
     React.useEffect(() => {
         const onMessage = (event: MessageEvent) => {
-            if (!event.data || event.data.type !== "shape-preview-ready") return;
+            if (!event.data || (event.data.type !== "shape-preview-ready" && event.data.type !== "shape-design-ready")) return;
             for (const [requestId, entry] of activeRef.current) {
                 if (!entry.settled && entry.iframe.contentWindow === event.source) {
                     void handleReady(requestId);
@@ -127,6 +253,15 @@ export function DesignPreviewCaptureHost() {
             const req = event.payload;
             const container = containerRef.current;
             if (!container || activeRef.current.has(req.requestId)) return;
+
+            if (req.url?.trim()) {
+                void captureLivePage(req, container);
+                return;
+            }
+            if (!req.htmlPath) {
+                settle(req.requestId, { error: "Preview capture missing htmlPath or url" });
+                return;
+            }
 
             const iframe = document.createElement("iframe");
             iframe.src = convertFileSrc(req.htmlPath);

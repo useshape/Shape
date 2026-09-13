@@ -1,25 +1,20 @@
 "use client";
 
-import { RiSearchLine } from "@remixicon/react";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { listen } from "@tauri-apps/api/event";
 import { ShapeLogo } from "@/components/ui/shape-logo";
-import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import type { GitSectionId } from "@/features/git/types";
 import Source from "@/features/git/ui/source/source";
-import Graph from "@/features/git/ui/graph/graph";
 import { BranchWindow } from "@/features/git/ui/branches/panel";
-import { LocalTags } from "@/features/git/ui/tags/panel";
-import { GitHubSection } from "@/features/git/ui/github/section";
-import { ReleasesPage } from "@/features/git/ui/github/releases-page";
-import { ActionsConsole, isActionsSection } from "@/features/git/ui/actions/console";
-import { useFilter, isGitSectionId, persistGitSection, readStoredGitSection } from "./filter-context";
+import { GraphTab } from "@/features/agent/workspace/graph-tab";
+import { useFilter, coerceGitSection, persistGitSection, readStoredGitSection } from "./filter-context";
+import { GitPageChrome } from "./chrome";
 import { useGitRepos } from "@/lib/git/repos";
 import { LoadingBar } from "@/components/ui/loading";
 import { useLoading } from "@/features/loading/context";
@@ -50,46 +45,6 @@ const NAV: NavGroup[] = [
             { id: "source", label: "Source Control", keywords: ["scm", "changes", "commit"] },
             { id: "graph", label: "Git Graph", keywords: ["history", "commits"] },
             { id: "branches", label: "Branches" },
-            { id: "tags", label: "Tags" },
-        ],
-    },
-    {
-        id: "github",
-        label: "GitHub",
-        children: [
-            { id: "issues", label: "Issues" },
-            { id: "pull-requests", label: "Pull requests", keywords: ["pr"] },
-            { id: "releases", label: "Releases" },
-        ],
-    },
-    {
-        id: "actions",
-        label: "Actions",
-        children: [
-            { id: "workflow-runs", label: "Workflow runs", keywords: ["ci", "cd"] },
-            { id: "workflow-definitions", label: "Workflow definitions" },
-            { id: "jobs", label: "Jobs" },
-            { id: "steps", label: "Individual steps" },
-            { id: "live-status", label: "Live status" },
-            { id: "logs", label: "Logs" },
-            { id: "artifacts", label: "Artifacts" },
-        ],
-    },
-    {
-        id: "checks",
-        label: "Checks",
-        children: [
-            { id: "check-runs", label: "Check runs" },
-            { id: "check-suites", label: "Check suites" },
-            { id: "commit-statuses", label: "Commit statuses" },
-        ],
-    },
-    {
-        id: "deploy",
-        label: "Deploy",
-        children: [
-            { id: "deployments", label: "Deployments" },
-            { id: "deployment-statuses", label: "Deployment statuses" },
         ],
     },
 ];
@@ -97,13 +52,15 @@ const NAV: NavGroup[] = [
 const ALL_SECTION_IDS = NAV.flatMap((g) => g.children.map((c) => c.id));
 
 function isSection(value: string | null | undefined): value is GitSectionId {
-    return isGitSectionId(value) && ALL_SECTION_IDS.includes(value);
+    const mapped = coerceGitSection(value);
+    return !!mapped && ALL_SECTION_IDS.includes(mapped);
 }
 
 function initialSection(pathname: string | null, query: string | null): GitSectionId {
-    if (isSection(query)) return query;
+    const fromQuery = coerceGitSection(query);
+    if (fromQuery && ALL_SECTION_IDS.includes(fromQuery)) return fromQuery;
     const stored = readStoredGitSection();
-    if (stored && isSection(stored)) return stored;
+    if (stored && ALL_SECTION_IDS.includes(stored)) return stored;
     if (pathname?.startsWith("/branch")) return "branches";
     return "source";
 }
@@ -319,6 +276,7 @@ function GitManagerGate() {
 function ManagerShell() {
     const search = useSearchParams();
     const pathname = usePathname();
+    const { project_path } = useProjectState();
     const { section, setSection } = useFilter();
     const { resetLoading } = useLoading();
     const { navPortalTarget, sidebarExpanded = true, onClose } = useContext(GitEmbedCtx);
@@ -358,18 +316,21 @@ function ManagerShell() {
     useEffect(() => {
         let unlisten: (() => void) | undefined;
         void listen<{ section?: string }>("shape-git-section", (event) => {
-            if (isSection(event.payload?.section)) {
-                setSection(event.payload.section);
-                setActiveLeafId(event.payload.section);
+            const next = coerceGitSection(event.payload?.section);
+            if (next && ALL_SECTION_IDS.includes(next)) {
+                setSection(next);
+                setActiveLeafId(next);
             }
         }).then((fn) => {
             unlisten = fn;
         });
         const onWindow = (e: Event) => {
-            const section = (e as CustomEvent<{ section?: string }>).detail?.section;
-            if (isSection(section)) {
-                setSection(section);
-                setActiveLeafId(section);
+            const next = coerceGitSection(
+                (e as CustomEvent<{ section?: string }>).detail?.section,
+            );
+            if (next && ALL_SECTION_IDS.includes(next)) {
+                setSection(next);
+                setActiveLeafId(next);
             }
         };
         window.addEventListener("shape-git-section", onWindow as EventListener);
@@ -437,16 +398,13 @@ function ManagerShell() {
                             ) : null}
                             {collapsed ? null : (
                                 <>
-                                    <div className="p-2">
-                                        <div className="flex h-9 items-center rounded-lg border border-border bg-transparent px-3">
-                                            <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
-                                            <Input
-                                                placeholder="Search git"
-                                                value={query}
-                                                className="h-auto! bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 select-text"
-                                                onChange={(e) => setQuery(e.target.value)}
-                                            />
-                                        </div>
+                                    <div className="shrink-0 px-2 pb-2">
+                                        <SearchInput
+                                            placeholder="Search git"
+                                            value={query}
+                                            onChange={(e) => setQuery(e.target.value)}
+                                            className="h-9 w-full rounded-full border border-border-subtle bg-input-bg px-3"
+                                        />
                                     </div>
                                     <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
                                         {filteredNav.map((group) => {
@@ -486,6 +444,7 @@ function ManagerShell() {
                 })()}
 
                 <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-panel">
+                    <GitPageChrome />
                     {/* Keep-alive panes use `hidden` (not `invisible`) so Monaco/diff
                         overlays cannot paint over other sections when inactive. */}
                     {visited.has("source") ? (
@@ -507,7 +466,7 @@ function ManagerShell() {
                             )}
                             aria-hidden={section !== "graph"}
                         >
-                            <Graph surface="editor" rich active={section === "graph"} />
+                            <GraphTab projectPath={project_path || ""} />
                         </div>
                     ) : null}
                     {visited.has("branches") ? (
@@ -519,46 +478,6 @@ function ManagerShell() {
                             aria-hidden={section !== "branches"}
                         >
                             <BranchWindow active={section === "branches"} />
-                        </div>
-                    ) : null}
-                    {visited.has("tags") ? (
-                        <div
-                            className={cn(
-                                "absolute inset-0 min-h-0 min-w-0",
-                                section === "tags" ? "z-10" : "hidden",
-                            )}
-                            aria-hidden={section !== "tags"}
-                        >
-                            <LocalTags />
-                        </div>
-                    ) : null}
-                    {isActionsSection(section) ? (
-                        <div
-                            key={`actions-${section}`}
-                            className="absolute inset-0 z-10 min-h-0 min-w-0"
-                        >
-                            <ActionsConsole focus={section} />
-                        </div>
-                    ) : null}
-                    {section === "releases" ? (
-                        <div
-                            key="releases"
-                            className="absolute inset-0 z-10 min-h-0 min-w-0"
-                        >
-                            <ReleasesPage />
-                        </div>
-                    ) : null}
-                    {!isActionsSection(section) &&
-                    section !== "source" &&
-                    section !== "graph" &&
-                    section !== "branches" &&
-                    section !== "tags" &&
-                    section !== "releases" ? (
-                        <div
-                            key={section}
-                            className="absolute inset-0 z-10 min-h-0 min-w-0"
-                        >
-                            <GitHubSection section={section} />
                         </div>
                     ) : null}
                 </section>

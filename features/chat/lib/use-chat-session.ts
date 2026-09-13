@@ -773,7 +773,13 @@ export function useChatSession() {
         try {
             if (!shapeAuth.loggedIn || !shapeAuth.accessToken) {
                 setSendError("Sign in to Shape to use AI chat.");
-                setMessages((prev) => prev.slice(0, -2));
+                setMessages((prev) => {
+                    const last = prev[prev.length - 1];
+                    if (last?.role === "assistant" && !last.content.trim()) {
+                        return prev.slice(0, -1);
+                    }
+                    return prev;
+                });
                 return false;
             }
 
@@ -795,7 +801,6 @@ export function useChatSession() {
                 ]);
 
                 if (att.kind === "image" && att.dataUrl) {
-                    // Native multimodal — model sees pixels via image_url (no separate OCR API).
                     attachmentBlocks.push(
                         `<attached_image name="${att.name}" type="${att.mimeType}" size="${att.size}">${att.dataUrl}</attached_image>`,
                     );
@@ -926,11 +931,10 @@ export function useChatSession() {
             const errMsg = err instanceof Error ? err.message : String(err);
             setSendError(errMsg);
             setMessages((prev) => {
-                if (prev.length < 2) return prev;
+                if (prev.length < 1) return prev;
                 const last = prev[prev.length - 1];
-                const prevUser = prev[prev.length - 2];
-                if (last?.role === "assistant" && prevUser?.role === "user") {
-                    return prev.slice(0, -2);
+                if (last?.role === "assistant" && !last.content.trim()) {
+                    return prev.slice(0, -1);
                 }
                 return prev;
             });

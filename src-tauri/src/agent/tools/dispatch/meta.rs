@@ -2,14 +2,16 @@
 
 use serde_json::{json, Value};
 use tauri::Emitter;
+use base64::Engine;
 
 use crate::agent::commands::{logging, streaming};
+use crate::agent::tools::page_shot;
 use crate::commands::design_sandbox;
 use crate::commands::preview_render;
 
 use super::common::{
     blocked_outcome, clip, error_outcome, escape_todo_content, escape_xml_attr, escape_xml_text,
-    get_str,
+    get_str, is_read_only_mode,
 };
 use super::{SideEffect, ToolCtx, ToolOutcome};
 
@@ -442,6 +444,70 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
     }
 }
 
+
+pub(super) async fn tool_screenshot_page(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    if is_read_only_mode(ctx.mode) {
+        return blocked_outcome(
+            "screenshot_page",
+            "Screenshots are not taken in Ask or Plan mode.",
+        );
+    }
+    let url_arg = args.get("url").and_then(|v| v.as_str());
+    let path_arg = args.get("path").and_then(|v| v.as_str());
+    let resolved = match page_shot::resolve_page_url(url_arg, path_arg) {
+        Ok(u) => u,
+        Err(e) => return error_outcome("screenshot_page", &e),
+    };
+
+    let captured = preview_render::capture_page_preview(
+        ctx.app_handle.clone(),
+        resolved.clone(),
+        Some(1280),
+        Some(720),
+    )
+    .await;
+
+    match captured {
+        Ok(shot) => {
+            let bytes = match std::fs::read(&shot.png_path) {
+                Ok(b) if !b.is_empty() => b,
+                Ok(_) => {
+                    return error_outcome("screenshot_page", "Capture wrote an empty image.");
+                }
+                Err(e) => {
+                    return error_outcome(
+                        "screenshot_page",
+                        &format!("Could not read captured image: {e}"),
+                    );
+                }
+            };
+            let (mime, name) = if bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 {
+                ("image/jpeg", "page.jpg")
+            } else {
+                ("image/png", "page.png")
+            };
+            let data_url = format!(
+                "data:{mime};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(&bytes)
+            );
+            let tag = page_shot::attached_image_tag(name, mime, &data_url);
+            ToolOutcome {
+                tool_result: format!(
+                    "Captured {resolved} ({mime}, {}x{}). The image is for the user reply and — when this model supports vision — in the next user message for you to inspect. Do not paste the image yourself. Do not take another shot this turn unless you changed a different route. Build Error overlays, blank/white pages, or broken layout mean the work is not done.",
+                    shot.width, shot.height
+                ),
+                ui_chunk: String::new(),
+                side_effect: Some(SideEffect::PageScreenshot { tag }),
+            }
+        }
+        Err(e) => error_outcome(
+            "screenshot_page",
+            &format!(
+                "Could not capture {resolved}: {e}. Skip screenshots if the preview is not a website or is not running."
+            ),
+        ),
+    }
+}
 
 pub(super) fn tool_finish(args: &Value) -> ToolOutcome {
     let summary = args

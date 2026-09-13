@@ -81,7 +81,7 @@ pub async fn summarize_pull_request(
         }
     }
 
-    let mut prompt = format!("{}\n\n", prompts::PR_SUMMARY_MD);
+    let mut prompt = format!("{}\n\n", prompts::PR_WALKTHROUGH_MD);
     prompt.push_str(&format!(
         "## PR\n- Repo: {slug}\n- Number: #{number}\n- Author: {user}\n- State: {state}\n- Base â† Head: {base} â† {head}\n- Diffstat: +{additions} âˆ’{deletions}\n\n## Title\n{title}\n\n## Body\n{}\n\n## Files\n{}\n",
         truncate_for_prompt(body, 8_000),
@@ -99,6 +99,171 @@ pub async fn summarize_pull_request(
             .await?;
     if message.trim().is_empty() {
         return Err(AppError::Message("Failed to summarize pull request".into()));
+    }
+    Ok(message)
+}
+
+/// One-shot AI review of a pull request (findings + CI, not a GitHub review comment).
+#[tauri::command]
+pub async fn review_pull_request(
+    access_token: Option<String>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> Result<String, AppError> {
+    let auth_token = require_shape_token(access_token)?;
+    let client = Client::new();
+    let model = MODEL_TITLE_GEN;
+    let slug = format!("{owner}/{repo}");
+
+    let pr_path = format!("repos/{slug}/pulls/{number}");
+    let files_path = format!("repos/{slug}/pulls/{number}/files?per_page=100");
+    let pr_raw = crate::commands::github_auth::api_get(&pr_path)?;
+    let files_raw = crate::commands::github_auth::api_get(&files_path).unwrap_or_else(|_| "[]".into());
+
+    let pr: serde_json::Value =
+        serde_json::from_str(&pr_raw).map_err(|e| AppError::Message(e.to_string()))?;
+    let files: serde_json::Value =
+        serde_json::from_str(&files_raw).unwrap_or_else(|_| serde_json::json!([]));
+
+    let title = pr.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
+    let body = pr.get("body").and_then(|v| v.as_str()).unwrap_or("");
+    let state = pr.get("state").and_then(|v| v.as_str()).unwrap_or("");
+    let base = pr
+        .pointer("/base/ref")
+        .and_then(|v| v.as_str())
+        .unwrap_or("?");
+    let head = pr
+        .pointer("/head/ref")
+        .and_then(|v| v.as_str())
+        .unwrap_or("?");
+    let sha = pr
+        .pointer("/head/sha")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let additions = pr.get("additions").and_then(|v| v.as_u64()).unwrap_or(0);
+    let deletions = pr.get("deletions").and_then(|v| v.as_u64()).unwrap_or(0);
+
+    let mut file_lines = Vec::new();
+    if let Some(arr) = files.as_array() {
+        for f in arr.iter().take(80) {
+            let name = f.get("filename").and_then(|v| v.as_str()).unwrap_or("?");
+            let status = f.get("status").and_then(|v| v.as_str()).unwrap_or("modified");
+            let a = f.get("additions").and_then(|v| v.as_u64()).unwrap_or(0);
+            let d = f.get("deletions").and_then(|v| v.as_u64()).unwrap_or(0);
+            file_lines.push(format!("- [{status}] {name} (+{a}/−{d})"));
+        }
+        if arr.len() > 80 {
+            file_lines.push(format!("- … and {} more files", arr.len() - 80));
+        }
+    }
+
+    let mut check_lines = Vec::new();
+    if !sha.is_empty() {
+        let checks_path = format!("repos/{slug}/commits/{sha}/check-runs?per_page=50");
+        if let Ok(raw) = crate::commands::github_auth::api_get(&checks_path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
+                let runs = val
+                    .get("check_runs")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                for c in runs.iter().take(40) {
+                    let name = c.get("name").and_then(|v| v.as_str()).unwrap_or("check");
+                    let status = c.get("status").and_then(|v| v.as_str()).unwrap_or("");
+                    let conclusion = c
+                        .get("conclusion")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    check_lines.push(format!("- {name}: {status} {conclusion}"));
+                }
+            }
+        }
+    }
+
+    let mut prompt = format!("{}\n\n", prompts::PR_REVIEW_MD);
+    prompt.push_str(&format!(
+        "## PR\n- Repo: {slug}\n- Number: #{number}\n- State: {state}\n- Base ← Head: {base} ← {head}\n- Diffstat: +{additions} −{deletions}\n\n## Title\n{title}\n\n## Body\n{}\n\n## Files\n{}\n\n## Check runs\n{}\n",
+        truncate_for_prompt(body, 6_000),
+        if file_lines.is_empty() {
+            "(none)".to_string()
+        } else {
+            file_lines.join("\n")
+        },
+        if check_lines.is_empty() {
+            "(none provided)".to_string()
+        } else {
+            check_lines.join("\n")
+        }
+    ));
+
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    let ctx = streaming::ProxyContext::new("pr_review").with_turn(Some(turn_id), None);
+    let (message, _, _) =
+        streaming::complete_chat_with_max_tokens(&client, &auth_token, &prompt, model, 700, &ctx)
+            .await?;
+    if message.trim().is_empty() {
+        return Err(AppError::Message("Failed to review pull request".into()));
+    }
+    Ok(message)
+}
+
+/// Draft a PR title + body from the diff between two local branches.
+#[tauri::command]
+pub async fn draft_pull_request(
+    access_token: Option<String>,
+    app_state: tauri::State<'_, AppState>,
+    base: String,
+    compare: String,
+    repo_path: Option<String>,
+) -> Result<String, AppError> {
+    let auth_token = require_shape_token(access_token)?;
+    let client = Client::new();
+    let model = MODEL_TITLE_GEN;
+    let project_path = repo_path
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            app_state
+                .0
+                .lock()
+                .ok()
+                .and_then(|s| s.project_path.clone())
+        })
+        .ok_or(AppError::Message("No project open".into()))?;
+
+    let base = base.trim().to_string();
+    let compare = compare.trim().to_string();
+    if base.is_empty() || compare.is_empty() {
+        return Err(AppError::Message("Base and compare branches are required".into()));
+    }
+    if base == compare {
+        return Err(AppError::Message("Pick a different branch than the base.".into()));
+    }
+
+    let stat = git::git_diff_branches(project_path.clone(), base.clone(), compare.clone())
+        .unwrap_or_default();
+    let patch = git::git_diff_range_patch(project_path.clone(), base.clone(), compare.clone())
+        .unwrap_or_default();
+    if stat.trim().is_empty() && patch.trim().is_empty() {
+        return Err(AppError::Message(
+            "No differences between these branches.".into(),
+        ));
+    }
+
+    let mut prompt = format!("{}\n\n", prompts::PR_DRAFT_MD);
+    prompt.push_str(&format!(
+        "## Branches\n- Base: {base}\n- Compare: {compare}\n\n## Diffstat\n{}\n\n## Diff\n{}\n",
+        truncate_for_prompt(&stat, 3_000),
+        truncate_for_prompt(&patch, 8_000),
+    ));
+
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    let ctx = streaming::ProxyContext::new("pr_draft").with_turn(Some(turn_id), None);
+    let (message, _, _) =
+        streaming::complete_chat_with_max_tokens(&client, &auth_token, &prompt, model, 700, &ctx)
+            .await?;
+    if message.trim().is_empty() {
+        return Err(AppError::Message("Failed to draft pull request".into()));
     }
     Ok(message)
 }
