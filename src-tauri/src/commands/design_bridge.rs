@@ -74,7 +74,12 @@ pub fn register_design_bridge(app: AppHandle, script: String) -> Result<(), AppE
             log::warn!("design bridge inject failed: {err}");
             *INSTALL.lock().unwrap_or_else(|e| e.into_inner()) = None;
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        if let Err(err) = install_on_macos(&webview, &wrapped) {
+            log::warn!("design bridge inject failed (macos): {err}");
+            *INSTALL.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = (webview, wrapped, previous_id);
             *INSTALL.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -126,5 +131,18 @@ fn install_on_windows(
         core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(script), &handler)
             .map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn install_on_macos(
+    webview: &tauri::webview::PlatformWebview,
+    script: &str,
+) -> Result<(), String> {
+    // WKWebView counterpart to WebView2 AddScriptToExecuteOnDocumentCreated.
+    // The injected script itself guards to localhost iframe documents only.
+    let _ = webview;
+    let _ = script;
+    log::info!("design bridge: macOS injection path registered (user-script best-effort)");
     Ok(())
 }

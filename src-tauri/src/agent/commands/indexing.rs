@@ -77,6 +77,17 @@ pub fn set_chat_memory_enabled(
     Ok(())
 }
 
+/// Store user OpenRouter / OpenAI keys for BYOK (direct provider calls, no Shape proxy).
+#[tauri::command]
+pub fn set_byok_keys(
+    openrouter_api_key: Option<String>,
+    openai_api_key: Option<String>,
+    state: tauri::State<'_, crate::agent::models::AgentState>,
+) -> Result<(), AppError> {
+    state.set_byok_keys(openrouter_api_key, openai_api_key);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_index_status(
     project_path: Option<String>,

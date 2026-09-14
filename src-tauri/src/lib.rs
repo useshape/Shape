@@ -308,6 +308,7 @@ pub fn run() {
             agent::commands::indexing::get_index_status,
             agent::commands::indexing::set_index_embeddings,
             agent::commands::indexing::set_chat_memory_enabled,
+            agent::commands::indexing::set_byok_keys,
             agent::commands::mcp_cmds::sync_mcp_servers,
             agent::commands::mcp_cmds::get_mcp_config_path,
             agent::commands::mcp_cmds::ensure_mcp_config,

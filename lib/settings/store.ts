@@ -109,6 +109,10 @@ export interface ShapeSettings {
          * Off by default — memories are never injected into every prompt.
          */
         chatMemoryEnabled: boolean;
+        /** OpenRouter API key — when set, chat calls OpenRouter directly (no Shape proxy). */
+        openRouterApiKey: string;
+        /** OpenAI API key — used when OpenRouter key is empty (OpenAI models only). */
+        openaiApiKey: string;
     };
     files: {
         exclude: string;
@@ -258,6 +262,8 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         pluginDisabledActions: {},
         indexEmbeddings: true,
         chatMemoryEnabled: false,
+        openRouterApiKey: "",
+        openaiApiKey: "",
     },
     files: {
         exclude: "**/node_modules,**/.git,**/dist,**/build,**/.next",
@@ -588,7 +594,19 @@ export async function initSettings(): Promise<void> {
         commands.setChatMemoryEnabled(currentSettings.ai.chatMemoryEnabled).catch(() => {
             /* desktop bridge may not be ready yet */
         });
+        commands
+            .setByokKeys(
+                currentSettings.ai.openRouterApiKey || null,
+                currentSettings.ai.openaiApiKey || null,
+            )
+            .catch(() => {
+                /* desktop bridge may not be ready yet */
+            });
     });
+}
+
+export function hasByokApiKeys(ai: ShapeSettings["ai"] = getSettings().ai): boolean {
+    return Boolean(ai.openRouterApiKey?.trim() || ai.openaiApiKey?.trim());
 }
 
 export function getSettings(): ShapeSettings {

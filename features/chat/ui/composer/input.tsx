@@ -50,7 +50,7 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog-store";
-import { useSettings } from "@/lib/settings";
+import { useSettings, hasByokApiKeys } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 
 type ChatInputProps = {
@@ -582,7 +582,8 @@ export function ChatInput({
     const modelInfo = MODELS.find(m => m.id === selectedModel) || autoModel;
     const selectedModeInfo = CHAT_MODES.find((m) => m.id === selectedMode) ?? CHAT_MODES[0];
     const providerOrder = getCatalogProviderOrder();
-    const needsSignIn = !shapeAuth.isLoading && !shapeAuth.loggedIn;
+    const needsSignIn =
+        !shapeAuth.isLoading && !shapeAuth.loggedIn && !hasByokApiKeys(settings.ai);
 
     const lastTurnUsage = React.useSyncExternalStore(
         subscribeLastTurnUsage,
@@ -1206,7 +1207,7 @@ export function ChatInput({
                     </div>
                 ) : null}
                 {needsSignIn ? (
-                    <Tooltip side="top" content="Sign in to Shape to use AI chat.">
+                    <Tooltip side="top" content="Sign in to Shape, or add an API key in Settings → AI.">
                         <div
                             role="button"
                             tabIndex={0}

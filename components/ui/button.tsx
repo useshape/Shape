@@ -16,11 +16,10 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-    xs: "h-7 px-sm text-xs rounded-md",
-    sm: "h-chrome px-md text-sm",
+    xs: "h-7 px-2.5 text-xs rounded-md",
+    sm: "h-7.5 px-3 text-sm rounded-md",
     md: "h-8 px-lg text-sm",
     lg: "h-10 px-xl text-base",
-    /** Compact square control (`p-1` = 4px). Avoid `max-h/w-full` on children — with larger padding that collapses them. */
     icon: "size-6 shrink-0 overflow-visible p-4",
 };
 

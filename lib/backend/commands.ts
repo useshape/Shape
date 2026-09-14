@@ -671,6 +671,11 @@ export const commands = {
         invokeCommand<void>("set_index_embeddings", { enabled }),
     setChatMemoryEnabled: (enabled: boolean) =>
         invokeCommand<void>("set_chat_memory_enabled", { enabled }),
+    setByokKeys: (openrouterApiKey: string | null, openaiApiKey: string | null) =>
+        invokeCommand<void>("set_byok_keys", {
+            openrouterApiKey,
+            openaiApiKey,
+        }),
     setDiagnostics: (path: string, diagnostics: unknown[]) => invokeCommand<void>("set_diagnostics", { path, diagnostics }),
     ptyAvailableShells: () =>
         invokeCommand<import("./types").TerminalShellProfile[]>("pty_available_shells"),

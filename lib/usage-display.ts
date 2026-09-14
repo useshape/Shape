@@ -109,11 +109,26 @@ export function resolveChatUsageDisplay(
     selectedModel: string,
     auth: Pick<
         ShapeAuthState,
-        "loggedIn" | "tier" | "freeAutoPercent" | "creditsIncluded" | "creditsRemaining"
+        | "loggedIn"
+        | "isLoading"
+        | "revalidating"
+        | "tier"
+        | "freeAutoPercent"
+        | "creditsIncluded"
+        | "creditsRemaining"
     >,
     _lastTurn?: LastTurnUsage | null,
 ): ChatUsageDisplay {
     if (!auth.loggedIn) {
+        if (auth.isLoading || auth.revalidating) {
+            return {
+                mode: "credits",
+                percent: 0,
+                title: "",
+                detail: "",
+                tooltip: "",
+            };
+        }
         return {
             mode: "credits",
             percent: 0,

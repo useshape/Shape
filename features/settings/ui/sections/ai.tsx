@@ -21,6 +21,7 @@ import {
 import { getShapeAccessToken } from "@/lib/cloud/store";
 import { openMcpConfig } from "@/lib/mcp/config";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
     SettingSection,
     SettingRow,
@@ -407,6 +408,47 @@ export function AiSettingsPanel({
                         </Button>
                     </div>
                 </div>
+            </SettingSection>
+
+            <SettingSection
+                id="settings-ai-byok"
+                title="API keys"
+                description="Use your own OpenRouter or OpenAI key. Chat goes straight to the provider — no Shape server required. OpenRouter is preferred when both are set."
+            >
+                <SettingRow title="OpenRouter" stack>
+                    <Input
+                        type="password"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="sk-or-…"
+                        value={a.openRouterApiKey}
+                        onChange={(e) => {
+                            const openRouterApiKey = e.target.value;
+                            updateSettingSection("ai", { openRouterApiKey });
+                            void commands
+                                .setByokKeys(openRouterApiKey || null, a.openaiApiKey || null)
+                                .catch(() => { /* ignore */ });
+                        }}
+                        className="font-mono text-sm"
+                    />
+                </SettingRow>
+                <SettingRow title="OpenAI" stack>
+                    <Input
+                        type="password"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="sk-…"
+                        value={a.openaiApiKey}
+                        onChange={(e) => {
+                            const openaiApiKey = e.target.value;
+                            updateSettingSection("ai", { openaiApiKey });
+                            void commands
+                                .setByokKeys(a.openRouterApiKey || null, openaiApiKey || null)
+                                .catch(() => { /* ignore */ });
+                        }}
+                        className="font-mono text-sm"
+                    />
+                </SettingRow>
             </SettingSection>
 
             <RulesEditor value={a.customRules} />

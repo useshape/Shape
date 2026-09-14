@@ -85,11 +85,14 @@ function SidebarNotifications() {
 export function AccountRow() {
     const auth = useShapeAuth();
     const github = useGitHubAuth();
+    const signedIn =
+        auth.loggedIn || github.loggedIn || Boolean(auth.accessToken);
+    const resolving = auth.isLoading || Boolean(auth.revalidating);
 
     const displayName =
         (auth.name && !/^n\/?a$/i.test(auth.name.trim()) ? auth.name.trim() : null)
         ?? (github.loggedIn && github.username ? github.username : null)
-        ?? "Sign in";
+        ?? "Account";
 
     return (
         <div className="flex h-10 items-center gap-1.5 px-2">
@@ -98,16 +101,28 @@ export function AccountRow() {
                     type="button"
                     className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:bg-panel-hover"
                 >
-                    <ProfileAvatar
-                        gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
-                        shapeUserId={auth.userId}
-                        offline={Boolean(auth.offline)}
-                        name={displayName}
-                        size={28}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
-                        {displayName}
-                    </span>
+                    {signedIn ? (
+                        <>
+                            <ProfileAvatar
+                                gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
+                                shapeUserId={auth.userId}
+                                offline={false}
+                                name={displayName}
+                                size={28}
+                            />
+                            <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                                {displayName}
+                            </span>
+                        </>
+                    ) : resolving ? (
+                        <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                            Account
+                        </span>
+                    ) : (
+                        <span className="min-w-0 flex-1 truncate text-sm text-text-muted">
+                            Sign in
+                        </span>
+                    )}
                 </button>
             </AccountMenu>
             <SidebarNotifications />
