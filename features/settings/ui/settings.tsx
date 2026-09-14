@@ -788,7 +788,7 @@ export function SettingsView({
                     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
                         {onBack ? (
                             <HostedSidebarBack
-                                label="Back to app"
+                                label="Go Back"
                                 onBack={onBack}
                                 collapsed={collapsed}
                             />
@@ -800,7 +800,7 @@ export function SettingsView({
                                         placeholder="Search settings"
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
-                                        className="h-9 w-full rounded-full border border-border-subtle bg-input-bg px-3"
+                                        className="w-full"
                                     />
                                 </div>
                                 <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">

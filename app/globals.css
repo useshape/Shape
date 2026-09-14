@@ -9,20 +9,20 @@
   /* ── Surface ladder ────────────────────────────────────── */
   --surface-0: #171717;
   --surface-1: #1a1a1a;
-  --surface-2: #242424;
-  --surface-3: #292929;
-  --surface-4: #292929;
+  --surface-2: #212121;
+  --surface-3: #212121;
+  --surface-4: #212121;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
-  --chrome: #171717;
-  --sidebar: #171717;
-  --editor: #171717;
+  --chrome: #191919;
+  --sidebar: #212121;
+  --editor: #191919;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #171717;
+  --panel: #191919;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.04);
@@ -42,7 +42,7 @@
   /* ── Borders / stroke ──────────────────────────────────── */
   --border: rgba(255, 255, 255, 0.048);
   --border-subtle: rgba(255, 255, 255, 0.025);
-  --border-secondary: rgba(255, 255, 255, 0.1);
+  --border-secondary: rgba(255, 255, 255, 0.062);
   --stroke: 1px;
 
   /* ── Actions ───────────────────────────────────────────── */
@@ -84,10 +84,13 @@
   --diff-removed-line-bg: rgba(228, 103, 107, 0.15);
   --diff-removed-text-bg: rgba(228, 103, 107, 0.28);
 
-  /* ── Inputs & buttons ──────────────────────────────────── */
+  /* ── Inputs & buttons (Pajamas-aligned control chrome) ── */
   --input-bg: var(--surface-2);
-  --input-border: var(--border);
+  --input-border: var(--border-secondary);
   --input-placeholder: var(--text-muted);
+  --input-radius: var(--radius-md);
+  --control-disabled-bg: color-mix(in srgb, var(--surface-3) 85%, transparent);
+  --control-disabled-fg: var(--text-disabled);
 
   --button-bg: var(--accent);
   --button-fg: var(--action-label);
@@ -317,6 +320,7 @@
   --color-input-bg: var(--input-bg);
   --color-input-border: var(--input-border);
   --color-input-placeholder: var(--input-placeholder);
+  --radius-input: var(--input-radius);
 
   --color-button-bg: var(--button-bg);
   --color-button-fg: var(--button-fg);
@@ -803,23 +807,7 @@ body[data-resizing] .xterm {
 }
 
 .shape-menu__search {
-  display: block;
   width: 100%;
-  height: 32px;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  background: transparent;
-  padding: 0 var(--menu-row-pad-x);
-  font-size: 0.8125rem;
-  color: var(--text-primary);
-  outline: none;
-  box-shadow: none;
-}
-
-.shape-menu__search::placeholder {
-  color: var(--text-muted);
 }
 
 .shape-menu .shape-menu__icon {

@@ -4,6 +4,7 @@ import { RiDeleteBinLine, RiHistoryLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/ui/search";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -132,11 +133,12 @@ export function ChatHistoryMenu({
                 <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
             </Tooltip>
                 <DropdownMenuContent align={align} className="w-72 p-0">
-                <div className="-mx-[var(--menu-pad)] -mt-[var(--menu-pad)] mb-1">
-                    <input
+                <div className="-mx-[var(--menu-pad)] -mt-[var(--menu-pad)] mb-1 border-b border-border-subtle">
+                    <SearchInput
+                        borderless
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search history..."
+                        placeholder="Search history"
                         onKeyDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
                         className="shape-menu__search"

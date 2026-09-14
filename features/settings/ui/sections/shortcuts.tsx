@@ -295,7 +295,7 @@ export function KeyboardShortcutsView() {
                             placeholder="Search shortcuts"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            className="h-9 min-w-[220px] flex-1 rounded-full border border-border-subtle bg-input-bg px-3"
+                            className="min-w-[220px] flex-1"
                         />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>

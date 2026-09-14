@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { formatTimeAgo } from "@/lib/repo-history";
 import { Tooltip } from "@/components/ui/tooltip";
+import { SearchInput } from "@/components/ui/search";
 import { ModelAvatarStack } from "@/features/chat/ui/message/bubble";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
@@ -370,23 +371,19 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
 
             {searchOpen ? (
                 <div className="px-2 pb-2">
-                    <div className="flex h-chrome items-center gap-2 rounded-lg bg-input-bg px-2.5">
-                        <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
-                        <input
-                            ref={searchRef}
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search chats"
-                            className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-                            onKeyDown={(e) => {
-                                if (e.key === "Escape") {
-                                    e.preventDefault();
-                                    setSearchOpen(false);
-                                    setQuery("");
-                                }
-                            }}
-                        />
-                    </div>
+                    <SearchInput
+                        ref={searchRef}
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search chats"
+                        onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                                e.preventDefault();
+                                setSearchOpen(false);
+                                setQuery("");
+                            }
+                        }}
+                    />
                 </div>
             ) : null}
 

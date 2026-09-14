@@ -16,7 +16,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search";
 import { commands, type GitFileParams, type GitLogEntry } from "@/lib/backend";
 import { useGitRepos } from "@/lib/git/repos";
 import { cn } from "@/lib/utils";
@@ -199,11 +199,11 @@ export function GraphTab({ projectPath }: { projectPath: string }) {
                             </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-64 p-0">
-                            <input
+                            <SearchInput
+                                borderless
                                 value={branchQuery}
                                 onChange={(e) => setBranchQuery(e.target.value)}
-                                placeholder="Search branches…"
-                                className="h-8 w-full border-0 border-b border-border-subtle bg-transparent px-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                                placeholder="Search branches"
                                 autoFocus
                             />
                             <div className="custom-scrollbar max-h-56 overflow-y-auto">
@@ -236,11 +236,10 @@ export function GraphTab({ projectPath }: { projectPath: string }) {
                         <Icon icon={RiRefreshLine} />
                     </button>
                 </div>
-                <Input
+                <SearchInput
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search commits…"
-                    className="h-8"
+                    placeholder="Search commits"
                 />
             </div>
 
