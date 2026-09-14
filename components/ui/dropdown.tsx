@@ -1,6 +1,6 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowRightSLine, RiArrowUpSLine, RiCheckLine, RiCheckboxBlankCircleLine } from "@remixicon/react";
+import { RiArrowRightSLine, RiCheckLine, RiCheckboxBlankCircleLine } from "@remixicon/react";
 import * as React from "react";
 import { Icon } from "./icon";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
@@ -22,52 +22,17 @@ const shortcutClasses =
 /** Tight inset — rows sit near the panel edge (Cursor-style). */
 const menuInsetClasses = "p-1";
 
-/** Circular scroll affordance — shows when a menu has more content above/below. */
-function DropdownScrollHint({
-    side,
-    visible,
-    onClick,
-}: {
-    side: "up" | "down";
-    visible: boolean;
-    onClick: () => void;
-}) {
+/** Overflow scrim — GitLab-style fade when the panel can scroll. */
+function DropdownScrollScrim({ side, visible }: { side: "up" | "down"; visible: boolean }) {
     return (
         <div
             className={cn(
-                "pointer-events-none absolute inset-x-0 z-20 flex justify-center transition-[opacity,transform] duration-200 ease-out",
-                side === "up" ? "top-1" : "bottom-1",
-                visible
-                    ? "opacity-100 translate-y-0 scale-100"
-                    : side === "up"
-                      ? "opacity-0 -translate-y-1 scale-90"
-                      : "opacity-0 translate-y-1 scale-90",
+                "pointer-events-none absolute inset-x-0 z-20 h-6 transition-opacity duration-200",
+                side === "up" ? "top-0 bg-linear-to-b from-surface-3 to-transparent" : "bottom-0 bg-linear-to-t from-surface-3 to-transparent",
+                visible ? "opacity-100" : "opacity-0",
             )}
-            aria-hidden={!visible}
-        >
-            <button
-                type="button"
-                tabIndex={-1}
-                disabled={!visible}
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onClick();
-                }}
-                onPointerDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }}
-                className={cn(
-                    "flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface-3 text-text-secondary shadow-sm hover:bg-panel-hover hover:text-text-primary",
-                    visible ? "pointer-events-auto" : "pointer-events-none",
-                )}
-            >
-                <Icon
-                    icon={side === "up" ? RiArrowUpSLine : RiArrowDownSLine}
-                />
-            </button>
-        </div>
+            aria-hidden
+        />
     );
 }
 
@@ -107,28 +72,19 @@ function DropdownScrollArea({
 
     return (
         <div className="relative min-h-0">
-            <DropdownScrollHint
-                side="up"
-                visible={canUp}
-                onClick={() => ref.current?.scrollBy({ top: -96, behavior: "smooth" })}
-            />
+            <DropdownScrollScrim side="up" visible={canUp} />
             <div
                 ref={ref}
                 onScroll={update}
                 className={cn(
                     "overflow-y-auto no-scrollbar",
                     className,
-                    // After className so call-site `p-*` cannot remove top/bottom inset.
                     menuInsetClasses,
                 )}
             >
                 {children}
             </div>
-            <DropdownScrollHint
-                side="down"
-                visible={canDown}
-                onClick={() => ref.current?.scrollBy({ top: 96, behavior: "smooth" })}
-            />
+            <DropdownScrollScrim side="down" visible={canDown} />
         </div>
     );
 }
@@ -239,11 +195,18 @@ const DropdownMenuItem = React.forwardRef<
     React.ElementRef<typeof DropdownMenuPrimitive.Item>,
     React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
         inset?: boolean;
+        variant?: "destructive";
     }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, variant, ...props }, ref) => (
     <DropdownMenuPrimitive.Item
         ref={ref}
-        className={cn("group", itemClasses, inset && "pl-7", className)}
+        className={cn(
+            "group",
+            itemClasses,
+            inset && "pl-7",
+            variant === "destructive" && "text-error focus:text-error",
+            className,
+        )}
         {...props}
     />
 ));

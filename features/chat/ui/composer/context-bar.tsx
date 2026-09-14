@@ -1,8 +1,8 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiCheckLine, RiFolderLine, RiGitBranchLine } from "@remixicon/react";
+import { RiAddLine, RiArrowDownSLine, RiCheckLine, RiFolderLine, RiGitBranchLine, RiFolder5Fill } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import {
@@ -10,6 +10,7 @@ import {
     loadRepoHistory,
     type RepoHistoryEntry,
 } from "@/lib/repo-history";
+import { SearchInput } from "@/components/ui/search";
 import { useGitBranch } from "@/features/workbench/hooks/use-git-branch";
 import {
     DropdownMenu,
@@ -90,15 +91,15 @@ export function ComposerContextBar({ className }: { className?: string }) {
                         <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-disabled" />
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-72 p-0">
-                    <input
+                <DropdownMenuContent align="start" className="w-72 p-0!">
+                    <SearchInput
+                        borderless
                         value={repoQuery}
                         onChange={(e) => setRepoQuery(e.target.value)}
-                        placeholder="Search repos…"
-                        className="h-8 w-full border-0 border-b border-border-subtle bg-transparent px-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                        placeholder="Search repos"
                         autoFocus
                     />
-                    <DropdownMenuLabel className="px-2 py-1 text-xs text-text-muted">
+                    <DropdownMenuLabel className="px-2 py-1 text-sm text-text-muted">
                         Recents
                     </DropdownMenuLabel>
                     {filteredRepos.map((r) => (
@@ -113,8 +114,8 @@ export function ComposerContextBar({ className }: { className?: string }) {
                             }}
                             className="gap-2"
                         >
-                            <Icon icon={RiFolderLine} className="shrink-0 text-text-muted" />
-                            <span className="min-w-0 flex-1 truncate">{getRepoName(r.path)}</span>
+                            <Icon icon={RiFolder5Fill} size={ICON_SIZE_SM} className="shrink-0 text-text-primary!" />
+                            <span className="min-w-0 flex-1 truncate text-sm text-text-primary!">{getRepoName(r.path)}</span>
                             {project_path === r.path ? (
                                 <Icon icon={RiCheckLine} className="shrink-0" />
                             ) : null}
@@ -123,10 +124,9 @@ export function ComposerContextBar({ className }: { className?: string }) {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                         onClick={() => window.dispatchEvent(new Event("open-folder-request"))}
-                        className="gap-2"
+                        className="gap-2 pb-2! pl-2.5"
                     >
-                        <Icon icon={RiAddLine} />
-                        Use Existing / New Folder…
+                        <span className="text-md text-text-muted!">Open Explorer</span>
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -148,11 +148,11 @@ export function ComposerContextBar({ className }: { className?: string }) {
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64 p-0">
-                    <input
+                    <SearchInput
+                        borderless
                         value={branchQuery}
                         onChange={(e) => setBranchQuery(e.target.value)}
-                        placeholder="Search branches…"
-                        className="h-8 w-full border-0 border-b border-border-subtle bg-transparent px-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                        placeholder="Search branches"
                         autoFocus
                     />
                     <div className="custom-scrollbar max-h-56 overflow-y-auto">

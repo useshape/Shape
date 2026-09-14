@@ -1,10 +1,11 @@
 "use client";
 
-import { RiDeleteBinLine, RiRobot2Line, RiSearchLine } from "@remixicon/react";
+import { RiDeleteBinLine, RiRobot2Line } from "@remixicon/react";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
+import { SearchInput } from "@/components/ui/search";
 
 import { getShortcutForLabel } from "@/lib/ui/shortcuts";
 import { SHAPE_MODAL_PANEL_CLASS, SHAPE_OVERLAY_CLASS, SHAPE_OVERLAY_CONTENT_CLASS } from "@/lib/ui/modal-overlay";
@@ -553,11 +554,10 @@ export function CommandPalette() {
                 )}>
                     <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
                     <Dialog.Description className="sr-only">Search agents, files, and actions</Dialog.Description>
-                    <div className="flex h-11 shrink-0 items-center gap-2 px-3">
-                        <Icon icon={RiSearchLine} className="shrink-0 text-text-muted" />
-                        <input
+                    <div className="px-1">
+                        <SearchInput
+                            borderless
                             ref={inputRef}
-                            className="h-10 flex-1 border-none bg-transparent px-0 font-sans text-sm text-text-primary outline-none placeholder:text-text-muted"
                             placeholder={placeholder}
                             autoFocus
                             value={query}
@@ -566,6 +566,7 @@ export function CommandPalette() {
                                 setSelectedIndex(0);
                             }}
                             onKeyDown={onInputKeyDown}
+                            className="h-11"
                         />
                     </div>
 

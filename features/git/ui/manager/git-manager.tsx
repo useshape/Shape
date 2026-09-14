@@ -403,7 +403,7 @@ function ManagerShell() {
                                             placeholder="Search git"
                                             value={query}
                                             onChange={(e) => setQuery(e.target.value)}
-                                            className="h-9 w-full rounded-full border border-border-subtle bg-input-bg px-3"
+                                            className="w-full"
                                         />
                                     </div>
                                     <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">

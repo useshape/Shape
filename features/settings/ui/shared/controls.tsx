@@ -36,13 +36,13 @@ export function SettingSection({
         <div id={id} className="mb-8 last:mb-0 scroll-mt-3">
             <div className="mb-2.5 flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                    <h2 className="text-lg font-medium text-text-primary">{title}</h2>
+                    <h2 className="text-md font-regular text-text-primary">{title}</h2>
                     {description && <p className="mt-0.5 text-sm font-medium text-text-muted">{description}</p>}
                 </div>
                 {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
             </div>
             {card ? (
-                <div className="flex flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface-2 divide-y divide-border-subtle">
+                <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface-2 divide-y divide-border">
                     {children}
                 </div>
             ) : (
@@ -76,7 +76,7 @@ export function SettingRow({
     }
 
     return (
-        <div className="flex items-start justify-between gap-4 px-4 py-3.5">
+        <div className="flex items-start justify-between gap-4 p-4">
             <div className="min-w-0 flex-1">
                 <div className="text-md font-medium text-text-primary">{title}</div>
                 {description && <div className="mt-0.5 text-sm text-text-muted">{description}</div>}
