@@ -477,7 +477,7 @@ function PluginDetail({
 
 export function PluginsSettingsView() {
     const auth = useShapeAuth();
-    const signedIn = auth.loggedIn;
+    const pluginsAvailable = auth.loggedIn && !auth.offline;
     const cached = peekPluginsCache();
     const [plugins, setPlugins] = useState<PluginRow[]>(cached?.plugins ?? []);
     const [configured, setConfigured] = useState(cached?.configured ?? true);
@@ -489,7 +489,7 @@ export function PluginsSettingsView() {
 
     const load = useCallback(
         async (force = false) => {
-            if (!signedIn) {
+            if (!pluginsAvailable) {
                 setLoading(false);
                 return;
             }
@@ -509,7 +509,7 @@ export function PluginsSettingsView() {
                 setLoading(false);
             }
         },
-        [signedIn],
+        [pluginsAvailable],
     );
 
     useEffect(() => {
@@ -641,9 +641,11 @@ export function PluginsSettingsView() {
                         </div>
 
                         <div className="mt-6 space-y-8">
-                            {!signedIn ? (
+                            {!pluginsAvailable ? (
                                 <div className="rounded-xl border border-border-subtle bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">
-                                    Sign in to Shape to connect plugins.
+                                    {auth.loggedIn
+                                        ? "Connect to Shape to manage cloud plugins. Local MCP servers still work under MCP."
+                                        : "Sign in to Shape to connect plugins. Local MCP servers still work under MCP."}
                                 </div>
                             ) : !configured ? (
                                 <div className="rounded-xl border border-border-subtle bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">

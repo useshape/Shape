@@ -45,22 +45,26 @@ export function NavLeafButton({
     onClick,
     children,
     className,
+    disabled,
 }: {
     active?: boolean;
     onClick: () => void;
     children: React.ReactNode;
     className?: string;
+    disabled?: boolean;
 }) {
     return (
         <Button
             variant="ghost"
             type="button"
             onClick={onClick}
+            disabled={disabled}
             className={cn(
                 "h-8 w-full justify-start gap-3 px-1.5! font-normal",
                 active
                     ? "bg-panel-hover text-text-primary"
                     : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",
+                disabled && "pointer-events-none opacity-40",
                 className,
             )}
         >

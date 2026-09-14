@@ -25,7 +25,7 @@ import {
     syncProposedEditsFromMessages,
     groupChatMessages,
 } from "./chat-session-utils";
-import { getSettings } from "@/lib/settings";
+import { getSettings, hasByokApiKeys } from "@/lib/settings";
 import { getVisibleModels } from "@/lib/models";
 import { getCatalogModels } from "@/lib/catalog-store";
 import { useShapeAuth } from "@/lib/cloud/store";
@@ -771,8 +771,10 @@ export function useChatSession() {
         appendUserOptimistic(userMsg);
 
         try {
-            if (!shapeAuth.loggedIn || !shapeAuth.accessToken) {
-                setSendError("Sign in to Shape to use AI chat.");
+            if ((!shapeAuth.loggedIn || !shapeAuth.accessToken) && !hasByokApiKeys()) {
+                setSendError(
+                    "Sign in to Shape, or add an OpenRouter / OpenAI API key in Settings → AI.",
+                );
                 setMessages((prev) => {
                     const last = prev[prev.length - 1];
                     if (last?.role === "assistant" && !last.content.trim()) {
@@ -783,7 +785,7 @@ export function useChatSession() {
                 return false;
             }
 
-            const token = shapeAuth.accessToken;
+            const token = shapeAuth.accessToken ?? null;
             const attachmentBlocks: string[] = [];
 
             for (const att of uploadedFiles) {

@@ -289,12 +289,23 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
+    const requestDesign = useCallback(() => {
+        if (!project_path) return;
+        setDesignOpen(true);
+    }, [project_path]);
+
     useEffect(() => {
         if (!project_path) setDesignOpen(false);
     }, [project_path]);
 
     useEffect(() => {
-        const onToggle = () => setDesignOpen((v) => !v);
+        const onToggle = () => {
+            if (designOpen) {
+                setDesignOpen(false);
+                return;
+            }
+            void requestDesign();
+        };
         const onExit = () => setDesignOpen(false);
         window.addEventListener("shape-toggle-design-mode", onToggle);
         window.addEventListener("shape-design-exit", onExit);
@@ -302,7 +313,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             window.removeEventListener("shape-toggle-design-mode", onToggle);
             window.removeEventListener("shape-design-exit", onExit);
         };
-    }, []);
+    }, [designOpen, requestDesign]);
 
     /** Always-mounted: open workspace Terminal even when Design Mode / collapsed rail unmounted AgentWorkspace. */
     const openWorkspaceTerminal = useCallback(() => {
@@ -378,7 +389,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 onToggleSidebar={toggleSidebar}
                 onNewChat={handleNewChat}
                 showDesign={Boolean(project_path)}
-                onDesign={() => setDesignOpen(true)}
+                onDesign={requestDesign}
                 onSearch={() => {
                     window.dispatchEvent(
                         new CustomEvent("shape-command-palette", {

@@ -55,9 +55,19 @@ pub async fn send_chat_message(
     pty_state: tauri::State<'_, PtyState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    let auth_token = access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
-        AppError::Env("Sign in to Shape to use AI chat.".to_string())
-    })?;
+    let auth_token = if let Some(provider) = state.byok_provider() {
+        provider.api_key("").to_string()
+    } else {
+        access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
+            AppError::Env(
+                "Sign in to Shape to use AI chat, or add an OpenRouter / OpenAI API key in Settings."
+                    .to_string(),
+            )
+        })?
+    };
+    let llm_provider = state
+        .byok_provider()
+        .unwrap_or(streaming::LlmProvider::Shape);
 
     let client = Client::new();
     let current_proj_path = app_state.0.lock()?.project_path.clone();
@@ -311,6 +321,7 @@ pub async fn send_chat_message(
             ),
             MODEL_TITLE_GEN,
             &streaming::ProxyContext::new("title")
+                .with_provider(llm_provider.clone())
                 .with_turn(Some(turn_id.clone()), Some(owned_conversation_id.clone())),
             Some(&cancel),
         )
@@ -378,6 +389,7 @@ pub async fn send_chat_message(
         conversation_id.clone(),
     );
     let proxy_base = streaming::ProxyContext::new("chat")
+        .with_provider(llm_provider)
         .with_turn(Some(turn_id.clone()), conversation_id.clone())
         .with_project_path(current_proj_path.clone())
         .with_reasoning_effort(Some(effort_norm.clone()))

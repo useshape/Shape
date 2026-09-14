@@ -44,9 +44,12 @@ function UserMessageAvatar() {
     const auth = useShapeAuth();
     const [failed, setFailed] = React.useState(false);
 
+    // Hide identity when not connected to Shape (offline / signed out) — BYOK users stay anonymous.
+    if (!auth.loggedIn || auth.offline) return null;
+
     const src =
         (github.loggedIn && github.avatarUrl ? github.avatarUrl : null)
-        ?? (auth.userId && !auth.offline ? `${SHAPE_API_BASE}/api/avatar/${auth.userId}` : null);
+        ?? (auth.userId ? `${SHAPE_API_BASE}/api/avatar/${auth.userId}` : null);
 
     if (!src || failed) return null;
 

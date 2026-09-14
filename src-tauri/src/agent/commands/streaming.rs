@@ -28,8 +28,74 @@ pub fn completions_url() -> String {
     format!("{}/api/ai/chat/completions", base)
 }
 
+const OPENROUTER_COMPLETIONS_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+const OPENAI_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
+
+/// Where chat completions are sent. Shape = website proxy; others = direct BYOK.
+#[derive(Debug, Clone)]
+pub enum LlmProvider {
+    Shape,
+    OpenRouter { api_key: String },
+    OpenAi { api_key: String },
+}
+
+impl LlmProvider {
+    pub fn api_key<'a>(&'a self, shape_token: &'a str) -> &'a str {
+        match self {
+            Self::Shape => shape_token,
+            Self::OpenRouter { api_key } | Self::OpenAi { api_key } => api_key,
+        }
+    }
+
+    pub fn completions_url(&self) -> String {
+        match self {
+            Self::Shape => completions_url(),
+            Self::OpenRouter { .. } => OPENROUTER_COMPLETIONS_URL.to_string(),
+            Self::OpenAi { .. } => OPENAI_COMPLETIONS_URL.to_string(),
+        }
+    }
+
+    pub fn is_direct(&self) -> bool {
+        !matches!(self, Self::Shape)
+    }
+}
+
+/// Map catalog / Auto model ids onto the provider's expected slug.
+/// `model` should already be normalized (including Auto → fast/vision).
+pub fn rewrite_model_for_provider(model: &str, provider: &LlmProvider) -> Result<String, AppError> {
+    let m = crate::agent::model_router::normalize_model(model);
+    match provider {
+        LlmProvider::Shape | LlmProvider::OpenRouter { .. } => Ok(m),
+        LlmProvider::OpenAi { .. } => {
+            if m == crate::agent::model_router::MODEL_FAST
+                || crate::agent::model_router::is_auto_selection(model)
+            {
+                return Ok("gpt-4o-mini".to_string());
+            }
+            if m == crate::agent::model_router::MODEL_FAST_VISION {
+                return Ok("gpt-4o".to_string());
+            }
+            if let Some(rest) = m.strip_prefix("openai/") {
+                return Ok(rest.to_string());
+            }
+            if m.starts_with("gpt-")
+                || m.starts_with("o1")
+                || m.starts_with("o3")
+                || m.starts_with("o4")
+                || m.starts_with("chatgpt-")
+            {
+                return Ok(m);
+            }
+            Err(AppError::Message(
+                "OpenAI API keys only support OpenAI models (ids like openai/gpt-4o). Use an OpenRouter key for other providers, or pick an OpenAI model."
+                    .to_string(),
+            ))
+        }
+    }
+}
+
 /// Billing / usage metadata sent with every proxied LLM request.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ProxyContext {
     pub feature: String,
     pub turn_id: Option<String>,
@@ -42,6 +108,13 @@ pub struct ProxyContext {
     pub reasoning_effort: Option<String>,
     /// OpenRouter service tier (`priority` / `fast`) — speed, not reasoning depth.
     pub service_tier: Option<String>,
+    pub provider: LlmProvider,
+}
+
+impl Default for ProxyContext {
+    fn default() -> Self {
+        Self::new("chat")
+    }
 }
 
 impl ProxyContext {
@@ -55,7 +128,13 @@ impl ProxyContext {
             context_breakdown: None,
             reasoning_effort: None,
             service_tier: None,
+            provider: LlmProvider::Shape,
         }
+    }
+
+    pub fn with_provider(mut self, provider: LlmProvider) -> Self {
+        self.provider = provider;
+        self
     }
 
     pub fn with_turn(mut self, turn_id: Option<String>, conversation_id: Option<String>) -> Self {
@@ -163,41 +242,55 @@ pub(crate) fn shape_proxy_request(
     api_key: &str,
     ctx: &ProxyContext,
 ) -> reqwest::RequestBuilder {
+    let bearer = ctx.provider.api_key(api_key);
     let mut builder = client
-        .post(completions_url())
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .header("X-Shape-Feature", &ctx.feature)
-        .header(
-            "X-Shape-Client-Version",
-            crate::core::build_attestation::client_version(),
-        );
-    if let Some(turn_id) = &ctx.turn_id {
-        builder = builder.header("X-Shape-Turn-Id", turn_id);
-    }
-    if let Some(conv_id) = &ctx.conversation_id {
-        builder = builder.header("X-Shape-Conversation-Id", conv_id);
-    }
-    if let Some(request_id) = &ctx.request_id {
-        builder = builder.header("X-Shape-Request-Id", request_id);
-    }
-    if let Some(breakdown) = &ctx.context_breakdown {
-        // Keep header under common proxy limits; breakdown is a small JSON object.
-        if breakdown.len() < 8_000 {
-            builder = builder.header("X-Shape-Context-Breakdown", breakdown);
+        .post(ctx.provider.completions_url())
+        .header("Authorization", format!("Bearer {}", bearer))
+        .header("Content-Type", "application/json");
+
+    match &ctx.provider {
+        LlmProvider::Shape => {
+            builder = builder
+                .header("X-Shape-Feature", &ctx.feature)
+                .header(
+                    "X-Shape-Client-Version",
+                    crate::core::build_attestation::client_version(),
+                );
+            if let Some(turn_id) = &ctx.turn_id {
+                builder = builder.header("X-Shape-Turn-Id", turn_id);
+            }
+            if let Some(conv_id) = &ctx.conversation_id {
+                builder = builder.header("X-Shape-Conversation-Id", conv_id);
+            }
+            if let Some(request_id) = &ctx.request_id {
+                builder = builder.header("X-Shape-Request-Id", request_id);
+            }
+            if let Some(breakdown) = &ctx.context_breakdown {
+                // Keep header under common proxy limits; breakdown is a small JSON object.
+                if breakdown.len() < 8_000 {
+                    builder = builder.header("X-Shape-Context-Breakdown", breakdown);
+                }
+            }
+            let device_id = crate::commands::device_id::get_device_id()
+                .ok()
+                .filter(|id| !id.is_empty())
+                .unwrap_or_default();
+            if !device_id.is_empty() {
+                builder = builder.header("X-Shape-Device-Id", &device_id);
+            }
+            if let Some(attestation) =
+                crate::core::build_attestation::build_attestation_header(&device_id)
+            {
+                builder = builder.header("X-Shape-Build-Attestation", attestation);
+            }
         }
-    }
-    let device_id = crate::commands::device_id::get_device_id()
-        .ok()
-        .filter(|id| !id.is_empty())
-        .unwrap_or_default();
-    if !device_id.is_empty() {
-        builder = builder.header("X-Shape-Device-Id", &device_id);
-    }
-    if let Some(attestation) =
-        crate::core::build_attestation::build_attestation_header(&device_id)
-    {
-        builder = builder.header("X-Shape-Build-Attestation", attestation);
+        LlmProvider::OpenRouter { .. } => {
+            // OpenRouter ranks/apps metadata — required for good attribution when BYOK.
+            builder = builder
+                .header("HTTP-Referer", "https://shape.dev")
+                .header("X-Title", "Shape");
+        }
+        LlmProvider::OpenAi { .. } => {}
     }
     builder
 }
@@ -273,6 +366,9 @@ pub async fn stream_chat(
     let max_tokens = get_model_max_tokens(model);
     logging::debug("stream", &format!("Using max_tokens={} for model={}", max_tokens, model));
 
+    let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
+    let direct_openai = matches!(proxy_ctx.provider, LlmProvider::OpenAi { .. });
+
     let mut body = json!({
         "model": model,
         "messages": messages,
@@ -284,30 +380,34 @@ pub async fn stream_chat(
     // OpenRouter reuse the cached prompt prefix across the many round-trips of a
     // single agent turn (system prompt + tool schemas + earlier messages), which is
     // the bulk of the input-token cost.
-    if let Some(session) = proxy_ctx
-        .conversation_id
-        .as_ref()
-        .or(proxy_ctx.turn_id.as_ref())
-    {
-        body["session_id"] = json!(session);
-    }
-    // Anthropic requires an explicit cache marker; OpenRouter's top-level
-    // `cache_control` enables automatic breakpoint placement for multi-turn chats.
-    if model.starts_with("anthropic/") {
-        body["cache_control"] = json!({ "type": "ephemeral" });
-    }
+    if !direct_openai {
+        if let Some(session) = proxy_ctx
+            .conversation_id
+            .as_ref()
+            .or(proxy_ctx.turn_id.as_ref())
+        {
+            body["session_id"] = json!(session);
+        }
+        // Anthropic requires an explicit cache marker; OpenRouter's top-level
+        // `cache_control` enables automatic breakpoint placement for multi-turn chats.
+        if model.starts_with("anthropic/") {
+            body["cache_control"] = json!({ "type": "ephemeral" });
+        }
 
-    // OpenRouter leaves Gemini thinking off unless requested. Without this, Flash
-    // dumps plans into normal `content` instead of the reasoning channel (think UI).
-    if let Some(reasoning) = reasoning_config_for_model(model, proxy_ctx.reasoning_effort.as_deref()) {
-        body["reasoning"] = reasoning;
-    }
+        // OpenRouter leaves Gemini thinking off unless requested. Without this, Flash
+        // dumps plans into normal `content` instead of the reasoning channel (think UI).
+        if let Some(reasoning) =
+            reasoning_config_for_model(&model, proxy_ctx.reasoning_effort.as_deref())
+        {
+            body["reasoning"] = reasoning;
+        }
 
-    // Fast mode = OpenRouter priority / service_tier — independent of reasoning effort.
-    if let Some(tier) = proxy_ctx.service_tier.as_deref() {
-        let t = tier.trim().to_ascii_lowercase();
-        if t == "priority" || t == "fast" || t == "flex" {
-            body["service_tier"] = json!(if t == "fast" { "priority" } else { t.as_str() });
+        // Fast mode = OpenRouter priority / service_tier — independent of reasoning effort.
+        if let Some(tier) = proxy_ctx.service_tier.as_deref() {
+            let t = tier.trim().to_ascii_lowercase();
+            if t == "priority" || t == "fast" || t == "flex" {
+                body["service_tier"] = json!(if t == "fast" { "priority" } else { t.as_str() });
+            }
         }
     }
 
@@ -915,6 +1015,8 @@ pub async fn complete_chat_cancellable(
         return Err(AppError::Message("Cancelled".to_string()));
     }
 
+    let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
+
     let body = json!({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -966,6 +1068,7 @@ pub async fn complete_chat_with_max_tokens(
     max_tokens: u32,
     proxy_ctx: &ProxyContext,
 ) -> Result<(String, usize, usize), AppError> {
+    let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
     let body = json!({
         "model": model,
         "messages": [{"role": "user", "content": message}],

@@ -173,8 +173,7 @@ async function captureLivePage(req: CaptureRequestPayload, container: HTMLDivEle
 
     try {
         const { commands } = await import("@/lib/backend");
-        const { DESIGN_BRIDGE_SCRIPT } = await import("@/features/preview/design/bridge-script");
-        const info = await commands.startDesignProxy(url, DESIGN_BRIDGE_SCRIPT);
+        const info = await commands.startDesignProxy(url, "");
         iframe.src = info.src;
         container.appendChild(iframe);
     } catch (err) {

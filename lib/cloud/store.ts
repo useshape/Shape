@@ -225,7 +225,8 @@ function applyCachedProfile(token: string, profile: CachedProfile) {
     isLoggingIn: false,
     isLoading: false,
     revalidating: true,
-    offline: false,
+    // Keep the last connectivity flag until fetchAccount succeeds or fails.
+    offline: state.loggedIn ? state.offline : false,
     error: null,
     userId: profile.userId,
     email: profile.email,
@@ -378,6 +379,7 @@ async function applyToken(token: string | null) {
     }
 
     if (cached && isNetwork) {
+      // Soft offline: keep cached session, no toast — BYOK / local chats still work.
       setState({
         loggedIn: true,
         isLoading: false,
@@ -392,9 +394,6 @@ async function applyToken(token: string | null) {
         creditsRemaining: cached.creditsRemaining,
         creditsIncluded: cached.creditsIncluded ?? 0,
         freeAutoPercent: cached.freeAutoPercent,
-      });
-      void import("@/lib/errors/catalog").then(({ notifyOfflineOnce }) => {
-        notifyOfflineOnce();
       });
       return;
     }

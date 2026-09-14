@@ -46,6 +46,7 @@ import { KeyboardShortcutsView } from "./sections/shortcuts";
 import { PluginsSettingsView } from "./sections/plugins";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import { useRouter } from "next/navigation";
+import { useShapeAuth } from "@/lib/cloud/store";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -601,6 +602,8 @@ export function SettingsView({
     onBack?: () => void;
 } = {}) {
     const settings = useSettings();
+    const auth = useShapeAuth();
+    const pluginsNavDisabled = !auth.loggedIn || Boolean(auth.offline);
     const searchParams = useSearchParams();
     const router = useRouter();
     const [query, setQuery] = useState("");
@@ -814,6 +817,7 @@ export function SettingsView({
                                                     <NavLeafButton
                                                         key={leaf.id}
                                                         active={activeLeafId === leaf.id}
+                                                        disabled={leaf.id === "plugins" && pluginsNavDisabled}
                                                         onClick={() => onLeafClick(leaf)}
                                                     >
                                                         <span className="min-w-0 flex-1 truncate text-left">{leaf.label}</span>
