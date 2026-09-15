@@ -1,9 +1,8 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiArrowGoBackLine, RiArrowRightLine, RiArrowRightSLine, RiArrowUpLine, RiChat3Line, RiCheckLine, RiClipboardLine, RiCodeLine, RiCornerDownLeftLine, RiListCheck3, RiPaletteLine, RiPencilLine, RiShieldLine } from "@remixicon/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { RiAddLine, RiArrowDownSLine, RiArrowGoBackLine, RiArrowRightLine, RiArrowRightSLine, RiArrowUpLine, RiBrushFill, RiChat3Line, RiCheckLine, RiClipboardLine, RiCodeLine, RiCornerDownLeftLine, RiGitBranchLine, RiFolderLine, RiListCheck3, RiMicLine, RiPencilLine, RiSpyFill } from "@remixicon/react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icon";
-import { MorphMenu } from "./morph";
 import { TypingDots, UserMessageCard } from "./bubble";
 import { DemoAvatar } from "./avatar";
 import { Button } from "./ui/button";
@@ -19,18 +18,19 @@ import { providerIcon } from "./provider";
 import { cn } from "@/lib/utils";
 import type { DemoChatId } from "./sidebar";
 import type { DemoFile } from "./panel";
-import { ICON_SIZE_MD, ICON_SIZE_SM } from "../ui/icon";
+import { ICON_SIZE_MD } from "../ui/icon";
+import { ChatMarkdown } from "@/features/chat/ui/md/view";
 
 /* Composer copied from shape/features/chat/ui/composer/input.tsx
    EditApprovalRow / WorkflowEditPreview from blocks/turn.tsx
    Tasks strip from composer/activity.tsx */
 
 const CHAT_MODES = [
-  { id: "Code", icon: RiCodeLine, color: "#3B82F6" },
-  { id: "Ask", icon: RiChat3Line, color: "#22C55E" },
-  { id: "Plan", icon: RiListCheck3, color: "#A855F7" },
-  { id: "Visual", icon: RiPaletteLine, color: "#EC4899" },
-  { id: "Review", icon: RiShieldLine, color: "#F59E0B" },
+  { id: "Code", icon: RiCodeLine, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
+  { id: "Ask", icon: RiChat3Line, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
+  { id: "Plan", icon: RiListCheck3, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
+  { id: "Visual", icon: RiBrushFill, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
+  { id: "Review", icon: RiSpyFill, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
 ] as const;
 
 const COMPOSER_HINTS = [
@@ -45,7 +45,7 @@ const COMPOSER_HINTS = [
 const REVIEW_PROMPT =
   "Run an adversarial review on the auth module. Hunt for CVEs, not style nits.";
 const REVIEW_REPLY =
-  "jwt.decode without verify in src/lib/auth.ts matches CVE-2022-23529. Tokens can be forged with alg none. Switched it to jwt.verify with an HS256 allowlist.";
+  "jwt.decode without verify in `src/lib/auth.ts` matches **CVE-2022-23529**. Tokens can be forged with `alg: none`.\n\n```ts\nexport function readToken(token: string) {\n  return jwt.verify(token, secret, { algorithms: [\"HS256\"] });\n}\n```\n\n### Still open\n\n- [x] Reject unsigned tokens\n- [ ] Rotate the signing secret\n- [ ] Audit refresh cookies\n\n> Switched the call to `jwt.verify` with an HS256 allowlist.";
 
 const REVIEW_DIFF = {
   kind: "edit" as const,
@@ -96,14 +96,20 @@ Alex`,
 
 type DoneTurn = {
   prompt: string;
-  tools: { action: string; detail?: string; preview?: "slack" | "search" }[];
+  tools: {
+    action: string;
+    detail?: string;
+    preview?: "slack" | "search" | "terminal";
+    sources?: { title: string; host: string }[];
+    output?: string;
+  }[];
   reply: string;
 };
 
 const REVIEW_SEED: DoneTurn[] = [
   {
     prompt: "Walk the auth module and flag anything unsafe.",
-    reply: "jwt.decode is used without verify in src/lib/auth.ts. That is the first place I would attack.",
+    reply: "jwt.decode is used without verify in `src/lib/auth.ts`. That is the first place I would attack.\n\n```ts\nreturn jwt.decode(token);\n```\n\nA forged `alg: none` token would be accepted here.",
     tools: [
       { action: "Explored", detail: "src/lib/auth.ts" },
       { action: "Searched", detail: "jwt.decode" },
@@ -151,6 +157,12 @@ const OPS_SEARCH = [
   { title: "firestore/waitlist", detail: "status: invited · followUp: null" },
 ];
 
+const WEB_SOURCES = [
+  { title: "CVE-2022-23529 jsonwebtoken", host: "nvd.nist.gov" },
+  { title: "jwt.decode without verify", host: "auth0.com" },
+  { title: "Forging tokens with alg none", host: "datatracker.ietf.org" },
+];
+
 const OPS_FIREBASE = {
   kind: "edit" as const,
   file: "firestore/waitlist.json",
@@ -180,6 +192,85 @@ Alex`,
   via: "Gmail",
 };
 
+const MARKDOWN_REPLY = `Settled assistant replies now stay on screen while the next turn starts.
+
+## What changed
+
+The transcript no longer jumps the last finished answer out of view. **Streaming** still appends below, and ~~the old jump-to-bottom lock~~ is gone.
+
+### Highlights
+
+- Keep the last settled reply pinned until you scroll
+- Restore the previous turn with one click
+- \`Shift+Enter\` still inserts a newline
+
+1. Finish generating
+2. Send the follow-up
+3. The settled reply stays visible
+
+> If a turn is still streaming, the pin waits until that reply is settled.
+
+| State | Pin | Scroll |
+| --- | --- | --- |
+| Streaming | off | follow |
+| Settled | on | manual |
+| Restored | on | jump |
+
+\`inline code\` and fenced blocks both render:
+
+\`\`\`ts
+export function shouldPinReply(status: "streaming" | "settled") {
+  return status === "settled";
+}
+\`\`\`
+
+See the [scroll pin notes](https://useshape.org/docs/chat) and this checklist:
+
+- [x] Persist pin across tab switches
+- [ ] Remember pin per conversation
+- [ ] Keyboard shortcut
+
+---
+
+Call \`pinSettledReply(turnId)\` after \`onFinish\`.
+`;
+
+const VISUAL_REPLY = `The marketing hero is a two-stop rose gradient with a tighter headline and a single primary CTA.
+
+### Type
+
+- **Display:** \`text-title-2-medium\`
+- **Body:** \`text-body-medium\`
+- **Muted:** \`text-text-secondary\`
+
+\`\`\`tsx
+<h1 className="text-title-2-medium text-text-primary">
+  Ship the review, not the chrome.
+</h1>
+\`\`\`
+
+> Visual mode only touched \`app/page.tsx\` and the hero tokens. Pricing and docs were left alone.
+`;
+
+const PLAN_REPLY = `## Auth migration plan
+
+1. **Inventory** — list every \`jwt.decode\` call and the routes that trust it
+2. **Verify** — switch those calls to \`jwt.verify\` with an algorithm allowlist
+3. **Tests** — add a forged \`alg: none\` fixture and a happy-path token
+4. **Rollout** — ship behind a flag, then remove decode
+
+### Risks
+
+- Old clients still send unsigned tokens for about 48h
+- Middleware caches the decoded payload today
+
+\`\`\`bash
+rg "jwt\\.decode" src
+\`\`\`
+
+Once that list is empty, flip \`AUTH_VERIFY=1\`.
+`;
+
 const STATIC: Record<
   Exclude<DemoChatId, "review" | "emails" | "ops">,
   { files: DemoFile[]; turns: DoneTurn[] }
@@ -188,15 +279,28 @@ const STATIC: Record<
     files: [
       { name: "app/pricing/page.tsx", add: 84, del: 31, status: "M" },
       { name: "components/pricing.tsx", add: 52, del: 40, status: "M" },
+      { name: "app/pricing/faq.tsx", add: 28, del: 6, status: "M" },
     ],
     turns: [
       {
         prompt: "Rebuild the pricing page. Two columns, keep the rest of the site.",
         reply:
-          "The /pricing page is a two-column layout now — plans on the left, FAQ on the right.\n\n{{page}}\n\nAnnual billing is the default. I left the homepage alone.",
+          "The `/pricing` page is a two-column layout now — plans on the left, FAQ on the right.\n\n{{page}}\n\n### Plans\n\n- **Pro** — $20 / month, annual default\n- **Team** — $16 / seat\n\nAnnual billing is the default. I left the homepage alone.\n\n```tsx\n<section className=\"grid gap-8 lg:grid-cols-[1fr_20rem]\">\n  <PricingTable />\n  <PricingFaq />\n</section>\n```",
         tools: [
           { action: "Explored", detail: "app/pricing" },
+          { action: "Searched", detail: "pricing grid" },
           { action: "Edited", detail: "app/pricing/page.tsx" },
+          { action: "Edited", detail: "components/pricing.tsx" },
+          { action: "Ran", detail: "npm run lint", preview: "terminal", output: "✓ lint passed in 1.2s" },
+        ],
+      },
+      {
+        prompt: "Add a FAQ column and quote the annual discount.",
+        reply:
+          "FAQ is a sticky aside. The annual toggle now shows **20% off** in the header.\n\n> Teams save 20% when they pay yearly.\n\n| Plan | Monthly | Yearly |\n| --- | --- | --- |\n| Pro | $20 | $16 |\n| Team | $16 | $13 |",
+        tools: [
+          { action: "Read", detail: "app/pricing/page.tsx" },
+          { action: "Edited", detail: "app/pricing/faq.tsx" },
           { action: "Edited", detail: "components/pricing.tsx" },
         ],
       },
@@ -206,22 +310,30 @@ const STATIC: Record<
     files: [
       { name: "src/app/api/webhooks/stripe/route.ts", add: 62, del: 0, status: "A" },
       { name: "src/lib/stripe.ts", add: 14, del: 2, status: "M" },
+      { name: "src/lib/stripe.test.ts", add: 41, del: 0, status: "A" },
     ],
     turns: [
       {
         prompt: "Wire Stripe webhooks for checkout.session.completed and cover the signature check.",
         reply:
-          "The webhook route verifies the Stripe signature and marks the order paid on checkout.session.completed.",
+          "The webhook route verifies the Stripe signature and marks the order paid on `checkout.session.completed`.\n\n```ts\nconst event = stripe.webhooks.constructEvent(raw, sig, secret);\nif (event.type === \"checkout.session.completed\") {\n  await markPaid(event.data.object.id);\n}\n```\n\nA bad signature now returns **400** instead of throwing.",
         tools: [
           { action: "Explored", detail: "src/app/api" },
           { action: "Searched", detail: "stripe" },
           { action: "Edited", detail: "src/app/api/webhooks/stripe/route.ts" },
           { action: "Edited", detail: "src/lib/stripe.ts" },
+          {
+            action: "Ran",
+            detail: "vitest src/lib/stripe.test.ts",
+            preview: "terminal",
+            output: "✓ rejects a forged signature\n✓ marks checkout.session.completed paid",
+          },
         ],
       },
       {
         prompt: "Also handle invoice.paid and write a test for a bad signature.",
-        reply: "invoice.paid now marks the subscription active. The bad-signature test is in stripe.test.ts.",
+        reply:
+          "`invoice.paid` now marks the subscription **active**.\n\n1. Verify signature\n2. Switch on `event.type`\n3. Persist `subscription.status`\n\nThe bad-signature test is in `stripe.test.ts`.",
         tools: [
           { action: "Edited", detail: "src/app/api/webhooks/stripe/route.ts" },
           { action: "Edited", detail: "src/lib/stripe.test.ts" },
@@ -237,7 +349,8 @@ const STATIC: Record<
     turns: [
       {
         prompt: "Add rate limiting to the /api/checkout route and cover it with tests.",
-        reply: "Checkout now allows 10 requests a minute per IP. Tests are in src/lib/rate-limit.test.ts.",
+        reply:
+          "Checkout now allows **10 requests a minute** per IP.\n\n```ts\nexport const checkoutLimit = rateLimit({ windowMs: 60_000, max: 10 });\n```\n\nTests live in `src/lib/rate-limit.test.ts`.",
         tools: [
           { action: "Explored", detail: "src/app/api/checkout" },
           { action: "Edited", detail: "src/lib/rate-limit.ts" },
@@ -246,8 +359,87 @@ const STATIC: Record<
       },
       {
         prompt: "Return 429 with a Retry-After header when the limit is hit.",
-        reply: "Over-limit requests now return 429 and a Retry-After header from the checkout route.",
-        tools: [{ action: "Edited", detail: "src/app/api/checkout/route.ts" }],
+        reply:
+          "Over-limit requests now return `429` and a `Retry-After` header.\n\n> Retry-After is seconds remaining in the current window.\n\n| Status | Meaning |\n| --- | --- |\n| 200 | charged |\n| 429 | slow down |",
+        tools: [
+          { action: "Edited", detail: "src/app/api/checkout/route.ts" },
+          { action: "Ran", detail: "vitest src/lib/rate-limit.test.ts", preview: "terminal", output: "✓ returns 429 with Retry-After" },
+        ],
+      },
+    ],
+  },
+  markdown: {
+    files: [
+      { name: "features/chat/ui/message/list.tsx", add: 36, del: 11, status: "M" },
+      { name: "features/chat/ui/shell/history-stepper.tsx", add: 22, del: 4, status: "M" },
+    ],
+    turns: [
+      {
+        prompt: "Keep settled assistant replies visible when the next turn starts. Cover the markdown cases too.",
+        reply: MARKDOWN_REPLY,
+        tools: [
+          { action: "Explored", detail: "features/chat/ui" },
+          { action: "Searched", detail: "scrollIntoView" },
+          {
+            action: "Searched web",
+            detail: "pin last message while streaming",
+            preview: "search",
+            sources: [
+              { title: "Keep the last reply in view", host: "developer.mozilla.org" },
+              { title: "Chat scroll pinning patterns", host: "nngroup.com" },
+              { title: "IntersectionObserver sticky footers", host: "web.dev" },
+            ],
+          },
+          { action: "Read", detail: "features/chat/ui/message/list.tsx" },
+          { action: "Edited", detail: "features/chat/ui/message/list.tsx" },
+          { action: "Edited", detail: "features/chat/ui/shell/history-stepper.tsx" },
+          {
+            action: "Ran",
+            detail: "npm test -- chat-renderer",
+            preview: "terminal",
+            output: "✓ keeps settled replies mounted\n✓ does not pin while streaming",
+          },
+        ],
+      },
+      {
+        prompt: "Show a table of pin states and a checklist in the reply so we can screenshot docs.",
+        reply:
+          "Added the state table and the checklist in the reply above.\n\n**Still open**\n\n- [ ] Remember pin per conversation\n- [ ] Keyboard shortcut\n\n`pinSettledReply` is exported from `history-stepper.tsx`.",
+        tools: [
+          { action: "Read", detail: "features/chat/ui/shell/history-stepper.tsx" },
+          { action: "Edited", detail: "features/chat/ui/message/list.tsx" },
+        ],
+      },
+    ],
+  },
+  visual: {
+    files: [
+      { name: "app/page.tsx", add: 48, del: 19, status: "M" },
+      { name: "app/globals.css", add: 12, del: 4, status: "M" },
+    ],
+    turns: [
+      {
+        prompt: "Visual pass on the marketing hero. Rose gradient, tighter type, one CTA.",
+        reply: VISUAL_REPLY,
+        tools: [
+          { action: "Explored", detail: "app/page.tsx" },
+          { action: "Edited", detail: "app/page.tsx" },
+          { action: "Edited", detail: "app/globals.css" },
+        ],
+      },
+    ],
+  },
+  plan: {
+    files: [],
+    turns: [
+      {
+        prompt: "Plan the auth migration before we touch files.",
+        reply: PLAN_REPLY,
+        tools: [
+          { action: "Explored", detail: "src/lib/auth.ts" },
+          { action: "Searched", detail: "jwt.decode" },
+          { action: "Read", detail: "src/middleware.ts" },
+        ],
       },
     ],
   },
@@ -256,7 +448,13 @@ const STATIC: Record<
 type Phase = "idle" | "typing" | "thinking" | "working" | "approval" | "streaming" | "done";
 type TaskStatus = "running" | "pending" | "done";
 type TaskItem = { id: string; label: string; status: TaskStatus };
-type ToolStep = { action: string; detail?: string; preview?: "slack" | "search" };
+type ToolStep = {
+  action: string;
+  detail?: string;
+  preview?: "slack" | "search" | "terminal";
+  sources?: { title: string; host: string }[];
+  output?: string;
+};
 type Approval =
   | {
       kind: "edit";
@@ -330,19 +528,41 @@ function SendSpiral() {
   );
 }
 
+function UsageRing({ percent, size = 16 }: { percent: number; size?: number }) {
+  const stroke = 1.75;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (Math.max(0, Math.min(100, percent)) / 100) * circumference;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90" aria-hidden>
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-border-secondary" />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        className="text-accent"
+      />
+    </svg>
+  );
+}
+
 function ComposerTasksStrip({ items }: { items: TaskItem[] }) {
   if (items.length === 0) return null;
   const active = items.find((i) => i.status === "running") ?? items[0];
-  const openH = Math.min(220, 48 + items.length * 36);
+  const done = items.filter((i) => i.status === "done").length;
   return (
-    <MorphMenu
-      aria-label="Tasks"
-      align="start"
-      openWidth={280}
-      openHeight={openH}
-      closedHeight={32}
-      trigger={
-        <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex h-6 max-w-[180px] items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+        >
           {active.status === "running" ? (
             <span className="t-spin-check shrink-0" data-state="spin">
               <span className="t-spin-check__ring" />
@@ -350,34 +570,31 @@ function ComposerTasksStrip({ items }: { items: TaskItem[] }) {
           ) : (
             <span className="size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
           )}
-          <span className="max-w-[180px] truncate">{active.label}</span>
-        </>
-      }
-    >
-      <div className="flex flex-col py-1">
+          <span className="truncate">{active.label}</span>
+          <span className="tabular-nums text-xs text-text-muted">
+            {done}/{items.length}
+          </span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64 p-1">
         {items.map((item) => (
-          <div key={item.id} className="flex min-h-8 items-center gap-2 px-3 py-1.5 text-sm">
-            {item.status === "running" ? (
+          <div key={item.id} className="flex min-h-8 items-center gap-2 rounded-md px-2 py-1 text-sm">
+            {item.status === "done" ? (
+              <Icon icon={RiCheckLine} className="text-success" />
+            ) : item.status === "running" ? (
               <span className="t-spin-check shrink-0" data-state="spin">
                 <span className="t-spin-check__ring" />
               </span>
-            ) : item.status === "done" ? (
-              <Icon icon={RiCheckLine} className="text-success" />
             ) : (
               <span className="size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
             )}
-            <span
-              className={cn(
-                "min-w-0 flex-1 truncate",
-                item.status === "running" ? "text-text-primary" : "text-text-muted",
-              )}
-            >
+            <span className={cn("min-w-0 flex-1 truncate", item.status === "running" ? "text-text-primary" : "text-text-muted")}>
               {item.label}
             </span>
           </div>
         ))}
-      </div>
-    </MorphMenu>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -392,59 +609,38 @@ function PendingEditsPanel({
 }) {
   if (files.length === 0) return null;
   const addTotal = files.reduce((s, f) => s + f.add, 0);
-  const openH = Math.min(240, 56 + files.length * 36);
   return (
-    <MorphMenu
-      aria-label="Changes"
-      align="start"
-      openWidth={280}
-      openHeight={openH}
-      closedHeight={32}
-      trigger={
-        <>
-          <span>Changes</span>
-          {addTotal > 0 ? (
-            <span className="text-success">+{addTotal}</span>
-          ) : (
-            <span className="tabular-nums text-text-muted">{files.length}</span>
-          )}
-        </>
-      }
-    >
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
-          <span className="text-sm text-text-muted">
-            {files.length} file{files.length === 1 ? "" : "s"}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={onUndoAll}
-              className="rounded-md px-2 py-1 text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
-            >
-              Undo All
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+        >
+          Changes
+          {addTotal > 0 ? <span className="text-success">+{addTotal}</span> : <span className="text-text-muted">{files.length}</span>}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72 p-1">
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <span className="text-sm text-text-muted">{files.length} files</span>
+          <div className="flex gap-1">
+            <button type="button" onClick={onUndoAll} className="rounded-md px-2 py-1 text-sm text-text-muted hover:bg-panel-hover">
+              Undo
             </button>
-            <button
-              type="button"
-              onClick={onAcceptAll}
-              className="rounded-md bg-accent px-2 py-1 text-sm text-white"
-            >
-              Keep All
+            <button type="button" onClick={onAcceptAll} className="rounded-md px-2 py-1 text-sm text-text-primary hover:bg-panel-hover">
+              Keep
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {files.map((f) => (
-            <div key={f.name} className="flex min-h-8 items-center gap-2 px-3 py-1.5 text-sm">
-              <Icon icon={RiPencilLine} className="text-text-muted" />
-              <span className="min-w-0 flex-1 truncate text-text-primary">{f.name}</span>
-              <span className="text-success">+{f.add}</span>
-              {f.del > 0 ? <span className="text-error">−{f.del}</span> : null}
-            </div>
-          ))}
-        </div>
-      </div>
-    </MorphMenu>
+        {files.map((f) => (
+          <div key={f.name} className="flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+            <span className="min-w-0 flex-1 truncate">{f.name}</span>
+            <span className="text-success">+{f.add}</span>
+            {f.del > 0 ? <span className="text-error">−{f.del}</span> : null}
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -493,15 +689,28 @@ function Composer({
           }}
           aria-hidden
         />
-        <div className="relative shrink-0 overflow-visible px-0 pb-3 pt-1">
-          {sending || pending.length > 0 ? (
-            <div className="mb-2 flex flex-wrap items-end justify-start gap-1.5 pl-1">
+        <div className="relative shrink-0 overflow-visible px-0 pb-3 pt-0">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+            <div className="pointer-events-auto flex h-8 items-center gap-1 rounded-xl border border-border-subtle bg-surface-3 px-2">
+              <span className="inline-flex min-w-0 items-center gap-1.5 px-1 text-sm text-text-secondary">
+                <Icon icon={RiGitBranchLine} className="text-text-muted" />
+                <span className="truncate">main</span>
+              </span>
+              <span className="inline-flex min-w-0 items-center gap-1.5 px-1 text-sm text-text-secondary">
+                <Icon icon={RiFolderLine} className="text-text-muted" />
+                <span className="truncate">shape</span>
+              </span>
+              <span className="flex-1" />
               <PendingEditsPanel files={pending} onAcceptAll={onAcceptAll} onUndoAll={onUndoAll} />
               <ComposerTasksStrip items={tasks} />
+              <span className="inline-flex items-center gap-1.5 px-1 text-sm tabular-nums text-text-muted">
+                <UsageRing percent={57} />
+                57%
+              </span>
             </div>
-          ) : null}
-          <div className="relative z-10 overflow-visible">
-            <div className="relative flex w-full flex-col rounded-3xl border border-border-subtle bg-secondary transition-colors focus-within:border-border">
+          </div>
+          <div className="relative z-10 overflow-visible pt-4">
+            <div className="relative flex w-full flex-col rounded-[1.35rem] border border-border-subtle bg-surface-3 transition-colors focus-within:border-border">
               <div className="flex min-h-0 flex-col overflow-hidden rounded-[inherit]">
                 <div className="relative px-4 py-3">
                   {!hasText ? (
@@ -546,23 +755,27 @@ function Composer({
                         <Button
                             variant="ghost"
                             size="xs"
-                            className="h-8 rounded-full px-2.5 font-medium"
-                            style={{ backgroundColor: `${mode.color}22`, color: mode.color }}
+                            className="h-8 px-2 font-medium text-[color:var(--mode-fg)] bg-[var(--mode-bg)] hover:bg-[var(--mode-bg)] hover:text-[color:var(--mode-fg)] hover:brightness-110"
+                            style={{
+                              ["--mode-fg" as string]: mode.color,
+                              ["--mode-bg" as string]: mode.bg,
+                            }}
                             aria-label={mode.id}
                         >
                         <div className="flex items-center gap-1.5 text-sm">
-                          <Icon icon={mode.icon} />
+                          <Icon icon={mode.icon} style={{ color: mode.color }} />
                           <span className="truncate">{mode.id}</span>
-                          <Icon icon={RiArrowDownSLine} className="opacity-70" />
                         </div>
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" side="top" className="w-48">
+                      <DropdownMenuContent align="start" side="top" className="w-90">
                         {CHAT_MODES.map((m) => (
-                          <DropdownMenuItem key={m.id} onClick={() => setMode(m)}>
-                            <Icon icon={m.icon} />
-                            <span className="flex-1">{m.id}</span>
-                            {mode.id === m.id ? <Icon icon={RiCheckLine} className="text-text-muted" /> : null}
+                          <DropdownMenuItem key={m.id} onClick={() => setMode(m)} className="items-start gap-2.5 py-2 rounded-xl">
+                            <Icon icon={m.icon} className="mt-0.5" style={{ color: m.color }} />
+                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                              <span className="text-sm text-text-primary">{m.id}</span>
+                              <span className="text-sm leading-snug text-text-muted">{m.description}</span>
+                            </span>
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
@@ -574,24 +787,30 @@ function Composer({
                         <Button
                             variant="ghost"
                             size="xs"
-                            className="h-8 max-w-[200px] rounded-full px-2 font-medium"
-                            aria-label="Auto"
+                            className="h-8 max-w-[200px] px-2 font-normal text-text-muted hover:text-text-primary"
+                            aria-label="GPT-5.6 Mini"
                         >
-                        <div className="flex min-w-0 items-center gap-1 text-sm">
+                        <div className="flex min-w-0 items-center gap-1.5 text-sm">
                           {providerIcon("auto", 14)}
-                          <span className="truncate text-text-primary">Auto</span>
-                          <span className="shrink-0 text-text-muted">Low Fast</span>
-                          <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted opacity-70" />
+                          <span className="truncate">GPT-5.6 Mini</span>
+                          <Icon icon={RiArrowDownSLine} className="shrink-0" />
                         </div>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" side="top" className="w-[260px]">
                         <DropdownMenuItem>
-                          <span className="flex-1">Auto</span>
+                          <span className="flex-1">GPT-5.6 Mini</span>
                           <Icon icon={RiCheckLine} className="text-text-muted" />
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    <button
+                      type="button"
+                      aria-label="Voice input"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-md text-text-muted hover:text-text-primary"
+                    >
+                      <Icon icon={RiMicLine} />
+                    </button>
                     <button
                       type="button"
                       aria-label={sending ? "Generating" : "Send"}
@@ -614,7 +833,44 @@ function Composer({
   );
 }
 
-function ToolRow({ action, detail, preview }: ToolStep) {
+function AgentProgressBlock({ items }: { items: TaskItem[] }) {
+  if (items.length === 0) return null;
+  const done = items.filter((i) => i.status === "done").length;
+  const active = items.find((i) => i.status === "running");
+  return (
+    <div className="my-1 flex w-full flex-col gap-1.5">
+      <div className="flex items-center gap-2 text-sm">
+        <Icon icon={RiListCheck3} className="shrink-0 text-text-muted" />
+        <span className="font-medium text-text-primary">
+          {done} of {items.length} done
+        </span>
+        {active ? (
+          <span className="agent-progress-loading-text ml-auto min-w-0 truncate text-sm">
+            {active.label}
+          </span>
+        ) : null}
+      </div>
+      {items.map((item) => (
+        <div key={item.id} className="flex items-center gap-2">
+          {item.status === "done" ? (
+            <Icon icon={RiCheckLine} className="shrink-0 text-success" />
+          ) : item.status === "running" ? (
+            <span className="t-spin-check shrink-0" data-state="spin">
+              <span className="t-spin-check__ring" />
+            </span>
+          ) : (
+            <span className="size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
+          )}
+          <span className={cn("truncate text-sm", item.status === "running" ? "text-text-primary" : "text-text-muted")}>
+            {item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ToolRow({ action, detail, preview, sources, output }: ToolStep) {
   const key = `${action} ${detail ?? ""}`.toLowerCase();
   const brand = key.includes("gmail")
     ? "gmail"
@@ -623,6 +879,7 @@ function ToolRow({ action, detail, preview }: ToolStep) {
       : key.includes("firebase") || key.includes("firestore")
         ? "firebase"
         : null;
+  const hits = sources?.length ? sources : preview === "search" ? OPS_SEARCH.map((h) => ({ title: h.title, host: h.detail })) : [];
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1.5 animate-in fade-in py-0.5 duration-300 chat-text font-medium text-text-primary/80">
@@ -651,15 +908,23 @@ function ToolRow({ action, detail, preview }: ToolStep) {
           </div>
         </div>
       ) : null}
-      {preview === "search" ? (
-        <div className="my-1 ml-5 overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
-          {OPS_SEARCH.map((hit) => (
-            <div key={hit.title} className="border-b border-border-subtle px-3 py-2 last:border-b-0">
-              <p className="chat-text font-medium text-text-primary">{hit.title}</p>
-              <p className="mt-0.5 chat-text text-text-secondary">{hit.detail}</p>
+      {preview === "search" || hits.length > 0 ? (
+        <div className="my-0.5 flex flex-col gap-0.5">
+          {hits.map((hit) => (
+            <div key={`${hit.title}-${hit.host}`} className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1">
+              <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border-subtle bg-surface-3 text-[10px] text-text-muted">
+                {(hit.host || hit.title).slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{hit.title}</span>
+              <span className="max-w-[40%] shrink-0 truncate text-xs text-text-muted">{hit.host}</span>
             </div>
           ))}
         </div>
+      ) : null}
+      {preview === "terminal" && output ? (
+        <pre className="my-1 ml-5 overflow-x-auto rounded-xl border border-border-subtle bg-surface-3 px-3 py-2 font-mono text-xs text-text-secondary">
+          {output}
+        </pre>
       ) : null}
     </div>
   );
@@ -832,18 +1097,16 @@ const STREAM_SPLIT = /(\{\{page\}\}|\s+)/;
 
 function StreamText({ text, count, streaming }: { text: string; count: number; streaming: boolean }) {
   const tokens = useMemo(() => text.split(STREAM_SPLIT), [text]);
-  const shown = tokens.slice(0, count);
+  const shown = tokens.slice(0, count).join("");
+  const parts = shown.split(/\{\{page\}\}/);
   return (
     <div className={cn("chat-markdown prose-compact max-w-none min-w-0", streaming && "chat-stream-fade-in")}>
-      {shown.map((w, i) =>
-        w === "{{page}}" ? (
-          <DemoPageShot key={i} />
-        ) : (
-          <span key={i} className="t-stream-w is-in">
-            {w}
-          </span>
-        ),
-      )}
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {part ? <ChatMarkdown content={part} /> : null}
+          {i < parts.length - 1 ? <DemoPageShot /> : null}
+        </Fragment>
+      ))}
     </div>
   );
 }
@@ -857,6 +1120,7 @@ function AssistantTurn({
   onResolve,
   reply,
   streamCount,
+  tasks,
 }: {
   phase: Phase;
   tools: ToolStep[];
@@ -866,6 +1130,7 @@ function AssistantTurn({
   onResolve: (approved: boolean) => void;
   reply: string | null;
   streamCount: number;
+  tasks?: TaskItem[];
 }) {
   return (
     <div className="group relative z-10 mb-2 flex w-full flex-col gap-1">
@@ -878,6 +1143,8 @@ function AssistantTurn({
         </div>
         <div className="min-w-0 chat-text text-text-primary">
           {phase === "thinking" ? <TypingDots /> : null}
+
+          {tasks && tasks.length > 0 ? <AgentProgressBlock items={tasks} /> : null}
 
           {tools.length > 0 || approval ? (
             <div className="mb-2 select-none">
@@ -905,7 +1172,7 @@ function AssistantTurn({
               <Collapse open={workingOpen}>
                 <div className="mt-0.5 flex flex-col gap-0.5">
                   {tools.map((t, i) => (
-                    <ToolRow key={`${i}-${t.action}-${t.detail ?? ""}`} action={t.action} detail={t.detail} preview={t.preview} />
+                    <ToolRow key={`${i}-${t.action}-${t.detail ?? ""}`} {...t} />
                   ))}
                   {approval?.status === "pending" ? (
                     approval.kind === "email" ? (
@@ -937,6 +1204,25 @@ function AssistantTurn({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function HistoryTurn({ turn }: { turn: DoneTurn }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div>
+      <UserBubble text={turn.prompt} />
+      <AssistantTurn
+        phase="done"
+        tools={turn.tools}
+        workingOpen={open}
+        onToggleWorking={() => setOpen((v) => !v)}
+        approval={null}
+        onResolve={() => undefined}
+        reply={turn.reply}
+        streamCount={turn.reply.split(/(\{\{page\}\}|\s+)/).length}
+      />
     </div>
   );
 }
@@ -1174,7 +1460,7 @@ export function DemoChat({
               reply: REVIEW_REPLY,
               tools: [
                 { action: "Explored", detail: "src/lib/auth.ts" },
-                { action: "Web search", detail: "CVE jwt.decode jsonwebtoken" },
+                { action: "Web search", detail: "CVE jwt.decode jsonwebtoken", preview: "search", sources: WEB_SOURCES },
                 { action: "Edited", detail: "src/lib/auth.ts" },
                 { action: "Edited", detail: "src/lib/auth.test.ts" },
               ],
@@ -1332,7 +1618,7 @@ export function DemoChat({
         const explore: ToolStep[] = [
           { action: "Explored", detail: "src/lib/auth.ts" },
           { action: "Searched", detail: "jwt.decode" },
-          { action: "Web search", detail: "CVE-2022-23529 jsonwebtoken decode" },
+          { action: "Web search", detail: "CVE-2022-23529 jsonwebtoken decode", preview: "search", sources: WEB_SOURCES },
         ];
         for (const row of explore) {
           if (cancelled) return;
@@ -1434,19 +1720,7 @@ export function DemoChat({
           >
             <div className="mx-auto flex min-h-full w-full min-w-0 max-w-4xl flex-col pb-72">
             {history.map((turn, i) => (
-              <div key={`${turn.prompt}-${i}`}>
-                <UserBubble text={turn.prompt} />
-                <AssistantTurn
-                  phase="done"
-                  tools={turn.tools}
-                  workingOpen={false}
-                  onToggleWorking={() => undefined}
-                  approval={null}
-                  onResolve={() => undefined}
-                  reply={turn.reply}
-                  streamCount={turn.reply.split(/(\{\{page\}\}|\s+)/).length}
-                />
-              </div>
+              <HistoryTurn key={`${turn.prompt}-${i}`} turn={turn} />
             ))}
             {sentPrompt ? <UserBubble text={sentPrompt} /> : null}
             {sentPrompt ? (
@@ -1459,6 +1733,7 @@ export function DemoChat({
                 onResolve={(approved) => resolveRef.current?.(approved)}
                 reply={reply}
                 streamCount={streamCount}
+                tasks={tasks}
               />
             ) : null}
             <div />
@@ -1469,7 +1744,17 @@ export function DemoChat({
         key={chatId}
         draft={ANIMATED.has(chatId) ? draft : ""}
         sending={ANIMATED.has(chatId) && sending}
-        modeId={chatId === "review" ? "Review" : chatId === "ops" || chatId === "emails" ? "Ask" : "Code"}
+        modeId={
+          chatId === "review"
+            ? "Review"
+            : chatId === "ops" || chatId === "emails"
+              ? "Ask"
+              : chatId === "visual"
+                ? "Visual"
+                : chatId === "plan" || chatId === "markdown"
+                  ? "Plan"
+                  : "Code"
+        }
         onDraft={(v) => {
           if (phase === "idle" || phase === "typing") setDraft(v);
         }}

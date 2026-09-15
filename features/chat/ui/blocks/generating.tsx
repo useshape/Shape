@@ -1,53 +1,45 @@
 "use client";
 
-import React from "react";
-import { LoadingState } from "./loading-state";
+import {
+    AgentThinking,
+    type AgentThinkingVariant,
+} from "@/components/application/agent-thinking/agent-thinking";
 
-function formatStatusLabel(label: string, elapsedSec: number): string {
-    const base = label.replace(/…+$/, "").trim();
-    const lower = base.toLowerCase();
-    if (lower.includes("creating design") && elapsedSec > 0) {
-        return `${base} for ${elapsedSec}s`;
-    }
-    return base;
-}
+const VARIANTS: AgentThinkingVariant[] = ["wave", "spin", "stars", "infinity"];
 
-function statusVariant(label: string): "Drive" | "Dots" | "Orbit" {
+export function thinkingVariantFor(label: string): AgentThinkingVariant {
     const lower = label.toLowerCase();
-    if (lower.includes("search") || lower.includes("web")) return "Dots";
-    if (lower.includes("command") || lower.includes("run") || lower.includes("test")) {
-        return "Orbit";
-    }
-    return "Drive";
+    if (/\b(search|web|reddit|google|docs)\b/.test(lower)) return "spin";
+    if (/\b(run|command|terminal|test|install)\b/.test(lower)) return "infinity";
+    if (/\b(edit|writ|creat|patch)\b/.test(lower)) return "wave";
+    let n = 0;
+    for (let i = 0; i < label.length; i++) n = (n + label.charCodeAt(i) * (i + 3)) % VARIANTS.length;
+    return VARIANTS[n] ?? "stars";
 }
 
-/**
- * Live status line while streaming — pixel grid + shimmer label.
- */
-export function GeneratingIndicator({ label }: { label?: string }) {
-    const [elapsedSec, setElapsedSec] = React.useState(0);
+function formatStatusLabel(label: string): string {
+    return label.replace(/…+$/, "").trim() || "Working";
+}
 
-    React.useEffect(() => {
-        if (!label?.trim()) {
-            setElapsedSec(0);
-            return;
-        }
-        setElapsedSec(0);
-        const started = Date.now();
-        const tick = () => {
-            setElapsedSec(Math.max(0, Math.floor((Date.now() - started) / 1000)));
-        };
-        tick();
-        const id = window.setInterval(tick, 1000);
-        return () => window.clearInterval(id);
-    }, [label]);
-
-    const raw = label?.trim() || "Working";
-    const display = formatStatusLabel(raw, elapsedSec);
-
+/** Live status line while streaming — mixed BoardUI thinking marks. */
+export function GeneratingIndicator({
+    label,
+    showTimer = true,
+    variantSeed,
+}: {
+    label?: string;
+    showTimer?: boolean;
+    variantSeed?: string;
+}) {
+    const display = formatStatusLabel(label?.trim() || "Working");
     return (
-        <div className="flex items-center py-1.5 px-1 animate-in fade-in duration-300">
-            <LoadingState label={display} variant={statusVariant(display)} />
+        <div className="flex items-center py-1">
+            <AgentThinking
+                variant={thinkingVariantFor(variantSeed || display)}
+                label={display}
+                tone="default"
+                showTimer={showTimer}
+            />
         </div>
     );
 }

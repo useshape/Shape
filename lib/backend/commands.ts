@@ -70,6 +70,7 @@ export const commands = {
     renamePath: (oldPath: string, newPath: string) => invokeCommand("rename_path", { oldPath, newPath }),
     copyPath: (oldPath: string, newPath: string) => invokeCommand("copy_path", { oldPath, newPath }),
     revealPath: (path: string) => invokeCommand("reveal_path", { path }),
+    openInApp: (app: string, path: string) => invokeCommand("open_in_app", { app, path }),
     setProjectPath: (path: string | null) => invokeCommand("set_project_path", { path }),
     openFile: (path: string, name: string) => invokeCommand("open_file", { path, name }),
     closeFile: (path: string) => invokeCommand("close_file", { path }),
@@ -528,6 +529,63 @@ export const commands = {
         invokeCommand<void>("register_design_bridge", { script }),
     designModeLog: (level: string, message: string) =>
         invokeCommand<void>("design_mode_log", { level, message }),
+    inspectDesignProject: (projectPath: string) =>
+        invokeCommand<{
+            framework: "react-vite" | "next" | "astro" | "remix" | "unsupported";
+            projectRoot: string;
+            supported: boolean;
+        }>("inspect_design_project", { projectPath }),
+    listDesignAssets: (projectPath: string) =>
+        invokeCommand<Array<{
+            path: string;
+            name: string;
+            bytes: number;
+            kind: "image" | "font" | "video";
+        }>>("list_design_assets", { projectPath }),
+    resolveDesignElement: (
+        projectPath: string,
+        query: {
+            tag: string;
+            id?: string | null;
+            classes?: string[];
+            text?: string | null;
+            routeSource?: string | null;
+            sourceFile?: string | null;
+            sourceLine?: number | null;
+        },
+    ) =>
+        invokeCommand<Array<{
+            file: string;
+            tag: string;
+            openingStart: number;
+            openingEnd: number;
+            nodeStart: number;
+            nodeEnd: number;
+            line: number;
+            confidence: number;
+        }>>("resolve_design_element", { projectPath, query }),
+    applyDesignSourcePatch: (patch: {
+        projectPath: string;
+        target: {
+            file: string;
+            tag: string;
+            openingStart: number;
+            openingEnd: number;
+            nodeStart: number;
+            nodeEnd: number;
+            line: number;
+            confidence: number;
+        };
+        styles?: Record<string, string>;
+        text?: string | null;
+        operation?: "delete" | "duplicate" | null;
+    }) =>
+        invokeCommand<{ file: string; changed: boolean; line: number }>(
+            "apply_design_source_patch",
+            { patch },
+        ),
+    undoDesignSourcePatch: () => invokeCommand<boolean>("undo_design_source_patch"),
+    redoDesignSourcePatch: () => invokeCommand<boolean>("redo_design_source_patch"),
     stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
     getChatHistory: () => invokeCommand<ChatMessage[]>("get_chat_history"),
     getChatGenerationState: () =>

@@ -2,9 +2,13 @@
 
 import { RiCheckLine } from "@remixicon/react";
 import React from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { MorphMenu } from "@/components/ui/morph-menu";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 
 export type ComposerTaskItem = {
     id: string;
@@ -14,63 +18,57 @@ export type ComposerTaskItem = {
 
 export type ComposerActivityItem = { kind: "task" } & ComposerTaskItem;
 
-/** Composer pill for live todos — shows the active step (with spinner), not "Continue Working". */
 export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
     if (items.length === 0) return null;
 
     const active = items.find((i) => i.status === "running") ?? items[0];
-    const openH = Math.min(220, 48 + items.length * 36);
+    const done = items.filter((i) => i.status === "done").length;
 
     return (
-        <MorphMenu
-            variant="morph"
-            aria-label="Tasks"
-            align="end"
-            openWidth={280}
-            openHeight={openH}
-            closedHeight={32}
-            trigger={
-                <>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="flex h-6 max-w-[200px] items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                    aria-label="Tasks"
+                >
                     {active.status === "running" ? (
                         <span className="t-spin-check shrink-0" data-state="spin">
                             <span className="t-spin-check__ring" />
                         </span>
                     ) : (
-                        <span className="size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
+                        <Icon icon={RiCheckLine} size={ICON_SIZE_SM} className="text-success" />
                     )}
-                    <span className="max-w-[180px] truncate">{active.label}</span>
-                </>
-            }
-        >
-            <div className="flex flex-col py-1">
+                    <span className="truncate">{active.label}</span>
+                    <span className="tabular-nums text-xs text-text-muted">
+                        {done}/{items.length}
+                    </span>
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64 p-1">
                 {items.map((item) => (
-                    <div
-                        key={item.id}
-                        className="flex min-h-8 items-center gap-2 px-3 py-1.5 text-sm"
-                    >
+                    <div key={item.id} className="flex min-h-8 items-center gap-2 rounded-md px-2 py-1 text-sm">
                         {item.status === "running" ? (
                             <span className="t-spin-check shrink-0" data-state="spin">
                                 <span className="t-spin-check__ring" />
                             </span>
                         ) : item.status === "done" ? (
-                            <Icon icon={RiCheckLine} className="text-success" />
+                            <Icon icon={RiCheckLine} size={ICON_SIZE_SM} className="text-success" />
                         ) : (
                             <span className="size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
                         )}
                         <span
                             className={cn(
                                 "min-w-0 flex-1 truncate",
-                                item.status === "running"
-                                    ? "text-text-primary"
-                                    : "text-text-muted",
+                                item.status === "running" ? "text-text-primary" : "text-text-muted",
                             )}
                         >
                             {item.label}
                         </span>
                     </div>
                 ))}
-            </div>
-        </MorphMenu>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 

@@ -204,7 +204,7 @@ export function useChatSession() {
             if (persisted) {
                 const tabs = [...persisted.tabs];
                 if (!tabs.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
-                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] });
+                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "Watch page density", models: ["auto"] });
                 }
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
                     tabs.unshift({ id: NEW_CHAT_TAB_ID, title: "New Chat" });
@@ -236,6 +236,9 @@ export function useChatSession() {
                     const { buildDemoChatMessages } = await import("./demo-chat");
                     if (!cancelled) {
                         setMessages(buildDemoChatMessages());
+                        void import("@/features/agent/subagents/store").then(({ seedDemoSubagents }) => {
+                            seedDemoSubagents();
+                        });
                         setOpenChatTabs((prev) => {
                             if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) return prev;
                             return [...prev, { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] }];
@@ -1217,6 +1220,9 @@ export function useChatSession() {
             setSendError(null);
             setMessages([]);
             setContextSummarized(false);
+            void import("@/features/agent/subagents/store").then(({ resetSubagents }) => {
+                resetSubagents();
+            });
             setChatTitle("New Chat");
             setConversationId(null);
             setResolvedFiles(new Set());
@@ -1377,6 +1383,10 @@ export function useChatSession() {
                 const { buildDemoChatMessages } = await import("./demo-chat");
                 const demo = buildDemoChatMessages();
                 setMessages(demo);
+                void import("@/features/agent/subagents/store").then(({ seedDemoSubagents }) => {
+                    seedDemoSubagents();
+                });
+                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "agents" }));
                 setInputValue("");
                 setSendError(null);
                 setOpenChatTabs((prev) => {

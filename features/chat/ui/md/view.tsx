@@ -145,7 +145,10 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             <strong className="chat-text font-medium text-text-primary">{children}</strong>
         ),
         em: ({ children }: { children?: React.ReactNode }) => <em>{children}</em>,
-        hr: () => null,
+        del: ({ children }: { children?: React.ReactNode }) => (
+            <del className="text-text-muted">{children}</del>
+        ),
+        hr: () => <hr className="my-3 border-border-subtle" />,
         a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
             <ChatLinkChip href={href}>{children}</ChatLinkChip>
         ),
@@ -154,6 +157,30 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
                 {children}
             </blockquote>
         ),
+        table: ({ children }: { children?: React.ReactNode }) => (
+            <div className="my-2 overflow-x-auto rounded-xl border border-border-subtle">
+                <table className="w-full min-w-50 border-collapse text-left">{children}</table>
+            </div>
+        ),
+        thead: ({ children }: { children?: React.ReactNode }) => (
+            <thead className="bg-surface-3">{children}</thead>
+        ),
+        th: ({ children }: { children?: React.ReactNode }) => (
+            <th className="border-b border-border-subtle px-2.5 py-1.5 font-sans chat-text font-medium text-text-primary">{children}</th>
+        ),
+        td: ({ children }: { children?: React.ReactNode }) => (
+            <td className="border-b border-border-subtle px-2.5 py-1.5 font-sans chat-text text-text-secondary">{children}</td>
+        ),
+        input: (props: React.InputHTMLAttributes<HTMLInputElement>) => {
+            if (props.type !== "checkbox") return <input {...props} />;
+            return (
+                <input
+                    {...props}
+                    readOnly
+                    className="mr-2 align-middle accent-accent"
+                />
+            );
+        },
     };
 }
 

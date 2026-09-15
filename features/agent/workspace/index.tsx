@@ -1,7 +1,7 @@
 "use client";
 
-import { RiArrowLeftLine, RiArrowLeftSLine, RiArrowRightLine, RiMoreLine } from "@remixicon/react";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { RiLayoutRight2Line, RiMoreLine } from "@remixicon/react";
+import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useProjectState } from "@/lib/backend";
@@ -14,6 +14,10 @@ import { FileTree } from "./tree";
 import { SingleFileDiffEditor, type FileDiffTabInfo } from "./file-diff";
 import Graph from "@/features/git/ui/graph/graph";
 import { ToolBtn } from "./tool";
+import { SubagentCards } from "@/features/agent/subagents/cards";
+import { getSubagents, subscribeSubagents } from "@/features/agent/subagents/store";
+import { WindowControlsSpacer } from "@/features/workbench/titlebar/ui/window-controls";
+import { PullRequestsPanel } from "@/features/chat/ui/prs/view";
 import {
     DEFAULT_TABS,
     uid,
@@ -21,16 +25,16 @@ import {
     type WorkspaceTab,
 } from "./model";
 
-const Terminal = lazy(() => import("@/features/terminal/ui/terminal"));
-
 export function AgentWorkspace({
     projectPath,
     expanded,
     onExpand,
+    onToggleRight,
 }: {
     projectPath: string;
     expanded: boolean;
     onExpand: () => void;
+    onToggleRight?: () => void;
 }) {
     const { active_file } = useProjectState();
     const [tabs, setTabs] = useState<WorkspaceTab[]>(DEFAULT_TABS);
@@ -54,30 +58,32 @@ export function AgentWorkspace({
 
     const addTab = useCallback((kind: TabKind) => {
         if (kind === "plan" || kind === "file" || kind === "diff") return;
-        if (kind === "changes" || kind === "files" || kind === "terminal" || kind === "graph") {
+        if (kind === "changes" || kind === "files" || kind === "agents" || kind === "graph" || kind === "prs") {
             const existing = tabs.find((t) => t.kind === kind);
             if (existing) {
                 select(existing.id);
-                if (kind === "files" || kind === "terminal" || kind === "graph") onExpand();
+                if (kind === "files" || kind === "agents" || kind === "graph" || kind === "prs") onExpand();
                 return;
             }
         }
         const title =
-            kind === "terminal"
-                ? "Terminal"
+            kind === "agents"
+                ? "Agents"
                 : kind === "files"
                   ? "Files"
                   : kind === "graph"
                     ? "Graph"
-                    : "Changes";
+                    : kind === "prs"
+                      ? "Pull requests"
+                      : "Changes";
         const tab: WorkspaceTab = {
-            id: kind === "graph" ? "graph" : uid(kind),
+            id: kind === "graph" ? "graph" : kind === "prs" ? "prs" : uid(kind),
             kind,
             title,
         };
         setTabs((p) => [...p, tab]);
         setActiveId(tab.id);
-        if (kind === "files" || kind === "terminal" || kind === "graph") onExpand();
+        if (kind === "files" || kind === "agents" || kind === "graph" || kind === "prs") onExpand();
     }, [onExpand, select, tabs]);
 
     const openFile = useCallback(
@@ -128,19 +134,22 @@ export function AgentWorkspace({
     );
 
     const openPlan = useCallback(
-        (path: string, title: string) => {
+        (path: string, title: string, markdown?: string) => {
             onExpand();
             setTabs((prev) => {
                 const existing = prev.find((t) => t.kind === "plan" && t.path === path);
                 if (existing) {
                     setActiveId(existing.id);
-                    return prev;
+                    return prev.map((t) =>
+                        t.id === existing.id ? { ...t, markdown: markdown ?? t.markdown } : t,
+                    );
                 }
                 const tab: WorkspaceTab = {
                     id: uid("plan"),
                     kind: "plan",
                     title: title || "Plan",
                     path,
+                    markdown,
                 };
                 setActiveId(tab.id);
                 return [...prev, tab];
@@ -178,21 +187,26 @@ export function AgentWorkspace({
                 addTab("graph");
                 onExpand();
             }
-            if (tabId === "terminal") {
-                openKind("terminal");
+            if (tabId === "agents") {
+                openKind("agents");
+            }
+            if (tabId === "prs" || tabId === "pulls" || tabId === "pull-requests") {
+                addTab("prs");
+                onExpand();
             }
             if (tabId === "files" || tabId === "explorer") {
                 addTab("files");
                 onExpand();
             }
         };
-        const onOpenTerminal = () => {
-            openKind("terminal");
-        };
         const onOpenPlan = (e: Event) => {
-            const detail = (e as CustomEvent<{ path?: string; title?: string }>).detail;
-            if (!detail?.path) return;
-            openPlan(detail.path, detail.title || detail.path.split(/[\\/]/).pop() || "Plan");
+            const detail = (e as CustomEvent<{ path?: string; title?: string; markdown?: string }>).detail;
+            if (!detail?.path && !detail?.markdown) return;
+            openPlan(
+                detail.path || "plan.md",
+                detail.title || detail.path?.split(/[\\/]/).pop() || "Plan",
+                detail.markdown,
+            );
         };
         const onOpenFile = (e: Event) => {
             const path = (e as CustomEvent<{ path?: string }>).detail?.path;
@@ -204,17 +218,21 @@ export function AgentWorkspace({
             if (!tab?.id || !tab.path) return;
             openDiff(tab);
         };
+        const onPrs = () => {
+            addTab("prs");
+            onExpand();
+        };
         window.addEventListener("shape-set-active-tab", onTab as EventListener);
-        window.addEventListener("shape-open-workspace-terminal", onOpenTerminal);
         window.addEventListener("shape-open-workspace-plan", onOpenPlan as EventListener);
         window.addEventListener("shape-open-workspace-file", onOpenFile as EventListener);
         window.addEventListener("shape-open-file-diff", onOpenDiff as EventListener);
+        window.addEventListener("shape-open-pull-requests", onPrs);
         return () => {
             window.removeEventListener("shape-set-active-tab", onTab as EventListener);
-            window.removeEventListener("shape-open-workspace-terminal", onOpenTerminal);
             window.removeEventListener("shape-open-workspace-plan", onOpenPlan as EventListener);
             window.removeEventListener("shape-open-workspace-file", onOpenFile as EventListener);
             window.removeEventListener("shape-open-file-diff", onOpenDiff as EventListener);
+            window.removeEventListener("shape-open-pull-requests", onPrs);
         };
     }, [addTab, onExpand, openDiff, openFile, openKind, openPlan]);
 
@@ -228,22 +246,26 @@ export function AgentWorkspace({
                 addTab("files");
                 onExpand();
             }
-            if (e.key.toLowerCase() === "j" && !e.shiftKey) {
-                e.preventDefault();
-                openKind("terminal");
-            }
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [addTab, onExpand, openKind]);
+    }, [addTab, onExpand]);
 
-    const go = (dir: -1 | 1) => {
-        const next = navIndex + dir;
-        const id = nav[next];
-        if (!id) return;
-        setNavIndex(next);
-        setActiveId(id);
-    };
+    useEffect(() => {
+        let seen = getSubagents().length > 0;
+        if (seen) {
+            addTab("agents");
+            onExpand();
+        }
+        return subscribeSubagents(() => {
+            const n = getSubagents().length;
+            if (!seen && n > 0) {
+                addTab("agents");
+                onExpand();
+            }
+            seen = n > 0;
+        });
+    }, [addTab, onExpand]);
 
     if (!expanded) {
         return (
@@ -255,7 +277,7 @@ export function AgentWorkspace({
                         onClick={onExpand}
                         className="flex size-9 items-center justify-center rounded-md text-text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary"
                     >
-                        <Icon icon={RiArrowLeftSLine} />
+                        <Icon icon={RiLayoutRight2Line} />
                     </button>
                 </Tooltip>
             </aside>
@@ -263,43 +285,42 @@ export function AgentWorkspace({
     }
 
     return (
-        <aside className="flex h-full w-full min-w-0 overflow-hidden border-l border-border-subtle bg-panel">
-            <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-                <WorkspaceTabs
-                    tabs={tabs}
-                    activeId={activeId}
-                    onSelect={select}
-                    onClose={closeTab}
-                    onReorder={setTabs}
-                    onNew={(kind) => {
-                        addTab(kind);
-                    }}
-                />
-
-                {active?.kind === "changes" || active?.kind === "files" || active?.kind === "graph" ? null : (
-                    <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border-subtle px-1">
-                        <ToolBtn label="Back" disabled={navIndex <= 0} onClick={() => go(-1)}>
-                            <Icon icon={RiArrowLeftLine} />
+        <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-panel">
+            <div
+                className="flex h-titlebar shrink-0 items-center bg-panel"
+                data-tauri-drag-region
+            >
+                <div className="min-w-0 flex-1 overflow-hidden" data-no-drag>
+                    <WorkspaceTabs
+                        tabs={tabs}
+                        activeId={activeId}
+                        onSelect={select}
+                        onClose={closeTab}
+                        onReorder={setTabs}
+                        fade
+                        onNew={(kind) => {
+                            addTab(kind);
+                        }}
+                    />
+                </div>
+                <div className="relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1" data-no-drag>
+                    <ToolBtn
+                        label="More"
+                        onClick={() =>
+                            window.dispatchEvent(new CustomEvent("shape-command-palette"))
+                        }
+                    >
+                        <Icon icon={RiMoreLine} />
+                    </ToolBtn>
+                    {onToggleRight ? (
+                        <ToolBtn label="Hide panel" onClick={onToggleRight}>
+                            <Icon icon={RiLayoutRight2Line} />
                         </ToolBtn>
-                        <ToolBtn
-                            label="Forward"
-                            disabled={navIndex >= nav.length - 1}
-                            onClick={() => go(1)}
-                        >
-                            <Icon icon={RiArrowRightLine} />
-                        </ToolBtn>
-                        <span className="flex-1" />
-                        <ToolBtn
-                            label="More"
-                            onClick={() =>
-                                window.dispatchEvent(new CustomEvent("shape-command-palette"))
-                            }
-                        >
-                            <Icon icon={RiMoreLine} />
-                        </ToolBtn>
-                    </div>
-                )}
-
+                    ) : null}
+                    <WindowControlsSpacer />
+                </div>
+            </div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="min-h-0 flex-1 overflow-hidden">
                     {active?.kind === "changes" ? (
                         <ChangesView projectPath={projectPath} />
@@ -311,12 +332,12 @@ export function AgentWorkspace({
                             activePath={active_file}
                             onOpenFile={openFile}
                         />
-                    ) : active?.kind === "terminal" ? (
-                        <Suspense fallback={<div className="h-full w-full bg-panel" />}>
-                            <Terminal terminalOnly isOpen />
-                        </Suspense>
-                    ) : active?.kind === "plan" && active.path ? (
-                        <PlanTabView path={active.path} />
+                    ) : active?.kind === "agents" ? (
+                        <SubagentCards className="h-full" />
+                    ) : active?.kind === "prs" ? (
+                        <PullRequestsPanel />
+                    ) : active?.kind === "plan" && (active.path || active.markdown) ? (
+                        <PlanTabView path={active.path || ""} markdown={active.markdown} />
                     ) : active?.kind === "file" && active.path ? (
                         <EditorViewProvider>
                             <EditorSplitProvider>

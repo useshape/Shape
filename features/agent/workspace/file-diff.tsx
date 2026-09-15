@@ -1,13 +1,15 @@
 "use client";
 
 import { RiArrowGoBackLine, RiLayoutColumnLine } from "@remixicon/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
 import { DiffView } from "@/features/editor/ui/diff/diff-view";
 import { Icon } from "@/components/ui/icon";
+import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
 import { openProjectFile } from "@/lib/window/open-project-file";
+import { diffLines } from "diff";
 
 export type FileDiffTabInfo = {
     id: string;
@@ -30,6 +32,27 @@ export function commitFileDiffTabId(path: string, commit: string) {
 
 function fileName(path: string) {
     return path.split(/[\\/]/).pop() || path;
+}
+
+function countDiff(original: string, current: string): { add: number; del: number } {
+    let add = 0;
+    let del = 0;
+    for (const part of diffLines(original || "", current || "")) {
+        const lines = part.value.split("\n").length - (part.value.endsWith("\n") ? 1 : 0);
+        const n = Math.max(lines, part.value ? 1 : 0);
+        if (part.added) add += n;
+        if (part.removed) del += n;
+    }
+    return { add, del };
+}
+
+function statusBadge(status: string, original: string, current: string): string | null {
+    const letter = status.trim().charAt(0).toUpperCase();
+    if (letter === "A" || (!original && current)) return "New";
+    if (letter === "D" || (original && !current)) return "Deleted";
+    if (letter === "R") return "Renamed";
+    if (letter === "M") return "Modified";
+    return null;
 }
 
 async function loadSides(
@@ -79,6 +102,8 @@ export function SingleFileDiffEditor({ tab }: { tab: FileDiffTabInfo }) {
     const [split, setSplit] = useState(false);
     const name = fileName(tab.path);
     const isCommit = Boolean(tab.commit);
+    const stats = useMemo(() => countDiff(original, current), [original, current]);
+    const badge = statusBadge(tab.status, original, current);
 
     useEffect(() => {
         let cancelled = false;
@@ -116,8 +141,21 @@ export function SingleFileDiffEditor({ tab }: { tab: FileDiffTabInfo }) {
     return (
         <div className="flex h-full min-h-0 flex-col bg-panel">
             <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border-subtle px-3 text-sm">
-                <span className="truncate font-medium text-text-primary">{name}</span>
-                <span className="truncate text-text-muted">{tab.path}</span>
+                <FileIcon name={name} className="size-4 shrink-0" />
+                <span className="min-w-0 truncate font-mono text-sm text-text-primary" title={tab.path}>
+                    {tab.path.replace(/\\/g, "/")}
+                </span>
+                {stats.add > 0 || stats.del > 0 ? (
+                    <span className="flex shrink-0 items-center gap-1.5 tabular-nums">
+                        {stats.add > 0 ? <span className="text-success">+{stats.add}</span> : null}
+                        {stats.del > 0 ? <span className="text-error">-{stats.del}</span> : null}
+                    </span>
+                ) : null}
+                {badge ? (
+                    <span className="shrink-0 rounded-md bg-panel-hover px-1.5 py-0.5 text-xs text-text-secondary">
+                        {badge}
+                    </span>
+                ) : null}
                 {isCommit ? (
                     <span className="shrink-0 font-mono text-2xs text-text-muted">
                         {tab.commit!.slice(0, 7)}

@@ -758,12 +758,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     needs_reread.remove(&abs);
                 }
                 if let Some(SideEffect::PageScreenshot { tag }) = &tool_outcome.side_effect {
+                    let tag = tag.clone();
                     page_shots.push(tag.clone());
-                    super::messages::push_page_screenshot_followup(
-                        config.api_messages,
-                        tag,
-                        config.model,
-                    );
+                    inject_page_screenshot(&mut config, &tag).await;
                 }
             }
 
@@ -1064,11 +1061,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         finished_signal = Some(summary.unwrap_or_default());
                     }
                     SideEffect::PageScreenshot { tag } => {
-                        super::messages::push_page_screenshot_followup(
-                            config.api_messages,
-                            &tag,
-                            config.model,
-                        );
+                        inject_page_screenshot(&mut config, &tag).await;
                         page_shots.push(tag);
                     }
                 }
@@ -1190,6 +1183,34 @@ fn push_tool_result(api_messages: &mut Vec<Value>, id: &str, name: &str, content
         "name": name,
         "content": content,
     }));
+}
+
+async fn inject_page_screenshot(config: &mut AgentTurnConfig<'_>, tag: &str) {
+    if model_router::model_accepts_images(config.model) {
+        super::messages::push_page_screenshot_followup(config.api_messages, tag, config.model);
+        return;
+    }
+    match super::caption::describe_attached_images(
+        config.client,
+        config.api_key,
+        tag,
+        &config.proxy_ctx,
+        Some(&config.cancel),
+    )
+    .await
+    {
+        Ok(desc) if !desc.trim().is_empty() => {
+            config.api_messages.push(json!({
+                "role": "user",
+                "content": format!(
+                    "screenshot_page captured this page.\n\n[image description]\n{desc}\n\nUse this description. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+                ),
+            }));
+        }
+        _ => {
+            super::messages::push_page_screenshot_followup(config.api_messages, tag, config.model);
+        }
+    }
 }
 
 /// Keep `<think>` in the saved transcript so Worked-for still shows thoughts after

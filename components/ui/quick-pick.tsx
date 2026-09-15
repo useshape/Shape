@@ -16,6 +16,7 @@ export type QuickPickItem = {
     label: string;
     description?: string;
     icon?: RemixiconComponentType;
+    iconNode?: React.ReactNode;
     /** Right-side muted hint */
     hint?: string;
 };
@@ -152,7 +153,11 @@ export function QuickPick({
                                                 : "text-text-secondary hover:bg-panel-hover/60",
                                         )}
                                     >
-                                        {item.icon ? (
+                                        {item.iconNode ? (
+                                            <span className="flex size-4 shrink-0 items-center justify-center">
+                                                {item.iconNode}
+                                            </span>
+                                        ) : item.icon ? (
                                             <Icon
                                                 icon={item.icon}
                                                 className="shrink-0 text-text-muted"

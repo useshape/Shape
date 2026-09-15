@@ -148,8 +148,10 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                         aria-selected={selected}
                         tabIndex={-1}
                         className={cn(
-                            "relative z-0 flex items-center rounded-lg cursor-pointer group transition-colors outline-none",
-                            selected && "bg-black/[0.12] dark:bg-white/[0.12]",
+                            "relative z-0 flex items-center rounded-lg cursor-pointer group outline-none whitespace-nowrap",
+                            "hover:bg-panel-hover",
+                            selected && "bg-panel-active",
+                            isExpanded && "bg-panel-active",
                         )}
                         style={{ height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` }}
                         onClick={(e) => {
@@ -160,17 +162,6 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                         }}
                         onPointerEnter={triggerFileLoad}
                     >
-                        {/* Hover / selected / expanded backgrounds — vscode-git-graph style */}
-                        <div
-                            className={cn(
-                                "absolute inset-y-0 left-1 right-1 rounded-md pointer-events-none -z-10 transition-colors",
-                                isExpanded
-                                    ? "bg-black/15 dark:bg-white/15"
-                                    : selected
-                                      ? "bg-black/[0.12] dark:bg-white/[0.12]"
-                                      : "group-hover:bg-black/[0.08] dark:group-hover:bg-white/[0.08]",
-                            )}
-                        />
                         <GraphSvgRow
                             node={node}
                             isFirst={isFirst}
@@ -180,7 +171,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                             avatarUrl={laneAvatarUrl}
                             avatarKey={log.hash}
                         />
-                        <div className="flex-1 flex items-center min-w-0 gap-1.5 pr-2 @container">
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden pr-2 @container">
                             {visibleRefs.map((refInfo) => (
                                 <RefPill
                                     key={refInfo.label}
@@ -233,7 +224,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                             {isManager ? (
                                 <span
                                     className={cn(
-                                        "text-sm truncate flex-1 min-w-0",
+                                        "min-w-0 flex-1 truncate whitespace-nowrap text-sm",
                                         isHead || isExpanded ? "text-text-primary font-medium" : "text-text-secondary",
                                     )}
                                 >
@@ -274,7 +265,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                             if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
                                         }}
                                     >
-                                        <div className="flex items-center gap-1 text-sm text-text-secondary flex-wrap pointer-events-auto">
+                                        <div className="flex items-center gap-1 text-sm text-text-secondary whitespace-nowrap pointer-events-auto">
                                             <span
                                                 className="font-medium text-text-primary cursor-pointer hover:underline hover:text-accent"
                                                 onClick={handleOpenAuthorEmail}
@@ -317,7 +308,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                             >
                                 <span
                                     className={cn(
-                                        "text-sm truncate flex-1 min-w-0",
+                                        "min-w-0 flex-1 truncate whitespace-nowrap text-sm",
                                         isHead || isExpanded ? "text-text-primary font-medium" : "text-text-secondary",
                                     )}
                                 >
@@ -326,16 +317,16 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                             </Tooltip>
                             )}
                             <Tooltip content={log.author} side="top" delayDuration={250}>
-                                <span className="text-sm text-text-muted shrink-0 max-w-[100px] truncate hidden @[380px]:inline text-right">
+                                <span className="hidden max-w-[100px] shrink-0 truncate whitespace-nowrap text-right text-sm text-text-muted @[380px]:inline">
                                     {log.author}
                                 </span>
                             </Tooltip>
-                            <span className="text-sm text-text-muted shrink-0 tabular-nums w-[52px] text-right hidden @[320px]:inline">
+                            <span className="hidden w-[52px] shrink-0 whitespace-nowrap text-right text-sm tabular-nums text-text-muted @[320px]:inline">
                                 {getRelativeTime(log.date)}
                             </span>
                             <Tooltip content={log.hash} side="top" delayDuration={250}>
                                 <span
-                                    className="text-xs text-text-disabled shrink-0 font-mono tabular-nums w-[52px] text-right hidden @[480px]:inline opacity-70 cursor-default"
+                                    className="hidden w-[52px] shrink-0 cursor-default whitespace-nowrap text-right font-mono text-xs tabular-nums text-text-disabled opacity-70 @[480px]:inline"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         void navigator.clipboard.writeText(log.hash);
@@ -527,15 +518,15 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                                         e.stopPropagation();
                                                         onOpenFile(file.path);
                                                     }}
-                                                    className="flex items-center gap-2 group/file cursor-pointer hover:bg-panel-hover px-2 rounded-md w-full"
+                                                    className="flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 hover:bg-panel-hover group/file cursor-pointer"
                                                     style={{ height: 22 }}
                                                 >
                                                     <div className="w-3.5 flex justify-center opacity-80 shrink-0">
                                                         <FileIcon name={name} className="w-3.5 h-3.5" />
                                                     </div>
-                                                    <span className="text-sm text-text-secondary group-hover/file:text-text-primary transition-colors shrink-0 truncate max-w-[50%]">{name}</span>
+                                                    <span className="max-w-[50%] shrink-0 truncate whitespace-nowrap text-sm text-text-secondary transition-colors group-hover/file:text-text-primary">{name}</span>
                                                     {folder && (
-                                                        <span className="text-sm text-text-muted truncate flex-1 opacity-60 text-left min-w-0 pr-2">{folder}</span>
+                                                        <span className="min-w-0 flex-1 truncate whitespace-nowrap pr-2 text-left text-sm text-text-muted opacity-60">{folder}</span>
                                                     )}
                                                     <span
                                                         className="text-sm font-medium w-4 text-center shrink-0 ml-auto"

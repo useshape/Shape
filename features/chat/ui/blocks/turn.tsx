@@ -1,10 +1,9 @@
 "use client";
 
-import { RiArrowRightSLine, RiCornerDownLeftLine, RiPencilLine } from "@remixicon/react";
+import { RiArrowRightSLine, RiPencilLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { diffLines } from "diff";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -20,14 +19,16 @@ import {
     groupWorkflowRows,
     isRenderableWorkflowBlock,
     parseGitStagePath,
-    getWorkflowActionConfig,
 } from "./workflow";
+import { providerIcon } from "@/lib/ui/provider-icon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { Favicon } from "@/components/ui/favicon";
 import { isShapePluginMeta } from "@/lib/plugin-logos";
-import { parseWebResults } from "../md/renderer";
-import { TypingDots } from "../message/bubble";
+import { parseWebSearchHits, WebSearchBlock } from "./search";
+import { GeneratingIndicator } from "./generating";
+import { ActionLine } from "./action-line";
+import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
 
 function formatDuration(ms?: number): string {
@@ -56,17 +57,7 @@ function GroupActionLabel({
     action: string;
     detail?: string | null;
 }) {
-    return (
-        <div className="py-0.5 chat-text font-medium text-text-primary/80">
-            {action}
-            {detail ? (
-                <>
-                    {" "}
-                    <span className="font-medium text-text-secondary">{detail}</span>
-                </>
-            ) : null}
-        </div>
-    );
+    return <ActionLine action={action} detail={detail} />;
 }
 
 function groupDetail(names: string[]): string | null {
@@ -244,10 +235,7 @@ function ThoughtStep({
     return (
         <div className="py-0.5">
             {isActive ? (
-                <div className="flex items-center gap-2 py-0.5 chat-text text-text-muted">
-                    <TypingDots />
-                    <span>Thinking</span>
-                </div>
+                <GeneratingIndicator label="Thinking" variantSeed={trimmed} showTimer={false} />
             ) : (
                 <button
                     type="button"
@@ -337,7 +325,8 @@ function WorkflowEditPreview({
                 }
             }
         }
-        return out.filter((r) => r.type === "add" || r.type === "remove").slice(0, 24);
+        const all = out.filter((r) => r.type === "add" || r.type === "remove");
+        return all.slice(0, 24);
     }, [original, replacement]);
 
     if (rows.length === 0) return null;
@@ -422,92 +411,54 @@ function EditApprovalRow({ block }: { block: Chunk }) {
         };
     }, [block.commandId]);
 
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (isProcessing) return;
-            const t = e.target as HTMLElement | null;
-            if (t?.closest("textarea, input, [contenteditable='true']")) return;
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                e.stopPropagation();
-                resolve(true);
-            }
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
-    }, [isProcessing, resolve]);
-
     const status = localStatus ?? block.commandStatus ?? "pending";
     if (status !== "pending") {
-        // Applied/rejected states render via the regular step rows once the
-        // upserted chunk arrives; show a minimal line meanwhile.
         return (
-            <div className="py-0.5 chat-text text-text-muted">
-                {status === "applied" ? "Applying edit to " : "Rejected edit to "}
-                <span className="text-text-secondary">{fileName(file)}</span>
-            </div>
+            <ActionLine
+                action={status === "applied" ? "Applying edit to" : "Rejected edit to"}
+                detail={fileName(file)}
+            />
         );
     }
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl bg-surface-3 border border-border-subtle">
-            <button
-                type="button"
-                onClick={() => setDiffOpen((v) => !v)}
-                className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
-            >
-                {isProcessing ? (
-                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-                ) : (
-                    <Icon icon={RiPencilLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
-                )}
-                <span className="truncate chat-text text-text-muted">Edit file</span>
-                <span className="truncate chat-text text-text-primary">{fileName(file)}</span>
-                <span className="flex shrink-0 items-center gap-1 chat-text">
-                    <span className="text-success">+{add}</span>
-                    <span className="text-error">-{del}</span>
-                </span>
-                <Icon
-                    icon={RiArrowRightSLine}
-                    className={cn(
-                        "ml-auto shrink-0 opacity-50 transition-transform duration-200",
-                        diffOpen && "rotate-90",
-                    )}
-                />
-            </button>
-            <Collapse open={diffOpen}>
-                <div>
-                    <WorkflowEditPreview
-                        file={file}
-                        original={block.original || ""}
-                        replacement={block.replacement || ""}
+        <ApprovalCard
+            icon={<Icon icon={RiPencilLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />}
+            title={
+                <button
+                    type="button"
+                    onClick={() => setDiffOpen((v) => !v)}
+                    className="flex min-w-0 items-center gap-1.5 text-left"
+                >
+                    <span>Edit file</span>
+                    <span className="truncate text-text-primary">{fileName(file)}</span>
+                    <span className="flex shrink-0 items-center gap-1">
+                        <span className="text-success">+{add}</span>
+                        <span className="text-error">-{del}</span>
+                    </span>
+                    <Icon
+                        icon={RiArrowRightSLine}
+                        className={cn(
+                            "shrink-0 opacity-50 transition-transform duration-200",
+                            diffOpen && "rotate-90",
+                        )}
                     />
-                </div>
+                </button>
+            }
+            isProcessing={isProcessing}
+            onSkip={() => resolve(false)}
+            onAccept={() => resolve(true)}
+            skipLabel="Skip"
+            acceptLabel="Accept"
+        >
+            <Collapse open={diffOpen}>
+                <WorkflowEditPreview
+                    file={file}
+                    original={block.original || ""}
+                    replacement={block.replacement || ""}
+                />
             </Collapse>
-            <div className="flex items-center justify-end gap-1.5 px-2 py-2">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    disabled={isProcessing}
-                    onClick={() => resolve(false)}
-                >
-                    Skip
-                </Button>
-                <Button
-                    type="button"
-                    variant="default"
-                    size="xs"
-                    disabled={isProcessing}
-                    onClick={() => resolve(true)}
-                >
-                    Accept
-                    <kbd>
-                        <Icon icon={RiCornerDownLeftLine} size={ICON_SIZE_MD} />
-                    </kbd>
-                </Button>
-            </div>
-        </div>
+        </ApprovalCard>
     );
 }
 
@@ -596,26 +547,25 @@ function PluginCallStep({ block }: { block: Chunk }) {
 
     if (status === "pending") {
         return (
-            <div className="flex min-w-0 items-center gap-2 py-1 px-2 chat-text font-sans bg-surface-4 border border-border-subtle rounded-[10px]">
-                {isProcessing ? (
-                    <div className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-                ) : isShapePluginMeta(toolkit, block.pluginSlug) ? (
-                    <ShapeLogo size={12} />
-                ) : (
-                    <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={14} className="rounded-sm" />
-                )}
-                <span className="min-w-0 truncate font-sans text-text-muted">
-                    Allow <span className="text-text-primary">{label}</span>
-                </span>
-                <div className="ml-auto flex shrink-0 items-center gap-1">
-                    <Button type="button" variant="ghost" size="xs" disabled={isProcessing} onClick={handleReject}>
-                        Reject
-                    </Button>
-                    <Button type="button" size="xs" disabled={isProcessing} onClick={handleAccept}>
-                        Allow
-                    </Button>
-                </div>
-            </div>
+            <ApprovalCard
+                icon={
+                    isShapePluginMeta(toolkit, block.pluginSlug) ? (
+                        <ShapeLogo size={12} />
+                    ) : (
+                        <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={14} className="rounded-sm" />
+                    )
+                }
+                title={
+                    <>
+                        Allow <span className="text-text-primary">{label}</span>
+                    </>
+                }
+                isProcessing={isProcessing}
+                onSkip={handleReject}
+                onAccept={handleAccept}
+                skipLabel="Reject"
+                acceptLabel="Allow"
+            />
         );
     }
 
@@ -685,69 +635,45 @@ function StepRow({ block }: { block: Chunk }) {
 
     if (block.type === "cat") {
         const path = block.content || "";
+        const fileName = path.split(/[\\/]/).pop() || path;
         return (
-            <div className="py-0.5 chat-text font-medium text-text-primary/80">
-                Read{" "}
-                <button
-                    type="button"
-                    onClick={() => path && void openProjectFile(path)}
-                    className="text-text-secondary hover:text-text-primary"
-                >
-                    {path ? fileName(path) : "file"}
-                </button>
+            <ActionLine
+                action="Read"
+                detail={fileName || "file"}
+                onClick={() => path && void openProjectFile(path)}
+            />
+        );
+    }
+
+    if (block.type === "subagent" || block.type === "subagent_ref") {
+        const name = block.query || "agent";
+        return (
+            <div className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80">
+                {providerIcon(block.command || "auto", 14)}
+                <span>
+                    Spawned <span className="text-text-secondary">{name}</span>
+                </span>
             </div>
         );
     }
 
     if (block.type === "grep") {
         const q = (block.query || block.content || "").trim();
-        return (
-            <div className="py-0.5 chat-text font-regular text-text-primary/80 truncate">
-                Grepped <span className="text-text-secondary">{q}</span>
-            </div>
-        );
+        return <ActionLine action="Grepped" detail={q} />;
     }
 
     if (block.type === "search" || block.type === "search_result") {
         const q = (block.query || block.content || "").trim();
-        return (
-            <div className="py-0.5 chat-text font-regular text-text-primary/80 truncate">
-                Searched <span className="text-text-secondary">{q}</span>
-            </div>
-        );
+        return <ActionLine action="Searched" detail={q} />;
     }
 
     if (block.type === "web_search" || block.type === "web_result") {
-        const q = (block.query || "").trim();
-        const hits = parseWebResults(block.content || "");
-        const favicons = hits
-            .map((h) => h.url)
-            .filter(Boolean)
-            .filter((url, i, arr) => arr.indexOf(url) === i)
-            .slice(0, 5);
         return (
-            <div className="flex items-center gap-1.5 py-0.5 chat-text font-regular text-text-primary/80 min-w-0">
-                <span className="shrink-0">
-                    {block.isGenerating ? "Searching" : "Searched"}
-                </span>
-                {q ? (
-                    <span className="text-text-secondary truncate min-w-0">
-                        {q.length > 48 ? `${q.slice(0, 48)}…` : q}
-                    </span>
-                ) : null}
-                {favicons.length > 0 ? (
-                    <span className="inline-flex items-center -space-x-1 shrink-0 pl-0.5">
-                        {favicons.map((url) => (
-                            <span
-                                key={url}
-                                className="inline-flex size-5 items-center justify-center rounded-full border border-border-subtle bg-panel overflow-hidden"
-                            >
-                                <Favicon url={url} size={12} />
-                            </span>
-                        ))}
-                    </span>
-                ) : null}
-            </div>
+            <WebSearchBlock
+                query={(block.query || "").trim()}
+                results={parseWebSearchHits(block.content || "")}
+                isActive={block.isGenerating}
+            />
         );
     }
 
@@ -857,15 +783,10 @@ function StepRow({ block }: { block: Chunk }) {
                     ? "Deleted"
                     : "Renamed";
         return (
-            <div className="py-0.5 chat-text text-text-primary/80">
-                {label}
-                {block.content ? (
-                    <>
-                        {" "}
-                        <span className="text-text-secondary">{fileName(block.content)}</span>
-                    </>
-                ) : null}
-            </div>
+            <ActionLine
+                action={label}
+                detail={block.content ? fileName(block.content) : undefined}
+            />
         );
     }
 
@@ -873,49 +794,10 @@ function StepRow({ block }: { block: Chunk }) {
     return <ActionItem block={block} />;
 }
 
-function shortenActivityLabel(label: string): string {
-    const trimmed = label.trim();
-    if (!trimmed) return trimmed;
-    if (/rate\s*limit/i.test(trimmed)) return "Rate limited, retrying…";
-    if (/high\s*(load|demand)/i.test(trimmed)) return "High load — retrying…";
-    if (trimmed.length > 48) return `${trimmed.slice(0, 45)}…`;
-    return trimmed;
-}
-
-function liveActivityLabel(blocks: Chunk[], activityLabel?: string | null): string {
-    if (activityLabel?.trim()) return shortenActivityLabel(activityLabel);
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        const block = blocks[i];
-        const config = getWorkflowActionConfig(block, true);
-        if (!config) continue;
-        if (block.type === "think" || block.type === "thought") {
-            return block.isGenerating ? "Thinking" : "Thought";
-        }
-        if (block.type === "edit" || block.type === "edit_pending") {
-            const name = block.file?.split(/[\\/]/).pop() || "file";
-            return `${config.label} ${name}`;
-        }
-        if (block.type === "web_visit") {
-            return `${config.label} ${block.visitHost || block.visitTitle || ""}`.trim();
-        }
-        if (config.query) {
-            const q = String(config.query);
-            return `${config.label} ${q.length > 40 ? `${q.slice(0, 40)}…` : q}`;
-        }
-        if (config.file) {
-            const name = config.file.split(/[\\/]/).pop() || config.file;
-            return `${config.label} ${name}`;
-        }
-        return config.label;
-    }
-    return "Working";
-}
-
 export function TurnWorkflowSummary({
     blocks,
     isActive,
     durationMs,
-    activityLabel,
     showHeader = true,
     children,
 }: {
@@ -972,9 +854,6 @@ export function TurnWorkflowSummary({
         ? Date.now() - startedAtRef.current
         : durationMs) ?? 0;
     void tick;
-    const headerLabel = isActive
-        ? liveActivityLabel(visible, activityLabel)
-        : null;
     const workedLabel = formatDuration(elapsedMs);
 
     const pendingApprovalRows = (
@@ -997,17 +876,11 @@ export function TurnWorkflowSummary({
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex w-fit max-w-full items-center gap-1 py-0.5 chat-text font-medium text-text-muted hover:text-text-primary transition-colors"
+                className="flex w-full max-w-full items-center gap-2 py-0.5 chat-text font-medium text-text-muted hover:text-text-primary transition-colors"
             >
-                <span className="wf-summary-text">
+                <span className="wf-summary-text min-w-0 flex-1 text-left">
                     Worked for{" "}
                     <span className="wf-summary-text-strong">{workedLabel}</span>
-                    {isActive && headerLabel ? (
-                        <>
-                            {" "}
-                            · <span className="wf-summary-text-strong">{headerLabel}</span>
-                        </>
-                    ) : null}
                 </span>
                 <Icon
                     icon={RiArrowRightSLine}
@@ -1034,7 +907,7 @@ export function TurnWorkflowSummary({
                                             <GroupActionLabel
                                                 key={`reads-${i}`}
                                                 action="Explored"
-                                                detail={groupDetail(row.paths)}
+                                                detail={groupDetail(row.files.map((f) => f.path))}
                                             />
                                         );
                                     }
@@ -1066,6 +939,37 @@ export function TurnWorkflowSummary({
                                                 key={`lists-${i}`}
                                                 action="Listed"
                                                 detail={row.count > 1 ? `${row.count} folders` : "folders"}
+                                            />
+                                        );
+                                    }
+                                    if (row.kind === "web_trail") {
+                                        const queries = row.blocks
+                                            .map((b) => (b.query || "").trim())
+                                            .filter(Boolean);
+                                        const results = row.blocks.flatMap((b) => {
+                                            if (b.type === "web_visit") {
+                                                return [{
+                                                    title: b.visitTitle || b.visitHost || "Visited",
+                                                    url: b.visitUrl || "",
+                                                    snippet: b.visitHost ? `Visited ${b.visitHost}` : "",
+                                                }];
+                                            }
+                                            return parseWebSearchHits(b.content || "");
+                                        });
+                                        const seen = new Set<string>();
+                                        const unique = results.filter((hit) => {
+                                            const key = hit.url || hit.title;
+                                            if (!key || seen.has(key)) return false;
+                                            seen.add(key);
+                                            return true;
+                                        });
+                                        return (
+                                            <WebSearchBlock
+                                                key={`web-${i}`}
+                                                query={queries[queries.length - 1]}
+                                                searches={queries.length}
+                                                results={unique}
+                                                isActive={row.blocks.some((b) => b.isGenerating)}
                                             />
                                         );
                                     }

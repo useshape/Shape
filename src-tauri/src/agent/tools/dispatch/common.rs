@@ -160,6 +160,7 @@ pub(super) fn record_tool_event(name: &str, outcome: &ToolOutcome, project_path:
         "git_stage" => "ai_git_stages",
         "render_design_previews" => "ai_design_previews",
         "save_plan" => "ai_plan_saves",
+        "spawn_subagent" => "ai_subagents",
         "update_todos" => "ai_todo_updates",
         _ if name.starts_with("mcp_") => "ai_mcp_calls",
         _ => return,

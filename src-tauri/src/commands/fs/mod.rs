@@ -569,6 +569,68 @@ pub async fn reveal_path(path: String) -> Result<(), AppError> {
     Ok(())
 }
 
+pub async fn open_in_app(app: String, path: String) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || {
+        let key = app.to_lowercase();
+        if key == "explorer" {
+            #[cfg(target_os = "windows")]
+            {
+                Command::new("explorer")
+                    .arg(path.replace("/", "\\"))
+                    .spawn()
+                    .map_err(|e| AppError::Io(e))?;
+            }
+            #[cfg(target_os = "macos")]
+            {
+                Command::new("open").arg(&path).spawn().map_err(|e| AppError::Io(e))?;
+            }
+            #[cfg(target_os = "linux")]
+            {
+                Command::new("xdg-open").arg(&path).spawn().map_err(|e| AppError::Io(e))?;
+            }
+            return Ok::<(), AppError>(());
+        }
+
+        let exe = match key.as_str() {
+            "cursor" => "cursor",
+            "vscode" | "code" => "code",
+            "zed" => "zed",
+            _ => {
+                return Err(AppError::Message(format!("Unknown app: {app}")));
+            }
+        };
+
+        #[cfg(target_os = "macos")]
+        {
+            let bundle = match key.as_str() {
+                "cursor" => "Cursor",
+                "vscode" | "code" => "Visual Studio Code",
+                "zed" => "Zed",
+                _ => exe,
+            };
+            Command::new("open")
+                .args(["-a", bundle, &path])
+                .spawn()
+                .map_err(|e| AppError::Io(e))?;
+            return Ok::<(), AppError>(());
+        }
+
+        #[allow(unused_mut)]
+        let mut cmd = Command::new(exe);
+        cmd.arg(&path);
+        #[cfg(windows)]
+        {
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        cmd.spawn().map_err(|e| AppError::Io(e))?;
+        Ok::<(), AppError>(())
+    })
+    .await
+    .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))??;
+    Ok(())
+}
+
 pub async fn save_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), AppError> {
     crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     match tokio::fs::write(&path, &content).await {

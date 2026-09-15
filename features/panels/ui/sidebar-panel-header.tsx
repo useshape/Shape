@@ -63,13 +63,9 @@ export function SidebarPanelActionButton({
 }: ButtonProps) {
     return (
         <Button
-            type="button"
             variant="ghost"
             size="icon"
-            className={cn(
-                "h-6 w-6 shrink-0 text-text-muted hover:bg-panel-hover hover:text-text-primary",
-                className,
-            )}
+            className="shrink-0 mt-0.5 text-text-muted hover:bg-panel-hover hover:text-text-primary"
             {...props}
         >
             {children}

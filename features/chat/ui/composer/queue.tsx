@@ -2,10 +2,13 @@
 
 import { RiCloseLine, RiPencilLine } from "@remixicon/react";
 import React from "react";
-import { Icon } from "@/components/ui/icon";
-import { MorphMenu } from "@/components/ui/morph-menu";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 
 export type QueuedMessage = {
     id: string;
@@ -29,65 +32,47 @@ export function QueuedMessagesPanel({
 }) {
     if (items.length === 0) return null;
 
-    const openH = Math.min(200, 52 + items.length * 44);
-
     return (
-        <MorphMenu
-            variant="morph"
-            aria-label="Queued messages"
-            align="end"
-            openWidth={300}
-            openHeight={openH}
-            closedHeight={32}
-            trigger={
-                <>
-                    <span>Queued</span>
-                    <span className="tabular-nums text-text-muted">{items.length}</span>
-                </>
-            }
-        >
-            <div className="flex h-full flex-col py-1">
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                    aria-label="Queued messages"
+                >
+                    Queued
+                    <span className="tabular-nums text-xs text-text-muted">{items.length}</span>
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72 p-1">
                 {items.map((item) => (
-                    <div
-                        key={item.id}
-                        className="group mx-1 flex items-start gap-2 rounded-lg px-2 py-1.5"
-                    >
-                        <div className="relative min-h-[2.5rem] min-w-0 flex-1">
-                            <p className="line-clamp-3 text-sm leading-snug text-text-primary">
-                                {previewText(item.content, 160)}
-                            </p>
-                            <div
-                                className="pointer-events-none absolute inset-x-0 top-0 h-3 bg-gradient-to-b from-surface-3 to-transparent"
-                                aria-hidden
-                            />
-                            <div
-                                className="pointer-events-none absolute inset-x-0 bottom-0 h-3 bg-gradient-to-t from-surface-3 to-transparent"
-                                aria-hidden
-                            />
-                        </div>
-                        <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                            <Tooltip content="Edit" side="left">
+                    <div key={item.id} className="flex items-start gap-2 rounded-md px-2 py-1.5">
+                        <p className="min-w-0 flex-1 line-clamp-3 text-sm leading-snug text-text-primary">
+                            {previewText(item.content, 160)}
+                        </p>
+                        <div className="flex shrink-0 gap-0.5">
+                            <Tooltip content="Edit">
                                 <button
                                     type="button"
-                                    className="rounded p-0.5 text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                                    className="rounded p-0.5 text-text-muted hover:text-text-primary"
                                     onClick={() => onEdit(item.id)}
                                 >
-                                    <Icon icon={RiPencilLine} />
+                                    <Icon icon={RiPencilLine} size={ICON_SIZE_SM} />
                                 </button>
                             </Tooltip>
-                            <Tooltip content="Remove" side="left">
+                            <Tooltip content="Remove">
                                 <button
                                     type="button"
-                                    className="rounded p-0.5 text-text-muted hover:bg-panel-hover hover:text-error"
+                                    className="rounded p-0.5 text-text-muted hover:text-error"
                                     onClick={() => onRemove(item.id)}
                                 >
-                                    <Icon icon={RiCloseLine} />
+                                    <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
                                 </button>
                             </Tooltip>
                         </div>
                     </div>
                 ))}
-            </div>
-        </MorphMenu>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }

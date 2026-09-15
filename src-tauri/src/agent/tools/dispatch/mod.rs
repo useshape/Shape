@@ -6,6 +6,7 @@ mod discover;
 mod files;
 mod git;
 mod meta;
+mod subagent;
 mod terminal;
 
 use reqwest::Client;
@@ -156,6 +157,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "write_to_terminal" => terminal::tool_write_to_terminal(&args, ctx),
         "wait" => terminal::tool_wait(&args, ctx).await,
         "save_plan" => meta::tool_save_plan(&args, ctx),
+        "spawn_subagent" => subagent::tool_spawn_subagent(&args, ctx).await,
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,

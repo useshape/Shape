@@ -115,7 +115,6 @@ export function ShapeWindow({
   const ids = useMemo(() => DEMO_CHATS.map((c) => c.id), []);
   const idx = ids.indexOf(chatId);
   const title = DEMO_CHATS.find((c) => c.id === chatId)?.title ?? "New chat";
-  const ago = chatId === "review" && working ? "now" : "just now";
 
   const selectChat = (id: DemoChatId) => {
     setChatId(id);
@@ -146,16 +145,16 @@ export function ShapeWindow({
             onNewChat={onNewChat}
           />
         ) : null}
-        <div
-          className={cn(
-            "relative flex min-w-0 flex-1 overflow-hidden bg-panel",
-            sidebar && "rounded-l-xl border-l border-border",
-          )}
-        >
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel",
+              sidebar && "rounded-l-xl border-l border-border",
+            )}
+          >
             <DemoChrome
               title={title}
-              ago={ago}
+              repo={DEMO_CHATS.find((c) => c.id === chatId)?.repo ?? "shape"}
               canBack={idx < ids.length - 1}
               canForward={idx > 0}
               rightOpen={workspaceOpen}
@@ -185,9 +184,10 @@ export function ShapeWindow({
           {workspace ? (
             <div
               style={{ width: workspaceOpen ? workspaceWidth : 0, flex: "0 0 auto" }}
-              className="h-full overflow-hidden transition-[width] duration-200 ease-[var(--ease-out)]"
+              className="h-full overflow-hidden border-l border-border-subtle bg-sidebar transition-[width] duration-200 ease-[var(--ease-out)]"
             >
-              <div style={{ width: workspaceWidth }} className="flex h-full">
+              <div style={{ width: workspaceWidth }} className="flex h-full flex-col bg-sidebar">
+                <div className="h-titlebar shrink-0 bg-sidebar" />
                 <DemoPanel
                   files={files}
                   tab={workspaceTab}

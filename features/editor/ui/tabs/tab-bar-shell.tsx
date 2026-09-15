@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import {
     WORKBENCH_TAB_ACTIONS_CLASS,
     WORKBENCH_TAB_BAR_CLASS,
+    WORKBENCH_TAB_FADE_CLASS,
     WORKBENCH_TAB_LIST_CLASS,
     WORKBENCH_TAB_ROW_CLASS,
     WORKBENCH_TAB_SCROLL_CLASS,
@@ -36,6 +37,7 @@ interface TabBarShellProps {
     dndId?: string;
     hideTabs?: boolean;
     className?: string;
+    fade?: boolean;
 }
 
 export function TabBarShell({
@@ -47,6 +49,7 @@ export function TabBarShell({
     dndId,
     hideTabs,
     className,
+    fade,
 }: TabBarShellProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -64,31 +67,34 @@ export function TabBarShell({
     return (
         <div className={cn(WORKBENCH_TAB_BAR_CLASS, className)}>
             {!hideTabs ? (
-                <div
-                    ref={scrollContainerRef}
-                    onWheel={handleWheel}
-                    className={WORKBENCH_TAB_SCROLL_CLASS}
-                >
-                    <DndContext
-                        id={dndId}
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={onDragEnd}
-                        modifiers={[restrictToHorizontalAxis, restrictToFirstScrollableAncestor]}
+                <div className="relative min-h-0 min-w-0 flex-1 self-stretch">
+                    <div
+                        ref={scrollContainerRef}
+                        onWheel={handleWheel}
+                        className={WORKBENCH_TAB_SCROLL_CLASS}
                     >
-                        <div className={WORKBENCH_TAB_ROW_CLASS}>
-                            <div className={WORKBENCH_TAB_LIST_CLASS}>
-                                <SortableContext items={itemIds} strategy={horizontalListSortingStrategy}>
-                                    {children}
-                                </SortableContext>
-                                {listEnd}
+                        <DndContext
+                            id={dndId}
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={onDragEnd}
+                            modifiers={[restrictToHorizontalAxis, restrictToFirstScrollableAncestor]}
+                        >
+                            <div className={WORKBENCH_TAB_ROW_CLASS}>
+                                <div className={WORKBENCH_TAB_LIST_CLASS}>
+                                    <SortableContext items={itemIds} strategy={horizontalListSortingStrategy}>
+                                        {children}
+                                    </SortableContext>
+                                    {listEnd}
+                                </div>
+                                <div className={WORKBENCH_TAB_TRAIL_CLASS} aria-hidden />
                             </div>
-                            <div className={WORKBENCH_TAB_TRAIL_CLASS} aria-hidden />
-                        </div>
-                    </DndContext>
+                        </DndContext>
+                    </div>
+                    {fade ? <div className={WORKBENCH_TAB_FADE_CLASS} aria-hidden /> : null}
                 </div>
             ) : (
-                <div className="min-w-0 flex-1 self-stretch bg-panel" />
+                <div className="min-w-0 flex-1 self-stretch bg-sidebar" />
             )}
             {actions ? <div className={WORKBENCH_TAB_ACTIONS_CLASS}>{actions}</div> : null}
         </div>

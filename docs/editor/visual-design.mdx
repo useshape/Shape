@@ -5,7 +5,18 @@ order: 5
 icon: ri-cursor-line
 ---
 
-**Visual design** lets you inspect the running page, edit layout and appearance in a Design sidebar, then **Apply** those changes to project source. It lives in the **Browser** tab, not in the code editor.
+**Visual design** opens the running website in a source-backed canvas. Select, move, resize,
+duplicate, delete, or edit an element and Shape writes a deterministic source change — it does
+not ask an AI model to rewrite the file.
+
+Design mode supports:
+
+- React projects running with Vite
+- Next.js
+- Astro
+- Remix
+
+Other project types are left unchanged.
 
 For Tailwind class panels on tokens in the file, see [Design Tools](/docs/editor/design-tools).
 
@@ -21,26 +32,29 @@ Start your app from **Scripts** or the [terminal](/docs/terminal/integrated-term
 
 ## Turn on design mode
 
-Click the **palette** in the Browser toolbar, or press **Ctrl+Shift+D**. The Design sidebar opens on the right.
+Click **Design** in the project sidebar, or press **Ctrl+Shift+D**. Shape discovers the project's
+routes, connects to the local development server, and opens the full designer. The animated
+canvas loader remains visible until the live page and source bridge are ready.
 
 The **inspect** control (eyedropper) is on while you select elements. Click the page to target a node. The overlay shows the tag and a short label, for example `button.Get started`.
 
 | Action | What it does |
 | --- | --- |
 | Click | Select the deepest control under the cursor (buttons/links preferred). Full-page layout shells are ignored |
-| **Ctrl+click** | Add to the selection |
-| **Shift-drag** | Select a region (marquee) |
-| **Drag** (positioned) | Move by `left`/`top` with snap guides. `static` elements promote to `relative` at `0,0` (no jump). Hold **Alt** to force free-move instead of flex reorder |
-| **Drag** (flex/grid child) | Reorder siblings inside an auto-layout parent (not under `body` / `#__next`) with an insertion line |
-| **Resize handles** | Change width and height on the selection |
-| **Double-click text** | Edit text content on the canvas (also available in the Typography panel) |
-| **Arrow keys** | Nudge offsets (positioned) or sibling index (flex/grid). Shift = larger step |
-| **Ctrl+I** | Toggle inspect vs interacting with the page |
-| **Escape** | Clear the selection |
+| **Drag `•••`** | Move an element. Static elements are promoted to `position: relative` without changing their initial layout |
+| **Resize handles** | Change width and height |
+| **Double-click text** | Edit direct static text in place |
+| **Arrow keys** | Nudge by 1px; Shift nudges by 10px |
+| **Ctrl+D** | Duplicate the selected source element |
+| **Delete** | Delete the selected source element |
 
 When inspect is off, you can click links and use the page as usual.
 
-## Design sidebar
+## Designer panels
+
+The left panel contains the live DOM layer tree, project routes, and source-backed assets. The
+bottom toolbar contains selection, undo/redo, capture, code, responsive frame, and zoom
+controls. There is no separate left activity toolbar.
 
 After you select an element, the sidebar shows:
 
@@ -48,34 +62,39 @@ After you select an element, the sidebar shows:
 | --- | --- |
 | **Position** | X and Y offsets |
 | **Layout** | Block, horizontal, vertical, or grid; width and height |
-| **Appearance** | Radius (scrubbable input), padding, overflow |
+| **Spacing and size** | Per-side margin and padding, gap, min/max constraints, width and height |
 | **Fill** | Background or text color, opacity |
 | **Stroke** | Border width, style, and color |
-| **Effects** | Shadows and similar |
-| **Styles** | **Color tokens** (CSS variables ≈ Figma variables) and **Text styles** (composite size/weight/line-height ≈ Figma text styles). **+** opens a side flyout (color token or text style); defaults to `:root`, optional `@theme` utilities when the file already uses `@theme` |
-| **Export** | Copy or export related assets |
+| **Effects** | Shadows, filters, backdrop filters, transforms, opacity, blend mode |
+| **Motion** | Transition property, duration, easing, transform, and transform origin |
+| **Settings** | Source tag, ID, classes, attributes, and accessibility metadata |
 
-Fill colors owned by `var(--token)` can **Edit token** (patch the shared variable) or **Detach** (write a plain color on the element).
+Changes preview immediately in the iframe and are then committed through the source engine.
+The engine resolves the DOM element to a JSX or Astro source range, applies only the selected
+attribute or node operation, parses the result, and rejects the edit if the match is ambiguous,
+the expression is dynamic, or syntax would regress.
 
-If the selection comes from a React component, use **Apply to component** to retarget the write to the component root; leave it off to patch the instance element.
+## Source safety
 
-Changes preview live in the iframe. They are pending until you apply. Canvas moves, resizes, reorders, and text edits participate in the same undo stack as inspector changes.
-
-## Apply to source
-
-The footer shows how many pending edits you have.
-
-1. **Undo** reverts the last design change in the preview.
-2. **Apply** writes matching updates to JSX, HTML, or CSS in the open project.
-3. **Reset** (toolbar) clears pending preview edits without writing files.
-
-Apply needs an open project folder and a local preview it can map back to source. If a node cannot be located, the sidebar marks that element and leaves the rest applied.
-
-**Ctrl+Z** / **Ctrl+Y** undo and redo design-mode history while the Browser tab is focused (outside text fields).
+- Source files remain the single source of truth.
+- No AI is used to apply visual edits.
+- Existing dynamic `style` expressions are never overwritten.
+- Direct text editing refuses nested or expression-generated content.
+- Every edit is syntax checked before writing.
+- Undo and redo restore exact file snapshots.
+- If more than one source node is an equally strong match, Shape asks for a more specific
+  selection instead of guessing.
 
 ## Device frames
 
-With design mode on, the device control frames the preview at phone and tablet sizes (iPhone, Pixel, iPad, and Full). Full uses the whole tab.
+Use the bottom toolbar to switch between full, tablet (768px), and mobile (390px) frames and to
+change canvas zoom.
+
+## Deploy
+
+The **Deploy** menu previews supported destinations with their official marks, including Vercel,
+Netlify, Cloudflare Pages, Railway, Render, Fly.io, AWS Amplify, Firebase, GitHub Pages, and
+Framer. Provider connections are intentionally disabled for now.
 
 ## Troubleshooting logs
 

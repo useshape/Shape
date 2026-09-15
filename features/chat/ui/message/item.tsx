@@ -33,8 +33,8 @@ import { Button } from "@/components/ui/button";
 import { useGitHubAuth } from "@/lib/github/store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
-import { providerIcon } from "@/lib/ui/provider-icon";
-import { TypingDots, UserMessageCard, AUTO_DISPLAY_MODEL } from "./bubble";
+import { UserMessageCard } from "./bubble";
+import { GeneratingIndicator } from "../blocks/generating";
 import { isAutoModelId } from "@/lib/usage-display";
 import { parseUserAttachments } from "../../lib/user-attachments";
 import type { ParsedUserAttachment } from "../../lib/user-attachments";
@@ -243,7 +243,7 @@ function ChatMessageItemInner({
     content,
     isGenerating,
     activityLabel,
-    roleLabel,
+    roleLabel: _roleLabel,
     stats,
     model,
     index = -1,
@@ -399,9 +399,7 @@ function ChatMessageItemInner({
         );
     }
 
-    const modelLabel = roleLabel || formatMessageModelLabel(model, stats) || "Auto";
     const showTypingOnly = Boolean(isGenerating && !content.trim());
-    const auto = isAutoModelId(model) || Boolean(stats?.usedAuto);
 
     return (
         <ContextMenu>
@@ -412,15 +410,9 @@ function ChatMessageItemInner({
             onKeyDown={handleKeyDown}
         >
             <div className="flex min-w-0 flex-col gap-1 pr-6">
-                <div className="flex items-center gap-2">
-                    <span className="flex size-6 shrink-0 items-center justify-center overflow-visible">
-                        {providerIcon(auto ? AUTO_DISPLAY_MODEL : (model || AUTO_DISPLAY_MODEL), 20)}
-                    </span>
-                    <span className="text-sm font-medium text-text-muted">{modelLabel}</span>
-                </div>
                 <div ref={bodyRef} className="min-w-0 select-text overflow-visible chat-text text-text-primary">
                     {showTypingOnly ? (
-                        <TypingDots />
+                        <GeneratingIndicator label="Thinking" />
                     ) : (
                         <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
                             <MessageRenderer

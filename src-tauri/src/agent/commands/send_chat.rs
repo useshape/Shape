@@ -85,10 +85,10 @@ pub async fn send_chat_message(
         .unwrap_or(false);
     let has_images = model_router::content_has_images(&message) || history_has_images;
     let mode_to_use = mode.unwrap_or_else(|| "Ask".to_string());
-    let model_to_use = model_router::normalize_model_with_images(
-        &raw_model,
-        has_images || model_router::mode_wants_vision(&mode_to_use),
-    );
+    // Auto stays on DeepSeek. Vision-capable picks (Claude/GPT/Gemini/Grok) keep
+    // the pixels. Text-only models get a cheap caption instead of swapping the
+    // whole turn onto Gemini Flash.
+    let model_to_use = model_router::normalize_model(&raw_model);
     let effort_raw = reasoning_effort
         .as_deref()
         .map(str::trim)
@@ -488,8 +488,23 @@ pub async fn send_chat_message(
         }
         snapshot
     };
+    let mut api_history = messages::build_api_history(&history_snapshot);
+    if super::caption::should_caption(&model_to_use, has_images) {
+        streaming::emit_chat_status(
+            &app_handle,
+            json!({ "phase": "tool", "label": "Looking at image…" }),
+        );
+        let _ = super::caption::caption_history_images(
+            &mut api_history,
+            &client,
+            &auth_token,
+            &proxy_base,
+            Some(&cancel),
+        )
+        .await;
+    }
     let mut api_messages =
-        messages::build_messages_json(&final_system_prompt, &messages::build_api_history(&history_snapshot), &model_to_use);
+        messages::build_messages_json(&final_system_prompt, &api_history, &model_to_use);
 
     let mcp_tools = mcp_state.tools_as_openai_schema().unwrap_or_default();
     let tools = schema::tools_for_mode_family_and_memory(

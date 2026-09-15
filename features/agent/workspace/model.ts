@@ -5,10 +5,10 @@ import {
     RiGitBranchLine,
     RiGitCommitLine,
     RiGitPullRequestLine,
-    RiTerminalBoxLine,
+    RiRobot2Line,
 } from "@remixicon/react";
 
-export type TabKind = "changes" | "graph" | "terminal" | "plan" | "file" | "diff" | "files";
+export type TabKind = "changes" | "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs";
 
 export type WorkspaceTab = {
     id: string;
@@ -16,6 +16,7 @@ export type WorkspaceTab = {
     title: string;
     /** Absolute path for plan / file tabs. */
     path?: string;
+    markdown?: string;
     diff?: {
         id: string;
         path: string;
@@ -43,14 +44,16 @@ export function iconFor(kind: TabKind): RemixiconComponentType {
             return RiGitPullRequestLine;
         case "graph":
             return RiGitCommitLine;
-        case "terminal":
-            return RiTerminalBoxLine;
+        case "agents":
+            return RiRobot2Line;
         case "plan":
             return RiGitBranchLine;
         case "diff":
             return RiGitPullRequestLine;
         case "files":
             return RiFolderLine;
+        case "prs":
+            return RiGitPullRequestLine;
         default:
             return RiFileTextLine;
     }

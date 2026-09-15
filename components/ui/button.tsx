@@ -154,7 +154,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         const classes = cn(
             "relative inline-flex items-center justify-center gap-1.5 font-medium outline-none select-none",
             "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-            "focus-visible:ring-1 focus-visible:ring-border-focus",
+            "focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
             "[&_svg.shape-icon]:pointer-events-none [&_svg.shape-icon]:shrink-0",
             variantClasses[resolvedVariant],
             category === "tertiary" && tertiaryOverride[resolvedVariant],

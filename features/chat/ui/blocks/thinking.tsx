@@ -4,6 +4,7 @@ import { RiArrowDownSLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { GeneratingIndicator } from "./generating";
 
 export function ThinkingBlock({ content, isActive }: { content: string; isActive?: boolean }) {
     const [isOpen, setIsOpen] = React.useState(true);
@@ -24,12 +25,9 @@ export function ThinkingBlock({ content, isActive }: { content: string; isActive
                     )}
                 />
                 {isActive ? (
-                    <span className="font-medium text-sm animate-pulse text-text-secondary">Analyzing...</span>
+                    <GeneratingIndicator label="Thinking" showTimer={false} />
                 ) : (
                     <span className="font-medium text-sm">Thought for a moment</span>
-                )}
-                {isActive && (
-                    <div className="w-2.5 h-2.5 border-[1.5px] border-accent border-t-transparent rounded-full animate-spin ml-1" />
                 )}
             </button>
 

@@ -11,6 +11,7 @@ import { AgentWorkspace } from "./workspace";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DesignStudio } from "@/features/preview/design/shell";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
+import { TerminalDock } from "./terminal-dock";
 
 const MIN_WORKSPACE = 360;
 const MAX_WORKSPACE_RATIO = 0.85;
@@ -84,10 +85,9 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (!splash) return;
-        let t1: number | undefined;
         let t2: number | undefined;
         const raf = requestAnimationFrame(() => setSplashVisible(true));
-        t1 = window.setTimeout(() => {
+        const t1 = window.setTimeout(() => {
             setSplashVisible(false);
             t2 = window.setTimeout(() => {
                 try {
@@ -184,7 +184,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 persistWorkspace(true);
                 return;
             }
-            if (["preview", "changes", "source", "graph", "git"].includes(tabId)) {
+            if (["preview", "changes", "source", "graph", "git", "prs", "pulls"].includes(tabId)) {
                 setOverlay(null);
                 persistWorkspace(true);
             }
@@ -201,15 +201,9 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 else toggleWorkspace();
             }
             if (id === "panel" || id === "terminal") {
-                // Classic bottom-panel / Terminal open → agent workspace Terminal.
                 setDesignOpen(false);
                 setOverlay(null);
-                persistWorkspace(true);
-                window.setTimeout(() => {
-                    window.dispatchEvent(
-                        new CustomEvent("shape-set-active-tab", { detail: "terminal" }),
-                    );
-                }, 120);
+                return;
             }
             if (id === "files-mode" || id === "explorer") {
                 setOverlay(null);
@@ -246,13 +240,19 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 /* ignore */
             }
         };
+        const onPrs = () => {
+            setOverlay(null);
+            persistWorkspace(true);
+        };
         window.addEventListener("shape-set-active-tab", onTab as EventListener);
         window.addEventListener("shape-layout-toggle", onToggle as EventListener);
         window.addEventListener("shape-agent-overlay", onOverlay as EventListener);
+        window.addEventListener("shape-open-pull-requests", onPrs);
         return () => {
             window.removeEventListener("shape-set-active-tab", onTab as EventListener);
             window.removeEventListener("shape-layout-toggle", onToggle as EventListener);
             window.removeEventListener("shape-agent-overlay", onOverlay as EventListener);
+            window.removeEventListener("shape-open-pull-requests", onPrs);
         };
     }, [project_path, persistWorkspace, toggleSidebar, toggleWorkspace]);
 
@@ -315,17 +315,14 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         };
     }, [designOpen, requestDesign]);
 
-    /** Always-mounted: open workspace Terminal even when Design Mode / collapsed rail unmounted AgentWorkspace. */
+    /** Terminal lives in the chat column dock, not the right workspace. */
     const openWorkspaceTerminal = useCallback(() => {
         setDesignOpen(false);
         setOverlay(null);
-        persistWorkspace(true);
-        setSidebarOpen(true);
-        // Defer so workspace mounts after Design/overlay unmount.
-        window.setTimeout(() => {
-            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "terminal" }));
-        }, 120);
-    }, [persistWorkspace]);
+        window.dispatchEvent(
+            new CustomEvent("shape-layout-toggle", { detail: { id: "terminal", value: true } }),
+        );
+    }, []);
 
     useEffect(() => {
         const onOpenTerminal = () => openWorkspaceTerminal();
@@ -342,12 +339,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             window.removeEventListener("shape-terminal-shortcut", onShortcut as EventListener);
         };
     }, [openWorkspaceTerminal]);
-
-    const handleNewChat = useCallback(() => {
-        setOverlay(null);
-        window.dispatchEvent(new CustomEvent("shape-chat-new"));
-        window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
-    }, []);
 
     const showWorkspace = Boolean(project_path) && !overlay && !designOpen;
     const rightExpanded = workspaceOpen && showWorkspace;
@@ -380,14 +371,16 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             ) : null}
 
             {designOpen && project_path ? (
-                <DesignStudio onClose={() => setDesignOpen(false)} />
+                <DesignStudio
+                    projectPath={project_path}
+                    onClose={() => setDesignOpen(false)}
+                />
             ) : (
                 <>
             <AgentSidebar
                 expanded={sidebarOpen}
                 overlay={overlay}
                 onToggleSidebar={toggleSidebar}
-                onNewChat={handleNewChat}
                 showDesign={Boolean(project_path)}
                 onDesign={requestDesign}
                 onSearch={() => {
@@ -402,16 +395,15 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 }}
             />
 
-            {/* Main column (chrome + content) · expanded workspace is full-height beside it;
-                collapsed Changes/Terminal rail sits under the top bar only. */}
-            <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+            {/* Chrome sits on the chat column; workspace is full-window height. */}
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
                     <AgentChrome
                         rightOpen={rightExpanded}
                         onToggleRight={toggleWorkspace}
                         canToggleRight={Boolean(project_path) && !overlay}
                     />
-                    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                        <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                             {overlay ? (
                                 <AgentOverlayView
                                     overlay={overlay}
@@ -421,20 +413,21 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                 />
                             ) : project_path ? (
                                 <>
-                                    <div className="absolute inset-0">
+                                    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                                         <Chat
                                             key={project_path.replace(/\//g, "\\").toLowerCase()}
                                             className="bg-panel"
                                         />
                                     </div>
+                                    <TerminalDock />
                                 </>
                             ) : (
                                 <div className="h-full overflow-hidden bg-panel" data-tauri-drag-region>
                                     {children}
                                 </div>
                             )}
-                        </div>
-                {/* Right panel — animate open/close width; no transition while dragging */}
+                    </div>
+                </div>
                 {showWorkspace && project_path ? (
                     <>
                         <div
@@ -455,7 +448,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                             }}
                         >
                             <div className="absolute inset-y-0 -left-1.5 w-3 cursor-col-resize" />
-                            <div className="pointer-events-none absolute inset-y-0 left-0 w-px transition-colors group-hover:bg-border-secondary group-active:bg-text-muted" />
+                            <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-border-subtle transition-colors group-hover:bg-border-secondary group-active:bg-text-muted" />
                         </div>
                         <div
                             style={{
@@ -463,25 +456,25 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                 flex: "0 0 auto",
                             }}
                             className={cn(
-                                "h-full overflow-hidden",
+                                "h-full overflow-hidden border-l border-border-subtle bg-panel",
                                 !isResizing &&
                                     "transition-[width] duration-200 ease-[var(--ease-out)]",
                             )}
                         >
                             <div
                                 style={{ width: workspaceWidth }}
-                                className="flex h-full"
+                                className="flex h-full bg-panel"
                             >
                                 <AgentWorkspace
                                     projectPath={project_path}
                                     expanded
                                     onExpand={() => persistWorkspace(true)}
+                                    onToggleRight={toggleWorkspace}
                                 />
                             </div>
                         </div>
                     </>
                 ) : null}
-                    </div>
             </div>
                 </>
             )}

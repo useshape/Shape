@@ -27,6 +27,7 @@ import { commands } from "@/lib/backend/commands";
 import { useSettings, updateSettingSection, type AutoRunModeSetting } from "@/lib/settings";
 import type { Chunk } from "../md/renderer";
 import { Collapse } from "./collapse";
+import { ApprovalCard } from "./approval";
 
 const OUTPUT_CAP = 16_000;
 
@@ -318,9 +319,46 @@ function TerminalCommandRow({
     );
 }
 
-function modKeyLabel(): string {
-    if (typeof navigator === "undefined") return "Ctrl";
-    return /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
+function AutoRunModePicker({ disabled }: { disabled?: boolean }) {
+    const settings = useSettings();
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild disabled={disabled}>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    aria-label="Approval mode for future agent commands"
+                >
+                    {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
+                        ?? "Ask every time"}
+                    <Icon icon={RiArrowDownSLine} className="opacity-70" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+                {AUTO_RUN_OPTIONS.map((opt) => {
+                    const selected = settings.ai.autoRunMode === opt.value;
+                    return (
+                        <DropdownMenuItem
+                            key={opt.value}
+                            onClick={() => {
+                                updateSettingSection("ai", { autoRunMode: opt.value });
+                                void commands.updateTurnPolicy({ autoRunMode: opt.value });
+                            }}
+                            className={cn("items-start gap-2 py-2", selected && "bg-panel-hover")}
+                        >
+                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="text-sm text-text-primary">{opt.label}</span>
+                                <span className="text-xs text-text-muted leading-snug">{opt.description}</span>
+                            </span>
+                            {selected ? <Icon icon={RiCheckLine} className="mt-0.5 shrink-0" /> : null}
+                        </DropdownMenuItem>
+                    );
+                })}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
 }
 
 /**
@@ -341,101 +379,31 @@ export function CommandApprovalCard({
     onRun: () => void;
     onSkip: () => void;
 }) {
-    const settings = useSettings();
-    const mod = modKeyLabel();
-
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (isProcessing) return;
-            const t = e.target as HTMLElement | null;
-            if (t?.closest("textarea, input, [contenteditable='true']")) return;
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                e.stopPropagation();
-                onRun();
-            }
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
-    }, [isProcessing, onRun]);
-
     return (
-        <div className="my-1 overflow-hidden rounded-xl bg-surface-3 border border-border-subtle">
-            <div className="flex items-center gap-2 px-3 pt-2 pb-2">
-                {isProcessing ? (
-                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-                ) : (
-                    <Icon icon={RiTerminalBoxLine} className="shrink-0 text-text-foreground" size={ICON_SIZE_MD} />
-                )}
-                <span className="truncate text-sm text-text-foreground">
-                    Run command{reason ? "" : ""}
+        <ApprovalCard
+            icon={<Icon icon={RiTerminalBoxLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />}
+            title={
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <span>Run command</span>
+                    {reason ? (
+                        <Tooltip content={reason} side="top">
+                            <Icon icon={RiInformationLine} className="shrink-0 text-text-disabled" size={ICON_SIZE_SM} />
+                        </Tooltip>
+                    ) : null}
                 </span>
-                {reason ? (
-                    <Tooltip content={reason} side="top">
-                        <Icon icon={RiInformationLine} className="shrink-0 text-text-disabled" size={ICON_SIZE_SM} />
-                    </Tooltip>
-                ) : null}
+            }
+            isProcessing={isProcessing}
+            onSkip={onSkip}
+            onAccept={onRun}
+            skipLabel="Skip"
+            acceptLabel="Run"
+            footerLeft={<AutoRunModePicker disabled={isProcessing} />}
+        >
+            <div className="max-h-[96px] min-h-[48px] overflow-y-auto px-3 pb-2 font-mono text-sm text-text-primary whitespace-pre-wrap break-words custom-scrollbar">
+                <span className="select-none text-text-disabled">$ </span>
+                {command}
             </div>
-            <div>
-                <div className="max-h-[96px] px-3 pb-2 min-h-[64px] overflow-y-auto custom-scrollbar font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
-                    <span className="select-none text-md text-text-disabled">$ </span>
-                    {command}
-                </div>
-            </div>
-            <div className="flex items-center justify-between gap-2 px-2 py-2">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild disabled={isProcessing}>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={isProcessing}
-                            aria-label="Approval mode for future agent commands"
-                        >
-                            {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
-                                ?? "Ask every time"}
-                            <Icon icon={RiArrowDownSLine} className="opacity-70" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                        {AUTO_RUN_OPTIONS.map((opt) => {
-                            const selected = settings.ai.autoRunMode === opt.value;
-                            return (
-                                <DropdownMenuItem
-                                    key={opt.value}
-                                    onClick={() => {
-                                        updateSettingSection("ai", { autoRunMode: opt.value });
-                                        void commands.updateTurnPolicy({ autoRunMode: opt.value });
-                                    }}
-                                    className={cn(
-                                        "flex w-full cursor-pointer items-center",
-                                        selected && "bg-panel-hover",
-                                    )}
-                                >
-                                    <span className="flex-1 text-sm text-text-primary">{opt.label}</span>
-                                    {selected ? (
-                                        <Icon icon={RiCheckLine} className="text-text-primary" />
-                                    ) : null}
-                                </DropdownMenuItem>
-                            );
-                        })}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                <div className="flex shrink-0 items-center gap-1.5">
-                    <Button type="button" variant="ghost" size="xs" disabled={isProcessing} onClick={onSkip}>
-                        Skip
-                    </Button>
-                    <Button type="button" variant="default" size="xs" disabled={isProcessing} onClick={onRun}>
-                        Run
-                        <span className="ml-1.5 inline-flex items-center gap-0.5">
-                            <kbd className="inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
-                                ↵
-                            </kbd>
-                        </span>
-                    </Button>
-                </div>
-            </div>
-        </div>
+        </ApprovalCard>
     );
 }
 

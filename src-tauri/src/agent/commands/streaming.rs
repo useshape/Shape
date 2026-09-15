@@ -72,8 +72,10 @@ pub fn rewrite_model_for_provider(model: &str, provider: &LlmProvider) -> Result
             {
                 return Ok("gpt-4o-mini".to_string());
             }
-            if m == crate::agent::model_router::MODEL_FAST_VISION {
-                return Ok("gpt-4o".to_string());
+            if m == crate::agent::model_router::MODEL_IMAGE_CAPTION
+                || m == crate::agent::model_router::MODEL_FAST_VISION
+            {
+                return Ok("gpt-4o-mini".to_string());
             }
             if let Some(rest) = m.strip_prefix("openai/") {
                 return Ok(rest.to_string());
@@ -134,6 +136,11 @@ impl ProxyContext {
 
     pub fn with_provider(mut self, provider: LlmProvider) -> Self {
         self.provider = provider;
+        self
+    }
+
+    pub fn with_feature(mut self, feature: &str) -> Self {
+        self.feature = feature.to_string();
         self
     }
 
@@ -1057,6 +1064,58 @@ pub async fn complete_chat_cancellable(
         "complete",
         &format!("Result: {}", &content[..content.floor_char_boundary(80)]),
     );
+    Ok(content)
+}
+
+/// Non-streaming completion with arbitrary message parts (image captions).
+pub async fn complete_chat_messages(
+    client: &Client,
+    api_key: &str,
+    messages: Vec<Value>,
+    model: &str,
+    max_tokens: u32,
+    proxy_ctx: &ProxyContext,
+    cancel: Option<&tokio_util::sync::CancellationToken>,
+) -> Result<String, AppError> {
+    if cancel.is_some_and(|t| t.is_cancelled()) {
+        return Err(AppError::Message("Cancelled".to_string()));
+    }
+
+    let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
+    let body = json!({
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    });
+
+    let send_fut = shape_proxy_request(client, api_key, proxy_ctx)
+        .json(&body)
+        .send();
+
+    let resp = match cancel {
+        Some(token) => {
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => {
+                    return Err(AppError::Message("Cancelled".to_string()));
+                }
+                result = send_fut => result,
+            }
+        }
+        None => send_fut.await,
+    }
+    .map_err(|e| AppError::Message(format!("Caption failed: {}", e)))?;
+
+    if cancel.is_some_and(|t| t.is_cancelled()) {
+        return Err(AppError::Message("Cancelled".to_string()));
+    }
+
+    let json = completion_json(resp).await?;
+    let content = json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .trim()
+        .to_string();
     Ok(content)
 }
 
