@@ -2,7 +2,7 @@
 
 import { RiArrowDownSLine, RiArrowRightSLine, RiArrowUpLine, RiCheckLine, RiClipboardLine, RiCloseLine, RiDeleteBinLine, RiDownloadLine, RiFileTextLine, RiFolderLine, RiGitBranchLine, RiLayoutBottomLine, RiLayoutColumnLine, RiMoreLine, RiPencilLine, RiRefreshLine, RiUploadLine } from "@remixicon/react";
 import React, { useState, useCallback, useEffect } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -787,22 +787,22 @@ export default function Source({
                 <GitChromeActions>
                     <Tooltip content="Refresh">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} aria-label="Refresh">
-                            <Icon icon={RiRefreshLine} />
+                            <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePull} aria-label="Pull">
-                            <Icon icon={RiDownloadLine} />
+                            <Icon icon={RiDownloadLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePush} aria-label="Push">
-                            <Icon icon={RiArrowUpLine} />
+                            <Icon icon={RiArrowUpLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Sync">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSync} aria-label="Sync">
-                            <Icon icon={RiUploadLine} />
+                            <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                 </GitChromeActions>
@@ -816,22 +816,22 @@ export default function Source({
                         <div className="flex shrink-0 items-center gap-0.5">
                         <Tooltip content="Refresh Repository">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={() => void refresh()}>
-                                <Icon icon={RiRefreshLine} />
+                                <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Pull">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePull}>
-                                <Icon icon={RiDownloadLine} />
+                                <Icon icon={RiDownloadLine} size={ICON_SIZE_SM} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Push">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePush}>
-                                <Icon icon={RiArrowUpLine} />
+                                <Icon icon={RiArrowUpLine} size={ICON_SIZE_SM} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Sync Changes">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handleSync}>
-                                <Icon icon={RiUploadLine} />
+                                <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
                             </Button>
                         </Tooltip>
                         {!embedded && project_path ? <GitManagerTrigger /> : null}
@@ -841,7 +841,7 @@ export default function Source({
                                 <DropdownMenu modal={false}>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="w-6 h-6" aria-label="More actions">
-                                            <Icon icon={RiMoreLine} />
+                                            <Icon icon={RiMoreLine} size={ICON_SIZE_SM} />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-48">
@@ -963,12 +963,12 @@ export default function Source({
                                 className="h-7 w-full justify-between gap-2 px-2 hover:bg-panel-hover text-text-secondary hover:text-text-primary"
                             >
                                 <span className="flex items-center gap-1.5 min-w-0">
-                                    <Icon icon={RiFolderLine} className="shrink-0" />
+                                    <Icon icon={RiFolderLine} size={ICON_SIZE_SM} className="shrink-0" />
                                     <span className="truncate text-sm">
                                         {repos.find((r) => r.path === activeRepoPath)?.name ?? "Repository"}
                                     </span>
                                 </span>
-                                <Icon icon={RiArrowDownSLine} className="shrink-0" />
+                                <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} className="shrink-0" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-56">
@@ -982,7 +982,7 @@ export default function Source({
                                 >
                                     <span className="truncate">{repo.name}</span>
                                     {activeRepoPath === repo.path && (
-                                        <Icon icon={RiCheckLine} className="ml-auto shrink-0" />
+                                        <Icon icon={RiCheckLine} size={ICON_SIZE_SM} className="ml-auto shrink-0" />
                                     )}
                                 </DropdownMenuItem>
                             ))}
@@ -1082,9 +1082,9 @@ export default function Source({
                             />
                             {lastCommit && (
                                 <div className="flex items-center text-sm text-text-muted gap-0.5 px-2 min-w-0">
-                                    <Icon icon={RiGitBranchLine} className="shrink-0" />
+                                    <Icon icon={RiGitBranchLine} size={ICON_SIZE_SM} className="shrink-0" />
                                     <span className="font-medium shrink-0 truncate max-w-[30%]">{currentBranch}</span>
-                                    <Icon icon={RiArrowRightSLine} className="shrink-0" />
+                                    <Icon icon={RiArrowRightSLine} size={ICON_SIZE_SM} className="shrink-0" />
                                     <span className="truncate flex-1 min-w-0">
                                         {lastCommit.message.split('\n')[0]}
                                     </span>
@@ -1096,26 +1096,18 @@ export default function Source({
                                 embedded ? "bg-transparent" : "bg-transparent",
                                 commitSuggestionStatus === "loading" && "git-generate-shimmer",
                             )}>
-                                <div className="relative">
-                                    <Input
-                                        placeholder="Commit title"
-                                        value={commitTitle}
-                                        onChange={(e) => setCommitTitle(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                                                e.preventDefault();
-                                                void handleCommit(false, { promptSyncAfter: true });
-                                            }
-                                        }}
-                                        className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent py-2 pl-2 pr-9"
-                                    />
-                                    <GenerateStarButton
-                                        className="absolute right-1 top-1/2 -translate-y-1/2"
-                                        loading={commitSuggestionStatus === "loading"}
-                                        disabled={changes.filter((c) => c.staged).length === 0}
-                                        onClick={() => void handleGenerateCommitMessage()}
-                                    />
-                                </div>
+                                <Input
+                                    placeholder="Commit title"
+                                    value={commitTitle}
+                                    onChange={(e) => setCommitTitle(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                            e.preventDefault();
+                                            void handleCommit(false, { promptSyncAfter: true });
+                                        }
+                                    }}
+                                    className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent py-2 pl-2 pr-2"
+                                />
                                 <Textarea
                                     placeholder="Add description..."
                                     value={commitDescription}
@@ -1126,8 +1118,13 @@ export default function Source({
                                             void handleCommit(false, { promptSyncAfter: true });
                                         }
                                     }}
-                                    className="border-none shadow-none resize-none text-sm min-h-[60px] focus-visible:ring-0 focus-visible:ring-offset-0 px-2 pb-2 mt-0 rounded-none bg-transparent"
+                                    className="border-none shadow-none resize-none text-sm min-h-[60px] focus-visible:ring-0 focus-visible:ring-offset-0 px-2 pb-8 mt-0 rounded-none bg-transparent"
                                     rows={2}
+                                />
+                                <GenerateStarButton
+                                    loading={commitSuggestionStatus === "loading"}
+                                    disabled={changes.filter((c) => c.staged).length === 0}
+                                    onClick={() => void handleGenerateCommitMessage()}
                                 />
                             </div>
 
@@ -1141,7 +1138,7 @@ export default function Source({
                                             className="gap-1 px-3 h-7 text-xs font-medium"
                                             onClick={() => void handleSync()}
                                         >
-                                            <Icon icon={RiUploadLine} />
+                                            <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
                                             <span>Push</span>
                                         </Button>
                                     ) : (
@@ -1166,7 +1163,7 @@ export default function Source({
                                                         disabled={!commitTitle.trim()}
                                                         aria-label="Commit options"
                                                     >
-                                                        <Icon icon={RiArrowDownSLine} />
+                                                        <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
@@ -1247,7 +1244,7 @@ export default function Source({
                                     <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
                                         {!diffFile ? (
                                             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-                                                <Icon icon={RiFileTextLine} className="text-text-muted" />
+                                                <Icon icon={RiFileTextLine} size={ICON_SIZE_SM} className="text-text-muted" />
                                                 <p>Select a file to view changes</p>
                                             </div>
                                         ) : (
@@ -1280,6 +1277,7 @@ export default function Source({
                                                                         ? RiLayoutBottomLine
                                                                         : RiLayoutColumnLine
                                                                 }
+                                                                size={ICON_SIZE_SM}
                                                             />
                                                         </Button>
                                                     </Tooltip>
@@ -1290,7 +1288,7 @@ export default function Source({
                                                         className="h-6 w-6 shrink-0 p-0"
                                                         onClick={() => setDiffFile(null)}
                                                     >
-                                                        <Icon icon={RiCloseLine} />
+                                                        <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
                                                     </Button>
                                                 </div>
                                                 <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -1352,9 +1350,9 @@ export default function Source({
                             />
                             {lastCommit && (
                                 <div className="flex items-center text-sm text-text-muted gap-0.5 px-2 min-w-0">
-                                    <Icon icon={RiGitBranchLine} className="shrink-0" />
+                                    <Icon icon={RiGitBranchLine} size={ICON_SIZE_SM} className="shrink-0" />
                                     <span className="font-medium shrink-0 truncate max-w-[30%]">{currentBranch}</span>
-                                    <Icon icon={RiArrowRightSLine} className="shrink-0" />
+                                    <Icon icon={RiArrowRightSLine} size={ICON_SIZE_SM} className="shrink-0" />
                                     <span className="truncate flex-1 min-w-0">
                                         {lastCommit.message.split('\n')[0]}
                                     </span>
@@ -1366,26 +1364,23 @@ export default function Source({
                                     commitSuggestionStatus === "loading" && "git-generate-shimmer",
                                 )}
                             >
-                                <div className="relative">
-                                    <Input
-                                        placeholder="Commit title"
-                                        value={commitTitle}
-                                        onChange={(e) => setCommitTitle(e.target.value)}
-                                        className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent py-2 pl-2 pr-9"
-                                    />
-                                    <GenerateStarButton
-                                        className="absolute right-1 top-1/2 -translate-y-1/2"
-                                        loading={commitSuggestionStatus === "loading"}
-                                        disabled={changes.filter((c) => c.staged).length === 0}
-                                        onClick={() => void handleGenerateCommitMessage()}
-                                    />
-                                </div>
+                                <Input
+                                    placeholder="Commit title"
+                                    value={commitTitle}
+                                    onChange={(e) => setCommitTitle(e.target.value)}
+                                    className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent py-2 pl-2 pr-2"
+                                />
                                 <Textarea
                                     placeholder="Add description..."
                                     value={commitDescription}
                                     onChange={(e) => setCommitDescription(e.target.value)}
-                                    className="border-none shadow-none resize-none text-sm min-h-[60px] focus-visible:ring-0 focus-visible:ring-offset-0 px-2 pb-2 mt-0 rounded-none bg-transparent"
+                                    className="border-none shadow-none resize-none text-sm min-h-[60px] focus-visible:ring-0 focus-visible:ring-offset-0 px-2 pb-8 mt-0 rounded-none bg-transparent"
                                     rows={2}
+                                />
+                                <GenerateStarButton
+                                    loading={commitSuggestionStatus === "loading"}
+                                    disabled={changes.filter((c) => c.staged).length === 0}
+                                    onClick={() => void handleGenerateCommitMessage()}
                                 />
                             </div>
                             <div className="flex w-full items-center justify-end gap-1 px-2">
@@ -1444,17 +1439,17 @@ export default function Source({
                                                 <div className="flex gap-1 shrink-0">
                                                     <Tooltip content="Edit URL">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingRemote(remote)} aria-label="Edit URL">
-                                                            <Icon icon={RiPencilLine} />
+                                                            <Icon icon={RiPencilLine} size={ICON_SIZE_SM} />
                                                         </Button>
                                                     </Tooltip>
                                                     <Tooltip content="Copy URL">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => void navigator.clipboard.writeText(remote.url)} aria-label="Copy URL">
-                                                            <Icon icon={RiClipboardLine} />
+                                                            <Icon icon={RiClipboardLine} size={ICON_SIZE_SM} />
                                                         </Button>
                                                     </Tooltip>
                                                     <Tooltip content="Remove">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-error" onClick={() => void handleRemoveRemote(remote.name)} aria-label="Remove remote">
-                                                            <Icon icon={RiDeleteBinLine} />
+                                                            <Icon icon={RiDeleteBinLine} size={ICON_SIZE_SM} />
                                                         </Button>
                                                     </Tooltip>
                                                 </div>

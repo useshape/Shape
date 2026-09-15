@@ -1,6 +1,5 @@
 //! Generate commit message command + helpers.
 use super::streaming;
-use crate::agent::model_router;
 use crate::agent::models::{AgentState, ChatMessage};
 use crate::agent::prompts;
 use super::messages;
@@ -8,8 +7,6 @@ use crate::app_state::AppState;
 use crate::commands::git;
 use crate::core::error::AppError;
 use reqwest::Client;
-
-const MODEL_TITLE_GEN: &str = model_router::MODEL_FAST;
 
 fn staged_paths_from_diff(diff: &str) -> Vec<String> {
     let mut paths = Vec::new();
@@ -97,20 +94,26 @@ fn related_chat_for_commit(
 #[tauri::command]
 pub async fn generate_commit_message(
     access_token: Option<String>,
+    repo_path: Option<String>,
     app_state: tauri::State<'_, AppState>,
     agent_state: tauri::State<'_, AgentState>,
 ) -> Result<String, AppError> {
-    let auth_token = access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
-        AppError::Env("Sign in to Shape to use AI chat.".to_string())
-    })?;
+    let provider = agent_state
+        .byok_provider()
+        .unwrap_or(streaming::LlmProvider::Shape);
+    let auth_token = match &provider {
+        streaming::LlmProvider::Shape => access_token
+            .filter(|t| !t.trim().is_empty())
+            .ok_or_else(|| AppError::Env("Sign in to Shape to use AI chat.".to_string()))?,
+        streaming::LlmProvider::OpenRouter { api_key }
+        | streaming::LlmProvider::OpenAi { api_key } => api_key.clone(),
+    };
     let client = Client::new();
-    let model = MODEL_TITLE_GEN;
+    let model = "auto";
 
-    let project_path = app_state
-        .0
-        .lock()?
-        .project_path
-        .clone()
+    let project_path = repo_path
+        .filter(|p| !p.trim().is_empty())
+        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
         .ok_or(AppError::Message("No project open".to_string()))?;
 
     let diff = git::git_staged_diff(project_path.clone()).unwrap_or_default();
@@ -177,7 +180,9 @@ pub async fn generate_commit_message(
     prompt.push_str(&diff_trimmed);
 
     let commit_turn_id = uuid::Uuid::new_v4().to_string();
-    let commit_ctx = streaming::ProxyContext::new("commit").with_turn(Some(commit_turn_id), None);
+    let commit_ctx = streaming::ProxyContext::new("commit")
+        .with_provider(provider)
+        .with_turn(Some(commit_turn_id), None);
 
     let (message, _, _) =
         streaming::complete_chat_with_max_tokens(&client, &auth_token, &prompt, model, 220, &commit_ctx).await?;

@@ -2,7 +2,7 @@
 
 import { RiArrowLeftLine, RiCloseLine, RiGitCommitLine, RiLayoutBottomLine, RiLayoutColumnLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
@@ -153,7 +153,7 @@ export function GraphDetailPanel({
     if (!selection || !log) {
         return (
             <div className="workbench-panel flex h-full flex-col items-center justify-center gap-2 border border-border-subtle bg-editor px-6 text-center text-sm text-text-muted">
-                <Icon icon={RiGitCommitLine} className="text-text-muted" />
+                <Icon icon={RiGitCommitLine} size={ICON_SIZE_SM} className="text-text-muted" />
                 <p>Select a commit</p>
             </div>
         );
@@ -171,7 +171,7 @@ export function GraphDetailPanel({
                             className="shrink-0"
                             onClick={onClearFile}
                         >
-                            <Icon icon={RiArrowLeftLine} />
+                            <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -197,7 +197,7 @@ export function GraphDetailPanel({
                                 className="shrink-0"
                                 onClick={() => setSideBySide((v) => !v)}
                             >
-                                <Icon icon={sideBySide ? RiLayoutBottomLine : RiLayoutColumnLine} />
+                                <Icon icon={sideBySide ? RiLayoutBottomLine : RiLayoutColumnLine} size={ICON_SIZE_SM} />
                             </Button>
                         </Tooltip>
                     </>
@@ -217,7 +217,7 @@ export function GraphDetailPanel({
                     className="shrink-0"
                     onClick={onClose}
                 >
-                    <Icon icon={RiCloseLine} />
+                    <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
                 </Button>
             </div>
 

@@ -72,7 +72,7 @@ export function PendingEditsPanel({
         >
             <div className="flex h-full flex-col">
                 <div className="flex items-center justify-between gap-2 px-3 py-2">
-                    <span className="text-sm text-text-muted">
+                    <span className="text-sm text-text-muted font-medium">
                         {edits.length} file{edits.length === 1 ? "" : "s"}
                     </span>
                     <div className="flex items-center gap-1">

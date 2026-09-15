@@ -230,14 +230,16 @@ export function AgentSidebar({
                 {expanded ? (
                     <>
                         {!showHostedNav && !github.loggedIn ? (
-                            <button
+                            <Button
                                 type="button"
                                 onClick={() => void loginGitHub()}
-                                className="mb-1 flex w-full items-center justify-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                                className="justify-start px-3 rounded-md w-full mb-1"
+                                variant="ghost"
+                                size="md"
                             >
                                 <Icon icon={RiGithubFill} />
                                 Connect GitHub
-                            </button>
+                            </Button>
                         ) : null}
                         <AccountRow />
                     </>

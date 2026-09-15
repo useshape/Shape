@@ -9,7 +9,7 @@ import {
     RiSparkling2Line,
 } from "@remixicon/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM, ICON_SIZE_XS } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll";
@@ -117,7 +117,7 @@ function FindingCard({
                     className="h-6 gap-1 px-1.5 text-2xs"
                     onClick={onFix}
                 >
-                    <Icon icon={RiChatAiLine} className="size-3" />
+                    <Icon icon={RiChatAiLine} size={ICON_SIZE_XS} />
                     Fix in chat
                 </Button>
             </div>
@@ -620,7 +620,7 @@ export function GitHubDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon icon={RiArrowLeftLine} />
+                            <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
                         </Button>
                     ) : null}
                 </div>
@@ -648,7 +648,7 @@ export function GitHubDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon icon={RiArrowLeftLine} />
+                            <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
                         </Button>
                     ) : null}
                     <div className="min-w-0 flex-1">
@@ -726,7 +726,7 @@ export function GitHubDetailPane({
                             className="h-7 gap-1 px-2"
                             onClick={() => openUrl(url)}
                         >
-                            <Icon icon={RiExternalLinkLine} />
+                            <Icon icon={RiExternalLinkLine} size={ICON_SIZE_SM} />
                             Open
                         </Button>
                     ) : null}
@@ -768,10 +768,8 @@ export function GitHubDetailPane({
                             >
                                 <Icon
                                     icon={RiSparkling2Line}
-                                    className={cn(
-                                        "size-3.5",
-                                        walkthroughLoading && "animate-spin",
-                                    )}
+                                    size={ICON_SIZE_SM}
+                                    className={cn(walkthroughLoading && "animate-spin")}
                                 />
                                 {walkthroughLoading ? "Walking through…" : "Walk through"}
                             </Button>
@@ -784,10 +782,8 @@ export function GitHubDetailPane({
                             >
                                 <Icon
                                     icon={RiSearchEyeLine}
-                                    className={cn(
-                                        "size-3.5",
-                                        findingsLoading && "animate-spin",
-                                    )}
+                                    size={ICON_SIZE_SM}
+                                    className={cn(findingsLoading && "animate-spin")}
                                 />
                                 {findingsLoading ? "Finding issues…" : "Find issues"}
                             </Button>
@@ -797,7 +793,7 @@ export function GitHubDetailPane({
                                 className="h-7 gap-1 px-2 text-xs"
                                 onClick={askInChat}
                             >
-                                <Icon icon={RiChatAiLine} className="size-3.5" />
+                                <Icon icon={RiChatAiLine} size={ICON_SIZE_SM} />
                                 Ask in chat
                             </Button>
                         </div>
@@ -835,7 +831,7 @@ export function GitHubDetailPane({
                                         >
                                             <Icon
                                                 icon={RiSparkling2Line}
-                                                className="size-3.5"
+                                                size={ICON_SIZE_SM}
                                             />
                                             Walk through this pull request
                                         </Button>
@@ -1116,6 +1112,7 @@ export function GitHubDetailPane({
                                         >
                                             <Icon
                                                 icon={RiGitCommitLine}
+                                                size={ICON_SIZE_SM}
                                                 className="shrink-0 text-text-muted"
                                             />
                                             <span className="min-w-0 flex-1 truncate text-sm">
@@ -1154,6 +1151,7 @@ export function GitHubDetailPane({
                                             >
                                                 <Icon
                                                     icon={icon.icon}
+                                                    size={ICON_SIZE_SM}
                                                     className={cn(
                                                         "shrink-0",
                                                         statusTone(run.status, run.conclusion),
@@ -1426,7 +1424,7 @@ export function GitHubDetailPane({
                         className="h-7 w-full gap-1 text-xs"
                         onClick={askInChat}
                     >
-                        <Icon icon={RiChatAiLine} className="size-3.5" />
+                        <Icon icon={RiChatAiLine} size={ICON_SIZE_SM} />
                         Ask in chat
                     </Button>
                 </div>

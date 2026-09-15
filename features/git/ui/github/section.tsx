@@ -115,6 +115,7 @@ function ItemStatusIcon({ status }: { status?: string }) {
     return (
         <Icon
             icon={icon.icon}
+            size={ICON_SIZE_SM}
             className={cn("shrink-0", statusTone(status), icon.spin && "animate-spin")}
         />
     );
@@ -221,7 +222,7 @@ function SimpleDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon icon={RiArrowLeftLine} />
+                            <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
                         </Button>
                     </div>
                     <GitDetailSkeleton />
@@ -241,7 +242,7 @@ function SimpleDetailPane({
                                 onClick={onBack}
                                 aria-label="Back to list"
                             >
-                                <Icon icon={RiArrowLeftLine} />
+                                <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
                             </Button>
                             <ItemStatusIcon status={detail?.status} />
                             <div className="min-w-0 flex-1">
@@ -266,7 +267,7 @@ function SimpleDetailPane({
                                         if (detail.url) void commands.openUrlExternal(detail.url);
                                     }}
                                 >
-                                    <Icon icon={RiExternalLinkLine} />
+                                    <Icon icon={RiExternalLinkLine} size={ICON_SIZE_SM} />
                                     Open on GitHub
                                 </Button>
                             ) : null}
@@ -513,6 +514,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                             {item.url ? (
                                                 <Icon
                                                     icon={RiExternalLinkLine}
+                                                    size={ICON_SIZE_SM}
                                                     className="shrink-0 text-text-muted"
                                                 />
                                             ) : null}

@@ -1045,7 +1045,7 @@ pub async fn complete_chat_cancellable(
         return Err(AppError::Message("Cancelled".to_string()));
     }
 
-    let json: Value = resp.json().await.map_err(|e| e.to_string())?;
+    let json = completion_json(resp).await?;
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("New Chat")
@@ -1058,6 +1058,34 @@ pub async fn complete_chat_cancellable(
         &format!("Result: {}", &content[..content.floor_char_boundary(80)]),
     );
     Ok(content)
+}
+
+fn api_error_message(json: &Value, fallback: &str) -> String {
+    json.get("error")
+        .and_then(|err| {
+            err.as_str().map(|s| s.to_string()).or_else(|| {
+                err.get("message")
+                    .and_then(|m| m.as_str())
+                    .map(|s| s.to_string())
+            })
+        })
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| fallback.chars().take(280).collect())
+}
+
+async fn completion_json(resp: reqwest::Response) -> Result<Value, AppError> {
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    let json: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+    if !status.is_success() {
+        let msg = api_error_message(&json, &text);
+        return Err(AppError::Message(if msg.is_empty() {
+            format!("AI request failed ({status})")
+        } else {
+            msg
+        }));
+    }
+    Ok(json)
 }
 
 pub async fn complete_chat_with_max_tokens(
@@ -1081,7 +1109,7 @@ pub async fn complete_chat_with_max_tokens(
         .await
         .map_err(|e| AppError::Message(format!("Completion failed: {}", e)))?;
 
-    let json: Value = resp.json().await.map_err(|e| e.to_string())?;
+    let json = completion_json(resp).await?;
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("")

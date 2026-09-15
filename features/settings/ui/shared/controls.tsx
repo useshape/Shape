@@ -63,11 +63,11 @@ export function SettingRow({
     children: React.ReactNode;
     stack?: boolean;
 }) {
-            if (stack) {
+    if (stack) {
         return (
-            <div className="px-4 py-3.5 space-y-2.5">
+            <div className="space-y-2.5 py-3.5 first:pt-0">
                 <div>
-                    <div className="text-md font-medium text-text-primary">{title}</div>
+                    <div className="text-sm font-medium text-text-primary">{title}</div>
                     {description && <div className="mt-0.5 text-sm text-text-muted">{description}</div>}
                 </div>
                 {children}
@@ -76,9 +76,9 @@ export function SettingRow({
     }
 
     return (
-        <div className="flex items-start justify-between gap-4 p-4">
+        <div className="flex items-start justify-between gap-4 p-3">
             <div className="min-w-0 flex-1">
-                <div className="text-md font-medium text-text-primary">{title}</div>
+                <div className="text-md font-regular text-text-primary">{title}</div>
                 {description && <div className="mt-0.5 text-sm text-text-muted">{description}</div>}
             </div>
             <div className="flex items-center shrink-0">{children}</div>
@@ -104,8 +104,8 @@ export function SettingSelect<T extends string>({
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="secondary"
-                    size="sm"
-                    className={cn("min-w-[180px] justify-between gap-2 rounded-lg border border-border-subtle bg-input-bg font-normal", className)}
+                    size="md"
+                    className={cn("min-w-[200px] justify-between gap-2 bg-panel-hover!", className)}
                 >
                     <span className="truncate">{label}</span>
                     <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
@@ -295,7 +295,7 @@ export function SettingMultiSelect({
                 <Button
                     variant="secondary"
                     size="sm"
-                    className={cn("min-w-[200px] max-w-[280px] justify-between gap-2 rounded-lg border border-border-subtle bg-input-bg font-normal", className)}
+                    className={cn("min-w-[200px] max-w-[280px] justify-between gap-2 bg-panel-hover!", className)}
                 >
                     <span className="truncate">{summary}</span>
                     <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />

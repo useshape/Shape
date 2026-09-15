@@ -1,7 +1,7 @@
 "use client";
 
-import { RiSparkling2Line } from "@remixicon/react";
-import { Icon } from "@/components/ui/icon";
+import { RiAiGenerate } from "@remixicon/react";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -29,21 +29,23 @@ export async function streamTextInto(
 }
 
 /**
- * GitKraken-style sparkle on a text field.
- * Must sit above the input hit target (`z-10` + `pointer-events-auto`).
+ * Generate-commit control inside a text field (bottom-right star).
+ * Parent must be `relative`. Sit above the input hit target.
  */
 export function GenerateStarButton({
     loading,
     disabled,
     onClick,
     className,
-    label = "Generate",
+    label = "Generate commit message",
+    placement = "corner",
 }: {
     loading?: boolean;
     disabled?: boolean;
     onClick: () => void;
     className?: string;
     label?: string;
+    placement?: "corner" | "inline";
 }) {
     return (
         <Tooltip content={label}>
@@ -65,16 +67,21 @@ export function GenerateStarButton({
                 className={cn(
                     "absolute z-10 inline-flex size-7 shrink-0 items-center justify-center rounded-md",
                     "pointer-events-auto text-text-muted",
+                    placement === "corner"
+                        ? "bottom-1 right-1"
+                        : "right-1 top-1/2 -translate-y-1/2",
                     "hover:bg-panel-hover hover:text-text-primary",
                     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
                     "disabled:pointer-events-none disabled:opacity-40",
+                    "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                     loading && "text-accent",
                     className,
                 )}
             >
                 <Icon
-                    icon={RiSparkling2Line}
-                    className={cn("size-3.5", loading && "animate-spin")}
+                    icon={RiAiGenerate}
+                    size={ICON_SIZE_MD}
+                    className={cn(loading && "animate-pulse")}
                 />
             </button>
         </Tooltip>

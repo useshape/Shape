@@ -1,10 +1,10 @@
 "use client";
 
 import type { RemixiconComponentType } from "@remixicon/react";
-import { RiArrowUpLine, RiErrorWarningLine, RiExternalLinkLine, RiEyeLine, RiGitMergeLine, RiMoreLine } from "@remixicon/react";
+import { RiArrowUpLine, RiErrorWarningLine, RiExternalLinkLine, RiEyeLine, RiGitMergeLine, RiMoreLine, RiDeleteBin6Fill, RiGitPullRequestFill, RiGithubFill, RiGitBranchLine } from "@remixicon/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
 import { discoverGitRepos, pickDefaultRepo } from "@/lib/git/repos";
@@ -35,6 +35,10 @@ import {
     ContextMenuSeparator,
     ContextMenuTrigger,
 } from "@/components/ui/context";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { GenerateStarButton, streamTextInto } from "@/features/git/ui/shared/generate-star";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 
 function fileName(path: string) {
     return path.split(/[\\/]/).pop() || path;
@@ -163,10 +167,12 @@ const FileRow = memo(function FileRow({
                 <ContextMenuItem onClick={() => onOpenDiff(file)}>Open diff</ContextMenuItem>
                 <ContextMenuItem onClick={() => onOpenFile(file)}>Open file</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => onToggleStage(file)}>
+                <ContextMenuItem onClick={() => onToggleStage(file)} className="gap-1.5">
+                    <Icon icon={RiGitPullRequestFill} size={ICON_SIZE_SM}/>
                     {file.staged ? "Unstage" : "Stage"}
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => onDiscard(file)} className="text-error">
+                <ContextMenuItem onClick={() => onDiscard(file)} className="text-error gap-1.5">
+                    <Icon icon={RiDeleteBin6Fill} size={ICON_SIZE_SM}/>
                     Discard changes
                 </ContextMenuItem>
             </ContextMenuContent>
@@ -315,6 +321,18 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
 
     const [commitOpen, setCommitOpen] = useState(false);
     const [commitMessage, setCommitMessage] = useState("");
+    const [commitGenerating, setCommitGenerating] = useState(false);
+    const [ownerRepo, setOwnerRepo] = useState<{ owner: string; repo: string } | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        void resolveOwnerRepo(projectPath).then((next) => {
+            if (!cancelled) setOwnerRepo(next);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [projectPath]);
 
     const openCommitModal = () => {
         if (!repo || files.length === 0) return;
@@ -323,6 +341,30 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
             files.length === 1 ? `Update ${name}` : `Update ${files.length} files`,
         );
         setCommitOpen(true);
+    };
+
+    const generateCommitMessage = async () => {
+        if (!repo) return;
+        setCommitGenerating(true);
+        try {
+            await commands.gitStageAll(repo);
+            const token = getShapeAccessToken();
+            if (!token) {
+                notify.error("AI Error", "Sign in to Shape to use AI.");
+                return;
+            }
+            const message = await commands.generateCommitMessage(token, repo);
+            await streamTextInto(message, setCommitMessage);
+            void import("@/lib/cloud/store")
+                .then(({ refreshShapeAuth }) => {
+                    void refreshShapeAuth();
+                })
+                .catch(() => undefined);
+        } catch (err) {
+            notify.error("AI Error", err instanceof Error ? err.message : String(err));
+        } finally {
+            setCommitGenerating(false);
+        }
     };
 
     const commitAndPush = async () => {
@@ -435,7 +477,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
         <div className="flex h-full min-h-0 flex-col bg-panel">
             {/* GitHub-style status strip — badge/text/CTA share the same tone */}
             <div
-                className="mx-2 flex h-9 shrink-0 items-center gap-2 rounded-md px-1.5"
+                className="mx-2 flex h-9 shrink-0 items-center gap-2 rounded-lg px-1"
                 style={{ background: toneBg }}
             >
                 <button
@@ -444,7 +486,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                     onClick={() => {
                         if (pr?.url) void commands.openUrlExternal(pr.url);
                     }}
-                    className="inline-flex h-6 items-center rounded-md px-2 text-[12px] font-semibold"
+                    className="inline-flex h-6 items-center rounded-md px-2 text-sm font-medium"
                     style={{ background: toneChipBg, color: toneFg }}
                 >
                     {badgeLabel}
@@ -457,11 +499,11 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                         className="flex size-6 items-center justify-center rounded-md hover:opacity-90"
                         style={{ color: toneFg }}
                     >
-                        <Icon icon={RiExternalLinkLine} />
+                        <Icon icon={RiExternalLinkLine} size={ICON_SIZE_SM}/>
                     </button>
                 ) : null}
                 <span
-                    className="inline-flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium"
+                    className="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium"
                     style={{ color: toneFg }}
                 >
                     <Icon
@@ -475,13 +517,13 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                         type="button"
                         disabled={busy || pr.mergeable === false}
                         onClick={() => void mergePr()}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium disabled:opacity-40"
+                        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium disabled:opacity-40"
                         style={{
                             background: toneChipBg,
                             color: toneFg,
                         }}
                     >
-                        <Icon icon={RiGitMergeLine} />
+                        <Icon icon={RiGitMergeLine} size={ICON_SIZE_SM}/>
                         Merge
                     </button>
                 ) : (
@@ -489,63 +531,81 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                         type="button"
                         disabled={busy || files.length === 0}
                         onClick={openCommitModal}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium disabled:opacity-40"
+                        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium disabled:opacity-40"
                         style={{
                             background: toneChipBg,
                             color: toneFg,
                         }}
                     >
-                        <Icon icon={RiGitMergeLine} />
+                        <Icon icon={RiGitMergeLine} size={ICON_SIZE_SM}/>
                         Commit & Push
                     </button>
                 )}
             </div>
 
             <AlertDialog open={commitOpen} onOpenChange={setCommitOpen}>
-                <AlertDialogContent sizeClassName="max-w-[440px]">
+                <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Commit & Push</AlertDialogTitle>
-                    </AlertDialogHeader>
-                    <AlertDialogBody>
-                        <p className="text-sm text-text-secondary">
-                            Stage all changes, commit, and push to the remote. This cannot be
-                            undone easily.
-                        </p>
-                        <div className="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-muted">
-                            {files.length} file{files.length === 1 ? "" : "s"} · branch{" "}
-                            <span className="text-text-primary">{branch ?? "…"}</span>
-                        </div>
-                        <label className="block space-y-1.5">
-                            <span className="text-xs font-medium text-text-muted">
-                                Commit message
+                        <AlertDialogTitle className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-md font-medium leading-snug">
+                            <span>Committing to</span>
+                            <Icon icon={RiGithubFill} size={ICON_SIZE_SM} className="text-text-primary" />
+                            <span className="text-text-primary">
+                                {ownerRepo
+                                    ? `${ownerRepo.owner}/${ownerRepo.repo}`
+                                    : fileName(projectPath)}
                             </span>
-                            <textarea
+                            <span>on branch</span>
+                            <Icon icon={RiGitBranchLine} size={ICON_SIZE_SM} className="text-text-primary" />
+                            <span className="text-text-primary">{branch ?? "HEAD"}</span>
+                            <span>
+                                with{" "}
+                                <span className="tabular-nums text-success">
+                                    {totals.plus.toLocaleString()}
+                                </span>{" "}
+                                additions and{" "}
+                                <span className="tabular-nums text-error">
+                                    {totals.minus.toLocaleString()}
+                                </span>{" "}
+                                deletions
+                            </span>
+                        </AlertDialogTitle>
+                    </AlertDialogHeader>
+                    <AlertDialogBody className="p-0 mb-1">
+                        <div className="relative">
+                            <Textarea
                                 value={commitMessage}
                                 onChange={(e) => setCommitMessage(e.target.value)}
-                                rows={3}
-                                className="w-full resize-none rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-primary outline-none focus:border-border"
+                                rows={4}
+                                placeholder="Commit message"
+                                className="min-h-[96px] pb-8 border-t border-b border-border rounded-none bg-surface-3"
                             />
-                        </label>
-                        <p className="text-sm text-text-secondary">Are you sure you want to continue?</p>
+                            <GenerateStarButton
+                                loading={commitGenerating}
+                                disabled={busy || files.length === 0}
+                                onClick={() => void generateCommitMessage()}
+                            />
+                        </div>
                     </AlertDialogBody>
                     <AlertDialogFooter>
                         <AlertDialogCancel asChild>
-                            <button
+                            <Button
                                 type="button"
-                                className="rounded-md px-3 py-1.5 text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                                variant="outline"
+                                size="sm"
                             >
                                 Cancel
-                            </button>
+                            </Button>
                         </AlertDialogCancel>
                         <AlertDialogAction asChild>
-                            <button
+                            <Button
                                 type="button"
                                 disabled={busy || !commitMessage.trim()}
                                 onClick={() => void commitAndPush()}
-                                className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-fg disabled:opacity-40"
+                                variant="default"
+                                size="sm"
                             >
                                 Commit & Push
-                            </button>
+                            </Button>
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -577,7 +637,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover"
                             aria-label="More"
                         >
-                            <Icon icon={RiMoreLine} />
+                            <Icon icon={RiMoreLine} size={ICON_SIZE_SM} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">

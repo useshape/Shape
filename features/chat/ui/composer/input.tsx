@@ -1207,7 +1207,7 @@ export function ChatInput({
                     </div>
                 ) : null}
                 {needsSignIn ? (
-                    <Tooltip side="top" content="Sign in to Shape, or add an API key in Settings → AI.">
+                    <Tooltip side="top" content="Sign in, or connect an API key">
                         <div
                             role="button"
                             tabIndex={0}

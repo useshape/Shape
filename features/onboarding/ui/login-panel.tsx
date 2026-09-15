@@ -46,7 +46,7 @@ function PasskeyIcon() {
 }
 
 const oauthBtn =
-    "h-11 min-w-0 flex-1 rounded-lg border-border border bg-transparent text-text-primary hover:bg-surface-4";
+    "h-10 min-w-0 flex-1 rounded-lg border border-border-secondary text-text-primary bg-panel-hover hover:bg-surface-4";
 
 export function LoginPanel({
     finishing,
@@ -94,10 +94,9 @@ export function LoginPanel({
                 className="logo-invert"
             />
 
-            <h1 className="mt-8 text-2xl font-medium tracking-tight text-text-primary">
+            <h1 className="mt-8 text-lg font-medium text-text-primary">
                 Let&apos;s start building
             </h1>
-            <p className="mt-2 text-md font-medium text-text-muted">Login or signup below</p>
 
             <form
                 className="mt-8 flex flex-col gap-3"
@@ -117,7 +116,6 @@ export function LoginPanel({
                         type="email"
                         autoComplete="username webauthn"
                         placeholder="you@example.com"
-                        className="h-13! text-lg! px-4! border border-border! bg-transparent"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                     />
@@ -125,8 +123,7 @@ export function LoginPanel({
 
                 <Button
                     type="submit"
-                    size="lg"
-                    className="h-11 w-full"
+                    size="md"
                     disabled={shapeAuth.loggedIn}
                     status={continueStatus}
                 >
@@ -136,7 +133,6 @@ export function LoginPanel({
                 <div className="flex gap-2">
                     <Button
                         type="button"
-                        variant="outline"
                         className={oauthBtn}
                         disabled={busy || shapeAuth.loggedIn}
                         aria-label="Continue with GitHub"
@@ -146,7 +142,6 @@ export function LoginPanel({
                     </Button>
                     <Button
                         type="button"
-                        variant="outline"
                         className={oauthBtn}
                         disabled={busy || shapeAuth.loggedIn}
                         aria-label="Continue with GitLab"
@@ -156,7 +151,6 @@ export function LoginPanel({
                     </Button>
                     <Button
                         type="button"
-                        variant="outline"
                         className={oauthBtn}
                         disabled={busy || shapeAuth.loggedIn}
                         aria-label="Continue with passkey"

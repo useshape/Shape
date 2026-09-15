@@ -1,6 +1,6 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiArrowGoBackLine, RiArrowRightSLine, RiArrowUpLine, RiChat3Line, RiCheckLine, RiClipboardLine, RiCodeLine, RiListCheck3, RiPaletteLine, RiPencilLine, RiShieldLine } from "@remixicon/react";
+import { RiAddLine, RiArrowDownSLine, RiArrowGoBackLine, RiArrowRightLine, RiArrowRightSLine, RiArrowUpLine, RiChat3Line, RiCheckLine, RiClipboardLine, RiCodeLine, RiCornerDownLeftLine, RiListCheck3, RiPaletteLine, RiPencilLine, RiShieldLine } from "@remixicon/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icon";
 import { MorphMenu } from "./morph";
@@ -19,6 +19,7 @@ import { providerIcon } from "./provider";
 import { cn } from "@/lib/utils";
 import type { DemoChatId } from "./sidebar";
 import type { DemoFile } from "./panel";
+import { ICON_SIZE_MD, ICON_SIZE_SM } from "../ui/icon";
 
 /* Composer copied from shape/features/chat/ui/composer/input.tsx
    EditApprovalRow / WorkflowEditPreview from blocks/turn.tsx
@@ -738,13 +739,13 @@ function EditApprovalRow({
         <DiffPreview original={original} replacement={replacement} />
       </Collapse>
       <div className="flex items-center justify-end gap-1.5 px-2 py-2">
-        <Button type="button" variant="ghost" size="xs" onClick={() => onResolve(false)}>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onResolve(false)}>
           Skip
         </Button>
-        <Button type="button" variant="default" size="xs" onClick={() => onResolve(true)}>
+        <Button type="button" variant="default" size="sm" onClick={() => onResolve(true)}>
           Accept
-          <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans chat-text leading-none">
-            ↵
+          <kbd>
+            <Icon icon={RiCornerDownLeftLine} size={ICON_SIZE_MD} />
           </kbd>
         </Button>
       </div>

@@ -178,7 +178,8 @@ export function CreatePullRequestDialog({
                             className="h-8 pr-9"
                         />
                         <GenerateStarButton
-                            className="absolute right-0.5 top-1/2 -translate-y-1/2"
+                            placement="inline"
+                            className="right-0.5"
                             loading={drafting}
                             disabled={!head || !base}
                             onClick={() => void draft()}

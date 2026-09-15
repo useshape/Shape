@@ -2,7 +2,7 @@
 
 import { RiAddLine, RiHistoryLine, RiRefreshLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll";
@@ -146,14 +146,14 @@ export function LocalTags() {
                     aria-label="Refresh tags"
                     onClick={() => void refresh()}
                 >
-                    <Icon icon={RiRefreshLine} />
+                    <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                 </Button>
             </div>
             {gitRepo ? (
                 <div className="shrink-0 px-2.5 pb-2">
                     <div className="flex items-center gap-2">
                         <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-transparent px-2.5">
-                            <Icon icon={RiAddLine} className="shrink-0 text-text-muted" />
+                            <Icon icon={RiAddLine} size={ICON_SIZE_SM} className="shrink-0 text-text-muted" />
                             <Input
                                 value={newTagName}
                                 onChange={(e) => setNewTagName(e.target.value)}
@@ -195,7 +195,7 @@ export function LocalTags() {
                                         type="button"
                                         className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-panel-hover"
                                     >
-                                        <Icon icon={RiHistoryLine} className="mt-0.5 shrink-0 text-text-muted" />
+                                        <Icon icon={RiHistoryLine} size={ICON_SIZE_SM} className="mt-0.5 shrink-0 text-text-muted" />
                                         <span className="min-w-0 flex-1">
                                             <span className="block truncate text-sm text-text-primary">{tag.name}</span>
                                             <span className="block truncate text-xs text-text-muted">

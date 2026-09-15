@@ -12,7 +12,11 @@ import { commands, useProjectState } from "@/lib/backend";
 import type { GitSectionId } from "@/features/git/types";
 import Source from "@/features/git/ui/source/source";
 import { BranchWindow } from "@/features/git/ui/branches/panel";
-import { GraphTab } from "@/features/agent/workspace/graph-tab";
+import Graph from "@/features/git/ui/graph/graph";
+import { GitHubSection } from "@/features/git/ui/github/section";
+import { ReleasesPage } from "@/features/git/ui/github/releases-page";
+import { ActionsConsole } from "@/features/git/ui/actions/console";
+import { LocalTags } from "@/features/git/ui/tags/panel";
 import { useFilter, coerceGitSection, persistGitSection, readStoredGitSection } from "./filter-context";
 import { GitPageChrome } from "./chrome";
 import { useGitRepos } from "@/lib/git/repos";
@@ -45,16 +49,29 @@ const NAV: NavGroup[] = [
             { id: "source", label: "Source Control", keywords: ["scm", "changes", "commit"] },
             { id: "graph", label: "Git Graph", keywords: ["history", "commits"] },
             { id: "branches", label: "Branches" },
+            { id: "tags", label: "Tags" },
+        ],
+    },
+    {
+        id: "github",
+        label: "GitHub",
+        children: [
+            { id: "pull-requests", label: "Pull requests", keywords: ["pr"] },
+            { id: "issues", label: "Issues" },
+            { id: "releases", label: "Releases" },
+        ],
+    },
+    {
+        id: "actions",
+        label: "Actions",
+        children: [
+            { id: "workflow-runs", label: "Workflow runs", keywords: ["ci", "checks"] },
+            { id: "jobs", label: "Jobs" },
         ],
     },
 ];
 
 const ALL_SECTION_IDS = NAV.flatMap((g) => g.children.map((c) => c.id));
-
-function isSection(value: string | null | undefined): value is GitSectionId {
-    const mapped = coerceGitSection(value);
-    return !!mapped && ALL_SECTION_IDS.includes(mapped);
-}
 
 function initialSection(pathname: string | null, query: string | null): GitSectionId {
     const fromQuery = coerceGitSection(query);
@@ -378,6 +395,20 @@ function ManagerShell() {
 
     const collapsed = Boolean(navPortalTarget) && !sidebarExpanded;
 
+    const pane = (id: GitSectionId, node: React.ReactNode) =>
+        visited.has(id) ? (
+            <div
+                key={id}
+                className={cn(
+                    "absolute inset-0 min-h-0 min-w-0",
+                    section === id ? "z-10" : "hidden",
+                )}
+                aria-hidden={section !== id}
+            >
+                {node}
+            </div>
+        ) : null;
+
     return (
         <div
             className={cn(
@@ -445,41 +476,28 @@ function ManagerShell() {
 
                 <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-panel">
                     <GitPageChrome />
-                    {/* Keep-alive panes use `hidden` (not `invisible`) so Monaco/diff
-                        overlays cannot paint over other sections when inactive. */}
-                    {visited.has("source") ? (
-                        <div
-                            className={cn(
-                                "absolute inset-0 min-h-0 min-w-0",
-                                section === "source" ? "z-10" : "hidden",
-                            )}
-                            aria-hidden={section !== "source"}
-                        >
-                            <Source embedded active={section === "source"} />
-                        </div>
-                    ) : null}
-                    {visited.has("graph") ? (
-                        <div
-                            className={cn(
-                                "absolute inset-0 min-h-0 min-w-0",
-                                section === "graph" ? "z-10" : "hidden",
-                            )}
-                            aria-hidden={section !== "graph"}
-                        >
-                            <GraphTab projectPath={project_path || ""} />
-                        </div>
-                    ) : null}
-                    {visited.has("branches") ? (
-                        <div
-                            className={cn(
-                                "absolute inset-0 min-h-0 min-w-0",
-                                section === "branches" ? "z-10" : "hidden",
-                            )}
-                            aria-hidden={section !== "branches"}
-                        >
-                            <BranchWindow active={section === "branches"} />
-                        </div>
-                    ) : null}
+                    {pane("source", <Source embedded active={section === "source"} />)}
+                    {pane(
+                        "graph",
+                        <Graph
+                            rich
+                            surface="editor"
+                            active={section === "graph"}
+                        />,
+                    )}
+                    {pane("branches", <BranchWindow active={section === "branches"} />)}
+                    {pane("tags", <LocalTags />)}
+                    {pane(
+                        "pull-requests",
+                        <GitHubSection section="pull-requests" />,
+                    )}
+                    {pane("issues", <GitHubSection section="issues" />)}
+                    {pane("releases", <ReleasesPage />)}
+                    {pane(
+                        "workflow-runs",
+                        <ActionsConsole focus="workflow-runs" />,
+                    )}
+                    {pane("jobs", <ActionsConsole focus="jobs" />)}
                 </section>
             </div>
             <LoadingBar className="absolute inset-x-0 bottom-0 z-50 pointer-events-none" />

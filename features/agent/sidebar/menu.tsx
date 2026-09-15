@@ -1,8 +1,8 @@
 "use client";
 
-import { RiUserLine } from "@remixicon/react";
+import { RiLoginBoxLine, RiLogoutBoxLine, RiUploadCloud2Fill, RiUserLine } from "@remixicon/react";
 import { useCallback, useState, type ReactNode } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/workbench/ui/login-prompt-dialog";
 import { logoutGitHub, useGitHubAuth } from "@/lib/github/store";
@@ -114,8 +114,9 @@ export function AccountMenu({ children }: { children: ReactNode }) {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="top" className="w-64">
-                <div className="flex items-center gap-2.5 px-2 py-2">
+                <div className="flex items-center gap-2.5 px-2 py-0.5">
                     <ProfileAvatar
+                        size={18}
                         gitAvatarUrl={githubAuth.loggedIn ? githubAuth.avatarUrl : null}
                         shapeUserId={shapeAuth.userId}
                         offline={Boolean(shapeAuth.offline)}
@@ -125,7 +126,6 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                         <div className="truncate text-sm font-medium text-text-primary">
                             {displayName}
                         </div>
-                        <div className="truncate text-xs text-text-muted">{email}</div>
                     </div>
                 </div>
 
@@ -139,18 +139,20 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                 >
                     Keyboard shortcuts
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void checkForUpdates()}>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer" onClick={() => void checkForUpdates()}>
+                    <Icon icon={RiUploadCloud2Fill} size={ICON_SIZE_SM} />
                     Check for updates
                 </DropdownMenuItem>
 
-                <DropdownMenuSeparator />
-
                 {signedIn ? (
-                    <DropdownMenuItem onClick={() => void handleSignOut()}>
+                    <DropdownMenuItem className="cursor-pointer text-danger hover:text-danger hover:bg-danger/10" onClick={() => void handleSignOut()}>
+                        <Icon icon={RiLogoutBoxLine} size={ICON_SIZE_SM} />
                         Sign out
                     </DropdownMenuItem>
                 ) : (
                     <DropdownMenuItem onClick={() => requestShapeLogin()}>
+                        <Icon icon={RiLoginBoxLine} size={ICON_SIZE_SM} />
                         Sign in
                     </DropdownMenuItem>
                 )}

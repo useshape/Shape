@@ -1,9 +1,9 @@
 "use client";
 
-import { RiArrowRightSLine, RiPencilLine } from "@remixicon/react";
+import { RiArrowRightSLine, RiCornerDownLeftLine, RiPencilLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { diffLines } from "diff";
@@ -343,7 +343,7 @@ function WorkflowEditPreview({
     if (rows.length === 0) return null;
 
     return (
-        <div className="my-1.5 overflow-hidden rounded-xl border border-border-subtle bg-surface-3 max-w-full">
+        <div className="my-1.5 overflow-hidden border-t border-b border-border bg-surface-3 max-w-full">
             <div className="max-h-[220px] overflow-y-auto custom-scrollbar chat-text font-mono">
                 {rows.map((row, i) => (
                     <div
@@ -454,12 +454,12 @@ function EditApprovalRow({ block }: { block: Chunk }) {
             <button
                 type="button"
                 onClick={() => setDiffOpen((v) => !v)}
-                className="flex w-full items-center gap-2 p-2 text-left"
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
             >
                 {isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
-                    <Icon icon={RiPencilLine} className="shrink-0 text-text-muted" />
+                    <Icon icon={RiPencilLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
                 )}
                 <span className="truncate chat-text text-text-muted">Edit file</span>
                 <span className="truncate chat-text text-text-primary">{fileName(file)}</span>
@@ -502,8 +502,8 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                     onClick={() => resolve(true)}
                 >
                     Accept
-                    <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans chat-text leading-none text-text-foreground">
-                        ↵
+                    <kbd>
+                        <Icon icon={RiCornerDownLeftLine} size={ICON_SIZE_MD} />
                     </kbd>
                 </Button>
             </div>

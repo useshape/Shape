@@ -2,7 +2,7 @@
 
 import { RiArrowDownSLine, RiArrowUpSLine, RiCheckboxBlankCircleLine, RiCheckboxCircleLine, RiCloseLine, RiExternalLinkLine, RiGitBranchLine, RiListCheck3 } from "@remixicon/react";
 import React from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
@@ -51,7 +51,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                     totalCount > 1 && "hover:bg-panel-hover/40 transition-colors cursor-pointer",
                 )}
             >
-                <Icon icon={RiListCheck3} className="shrink-0 text-text-muted" />
+                <Icon icon={RiListCheck3} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
                 <span className="truncate text-sm font-medium text-text-muted">
                     {completedCount} of {totalCount} done
                 </span>
@@ -59,6 +59,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                     <Icon
                         icon={isOpen ? RiArrowUpSLine : RiArrowDownSLine}
                         className="ml-auto shrink-0 text-text-muted"
+                        size={ICON_SIZE_MD}
                     />
                 ) : null}
             </button>
@@ -68,22 +69,22 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                     {visibleSteps.map((step, i) => (
                         <div key={`${step.label}-${i}`} className="flex items-start gap-2">
                             {step.status === "done" ? (
-                                <Icon icon={RiCheckboxCircleLine} className="text-success shrink-0 mt-0.5" />
+                                <Icon icon={RiCheckboxCircleLine} className="text-success shrink-0 mt-0.5" size={ICON_SIZE_MD} />
                             ) : step.status === "active" ? (
                                 <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0 mt-0.5">
                                     <div className="w-2.5 h-2.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                                 </div>
                             ) : step.status === "cancelled" ? (
-                                <Icon icon={RiCloseLine} className="text-text-disabled shrink-0 mt-0.5" />
+                                <Icon icon={RiCloseLine} className="text-text-disabled shrink-0 mt-0.5" size={ICON_SIZE_MD} />
                             ) : (
                                 <span className="mt-0.5 size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
                             )}
                             <span className={cn(
                                 "text-sm leading-snug",
-                                step.status === "done" && "text-text-muted line-through",
+                                step.status === "done" && "text-text-muted",
                                 step.status === "active" && "text-text-primary",
                                 step.status === "pending" && "text-text-muted",
-                                step.status === "cancelled" && "text-text-disabled line-through",
+                                step.status === "cancelled" && "text-text-disabled",
                             )}>
                                 {step.label}
                             </span>
@@ -214,7 +215,7 @@ export function PlanSavedBlock({
                 onClick={() => setOpen((v) => !v)}
                 className="flex w-full items-center gap-2 p-2 text-left hover:bg-panel-hover/40 transition-colors"
             >
-                <Icon icon={RiGitBranchLine} className="shrink-0 text-text-muted" />
+                <Icon icon={RiGitBranchLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-muted">
                     Plan ready
                 </span>
@@ -224,6 +225,7 @@ export function PlanSavedBlock({
                 <Icon
                     icon={open ? RiArrowUpSLine : RiArrowDownSLine}
                     className="shrink-0 text-text-muted"
+                    size={ICON_SIZE_MD}
                 />
             </button>
 
@@ -251,7 +253,7 @@ export function PlanSavedBlock({
                                 onClick={() => { void handleOpen(); }}
                                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-panel-hover transition-colors shrink-0"
                             >
-                                <Icon icon={RiExternalLinkLine} />
+                                <Icon icon={RiExternalLinkLine} size={ICON_SIZE_MD} />
                             </button>
                         </Tooltip>
                     </div>
@@ -263,6 +265,7 @@ export function PlanSavedBlock({
                                     <Icon
                                         icon={RiCheckboxBlankCircleLine}
                                         className="text-text-disabled shrink-0 mt-0.5"
+                                        size={ICON_SIZE_MD}
                                     />
                                     <span className="text-sm text-text-primary leading-snug">{todo}</span>
                                 </li>

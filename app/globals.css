@@ -11,7 +11,7 @@
   --surface-1: #1a1a1a;
   --surface-2: #212121;
   --surface-3: #212121;
-  --surface-4: #212121;
+  --surface-4: #252525;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
   --chrome: #191919;
@@ -196,7 +196,7 @@
     0 4px 16px color-mix(in srgb, #000 28%, transparent),
     0 1px 2px color-mix(in srgb, #000 18%, transparent);
 
-  --overlay-scrim: transparent;
+  --overlay-scrim: rgb(0 0 0 / 0.1);
 
   /* Soft accent pills (composer / settings) */
   --pill-bg: color-mix(in srgb, var(--accent-text) 16%, transparent);
@@ -847,7 +847,7 @@ body[data-resizing] .xterm {
 @keyframes shape-modal-in {
   from {
     opacity: 0;
-    scale: 0.96;
+    scale: 0.97;
   }
   to {
     opacity: 1;
@@ -862,8 +862,18 @@ body[data-resizing] .xterm {
   }
   to {
     opacity: 0;
-    scale: 0.96;
+    scale: 0.98;
   }
+}
+
+@keyframes shape-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shape-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .shape-modal-panel {
@@ -873,11 +883,11 @@ body[data-resizing] .xterm {
 
 .shape-modal-panel[data-state="open"],
 .shape-modal-panel:not([data-state]) {
-  animation: shape-modal-in 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: shape-modal-in var(--transition-base) var(--ease-out);
 }
 
 .shape-modal-panel[data-state="closed"] {
-  animation: shape-modal-out 75ms cubic-bezier(0.7, 0, 0.84, 0);
+  animation: shape-modal-out var(--transition-fast) var(--ease-in);
 }
 
 .shape-popover-content--from-right {
@@ -887,12 +897,16 @@ body[data-resizing] .xterm {
 /* ── Modal overlays (global) ─────────────────────────────── */
 .shape-overlay {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  top: var(--titlebar-height);
+  inset: 0;
   z-index: var(--z-overlay);
   background-color: var(--overlay-scrim);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: shape-overlay-in var(--transition-base) var(--ease-out);
+}
+
+.shape-overlay[data-state="closed"] {
+  animation: shape-overlay-out var(--transition-fast) var(--ease-in);
 }
 
 .shape-overlay-content {
@@ -900,7 +914,6 @@ body[data-resizing] .xterm {
 }
 
 .titlebar-window-controls {
-  position: relative;
   z-index: var(--z-titlebar-controls);
   pointer-events: auto;
 }

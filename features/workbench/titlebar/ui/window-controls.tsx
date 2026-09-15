@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
 export function IconMinimize() {
     return (
         <svg width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
@@ -31,7 +36,9 @@ export function IconClose() {
     );
 }
 
-export function WindowControls({
+const CONTROLS_WIDTH = 46 * 3;
+
+function WindowControlButtons({
     isMaximized,
     onMinimize,
     onToggleMaximize,
@@ -43,7 +50,7 @@ export function WindowControls({
     onClose: () => void;
 }) {
     return (
-        <div className="titlebar-window-controls flex h-full shrink-0 items-stretch" data-no-drag>
+        <>
             <button
                 type="button"
                 aria-label="Minimize"
@@ -68,6 +75,53 @@ export function WindowControls({
             >
                 <IconClose />
             </button>
+        </>
+    );
+}
+
+export function WindowControls({
+    isMaximized,
+    onMinimize,
+    onToggleMaximize,
+    onClose,
+}: {
+    isMaximized: boolean;
+    onMinimize: () => void;
+    onToggleMaximize: () => void;
+    onClose: () => void;
+}) {
+    const [host, setHost] = useState<HTMLElement | null>(null);
+    useEffect(() => {
+        setHost(document.body);
+    }, []);
+
+    const buttons = (
+        <WindowControlButtons
+            isMaximized={isMaximized}
+            onMinimize={onMinimize}
+            onToggleMaximize={onToggleMaximize}
+            onClose={onClose}
+        />
+    );
+
+    /** Same layer as Radix overlays (document.body) so blur cannot cover these. */
+    const floating = (
+        <div
+            className="titlebar-window-controls pointer-events-auto fixed top-0 right-0 isolate z-titlebar-controls flex h-titlebar shrink-0 items-stretch bg-titlebar"
+            data-no-drag
+        >
+            {buttons}
         </div>
+    );
+
+    return (
+        <>
+            <div
+                className="h-full shrink-0"
+                style={{ width: CONTROLS_WIDTH }}
+                aria-hidden
+            />
+            {host ? createPortal(floating, host) : floating}
+        </>
     );
 }

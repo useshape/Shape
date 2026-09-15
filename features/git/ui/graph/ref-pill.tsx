@@ -1,5 +1,5 @@
 import { RiGitBranchLine, RiGitCommitLine, RiPriceTag3Line } from "@remixicon/react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM, ICON_SIZE_XS } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -42,7 +42,7 @@ function RefPillVisual({
                 className="flex h-full w-[16px] shrink-0 items-center justify-center"
                 style={{ backgroundColor: color }}
             >
-                <Icon icon={icon} className="text-[var(--graph-surface,var(--color-panel))]" />
+                <Icon icon={icon} size={ICON_SIZE_XS} className="text-[var(--graph-surface,var(--color-panel))]" />
             </span>
             <span
                 className={cn(

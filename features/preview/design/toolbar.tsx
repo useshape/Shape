@@ -46,15 +46,7 @@ export function DesignToolbar({ onClose }: { onClose: () => void }) {
                 <div className="pointer-events-auto flex items-center gap-1.5" data-no-drag>
                     <Combobox
                         variant="ghost"
-                        size="xs"
-                        toggleText="Default"
-                        items={[{ value: "default", text: "Default" }]}
-                        value="default"
-                    />
-                    <Combobox
-                        variant="ghost"
-                        size="xs"
-                        icon={RiHomeLine}
+                        size="sm"
                         toggleText="Home page"
                         items={[{ value: "home", text: "Home page" }]}
                         value="home"

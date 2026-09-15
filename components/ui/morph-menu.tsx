@@ -101,7 +101,7 @@ export function MorphMenu({
                     aria-label={ariaLabel}
                     onClick={() => setOpen((v) => !v)}
                     className={cn(
-                        "inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface-3 px-3 text-sm text-text-secondary",
+                        "inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface-3/80 backdrop-blur-sm px-3 text-sm text-text-secondary",
                         "hover:bg-panel-hover hover:text-text-primary",
                         open && "bg-panel-active text-text-primary",
                     )}
@@ -111,7 +111,7 @@ export function MorphMenu({
                 {open ? (
                     <div
                         className={cn(
-                            "absolute bottom-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-border bg-surface-3 shadow-md",
+                            "absolute bottom-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-border bg-surface-3/80 backdrop-blur-sm shadow-md",
                             align === "end" ? "right-0" : "left-0",
                         )}
                         style={{ width: openWidth, maxHeight: openHeight }}
