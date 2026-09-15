@@ -23,7 +23,8 @@ const TooltipContent = React.forwardRef<
                 right: 10,
             }}
             className={cn(
-                "shape-popover-content z-tooltip rounded-lg bg-surface-2 px-2 py-1",
+                "shape-popover-content z-tooltip rounded-md bg-surface-4 shadow-md/30 px-2 py-1",
+                "max-w-[min(260px,calc(100vw-20px))] whitespace-normal wrap-break-word text-pretty leading-snug",
                 "text-sm text-text-primary",
                 "filter-[drop-shadow(1px_0_0_var(--border-subtle))_drop-shadow(-1px_0_0_var(--border-subtle))_drop-shadow(0_1px_0_var(--border-subtle))_drop-shadow(0_-1px_0_var(--border-subtle))]",
                 className,

@@ -158,7 +158,7 @@ export function AiSettingsPanel({
     useShapeCatalog();
     const allModels = getCatalogModels();
     const unavailableHint =
-        "This model is not available on your plan. Manage models on useshape.org.";
+        "This model is not available on your plan.";
     const [showAllModels, setShowAllModels] = React.useState(false);
     const [indexStatus, setIndexStatus] = React.useState<{
         filesIndexed: number;
@@ -276,13 +276,15 @@ export function AiSettingsPanel({
                         }
                     />
                 ))}
-                <button
+                <Button
                     type="button"
-                    className="px-3.5 py-2.5 text-left text-sm text-text-muted hover:text-text-primary transition-colors"
+                    variant="secondary"
+                    size="md"
+                    className="w-full bg-panel-hover! rounded-none py-6"
                     onClick={() => setShowAllModels((v) => !v)}
                 >
                     {showAllModels ? "Show fewer models" : "View all models"}
-                </button>
+                </Button>
             </SettingSection>
 
             <SettingSection title="Behavior">
@@ -365,9 +367,6 @@ export function AiSettingsPanel({
                         onChange={(v) => updateSettingSection("ai", { maxContextLines: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Semantic codebase index">
-                    <span className="text-xs text-text-muted">Always on</span>
-                </SettingRow>
                 <SettingRow title="Semantic embeddings">
                     <SettingSwitch
                         checked={a.indexEmbeddings}
@@ -378,8 +377,7 @@ export function AiSettingsPanel({
                     />
                 </SettingRow>
                 <SettingRow
-                    title="Chat memory"
-                    description="Let the agent fetch past chats in this project only when needed (tools, not every prompt)."
+                    title="Project memory"
                 >
                     <SettingSwitch
                         checked={a.chatMemoryEnabled}
@@ -389,21 +387,12 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <div className="px-3.5 py-3 space-y-3">
+                <div className="p-3 space-y-2">
                     <IndexProgressBar percent={indexPercent} indexing={indexing} phase={indexPhase} />
                     <div className="text-sm text-text-muted">
-                        {indexStatus
-                            ? `${indexStatus.filesIndexed} files · ${indexStatus.chunks} chunks${
-                                  indexStatus.vectors != null ? ` · ${indexStatus.vectors} vectors` : ""
-                              }${
-                                  indexStatus.lastIndexedAt
-                                      ? ` · Last indexed ${new Date(indexStatus.lastIndexedAt * 1000).toLocaleString()}`
-                                      : ""
-                              }`
-                            : "Not indexed"}
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="secondary" size="sm" disabled={indexing} onClick={() => void handleReindex()}>
+                        <Button variant="secondary" className="w-full bg-panel-hover!" size="md" disabled={indexing} onClick={() => void handleReindex()}>
                             {indexing ? "Indexing…" : "Re-index"}
                         </Button>
                     </div>
@@ -413,7 +402,7 @@ export function AiSettingsPanel({
             <SettingSection
                 id="settings-ai-byok"
                 title="API keys"
-                description="Use your own OpenRouter or OpenAI key. Chat goes straight to the provider — no Shape server required. OpenRouter is preferred when both are set."
+                card={false}
             >
                 <SettingRow title="OpenRouter" stack>
                     <Input
@@ -429,7 +418,7 @@ export function AiSettingsPanel({
                                 .setByokKeys(openRouterApiKey || null, a.openaiApiKey || null)
                                 .catch(() => { /* ignore */ });
                         }}
-                        className="font-mono text-sm"
+                        className="font-mono bg-panel-hover! text-sm"
                     />
                 </SettingRow>
                 <SettingRow title="OpenAI" stack>

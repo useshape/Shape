@@ -4,7 +4,7 @@ import type { RemixiconComponentType } from "@remixicon/react";
 import { RiArrowLeftLine, RiArrowRightSLine, RiChat3Line, RiCodeLine, RiFileLine, RiFolderLine, RiGitBranchLine, RiGlobalLine, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiTerminalBoxLine, RiApps2Line } from "@remixicon/react";
 import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
@@ -364,13 +364,13 @@ export function MentionPicker({
     return createPortal(
         <div
             ref={setMenuEl}
-            className="fixed z-[200] max-h-72 max-w-70 overflow-hidden rounded-xl border border-border bg-surface-3 shadow-lg/30"
+            className="fixed z-[200] max-h-72 max-w-70 overflow-hidden rounded-xl border border-border bg-surface-3/80 backdrop-blur-sm shadow-md/30"
             style={{ left: pos.left, top: pos.top, width: pos.width }}
         >
             {activeCategory ? (
                 <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-text-muted hover:text-text-primary"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-muted! font-regular hover:text-text-primary"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setActiveCategory(null)}
                 >
@@ -388,10 +388,10 @@ export function MentionPicker({
                             key={`${item.kind}-${item.id ?? item.path ?? item.label}-${idx}`}
                             type="button"
                             className={cn(
-                                "flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs",
+                                "flex w-full items-center gap-2 py-1 px-2 text-text-muted rounded-md text-left text-sm font-regular",
                                 idx === highlight
-                                    ? "bg-panel-hover text-text-primary"
-                                    : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                    ? "bg-panel-hover text-text-muted"
+                                    : "text-text-muted hover:bg-panel-hover hover:text-text-muted",
                             )}
                             onMouseDown={(e) => e.preventDefault()}
                             onMouseEnter={() => setHighlight(idx)}
@@ -406,7 +406,7 @@ export function MentionPicker({
                                 <PluginLogo
                                     toolkit={item.id || item.path || item.label}
                                     name={item.label}
-                                    size={14}
+                                    size={ICON_SIZE_SM}
                                     className="rounded-sm"
                                 />
                             ) : item.kind === "browser" && item.path && item.path !== "current" ? (
@@ -434,10 +434,10 @@ export function MentionPicker({
                                                             ? RiApps2Line
                                                           : RiFileLine
                                     }
-                                    className="shrink-0 text-text-muted"
+                                    className="shrink-0 text-text-muted" size={ICON_SIZE_SM}
                                 />
                             )}
-                            <span className="min-w-0 truncate font-medium text-text-primary">
+                            <span className="min-w-0 truncate font-regular text-text-muted">
                                 {item.kind === "browser" && item.path && item.path !== "current"
                                     ? `Visit ${item.label}`
                                     : item.label}
@@ -458,13 +458,13 @@ export function MentionPicker({
                             <button
                                 key={cat.id}
                                 type="button"
-                                className="flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                                className="flex w-full items-center gap-2 py-1 px-2 rounded-md text-left text-sm font-regular text-text-muted hover:bg-panel-hover hover:text-text-muted"
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => setActiveCategory(cat.id)}
                             >
-                                <Icon icon={cat.icon} className="shrink-0 text-text-muted" />
+                                <Icon icon={cat.icon} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
                                 <span className="flex-1">{cat.label}</span>
-                                <Icon icon={RiArrowRightSLine} className="text-text-muted" />
+                                <Icon icon={RiArrowRightSLine} className="text-text-muted" size={ICON_SIZE_SM} />
                             </button>
                         ))}
                     </>

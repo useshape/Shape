@@ -14,6 +14,7 @@ import { isPopoutPath } from "@/lib/window/tauri-window";
 import { SETTINGS_CATEGORIES } from "@/features/settings/ui/shared/nav";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { toTimestampMs } from "@/lib/timestamp";
+import { Button } from "@/components/ui/button";
 
 interface EditorAction {
     id: string;
@@ -149,7 +150,7 @@ function ShortcutBadge({ shortcut }: { shortcut: string }) {
             {parts.map((part) => (
                 <kbd
                     key={part}
-                    className="rounded-lg bg-white/5 px-2 py-0.5 text-xs font-sans text-text-muted"
+                    className="rounded-sm bg-panel-hover text-text-secondary px-1.5 py-0.5 text-xs font-sans"
                 >
                     {part}
                 </kbd>
@@ -550,7 +551,7 @@ export function CommandPalette() {
                 <Dialog.Content className={cn(
                     SHAPE_OVERLAY_CONTENT_CLASS,
                     SHAPE_MODAL_PANEL_CLASS,
-                    "fixed top-[12%] left-1/2 z-50 -translate-x-1/2 flex bg-surface-2/80 backdrop-blur-2xl w-full max-w-[650px] rounded-2xl flex-col overflow-hidden border border-border-subtle shadow-lg focus:outline-none",
+                    "fixed top-[12%] left-1/2 z-50 -translate-x-1/2 flex bg-surface-2/80 backdrop-blur-xl w-full max-w-[650px] flex-col overflow-hidden shadow-md/50 focus:outline-none",
                 )}>
                     <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
                     <Dialog.Description className="sr-only">Search agents, files, and actions</Dialog.Description>
@@ -571,24 +572,25 @@ export function CommandPalette() {
                     </div>
 
                     {browse ? (
-                        <div className="flex shrink-0 items-center gap-1 px-3 py-2">
+                        <div className="flex shrink-0 items-center border-b border-border border-t px-1.5 py-1">
                             {PALETTE_FILTERS.map((f) => (
-                                <button
+                                <Button
                                     key={f.id}
-                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => {
                                         setFilterTab(f.id);
                                         setSelectedIndex(0);
                                     }}
                                     className={cn(
-                                        "rounded-md px-2.5 py-1 text-xs transition-colors",
+                                        "transition-colors px-2.5 bg-transparent!",
                                         filterTab === f.id
-                                            ? "bg-surface-3 text-text-primary"
-                                            : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
+                                            ? "text-text-primary"
+                                            : "text-text-muted hover:text-text-secondary",
                                     )}
                                 >
                                     {f.label}
-                                </button>
+                                </Button>
                             ))}
                         </div>
                     ) : null}
@@ -615,7 +617,7 @@ export function CommandPalette() {
                             return (
                                 <React.Fragment key={action.id}>
                                     {showHeader ? (
-                                        <div className="px-3 pb-1 pt-2 text-2xs font-medium text-text-muted">
+                                        <div className="px-3 pb-1 pt-2 text-sm font-medium text-text-muted">
                                             {section}
                                         </div>
                                     ) : null}
@@ -624,7 +626,7 @@ export function CommandPalette() {
                                         role="button"
                                         tabIndex={0}
                                         className={cn(
-                                            "mx-1 flex min-w-0 cursor-pointer items-center justify-between rounded-lg px-3 py-1.5 text-left",
+                                            "mx-1 flex min-w-0 cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-left",
                                             idx === selectedIndex
                                                 ? "bg-panel-hover text-text-primary"
                                                 : "text-text-secondary hover:bg-panel-hover",
@@ -670,17 +672,17 @@ export function CommandPalette() {
                     </div>
 
                     {browse ? (
-                        <div className="flex shrink-0 items-center gap-4 border-t border-border-subtle px-3 py-2 text-2xs text-text-muted">
-                            <span>
-                                <kbd className="text-text-secondary">↑↓</kbd> Select
+                        <div className="flex shrink-0 items-center gap-4 border-t border-border px-2 py-1.5 text-sm text-text-muted">
+                            <span className="flex items-center gap-1">
+                                <kbd className="text-xs bg-panel-hover text-text-secondary rounded-sm px-1.5 py-0.5">↑↓</kbd> <span>Select</span>
                             </span>
                             <span>
-                                <kbd className="text-text-secondary">⏎</kbd> Open
+                                <kbd className="text-xs bg-panel-hover text-text-secondary rounded-sm px-1.5 py-0.5">⏎</kbd> <span>Open</span>
                             </span>
                             <span>
-                                <kbd className="text-text-secondary">Ctrl+[</kbd>
+                                <kbd className="text-xs bg-panel-hover text-text-secondary rounded-sm px-1.5 py-0.5">Ctrl+[</kbd>
                                 {" or "}
-                                <kbd className="text-text-secondary">Ctrl+]</kbd>
+                                <kbd className="text-xs bg-panel-hover text-text-secondary rounded-sm px-1.5 py-0.5">Ctrl+]</kbd>
                                 {" Change Filter"}
                             </span>
                         </div>

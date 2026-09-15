@@ -788,7 +788,7 @@ export function SettingsView({
                     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
                         {onBack ? (
                             <HostedSidebarBack
-                                label="Go Back"
+                                label="Chat"
                                 onBack={onBack}
                                 collapsed={collapsed}
                             />

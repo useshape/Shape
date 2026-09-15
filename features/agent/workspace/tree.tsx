@@ -135,8 +135,8 @@ export function FileTree({
     // Padding on the wrapper (not margin on the island) keeps the flex parent
     // from shifting — the island sits inset without pushing layout sideways.
     return (
-        <div className="box-border flex h-full min-h-0 w-full flex-col p-2">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface-2">
+        <div className="box-border flex h-full min-h-0 w-full flex-col">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-text-muted">
                     <span className="truncate capitalize">{title}</span>
                 </div>

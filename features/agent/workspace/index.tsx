@@ -12,7 +12,7 @@ import { PlanTabView } from "./plan-tab";
 import { FileEditor } from "./editor";
 import { FileTree } from "./tree";
 import { SingleFileDiffEditor, type FileDiffTabInfo } from "./file-diff";
-import { GraphTab } from "./graph-tab";
+import Graph from "@/features/git/ui/graph/graph";
 import { ToolBtn } from "./tool";
 import {
     DEFAULT_TABS,
@@ -304,7 +304,7 @@ export function AgentWorkspace({
                     {active?.kind === "changes" ? (
                         <ChangesView projectPath={projectPath} />
                     ) : active?.kind === "graph" ? (
-                        <GraphTab projectPath={projectPath} />
+                        <Graph hideHeader surface="panel" active />
                     ) : active?.kind === "files" ? (
                         <FileTree
                             projectPath={projectPath}

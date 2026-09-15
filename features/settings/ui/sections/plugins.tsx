@@ -169,19 +169,19 @@ function PluginCard({
         <button
             type="button"
             onClick={onOpen}
-            className="flex h-full w-full items-start gap-3 rounded-xl border border-border-subtle bg-surface-2 p-4 text-left transition-colors hover:bg-panel-hover"
+            className="flex h-full w-full items-start gap-3 rounded-lg border border-border bg-surface-4 p-4 text-left transition-colors hover:bg-panel-hover"
         >
             <PluginLogo toolkit={plugin.toolkit} name={plugin.name} logo={plugin.logo} size={36} />
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                     <div className="truncate text-md font-medium text-text-primary">{plugin.name}</div>
                     {plugin.connected ? (
-                        <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-xs text-accent">
+                        <span className="shrink-0 rounded-md border border-border bg-panel-hover px-1.5 text-xs">
                             Connected
                         </span>
                     ) : null}
                 </div>
-                <div className="mt-0.5 line-clamp-2 text-sm text-text-muted">{plugin.description}</div>
+                <div className="line-clamp-1 text-sm text-text-muted">{plugin.description}</div>
             </div>
         </button>
     );
@@ -197,8 +197,8 @@ function ConnectedList({
     if (plugins.length === 0) return null;
     return (
         <section className="space-y-3">
-            <h2 className="text-sm font-medium text-text-muted">Connected</h2>
-            <div className="overflow-hidden rounded-xl border border-border-subtle bg-surface-2">
+            <h2 className="text-md font-medium text-text-muted">Connected</h2>
+            <div className="overflow-hidden rounded-lg border border-border bg-surface-4">
                 {plugins.map((plugin, index) => (
                     <button
                         key={plugin.id}
@@ -214,7 +214,7 @@ function ConnectedList({
                             <div className="truncate text-md font-medium text-text-primary">{plugin.name}</div>
                             <div className="truncate text-sm text-text-muted">{plugin.description}</div>
                         </div>
-                        <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-xs text-accent">
+                        <span className="shrink-0 rounded-md border border-border bg-panel-hover px-1.5 py-0.5 text-xs">
                             Connected
                         </span>
                     </button>
@@ -392,15 +392,17 @@ function PluginDetail({
     }
 
     return (
-        <div className="mx-auto w-full max-w-3xl">
-            <button
+        <div className="mx-auto w-full max-w-5xl">
+            <Button
                 type="button"
                 onClick={onBack}
-                className="mb-6 inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-primary"
+                variant="outline"
+                size="md"
+                className="mb-10"
             >
                 <Icon icon={RiArrowLeftLine} />
                 Back
-            </button>
+            </Button>
             <div className="flex items-start gap-4">
                 <PluginLogo toolkit={plugin.toolkit} name={plugin.name} logo={plugin.logo} size={48} />
                 <div className="min-w-0 flex-1">
@@ -408,11 +410,11 @@ function PluginDetail({
                     <p className="mt-1 text-sm text-text-muted">{plugin.description}</p>
                 </div>
                 {plugin.connected ? (
-                    <Button variant="secondary" size="sm" disabled={busy} onClick={onDisconnect}>
+                    <Button variant="secondary" size="md" disabled={busy} onClick={onDisconnect}>
                         Disconnect
                     </Button>
                 ) : (
-                    <Button size="sm" disabled={busy} onClick={onConnect}>
+                    <Button size="md" disabled={busy} onClick={onConnect}>
                         {busy ? "Connecting…" : "Connect"}
                     </Button>
                 )}
@@ -438,13 +440,14 @@ function PluginDetail({
                     description="Turn off anything you do not want the agent to call."
                     action={
                         tools.length > 0 ? (
-                            <button
+                            <Button
                                 type="button"
-                                className="text-sm text-text-muted hover:text-text-primary"
+                                variant="ghost"
+                                size="md"
                                 onClick={enableAll}
                             >
                                 Enable all
-                            </button>
+                            </Button>
                         ) : null
                     }
                 >
@@ -595,7 +598,7 @@ export function PluginsSettingsView() {
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-8 lg:px-8">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-8">
                 {openPlugin ? (
                     <PluginDetail
                         plugin={openPlugin}
@@ -607,19 +610,17 @@ export function PluginsSettingsView() {
                 ) : (
                     <div className="mx-auto w-full max-w-5xl">
                         <h1 className="text-2xl font-medium text-text-primary">Plugins</h1>
-                        <p className="mt-1 text-sm text-text-muted">
-                            Connect apps so the agent can use them. Each plugin has its own approval mode.
-                        </p>
                         <div className="mt-4 flex items-center gap-2">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border-subtle bg-input-bg px-3 text-sm text-text-primary"
+                                    <Button
+                                        variant="outline"
+                                        size="md"
+                                        className="min-w-[110px] justify-between gap-2 bg-panel-hover! rounded-lg"
                                     >
                                         {categoryLabel}
-                                        <Icon icon={RiArrowDownSLine} className="text-text-muted" />
-                                    </button>
+                                        <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
+                                    </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" className="min-w-40">
                                     <DropdownMenuRadioGroup value={category} onValueChange={setCategory}>

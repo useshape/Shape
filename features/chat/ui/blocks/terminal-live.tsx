@@ -14,7 +14,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiInformationLine, Ri
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "@/lib/utils";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
@@ -199,7 +199,7 @@ function TerminalCommandMenu({ command }: { command: string }) {
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-1.5 text-xs font-medium text-text-muted">Auto-run</div>
+                <div className="px-2 py-1.5 text-sm font-medium text-text-muted">Auto-run</div>
                 {AUTO_RUN_OPTIONS.map((opt) => {
                     const selected = settings.ai.autoRunMode === opt.value;
                     return (
@@ -360,25 +360,25 @@ export function CommandApprovalCard({
     }, [isProcessing, onRun]);
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl bg-surface-3  border border-border-subtle">
+        <div className="my-1 overflow-hidden rounded-xl bg-surface-3 border border-border-subtle">
             <div className="flex items-center gap-2 px-3 pt-2 pb-2">
                 {isProcessing ? (
                     <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
                 ) : (
-                    <Icon icon={RiTerminalBoxLine} className="shrink-0 text-text-muted" />
+                    <Icon icon={RiTerminalBoxLine} className="shrink-0 text-text-foreground" size={ICON_SIZE_MD} />
                 )}
-                <span className="truncate text-sm text-text-muted">
+                <span className="truncate text-sm text-text-foreground">
                     Run command{reason ? "" : ""}
                 </span>
                 {reason ? (
                     <Tooltip content={reason} side="top">
-                        <Icon icon={RiInformationLine} className="shrink-0 text-text-disabled" />
+                        <Icon icon={RiInformationLine} className="shrink-0 text-text-disabled" size={ICON_SIZE_SM} />
                     </Tooltip>
                 ) : null}
             </div>
             <div>
                 <div className="max-h-[96px] px-3 pb-2 min-h-[64px] overflow-y-auto custom-scrollbar font-mono text-sm text-text-primary whitespace-pre-wrap break-words">
-                    <span className="select-none text-text-disabled">$ </span>
+                    <span className="select-none text-md text-text-disabled">$ </span>
                     {command}
                 </div>
             </div>
@@ -388,7 +388,7 @@ export function CommandApprovalCard({
                         <Button
                             type="button"
                             variant="ghost"
-                            size="xs"
+                            size="sm"
                             disabled={isProcessing}
                             aria-label="Approval mode for future agent commands"
                         >

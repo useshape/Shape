@@ -24,7 +24,7 @@ import {
     SidebarPanelHeaderFrame,
 } from "@/features/panels";
 import { useLoading } from "@/features/loading/context";
-import { useFilter } from "@/features/git/ui/manager/filter-context";
+import { useOptionalFilter } from "@/features/git/ui/manager/filter-context";
 import { useGitRepos } from "@/lib/git/repos";
 import { resolveGithubAvatarUrl } from "@/lib/git/github-avatar";
 import { useSettings } from "@/lib/settings";
@@ -46,6 +46,7 @@ export default function Graph({
     surface = "panel",
     rich = false,
     active = true,
+    hideHeader = false,
 }: {
     className?: string;
     surface?: "panel" | "editor";
@@ -53,11 +54,13 @@ export default function Graph({
     rich?: boolean;
     /** When false (keep-alive pane hidden), unmount Monaco so it cannot overlay other pages. */
     active?: boolean;
+    /** Skip the in-panel header (agent workspace tab already has chrome). */
+    hideHeader?: boolean;
 }) {
     const { project_path } = useProjectState();
     const { scmRepoPath } = useGitRepos(project_path);
     const gitRepo = scmRepoPath;
-    const { query: commitSearch } = useFilter();
+    const commitSearch = useOptionalFilter()?.query ?? "";
     const settings = useSettings();
     const showAllBranches = settings.git.graphShowAllBranches;
     const showGraphAvatars = settings.git.graphAvatars;
@@ -668,7 +671,8 @@ export default function Graph({
 
     const graphChrome = (
         <>
-            {rich && active ? (
+            {rich ? (
+                active ? (
                 <GitChromeActions>
                     <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
@@ -823,7 +827,8 @@ export default function Graph({
                         </Tooltip>
                     ) : null}
                 </GitChromeActions>
-            ) : (
+            ) : null
+            ) : hideHeader ? null : (
             <SidebarPanelHeaderFrame
                 title="Git Graph"
                 className={rich ? "bg-editor" : undefined}
@@ -838,7 +843,7 @@ export default function Graph({
                     <>
                     <Tooltip content="Go to HEAD (H)">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
-                            <Icon icon={RiCrosshair2Line} />
+                            <Icon icon={RiCrosshair2Line} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fetch From All Remotes">
@@ -852,7 +857,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={RiRefreshLine} />
+                            <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
@@ -866,7 +871,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={RiCloudOffLine} />
+                            <Icon icon={RiCloudOffLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
@@ -880,12 +885,12 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={RiUploadLine} />
+                            <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Refresh Graph">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={() => void refresh()}>
-                            <Icon icon={RiRefreshLine} />
+                            <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     {!rich && project_path ? <GitManagerTrigger /> : null}

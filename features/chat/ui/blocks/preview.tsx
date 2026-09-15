@@ -36,7 +36,7 @@ export function DesignPreviewView({ sessionId }: { sessionId: string }) {
 
     return (
         <div className="flex h-full min-h-0 w-full flex-col bg-editor p-2">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-subtle bg-transparent">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border-subtle bg-transparent">
                 <div className="relative min-h-0 flex-1 bg-transparent">
                     {html ? (
                         <iframe

@@ -15,12 +15,24 @@ const PLACEHOLDERS: Record<GitSectionId, string> = {
     source: "Search changes…",
     graph: "Search commits…",
     branches: "Filter branches…",
+    tags: "Filter tags…",
+    "pull-requests": "Search pull requests…",
+    issues: "Search issues…",
+    releases: "Search releases…",
+    "workflow-runs": "Search workflow runs…",
+    jobs: "Search jobs…",
 };
 
 export const GIT_SECTION_TITLES: Record<GitSectionId, string> = {
     source: "Source Control",
     graph: "Git Graph",
     branches: "Branches",
+    tags: "Tags",
+    "pull-requests": "Pull requests",
+    issues: "Issues",
+    releases: "Releases",
+    "workflow-runs": "Workflow runs",
+    jobs: "Jobs",
 };
 
 const SECTION_STORAGE_KEY = "shape-git-manager-section";
@@ -28,22 +40,16 @@ const SECTION_STORAGE_KEY = "shape-git-manager-section";
 const KNOWN_SECTIONS = new Set<string>(Object.keys(PLACEHOLDERS));
 
 const LEGACY_SECTIONS: Record<string, GitSectionId> = {
-    tags: "branches",
-    releases: "graph",
-    issues: "graph",
-    "pull-requests": "graph",
-    "workflow-runs": "graph",
-    jobs: "graph",
-    "workflow-definitions": "graph",
-    steps: "graph",
-    "live-status": "graph",
-    logs: "graph",
-    artifacts: "graph",
-    "check-runs": "graph",
-    "check-suites": "graph",
+    "workflow-definitions": "workflow-runs",
+    steps: "jobs",
+    "live-status": "workflow-runs",
+    logs: "jobs",
+    artifacts: "workflow-runs",
+    "check-runs": "workflow-runs",
+    "check-suites": "workflow-runs",
     "commit-statuses": "graph",
-    deployments: "graph",
-    "deployment-statuses": "graph",
+    deployments: "workflow-runs",
+    "deployment-statuses": "workflow-runs",
 };
 
 export function coerceGitSection(value: string | null | undefined): GitSectionId | null {
@@ -144,6 +150,10 @@ export function FilterProvider({
     }
 
     return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
+}
+
+export function useOptionalFilter() {
+    return useContext(FilterContext);
 }
 
 export function useFilter() {

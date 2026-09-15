@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const itemClasses =
     "group relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1 text-sm outline-none focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
 const containerClasses =
-    "shape-popover-content z-dropdown overflow-hidden rounded-xl border border-border-subtle bg-surface-3 text-text-primary shadow-md";
+    "shape-popover-content z-dropdown overflow-hidden rounded-xl border border-border-secondary bg-surface-4/80 backdrop-blur-sm text-text-primary shadow-md";
 const shortcutClasses =
     "ml-auto shrink-0 pr-1 text-sm text-text-muted group-focus:text-text-primary";
 /** Tight inset — rows sit near the panel edge (Cursor-style). */

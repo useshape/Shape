@@ -15,9 +15,9 @@ export function ThemeWorkbenchPreview({
     className?: string;
 }) {
     const light = theme === "light";
-    const canvas = light ? "#c8c8cc" : "#050505";
-    const windowBg = light ? "#9e9ea4" : "#141414";
-    const pane = light ? "#ececef" : "#2e2e2e";
+    const canvas = light ? "#FFFFFF" : "#050505";
+    const windowBg = light ? "#E6E6E6" : "#141414";
+    const pane = light ? "#FFFFFF" : "#2e2e2e";
 
     return (
         <div
@@ -28,12 +28,12 @@ export function ThemeWorkbenchPreview({
         >
             {/* Shifted down + oversized so bottom and sides clip out of view */}
             <div
-                className="absolute left-[4%] top-[20%] flex h-[100%] w-[92%] flex-col rounded-md p-[1.5%]"
+                className="absolute left-[15%] top-[20%] flex h-[100%] w-[92%] flex-col rounded-lg p-[3%]"
                 style={{ background: windowBg }}
             >
-                <div className="flex min-h-0 flex-1 gap-[1.5%]">
-                    <div className="h-full w-[28%] shrink-0 rounded-sm" style={{ background: pane }} />
-                    <div className="h-full min-w-0 flex-1 rounded-sm" style={{ background: pane }} />
+                <div className="flex min-h-0 flex-1 gap-[2%]">
+                    <div className="h-full w-[28%] shrink-0 rounded-md" style={{ background: pane }} />
+                    <div className="h-full min-w-0 flex-1 rounded-md" style={{ background: pane }} />
                 </div>
             </div>
         </div>

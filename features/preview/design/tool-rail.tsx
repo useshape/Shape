@@ -20,9 +20,10 @@ import {
     RiShoppingBag3Line,
     RiUserLine,
 } from "@remixicon/react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 function RailBtn({
     label,
@@ -35,18 +36,18 @@ function RailBtn({
 }) {
     return (
         <Tooltip content={label} side="right">
-            <button
-                type="button"
-                aria-label={label}
-                aria-pressed={active}
+            <Button
+                variant="ghost"
+                size="icon"
                 className={cn(
-                    "flex size-8 items-center justify-center rounded-lg text-text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-                    "hover:bg-panel-hover hover:text-text-primary",
+                    "size-10",
                     active && "bg-panel-active text-text-primary",
                 )}
+                aria-label={label}
+                aria-pressed={active}
             >
-                <Icon icon={icon} size={18} />
-            </button>
+                <Icon icon={icon} size={ICON_SIZE_MD} />
+            </Button>
         </Tooltip>
     );
 }
@@ -76,7 +77,7 @@ const BOTTOM_TOOLS: { label: string; icon: RemixiconComponentType }[] = [
 
 export function DesignToolRail() {
     return (
-        <div className="flex h-full w-11 shrink-0 flex-col items-center overflow-y-auto border-r border-border-subtle bg-panel py-1.5">
+        <div className="flex h-full w-13 shrink-0 flex-col items-center overflow-y-auto border-r border-border bg-surface-3 py-1.5">
             <div className="flex flex-col items-center gap-0.5">
                 {TOP_TOOLS.map((tool) => (
                     <RailBtn key={tool.label} {...tool} />

@@ -1,7 +1,7 @@
 "use client";
 
 import { RiArrowLeftLine, RiCloseLine } from "@remixicon/react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -37,16 +37,16 @@ export function HostedSidebarBack({
     }
 
     return (
-        <div className="flex h-10 shrink-0 items-center px-2">
+        <div className="flex h-8 shrink-0 items-center px-2 mt-1.5 mb-2">
             <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={onBack}
                 aria-label={label}
-                className="h-8 w-full justify-start gap-2 px-1.5! text-left"
+                className="gap-2 px-1.5!"
             >
-                <Icon icon={closeIcon ? RiCloseLine : RiArrowLeftLine} className="shrink-0" />
+                <Icon icon={closeIcon ? RiCloseLine : RiArrowLeftLine} size={ICON_SIZE_MD} />
                 <span className="min-w-0 truncate">{label}</span>
             </Button>
         </div>

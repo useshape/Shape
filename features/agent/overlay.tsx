@@ -55,7 +55,7 @@ export function AgentOverlayView({
 
     if (overlay.type === "settings") {
         return (
-            <div className="h-full min-h-0 w-full overflow-hidden animate-in">
+            <div className="h-full min-h-0 w-full overflow-hidden animate-in fade-in duration-300 ease-[var(--ease-out)]">
                 <Suspense fallback={<div className="h-full bg-panel" />}>
                     <SettingsView
                         navPortalTarget={navPortalTarget}
@@ -68,7 +68,7 @@ export function AgentOverlayView({
     }
 
     return (
-        <div className="h-full min-h-0 w-full overflow-hidden animate-in">
+        <div className="h-full min-h-0 w-full overflow-hidden animate-in fade-in duration-300 ease-[var(--ease-out)]">
             <FilterProvider>
                 <GitManager
                     embedded

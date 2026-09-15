@@ -46,7 +46,7 @@ const tertiaryOverride: Partial<Record<ButtonVariant, string>> = {
 const sizeClasses: Record<ButtonSize, string> = {
     xs: "h-7 min-h-7 px-2.5 text-xs rounded-md",
     sm: "h-7.5 min-h-7.5 px-3 text-sm rounded-md",
-    md: "h-8 min-h-8 px-3.5 text-sm rounded-lg",
+    md: "h-9 min-h-8 px-3.5 text-sm rounded-lg",
     lg: "h-10 min-h-10 px-4 text-base rounded-lg",
     icon: "size-7 min-h-7 min-w-7 shrink-0 overflow-visible p-0 rounded-md",
 };

@@ -41,7 +41,7 @@ import {
 
 function Keycap({ children }: { children: React.ReactNode }) {
     return (
-        <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-input-bg px-2 py-0.5 text-xs font-medium text-text-secondary">
+        <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-sm bg-input-bg px-2 py-0.5 text-sm font-medium text-text-secondary">
             {children}
         </kbd>
     );
@@ -169,7 +169,7 @@ function RecordKeybindingDialog({
                     <AlertDialogDescription>{binding.label}</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogBody>
-                    <div className="rounded-lg border border-border bg-panel px-3 py-2 font-mono text-sm text-text-primary">
+                    <div className="rounded-lg border border-border bg-panel-hover px-2 py-1 font-mono text-sm text-text-primary">
                         {preview}
                         <span className="ml-0.5 inline-block h-4 w-px animate-pulse bg-accent align-middle" />
                     </div>
@@ -190,7 +190,7 @@ function RecordKeybindingDialog({
                     </AlertDialogCancel>
                     <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => onSave("")}
                     >
@@ -289,7 +289,7 @@ export function KeyboardShortcutsView() {
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-6 lg:px-8">
                 <div className="mx-auto w-full max-w-5xl">
-                    <h1 className="text-2xl font-medium text-text-primary">Keyboard shortcuts</h1>
+                    <h1 className="text-2xl font-medium text-text-primary">Shortcuts</h1>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                         <SearchInput
                             placeholder="Search shortcuts"
@@ -299,7 +299,7 @@ export function KeyboardShortcutsView() {
                         />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button type="button" variant="ghost" size="sm" className="gap-1.5">
+                                <Button type="button" variant="outline" size="md" className="gap-1.5 bg-panel-hover">
                                     <Icon icon={RiDownloadLine} />
                                     Import
                                 </Button>
@@ -318,9 +318,9 @@ export function KeyboardShortcutsView() {
                         </DropdownMenu>
                         <Button
                             type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1.5"
+                            variant="outline"
+                            size="md"
+                            className="gap-1.5 bg-panel-hover"
                             onClick={() => void onExportJson()}
                         >
                             <Icon icon={RiUploadLine} />
@@ -328,8 +328,9 @@ export function KeyboardShortcutsView() {
                         </Button>
                         <Button
                             type="button"
-                            variant="ghost"
-                            size="sm"
+                            variant="outline"
+                            size="md"
+                            className="gap-1.5 bg-panel-hover"
                             onClick={() => {
                                 resetKeybindingOverrides();
                                 reload();
@@ -339,13 +340,8 @@ export function KeyboardShortcutsView() {
                             Reset
                         </Button>
                     </div>
-                    <p className="mt-2 text-sm text-text-muted">
-                        {presetId === "custom"
-                            ? "Custom"
-                            : presets.find((p) => p.id === presetId)?.label ?? presetId}
-                    </p>
 
-                    <div className="mt-6 overflow-hidden rounded-xl border border-border-subtle bg-surface-2 divide-y divide-border-subtle">
+                    <div className="mt-6 overflow-hidden rounded-lg border border-border bg-surface-2 divide-y divide-border">
                         {filtered.length === 0 ? (
                             <div className="px-4 py-10 text-center text-sm text-text-muted">
                                 No keybindings match “{query}”
@@ -358,7 +354,7 @@ export function KeyboardShortcutsView() {
                                         className="flex items-center gap-4 px-4 py-3.5"
                                     >
                                         <div className="min-w-0 flex-1">
-                                            <div className="text-md font-medium text-text-primary">{b.label}</div>
+                                            <div className="text-sm font-medium text-text-primary">{b.label}</div>
                                             <div className="mt-0.5 text-sm text-text-muted">
                                                 {b.description || b.when}
                                             </div>
