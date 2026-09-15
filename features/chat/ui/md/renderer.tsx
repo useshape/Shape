@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { stripLeakedToolCode, stripOrphanThinkTags } from "./stream";
 import { ChatMarkdown } from "./view";
+import { syncSubagentsFromChunks } from "@/features/agent/subagents/store";
 
 import {
     isRenderableWorkflowBlock,
@@ -261,8 +262,8 @@ export function parseMessageContent(text: string): Chunk[] {
             return m ? m[1] : undefined;
         };
         const path = getAttr('path') || content.trim();
-        const start = getAttr('start');
-        const end = getAttr('end');
+        const start = getAttr('start') || getAttr('startLine');
+        const end = getAttr('end') || getAttr('endLine');
         return {
             type: 'cat',
             content: path,
@@ -807,10 +808,11 @@ export function MessageRenderer({
         return parsed.map((c) => (c.isGenerating ? { ...c, isGenerating: false } : c));
     }, [content, isGenerating]);
 
-    // Legacy <subagent_ref> / <subagent> tags are stripped from display.
-    const contentChunks = useMemo(() => mergeAdjacentTextChunks(
-        chunks.filter((c) => c.type !== 'subagent_ref' && c.type !== 'subagent'),
-    ), [chunks]);
+    useEffect(() => {
+        syncSubagentsFromChunks(chunks, Boolean(isGenerating));
+    }, [chunks, isGenerating]);
+
+    const contentChunks = useMemo(() => mergeAdjacentTextChunks(chunks), [chunks]);
 
     // Chronological segments so mid-turn prose sits between tool groups (Cursor-style).
     const segments = useMemo(
@@ -847,22 +849,28 @@ export function MessageRenderer({
                 && b.commandStatus === 'pending',
         ),
     );
-    const showStatusLine =
-        !!isGenerating
-        && workflowSegments.length === 0
-        && (
-            hasPendingApproval
-            || !!activityLabel?.trim()
-            || !proseIsStreaming
-        );
-
     const lastWorkflowBlock = workflowSegments.at(-1)?.blocks.at(-1);
     const isThinking = !!isGenerating
         && (lastWorkflowBlock?.type === 'think' || lastWorkflowBlock?.type === 'thought')
         && !!lastWorkflowBlock.isGenerating;
+    const lastIsEdit = lastWorkflowBlock?.type === "edit" || lastWorkflowBlock?.type === "edit_pending";
+    const activityIsEdit = /\bedit/i.test(activityLabel ?? "");
+    const editFileName = [...(workflowSegments.at(-1)?.blocks ?? [])]
+        .reverse()
+        .find((b) => b.type === "edit" || b.type === "edit_pending")
+        ?.file?.split(/[\\/]/).pop();
     const statusLabel = hasPendingApproval
         ? "Waiting for approval"
-        : (activityLabel ?? (isThinking ? "Thinking" : undefined));
+        : lastIsEdit || activityIsEdit
+          ? `Editing ${editFileName || "file"}`
+          : (activityLabel?.trim() || (isThinking ? "Thinking" : (workflowSegments.length > 0 ? "Working" : undefined)));
+    const showStatusLine =
+        !!isGenerating
+        && !proseIsStreaming
+        && (
+            hasPendingApproval
+            || !!statusLabel
+        );
 
     const renderedSegments = segments.map((segment, index) => {
         const isLastSegment = index === segments.length - 1;
@@ -993,10 +1001,10 @@ export function MessageRenderer({
 
     return (
         <div className="flex flex-col gap-0 overflow-hidden">
-            {renderedSegments}
             {showStatusLine && (
                 <GeneratingIndicator label={statusLabel} />
             )}
+            {renderedSegments}
         </div>
     );
 }

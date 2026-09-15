@@ -76,7 +76,11 @@ function FileRow({
             {file.del > 0 ? <span className="text-error">−{file.del}</span> : null}
           </span>
         ) : null}
-        <StatusGlyph status={file.status ?? (file.del > 0 ? "M" : "A")} />
+        {(file.status ?? (file.del > 0 ? "M" : "A")).toUpperCase() === "A" ? (
+          <span className="text-xs font-medium text-success">New</span>
+        ) : (
+          <StatusGlyph status={file.status ?? (file.del > 0 ? "M" : "A")} />
+        )}
       </span>
     </button>
   );
@@ -117,7 +121,7 @@ function ChangesView({
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-panel">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <div
         className="mx-2 flex h-8 shrink-0 items-center gap-2 rounded-lg px-1"
         style={{ background: toneBg }}
@@ -188,15 +192,17 @@ function ChangesView({
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
-          {plus > 0 || minus > 0 ? (
-            <div className="flex items-center gap-2 px-2 pb-1 text-sm tabular-nums text-text-muted">
-              {plus > 0 ? <span className="text-success">+{plus}</span> : null}
-              {minus > 0 ? <span className="text-error">−{minus}</span> : null}
-            </div>
-          ) : null}
           <section>
-            <div className="px-2 pb-0.5 text-sm font-medium text-text-muted">
-              Changes {files.length}
+            <div className="flex items-center gap-2 px-2 pb-0.5 text-sm font-medium text-text-muted">
+              <span className="min-w-0 flex-1 truncate">
+                {files.length} Uncommitted change{files.length === 1 ? "" : "s"}
+              </span>
+              {plus > 0 || minus > 0 ? (
+                <span className="inline-flex shrink-0 items-center gap-1.5 tabular-nums">
+                  {plus > 0 ? <span className="text-success">+{plus}</span> : null}
+                  {minus > 0 ? <span className="text-error">−{minus}</span> : null}
+                </span>
+              ) : null}
             </div>
             <div className="flex flex-col">
               {files.map((file, i) => (
@@ -229,8 +235,8 @@ function TerminalView({ lines }: { lines: string[] }) {
   }, [lines]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-panel">
-      <div className="workbench-tab-bar box-border flex h-[36px] w-full shrink-0 items-center gap-1 bg-panel px-2">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar">
+      <div className="workbench-tab-bar box-border flex h-[36px] w-full shrink-0 items-center gap-1 bg-sidebar px-2">
         <div className="no-scrollbar flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           <div className={workbenchTabItemClass(true)}>
             <span className="truncate whitespace-nowrap text-sm">PowerShell 1</span>
@@ -330,9 +336,9 @@ export function DemoPanel({
   };
 
   return (
-    <aside className="flex h-full w-full min-w-0 overflow-hidden border-l border-border bg-panel">
+    <aside className="flex h-full w-full min-w-0 overflow-hidden bg-sidebar">
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="workbench-tab-bar box-border flex h-[36px] w-full shrink-0 items-center gap-1 bg-panel px-2">
+        <div className="workbench-tab-bar box-border flex h-[36px] w-full shrink-0 items-center gap-1 bg-sidebar px-2">
           <div className="workbench-tab-scroll no-scrollbar flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {tabs.map((t) => (
               <button

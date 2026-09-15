@@ -2,7 +2,7 @@
 
 import { RiDeleteBinLine, RiHistoryLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
 import {
@@ -122,8 +122,8 @@ export function ChatHistoryMenu({
                 History
             </Button>
         ) : (
-            <SidebarPanelActionButton className="h-6 w-6" aria-label={tooltip}>
-                <Icon icon={RiHistoryLine} />
+            <SidebarPanelActionButton aria-label={tooltip}>
+                <Icon icon={RiHistoryLine} size={ICON_SIZE_MD} />
             </SidebarPanelActionButton>
         );
 
@@ -169,7 +169,7 @@ export function ChatHistoryMenu({
                                     >
                                         {conversation.title}
                                     </span>
-                                    <span className="shrink-0 text-xs text-text-muted tabular-nums">
+                                    <span className="shrink-0 text-sm text-text-muted tabular-nums">
                                         {formatConversationDate(conversation.timestamp)}
                                     </span>
                                     <button

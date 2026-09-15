@@ -161,22 +161,25 @@ function chromeTheme(dark: boolean) {
         {
             "&": {
                 height: "100%",
-                fontSize: "13.5px",
-                backgroundColor: "var(--color-panel)",
-                color: "var(--color-text-primary)",
+                fontSize: "13px",
+                backgroundColor: "var(--panel)",
+                color: "var(--text-primary)",
             },
             ".cm-scroller": {
                 fontFamily:
-                    "var(--font-geist-mono, var(--font-mono), 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace)",
-                fontFeatureSettings: '"liga" 1, "calt" 1',
+                    "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+                fontFeatureSettings: '"liga" 0, "calt" 0',
                 lineHeight: "1.55",
                 overflow: "auto",
-                backgroundColor: "var(--color-panel)",
+                backgroundColor: "var(--panel)",
+                color: "var(--text-primary)",
             },
             ".cm-content": {
-                caretColor: "var(--color-text-primary)",
+                caretColor: "var(--text-primary)",
+                color: "var(--text-primary)",
                 padding: "12px 0 48px",
                 minHeight: "100%",
+                fontFamily: "inherit",
             },
             "&.cm-focused .cm-content": {
                 outline: "none",
@@ -195,7 +198,7 @@ function chromeTheme(dark: boolean) {
             },
             ".cm-cursor, .cm-dropCursor": {
                 borderLeftWidth: "2px",
-                borderLeftColor: "var(--color-text-primary)",
+                borderLeftColor: "var(--text-primary)",
             },
             "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
                 {
@@ -212,15 +215,15 @@ function chromeTheme(dark: boolean) {
                     : "rgba(0, 0, 0, 0.035)",
             },
             ".cm-gutters": {
-                backgroundColor: "var(--color-panel)",
-                color: "var(--color-text-disabled)",
+                backgroundColor: "var(--panel)",
+                color: "var(--text-disabled)",
                 border: "none",
                 borderRight: "1px solid transparent",
                 minWidth: "3.25rem",
                 paddingLeft: "4px",
             },
             ".cm-gutter, .cm-lineNumbers": {
-                backgroundColor: "var(--color-panel)",
+                backgroundColor: "var(--panel)",
             },
             ".cm-gutterElement": {
                 padding: "0 10px 0 8px",
@@ -318,7 +321,8 @@ function chromeTheme(dark: boolean) {
                 textDecoration: "none !important",
             },
             ".cm-mergeView, .cm-mergeViewEditor, .cm-editor, .cm-scroller, .cm-content": {
-                backgroundColor: "var(--color-panel) !important",
+                backgroundColor: "var(--panel) !important",
+                color: "var(--text-primary)",
             },
         },
         { dark },

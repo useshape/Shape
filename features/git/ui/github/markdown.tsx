@@ -18,7 +18,7 @@ export type GitMarkdownCtx = {
 
 /** Strip noise bots leave in bodies so comments read like GitHub. */
 export function preprocessGitHubBody(content: string): string {
-    return content
+    return (content ?? "")
         .replace(/\r\n/g, "\n")
         // HTML comments (CodeRabbit / Vercel metadata)
         .replace(/<!--[\s\S]*?-->/g, "")

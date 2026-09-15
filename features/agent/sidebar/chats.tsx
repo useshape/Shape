@@ -1,17 +1,18 @@
 "use client";
 
-import { RiAddLine, RiFolderLine, RiGitPullRequestLine, RiSearchLine, RiSortDesc } from "@remixicon/react";
+import { RiAddLine, RiFolderLine, RiSearchLine, RiSortDesc } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { formatTimeAgo } from "@/lib/repo-history";
+import { formatCompactAgo, getRepoName, loadRepoHistory, type RepoHistoryEntry } from "@/lib/repo-history";
+import { ProjectKindGlyph } from "@/features/detection/ui/kind-glyph";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SearchInput } from "@/components/ui/search";
-import { ModelAvatarStack } from "@/features/chat/ui/message/bubble";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
+import { useGitBranch } from "@/features/workbench/hooks/use-git-branch";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -49,12 +50,15 @@ function loadSort(): ChatSort {
     return "recent";
 }
 
-function modelsFromConversation(c: Conversation): string[] {
-    const models: string[] = [];
-    for (const m of c.history || []) {
-        if (m.role === "assistant" && m.model) models.push(m.model);
+function extractPrNumber(conversation: Conversation): string | null {
+    const titleHit = (conversation.title || "").match(/#(\d{2,7})\b/);
+    if (titleHit?.[1]) return titleHit[1];
+    for (const message of conversation.history || []) {
+        const text = typeof message.content === "string" ? message.content : "";
+        const hit = text.match(/#(\d{2,7})\b/);
+        if (hit?.[1]) return hit[1];
     }
-    return [...new Set(models)].slice(-4);
+    return null;
 }
 
 function HeaderIconBtn({
@@ -91,13 +95,19 @@ function HeaderIconBtn({
 function ChatRow({
     id,
     title,
-    models,
+    repo,
+    path,
+    branch,
+    pr,
     ago,
     active,
 }: {
     id: string;
     title: string;
-    models: string[];
+    repo: string;
+    path: string;
+    branch: string | null;
+    pr: string | null;
     ago: string;
     active: boolean;
 }) {
@@ -180,38 +190,34 @@ function ChatRow({
                         <button
                             type="button"
                             onClick={openChat}
-                            className="flex w-full items-start gap-2 text-left"
+                            className="flex w-full flex-col gap-0.5 text-left"
                         >
-                            <span className="min-w-0 flex-1">
-                                <span className="block truncate">{title}</span>
-                                <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
-                                    {generating ? (
-                                        <>
-                                            <Icon
-                                                icon={RiGitPullRequestLine}
-                                                className="shrink-0 text-text-muted"
-                                            />
-                                            <span>Working...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <ModelAvatarStack models={models} size={12} />
-                                            <span className="truncate">{ago}</span>
-                                            <span className="size-0.5 shrink-0 rounded-full bg-text-muted" />
-                                            <Icon
-                                                icon={RiGitPullRequestLine}
-                                                className="shrink-0 text-error"
-                                            />
-                                        </>
-                                    )}
+                            <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                    <ProjectKindGlyph path={path} className="size-3.5 shrink-0" />
+                                    <span className="min-w-0 truncate">{repo}</span>
                                 </span>
+                                <span className="shrink-0 tabular-nums">{generating ? "now" : ago}</span>
                             </span>
-                            {generating ? (
-                                <span
-                                    className="mt-1.5 size-2 shrink-0 rounded-full bg-accent"
-                                    aria-label="Working"
-                                />
-                            ) : null}
+                            <span className="block truncate text-sm text-text-primary">{title}</span>
+                            <span className="flex min-w-0 items-center gap-2 text-xs text-text-muted">
+                                {generating ? (
+                                    <span>Working...</span>
+                                ) : (
+                                    <>
+                                        {branch ? (
+                                            <span className="min-w-0 truncate">{branch}</span>
+                                        ) : (
+                                            <span />
+                                        )}
+                                        {pr ? (
+                                            <span className="ml-auto shrink-0 tabular-nums text-text-muted">
+                                                #{pr}
+                                            </span>
+                                        ) : null}
+                                    </>
+                                )}
+                            </span>
                         </button>
                     )}
                 </div>
@@ -226,8 +232,56 @@ function ChatRow({
     );
 }
 
+function RecentProjects() {
+    const { project_path } = useProjectState();
+    const [recents, setRecents] = useState<RepoHistoryEntry[]>([]);
+
+    useEffect(() => {
+        const sync = () => setRecents(loadRepoHistory().slice(0, 8));
+        sync();
+        window.addEventListener("shape-repo-history-changed", sync);
+        return () => window.removeEventListener("shape-repo-history-changed", sync);
+    }, []);
+
+    if (recents.length === 0) return null;
+
+    return (
+        <div className="shrink-0 pb-1 pt-2">
+            <div className="flex items-center justify-between pl-3 pr-1 pb-1">
+                <span className="text-sm font-medium text-text-muted">Recent projects</span>
+            </div>
+            <div className="px-1.5">
+                {recents.map((r) => {
+                    const active = project_path === r.path;
+                    return (
+                        <button
+                            key={r.path}
+                            type="button"
+                            onClick={() =>
+                                window.dispatchEvent(
+                                    new CustomEvent("shape-open-project", { detail: { path: r.path } }),
+                                )
+                            }
+                            className={cn(
+                                "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm",
+                                active
+                                    ? "bg-panel-hover text-text-primary"
+                                    : "text-text-primary hover:bg-panel-hover",
+                            )}
+                        >
+                            <ProjectKindGlyph path={r.path} className="size-4 shrink-0" />
+                            <span className="min-w-0 flex-1 truncate">{getRepoName(r.path)}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 export function ChatList({ onNewChat }: { onNewChat: () => void }) {
     const { project_path } = useProjectState();
+    const branch = useGitBranch(project_path);
     const [chats, setChats] = useState<Conversation[]>([]);
     const [query, setQuery] = useState("");
     const [searchOpen, setSearchOpen] = useState(false);
@@ -332,6 +386,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
+            <RecentProjects />
             <div className="flex items-center justify-between pl-3 pr-1 pb-1 pt-3">
                 <span className="text-sm font-medium text-text-muted">Chats</span>
                 <div className="flex items-center">
@@ -413,8 +468,11 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                                 key={c.id}
                                 id={c.id}
                                 title={c.title?.trim() || "Untitled"}
-                                models={modelsFromConversation(c)}
-                                ago={formatTimeAgo(c.timestamp)}
+                                repo={getRepoName(c.project_path || project_path || "")}
+                                path={c.project_path || project_path || ""}
+                                branch={branch}
+                                pr={extractPrNumber(c)}
+                                ago={formatCompactAgo(c.timestamp)}
                                 active={c.id === activeId}
                             />
                         ))}

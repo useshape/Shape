@@ -3,9 +3,13 @@
 import { RiCheckLine, RiCloseLine } from "@remixicon/react";
 import React, { useMemo } from "react";
 import { diffLines } from "diff";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { MorphMenu } from "@/components/ui/morph-menu";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
 import { getProjectPath } from "@/lib/backend";
@@ -49,116 +53,99 @@ export function PendingEditsPanel({
     if (edits.length === 0) return null;
 
     const addTotal = withStats.reduce((s, e) => s + e.add, 0);
-    const openH = Math.min(240, 56 + edits.length * 36);
 
     return (
-        <MorphMenu
-            variant="morph"
-            aria-label="Changes"
-            align="end"
-            openWidth={280}
-            openHeight={openH}
-            closedHeight={32}
-            trigger={
-                <>
-                    <span>Changes</span>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                >
+                    Changes
                     {addTotal > 0 ? (
-                        <span className="text-success">+{addTotal}</span>
+                        <span className="tabular-nums text-success">+{addTotal}</span>
                     ) : (
                         <span className="tabular-nums text-text-muted">{edits.length}</span>
                     )}
-                </>
-            }
-        >
-            <div className="flex h-full flex-col">
-                <div className="flex items-center justify-between gap-2 px-3 py-2">
-                    <span className="text-sm text-text-muted font-medium">
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72 p-1">
+                <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                    <span className="text-sm text-text-muted">
                         {edits.length} file{edits.length === 1 ? "" : "s"}
                     </span>
                     <div className="flex items-center gap-1">
                         <Button variant="ghost" size="xs" onClick={onRejectAll}>
-                            Undo All
+                            Undo
                         </Button>
                         <Button variant="ghost" size="xs" onClick={onAcceptAll}>
-                            Keep All
+                            Keep
                         </Button>
                     </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar pb-1.5">
-                    {withStats.map((edit) => {
-                        const fileName = edit.file.split(/[\\/]/).pop() || edit.file;
-                        return (
-                            <div
-                                key={edit.id}
-                                onClick={() => {
-                                    const resolved = resolveProjectFilePath(
-                                        edit.file,
-                                        getProjectPath(),
-                                    );
-                                    void openProjectFile(edit.file, fileName).then((ok) => {
-                                        if (!ok) return;
-                                        setTimeout(() => {
-                                            window.dispatchEvent(
-                                                new CustomEvent("shape-editor-preview-diff", {
-                                                    detail: {
-                                                        path: resolved,
-                                                        original: edit.original,
-                                                        replacement: edit.replacement,
-                                                    },
-                                                }),
-                                            );
-                                        }, 150);
-                                    });
-                                }}
-                                className="group mx-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-panel-hover"
-                            >
-                                <span className="min-w-0 flex-1 truncate text-text-primary">
-                                    {fileName}
-                                </span>
-                                <span className="shrink-0 tabular-nums text-xs">
-                                    {edit.add > 0 ? (
-                                        <span className="text-success">+{edit.add}</span>
-                                    ) : null}
-                                    {edit.add > 0 && edit.del > 0 ? " " : null}
-                                    {edit.del > 0 ? (
-                                        <span className="text-error">-{edit.del}</span>
-                                    ) : null}
-                                </span>
-                                <div className="ml-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-                                    {onAccept ? (
-                                        <Tooltip content="Keep" side="top">
-                                            <button
-                                                type="button"
-                                                className="rounded p-0.5 text-text-muted hover:text-success"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onAccept(edit.id);
-                                                }}
-                                            >
-                                                <Icon icon={RiCheckLine} />
-                                            </button>
-                                        </Tooltip>
-                                    ) : null}
-                                    {onReject ? (
-                                        <Tooltip content="Undo" side="top">
-                                            <button
-                                                type="button"
-                                                className="rounded p-0.5 text-text-muted hover:text-error"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onReject(edit.id);
-                                                }}
-                                            >
-                                                <Icon icon={RiCloseLine} />
-                                            </button>
-                                        </Tooltip>
-                                    ) : null}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </MorphMenu>
+                {withStats.map((edit) => {
+                    const fileName = edit.file.split(/[\\/]/).pop() || edit.file;
+                    return (
+                        <button
+                            key={edit.id}
+                            type="button"
+                            onClick={() => {
+                                const resolved = resolveProjectFilePath(edit.file, getProjectPath());
+                                void openProjectFile(edit.file, fileName).then((ok) => {
+                                    if (!ok) return;
+                                    setTimeout(() => {
+                                        window.dispatchEvent(
+                                            new CustomEvent("shape-editor-preview-diff", {
+                                                detail: {
+                                                    path: resolved,
+                                                    original: edit.original,
+                                                    replacement: edit.replacement,
+                                                },
+                                            }),
+                                        );
+                                    }, 150);
+                                });
+                            }}
+                            className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-panel-hover"
+                        >
+                            <span className="min-w-0 flex-1 truncate text-text-primary">{fileName}</span>
+                            <span className="shrink-0 tabular-nums text-xs">
+                                {edit.add > 0 ? <span className="text-success">+{edit.add}</span> : null}
+                                {edit.add > 0 && edit.del > 0 ? " " : null}
+                                {edit.del > 0 ? <span className="text-error">-{edit.del}</span> : null}
+                            </span>
+                            {onAccept ? (
+                                <Tooltip content="Keep">
+                                    <span
+                                        role="button"
+                                        className="text-text-muted hover:text-success"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onAccept(edit.id);
+                                        }}
+                                    >
+                                        <Icon icon={RiCheckLine} size={ICON_SIZE_SM} />
+                                    </span>
+                                </Tooltip>
+                            ) : null}
+                            {onReject ? (
+                                <Tooltip content="Undo">
+                                    <span
+                                        role="button"
+                                        className="text-text-muted hover:text-error"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onReject(edit.id);
+                                        }}
+                                    >
+                                        <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
+                                    </span>
+                                </Tooltip>
+                            ) : null}
+                        </button>
+                    );
+                })}
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }

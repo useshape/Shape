@@ -42,7 +42,7 @@ export function SettingSection({
                 {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
             </div>
             {card ? (
-                <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface-2 divide-y divide-border">
+                <div className="flex flex-col overflow-hidden rounded-xl border-none bg-surface-2 divide-y divide-border">
                     {children}
                 </div>
             ) : (

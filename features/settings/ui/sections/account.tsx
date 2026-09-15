@@ -25,22 +25,31 @@ function UsageBar({
     label,
     detail,
     percent,
+    trailing,
 }: {
     label: string;
-    detail: string;
+    detail?: string;
     percent: number;
+    trailing?: string;
 }) {
     const clamped = Math.max(0, Math.min(100, percent));
     return (
         <div className="space-y-1.5">
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="text-text-primary font-medium text-md">{label}</span>
-                <span className="text-text-muted text-sm shrink-0">{detail}</span>
+            <div className="flex items-baseline gap-3 text-sm">
+                <span className="min-w-0 flex-1 truncate text-text-primary">{label}</span>
+                {detail ? (
+                    <span className="shrink-0 text-text-muted">{detail}</span>
+                ) : null}
+                {trailing ? (
+                    <span className="shrink-0 tabular-nums text-text-secondary">{trailing}</span>
+                ) : (
+                    <span className="shrink-0 tabular-nums text-text-secondary">{clamped}%</span>
+                )}
             </div>
-            <div className="h-3 w-ful bg-panel-hover overflow-hidden">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-hover">
                 <div
                     className={cn(
-                        "h-full rounded-xs transition-all",
+                        "h-full rounded-full transition-all",
                         clamped >= 90 ? "bg-warning" : "bg-accent",
                     )}
                     style={{ width: `${clamped}%` }}
@@ -155,28 +164,38 @@ export function AccountSettingsPanel() {
 
             <SettingSection title="Usage">
                 <div className="px-3.5 py-4 space-y-4">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-text-primary">
+                            Plan usage limits
+                            <span className="text-text-muted"> · {tierLabel(auth.tier)}</span>
+                        </span>
+                        <button
+                            type="button"
+                            className="text-sm text-text-muted hover:text-text-primary"
+                            onClick={() => openShapeBilling()}
+                        >
+                            Manage
+                        </button>
+                    </div>
                     <UsageBar
-                        label="Auto usage"
-                        detail={`${Math.round(freeAutoPercent)}% used this month`}
+                        label="Auto · monthly"
+                        detail="Resets each month"
                         percent={freeAutoPercent}
                     />
                     <UsageBar
                         label="Premium credits"
                         detail={
                             auth.creditsIncluded > 0
-                                ? `${auth.creditsRemaining.toLocaleString()} / ${auth.creditsIncluded.toLocaleString()} left · ${creditPercent}% used`
+                                ? `${auth.creditsRemaining.toLocaleString()} left`
                                 : auth.tier === "free"
                                   ? "Upgrade for premium models"
                                   : `${auth.creditsRemaining.toLocaleString()} remaining`
                         }
                         percent={auth.creditsIncluded > 0 ? creditPercent : 0}
+                        trailing={
+                            auth.creditsIncluded > 0 ? `${creditPercent}%` : undefined
+                        }
                     />
-                    <div className="flex items-center justify-between text-sm pt-1 border-t border-border/60">
-                        <span className="text-text-primary font-medium">Credits remaining</span>
-                        <span className="text-text-muted tabular-nums">
-                            {auth.creditsRemaining.toLocaleString()}
-                        </span>
-                    </div>
                 </div>
             </SettingSection>
 

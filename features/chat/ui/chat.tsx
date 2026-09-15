@@ -8,7 +8,6 @@ import { ChatTitlebar } from "./shell/titlebar";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
 import { ChatEmptyState } from "./shell/empty";
-import { ComposerContextBar } from "./composer/context-bar";
 import { parseMessageContent } from "./md/renderer";
 import type { ComposerTaskItem } from "./composer/activity";
 import { AGENT_TABS_SLOT } from "@/features/agent/chrome";
@@ -175,11 +174,11 @@ export default function Chat({
             <div className="relative flex min-h-0 flex-1 flex-col">
                 <div className="pointer-events-none relative z-20 h-0 shrink-0 overflow-visible">
                     <div
-                        className="absolute inset-x-0 top-0 h-40 transition-opacity duration-200"
+                        className="absolute inset-x-0 top-0 h-16 transition-opacity duration-200"
                         style={{
                             opacity: session.scrolledFromTop ? 1 : 0,
                             background:
-                                "linear-gradient(to bottom, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 78%, transparent) 28%, color-mix(in srgb, var(--color-panel) 38%, transparent) 62%, transparent 100%)",
+                                "linear-gradient(to bottom, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 55%, transparent) 55%, transparent 100%)",
                         }}
                         aria-hidden
                     />
@@ -196,7 +195,6 @@ export default function Chat({
                             />
                             <div className="w-full">
                                 {composer}
-                                <ComposerContextBar className="mt-2" />
                             </div>
                         </div>
                     </div>
@@ -258,10 +256,10 @@ export default function Chat({
                         <div className="relative z-20 w-full shrink-0 overflow-visible px-5 md:px-6">
                             <div className="relative mx-auto w-full max-w-4xl overflow-visible">
                                 <div
-                                    className="pointer-events-none absolute inset-x-0 bottom-full h-40"
+                                    className="pointer-events-none absolute inset-x-0 bottom-full h-16"
                                     style={{
                                         background:
-                                            "linear-gradient(to top, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 78%, transparent) 28%, color-mix(in srgb, var(--color-panel) 38%, transparent) 62%, transparent 100%)",
+                                            "linear-gradient(to top, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 55%, transparent) 55%, transparent 100%)",
                                     }}
                                     aria-hidden
                                 />

@@ -46,6 +46,14 @@ export function formatTimeAgo(timestamp: number): string {
     return `${days}d ago`;
 }
 
+/** Compact sidebar timestamp: `14h`, `13d`, `now`. */
+export function formatCompactAgo(timestamp: number): string {
+    const full = formatTimeAgo(timestamp);
+    if (full === "just now") return "now";
+    if (full === "—") return "—";
+    return full.replace(" ago", "");
+}
+
 export function loadRepoHistory(): RepoHistoryEntry[] {
     if (typeof window === "undefined") return [];
     try {

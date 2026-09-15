@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 export const WORKBENCH_TAB_HEIGHT = 36;
 
 export const WORKBENCH_TAB_BAR_CLASS =
-    "workbench-tab-bar box-border flex h-[36px] shrink-0 w-full items-center gap-1 bg-panel px-2";
+    "workbench-tab-bar relative box-border flex h-[36px] shrink-0 w-full items-center gap-1 bg-panel px-2";
 
 export const WORKBENCH_TAB_SCROLL_CLASS =
     "workbench-tab-scroll flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar";
@@ -16,6 +16,9 @@ export const WORKBENCH_TAB_ROW_CLASS =
     "flex h-full min-w-full w-max items-center gap-1";
 
 export const WORKBENCH_TAB_LIST_CLASS = "flex h-full w-max shrink-0 items-center gap-1";
+
+export const WORKBENCH_TAB_FADE_CLASS =
+    "pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-linear-to-r from-transparent to-sidebar";
 
 export const WORKBENCH_TAB_ACTIONS_CLASS =
     "box-border flex h-full shrink-0 items-center gap-0.5 px-1";

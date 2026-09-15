@@ -24,13 +24,14 @@ type ReadyListener = (url: string) => void;
 type Runtime = {
     ptyId: number;
     command: string;
+    cwd: string;
     unOut: () => void;
     unExit: () => void;
     unReady: () => void;
 };
 
 let runtime: Runtime | null = null;
-let starting: Promise<number> | null = null;
+let starting: { command: string; cwd: string; promise: Promise<number> } | null = null;
 const readyListeners = new Set<ReadyListener>();
 let lastReadyUrl: string | null = null;
 
@@ -59,6 +60,10 @@ export function getBackgroundRunPtyId(): number | null {
 
 export function getBackgroundRunCommand(): string | null {
     return runtime?.command ?? getDevRunSnapshot().command;
+}
+
+export function getBackgroundRunCwd(): string | null {
+    return runtime?.cwd ?? null;
 }
 
 export function getLastPreviewReadyUrl(): string | null {
@@ -123,24 +128,36 @@ async function attachListeners(ptyId: number) {
  * Ensure a background run is alive for `command`. Idempotent for the same
  * command — Strict Mode remounts will not kill/respawn.
  */
-export async function ensureBackgroundRun(command: string): Promise<number> {
+export async function ensureBackgroundRun(command: string, cwdOverride?: string): Promise<number> {
     const trimmed = preferIpv4DevCommand(command);
     if (!trimmed) throw new Error("Empty run command");
 
-    if (runtime && sameDevCommand(runtime.command, trimmed)) {
+    const cwd = cwdOverride || getProjectPath();
+    if (!cwd) throw new Error("No project open");
+    const sameCwd = (a: string, b: string) =>
+        a.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
+        === b.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+
+    if (runtime && sameDevCommand(runtime.command, trimmed) && sameCwd(runtime.cwd, cwd)) {
         return runtime.ptyId;
     }
     if (starting) {
-        return starting;
+        const pending = starting;
+        if (sameDevCommand(pending.command, trimmed) && sameCwd(pending.cwd, cwd)) {
+            return pending.promise;
+        }
+        try {
+            await pending.promise;
+        } catch {
+            // The new project still gets its own start attempt below.
+        }
+        return ensureBackgroundRun(trimmed, cwd);
     }
 
-    starting = (async () => {
+    const promise = (async () => {
         if (runtime) {
             await stopBackgroundRun();
         }
-
-        const cwd = getProjectPath();
-        if (!cwd) throw new Error("No project open");
 
         startDevRun(trimmed);
         lastReadyUrl = null;
@@ -149,7 +166,7 @@ export async function ensureBackgroundRun(command: string): Promise<number> {
         // after invoke was racing the event and leaving Design Mode on a white canvas.
         const { listen } = await import("@tauri-apps/api/event");
         const { invoke } = await import("@tauri-apps/api/core");
-        let spawnId: { current: number | null } = { current: null };
+        const spawnId: { current: number | null } = { current: null };
         const earlyReady = await listen<{ id: number; url: string }>("preview-ready", (ev) => {
             if (spawnId.current === null || ev.payload.id !== spawnId.current) return;
             console.info("[preview] ready event (early)", ev.payload.url);
@@ -178,6 +195,7 @@ export async function ensureBackgroundRun(command: string): Promise<number> {
         runtime = {
             ptyId,
             command: trimmed,
+            cwd,
             unOut: () => listeners.unOut(),
             unExit: () => listeners.unExit(),
             unReady: () => listeners.unReady(),
@@ -185,11 +203,12 @@ export async function ensureBackgroundRun(command: string): Promise<number> {
 
         return ptyId;
     })();
+    starting = { command: trimmed, cwd, promise };
 
     try {
-        return await starting;
+        return await promise;
     } finally {
-        starting = null;
+        if (starting?.promise === promise) starting = null;
     }
 }
 

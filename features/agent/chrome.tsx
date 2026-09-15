@@ -1,6 +1,6 @@
 "use client";
 
-import { RiLayoutRight2Line, RiLayoutLeft2Line, RiPlayFill, RiSparkling2Fill, RiStopFill } from "@remixicon/react";
+import { RiLayoutRight2Line, RiLayoutLeft2Line, RiRadioButtonFill, RiSparkling2Fill, RiStopFill } from "@remixicon/react";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -23,8 +23,10 @@ import { WindowControls } from "@/features/workbench/titlebar/ui/window-controls
 import { useShapeAuth } from "@/lib/cloud/store";
 import { dashboardUrl } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend/commands";
+import { Button } from "@/components/ui/button";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
+export const AGENT_CHROME_ACTIONS_SLOT = "shape-agent-chrome-actions";
 export const AGENT_SIDEBAR_BACK_SLOT = "shape-agent-sidebar-back";
 export const AGENT_SIDEBAR_HISTORY_SLOT = "shape-agent-sidebar-history";
 
@@ -126,34 +128,28 @@ function RunControl({
         );
     };
 
-    if (!busy) {
-        return (
-            <Btn label={`Run ${command}`} onClick={start}>
-                <span className="relative inline-flex">
-                    <Icon icon={RiPlayFill} />
-                    <RunStatusDot status={run.status} />
-                </span>
-            </Btn>
-        );
-    }
+    const label = busy ? (run.status === "starting" ? "Starting" : "Running") : "Run";
+    const trigger = (
+        <Button
+            variant="outline"
+            size="sm"
+            aria-label={busy ? label : `Run ${command}`}
+            onClick={busy ? undefined : start}
+            className="px-1.5 text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
+        >
+            <span className="relative inline-flex">
+                <Icon icon={busy ? (run.status === "starting" ? RiRadioButtonFill : RiStopFill) : RiRadioButtonFill} />
+                <RunStatusDot status={run.status} />
+            </span>
+            <span>{label}</span>
+        </Button>
+    );
+
+    if (!busy) return trigger;
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    aria-label={run.status === "starting" ? "Starting…" : "Running"}
-                    className={cn(
-                        "flex size-7 items-center justify-center rounded-md text-text-muted transition-colors",
-                        "hover:bg-panel-hover hover:text-text-primary",
-                    )}
-                >
-                    <span className="relative inline-flex">
-                        <Icon icon={run.status === "starting" ? RiPlayFill : RiStopFill} />
-                        <RunStatusDot status={run.status} />
-                    </span>
-                </button>
-            </DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-36">
                 <DropdownMenuItem onClick={restart}>Restart</DropdownMenuItem>
                 <DropdownMenuItem onClick={stop}>Stop</DropdownMenuItem>
@@ -162,39 +158,10 @@ function RunControl({
     );
 }
 
-export function AgentChrome({
-    rightOpen,
-    onToggleRight,
-    canToggleRight = true,
-}: {
-    leftOpen?: boolean;
-    rightOpen: boolean;
-    onToggleLeft?: () => void;
-    onToggleRight: () => void;
-    canToggleRight?: boolean;
-}) {
+export function RunDevButton() {
     const { project_path } = useProjectState();
     const [web, setWeb] = useState(false);
     const [dev, setDev] = useState<DevCommandInfo | null>(null);
-    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
-    const [sidebarOpen, setSidebarOpen] = useState(true);
-
-    useEffect(() => {
-        try {
-            setSidebarOpen(localStorage.getItem("shape-agent-sidebar") !== "false");
-        } catch {
-            /* ignore */
-        }
-        const onToggle = (e: Event) => {
-            const detail = (e as CustomEvent<{ id?: string; value?: boolean }>).detail;
-            if (detail?.id !== "primary-sidebar" && detail?.id !== "agent-sidebar") return;
-            if (detail.value === true) setSidebarOpen(true);
-            else if (detail.value === false) setSidebarOpen(false);
-            else setSidebarOpen((v) => !v);
-        };
-        window.addEventListener("shape-layout-toggle", onToggle as EventListener);
-        return () => window.removeEventListener("shape-layout-toggle", onToggle as EventListener);
-    }, []);
 
     useEffect(() => {
         if (!project_path) {
@@ -219,46 +186,51 @@ export function AgentChrome({
         };
     }, [project_path]);
 
+    if (!web || !dev) return null;
+    return <RunControl command={dev.command} />;
+}
+
+export function AgentChrome({
+    rightOpen,
+    onToggleRight,
+    canToggleRight = true,
+}: {
+    rightOpen: boolean;
+    onToggleRight: () => void;
+    canToggleRight?: boolean;
+}) {
+    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+
     return (
         <div className="relative flex h-titlebar shrink-0 items-stretch bg-panel" data-tauri-drag-region>
-            <div className="relative z-10 flex h-full shrink-0 items-center pl-1" data-no-drag>
-                <SidebarToggleBtn
-                    open={sidebarOpen}
-                    onToggle={() => {
-                        window.dispatchEvent(
-                            new CustomEvent("shape-layout-toggle", {
-                                detail: { id: "primary-sidebar" },
-                            }),
-                        );
-                    }}
-                />
-            </div>
             {/* Title/tabs content — no data-no-drag so empty chrome stays draggable.
                 Interactive children opt out via data-no-drag / button CSS rules. */}
             <div
                 id={AGENT_TABS_SLOT}
-                className="relative z-10 flex h-full min-w-0 shrink-0 items-center overflow-hidden pl-1"
+                className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-2"
             />
-            <div className="min-w-8 flex-1" aria-hidden />
 
             <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
+                <div id={AGENT_CHROME_ACTIONS_SLOT} className="flex items-center gap-0.5" />
                 <GetPlusButton />
-                {web && dev ? <RunControl command={dev.command} /> : null}
                 <Btn
                     label={rightOpen ? "Hide panel" : "Show panel"}
-                    active={rightOpen}
                     disabled={!canToggleRight}
+                    active={rightOpen}
                     onClick={onToggleRight}
                 >
                     <Icon icon={RiLayoutRight2Line} />
                 </Btn>
             </div>
-            <div className="relative z-10 h-full shrink-0" data-no-drag>
+            <div className="relative z-10 flex h-full shrink-0 items-center" data-no-drag>
                 <WindowControls
                     isMaximized={isMaximized}
                     onMinimize={minimize}
                     onToggleMaximize={() => void toggleMaximize()}
                     onClose={close}
+                    surface="panel"
+                    spacer={!rightOpen}
+                    floating
                 />
             </div>
         </div>

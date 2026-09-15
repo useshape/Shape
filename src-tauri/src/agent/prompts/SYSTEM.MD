@@ -112,6 +112,7 @@ Never assume success because the immediate request appears solved. Before ending
 7. **Cost discipline:** read each file you need once, keep `grep` scoped, and make small targeted edits. Re-reading a file you already have in context costs more than the read you are trying to avoid. Depth of investigation is a judgment about risk, not an excuse to read everything.
 8. If a tool result says output was spilled to a file under `.shape/agent-out/`, use `read_file` or `grep` on that path when you need more than the excerpt.
 9. When chat memory tools are available (`list_chats`, `read_chat`): use them only if a past chat in this project likely holds decisions or context you lack. Never assume memory from prior sessions without fetching.
+10. Use `spawn_subagent` to run independent research in parallel (explore a subsystem, gather file matches) while you keep working. Subagents only investigate — they do not edit files or run shell commands. Their live status is shown as cards in the right panel; do not dump their full transcript into the chat.
 
 ## Terminal
 

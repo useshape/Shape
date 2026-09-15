@@ -6,7 +6,7 @@ import {
     RiFolderLine,
     RiGitCommitLine,
     RiGitPullRequestLine,
-    RiTerminalBoxLine,
+    RiRobot2Line,
 } from "@remixicon/react";
 import { useCallback } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
@@ -131,6 +131,8 @@ export function WorkspaceTabs({
     onClose,
     onNew,
     onReorder,
+    className,
+    fade,
 }: {
     tabs: WorkspaceTab[];
     activeId: string;
@@ -138,6 +140,8 @@ export function WorkspaceTabs({
     onClose: (id: string) => void;
     onNew: (kind: TabKind) => void;
     onReorder: (next: WorkspaceTab[]) => void;
+    className?: string;
+    fade?: boolean;
 }) {
     const handleDragEnd = useCallback(
         (event: DragEndEvent) => {
@@ -163,10 +167,9 @@ export function WorkspaceTabs({
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => onNew("terminal")}>
-                    <Icon icon={RiTerminalBoxLine} />
-                    <span className="flex-1">Terminal</span>
-                    <span className="text-2xs text-text-muted">Ctrl+J</span>
+                <DropdownMenuItem onClick={() => onNew("agents")}>
+                    <Icon icon={RiRobot2Line} />
+                    <span className="flex-1">Agents</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("files")}>
                     <Icon icon={RiFolderLine} />
@@ -181,6 +184,10 @@ export function WorkspaceTabs({
                     <Icon icon={RiGitCommitLine} />
                     <span className="flex-1">Graph</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onNew("prs")}>
+                    <Icon icon={RiGitPullRequestLine} />
+                    <span className="flex-1">Pull requests</span>
+                </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );
@@ -191,6 +198,8 @@ export function WorkspaceTabs({
             itemIds={tabs.map((t) => t.id)}
             onDragEnd={handleDragEnd}
             actions={newMenu}
+            fade={fade}
+            className={cn("h-titlebar bg-sidebar px-1", className)}
         >
             {tabs.map((tab) => (
                 <SortableWorkspaceTab

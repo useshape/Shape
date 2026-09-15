@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
 
 export function IconMinimize() {
     return (
@@ -79,16 +80,33 @@ function WindowControlButtons({
     );
 }
 
+export function WindowControlsSpacer() {
+    return (
+        <div
+            className="h-full shrink-0"
+            style={{ width: CONTROLS_WIDTH }}
+            aria-hidden
+        />
+    );
+}
+
 export function WindowControls({
     isMaximized,
     onMinimize,
     onToggleMaximize,
     onClose,
+    surface = "panel",
+    spacer = true,
+    floating = true,
 }: {
     isMaximized: boolean;
     onMinimize: () => void;
     onToggleMaximize: () => void;
     onClose: () => void;
+    /** Match the panel the controls sit on. */
+    surface?: "chrome" | "panel" | "sidebar";
+    spacer?: boolean;
+    floating?: boolean;
 }) {
     const [host, setHost] = useState<HTMLElement | null>(null);
     useEffect(() => {
@@ -104,24 +122,26 @@ export function WindowControls({
         />
     );
 
+    const bg =
+        surface === "sidebar" ? "bg-sidebar" : "bg-panel";
+
     /** Same layer as Radix overlays (document.body) so blur cannot cover these. */
-    const floating = (
+    const floatingEl = floating ? (
         <div
-            className="titlebar-window-controls pointer-events-auto fixed top-0 right-0 isolate z-titlebar-controls flex h-titlebar shrink-0 items-stretch bg-titlebar"
+            className={cn(
+                "titlebar-window-controls pointer-events-auto fixed top-0 right-0 isolate z-titlebar-controls flex h-titlebar shrink-0 items-stretch",
+                bg,
+            )}
             data-no-drag
         >
             {buttons}
         </div>
-    );
+    ) : null;
 
     return (
         <>
-            <div
-                className="h-full shrink-0"
-                style={{ width: CONTROLS_WIDTH }}
-                aria-hidden
-            />
-            {host ? createPortal(floating, host) : floating}
+            {spacer ? <WindowControlsSpacer /> : null}
+            {floatingEl ? (host ? createPortal(floatingEl, host) : floatingEl) : null}
         </>
     );
 }

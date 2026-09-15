@@ -5,28 +5,44 @@ import { commands } from "@/lib/backend";
 import { MarkdownPreview } from "@/features/editor/ui/markdown/markdown";
 
 /** Plan markdown viewer for a right-workspace tab. */
-export function PlanTabView({ path }: { path: string }) {
-    const [content, setContent] = useState<string | null>(null);
+export function PlanTabView({ path, markdown }: { path: string; markdown?: string }) {
+    const [content, setContent] = useState<string | null>(markdown?.trim() ? markdown : null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
-        setContent(null);
-        setError(null);
+        if (markdown?.trim()) {
+            setContent(markdown);
+            setError(null);
+        } else {
+            setContent(null);
+            setError(null);
+        }
+        if (!path) {
+            if (!markdown?.trim()) setError("No plan content");
+            return;
+        }
         void commands
             .readFile(path)
             .then((text) => {
-                if (!cancelled) setContent(text);
+                if (!cancelled) {
+                    setContent(text);
+                    setError(null);
+                }
             })
             .catch((e) => {
-                if (!cancelled) {
-                    setError(e instanceof Error ? e.message : String(e));
+                if (cancelled) return;
+                if (markdown?.trim()) {
+                    setContent(markdown);
+                    setError(null);
+                    return;
                 }
+                setError(e instanceof Error ? e.message : String(e));
             });
         return () => {
             cancelled = true;
         };
-    }, [path]);
+    }, [path, markdown]);
 
     if (error) {
         return (

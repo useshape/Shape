@@ -88,6 +88,11 @@ pub async fn reveal_path(path: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+pub async fn open_in_app(app: String, path: String) -> Result<(), AppError> {
+    crate::commands::fs::open_in_app(app, path).await
+}
+
+#[tauri::command]
 pub async fn save_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), AppError> {
     service::save_file(app, path, content).await
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { RemixiconComponentType } from "@remixicon/react";
-import { RiAddLine, RiGithubFill, RiHistoryLine, RiNotification3Line, RiQuillPenAiFill, RiSearchLine, RiSettings3Line } from "@remixicon/react";
+import { RiAddLine, RiBrushFill, RiGithubFill, RiBrushLine, RiSearchLine, RiSettings3Line } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
@@ -10,69 +10,10 @@ import { ChatList } from "./chats";
 import { AccountRow } from "./account";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { AGENT_SIDEBAR_HISTORY_SLOT } from "../chrome";
+import { SidebarToggleBtn } from "../chrome";
 import type { AgentOverlay } from "../overlay";
-import {
-    notificationStore,
-    useNotifications,
-    useUnreadNotificationCount,
-} from "@/features/notifications";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown";
 
 export const AGENT_SIDEBAR_NAV_SLOT = "shape-agent-sidebar-nav";
-
-/** Fixed header height so overlay / design / normal modes don't shift the rail. */
-const HEADER_CLASS = "flex h-10 shrink-0 items-center gap-0.5";
-
-function SidebarNotificationsCollapsed() {
-    const { notifications } = useNotifications();
-    const unreadCount = useUnreadNotificationCount();
-
-    return (
-        <DropdownMenu
-            onOpenChange={(open) => {
-                if (open) notificationStore.markViewed();
-            }}
-        >
-            <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    aria-label="Notifications"
-                    className="relative flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                >
-                    <Icon icon={RiNotification3Line} />
-                    {unreadCount > 0 ? (
-                        <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-1 text-2xs font-medium text-accent-fg">
-                            {Math.min(unreadCount, 99)}
-                        </span>
-                    ) : null}
-                </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="end" className="w-72">
-                <div className="px-2 py-1.5 text-sm font-medium text-text-primary">Notifications</div>
-                {notifications.length === 0 ? (
-                    <DropdownMenuItem disabled>None yet</DropdownMenuItem>
-                ) : (
-                    [...notifications].reverse().slice(0, 12).map((n) => (
-                        <DropdownMenuItem key={n.id} className="whitespace-normal text-sm">
-                            {n.message}
-                        </DropdownMenuItem>
-                    ))
-                )}
-                {notifications.length > 0 ? (
-                    <DropdownMenuItem onClick={() => notificationStore.clearAll()}>
-                        Clear all
-                    </DropdownMenuItem>
-                ) : null}
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-}
 
 function NavItem({
     label,
@@ -87,7 +28,11 @@ function NavItem({
 }) {
     if (collapsed) {
         return (
-            <Tooltip content={label} side="right" delayDuration={80}>
+            <Tooltip
+                content={label}
+                side="right"
+                delayDuration={80}
+            >
                 <Button
                     type="button"
                     variant="ghost"
@@ -108,7 +53,7 @@ function NavItem({
             variant="ghost"
             size="sm"
             onClick={onClick}
-            className={cn("flex h-8 w-full items-center gap-3 px-1.5! text-left")}
+            className={cn("flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left")}
         >
             <Icon icon={icon} className="shrink-0 text-text-muted" />
             <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -117,14 +62,13 @@ function NavItem({
 }
 
 export function AgentSidebar({
-    onNewChat,
     onSearch,
     expanded,
     overlay,
     onDesign,
     showDesign,
+    onToggleSidebar,
 }: {
-    onNewChat: () => void;
     onSearch: () => void;
     expanded: boolean;
     overlay: AgentOverlay;
@@ -136,10 +80,8 @@ export function AgentSidebar({
     const showHostedNav = Boolean(overlay);
 
     const items = [
-        { label: "New Chat", icon: RiAddLine, onClick: onNewChat },
-        { label: "Search", icon: RiSearchLine, onClick: onSearch },
         ...(showDesign && onDesign
-            ? [{ label: "Design", icon: RiQuillPenAiFill, onClick: onDesign }]
+            ? [{ label: "Design", icon: RiBrushLine, onClick: onDesign }]
             : []),
         {
             label: "Customize",
@@ -148,50 +90,19 @@ export function AgentSidebar({
         },
     ];
 
+    const newChat = () => {
+        window.dispatchEvent(new Event("shape-chat-new"));
+        window.dispatchEvent(new Event("shape-chat-focus-input"));
+    };
+
     return (
         <aside
             className={cn(
-                "flex h-full shrink-0 flex-col overflow-hidden bg-sidebar border-r border-border text-text-primary",
+                "flex h-full shrink-0 flex-col overflow-hidden bg-sidebar border-none! text-text-primary",
                 "transition-[width] duration-[var(--transition-base)] ease-[var(--ease-out)]",
                 expanded ? "w-76" : "w-12",
             )}
         >
-            {showHostedNav ? null : (
-            <div
-                className={cn(
-                    HEADER_CLASS,
-                    expanded ? "justify-between px-2" : "justify-center px-1.5",
-                )}
-            >
-                {expanded ? (
-                    <div
-                        id={AGENT_SIDEBAR_HISTORY_SLOT}
-                        data-collapsed="false"
-                        className="flex min-h-0 shrink-0 items-center"
-                    />
-                ) : null}
-                    <Tooltip content="History" side={expanded ? "bottom" : "right"} delayDuration={80}>
-                        <button
-                            type="button"
-                            aria-label="History"
-                            onClick={() => {
-                                void import("@/features/chat/ui/shell/history").then(
-                                    ({ openChatHistoryMenu }) => {
-                                        openChatHistoryMenu();
-                                    },
-                                );
-                            }}
-                            className={cn(
-                                "flex items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary",
-                                expanded ? "size-7" : "size-9",
-                            )}
-                        >
-                            <Icon icon={RiHistoryLine} />
-                        </button>
-                    </Tooltip>
-            </div>
-            )}
-
             {showHostedNav ? (
                 <div
                     id={AGENT_SIDEBAR_NAV_SLOT}
@@ -200,12 +111,65 @@ export function AgentSidebar({
                 />
             ) : (
                 <>
+                    <div
+                        className={cn(
+                            "flex h-10 shrink-0 items-center",
+                            expanded ? "justify-start px-2" : "justify-center px-1.5",
+                        )}
+                    >
+                        <SidebarToggleBtn
+                            open={expanded}
+                            collapsed={!expanded}
+                            onToggle={() => {
+                                if (onToggleSidebar) {
+                                    onToggleSidebar();
+                                    return;
+                                }
+                                window.dispatchEvent(
+                                    new CustomEvent("shape-layout-toggle", {
+                                        detail: { id: "primary-sidebar" },
+                                    }),
+                                );
+                            }}
+                        />
+                    </div>
                     <nav
                         className={cn(
                             "flex shrink-0 gap-0.5",
                             expanded ? "flex-col px-2" : "flex-col items-center px-1.5",
                         )}
                     >
+                        {expanded ? (
+                            <div className="flex h-8 w-full items-center gap-0.5">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={newChat}
+                                    className="flex h-8 min-w-0 flex-1 items-center justify-start gap-3 px-1.5! text-left"
+                                >
+                                    <Icon icon={RiAddLine} className="shrink-0 text-text-muted" />
+                                    <span className="min-w-0 flex-1 truncate">New Chat</span>
+                                </Button>
+                                <Tooltip content="Search" side="bottom" delayDuration={80}>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Search"
+                                        onClick={onSearch}
+                                        className="size-8 shrink-0 text-text-secondary hover:text-text-primary"
+                                    >
+                                        <Icon icon={RiSearchLine} />
+                                    </Button>
+                                </Tooltip>
+                            </div>
+                        ) : (
+                            <>
+                                <NavItem label="New Chat" icon={RiAddLine} onClick={newChat} collapsed />
+                                <NavItem label="Search" icon={RiSearchLine} onClick={onSearch} collapsed />
+                            </>
+                        )}
                         {items.map((item) => (
                             <NavItem
                                 key={item.label}
@@ -217,7 +181,16 @@ export function AgentSidebar({
                         ))}
                     </nav>
 
-                    {expanded ? <ChatList onNewChat={onNewChat} /> : <div className="min-h-0 flex-1" />}
+                    {expanded ? (
+                        <ChatList
+                            onNewChat={() => {
+                                window.dispatchEvent(new Event("shape-chat-new"));
+                                window.dispatchEvent(new Event("shape-chat-focus-input"));
+                            }}
+                        />
+                    ) : (
+                        <div className="min-h-0 flex-1" />
+                    )}
                 </>
             )}
 
@@ -245,7 +218,6 @@ export function AgentSidebar({
                     </>
                 ) : (
                     <div className="flex flex-col items-center gap-1">
-                        <SidebarNotificationsCollapsed />
                         <Tooltip content="Settings" side="right" delayDuration={80}>
                             <button
                                 type="button"

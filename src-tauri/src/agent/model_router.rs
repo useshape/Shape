@@ -11,7 +11,13 @@
 /// Fast included model used for Auto and auxiliary work (titles, explore, etc.).
 pub const MODEL_FAST: &str = "deepseek/deepseek-v4-flash";
 
-pub const MODEL_FAST_VISION: &str = "google/gemini-2.5-flash";
+/// Cheap vision pass that *describes* images for [`MODEL_FAST`]. Never used as the
+/// Auto agent itself — Gemini Flash was burning as much as DeepSeek just to
+/// look at screenshots inside a full coding turn.
+pub const MODEL_IMAGE_CAPTION: &str = "google/gemini-2.5-flash-lite";
+
+/// Same slug as [`MODEL_IMAGE_CAPTION`]. Kept so older call sites still compile.
+pub const MODEL_FAST_VISION: &str = MODEL_IMAGE_CAPTION;
 
 /// Provider family used to select prompts and edit tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -52,9 +58,8 @@ pub fn normalize_model(model: &str) -> String {
 }
 
 pub fn normalize_model_with_images(model: &str, has_images: bool) -> String {
-    if has_images && is_auto_selection(model) {
-        return MODEL_FAST_VISION.to_string();
-    }
+    let _ = has_images;
+    // Auto always stays on the cheap text model. Images are captioned separately.
     normalize_model(model)
 }
 
@@ -82,7 +87,7 @@ pub fn model_accepts_images(model: &str) -> bool {
     if m.is_empty() || m == MODEL_FAST {
         return false;
     }
-    if m == MODEL_FAST_VISION || m.contains("vision") {
+    if m == MODEL_FAST_VISION || m == MODEL_IMAGE_CAPTION || m.contains("vision") {
         return true;
     }
     m.starts_with("google/")
@@ -180,7 +185,7 @@ mod tests {
         assert_eq!(normalize_model("anthropic/claude-sonnet-4"), "anthropic/claude-sonnet-4");
         assert_eq!(
             normalize_model_with_images("auto", true),
-            MODEL_FAST_VISION
+            MODEL_FAST
         );
         assert_eq!(normalize_model_with_images("auto", false), MODEL_FAST);
     }
@@ -221,14 +226,14 @@ mod tests {
     }
 
     #[test]
-    fn auto_with_images_uses_vision_model_not_deepseek() {
+    fn auto_with_images_stays_on_fast_text_model() {
         assert_eq!(
             normalize_model_with_images("auto", true),
-            MODEL_FAST_VISION
+            MODEL_FAST
         );
-        assert_ne!(MODEL_FAST_VISION, MODEL_FAST);
+        assert_ne!(MODEL_IMAGE_CAPTION, MODEL_FAST);
         assert!(!model_accepts_images(MODEL_FAST));
-        assert!(model_accepts_images(MODEL_FAST_VISION));
+        assert!(model_accepts_images(MODEL_IMAGE_CAPTION));
         assert!(content_has_images(
             "see <attached_image name=\"x.png\">data:image/png;base64,aa</attached_image>"
         ));
@@ -257,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn modes_with_screenshot_tool_want_vision_for_auto() {
+    fn modes_with_screenshot_tool_do_not_swap_auto_to_caption_model() {
         assert!(mode_wants_vision("code"));
         assert!(mode_wants_vision("Visual"));
         assert!(mode_wants_vision("design"));
@@ -267,7 +272,7 @@ mod tests {
         assert!(!mode_wants_vision("plan"));
         assert_eq!(
             normalize_model_with_images("auto", mode_wants_vision("code")),
-            MODEL_FAST_VISION
+            MODEL_FAST
         );
         assert_eq!(
             normalize_model_with_images("auto", mode_wants_vision("ask")),

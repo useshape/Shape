@@ -1,5 +1,6 @@
 pub mod adversarial_review;
 pub mod approvals;
+pub mod caption;
 pub mod checkpoints;
 pub mod commit_message;
 pub mod conversation;

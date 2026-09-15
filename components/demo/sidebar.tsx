@@ -11,12 +11,15 @@ import { cn } from "@/lib/utils";
 /* Layout/classes copied from shape/features/agent/sidebar/index.tsx, chats.tsx, account.tsx, menu.tsx */
 
 export const DEMO_CHATS = [
-  { id: "review", title: "Adversarial review", ago: "now" },
-  { id: "pricing", title: "Rebuild the pricing page", ago: "12m" },
-  { id: "emails", title: "Send the follow-up", ago: "8m" },
-  { id: "ops", title: "Launch follow-through", ago: "4m" },
-  { id: "stripe", title: "Connect billing events", ago: "32m" },
-  { id: "ratelimit", title: "Guard the checkout route", ago: "2h" },
+  { id: "review", title: "Adversarial review", ago: "now", repo: "shape", branch: "main" },
+  { id: "pricing", title: "Rebuild the pricing page", ago: "12m", repo: "fleet", branch: "main" },
+  { id: "emails", title: "Send the follow-up", ago: "8m", repo: "shape", branch: "ops/waitlist" },
+  { id: "ops", title: "Launch follow-through", ago: "4m", repo: "shape", branch: "main" },
+  { id: "stripe", title: "Connect billing events", ago: "32m", repo: "fleet", branch: "feat/stripe", pr: "201" },
+  { id: "ratelimit", title: "Guard the checkout route", ago: "2h", repo: "shape", branch: "main" },
+  { id: "markdown", title: "Keep Settled Responses Visible", ago: "13d", repo: "t3code-3", branch: "t3code/show-substan...", pr: "7723" },
+  { id: "visual", title: "T3 Code Marketing Site Redesign", ago: "2h", repo: "t3code", branch: "t3code/refresh-marketing-site" },
+  { id: "plan", title: "Plan auth migration", ago: "3d", repo: "shape", branch: "plan/auth-migration" },
 ] as const;
 
 export type DemoChatId = (typeof DEMO_CHATS)[number]["id"];
@@ -61,6 +64,9 @@ function NavItem({
 function ChatRow({
   title,
   ago,
+  repo,
+  branch,
+  pr,
   active,
   working,
   target,
@@ -68,6 +74,9 @@ function ChatRow({
 }: {
   title: string;
   ago: string;
+  repo: string;
+  branch: string;
+  pr?: string;
   active: boolean;
   working: boolean;
   target?: string;
@@ -78,31 +87,33 @@ function ChatRow({
       className={cn(
         "group/chat w-full rounded-lg px-2.5 py-2 text-sm",
         "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-        active ? "bg-panel-hover font-medium text-text-primary" : "text-text-primary font-medium hover:bg-panel-hover",
+        active ? "bg-panel-hover text-text-primary" : "text-text-primary hover:bg-panel-hover",
       )}
     >
       <button
         type="button"
         data-demo-target={target}
         onClick={onSelect}
-        className="flex w-full items-start gap-2 text-left"
+        className="flex w-full flex-col gap-0.5 text-left"
       >
-        <span className="min-w-0 flex-1">
-          <span className="block truncate">{title}</span>
-          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm text-text-muted">
-            {working ? (
-              <>
-                <WorkingDots />
-                <span>Working...</span>
-              </>
-            ) : (
-              <span className="truncate">{ago}</span>
-            )}
-          </span>
+        <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
+          <span className="min-w-0 truncate">{repo}</span>
+          <span className="shrink-0 tabular-nums">{working ? "now" : ago}</span>
         </span>
-        {working ? (
-          <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" aria-label="Working" />
-        ) : null}
+        <span className="block truncate text-sm text-text-primary">{title}</span>
+        <span className="flex min-w-0 items-center gap-2 text-xs text-text-muted">
+          {working ? (
+            <>
+              <WorkingDots />
+              <span>Working...</span>
+            </>
+          ) : (
+            <>
+              <span className="min-w-0 truncate">{branch}</span>
+              {pr ? <span className="ml-auto shrink-0 tabular-nums">#{pr}</span> : null}
+            </>
+          )}
+        </span>
       </button>
     </div>
   );
@@ -135,7 +146,7 @@ export function DemoSidebar({
       className={cn(
         "flex h-full shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
         "transition-[width] duration-[var(--transition-base)] ease-[var(--ease-out)]",
-        expanded ? "w-76" : "w-12",
+        expanded ? "w-86" : "w-12",
       )}
     >
       <div className={cn(HEADER_CLASS, expanded ? "justify-between px-2" : "justify-center px-1.5")}>
@@ -206,6 +217,9 @@ export function DemoSidebar({
                   key={c.id}
                   title={c.title}
                   ago={c.ago}
+                  repo={c.repo}
+                  branch={c.branch}
+                  pr={"pr" in c ? c.pr : undefined}
                   active={c.id === activeId}
                   working={c.id === activeId && working}
                   target={`chat-${c.id}`}

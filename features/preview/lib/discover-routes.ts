@@ -8,7 +8,7 @@ export type DesignPage = {
     /** Source file relative to project root when known */
     source?: string;
     /** Framework hint */
-    kind: "next-app" | "next-pages" | "astro" | "vite" | "static" | "view";
+    kind: "next-app" | "next-pages" | "astro" | "vite" | "remix" | "static" | "view";
     /** Dynamic segment route (e.g. `/blog/[slug]`) */
     dynamic?: boolean;
 };
@@ -210,6 +210,45 @@ async function discoverPagesDir(
     return pages;
 }
 
+function remixFileToRoute(relativeFile: string): string | null {
+    let route = toPosix(relativeFile).replace(/\.(tsx|ts|jsx|js|mdx|md)$/i, "");
+    route = route.replace(/\/route$/i, "");
+    if (route === "_index" || route === "index") return "/";
+    const parts = route
+        .split(/[/.]/)
+        .filter(Boolean)
+        .filter((part) => !part.startsWith("_"))
+        .map((part) => {
+            const clean = part.replace(/_$/, "");
+            if (clean === "$") return "[...splat]";
+            if (clean.startsWith("$")) return `[${clean.slice(1)}]`;
+            return clean;
+        })
+        .filter(Boolean);
+    return parts.length ? `/${parts.join("/")}` : "/";
+}
+
+async function discoverRemixRoutes(projectRoot: string, routesRoot: string): Promise<DesignPage[]> {
+    const files: { path: string; name: string; is_dir: boolean }[] = [];
+    await walkFiles(routesRoot, 12, files);
+    const rootPosix = toPosix(routesRoot);
+    const pages: DesignPage[] = [];
+    for (const file of files) {
+        if (!/\.(tsx|ts|jsx|js|mdx|md)$/i.test(file.name)) continue;
+        const relative = relFromRoot(toPosix(file.path), rootPosix);
+        const path = remixFileToRoute(relative);
+        if (!path) continue;
+        pages.push({
+            path,
+            label: labelForPath(path),
+            source: toPosix(file.path).slice(toPosix(projectRoot).length).replace(/^\//, ""),
+            kind: "remix",
+            dynamic: isDynamic(path),
+        });
+    }
+    return pages;
+}
+
 const VIEW_SKIP =
     /^(search|settings|notifications|learn more|see all|browse all|cancel|close|back|edit avatar|edit profile)$/i;
 
@@ -261,6 +300,7 @@ export async function discoverDesignPages(projectRoot: string): Promise<DesignPa
         { dir: joinPath(projectRoot, "pages"), kind: "next-pages" as const },
         { dir: joinPath(projectRoot, "website/src/pages"), kind: "next-pages" as const },
         { dir: joinPath(projectRoot, "website/pages"), kind: "next-pages" as const },
+        { dir: joinPath(projectRoot, "src/routes"), kind: "vite" as const },
     ];
 
     const found: DesignPage[] = [];
@@ -278,9 +318,18 @@ export async function discoverDesignPages(projectRoot: string): Promise<DesignPa
                 ...(await discoverPagesDir(
                     projectRoot,
                     c.dir,
-                    hasAstro ? "astro" : "next-pages",
+                    hasAstro ? "astro" : c.kind,
                 )),
             );
+        }
+    }
+
+    for (const routesRoot of [
+        joinPath(projectRoot, "app/routes"),
+        joinPath(projectRoot, "src/app/routes"),
+    ]) {
+        if (await dirExists(routesRoot)) {
+            found.push(...(await discoverRemixRoutes(projectRoot, routesRoot)));
         }
     }
 

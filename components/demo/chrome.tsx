@@ -1,6 +1,6 @@
 "use client";
 
-import { RiArrowLeftLine, RiArrowRightLine, RiPlayFill, RiStopFill } from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowRightLine, RiGitBranchLine, RiPlayFill, RiStopFill } from "@remixicon/react";
 import { Icon } from "./icon";
 import { AnimatedSecondarySidebarIcon } from "./panel-icons";
 import { cn } from "@/lib/utils";
@@ -89,7 +89,7 @@ function RunStatusDot({ status }: { status: DemoRunStatus }) {
 
 export function DemoChrome({
   title,
-  ago = "just now",
+  repo = "shape",
   canBack,
   canForward,
   rightOpen,
@@ -102,7 +102,7 @@ export function DemoChrome({
   onRun,
 }: {
   title: string;
-  ago?: string;
+  repo?: string;
   canBack: boolean;
   canForward: boolean;
   rightOpen: boolean;
@@ -125,8 +125,14 @@ export function DemoChrome({
         <NavBtn label="Forward" disabled={!canForward} onClick={onForward}>
           <Icon icon={RiArrowRightLine} />
         </NavBtn>
-        <span className="ml-1 min-w-0 truncate text-sm text-text-secondary">{title}</span>
-        {ago ? <span className="shrink-0 pl-1 text-sm text-text-muted">{ago}</span> : null}
+        <span className="ml-1 flex min-w-0 items-center gap-1.5">
+          <Icon icon={RiGitBranchLine} className="shrink-0 text-text-muted" />
+          <span className="min-w-0 truncate text-sm text-text-secondary">
+            <span className="text-text-muted">{repo}</span>
+            <span className="px-1 text-text-disabled">/</span>
+            <span>{title}</span>
+          </span>
+        </span>
       </div>
       <div className="flex items-center gap-0.5 px-2">
         {showRun ? (

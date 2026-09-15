@@ -54,6 +54,7 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         write_to_terminal(),
         wait(),
         read_lints(),
+        spawn_subagent(),
         update_todos(),
         screenshot_page(),
         finish(),
@@ -74,6 +75,7 @@ fn ask_tools() -> Vec<Value> {
         plugin_search(),
         plugin_tools(),
         read_lints(),
+        spawn_subagent(),
         finish(),
     ]
 }
@@ -519,6 +521,22 @@ fn save_plan() -> Value {
                 "content": {"type": "string", "description": "Full markdown plan body. Must include a ## Todos section with `- [ ]` checkboxes or a numbered implementation steps list."}
             },
             "required": ["title", "content"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn spawn_subagent() -> Value {
+    tool(
+        "spawn_subagent",
+        "Delegate a focused research task to a subagent. The subagent searches the project and reports findings; its live status appears as a card in the right panel (not as a full chat). Use for independent parallel investigations (e.g. explore auth while you work on UI). Pass a short title and a specific task. Do not use this for edits, terminal commands, or the main user request — you still own the outcome.",
+        json!({
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short card title (e.g. Explore auth)."},
+                "task": {"type": "string", "description": "What the subagent should investigate. Be specific: symbols, files, or questions."}
+            },
+            "required": ["task"],
             "additionalProperties": false
         }),
     )

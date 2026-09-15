@@ -10,6 +10,7 @@ import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan-preview";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Collapse } from "./collapse";
+import { ShimmerText } from "@/components/application/agent-log/agent-log";
 
 type PlanStep = {
     label: string;
@@ -52,15 +53,13 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                 )}
             >
                 <Icon icon={RiListCheck3} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
-                <span className="truncate text-sm font-medium text-text-muted">
+                <span className="truncate text-sm font-medium text-text-primary">
                     {completedCount} of {totalCount} done
                 </span>
-                {totalCount > 1 ? (
-                    <Icon
-                        icon={isOpen ? RiArrowUpSLine : RiArrowDownSLine}
-                        className="ml-auto shrink-0 text-text-muted"
-                        size={ICON_SIZE_MD}
-                    />
+                {active ? (
+                    <span className="ml-auto min-w-0 truncate text-sm text-text-muted">
+                        {isGenerating ? <ShimmerText>{active.label}</ShimmerText> : active.label}
+                    </span>
                 ) : null}
             </button>
 
@@ -165,7 +164,6 @@ export function PlanSavedBlock({
     };
 
     const openPlanPreview = async () => {
-        if (!(await ensurePlanFile())) return;
         window.dispatchEvent(
             new CustomEvent("shape-layout-toggle", {
                 detail: { id: "agent-workspace", value: true },
@@ -173,9 +171,16 @@ export function PlanSavedBlock({
         );
         window.dispatchEvent(
             new CustomEvent("shape-open-workspace-plan", {
-                detail: { path: absPath, title: displayTitle || fileName },
+                detail: {
+                    path: absPath,
+                    title: displayTitle || fileName,
+                    markdown,
+                },
             }),
         );
+        void ensurePlanFile().catch(() => {
+            /* panel still opens from in-chat markdown */
+        });
     };
 
     const handleOpen = async () => {

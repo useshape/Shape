@@ -20,12 +20,17 @@ import { looksLikeProseMarkdown } from "../md/stream";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path-utils";
 import { TerminalCommandStep } from "./terminal-live";
+import { parseWebSearchHits, WebSearchBlock } from "./search";
+import { ActionLine } from "./action-line";
+import { providerIcon } from "@/lib/ui/provider-icon";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
     "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
     "plugin_call",
+    "subagent",
+    "subagent_ref",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -142,16 +147,18 @@ export function parseGitDiffMeta(content?: string): { file?: string; scope?: str
 type WorkflowRow =
     | { kind: "block"; block: Chunk }
     | { kind: "git_stage_group"; paths: string[] }
-    | { kind: "read_group"; paths: string[] }
+    | { kind: "read_group"; files: { path: string; start?: number; end?: number }[] }
     | { kind: "search_group"; queries: string[]; count: number }
+    | { kind: "web_trail"; blocks: Chunk[] }
     | { kind: "write_group"; paths: string[]; count: number }
     | { kind: "list_group"; count: number };
 
 export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
     const rows: WorkflowRow[] = [];
     let stagePaths: string[] = [];
-    let readPaths: string[] = [];
+    let readFiles: { path: string; start?: number; end?: number }[] = [];
     let searchQueries: string[] = [];
+    let webBlocks: Chunk[] = [];
     let writePaths: string[] = [];
     let writeCount = 0;
     let listCount = 0;
@@ -162,9 +169,9 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         stagePaths = [];
     };
     const flushReads = () => {
-        if (readPaths.length === 0) return;
-        rows.push({ kind: "read_group", paths: [...readPaths] });
-        readPaths = [];
+        if (readFiles.length === 0) return;
+        rows.push({ kind: "read_group", files: [...readFiles] });
+        readFiles = [];
     };
     const flushSearches = () => {
         if (searchQueries.length === 0) return;
@@ -174,6 +181,11 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
             count: searchQueries.length,
         });
         searchQueries = [];
+    };
+    const flushWeb = () => {
+        if (webBlocks.length === 0) return;
+        rows.push({ kind: "web_trail", blocks: [...webBlocks] });
+        webBlocks = [];
     };
     const flushWrites = () => {
         if (writeCount === 0) return;
@@ -190,6 +202,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         flushStages();
         flushReads();
         flushSearches();
+        flushWeb();
         flushWrites();
         flushLists();
     };
@@ -198,6 +211,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         if (block.type === "git_operation" && block.gitOp === "stage") {
             flushReads();
             flushSearches();
+            flushWeb();
             flushWrites();
             flushLists();
             const path = parseGitStagePath(block.content);
@@ -209,19 +223,32 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         if (block.type === "cat" && block.content) {
             flushStages();
             flushSearches();
+            flushWeb();
             flushWrites();
             flushLists();
-            readPaths.push(block.content);
+            readFiles.push({
+                path: block.content,
+                start: block.catStartLine,
+                end: block.catEndLine,
+            });
             continue;
         }
-        // Keep web_search / web_result / web_visit as individual rows so the UI
-        // can show host + favicon (not "Searched N times").
+        if (block.type === "web_search" || block.type === "web_result" || block.type === "web_visit") {
+            flushStages();
+            flushReads();
+            flushSearches();
+            flushWrites();
+            flushLists();
+            webBlocks.push(block);
+            continue;
+        }
         if (
             (block.type === "search" || block.type === "grep" || block.type === "search_result")
             && !block.isGenerating
         ) {
             flushStages();
             flushReads();
+            flushWeb();
             flushWrites();
             flushLists();
             const q = (block.query || block.content || "").trim();
@@ -248,6 +275,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
             flushStages();
             flushReads();
             flushSearches();
+            flushWeb();
             flushLists();
             const path =
                 block.type === "edit" || block.type === "edit_pending"
@@ -261,6 +289,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
             flushStages();
             flushReads();
             flushSearches();
+            flushWeb();
             flushWrites();
             listCount += 1;
             continue;
@@ -569,7 +598,64 @@ function GitDiffGroup({
     );
 }
 
-/** Summary label for a collapsed run of consecutive tool actions. */
+export function formatReadTarget(file: {
+    path: string;
+    start?: number;
+    end?: number;
+}): string {
+    const range =
+        file.start && file.end
+            ? `:${file.start}-${file.end}`
+            : file.start
+              ? `:${file.start}`
+              : "";
+    return `${file.path}${range}:raw`;
+}
+
+export function estimateReadTokens(files: { path: string; start?: number; end?: number }[]): number {
+    return files.reduce((sum, file) => {
+        if (file.start && file.end && file.end >= file.start) {
+            return sum + Math.max(400, (file.end - file.start + 1) * 40);
+        }
+        return sum + 2400;
+    }, 0);
+}
+
+export function formatTokenCount(tokens: number): string {
+    if (tokens >= 1000) return `${Math.round(tokens / 1000)}k`;
+    return String(tokens);
+}
+
+export function ReadGroup({
+    files,
+    tokens,
+}: {
+    files: { path: string; start?: number; end?: number }[];
+    tokens?: number;
+}) {
+    const unique = files.filter((f) => f.path);
+    const tokenCount = tokens ?? estimateReadTokens(unique);
+    return (
+        <div className="flex flex-col gap-0.5 py-0.5">
+            {unique.map((file, i) => (
+                <ActionLine
+                    key={`${file.path}-${i}`}
+                    action="read"
+                    detail={formatReadTarget(file)}
+                    title={file.path}
+                    onClick={() => void openProjectFile(file.path)}
+                />
+            ))}
+            {unique.length > 0 ? (
+                <div className="py-0.5 chat-text text-text-muted">
+                    {unique.length} file{unique.length === 1 ? "" : "s"} read
+                    {" · "}
+                    {formatTokenCount(tokenCount)} tokens
+                </div>
+            ) : null}
+        </div>
+    );
+}
 function computeGroupHeader(visible: Chunk[]) {
     const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
     const hasExplore = visible.some((b) =>
@@ -645,6 +731,14 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
             return {
                 label: block.pluginLabel || "Plugin",
                 query: block.pluginToolkit,
+                expandable: false,
+                content: block.content,
+            };
+        case "subagent":
+        case "subagent_ref":
+            return {
+                label: "Spawned",
+                query: block.query || "agent",
                 expandable: false,
                 content: block.content,
             };
@@ -853,7 +947,13 @@ export function AgentWorkflow({
                     return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
                 }
                 if (row.kind === "read_group") {
-                    const names = [...new Set(row.paths.map((p) => p.split(/[\\/]/).pop() || p).filter(Boolean))];
+                    const names = [
+                        ...new Set(
+                            row.files
+                                .map((f) => f.path.split(/[\\/]/).pop() || f.path)
+                                .filter(Boolean),
+                        ),
+                    ];
                     const detail =
                         names.length === 0
                             ? null
@@ -861,28 +961,51 @@ export function AgentWorkflow({
                               ? names[0]
                               : `${names[0]} and more`;
                     return (
-                        <div key={`reads-${i}`} className="py-0.5 chat-text font-medium text-text-primary/80">
-                            Explored
-                            {detail ? (
-                                <>
-                                    {" "}
-                                    <span className="text-text-secondary">{detail}</span>
-                                </>
-                            ) : null}
-                        </div>
+                        <ActionLine
+                            key={`reads-${i}`}
+                            action="Explored"
+                            detail={detail}
+                        />
                     );
                 }
                 if (row.kind === "search_group") {
                     return (
-                        <div key={`searches-${i}`} className="py-0.5 chat-text font-medium text-text-primary/80">
-                            Searched
-                            {row.count > 1 ? (
-                                <>
-                                    {" "}
-                                    <span className="text-text-secondary">{row.count} times</span>
-                                </>
-                            ) : null}
-                        </div>
+                        <ActionLine
+                            key={`searches-${i}`}
+                            action="Searched"
+                            detail={row.count > 1 ? `${row.count} times` : undefined}
+                        />
+                    );
+                }
+                if (row.kind === "web_trail") {
+                    const queries = row.blocks
+                        .map((b) => (b.query || "").trim())
+                        .filter(Boolean);
+                    const results = row.blocks.flatMap((b) => {
+                        if (b.type === "web_visit") {
+                            return [{
+                                title: b.visitTitle || b.visitHost || "Visited",
+                                url: b.visitUrl || "",
+                                snippet: b.visitHost ? `Visited ${b.visitHost}` : "",
+                            }];
+                        }
+                        return parseWebSearchHits(b.content || "");
+                    });
+                    const seen = new Set<string>();
+                    const unique = results.filter((hit) => {
+                        const key = hit.url || hit.title;
+                        if (!key || seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                    });
+                    return (
+                        <WebSearchBlock
+                            key={`web-${i}`}
+                            query={queries[queries.length - 1]}
+                            searches={queries.length}
+                            results={unique}
+                            isActive={row.blocks.some((b) => b.isGenerating)}
+                        />
                     );
                 }
                 if (row.kind === "write_group") {
@@ -894,25 +1017,20 @@ export function AgentWorkflow({
                               ? names[0]
                               : `${names[0]} and more`;
                     return (
-                        <div key={`writes-${i}`} className="py-0.5 chat-text font-medium text-text-primary/80">
-                            Edited
-                            {detail ? (
-                                <>
-                                    {" "}
-                                    <span className="text-text-secondary">{detail}</span>
-                                </>
-                            ) : null}
-                        </div>
+                        <ActionLine
+                            key={`writes-${i}`}
+                            action="Edited"
+                            detail={detail}
+                        />
                     );
                 }
                 if (row.kind === "list_group") {
                     return (
-                        <div key={`lists-${i}`} className="py-0.5 chat-text font-medium text-text-primary/80">
-                            Listed{" "}
-                            <span className="text-text-secondary">
-                                {row.count > 1 ? `${row.count} folders` : "folders"}
-                            </span>
-                        </div>
+                        <ActionLine
+                            key={`lists-${i}`}
+                            action="Listed"
+                            detail={row.count > 1 ? `${row.count} folders` : "folders"}
+                        />
                     );
                 }
                 return (
@@ -1072,6 +1190,17 @@ export function ActionItem({
             );
         }
         return <GitActionChip label={shortLabel} />;
+    }
+
+    if (block.type === "subagent" || block.type === "subagent_ref") {
+        return (
+            <div className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80">
+                {providerIcon(block.command || "auto", 14)}
+                <span>
+                    Spawned <span className="text-text-secondary">{block.query || "agent"}</span>
+                </span>
+            </div>
+        );
     }
 
     const useMarkdown =

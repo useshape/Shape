@@ -336,6 +336,20 @@ export function setPreviewError(error: string | null) {
 
 let globalLastDevUrl: string | null = null;
 
+export function resetPreviewState() {
+    globalLastDevUrl = null;
+    state = {
+        history: [],
+        index: -1,
+        urlBar: DEFAULT_URL,
+        iframeSrc: null,
+        reloadKey: state.reloadKey + 1,
+        error: null,
+        loading: false,
+    };
+    emit();
+}
+
 export function getLastDevUrl() {
     return globalLastDevUrl;
 }

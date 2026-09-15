@@ -159,7 +159,11 @@ const FileRow = memo(function FileRow({
                                 ) : null}
                             </span>
                         ) : null}
-                        <StatusGlyph status={file.status} />
+                        {file.status.toUpperCase() === "A" || file.status === "??" || file.status === "?" ? (
+                            <span className="text-xs font-medium text-success">New</span>
+                        ) : (
+                            <StatusGlyph status={file.status} />
+                        )}
                     </span>
                 </button>
             </ContextMenuTrigger>
@@ -452,7 +456,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
           ? "Up to date"
           : staged.length > 0
             ? "Ready to commit"
-            : `${files.length} change${files.length === 1 ? "" : "s"}`;
+            : `${files.length} Uncommitted change${files.length === 1 ? "" : "s"}`;
 
     const toneBg =
         statusTone === "warn"
@@ -474,7 +478,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
     ];
 
     return (
-        <div className="flex h-full min-h-0 flex-col bg-panel">
+        <div className="flex h-full min-h-0 flex-col bg-sidebar">
             {/* GitHub-style status strip — badge/text/CTA share the same tone */}
             <div
                 className="mx-2 flex h-9 shrink-0 items-center gap-2 rounded-lg px-1"
@@ -510,6 +514,12 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                         icon={statusTone === "warn" ? RiErrorWarningLine : RiArrowUpLine}
                     />
                     {statusLabel}
+                    {totals.plus > 0 || totals.minus > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 tabular-nums">
+                            {totals.plus > 0 ? <span className="text-success">+{totals.plus}</span> : null}
+                            {totals.minus > 0 ? <span className="text-error">-{totals.minus}</span> : null}
+                        </span>
+                    ) : null}
                 </span>
                 <span className="flex-1" />
                 {pr ? (
@@ -656,12 +666,6 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                 </div>
             ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto py-1 custom-scrollbar">
-                    {(totals.plus > 0 || totals.minus > 0) && (
-                        <div className="flex items-center gap-2 px-2 pb-1 text-sm tabular-nums text-text-muted">
-                            <span className="text-success">+{totals.plus}</span>
-                            <span className="text-error">−{totals.minus}</span>
-                        </div>
-                    )}
                     {staged.length > 0 ? (
                         <section className="mb-1">
                             <div className="px-2 pb-0.5 text-sm font-medium text-text-muted">
@@ -684,8 +688,16 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                     ) : null}
                     {unstaged.length > 0 ? (
                         <section>
-                            <div className="px-2 pb-0.5 text-sm font-medium text-text-muted">
-                                Changes {unstaged.length}
+                            <div className="flex items-center gap-2 px-2 pb-0.5 text-sm font-medium text-text-muted">
+                                <span className="min-w-0 flex-1 truncate">
+                                    {unstaged.length} Uncommitted change{unstaged.length === 1 ? "" : "s"}
+                                </span>
+                                {totals.plus > 0 || totals.minus > 0 ? (
+                                    <span className="inline-flex shrink-0 items-center gap-1.5 tabular-nums">
+                                        {totals.plus > 0 ? <span className="text-success">+{totals.plus}</span> : null}
+                                        {totals.minus > 0 ? <span className="text-error">-{totals.minus}</span> : null}
+                                    </span>
+                                ) : null}
                             </div>
                             <div className="flex flex-col">
                                 {unstaged.map((file) => (

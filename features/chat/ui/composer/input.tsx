@@ -1,6 +1,6 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiChat3Line, RiCheckLine, RiCodeLine, RiGitBranchLine, RiListCheck3, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiShieldLine, RiTerminalBoxLine } from "@remixicon/react";
+import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiBrushFill, RiChat3Line, RiCheckLine, RiCodeLine, RiSpyFill, RiGitBranchLine, RiListCheck3, RiMicLine, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiShieldLine, RiStopCircleLine, RiTerminalBoxLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -26,9 +26,9 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { AUTO_DISPLAY_MODEL } from "../message/bubble";
 import { MentionPicker } from "./mentions";
 import { PendingEditsPanel } from "./edits";
+import { ComposerContextBar } from "./context-bar";
 import {
     ComposerTasksStrip,
     type ComposerTaskItem,
@@ -52,6 +52,7 @@ import {
 } from "@/lib/catalog-store";
 import { useSettings, hasByokApiKeys } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
+import { notify } from "@/features/notifications";
 
 type ChatInputProps = {
     inputValue: string;
@@ -315,11 +316,11 @@ function ComposerMentionChip({ raw, mention }: { raw: string; mention: ChatMenti
 }
 
 const CHAT_MODES = [
-    { id: "Code", icon: RiCodeLine, color: "#3B82F6" },
-    { id: "Ask", icon: RiChat3Line, color: "#22C55E" },
-    { id: "Plan", icon: RiListCheck3, color: "#A855F7" },
-    { id: "Visual", icon: RiPaletteLine, color: "#EC4899" },
-    { id: "Review", icon: RiShieldLine, color: "#F59E0B" },
+    { id: "Code", icon: RiCodeLine, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
+    { id: "Ask", icon: RiChat3Line, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
+    { id: "Plan", icon: RiListCheck3, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
+    { id: "Visual", icon: RiBrushFill, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
+    { id: "Review", icon: RiSpyFill, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
 ] as const;
 
 const COMPOSER_HINTS = [
@@ -374,6 +375,142 @@ function RotatingComposerHint({
                 {COMPOSER_HINTS[index]}
             </span>
         </div>
+    );
+}
+
+function ModeMenu({
+    compactTrigger,
+    selectedMode,
+    setSelectedMode,
+    disabled,
+}: {
+    compactTrigger?: boolean;
+    selectedMode: string;
+    setSelectedMode: (m: string) => void;
+    disabled?: boolean;
+}) {
+    const selected = CHAT_MODES.find((m) => m.id === selectedMode) ?? CHAT_MODES[0];
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild disabled={disabled}>
+                <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={disabled}
+                    className={cn(
+                        "font-medium text-[color:var(--mode-fg)] bg-[var(--mode-bg)] hover:bg-[var(--mode-bg)] hover:text-[color:var(--mode-fg)] hover:brightness-110",
+                        compactTrigger ? "h-7 gap-1 rounded-full px-1.5" : "h-8 px-2",
+                    )}
+                    style={{
+                        ["--mode-fg" as string]: selected.color,
+                        ["--mode-bg" as string]: selected.bg,
+                    }}
+                    aria-label={selected.id}
+                >
+                    <div className="flex items-center gap-1.5 text-sm">
+                        <Icon icon={selected.icon} style={{ color: selected.color }} />
+                        <span className="truncate">{selected.id}</span>
+                    </div>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-90">
+                {CHAT_MODES.map((mode) => (
+                    <DropdownMenuItem
+                        key={mode.id}
+                        onClick={() => setSelectedMode(mode.id)}
+                        className="items-start gap-2.5 py-2 rounded-xl"
+                    >
+                        <Icon
+                            icon={mode.icon}
+                            className="mt-0.5"
+                            style={{ color: mode.color }}
+                        />
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="text-sm text-text-primary">{mode.id}</span>
+                            <span className="text-sm leading-snug text-text-muted">
+                                {mode.description}
+                            </span>
+                        </span>
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+function VoiceInputButton({
+    disabled,
+    onTranscript,
+}: {
+    disabled?: boolean;
+    onTranscript: (text: string) => void;
+}) {
+    const [listening, setListening] = React.useState(false);
+    const recRef = React.useRef<{ stop: () => void } | null>(null);
+
+    const toggle = () => {
+        const w = window as typeof window & {
+            SpeechRecognition?: new () => {
+                continuous: boolean;
+                interimResults: boolean;
+                onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+                onend: (() => void) | null;
+                onerror: (() => void) | null;
+                start: () => void;
+                stop: () => void;
+            };
+            webkitSpeechRecognition?: new () => {
+                continuous: boolean;
+                interimResults: boolean;
+                onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+                onend: (() => void) | null;
+                onerror: (() => void) | null;
+                start: () => void;
+                stop: () => void;
+            };
+        };
+        const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+        if (!SR) {
+            notify.warn("Voice input isn't available in this window.");
+            return;
+        }
+        if (listening) {
+            recRef.current?.stop();
+            setListening(false);
+            return;
+        }
+        const rec = new SR();
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.onresult = (e) => {
+            const text = Array.from(e.results)
+                .map((r) => r[0]?.transcript ?? "")
+                .join(" ")
+                .trim();
+            if (text) onTranscript(text);
+        };
+        rec.onend = () => setListening(false);
+        rec.onerror = () => setListening(false);
+        rec.start();
+        recRef.current = rec;
+        setListening(true);
+    };
+
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={disabled}
+            onClick={toggle}
+            aria-label={listening ? "Stop listening" : "Voice input"}
+            className={cn(
+                "size-8 shrink-0 text-text-muted hover:text-text-primary",
+                listening && "text-accent hover:text-accent",
+            )}
+        >
+            <Icon icon={listening ? RiStopCircleLine : RiMicLine} />
+        </Button>
     );
 }
 
@@ -580,7 +717,6 @@ export function ChatInput({
         releaseDate: "Rolling",
     };
     const modelInfo = MODELS.find(m => m.id === selectedModel) || autoModel;
-    const selectedModeInfo = CHAT_MODES.find((m) => m.id === selectedMode) ?? CHAT_MODES[0];
     const providerOrder = getCatalogProviderOrder();
     const needsSignIn =
         !shapeAuth.isLoading && !shapeAuth.loggedIn && !hasByokApiKeys(settings.ai);
@@ -640,10 +776,10 @@ export function ChatInput({
     const inputPanel = (
                 <div
                     className={cn(
-                        "relative flex w-full flex-col border border-border-subtle bg-surface-3 transition-colors focus-within:border-border",
-                        compact ? "rounded-full h-12 px-0.5" : "rounded-[1.35rem]",
+                        "relative flex w-full flex-col border border-border-subtle bg-surface-4 transition-colors focus-within:border-border",
+                        compact ? "rounded-full h-12 px-0.5" : "rounded-xl",
                         dragOver && "border-border-subtle bg-surface-3/80",
-                        needsSignIn && "opacity-50 cursor-not-allowed pointer-events-none",
+                        needsSignIn && "cursor-default",
                     )}
                     onDrop={needsSignIn ? undefined : handleDrop}
                     onDragEnter={needsSignIn ? undefined : handleDragEnter}
@@ -688,46 +824,11 @@ export function ChatInput({
                             accept={acceptString}
                             onChange={handleFilteredFileUpload}
                         />
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild disabled={needsSignIn}>
-                                <Button
-                                    variant="ghost"
-                                    size="xs"
-                                    disabled={needsSignIn}
-                                    className="size-8 justify-center rounded-full px-0 font-medium"
-                                    style={{
-                                        backgroundColor: `${selectedModeInfo.color}22`,
-                                        color: selectedModeInfo.color,
-                                    }}
-                                    aria-label={selectedModeInfo.id}
-                                >
-                                    <Icon icon={selectedModeInfo.icon} />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-48">
-                                {CHAT_MODES.map((mode) => (
-                                    <DropdownMenuItem
-                                        key={mode.id}
-                                        onClick={() => setSelectedMode(mode.id)}
-                                    >
-                                        <Icon
-                                            icon={mode.icon}
-                                            style={{ color: mode.color }}
-                                        />
-                                        <span className="flex-1">{mode.id}</span>
-                                        {selectedMode === mode.id ? (
-                                            <Icon icon={RiCheckLine} className="text-text-muted" />
-                                        ) : null}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
                         <Button
                             variant="ghost"
                             size="xs"
-                            disabled={needsSignIn}
                             onClick={() => document.getElementById("chat-media-upload")?.click()}
-                            className="size-8 ml-1 shrink-0 p-0 rounded-full text-text-muted hover:text-text-primary"
+                            className="size-8 ml-0.5 shrink-0 p-0 rounded-full text-text-muted hover:text-text-primary"
                             aria-label="Attach file"
                         >
                             <Icon icon={RiAddLine} />
@@ -800,9 +901,9 @@ export function ChatInput({
                             <textarea
                                 ref={textareaRef}
                                 value={inputValue}
-                                onChange={needsSignIn ? undefined : handleInputChangeWithMentions}
-                                onKeyDown={needsSignIn ? undefined : onComposerKeyDown}
-                                onPaste={needsSignIn ? undefined : handlePaste}
+                                onChange={handleInputChangeWithMentions}
+                                onKeyDown={onComposerKeyDown}
+                                onPaste={handlePaste}
                                 onSelect={(e) => {
                                     if (!mentionOpen) return;
                                     const el = e.currentTarget;
@@ -820,7 +921,6 @@ export function ChatInput({
                                     const overlay = mentionOverlayRef.current;
                                     if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
                                 }}
-                                readOnly={needsSignIn}
                                 placeholder=""
                                 aria-label={
                                     needsSignIn
@@ -837,7 +937,6 @@ export function ChatInput({
                         </ContextMenuTrigger>
                         <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
                             <ContextMenuItem
-                                disabled={needsSignIn}
                                 onClick={() => document.execCommand("cut")}
                             >
                                 Cut
@@ -848,7 +947,6 @@ export function ChatInput({
                                 <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                             </ContextMenuItem>
                             <ContextMenuItem
-                                disabled={needsSignIn}
                                 onClick={() => {
                                     void navigator.clipboard.readText().then((text) => {
                                         const el = textareaRef.current;
@@ -903,66 +1001,35 @@ export function ChatInput({
                         />
                         <Button
                             variant="ghost"
-                            disabled={needsSignIn}
                             onClick={() => document.getElementById("chat-media-upload")?.click()}
                             className="size-8 shrink-0 p-0 text-text-muted hover:text-text-primary"
                             aria-label="Attach file"
                         >
                             <Icon icon={RiAddLine} />
                         </Button>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild disabled={needsSignIn}>
-                                <Button
-                                    variant="ghost"
-                                    size="xs"
-                                    disabled={needsSignIn}
-                                    className="h-8 rounded-full px-2.5 font-medium"
-                                    style={{
-                                        backgroundColor: `${selectedModeInfo.color}22`,
-                                        color: selectedModeInfo.color,
-                                    }}
-                                    aria-label={selectedModeInfo.id}
-                                >
-                                    <div className="flex items-center gap-1.5 text-sm">
-                                        <Icon icon={selectedModeInfo.icon} />
-                                        <span className="truncate">{selectedModeInfo.id}</span>
-                                        <Icon icon={RiArrowDownSLine} className="text-text-muted" />
-                                    </div>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-48">
-                                {CHAT_MODES.map((mode) => (
-                                    <DropdownMenuItem
-                                        key={mode.id}
-                                        onClick={() => setSelectedMode(mode.id)}
-                                    >
-                                        <Icon
-                                            icon={mode.icon}
-                                            style={{ color: mode.color }}
-                                        />
-                                        <span className="flex-1">{mode.id}</span>
-                                        {selectedMode === mode.id ? (
-                                            <Icon icon={RiCheckLine} className="text-text-muted" />
-                                        ) : null}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <ModeMenu
+                            selectedMode={selectedMode}
+                            setSelectedMode={setSelectedMode}
+                        />
                     </div>
                     ) : null}
 
                     <div className="flex shrink-0 items-center gap-0.5">
+                        {compact ? (
+                            <ModeMenu
+                                compactTrigger
+                                selectedMode={selectedMode}
+                                setSelectedMode={setSelectedMode}
+                            />
+                        ) : null}
                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild disabled={needsSignIn}>
+                            <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     size="xs"
-                                    disabled={needsSignIn}
                                     className={cn(
-                                        "h-8 rounded-full font-medium",
-                                        compact
-                                            ? "flex size-8 max-w-none items-center justify-center px-0"
-                                            : "max-w-[200px] px-2",
+                                        "h-8 font-normal text-text-muted hover:text-text-primary",
+                                        compact ? "max-w-[148px] px-1.5" : "max-w-[200px] px-2",
                                     )}
                                     aria-label={
                                         selectedModel === "auto" || modelInfo.name === "auto"
@@ -970,46 +1037,18 @@ export function ChatInput({
                                             : modelInfo.name
                                     }
                                 >
-                                    <div
-                                        className={cn(
-                                            "flex min-w-0 items-center text-sm",
-                                            compact ? "justify-center gap-0 " : "gap-2",
-                                        )}
-                                    >
-                                        {compact ? (
-                                            <span className="inline-flex size-[16px] shrink-0 items-center justify-center [&>svg]:block">
-                                                {providerIcon(
-                                                    selectedModel === "auto"
-                                                        ? AUTO_DISPLAY_MODEL
-                                                        : selectedModel,
-                                                    16,
-                                                )}
-                                            </span>
-                                        ) : (
-                                            providerIcon(
-                                                selectedModel === "auto"
-                                                    ? AUTO_DISPLAY_MODEL
-                                                    : selectedModel,
-                                                14,
-                                            )
-                                        )}
-                                        {!compact ? (
-                                            <>
-                                                <span className="truncate text-text-primary">
-                                                    {selectedModel === "auto" || modelInfo.name === "auto"
-                                                        ? "Auto"
-                                                        : modelInfo.name}
-                                                </span>
-                                                <span className="shrink-0 text-text-muted">
-                                                    {effortFastLabel(reasoningEffort, fastMode)}
-                                                </span>
-                                                <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
-                                            </>
-                                        ) : null}
+                                    <div className={cn("flex min-w-0 items-center gap-1.5 text-sm", compact && "max-w-[140px]")}>
+                                        {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
+                                        <span className="truncate">
+                                            {selectedModel === "auto" || modelInfo.name === "auto"
+                                                ? "Auto"
+                                                : modelInfo.name}
+                                        </span>
+                                        <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-60" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-[260px]">
+                            <DropdownMenuContent align="end" className="w-[200px]">
                                 <div className="flex h-9 items-center justify-between gap-3 rounded-lg px-2.5">
                                     <span className="text-sm text-text-primary">Fast</span>
                                     <Switch
@@ -1091,22 +1130,19 @@ export function ChatInput({
                             </DropdownMenuContent>
                         </DropdownMenu>
 
-                        {shapeAuth.loggedIn ? (
-                            <Tooltip content={usageDisplay.tooltip}>
-                                <button
-                                    type="button"
-                                    className="flex size-8 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary"
-                                    onClick={() =>
-                                        void import("@/lib/window/open-settings").then(({ openSettingsWindow }) =>
-                                            openSettingsWindow({ category: "general" }),
-                                        )
-                                    }
-                                    aria-label={usageDisplay.tooltip}
-                                >
-                                    <UsageRing percent={usageDisplay.percent} size={16} />
-                                </button>
-                            </Tooltip>
-                        ) : null}
+                        <VoiceInputButton
+                            onTranscript={(text) => {
+                                const el = textareaRef.current;
+                                if (!el) return;
+                                const next = inputValue.trim() ? `${inputValue.trim()} ${text}` : text;
+                                const native = Object.getOwnPropertyDescriptor(
+                                    HTMLTextAreaElement.prototype,
+                                    "value",
+                                )?.set;
+                                native?.call(el, next);
+                                el.dispatchEvent(new Event("input", { bubbles: true }));
+                            }}
+                        />
                         <button
                             type="button"
                             onClick={() => {
@@ -1167,68 +1203,88 @@ export function ChatInput({
                 </div>
     );
 
+    const usageChip = (
+        <Tooltip content={usageDisplay.tooltip}>
+            <button
+                type="button"
+                className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1 text-sm text-text-muted hover:text-text-primary"
+                onClick={() =>
+                    void import("@/lib/window/open-settings").then(({ openSettingsWindow }) =>
+                        openSettingsWindow({ category: "account" }),
+                    )
+                }
+                aria-label={usageDisplay.tooltip}
+            >
+                <UsageRing percent={usageDisplay.percent} size={16} />
+                <span className="tabular-nums">{usageDisplay.percent}%</span>
+            </button>
+        </Tooltip>
+    );
+
+    const contextExtras = (
+        <>
+            {pendingEdits.length > 0 && onAcceptAllEdits && onRejectAllEdits ? (
+                <PendingEditsPanel
+                    edits={pendingEdits}
+                    onAcceptAll={onAcceptAllEdits}
+                    onRejectAll={onRejectAllEdits}
+                    onAccept={onAcceptEdit}
+                    onReject={onRejectEdit}
+                />
+            ) : null}
+            {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
+                <QueuedMessagesPanel
+                    items={queuedMessages}
+                    onEdit={onEditQueuedMessage}
+                    onRemove={onRemoveQueuedMessage}
+                />
+            ) : null}
+            {taskItems.length > 0 ? <ComposerTasksStrip items={taskItems} /> : null}
+        </>
+    );
+
     return (
         <div
             className={cn(
                 "relative shrink-0 overflow-visible",
-                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-1",
+                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-0",
             )}
         >
             <div className="relative z-10 overflow-visible">
-                {(pendingEdits.length > 0 || taskItems.length > 0 || queuedMessages.length > 0 || (compact && uploadedFiles.length > 0)) ? (
-                    <div className="mb-2 flex flex-wrap items-end justify-start gap-1.5 pr-1">
-                        {pendingEdits.length > 0 && onAcceptAllEdits && onRejectAllEdits ? (
-                            <PendingEditsPanel
-                                edits={pendingEdits}
-                                onAcceptAll={onAcceptAllEdits}
-                                onRejectAll={onRejectAllEdits}
-                                onAccept={onAcceptEdit}
-                                onReject={onRejectEdit}
-                            />
-                        ) : null}
-                        {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
-                            <QueuedMessagesPanel
-                                items={queuedMessages}
-                                onEdit={onEditQueuedMessage}
-                                onRemove={onRemoveQueuedMessage}
-                            />
-                        ) : null}
-                        {taskItems.length > 0 ? (
-                            <ComposerTasksStrip items={taskItems} />
-                        ) : null}
-                        {compact && uploadedFiles.length > 0 ? (
-                            <ComposerAttachmentsStrip
-                                attachments={uploadedFiles}
-                                onRemove={(id) =>
-                                    setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
-                                }
-                            />
-                        ) : null}
+                {compact && uploadedFiles.length > 0 ? (
+                    <div className="mb-2">
+                        <ComposerAttachmentsStrip
+                            attachments={uploadedFiles}
+                            onRemove={(id) =>
+                                setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
+                            }
+                        />
                     </div>
                 ) : null}
-                {needsSignIn ? (
-                    <Tooltip side="top" content="Sign in, or connect an API key">
-                        <div
-                            role="button"
-                            tabIndex={0}
-                            className="w-full cursor-pointer text-left"
-                            onClick={() => {
-                                void import("@/features/workbench/ui/login-prompt-dialog").then(
-                                    ({ requestShapeLogin }) => requestShapeLogin(),
-                                );
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    (e.currentTarget as HTMLElement).click();
-                                }
-                            }}
-                        >
+                {compact ? (
+                    <>
+                        <div className="relative">
                             {inputPanel}
                         </div>
-                    </Tooltip>
+                        <div className="relative flex min-w-0 items-center gap-2 px-2 pt-1.5">
+                            <ComposerContextBar compact className="min-w-0 flex-1" />
+                            <div className="flex shrink-0 items-center gap-0.5">
+                                {contextExtras}
+                                {usageChip}
+                            </div>
+                        </div>
+                    </>
                 ) : (
-                    inputPanel
+                    <div className="relative flex flex-col">
+                        <div className="relative z-0 -mb-2.5 flex items-end mx-3 rounded-t-xl border border-b-0 border-border-subtle bg-surface-3 px-2 pt-1 pb-3.5">
+                            <div className="flex h-7 w-full min-w-0 items-center gap-1">
+                                <ComposerContextBar compact className="min-w-0 flex-1" />
+                                {contextExtras}
+                                {usageChip}
+                            </div>
+                        </div>
+                        <div className="relative z-10">{inputPanel}</div>
+                    </div>
                 )}
             </div>
             <MediaLightbox
