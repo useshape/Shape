@@ -18,10 +18,7 @@ impl WorkspaceTrustState {
 
     pub fn is_trusted(&self, path: &str) -> bool {
         let key = Self::normalize(path);
-        self.0
-            .lock()
-            .map(|set| set.contains(&key))
-            .unwrap_or(false)
+        self.0.lock().map(|set| set.contains(&key)).unwrap_or(false)
     }
 
     pub fn set_trusted(&self, path: &str, trusted: bool) {

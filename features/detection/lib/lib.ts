@@ -193,6 +193,32 @@ function detectLockfilePm(names: string[]): PackageManager | null {
     return null;
 }
 
+const FRAMEWORK_DEV_RE = /\b(?:next|vite|astro|remix)\s+dev\b/i;
+const PROCESS_RUNNER_RE = /^(run-p|run-s|npm-run-all|concurrently|turbo|nx|wireit)\b/i;
+
+function isFrameworkDevScript(body: string): boolean {
+    return FRAMEWORK_DEV_RE.test(body) && !PROCESS_RUNNER_RE.test(body.trim());
+}
+
+/** Pick the script that actually starts the framework, not a process-runner wrapper. */
+export function pickDevScript(scripts: Record<string, string>): string | null {
+    for (const key of SCRIPT_PRIORITY) {
+        const body = scripts[key];
+        if (body && isFrameworkDevScript(body)) return key;
+    }
+    const frameworkKey = Object.keys(scripts).find((key) => isFrameworkDevScript(scripts[key] ?? ""));
+    if (frameworkKey) return frameworkKey;
+    for (const key of SCRIPT_PRIORITY) {
+        if (scripts[key]) return key;
+    }
+    return Object.keys(scripts).find((key) => /^(dev|start|serve|preview)(:|$)/i.test(key)) ?? null;
+}
+
+export function portFromScript(body: string): string | null {
+    const match = body.match(/--port(?:=|\s+)(\d+)/i) ?? body.match(/(?:^|\s)-p(?:=|\s+)(\d+)/);
+    return match?.[1] ?? null;
+}
+
 function runScript(pm: PackageManager, script: string): string {
     switch (pm) {
         case "yarn":
@@ -206,7 +232,18 @@ function runScript(pm: PackageManager, script: string): string {
     }
 }
 
-function guessUrlHint(pkg: Record<string, unknown>, script: string | null): string {
+/** Prefer the script body so we start Next/Vite directly — not `pnpm`/`npm`, which can install a workspace. */
+function commandForScript(body: string, pm: PackageManager, key: string): string {
+    const trimmed = body.trim();
+    if (isFrameworkDevScript(trimmed)) return trimmed;
+    return runScript(pm, key);
+}
+
+function guessUrlHint(
+    pkg: Record<string, unknown>,
+    script: string | null,
+    scripts: Record<string, string>,
+): string {
     const deps = {
         ...(typeof pkg.dependencies === "object" && pkg.dependencies
             ? (pkg.dependencies as Record<string, string>)
@@ -215,17 +252,27 @@ function guessUrlHint(pkg: Record<string, unknown>, script: string | null): stri
             ? (pkg.devDependencies as Record<string, string>)
             : {}),
     };
-    if (deps.next) return URL_HINTS.next!;
-    if (deps.nuxt || deps["nuxt3"]) return URL_HINTS.nuxt!;
-    if (deps.astro) return URL_HINTS.astro!;
-    if (deps.vite || deps["@vitejs/plugin-react"] || deps["@vitejs/plugin-vue"]) {
-        return URL_HINTS.vite!;
+    let base = URL_HINTS.default!;
+    if (deps.next) base = URL_HINTS.next!;
+    else if (deps.nuxt || deps["nuxt3"]) base = URL_HINTS.nuxt!;
+    else if (deps.astro) base = URL_HINTS.astro!;
+    else if (deps.vite || deps["@vitejs/plugin-react"] || deps["@vitejs/plugin-vue"]) {
+        base = URL_HINTS.vite!;
+    } else if (deps["@remix-run/dev"] || deps["@remix-run/react"]) {
+        base = URL_HINTS.remix!;
+    } else if (deps.gatsby) base = URL_HINTS.gatsby!;
+    else if (deps["@angular/core"]) base = URL_HINTS.angular!;
+    else if (deps["@sveltejs/kit"] || deps.svelte) base = URL_HINTS.svelte!;
+    else if (script && scripts[script]?.includes("vite")) base = URL_HINTS.vite!;
+    const port = script ? portFromScript(scripts[script] ?? "") : null;
+    if (!port) return base;
+    try {
+        const url = new URL(base);
+        url.port = port;
+        return url.toString();
+    } catch {
+        return `http://localhost:${port}/`;
     }
-    if (deps.gatsby) return URL_HINTS.gatsby!;
-    if (deps["@angular/core"]) return URL_HINTS.angular!;
-    if (deps["@sveltejs/kit"] || deps.svelte) return URL_HINTS.svelte!;
-    if (script?.includes("vite")) return URL_HINTS.vite!;
-    return URL_HINTS.default!;
 }
 
 /**
@@ -263,33 +310,17 @@ export async function detectDevCommand(path: string): Promise<DevCommandInfo | n
             typeof pkg.packageManager === "string" ? pkg.packageManager : undefined,
         );
         const resolvedPm = lockPm ?? pm;
+        const key = pickDevScript(scripts);
+        if (!key) return null;
+        const body = scripts[key] ?? "";
 
-        for (const key of SCRIPT_PRIORITY) {
-            if (scripts[key]) {
-                return {
-                    command: runScript(resolvedPm, key),
-                    script: key,
-                    packageManager: resolvedPm,
-                    label: key,
-                    urlHint: guessUrlHint(pkg, key),
-                };
-            }
-        }
-
-        const named = Object.keys(scripts).find((k) =>
-            /^(dev|start|serve|preview)(:|$)/i.test(k),
-        );
-        if (named) {
-            return {
-                command: runScript(resolvedPm, named),
-                script: named,
-                packageManager: resolvedPm,
-                label: named,
-                urlHint: guessUrlHint(pkg, named),
-            };
-        }
-
-        return null;
+        return {
+            command: commandForScript(body, resolvedPm, key),
+            script: key,
+            packageManager: resolvedPm,
+            label: key,
+            urlHint: guessUrlHint(pkg, key, scripts),
+        };
     } catch (e) {
         console.error("Failed to detect run command:", e);
         return null;

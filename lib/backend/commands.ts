@@ -552,6 +552,7 @@ export const commands = {
             routeSource?: string | null;
             sourceFile?: string | null;
             sourceLine?: number | null;
+            sourceColumn?: number | null;
         },
     ) =>
         invokeCommand<Array<{

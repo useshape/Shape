@@ -43,18 +43,29 @@ fn known_git_paths() -> Vec<PathBuf> {
 
     #[cfg(windows)]
     {
-        let prog_files = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
-        let prog_files_x86 =
-            std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| r"C:\Program Files (x86)".to_string());
+        let prog_files =
+            std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
+        let prog_files_x86 = std::env::var("ProgramFiles(x86)")
+            .unwrap_or_else(|_| r"C:\Program Files (x86)".to_string());
         paths.push(PathBuf::from(format!(r"{}\Git\cmd\git.exe", prog_files)));
         paths.push(PathBuf::from(format!(r"{}\Git\bin\git.exe", prog_files)));
-        paths.push(PathBuf::from(format!(r"{}\Git\cmd\git.exe", prog_files_x86)));
-        paths.push(PathBuf::from(format!(r"{}\Git\bin\git.exe", prog_files_x86)));
+        paths.push(PathBuf::from(format!(
+            r"{}\Git\cmd\git.exe",
+            prog_files_x86
+        )));
+        paths.push(PathBuf::from(format!(
+            r"{}\Git\bin\git.exe",
+            prog_files_x86
+        )));
     }
 
     #[cfg(not(windows))]
     {
-        for p in ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"] {
+        for p in [
+            "/usr/bin/git",
+            "/usr/local/bin/git",
+            "/opt/homebrew/bin/git",
+        ] {
             paths.push(PathBuf::from(p));
         }
     }

@@ -43,6 +43,22 @@ function preferIpv4DevCommand(command: string): string {
     return t;
 }
 
+/** Strip Windows `\\?\` prefixes so cmd.exe and path compares see a normal drive path. */
+export function spawnCwd(path: string): string {
+    let value = path.trim();
+    if (value.startsWith("\\\\?\\UNC\\")) value = `\\\\${value.slice(8)}`;
+    else if (value.startsWith("\\\\?\\")) value = value.slice(4);
+    else if (value.startsWith("//?/UNC/")) value = `//${value.slice(8)}`;
+    else if (value.startsWith("//?/")) value = value.slice(4);
+    return value;
+}
+
+export function sameProjectPath(a: string, b: string): boolean {
+    const norm = (value: string) =>
+        spawnCwd(value).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    return norm(a) === norm(b);
+}
+
 /** Compare run commands ignoring hostname flags Rust may add. */
 export function sameDevCommand(a: string, b: string): boolean {
     const strip = (s: string) =>
@@ -132,18 +148,15 @@ export async function ensureBackgroundRun(command: string, cwdOverride?: string)
     const trimmed = preferIpv4DevCommand(command);
     if (!trimmed) throw new Error("Empty run command");
 
-    const cwd = cwdOverride || getProjectPath();
+    const cwd = spawnCwd(cwdOverride || getProjectPath() || "");
     if (!cwd) throw new Error("No project open");
-    const sameCwd = (a: string, b: string) =>
-        a.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
-        === b.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 
-    if (runtime && sameDevCommand(runtime.command, trimmed) && sameCwd(runtime.cwd, cwd)) {
+    if (runtime && sameDevCommand(runtime.command, trimmed) && sameProjectPath(runtime.cwd, cwd)) {
         return runtime.ptyId;
     }
     if (starting) {
         const pending = starting;
-        if (sameDevCommand(pending.command, trimmed) && sameCwd(pending.cwd, cwd)) {
+        if (sameDevCommand(pending.command, trimmed) && sameProjectPath(pending.cwd, cwd)) {
             return pending.promise;
         }
         try {

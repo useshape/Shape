@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use tree_sitter::{Language, Node, Parser};
 use walkdir::WalkDir;
 
+use crate::commands::design_css::{merge_css_declarations, normalize_css_value};
 use crate::core::error::AppError;
+use crate::core::paths;
 
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024;
-const MAX_RESULTS: usize = 12;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +31,7 @@ pub struct DesignAsset {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct DesignElementQuery {
     pub tag: String,
     pub id: Option<String>,
@@ -39,6 +41,8 @@ pub struct DesignElementQuery {
     pub route_source: Option<String>,
     pub source_file: Option<String>,
     pub source_line: Option<usize>,
+    #[serde(default)]
+    pub source_column: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,13 +167,13 @@ pub fn inspect_design_project(project_path: String) -> Result<DesignProjectInfo,
     if let Some((root, framework)) = find_supported_root(&canonical) {
         return Ok(DesignProjectInfo {
             framework: framework.into(),
-            project_root: root.to_string_lossy().into_owned(),
+            project_root: paths::spawn_cwd(&root.to_string_lossy()),
             supported: true,
         });
     }
     Ok(DesignProjectInfo {
         framework: "unsupported".into(),
-        project_root: canonical.to_string_lossy().into_owned(),
+        project_root: paths::spawn_cwd(&canonical.to_string_lossy()),
         supported: false,
     })
 }
@@ -340,143 +344,97 @@ fn attribute_index(opening: &str, name: &str) -> Option<usize> {
     None
 }
 
-fn candidate_score(
-    query: &DesignElementQuery,
-    tag: &str,
-    opening: &str,
-    node_source: &str,
-    relative_file: &str,
-    line: usize,
-) -> i32 {
-    if !tag.eq_ignore_ascii_case(&query.tag) {
-        return -1;
+fn locate_source_path(root: &Path, raw: &str) -> Option<PathBuf> {
+    let mut cleaned = raw.trim().replace('\\', "/");
+    cleaned = cleaned
+        .trim_start_matches("file:///")
+        .trim_start_matches("file://")
+        .trim_start_matches("/@fs/")
+        .to_string();
+    if let Some((path, _)) = cleaned.split_once('?') {
+        cleaned = path.to_string();
     }
-    let mut score = 30;
-    if let Some(expected_id) = query.id.as_deref().filter(|v| !v.is_empty()) {
-        match quoted_attribute(opening, &["id"]).as_deref() {
-            Some(actual) if actual == expected_id => score += 90,
-            Some(_) => return -1,
-            None => score -= 8,
-        }
-    }
-    let actual_classes = quoted_attribute(opening, &["className", "class"])
-        .unwrap_or_default()
-        .split_whitespace()
-        .map(str::to_string)
-        .collect::<HashSet<_>>();
-    let expected_classes = query
-        .classes
-        .iter()
-        .filter(|v| !v.starts_with("shape-") && !v.starts_with("__"))
-        .collect::<Vec<_>>();
-    let overlap = expected_classes
-        .iter()
-        .filter(|v| actual_classes.contains(v.as_str()))
-        .count();
-    score += (overlap as i32) * 12;
-    if !expected_classes.is_empty() && overlap == expected_classes.len() {
-        score += 24;
-    }
-    if let Some(text) = query
-        .text
-        .as_deref()
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-    {
-        let needle = text.chars().take(80).collect::<String>();
-        if node_source.contains(&needle) {
-            score += 36;
-        }
-    }
-    if let Some(route_source) = query.route_source.as_deref() {
-        if relative_file
-            .replace('\\', "/")
-            .ends_with(&route_source.replace('\\', "/"))
-        {
-            score += 70;
-        }
-    }
-    if let Some(source_file) = query.source_file.as_deref() {
-        let expected = source_file
-            .replace("file:///", "")
-            .replace("file://", "")
-            .replace('\\', "/");
-        let actual = relative_file.replace('\\', "/");
-        if expected.ends_with(&actual) || actual.ends_with(&expected) {
-            score += 180;
-            if let Some(source_line) = query.source_line {
-                let distance = line.abs_diff(source_line);
-                score += 80 - (distance.min(80) as i32);
+    let root_canon = root.canonicalize().ok()?;
+    let absolute = PathBuf::from(&cleaned);
+    if absolute.is_absolute() {
+        if let Ok(canon) = absolute.canonicalize() {
+            if canon.starts_with(&root_canon) && supported_source(&canon) && !skip_dir(&canon) {
+                return Some(canon);
             }
-        } else {
-            score -= 40;
+        }
+        let root_s = paths::spawn_cwd(&root_canon.to_string_lossy())
+            .replace('\\', "/")
+            .to_lowercase();
+        let file_s = paths::spawn_cwd(&cleaned)
+            .replace('\\', "/")
+            .to_lowercase();
+        if let Some(rest) = file_s.strip_prefix(root_s.trim_end_matches('/')) {
+            let joined = root_canon.join(rest.trim_start_matches('/'));
+            if joined.is_file() && supported_source(&joined) {
+                return Some(joined);
+            }
         }
     }
-    score
-}
-
-fn enclosing_edit_node(node: Node<'_>) -> Node<'_> {
-    let mut current = node;
-    while let Some(parent) = current.parent() {
-        if matches!(parent.kind(), "jsx_element" | "element") {
-            return parent;
+    let relative = cleaned.trim_start_matches('/');
+    for base in [root, root_canon.as_path()] {
+        let joined = base.join(relative);
+        if joined.is_file() && supported_source(&joined) && !skip_dir(&joined) {
+            return Some(joined);
         }
-        if matches!(parent.kind(), "program" | "document") {
-            break;
-        }
-        current = parent;
     }
-    node
+    None
 }
 
-fn collect_tree_candidates(
-    node: Node<'_>,
-    source: &str,
-    relative_file: &str,
-    query: &DesignElementQuery,
-    out: &mut Vec<DesignSourceTarget>,
-) {
+struct OpeningHit {
+    tag: String,
+    opening_start: usize,
+    opening_end: usize,
+    node_start: usize,
+    node_end: usize,
+    line: usize,
+    column: usize,
+}
+
+fn pick_opening<'a>(
+    hits: &'a [OpeningHit],
+    tag: &str,
+    line: usize,
+    column: Option<usize>,
+) -> Option<&'a OpeningHit> {
+    hits.iter()
+        .filter(|hit| hit.line == line)
+        .min_by_key(|hit| {
+            let tag_penalty: u8 = if hit.tag.eq_ignore_ascii_case(tag) { 0 } else { 1 };
+            let col_dist = column.map(|col| hit.column.abs_diff(col)).unwrap_or(0);
+            (tag_penalty, col_dist, hit.opening_start)
+        })
+}
+
+fn collect_jsx_openings(node: Node<'_>, source: &str, out: &mut Vec<OpeningHit>) {
     if matches!(
         node.kind(),
         "jsx_opening_element" | "jsx_self_closing_element" | "start_tag" | "self_closing_tag"
     ) {
         let opening = &source[node.start_byte()..node.end_byte()];
-        let tag = tag_from_opening(opening);
         let edit_node = enclosing_edit_node(node);
-        let node_source = &source[edit_node.start_byte()..edit_node.end_byte()];
-        let confidence = candidate_score(
-            query,
-            &tag,
-            opening,
-            node_source,
-            relative_file,
-            node.start_position().row + 1,
-        );
-        if confidence >= 30 {
-            out.push(DesignSourceTarget {
-                file: relative_file.to_string(),
-                tag,
-                opening_start: node.start_byte(),
-                opening_end: node.end_byte(),
-                node_start: edit_node.start_byte(),
-                node_end: edit_node.end_byte(),
-                line: node.start_position().row + 1,
-                confidence,
-            });
-        }
+        let point = node.start_position();
+        out.push(OpeningHit {
+            tag: tag_from_opening(opening),
+            opening_start: node.start_byte(),
+            opening_end: node.end_byte(),
+            node_start: edit_node.start_byte(),
+            node_end: edit_node.end_byte(),
+            line: point.row + 1,
+            column: point.column + 1,
+        });
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_tree_candidates(child, source, relative_file, query, out);
+        collect_jsx_openings(child, source, out);
     }
 }
 
-fn scan_astro_candidates(
-    source: &str,
-    relative_file: &str,
-    query: &DesignElementQuery,
-    out: &mut Vec<DesignSourceTarget>,
-) {
+fn collect_markup_openings(source: &str, out: &mut Vec<OpeningHit>) {
     let bytes = source.as_bytes();
     let mut i = source
         .find("---")
@@ -534,28 +492,31 @@ fn scan_astro_candidates(
                 .map(|offset| end + offset + closing.len())
                 .unwrap_or(end)
         };
-        let preview_end = (end + 2000).min(source.len());
-        let confidence = candidate_score(
-            query,
-            &tag,
-            opening,
-            &source[start..preview_end],
-            relative_file,
-            source[..start].bytes().filter(|b| *b == b'\n').count() + 1,
-        );
-        if confidence >= 30 {
-            out.push(DesignSourceTarget {
-                file: relative_file.to_string(),
-                tag,
-                opening_start: start,
-                opening_end: end,
-                node_start: start,
-                node_end,
-                line: source[..start].bytes().filter(|b| *b == b'\n').count() + 1,
-                confidence,
-            });
-        }
+        let line = source[..start].bytes().filter(|b| *b == b'\n').count() + 1;
+        let line_start = source[..start].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+        out.push(OpeningHit {
+            tag,
+            opening_start: start,
+            opening_end: end,
+            node_start: start,
+            node_end,
+            line,
+            column: start - line_start + 1,
+        });
         i = end;
+    }
+}
+
+fn hit_to_target(relative: &str, hit: &OpeningHit) -> DesignSourceTarget {
+    DesignSourceTarget {
+        file: relative.to_string(),
+        tag: hit.tag.clone(),
+        opening_start: hit.opening_start,
+        opening_end: hit.opening_end,
+        node_start: hit.node_start,
+        node_end: hit.node_end,
+        line: hit.line,
+        confidence: 100,
     }
 }
 
@@ -570,51 +531,66 @@ pub fn resolve_design_element(
             "Design mode supports React + Vite, Next.js, Astro, and Remix projects.".into(),
         ));
     };
-    let mut results = Vec::new();
-    for entry in WalkDir::new(&root)
-        .max_depth(14)
-        .into_iter()
-        .filter_entry(|e| !skip_dir(e.path()))
-        .filter_map(Result::ok)
+    let Some(source_file) = query.source_file.as_deref().filter(|value| !value.is_empty()) else {
+        return Ok(Vec::new());
+    };
+    let Some(path) = locate_source_path(&root, source_file) else {
+        return Ok(Vec::new());
+    };
+    if path
+        .metadata()
+        .map(|meta| meta.len())
+        .unwrap_or(u64::MAX)
+        > MAX_SOURCE_BYTES
     {
-        if !entry.file_type().is_file() || !supported_source(entry.path()) {
-            continue;
-        }
-        if entry.metadata().map(|m| m.len()).unwrap_or(u64::MAX) > MAX_SOURCE_BYTES {
-            continue;
-        }
-        let Ok(source) = std::fs::read_to_string(entry.path()) else {
-            continue;
-        };
-        let relative = entry
-            .path()
-            .strip_prefix(&root)
-            .unwrap_or(entry.path())
-            .to_string_lossy()
-            .replace('\\', "/");
-        if matches!(
-            entry.path().extension().and_then(|v| v.to_str()),
-            Some("astro" | "mdx")
-        ) {
-            scan_astro_candidates(&source, &relative, &query, &mut results);
-        } else if let Some(language) = language_for(entry.path()) {
-            let mut parser = Parser::new();
-            if parser.set_language(&language).is_ok() {
-                if let Some(tree) = parser.parse(&source, None) {
-                    collect_tree_candidates(
-                        tree.root_node(),
-                        &source,
-                        &relative,
-                        &query,
-                        &mut results,
-                    );
-                }
+        return Ok(Vec::new());
+    }
+    let Ok(source) = std::fs::read_to_string(&path) else {
+        return Ok(Vec::new());
+    };
+    let relative = path
+        .strip_prefix(root.canonicalize().unwrap_or(root.clone()))
+        .or_else(|_| path.strip_prefix(&root))
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let line = query.source_line.unwrap_or(0);
+    if line == 0 {
+        return Ok(Vec::new());
+    }
+    let mut hits = Vec::new();
+    let is_markup = matches!(
+        path.extension().and_then(|value| value.to_str()),
+        Some("astro" | "mdx")
+    );
+    if is_markup {
+        collect_markup_openings(&source, &mut hits);
+    } else if let Some(language) = language_for(&path) {
+        let mut parser = Parser::new();
+        if parser.set_language(&language).is_ok() {
+            if let Some(tree) = parser.parse(&source, None) {
+                collect_jsx_openings(tree.root_node(), &source, &mut hits);
             }
         }
     }
-    results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
-    results.truncate(MAX_RESULTS);
-    Ok(results)
+    let Some(hit) = pick_opening(&hits, &query.tag, line, query.source_column) else {
+        return Ok(Vec::new());
+    };
+    Ok(vec![hit_to_target(&relative, hit)])
+}
+
+fn enclosing_edit_node(node: Node<'_>) -> Node<'_> {
+    let mut current = node;
+    while let Some(parent) = current.parent() {
+        if matches!(parent.kind(), "jsx_element" | "element") {
+            return parent;
+        }
+        if matches!(parent.kind(), "program" | "document") {
+            break;
+        }
+        current = parent;
+    }
+    node
 }
 
 fn css_to_react_key(property: &str) -> String {
@@ -682,7 +658,13 @@ fn split_js_properties(input: &str) -> Vec<String> {
 fn merge_react_style(opening: &str, styles: &BTreeMap<String, String>) -> Result<String, AppError> {
     let declarations = styles
         .iter()
-        .map(|(key, value)| format!("{}: {}", css_to_react_key(key), js_string(value)))
+        .map(|(key, value)| {
+            format!(
+                "{}: {}",
+                css_to_react_key(key),
+                js_string(&normalize_css_value(key, value))
+            )
+        })
         .collect::<Vec<_>>();
     if declarations.is_empty() {
         return Ok(opening.to_string());
@@ -748,11 +730,7 @@ fn merge_react_style(opening: &str, styles: &BTreeMap<String, String>) -> Result
 }
 
 fn merge_html_style(opening: &str, styles: &BTreeMap<String, String>) -> Result<String, AppError> {
-    let mut declarations = styles
-        .iter()
-        .map(|(key, value)| format!("{key}: {value}"))
-        .collect::<Vec<_>>();
-    if declarations.is_empty() {
+    if styles.is_empty() {
         return Ok(opening.to_string());
     }
     if let Some(style_at) = attribute_index(opening, "style") {
@@ -784,24 +762,8 @@ fn merge_html_style(opening: &str, styles: &BTreeMap<String, String>) -> Result<
             .position(|b| *b == quote)
             .map(|v| start + v)
             .ok_or_else(|| AppError::Message("Invalid style attribute.".into()))?;
-        let replaced = styles.keys().cloned().collect::<HashSet<_>>();
-        let mut kept = opening[start..end]
-            .split(';')
-            .map(str::trim)
-            .filter(|part| {
-                let key = part.split(':').next().unwrap_or("").trim();
-                !replaced.contains(key)
-            })
-            .filter(|v| !v.is_empty())
-            .map(str::to_string)
-            .collect::<Vec<_>>();
-        kept.append(&mut declarations);
-        return Ok(format!(
-            "{}{}{}",
-            &opening[..start],
-            kept.join("; "),
-            &opening[end..]
-        ));
+        let merged = merge_css_declarations(&opening[start..end], styles);
+        return Ok(format!("{}{}{}", &opening[..start], merged, &opening[end..]));
     }
     let insert_at = opening
         .rfind("/>")
@@ -810,7 +772,7 @@ fn merge_html_style(opening: &str, styles: &BTreeMap<String, String>) -> Result<
     Ok(format!(
         "{} style=\"{}\"{}",
         &opening[..insert_at],
-        declarations.join("; "),
+        merge_css_declarations("", styles),
         &opening[insert_at..]
     ))
 }
@@ -1051,11 +1013,9 @@ mod tests {
             r#"{"dependencies":{"vite":"7","react":"19"}}"#,
         )
         .unwrap();
-        std::fs::write(
-            src.join("App.tsx"),
-            r#"export function App(){return <main className="hero shell">Hello Shape</main>}"#,
-        )
-        .unwrap();
+        let source = r#"export function App(){return <main className="hero shell">Hello Shape</main>}"#;
+        std::fs::write(src.join("App.tsx"), source).unwrap();
+        let column = source.find("<main").unwrap() + 1;
 
         let matches = resolve_design_element(
             root.to_string_lossy().into_owned(),
@@ -1065,11 +1025,13 @@ mod tests {
                 classes: vec!["hero".into(), "shell".into()],
                 text: Some("Hello Shape".into()),
                 route_source: Some("src/App.tsx".into()),
-                source_file: None,
-                source_line: None,
+                source_file: Some("src/App.tsx".into()),
+                source_line: Some(1),
+                source_column: Some(column),
             },
         )
         .unwrap();
+        assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].file, "src/App.tsx");
 
         let mut styles = BTreeMap::new();
@@ -1086,6 +1048,60 @@ mod tests {
         let updated = std::fs::read_to_string(src.join("App.tsx")).unwrap();
         assert!(updated.contains(r#"style={{ display: "flex" }}"#));
         assert!(syntax_is_clean(&src.join("App.tsx"), &updated));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolves_the_opening_tag_at_file_line_and_column() {
+        let root =
+            std::env::temp_dir().join(format!("shape-design-source-{}", uuid::Uuid::new_v4()));
+        let src = root.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"dependencies":{"vite":"7","react":"19"}}"#,
+        )
+        .unwrap();
+        let source = "export function App(){\n  return (\n    <>\n      <main className=\"first\">A</main>\n      <main className=\"second\">B</main>\n    </>\n  );\n}\n";
+        std::fs::write(src.join("App.tsx"), source).unwrap();
+        let second = source.match_indices("<main").nth(1).unwrap().0;
+        let line = source[..second].bytes().filter(|b| *b == b'\n').count() + 1;
+        let column = second - source[..second].rfind('\n').unwrap() ;
+
+        let matches = resolve_design_element(
+            root.to_string_lossy().into_owned(),
+            DesignElementQuery {
+                tag: "main".into(),
+                id: None,
+                classes: vec![],
+                text: None,
+                route_source: None,
+                source_file: Some("src/App.tsx".into()),
+                source_line: Some(line),
+                source_column: Some(column),
+            },
+        )
+        .unwrap();
+        assert_eq!(matches.len(), 1);
+        let opening = &source[matches[0].opening_start..matches[0].opening_end];
+        assert!(opening.contains("second"), "{opening}");
+        assert!(!opening.contains("first"), "{opening}");
+
+        let none = resolve_design_element(
+            root.to_string_lossy().into_owned(),
+            DesignElementQuery {
+                tag: "main".into(),
+                id: None,
+                classes: vec!["first".into()],
+                text: Some("A".into()),
+                route_source: Some("src/App.tsx".into()),
+                source_file: None,
+                source_line: None,
+                source_column: None,
+            },
+        )
+        .unwrap();
+        assert!(none.is_empty());
         let _ = std::fs::remove_dir_all(root);
     }
 }

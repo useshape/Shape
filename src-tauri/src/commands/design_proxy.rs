@@ -93,10 +93,7 @@ fn origin_of(parsed: &url::Url) -> String {
         "{}://{}{}",
         parsed.scheme(),
         parsed.host_str().unwrap_or("localhost"),
-        parsed
-            .port()
-            .map(|p| format!(":{p}"))
-            .unwrap_or_default()
+        parsed.port().map(|p| format!(":{p}")).unwrap_or_default()
     )
 }
 
@@ -113,7 +110,9 @@ fn proxy_src(listen_port: u16, parsed: &url::Url) -> String {
 
 fn rewrite_location(value: &str, listen_port: u16, target: &url::Url) -> String {
     if let Ok(u) = url::Url::parse(value) {
-        if u.host_str() == target.host_str() && u.port_or_known_default() == target.port_or_known_default() {
+        if u.host_str() == target.host_str()
+            && u.port_or_known_default() == target.port_or_known_default()
+        {
             return proxy_src(listen_port, &u);
         }
     }
@@ -158,11 +157,15 @@ async fn handle_client(
     let Ok(http) = client_http else { return };
 
     let mut builder = http.request(
-        method.parse::<reqwest::Method>().unwrap_or(reqwest::Method::GET),
+        method
+            .parse::<reqwest::Method>()
+            .unwrap_or(reqwest::Method::GET),
         dest.clone(),
     );
     for line in lines {
-        let Some((name, value)) = line.split_once(':') else { continue };
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
         let name = name.trim();
         let value = value.trim();
         let lower = name.to_ascii_lowercase();
@@ -204,7 +207,11 @@ async fn handle_client(
         }
     }
 
-    let mut head = format!("HTTP/1.1 {} {}\r\n", status.as_u16(), status.canonical_reason().unwrap_or("OK"));
+    let mut head = format!(
+        "HTTP/1.1 {} {}\r\n",
+        status.as_u16(),
+        status.canonical_reason().unwrap_or("OK")
+    );
     for (name, value) in headers.iter() {
         let lower = name.as_str().to_ascii_lowercase();
         if lower == "content-length"
@@ -227,7 +234,10 @@ async fn handle_client(
         head.push_str(&val);
         head.push_str("\r\n");
     }
-    head.push_str(&format!("Content-Length: {}\r\nConnection: close\r\n\r\n", out_body.len()));
+    head.push_str(&format!(
+        "Content-Length: {}\r\nConnection: close\r\n\r\n",
+        out_body.len()
+    ));
     let _ = client.write_all(head.as_bytes()).await;
     let _ = client.write_all(&out_body).await;
 }
@@ -241,7 +251,9 @@ pub async fn start_design_proxy(
     let parsed = url::Url::parse(&target_url)
         .map_err(|e| AppError::Message(format!("Invalid preview URL: {e}")))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return Err(AppError::Message("Design mode only supports http(s) preview URLs.".into()));
+        return Err(AppError::Message(
+            "Design mode only supports http(s) preview URLs.".into(),
+        ));
     }
 
     let inject = !bridge_script.trim().is_empty();
@@ -321,12 +333,18 @@ pub async fn probe_preview_url(url: String) -> Result<bool, AppError> {
     let host = parsed.host_str().unwrap_or("localhost");
     let port = parsed.port_or_known_default().unwrap_or(80);
     // IPv4 only — [::1] on Windows can stall far past the connect timeout.
-    let mut candidates = vec![format!("{host}:{port}")];
+    // Prefer 127.0.0.1 first: Next/Vite are started with `--hostname 127.0.0.1`,
+    // and Windows `localhost` often tries `[::1]` which is not listening.
+    let mut candidates = Vec::new();
     let lower = host.to_ascii_lowercase();
-    if lower == "localhost" {
+    if lower == "localhost" || lower == "0.0.0.0" || lower == "::1" || lower == "[::1]" {
         candidates.push(format!("127.0.0.1:{port}"));
-    } else if lower == "127.0.0.1" {
         candidates.push(format!("localhost:{port}"));
+    } else if lower == "127.0.0.1" {
+        candidates.push(format!("127.0.0.1:{port}"));
+        candidates.push(format!("localhost:{port}"));
+    } else {
+        candidates.push(format!("{host}:{port}"));
     }
     log::info!("[preview] probe_preview_url {}", url);
     for addr in candidates {

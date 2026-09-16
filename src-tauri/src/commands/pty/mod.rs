@@ -2,7 +2,9 @@ use crate::core::error::AppError;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -50,6 +52,7 @@ pub struct SessionMeta {
     pub kind: SessionKind,
     /// Only `pty_spawn_run` sessions scrape preview URLs from output.
     pub scrape_preview: AtomicBool,
+    pub cwd: Mutex<Option<String>>,
 }
 
 impl SessionMeta {
@@ -62,6 +65,7 @@ impl SessionMeta {
             exit_notify: tokio::sync::Notify::new(),
             kind,
             scrape_preview: AtomicBool::new(false),
+            cwd: Mutex::new(None),
         }
     }
 
@@ -100,7 +104,6 @@ impl SessionMeta {
         self.running.store(false, Ordering::SeqCst);
         self.exit_notify.notify_waiters();
     }
-
 }
 
 fn tail_of(text: &str, tail_chars: usize) -> String {
@@ -126,10 +129,23 @@ pub fn looks_like_input_prompt(output: &str) -> bool {
         return false;
     }
     const ENDINGS: &[&str] = &[
-        "(y/n)", "(y/n):", "[y/n]", "[y/n]:", "(yes/no)", "(yes/no):", "[yes/no]",
-        "password:", "passphrase:", "username:", "login:",
-        "press any key to continue", "press enter to continue",
-        "overwrite?", "are you sure?", "continue?", "proceed?",
+        "(y/n)",
+        "(y/n):",
+        "[y/n]",
+        "[y/n]:",
+        "(yes/no)",
+        "(yes/no):",
+        "[yes/no]",
+        "password:",
+        "passphrase:",
+        "username:",
+        "login:",
+        "press any key to continue",
+        "press enter to continue",
+        "overwrite?",
+        "are you sure?",
+        "continue?",
+        "proceed?",
     ];
     if ENDINGS.iter().any(|e| last_line.ends_with(e)) {
         return true;
@@ -210,6 +226,45 @@ impl PtyState {
         }
     }
 
+    pub fn find_running_preview(&self, cwd: &str, command: &str) -> Option<u32> {
+        let want_cwd = crate::core::paths::normalize_fs_path(cwd);
+        let want_cmd = normalize_run_command(command);
+        let ids: Vec<u32> = self
+            .session_meta
+            .lock()
+            .ok()?
+            .iter()
+            .filter(|(_, meta)| meta.scrape_preview.load(Ordering::SeqCst))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            if self.session_is_running(id) != Some(true) {
+                continue;
+            }
+            let Some(meta) = self.session_meta(id) else {
+                continue;
+            };
+            let cmd = meta
+                .command
+                .lock()
+                .ok()
+                .and_then(|c| c.clone())
+                .unwrap_or_default();
+            let stored_cwd = meta
+                .cwd
+                .lock()
+                .ok()
+                .and_then(|c| c.clone())
+                .unwrap_or_default();
+            if crate::core::paths::normalize_fs_path(&stored_cwd) == want_cwd
+                && normalize_run_command(&cmd) == want_cmd
+            {
+                return Some(id);
+            }
+        }
+        None
+    }
+
     pub fn session_meta(&self, id: u32) -> Option<Arc<SessionMeta>> {
         self.session_meta.lock().ok()?.get(&id).cloned()
     }
@@ -240,7 +295,11 @@ impl PtyState {
         Some(meta.is_running())
     }
 
-    pub fn read_session_output(&self, id: u32, tail_chars: usize) -> Result<TerminalSessionSnapshot, AppError> {
+    pub fn read_session_output(
+        &self,
+        id: u32,
+        tail_chars: usize,
+    ) -> Result<TerminalSessionSnapshot, AppError> {
         let meta = self
             .session_meta(id)
             .ok_or_else(|| AppError::Message(format!("Terminal session {} not found", id)))?;
@@ -254,7 +313,9 @@ impl PtyState {
         let tail = tail_chars.max(500).min(50_000);
         let output = tail_of(&full_output, tail);
 
-        let running = self.session_is_running(id).unwrap_or_else(|| meta.is_running());
+        let running = self
+            .session_is_running(id)
+            .unwrap_or_else(|| meta.is_running());
         let command = meta.command.lock().ok().and_then(|c| c.clone());
         let waiting_for_input = running && looks_like_input_prompt(&full_output);
 
@@ -285,9 +346,10 @@ impl PtyState {
     pub fn write_to_session(&self, id: u32, data: &str) -> Result<(), AppError> {
         if let Ok(mut sessions) = self.sessions.lock() {
             if let Some(session) = sessions.get_mut(&id) {
-                let mut writer = session.writer.lock().map_err(|e| {
-                    AppError::Message(format!("PTY writer lock poisoned: {e}"))
-                })?;
+                let mut writer = session
+                    .writer
+                    .lock()
+                    .map_err(|e| AppError::Message(format!("PTY writer lock poisoned: {e}")))?;
                 writer.write_all(data.as_bytes()).map_err(AppError::Io)?;
                 writer.flush().map_err(AppError::Io)?;
                 return Ok(());
@@ -301,9 +363,9 @@ impl PtyState {
             .stdin
             .lock()
             .map_err(|_| AppError::Message("Terminal stdin lock failed".to_string()))?;
-        let stdin = stdin_guard
-            .as_mut()
-            .ok_or_else(|| AppError::Message(format!("Terminal session {} has no open stdin", id)))?;
+        let stdin = stdin_guard.as_mut().ok_or_else(|| {
+            AppError::Message(format!("Terminal session {} has no open stdin", id))
+        })?;
         stdin.write_all(data.as_bytes()).map_err(AppError::Io)?;
         stdin.flush().map_err(AppError::Io)?;
         Ok(())
@@ -499,7 +561,12 @@ async fn http_preview_serves(url: &str) -> bool {
     else {
         return false;
     };
-    match client.get(url).header("accept", "text/html,*/*").send().await {
+    match client
+        .get(url)
+        .header("accept", "text/html,*/*")
+        .send()
+        .await
+    {
         Ok(res) => {
             let code = res.status().as_u16();
             // Port is accepting HTTP. 4xx is still a real server (wrong path).
@@ -548,7 +615,12 @@ async fn probe_preview_until_ready(app: AppHandle, id: u32, command: String) {
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         for url in &candidates {
             if tcp_preview_reachable(url).await && http_preview_serves(url).await {
-                log::info!("[preview] http READY id={} url={} attempt={}", id, url, attempt);
+                log::info!(
+                    "[preview] http READY id={} url={} attempt={}",
+                    id,
+                    url,
+                    attempt
+                );
                 let _ = app.emit(
                     "preview-ready",
                     PreviewReadyEvent {
@@ -581,7 +653,10 @@ pub struct ShellProfile {
 fn command_exists(command: &str) -> Option<String> {
     #[cfg(windows)]
     {
-        let output = std::process::Command::new("where").arg(command).output().ok()?;
+        let output = std::process::Command::new("where")
+            .arg(command)
+            .output()
+            .ok()?;
         if !output.status.success() {
             return None;
         }
@@ -593,7 +668,10 @@ fn command_exists(command: &str) -> Option<String> {
     }
     #[cfg(not(windows))]
     {
-        let output = std::process::Command::new("which").arg(command).output().ok()?;
+        let output = std::process::Command::new("which")
+            .arg(command)
+            .output()
+            .ok()?;
         if !output.status.success() {
             return None;
         }
@@ -608,7 +686,8 @@ fn command_exists(command: &str) -> Option<String> {
 /// Dynamically find Git Bash by locating the system git executable.
 fn find_git_bash() -> Option<String> {
     // Try environment variables first
-    let prog_files = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
+    let prog_files =
+        std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
     let common_paths = [
         format!(r"{}\Git\bin\bash.exe", prog_files),
         format!(r"{}\Git\usr\bin\bash.exe", prog_files),
@@ -626,7 +705,11 @@ fn find_git_bash() -> Option<String> {
         let git_path = std::path::Path::new(git_path);
         if git_path.exists() {
             if let Some(parent) = git_path.parent() {
-                let git_root = if parent.file_name().map(|f| f == "cmd" || f == "bin").unwrap_or(false) {
+                let git_root = if parent
+                    .file_name()
+                    .map(|f| f == "cmd" || f == "bin")
+                    .unwrap_or(false)
+                {
                     parent.parent()
                 } else {
                     Some(parent)
@@ -770,6 +853,72 @@ pub async fn spawn_session(
 /// Ensure Next/Vite-style dev servers bind on IPv4 loopback so TCP probe + iframe
 /// work on Windows. Prefer `--hostname` (never bare `-H` after `--`) so shell
 /// joining cannot collapse `-- -H` into the broken `---H`.
+fn node_module_bin_dirs(cwd: &str) -> Vec<PathBuf> {
+    let mut current = PathBuf::from(cwd);
+    let mut bins = Vec::new();
+    for _ in 0..8 {
+        let bin = current.join("node_modules").join(".bin");
+        if bin.is_dir() {
+            bins.push(bin);
+        }
+        match current.parent() {
+            Some(parent) if parent != current.as_path() => current = parent.to_path_buf(),
+            _ => break,
+        }
+    }
+    bins
+}
+
+fn common_node_bin_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    let mut push_if_dir = |path: PathBuf| {
+        if path.is_dir() && !dirs.contains(&path) {
+            dirs.push(path);
+        }
+    };
+    push_if_dir(PathBuf::from(r"C:\Program Files\nodejs"));
+    push_if_dir(PathBuf::from(r"C:\Program Files (x86)\nodejs"));
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        push_if_dir(PathBuf::from(appdata).join("npm"));
+    }
+    dirs
+}
+
+fn join_path_dirs(mut dirs: Vec<PathBuf>, existing: Option<&OsStr>) -> Option<OsString> {
+    if let Some(existing) = existing {
+        for dir in std::env::split_paths(existing) {
+            if !dirs.contains(&dir) {
+                dirs.push(dir);
+            }
+        }
+    }
+    if dirs.is_empty() {
+        return existing.map(OsStr::to_os_string);
+    }
+    std::env::join_paths(&dirs).ok()
+}
+
+/// Keep Windows user/machine PATH from portable-pty, then prepend workspace
+/// `node_modules/.bin` and common Node toolchain dirs (`pnpm`, `npm`, fnm).
+fn apply_pty_path(cmd: &mut CommandBuilder, cwd: Option<&str>) {
+    let mut extras = Vec::new();
+    if let Some(dir) = cwd.filter(|value| !value.is_empty()) {
+        extras.extend(node_module_bin_dirs(dir));
+    }
+    extras.extend(common_node_bin_dirs());
+    let extra_count = extras.len();
+    let existing = cmd.get_env("PATH").map(OsStr::to_os_string);
+    match join_path_dirs(extras, existing.as_deref()) {
+        Some(joined) => {
+            if extra_count > 0 {
+                log::info!("[pty] prepended {extra_count} Node toolchain dirs to PATH");
+            }
+            cmd.env("PATH", joined);
+        }
+        None => log::warn!("[pty] failed to join Node toolchain PATH"),
+    }
+}
+
 fn with_ipv4_hostname(command: &str) -> String {
     let t = command.trim();
     let lower = t.to_ascii_lowercase();
@@ -796,6 +945,16 @@ fn with_ipv4_hostname(command: &str) -> String {
     }
     t.to_string()
 }
+
+fn normalize_run_command(command: &str) -> String {
+    with_ipv4_hostname(command.trim())
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
+}
+
+static PREVIEW_RUN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 fn regex_is_package_dev(command: &str) -> bool {
     let lower = command.to_ascii_lowercase();
@@ -871,9 +1030,20 @@ pub async fn pty_spawn_run(
     cwd: String,
     command: String,
 ) -> Result<u32, AppError> {
+    let _guard = PREVIEW_RUN_LOCK.lock().await;
     let trimmed = with_ipv4_hostname(command.trim());
     if trimmed.is_empty() {
         return Err(AppError::Message("Empty run command".into()));
+    }
+    let cwd = crate::core::paths::spawn_cwd(&cwd);
+    if let Some(id) = state.find_running_preview(&cwd, &trimmed) {
+        log::info!(
+            "[preview] pty_spawn_run reuse id={} cwd={} cmd={:?}",
+            id,
+            cwd,
+            trimmed
+        );
+        return Ok(id);
     }
     if let Ok(path) = std::env::var("PATH") {
         let has_node = path
@@ -910,7 +1080,9 @@ pub async fn pty_read_output(
     id: u32,
     tail_chars: Option<usize>,
 ) -> Result<TerminalSessionSnapshot, AppError> {
-    let tail = tail_chars.unwrap_or(SESSION_OUTPUT_CAP).min(SESSION_OUTPUT_CAP);
+    let tail = tail_chars
+        .unwrap_or(SESSION_OUTPUT_CAP)
+        .min(SESSION_OUTPUT_CAP);
     log::info!("[preview] pty_read_output id={} tail={}", id, tail);
     let snap = state.read_session_output(id, tail)?;
     log::info!(
@@ -948,11 +1120,16 @@ async fn spawn_pty_with_command(
 
     if let Some(ref dir) = cwd {
         if !dir.is_empty() {
-            log::info!("Setting PTY CWD to: {}", dir);
-            cmd.cwd(dir);
+            let spawn_dir = crate::core::paths::spawn_cwd(dir);
+            log::info!("Setting PTY CWD to: {}", spawn_dir);
+            cmd.cwd(&spawn_dir);
+            apply_pty_path(&mut cmd, Some(&spawn_dir));
         } else {
             log::warn!("PTY CWD is empty string, falling back to process default");
+            apply_pty_path(&mut cmd, None);
         }
+    } else {
+        apply_pty_path(&mut cmd, None);
     }
 
     cmd.env("TERM", "xterm-256color");
@@ -991,6 +1168,13 @@ async fn spawn_pty_with_command(
 
     let cancellation_token = CancellationToken::new();
     let meta = Arc::new(SessionMeta::new(kind));
+    if let Some(ref dir) = cwd {
+        if !dir.is_empty() {
+            if let Ok(mut slot) = meta.cwd.lock() {
+                *slot = Some(crate::core::paths::spawn_cwd(dir));
+            }
+        }
+    }
 
     {
         let mut sessions = state.sessions.lock()?;
@@ -1188,7 +1372,9 @@ pub fn spawn_piped_session(
     thread::spawn(move || {
         loop {
             let status = {
-                let Ok(mut guard) = child_slot.lock() else { break };
+                let Ok(mut guard) = child_slot.lock() else {
+                    break;
+                };
                 match guard.as_mut() {
                     Some(child) => match child.try_wait() {
                         Ok(Some(status)) => Some(status.code().unwrap_or(-1)),
@@ -1337,5 +1523,25 @@ mod scrape_tests {
     fn scrape_ignores_casual_localhost_mentions() {
         assert!(scrape_preview_url("GET http://localhost:3000/api\n").is_none());
         assert!(scrape_preview_url("open http://127.0.0.1:3000 for the website\n").is_none());
+    }
+
+    #[test]
+    fn run_commands_match_with_or_without_hostname() {
+        assert_eq!(
+            normalize_run_command("bun run dev"),
+            normalize_run_command("bun run dev -- --hostname 127.0.0.1")
+        );
+    }
+
+    #[test]
+    fn pnpm_framework_script_gets_hostname() {
+        let out = with_ipv4_hostname("pnpm dev:next");
+        assert_eq!(out, "pnpm dev:next -- --hostname 127.0.0.1");
+    }
+
+    #[test]
+    fn next_dev_gets_hostname_flag() {
+        let out = with_ipv4_hostname("next dev --turbopack --port 3003");
+        assert_eq!(out, "next dev --turbopack --port 3003 --hostname 127.0.0.1");
     }
 }
