@@ -19,18 +19,18 @@ export const Slider = React.forwardRef<
     >
         <SliderPrimitive.Track
             className={cn(
-                "relative h-1.5 w-full grow overflow-hidden rounded-sm bg-border-subtle",
+                "relative h-4 w-full grow overflow-hidden rounded-full bg-border",
                 trackClassName,
             )}
         >
             <SliderPrimitive.Range
                 className={cn(
                     "absolute h-full rounded-full",
-                    trackClassName?.includes("gradient") ? "bg-transparent" : "bg-accent",
+                    trackClassName?.includes("gradient") ? "bg-transparent" : "bg-white/20",
                 )}
             />
         </SliderPrimitive.Track>
-        <SliderPrimitive.Thumb className="block h-3.5 w-3.5 rounded-full border-2 border-background bg-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-focus disabled:pointer-events-none disabled:opacity-50" />
+        <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full bg-base transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-focus disabled:pointer-events-none disabled:opacity-50" />
     </SliderPrimitive.Root>
 ));
 Slider.displayName = SliderPrimitive.Root.displayName;

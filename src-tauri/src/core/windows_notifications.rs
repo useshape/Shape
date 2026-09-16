@@ -16,8 +16,8 @@ pub fn init() {
 }
 
 fn set_process_aumid() {
-    use std::os::windows::ffi::OsStrExt;
     use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
 
     #[link(name = "shell32")]
     unsafe extern "system" {

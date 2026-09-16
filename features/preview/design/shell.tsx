@@ -10,6 +10,7 @@ import {
     ensureBackgroundRun,
     getBackgroundRunCwd,
     getLastPreviewReadyUrl,
+    sameProjectPath,
     subscribePreviewReady,
 } from "@/features/terminal/background-run";
 import { commands } from "@/lib/backend";
@@ -47,35 +48,65 @@ type SourceTarget = {
     confidence: number;
 };
 
-function LoadingCanvas({ label, detail }: { label: string; detail: string }) {
+function LoadingCanvas({
+    label,
+    detail,
+    failed,
+    onPickPackage,
+    onClose,
+}: {
+    label: string;
+    detail: string;
+    failed?: boolean;
+    onPickPackage?: () => void;
+    onClose?: () => void;
+}) {
     return (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-editor">
-            <div className="flex flex-col items-center">
-                <div className="relative size-24">
-                    <motion.div
-                        className="absolute inset-0 rounded-[28px] border border-accent/30"
-                        animate={{ rotate: 360, borderRadius: ["28px", "48px", "28px"] }}
-                        transition={{ duration: 4.2, ease: "linear", repeat: Infinity }}
-                    />
-                    <motion.div
-                        className="absolute inset-3 rounded-full border border-text-muted/30"
-                        animate={{ rotate: -360, scale: [0.88, 1.08, 0.88] }}
-                        transition={{ duration: 3.1, ease: "easeInOut", repeat: Infinity }}
-                    >
-                        <motion.span
-                            className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-accent shadow-[0_0_18px_var(--accent)]"
-                            animate={{ scale: [0.7, 1.25, 0.7] }}
-                            transition={{ duration: 1.4, repeat: Infinity }}
+            <div className="flex max-w-md flex-col items-center px-6 text-center">
+                {!failed ? (
+                    <div className="relative size-24">
+                        <motion.div
+                            className="absolute inset-0 rounded-[28px] border border-accent/30"
+                            animate={{ rotate: 360, borderRadius: ["28px", "48px", "28px"] }}
+                            transition={{ duration: 4.2, ease: "linear", repeat: Infinity }}
                         />
-                    </motion.div>
-                    <motion.div
-                        className="absolute inset-7.5 rounded-lg bg-accent/15 ring-1 ring-accent/50"
-                        animate={{ rotate: [0, 90, 180, 270, 360] }}
-                        transition={{ duration: 2.8, ease: "easeInOut", repeat: Infinity }}
-                    />
-                </div>
+                        <motion.div
+                            className="absolute inset-3 rounded-full border border-text-muted/30"
+                            animate={{ rotate: -360, scale: [0.88, 1.08, 0.88] }}
+                            transition={{ duration: 3.1, ease: "easeInOut", repeat: Infinity }}
+                        >
+                            <motion.span
+                                className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-accent shadow-[0_0_18px_var(--accent)]"
+                                animate={{ scale: [0.7, 1.25, 0.7] }}
+                                transition={{ duration: 1.4, repeat: Infinity }}
+                            />
+                        </motion.div>
+                        <motion.div
+                            className="absolute inset-7.5 rounded-lg bg-accent/15 ring-1 ring-accent/50"
+                            animate={{ rotate: [0, 90, 180, 270, 360] }}
+                            transition={{ duration: 2.8, ease: "easeInOut", repeat: Infinity }}
+                        />
+                    </div>
+                ) : (
+                    <Icon icon={RiAlertLine} className="size-10 text-warning" />
+                )}
                 <p className="mt-5 text-sm font-medium text-text-primary">{label}</p>
-                <p className="mt-1 text-xs text-text-muted">{detail}</p>
+                <p className="mt-1 text-sm text-text-muted">{detail}</p>
+                {failed ? (
+                    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                        {onPickPackage ? (
+                            <Button variant="secondary" size="sm" onClick={onPickPackage}>
+                                Choose package.json
+                            </Button>
+                        ) : null}
+                        {onClose ? (
+                            <Button variant="ghost" size="sm" onClick={onClose}>
+                                Close
+                            </Button>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </div>
     );
@@ -86,6 +117,81 @@ function joinProjectPath(root: string, relative: string) {
     return `${root.replace(/[/\\]+$/, "")}${separator}${relative.replace(/[/\\]/g, separator)}`;
 }
 
+function concatBytes(...chunks: Uint8Array[]) {
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.length;
+    }
+    return out;
+}
+
+function jpegToPdf(jpeg: Uint8Array, width: number, height: number) {
+    const encoder = new TextEncoder();
+    const content = `q ${width} 0 0 ${height} 0 0 cm /Im0 Do Q\n`;
+    let body = encoder.encode("%PDF-1.4\n");
+    const offsets: number[] = [];
+    const push = (bytes: Uint8Array) => {
+        offsets.push(body.length);
+        body = concatBytes(body, bytes);
+    };
+    push(encoder.encode("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"));
+    push(encoder.encode("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"));
+    push(
+        encoder.encode(
+            `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >> endobj\n`,
+        ),
+    );
+    push(encoder.encode(`4 0 obj << /Length ${content.length} >> stream\n${content}endstream\nendobj\n`));
+    push(
+        concatBytes(
+            encoder.encode(
+                `5 0 obj << /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >> stream\n`,
+            ),
+            jpeg,
+            encoder.encode("\nendstream\nendobj\n"),
+        ),
+    );
+    const xrefStart = body.length;
+    let xref = `xref\n0 6\n0000000000 65535 f \n`;
+    for (const offset of offsets) {
+        xref += `${String(offset).padStart(10, "0")} 00000 n \n`;
+    }
+    return concatBytes(
+        body,
+        encoder.encode(xref),
+        encoder.encode(`trailer << /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`),
+    );
+}
+
+function loadImage(src: string) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("Failed to decode export"));
+        image.src = src;
+    });
+}
+
+function loopbackPreviewUrl(raw: string): string {
+    try {
+        const url = new URL(raw.includes("://") ? raw : `http://${raw}`);
+        if (
+            url.hostname === "localhost"
+            || url.hostname === "0.0.0.0"
+            || url.hostname === "[::1]"
+            || url.hostname === "::1"
+        ) {
+            url.hostname = "127.0.0.1";
+        }
+        return url.toString();
+    } catch {
+        return raw;
+    }
+}
+
 export function DesignStudio({
     onClose,
     projectPath,
@@ -94,7 +200,8 @@ export function DesignStudio({
     projectPath: string;
 }) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
-    const { iframeSrc, reloadKey, urlBar, error } = usePreviewStore();
+    const { iframeSrc, reloadKey, urlBar } = usePreviewStore();
+    const [bootRoot, setBootRoot] = useState(projectPath);
     const [designerRoot, setDesignerRoot] = useState(projectPath);
     const [framework, setFramework] = useState("");
     const [pages, setPages] = useState<DesignPage[]>([]);
@@ -108,11 +215,16 @@ export function DesignStudio({
     const [selected, setSelected] = useState<DesignElementSnapshot | null>(null);
     const [target, setTarget] = useState<SourceTarget | null>(null);
     const [mappingError, setMappingError] = useState<string | null>(null);
+    const [bootError, setBootError] = useState<string | null>(null);
     const [ready, setReady] = useState(false);
     const [booting, setBooting] = useState(true);
     const [saved, setSaved] = useState(true);
     const [viewport, setViewport] = useState<DesignViewport>("desktop");
     const [zoom, setZoom] = useState(100);
+
+    useEffect(() => {
+        setBootRoot(projectPath);
+    }, [projectPath]);
 
     const currentUrl = getPreviewCurrentUrl() || iframeSrc || urlBar;
     const activePage = useMemo(() => {
@@ -123,35 +235,21 @@ export function DesignStudio({
             return "/";
         }
     }, [currentUrl]);
-    const routeSource = pages.find((page) => page.path === activePage)?.source;
 
     const resolveElement = useCallback(
         async (element: DesignElementSnapshot) => {
             setMappingError(null);
             const matches = await commands.resolveDesignElement(designerRoot, {
                 tag: element.tag,
-                id: element.id,
-                classes: element.classes,
-                text: element.text,
-                routeSource,
                 sourceFile: element.source?.fileName,
                 sourceLine: element.source?.lineNumber,
+                sourceColumn: element.source?.columnNumber,
             });
-            const best = matches[0] ?? null;
-            if (!best) {
-                setTarget(null);
-                setMappingError("No safe source match. Shape will not guess.");
-                return null;
-            }
-            if (matches[1] && matches[1].confidence === best.confidence) {
-                setTarget(null);
-                setMappingError("Multiple source elements match. Select a more specific child.");
-                return null;
-            }
-            setTarget(best);
-            return best;
+            const target = matches.length === 1 ? matches[0] : null;
+            setTarget(target);
+            return target;
         },
-        [designerRoot, routeSource],
+        [designerRoot],
     );
 
     useEffect(() => {
@@ -161,18 +259,19 @@ export function DesignStudio({
         let opening: Promise<boolean> | null = null;
         setBooting(true);
         setReady(false);
+        setBootError(null);
         setLayers([]);
         setSelected(null);
         setTarget(null);
         resetPreviewState();
         void (async () => {
             try {
-                const info = await commands.inspectDesignProject(projectPath);
+                const info = await commands.inspectDesignProject(bootRoot);
                 if (cancelled) return;
                 setFramework(info.framework);
                 setDesignerRoot(info.projectRoot);
                 if (!info.supported) {
-                    setMappingError("Design mode supports React + Vite, Next.js, Astro, and Remix.");
+                    setBootError("Design mode supports React + Vite, Next.js, Astro, and Remix.");
                     setBooting(false);
                     return;
                 }
@@ -186,12 +285,13 @@ export function DesignStudio({
                 await commands.registerDesignBridge(DESIGN_BRIDGE_SCRIPT);
                 if (cancelled) return;
 
-                const dev = await detectDevCommand(info.projectRoot);
-                if (!dev) {
-                    setMappingError("No development command was found for this project.");
+                const detected = await detectDevCommand(info.projectRoot);
+                if (!detected) {
+                    setBootError("No development command was found for this project.");
                     setBooting(false);
                     return;
                 }
+                const dev = detected;
 
                 const openWhenReachable = (url: string) => {
                     if (opened) return Promise.resolve(true);
@@ -199,7 +299,8 @@ export function DesignStudio({
                     opening = (async () => {
                         if (cancelled || !(await commands.probePreviewUrl(url))) return false;
                         opened = true;
-                        await navigatePreview(url, { replace: true });
+                        // Load the scraped URL directly — WebView2 injects the bridge into iframes.
+                        await navigatePreview(loopbackPreviewUrl(url), { replace: true });
                         return true;
                     })().finally(() => {
                         opening = null;
@@ -208,31 +309,38 @@ export function DesignStudio({
                 };
 
                 unsubscribeReady = subscribePreviewReady((url) => {
-                    void openWhenReachable(url);
+                    void openWhenReachable(loopbackPreviewUrl(url));
                 });
 
-                const normalizePath = (value: string) =>
-                    value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
                 const runningHere =
-                    getBackgroundRunCwd()
-                    && normalizePath(getBackgroundRunCwd()!) === normalizePath(info.projectRoot);
+                    Boolean(getBackgroundRunCwd())
+                    && sameProjectPath(getBackgroundRunCwd()!, info.projectRoot);
                 const existingUrl = runningHere ? getLastPreviewReadyUrl() : null;
-                if (existingUrl && (await openWhenReachable(existingUrl))) return;
-
-                await ensureBackgroundRun(dev.command, info.projectRoot);
-                for (let attempt = 0; attempt < 60 && !cancelled && !opened; attempt += 1) {
-                    const announced = getLastPreviewReadyUrl();
-                    if (announced && (await openWhenReachable(announced))) break;
-                    if (attempt >= 10 && (await openWhenReachable(dev.urlHint))) break;
-                    await new Promise((resolve) => window.setTimeout(resolve, 500));
+                // Prefer the URL scraped from the terminal (actual bound port).
+                if (existingUrl && (await openWhenReachable(loopbackPreviewUrl(existingUrl)))) {
+                    /* opened */
+                } else {
+                    await ensureBackgroundRun(dev.command, info.projectRoot);
+                    for (let attempt = 0; attempt < 60 && !cancelled && !opened; attempt += 1) {
+                        const announced = getLastPreviewReadyUrl();
+                        if (announced && (await openWhenReachable(loopbackPreviewUrl(announced)))) {
+                            break;
+                        }
+                        if (attempt >= 10) {
+                            const hint = loopbackPreviewUrl(dev.urlHint);
+                            if (await openWhenReachable(hint)) break;
+                        }
+                        await new Promise((resolve) => window.setTimeout(resolve, 500));
+                    }
                 }
+
                 if (!cancelled && !opened) {
-                    setMappingError(`The development server did not become ready at ${dev.urlHint}.`);
+                    setBootError(`Could not start the preview at ${dev.urlHint}.`);
                     setBooting(false);
                 }
             } catch (cause) {
                 if (!cancelled) {
-                    setMappingError(cause instanceof Error ? cause.message : String(cause));
+                    setBootError(cause instanceof Error ? cause.message : String(cause));
                     setBooting(false);
                 }
             }
@@ -241,7 +349,7 @@ export function DesignStudio({
             cancelled = true;
             unsubscribeReady();
         };
-    }, [projectPath]);
+    }, [bootRoot]);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
@@ -274,8 +382,8 @@ export function DesignStudio({
                             styles: data.styles,
                         });
                         await resolveElement(data.element!);
-                    } catch (cause) {
-                        setMappingError(cause instanceof Error ? cause.message : String(cause));
+                    } catch {
+                        previewReload();
                     } finally {
                         setSaved(true);
                     }
@@ -291,8 +399,8 @@ export function DesignStudio({
                             target: resolved,
                             text: data.text ?? "",
                         });
-                    } catch (cause) {
-                        setMappingError(cause instanceof Error ? cause.message : String(cause));
+                    } catch {
+                        previewReload();
                     } finally {
                         setSaved(true);
                     }
@@ -315,8 +423,8 @@ export function DesignStudio({
                         setTarget(null);
                         setReady(false);
                         previewReload();
-                    } catch (cause) {
-                        setMappingError(cause instanceof Error ? cause.message : String(cause));
+                    } catch {
+                        previewReload();
                     } finally {
                         setSaved(true);
                     }
@@ -339,20 +447,19 @@ export function DesignStudio({
 
     const commitStyles = useCallback(
         async (styles: Record<string, string>) => {
-            if (!selected || !target) {
-                setMappingError("Select an element with a unique source match first.");
-                return;
-            }
+            const current = selected;
+            if (!current) return;
+            const resolved = target ?? (await resolveElement(current));
+            if (!resolved) return;
             setSaved(false);
             try {
                 await commands.applyDesignSourcePatch({
                     projectPath: designerRoot,
-                    target,
+                    target: resolved,
                     styles,
                 });
-                await resolveElement({ ...selected, styles: { ...selected.styles, ...styles } });
-            } catch (cause) {
-                setMappingError(cause instanceof Error ? cause.message : String(cause));
+                await resolveElement({ ...current, styles: { ...current.styles, ...styles } });
+            } catch {
                 previewReload();
             } finally {
                 setSaved(true);
@@ -369,29 +476,98 @@ export function DesignStudio({
 
     const applyStructure = useCallback(
         async (operation: "delete" | "duplicate") => {
-            if (!target) {
-                setMappingError("Select an element with a unique source match first.");
-                return;
-            }
+            const current = selected;
+            const resolved = target ?? (current ? await resolveElement(current) : null);
+            if (!resolved) return;
             setSaved(false);
             try {
                 await commands.applyDesignSourcePatch({
                     projectPath: designerRoot,
-                    target,
+                    target: resolved,
                     operation,
                 });
                 setSelected(null);
                 setTarget(null);
                 setReady(false);
                 previewReload();
-            } catch (cause) {
-                setMappingError(cause instanceof Error ? cause.message : String(cause));
+            } catch {
+                previewReload();
             } finally {
                 setSaved(true);
             }
         },
-        [designerRoot, target],
+        [designerRoot, resolveElement, selected, target],
     );
+
+    const exportSelection = useCallback(async (scale: number, format: string) => {
+        const frame = iframeRef.current?.contentWindow;
+        if (!frame) return;
+        const requestId = crypto.randomUUID();
+        const result = await new Promise<{ dataUrl?: string; width?: number; height?: number }>((resolve) => {
+            const timer = window.setTimeout(() => {
+                window.removeEventListener("message", onMessage);
+                resolve({});
+            }, 12_000);
+            const onMessage = (event: MessageEvent) => {
+                if (event.source !== frame) return;
+                const data = event.data as {
+                    type?: string;
+                    requestId?: string;
+                    dataUrl?: string;
+                    width?: number;
+                    height?: number;
+                };
+                if (data.type !== "shape-design-export-result" || data.requestId !== requestId) return;
+                window.clearTimeout(timer);
+                window.removeEventListener("message", onMessage);
+                resolve(data);
+            };
+            window.addEventListener("message", onMessage);
+            frame.postMessage({ type: "shape-design-export", requestId, scale }, "*");
+        });
+        if (!result.dataUrl) return;
+        const image = await loadImage(result.dataUrl);
+        const canvas = document.createElement("canvas");
+        canvas.width = result.width || image.width;
+        canvas.height = result.height || image.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        if (format === "jpg" || format === "pdf") {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.drawImage(image, 0, 0);
+        const mime =
+            format === "jpg"
+                ? "image/jpeg"
+                : format === "webp"
+                  ? "image/webp"
+                  : format === "avif"
+                    ? "image/avif"
+                    : "image/png";
+        const blob =
+            (await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.92)))
+            ?? (await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png")));
+        if (!blob) return;
+        let bytes = new Uint8Array(await blob.arrayBuffer());
+        let ext = format === "jpg" ? "jpg" : format === "avif" ? "avif" : format;
+        if (format === "pdf") {
+            const jpeg =
+                (await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92)));
+            if (!jpeg) return;
+            bytes = jpegToPdf(new Uint8Array(await jpeg.arrayBuffer()), canvas.width, canvas.height);
+            ext = "pdf";
+        } else if (blob.type === "image/png" && format !== "png") {
+            ext = "png";
+        }
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const path = await save({
+            defaultPath: `export.${ext}`,
+            filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+        });
+        if (typeof path !== "string") return;
+        await commands.saveFileBytes(path, Array.from(bytes));
+    }, []);
 
     const changePage = useCallback(
         (path: string) => {
@@ -408,49 +584,94 @@ export function DesignStudio({
     const canvasWidth =
         viewport === "mobile" ? 390 : viewport === "tablet" ? 768 : "100%";
     const selectedKey = selected?.key ?? null;
+    const showPanels = ready && !bootError;
+    const showBootOverlay = booting || !ready || Boolean(bootError);
+
+    const pickPackageJson = useCallback(async () => {
+        const { open } = await import("@tauri-apps/plugin-dialog");
+        const selectedPath = await open({
+            multiple: false,
+            defaultPath: bootRoot,
+            filters: [{ name: "package.json", extensions: ["json"] }],
+        });
+        if (typeof selectedPath !== "string") return;
+        const base = selectedPath.replace(/[/\\][^/\\]+$/, "");
+        if (!base || base === selectedPath) {
+            setBootError("Pick a package.json file for the web app you want to preview.");
+            return;
+        }
+        const name = selectedPath.replace(/^.*[/\\]/, "").toLowerCase();
+        if (name !== "package.json") {
+            setBootError("Pick a package.json file for the web app you want to preview.");
+            return;
+        }
+        setBootError(null);
+        setBootRoot(base);
+    }, [bootRoot]);
+
+    if (bootError && !iframeSrc) {
+        return (
+            <div className="relative h-full min-h-0 w-full overflow-hidden bg-editor">
+                <LoadingCanvas
+                    failed
+                    label="Preview did not start"
+                    detail={bootError}
+                    onPickPackage={() => void pickPackageJson()}
+                    onClose={onClose}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-editor">
-            <DesignToolbar
-                onClose={onClose}
-                projectPath={designerRoot}
-                pages={pages}
-                activePage={activePage}
-                onPageChange={changePage}
-                onReload={() => {
-                    setReady(false);
-                    previewReload();
-                }}
-                onOpenCode={openSource}
-                saved={saved}
-            />
-            <div className="flex min-h-0 flex-1">
-                <DesignLeftPanel
-                    layers={layers}
-                    selectedKey={selectedKey}
-                    onSelectLayer={(key) => {
-                        iframeRef.current?.contentWindow?.postMessage(
-                            { type: "shape-design-select-key", key },
-                            "*",
-                        );
-                    }}
+            {showPanels ? (
+                <DesignToolbar
+                    onClose={onClose}
+                    projectPath={designerRoot}
                     pages={pages}
                     activePage={activePage}
                     onPageChange={changePage}
-                    assets={assets}
-                    projectRoot={designerRoot}
+                    onReload={() => {
+                        setReady(false);
+                        previewReload();
+                    }}
+                    onOpenCode={openSource}
+                    saved={saved}
                 />
-                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-editor">
-                    <div className="relative min-h-0 flex-1 overflow-auto">
-                    <div className="flex h-full min-h-90 min-w-full items-stretch justify-center p-5">
+            ) : null}
+            <div className="flex min-h-0 flex-1">
+                {showPanels ? (
+                    <DesignLeftPanel
+                        layers={layers}
+                        selectedKey={selectedKey}
+                        onSelectLayer={(key) => {
+                            iframeRef.current?.contentWindow?.postMessage(
+                                { type: "shape-design-select-key", key },
+                                "*",
+                            );
+                        }}
+                        pages={pages}
+                        activePage={activePage}
+                        onPageChange={changePage}
+                        assets={assets}
+                        projectRoot={designerRoot}
+                    />
+                ) : null}
+                <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-editor">
+                    <div className="h-full overflow-hidden">
+                    <div
+                        className={cn(
+                            "flex h-full min-h-90 min-w-full items-stretch justify-center",
+                            viewport !== "desktop" && showPanels && "p-5",
+                        )}
+                    >
                         <div
-                            className={cn(
-                                "relative h-full min-h-80 overflow-hidden rounded-md border border-border bg-white shadow-lg transition-[width,transform] duration-300",
-                            )}
+                            className="relative h-full min-h-80 overflow-hidden bg-white transition-[width,transform] duration-300"
                             style={{
-                                width: canvasWidth,
+                                width: showPanels ? canvasWidth : "100%",
                                 maxWidth: "100%",
-                                transform: `scale(${zoom / 100})`,
+                                transform: showPanels ? `scale(${zoom / 100})` : undefined,
                                 transformOrigin: "center center",
                             }}
                         >
@@ -460,7 +681,7 @@ export function DesignStudio({
                                     ref={iframeRef}
                                     src={iframeSrc}
                                     title="Design canvas"
-                                    className="h-full w-full border-0 bg-white"
+                                    className="h-full w-full border-0 bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                                     sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
                                     referrerPolicy="no-referrer"
                                     onLoad={() => {
@@ -473,26 +694,30 @@ export function DesignStudio({
                                     }}
                                 />
                             ) : null}
-                            {!ready || booting ? (
+                            {showBootOverlay ? (
                                 <LoadingCanvas
+                                    failed={Boolean(bootError)}
                                     label={
-                                        error
-                                            ? "Waiting for the development server"
+                                        bootError
+                                            ? "Preview did not start"
                                             : !iframeSrc
                                               ? `Starting ${framework ? framework.replace("-", " + ") : "project"}`
                                               : "Preparing the canvas"
                                     }
                                     detail={
-                                        iframeSrc
-                                            ? "Mapping the live page to source"
-                                            : "The preview will open automatically when it is ready"
+                                        bootError
+                                            ?? (iframeSrc
+                                                ? "Mapping the live page to source"
+                                                : "Waiting for the development server")
                                     }
+                                    onPickPackage={bootError ? () => void pickPackageJson() : undefined}
+                                    onClose={bootError ? onClose : undefined}
                                 />
                             ) : null}
                         </div>
                     </div>
                     {mappingError ? (
-                        <div className="absolute left-1/2 top-3 z-30 flex max-w-[min(520px,80%)] -translate-x-1/2 items-center gap-2 rounded-lg border border-border-secondary bg-surface-4/95 px-3 py-2 text-xs text-text-secondary shadow-lg backdrop-blur">
+                        <div className="absolute left-1/2 top-3 z-30 flex max-w-[min(520px,80%)] -translate-x-1/2 items-center gap-2 rounded-lg border border-border-secondary bg-surface-4/95 px-3 py-2 text-sm text-text-secondary shadow-lg backdrop-blur">
                             <Icon icon={RiAlertLine} className="text-warning" />
                             <span className="min-w-0 flex-1">{mappingError}</span>
                             <Button
@@ -506,45 +731,55 @@ export function DesignStudio({
                         </div>
                     ) : null}
                     </div>
-                    <div className="flex h-14 shrink-0 items-center justify-center border-t border-border bg-panel/40">
-                    <DesignBottomToolbar
-                        viewport={viewport}
-                        onViewportChange={setViewport}
+                    {showPanels ? (
+                        <DesignBottomToolbar
+                            viewport={viewport}
+                            onViewportChange={setViewport}
+                            zoom={zoom}
+                            onZoomChange={setZoom}
+                            onUndo={() => {
+                                void commands.undoDesignSourcePatch().then((changed) => {
+                                    if (changed) previewReload();
+                                });
+                            }}
+                            onRedo={() => {
+                                void commands.redoDesignSourcePatch().then((changed) => {
+                                    if (changed) previewReload();
+                                });
+                            }}
+                            onCapture={() => {
+                                if (ready && iframeSrc) {
+                                    void commands.capturePagePreview(iframeSrc).catch(() => {});
+                                }
+                            }}
+                            onOpenCode={openSource}
+                            canCapture={ready && Boolean(iframeSrc)}
+                            canOpenCode={Boolean(target)}
+                        />
+                    ) : null}
+                </main>
+                {showPanels ? (
+                    <DesignStylePanel
+                        key={selectedKey ?? "empty"}
+                        element={selected}
+                        source={target ? { file: target.file, line: target.line } : null}
+                        previewUrl={iframeSrc}
                         zoom={zoom}
                         onZoomChange={setZoom}
-                        onUndo={() => {
-                            void commands.undoDesignSourcePatch().then((changed) => {
-                                if (changed) previewReload();
-                            });
-                        }}
-                        onRedo={() => {
-                            void commands.redoDesignSourcePatch().then((changed) => {
-                                if (changed) previewReload();
-                            });
-                        }}
-                        onCapture={() => {
-                            if (ready && iframeSrc) {
-                                void commands.capturePagePreview(iframeSrc).catch((cause) => {
-                                    setMappingError(cause instanceof Error ? cause.message : String(cause));
-                                });
-                            }
-                        }}
-                        onOpenCode={openSource}
-                        canCapture={ready && Boolean(iframeSrc)}
-                        canOpenCode={Boolean(target)}
+                        onPreview={previewStyles}
+                        onCommit={(styles: Record<string, string>) => void commitStyles(styles)}
+                        onOpenSource={openSource}
+                        onAlign={(alignment: "center" | "center-x" | "center-y") =>
+                            iframeRef.current?.contentWindow?.postMessage(
+                                { type: "shape-design-align", alignment },
+                                "*",
+                            )
+                        }
+                        onDuplicate={() => void applyStructure("duplicate")}
+                        onDelete={() => void applyStructure("delete")}
+                        onExport={exportSelection}
                     />
-                    </div>
-                </main>
-                <DesignStylePanel
-                    key={selectedKey ?? "empty"}
-                    element={selected}
-                    source={target ? { file: target.file, line: target.line } : null}
-                    onPreview={previewStyles}
-                    onCommit={(styles) => void commitStyles(styles)}
-                    onOpenSource={openSource}
-                    onDuplicate={() => void applyStructure("duplicate")}
-                    onDelete={() => void applyStructure("delete")}
-                />
+                ) : null}
             </div>
         </div>
     );

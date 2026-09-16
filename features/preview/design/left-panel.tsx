@@ -83,13 +83,15 @@ export function DesignLeftPanel({
             {tab === "layers" ? (
                 <>
                     <div className="shrink-0 border-b border-border p-2">
-                        <label className="flex h-7 items-center gap-1.5 rounded-md bg-input-bg px-2 text-text-muted">
-                            <Icon icon={RiSearchLine} size={ICON_SIZE_SM} />
+                        <label className="relative flex h-6 items-center rounded-md bg-input-bg text-text-muted">
+                            <span className="pointer-events-none absolute left-0 top-0 flex size-6 items-center justify-center">
+                                <Icon icon={RiSearchLine} size={ICON_SIZE_SM} />
+                            </span>
                             <input
                                 value={query}
                                 onChange={(event) => setQuery(event.target.value)}
                                 placeholder="Filter layers"
-                                className="min-w-0 flex-1 bg-transparent text-xs text-text-primary outline-none placeholder:text-text-muted"
+                                className="h-6 min-w-0 flex-1 bg-transparent pl-6 pr-2 text-xs leading-none text-text-primary outline-none placeholder:text-text-muted"
                             />
                         </label>
                     </div>
@@ -105,7 +107,7 @@ export function DesignLeftPanel({
                                         type="button"
                                         onClick={() => onSelectLayer(layer.key)}
                                         className={cn(
-                                            "flex h-7 w-full items-center gap-1 px-1.5 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                            "flex h-6 w-full items-center gap-1 px-1.5 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary",
                                             selectedKey === layer.key && "bg-panel-active text-text-primary",
                                         )}
                                         style={{ paddingLeft: 6 + Math.min(layer.depth, 12) * 12 }}
@@ -211,7 +213,7 @@ export function DesignLeftPanel({
             ) : null}
 
             <div className="shrink-0 border-t border-border p-1.5">
-                <div className="flex h-7 items-center gap-1.5 px-2 text-xs text-text-muted">
+                <div className="flex h-6 items-center gap-1.5 px-2 text-xs text-text-muted">
                     <Icon icon={RiCodeLine} size={ICON_SIZE_SM} />
                     Source-backed canvas
                 </div>

@@ -8,9 +8,9 @@ use tauri::{AppHandle, Emitter, Listener, Manager};
 use tokio::sync::oneshot;
 use url::Url;
 
+use crate::agent::commands::logging;
 use crate::commands::design_sandbox;
 use crate::core::error::AppError;
-use crate::agent::commands::logging;
 
 const MAX_WIDTH: u32 = 1920;
 const MAX_HEIGHT: u32 = 1080;
@@ -108,16 +108,17 @@ impl PreviewCaptureState {
     pub fn register_listener(&self, app: &AppHandle) {
         let app_for_listener = app.clone();
         let _ = app.listen("design-preview-capture-result", move |event| {
-            let payload: DesignPreviewCaptureResultEvent = match serde_json::from_str(event.payload()) {
-                Ok(p) => p,
-                Err(e) => {
-                    logging::warn(
-                        "design_preview",
-                        &format!("Invalid design-preview-capture-result payload: {e}"),
-                    );
-                    return;
-                }
-            };
+            let payload: DesignPreviewCaptureResultEvent =
+                match serde_json::from_str(event.payload()) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        logging::warn(
+                            "design_preview",
+                            &format!("Invalid design-preview-capture-result payload: {e}"),
+                        );
+                        return;
+                    }
+                };
             let state = app_for_listener.state::<PreviewCaptureState>();
             let mut guard = match state.pending.lock() {
                 Ok(g) => g,
@@ -237,7 +238,9 @@ pub async fn capture_page_preview(
     );
     if let Err(e) = emit_result {
         let _ = state.pending.lock().map(|mut g| g.remove(&request_id));
-        return Err(AppError::Env(format!("Failed to emit page capture request: {e}")));
+        return Err(AppError::Env(format!(
+            "Failed to emit page capture request: {e}"
+        )));
     }
 
     let timeout_ms = CAPTURE_TIMEOUT_MS + 8_000;
@@ -294,10 +297,7 @@ pub async fn capture_html_preview_inner(
         )
     };
     if document.contains(r#"src="bundle.js""#) {
-        document = document.replace(
-            r#"src="bundle.js""#,
-            &format!(r#"src="{bundle_src}""#),
-        );
+        document = document.replace(r#"src="bundle.js""#, &format!(r#"src="{bundle_src}""#));
     }
     let tailwind_path = preview_dir.join(design_sandbox::PREVIEW_TAILWIND_FILENAME);
     let tailwind_src = asset_url_for_path(&tailwind_path)?.to_string();
@@ -343,7 +343,9 @@ pub async fn capture_html_preview_inner(
     );
     if let Err(e) = emit_result {
         let _ = state.pending.lock().map(|mut g| g.remove(&request_id));
-        return Err(AppError::Env(format!("Failed to emit preview capture request: {e}")));
+        return Err(AppError::Env(format!(
+            "Failed to emit preview capture request: {e}"
+        )));
     }
 
     let timeout_ms = if req.react_sandbox.unwrap_or(false) {
@@ -376,7 +378,11 @@ pub async fn capture_html_preview_inner(
     })
 }
 
-fn wrap_preview_html(body_html: &str, project_path: Option<&str>, use_project_tokens: bool) -> String {
+fn wrap_preview_html(
+    body_html: &str,
+    project_path: Option<&str>,
+    use_project_tokens: bool,
+) -> String {
     let project_css = if use_project_tokens {
         load_project_css(project_path)
     } else {
@@ -392,7 +398,10 @@ fn load_project_css(project_path: Option<&str>) -> String {
     let candidates = [
         Path::new(root).join("app").join("globals.css"),
         Path::new(root).join("src").join("app").join("globals.css"),
-        Path::new(root).join("shape").join("app").join("globals.css"),
+        Path::new(root)
+            .join("shape")
+            .join("app")
+            .join("globals.css"),
         Path::new(root).join("globals.css"),
     ];
     for path in candidates {
@@ -407,20 +416,14 @@ fn asset_url_for_path(path: &Path) -> Result<Url, AppError> {
     let canonical = path
         .canonicalize()
         .map_err(|e| AppError::Env(format!("Failed to canonicalize preview path: {e}")))?;
-    let canonical_str = strip_extended_path_prefix(&canonical.to_string_lossy());
+    let canonical_str =
+        crate::core::paths::strip_extended_path_prefix(&canonical.to_string_lossy());
     let encoded = urlencoding::encode(&canonical_str);
     #[cfg(windows)]
     let url = format!("http://asset.localhost/{encoded}");
     #[cfg(not(windows))]
     let url = format!("asset://localhost/{encoded}");
     Url::parse(&url).map_err(|e| AppError::Env(format!("Invalid preview asset url: {e}")))
-}
-
-fn strip_extended_path_prefix(path: &str) -> String {
-    path.strip_prefix(r"\\?\")
-        .or_else(|| path.strip_prefix("//?/"))
-        .unwrap_or(path)
-        .to_string()
 }
 
 pub fn cleanup_preview_dir() {

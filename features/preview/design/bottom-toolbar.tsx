@@ -78,7 +78,7 @@ export function DesignBottomToolbar({
     canOpenCode: boolean;
 }) {
     return (
-        <div className="z-30 flex items-center gap-0.5 rounded-xl border border-border-secondary bg-surface-4/92 p-1 shadow-xl backdrop-blur-xl">
+        <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border-secondary bg-surface-4/92 p-1 shadow-xl backdrop-blur-xl">
             <Tool label="Select and move" icon={RiCursorLine} active />
             <span className="mx-0.5 h-5 w-px bg-border" />
             <Tool label="Undo visual edit" icon={RiArrowGoBackLine} onClick={onUndo} />
