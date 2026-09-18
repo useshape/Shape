@@ -131,6 +131,7 @@ fn split_trailing_prose(body: &str) -> (String, String) {
         "</tool_result>",
         "</cat>",
         "</search_result>",
+        "</inspect_runtime>",
         "</git_operation>",
         "</status>",
         "</todos>",

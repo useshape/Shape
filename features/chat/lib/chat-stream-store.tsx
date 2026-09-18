@@ -19,6 +19,7 @@ const TOOL_LABELS: Record<string, string> = {
     wait: "Waiting",
     read_terminal: "Reading terminal",
     list_terminals: "Listing terminals",
+    inspect_runtime: "Inspecting page",
     render_design_previews: "Creating preview",
     update_todos: "Updating todos",
     save_plan: "Saving plan",
@@ -476,9 +477,6 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 setTurnId(null);
                 if (error && error !== "Cancelled") {
                     setSendError(error);
-                    void import("@/features/notifications").then(({ notify }) => {
-                        notify.error("Chat", error);
-                    });
                 } else if (!error && (document.hidden || !document.hasFocus())) {
                     void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
                         showDesktopNotification(

@@ -12,7 +12,6 @@ import { ChatStreamProvider } from "@/features/chat/lib/chat-stream-store";
 import { initSettings } from "@/lib/settings";
 import { initGitHubAuth } from "@/lib/github/store";
 import { LoginPromptDialog } from "@/features/workbench/ui/login-prompt-dialog";
-import { WorkspaceTrustHost } from "@/features/workbench/ui/workspace-trust-dialog";
 import { CheckpointRestoreDialog } from "@/features/chat/ui/shell/checkpoint-restore-dialog";
 import { UpdateBootstrap } from "@/features/workbench/update-bootstrap";
 import { installBenignErrorFilters } from "@/lib/editor/benign-errors";
@@ -214,7 +213,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const body = (
             <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
                 <Titlebar settings title={windowTitle} />
-                <main className="min-h-0 flex-1 overflow-hidden bg-background">
+                <main className="min-h-0 flex-1 overflow-hidden bg-background" data-tauri-drag-region>
                     {children}
                 </main>
             </div>
@@ -276,7 +275,6 @@ function Content({ children }: { children: React.ReactNode }) {
             <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col">
                 <Main>{children}</Main>
                 <LoginPromptDialog />
-                <WorkspaceTrustHost />
                 <CheckpointRestoreDialog />
                 <UpdateBootstrap />
                 <CommandPaletteBridge />

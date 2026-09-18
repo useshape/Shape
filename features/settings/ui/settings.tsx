@@ -36,6 +36,7 @@ import {
 import { AiSettingsPanel } from "./sections/ai";
 import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
+import { clearRepoHistory } from "@/lib/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
@@ -60,7 +61,9 @@ import {
 
 function EditorSettings({ settings }: { settings: ShapeSettings }) {
     const e = settings.editor;
+    const f = settings.files;
     return (
+        <>
         <SettingSection id="settings-editor-font" title="Editor">
             <SettingRow title="Compact Tab Bar">
                 <SettingSwitch
@@ -68,7 +71,125 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
                     onChange={(v) => updateSettingSection("editor", { compactTabs: v })}
                 />
             </SettingRow>
+            <SettingRow title="Font Size">
+                <SettingNumberSelect
+                    value={e.fontSize}
+                    options={FONT_SIZE_PRESETS}
+                    onChange={(v) => updateSettingSection("editor", { fontSize: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Tab Size">
+                <SettingNumberSelect
+                    value={e.tabSize}
+                    options={[2, 4, 8]}
+                    onChange={(v) => updateSettingSection("editor", { tabSize: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Insert Spaces">
+                <SettingSwitch
+                    checked={e.insertSpaces}
+                    onChange={(v) => updateSettingSection("editor", { insertSpaces: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Detect Indentation">
+                <SettingSwitch
+                    checked={e.detectIndentation}
+                    onChange={(v) => updateSettingSection("editor", { detectIndentation: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Word Wrap">
+                <SettingSelect
+                    value={e.wordWrap}
+                    options={[
+                        { value: "off", label: "Off" },
+                        { value: "on", label: "On" },
+                        { value: "bounded", label: "Bounded" },
+                    ]}
+                    onChange={(v) =>
+                        updateSettingSection("editor", { wordWrap: v as ShapeSettings["editor"]["wordWrap"] })
+                    }
+                />
+            </SettingRow>
+            <SettingRow title="Line Numbers">
+                <SettingSelect
+                    value={e.lineNumbers}
+                    options={[
+                        { value: "on", label: "On" },
+                        { value: "off", label: "Off" },
+                        { value: "relative", label: "Relative" },
+                    ]}
+                    onChange={(v) =>
+                        updateSettingSection("editor", {
+                            lineNumbers: v as ShapeSettings["editor"]["lineNumbers"],
+                        })
+                    }
+                />
+            </SettingRow>
+            <SettingRow title="Minimap">
+                <SettingSwitch
+                    checked={e.minimap}
+                    onChange={(v) => updateSettingSection("editor", { minimap: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Font Ligatures">
+                <SettingSwitch
+                    checked={e.fontLigatures}
+                    onChange={(v) => updateSettingSection("editor", { fontLigatures: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Format On Save">
+                <SettingSwitch
+                    checked={e.formatOnSave}
+                    onChange={(v) => updateSettingSection("editor", { formatOnSave: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Auto Save">
+                <SettingSelect
+                    value={e.autoSave}
+                    options={[
+                        { value: "off", label: "Off" },
+                        { value: "afterDelay", label: "After Delay" },
+                        { value: "onFocusChange", label: "On Focus Change" },
+                    ]}
+                    onChange={(v) =>
+                        updateSettingSection("editor", { autoSave: v as ShapeSettings["editor"]["autoSave"] })
+                    }
+                />
+            </SettingRow>
+            <SettingRow title="Trim Trailing Whitespace">
+                <SettingSwitch
+                    checked={e.trimTrailingWhitespace}
+                    onChange={(v) => updateSettingSection("editor", { trimTrailingWhitespace: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Insert Final Newline">
+                <SettingSwitch
+                    checked={e.insertFinalNewline}
+                    onChange={(v) => updateSettingSection("editor", { insertFinalNewline: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Image Preview">
+                <SettingSwitch
+                    checked={e.imagePreview}
+                    onChange={(v) => updateSettingSection("editor", { imagePreview: v })}
+                />
+            </SettingRow>
         </SettingSection>
+        <SettingSection id="settings-files" title="Files">
+            <SettingRow title="Default EOL">
+                <SettingSelect
+                    value={f.defaultEol}
+                    options={[
+                        { value: "LF", label: "LF" },
+                        { value: "CRLF", label: "CRLF" },
+                    ]}
+                    onChange={(v) =>
+                        updateSettingSection("files", { defaultEol: v as ShapeSettings["files"]["defaultEol"] })
+                    }
+                />
+            </SettingRow>
+        </SettingSection>
+        </>
     );
 }
 
@@ -371,7 +492,6 @@ function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
     const restartOnboarding = () => {
         localStorage.removeItem("shape-onboarding-complete");
         window.dispatchEvent(new CustomEvent("shape-onboarding-restart"));
-        // Close settings overlay if open in agent shell.
         window.dispatchEvent(new CustomEvent("shape-agent-overlay", { detail: null }));
     };
 
@@ -396,35 +516,65 @@ function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
     );
 }
 
+function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
+    const u = settings.updates;
+    const [version, setVersion] = useState("0.0.1");
+    const [iconSrc, setIconSrc] = useState("/app-icon.png");
+
+    useEffect(() => {
+        void import("@tauri-apps/api/app")
+            .then(({ getVersion }) => getVersion())
+            .then(setVersion)
+            .catch(() => {});
+    }, []);
+
+    return (
+        <SettingSection id="settings-updates" title="Updates">
+            <div className="flex items-center gap-3 p-3">
+                <img
+                    src={iconSrc}
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="size-10 shrink-0 rounded-lg object-cover"
+                    onError={() => setIconSrc("/logos/logo.svg")}
+                />
+                <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-text-primary">Shape</div>
+                    <div className="text-xs text-text-muted">Desktop app</div>
+                </div>
+                <span className="shrink-0 text-sm tabular-nums text-text-muted">{version}</span>
+            </div>
+            <SettingRow title="Automatic updates">
+                <SettingSwitch
+                    checked={u.autoUpdate}
+                    onChange={(v) => updateSettingSection("updates", { autoUpdate: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Update channel">
+                <SettingSelect
+                    value={u.channel}
+                    options={[
+                        { value: "stable", label: "Stable" },
+                        { value: "pre", label: "Pre-release" },
+                    ]}
+                    onChange={(v) =>
+                        updateSettingSection("updates", {
+                            channel: v as ShapeSettings["updates"]["channel"],
+                        })
+                    }
+                />
+            </SettingRow>
+        </SettingSection>
+    );
+}
+
 function PrivacySettings({ settings }: { settings: ShapeSettings }) {
     const p = settings.privacy;
     const n = settings.notifications;
-    const u = settings.updates;
     const websiteBase = SHAPE_API_BASE;
     return (
         <>
-            <SettingSection id="settings-updates" title="Updates">
-                <SettingRow title="Automatic updates">
-                    <SettingSwitch
-                        checked={u.autoUpdate}
-                        onChange={(v) => updateSettingSection("updates", { autoUpdate: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Update channel">
-                    <SettingSelect
-                        value={u.channel}
-                        options={[
-                            { value: "stable", label: "Stable" },
-                            { value: "pre", label: "Pre-release" },
-                        ]}
-                        onChange={(v) =>
-                            updateSettingSection("updates", {
-                                channel: v as ShapeSettings["updates"]["channel"],
-                            })
-                        }
-                    />
-                </SettingRow>
-            </SettingSection>
             <SettingSection title="Startup">
                 <SettingRow title="Show welcome page on startup">
                     <SettingSwitch
@@ -468,14 +618,45 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                     />
                 </SettingRow>
             </SettingSection>
-            <SettingSection id="settings-privacy" title="Telemetry">
-                <SettingRow title="Send usage telemetry">
+            <SettingSection id="settings-privacy" title="Data Control">
+                <SettingRow title="Usage telemetry">
                     <SettingSwitch
                         checked={p.telemetryEnabled}
                         onChange={(v) => {
                             updateSettingSection("privacy", { telemetryEnabled: v });
                             void applyTelemetryPreference(v);
                         }}
+                    />
+                </SettingRow>
+                <SettingRow title="Clear recent folders">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            clearRepoHistory();
+                            window.dispatchEvent(new Event("shape-repo-history-changed"));
+                        }}
+                    >
+                        Clear
+                    </Button>
+                </SettingRow>
+                <SettingRow title="Clear current chat">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            void commands.clearChatHistory().then(() => {
+                                window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
+                            });
+                        }}
+                    >
+                        Clear
+                    </Button>
+                </SettingRow>
+                <SettingRow title="Skip checkpoint restore confirm">
+                    <SettingSwitch
+                        checked={p.skipCheckpointRestoreConfirm}
+                        onChange={(v) => updateSettingSection("privacy", { skipCheckpointRestoreConfirm: v })}
                     />
                 </SettingRow>
             </SettingSection>
@@ -525,7 +706,6 @@ function PythonSettings({ settings }: { settings: ShapeSettings }) {
             label: i.version ? `Python ${i.version}  ${i.path}` : `${i.label || "Python"}  ${i.path}`,
         })),
     ];
-    // Ensure current custom path remains selectable even if discovery missed it
     if (selected !== "auto" && !options.some((o) => o.value === selected)) {
         options.push({ value: selected, label: selected });
     }
@@ -585,6 +765,7 @@ function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
                 </SettingRow>
             </SettingSection>
             <DeveloperSettings settings={settings} />
+            <UpdatesSettings settings={settings} />
             <PrivacySettings settings={settings} />
         </>
     );
@@ -613,6 +794,7 @@ export function SettingsView({
         () => new Set(SETTINGS_NAV.map((g) => g.id)),
     );
     const scrollingToRef = React.useRef<string | null>(null);
+    const settingsScrollRef = React.useRef<HTMLDivElement>(null);
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "plugins") return "settings-ai-plugins";
@@ -650,15 +832,17 @@ export function SettingsView({
     }, []);
 
     const scrollToTarget = useCallback((targetId: string) => {
+        const root = settingsScrollRef.current;
         const el = document.getElementById(targetId);
-        if (!el) return;
+        if (!root || !el) return;
         scrollingToRef.current = targetId;
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        const nextTop = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop - 12;
+        root.scrollTo({ top: nextTop, behavior: "auto" });
         const leaf = allSettingsLeaves().find((l) => l.targetId === targetId);
         if (leaf) setActiveLeafId(leaf.id);
         window.setTimeout(() => {
             if (scrollingToRef.current === targetId) scrollingToRef.current = null;
-        }, 600);
+        }, 250);
     }, []);
 
     const applyNavigation = useCallback(
@@ -710,7 +894,11 @@ export function SettingsView({
         };
     }, [applyNavigation, router]);
 
+    const activeLeafRef = React.useRef(activeLeafId);
+    activeLeafRef.current = activeLeafId;
+
     useEffect(() => {
+        const root = settingsScrollRef.current;
         const targets = allSettingsLeaves()
             .map((l) => l.targetId)
             .filter((id): id is string => !!id);
@@ -719,6 +907,7 @@ export function SettingsView({
             .filter((el): el is HTMLElement => !!el);
         if (elements.length === 0) return;
 
+        let frame = 0;
         const observer = new IntersectionObserver(
             (entries) => {
                 if (scrollingToRef.current) return;
@@ -728,13 +917,22 @@ export function SettingsView({
                 const first = visible[0];
                 if (!first?.target.id) return;
                 const leaf = allSettingsLeaves().find((l) => l.targetId === first.target.id);
-                if (leaf) setActiveLeafId(leaf.id);
+                if (!leaf || leaf.id === activeLeafRef.current) return;
+                cancelAnimationFrame(frame);
+                frame = requestAnimationFrame(() => {
+                    if (scrollingToRef.current || leaf.id === activeLeafRef.current) return;
+                    activeLeafRef.current = leaf.id;
+                    setActiveLeafId(leaf.id);
+                });
             },
-            { root: null, rootMargin: "-20% 0px -65% 0px", threshold: 0 },
+            { root: root ?? null, rootMargin: "-12% 0px -70% 0px", threshold: 0 },
         );
         for (const el of elements) observer.observe(el);
-        return () => observer.disconnect();
-    }, [settings]);
+        return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+        };
+    }, []);
 
     const filteredNav = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -785,7 +983,7 @@ export function SettingsView({
             {(() => {
                 const collapsed = Boolean(navPortalTarget) && !sidebarExpanded;
                 const nav = (
-                    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+                    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden" data-tauri-drag-region>
                         {onBack ? (
                             <HostedSidebarBack
                                 label="Chat"
@@ -848,7 +1046,7 @@ export function SettingsView({
                     </aside>
                 );
             })()}
-            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-no-drag>
                 <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
                     {activeLeafId === "keyboard-shortcuts" ? (
                         <div id="settings-keyboard-shortcuts" className="flex h-full min-h-0 flex-col">
@@ -859,7 +1057,10 @@ export function SettingsView({
                             <PluginsSettingsView />
                         </div>
                     ) : (
-                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-8 pb-8 no-scrollbar lg:px-8">
+                            <div
+                                ref={settingsScrollRef}
+                                className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-auto px-6 pt-8 pb-8 no-scrollbar lg:px-8"
+                            >
                                 <div className="mx-auto w-full max-w-5xl space-y-2">
                                     <AccountSettingsPanel />
                                     <AiSettings settings={settings} />

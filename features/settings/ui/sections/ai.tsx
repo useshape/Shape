@@ -12,7 +12,10 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog-store";
-import { isModelEnabled, type ModelInfo } from "@/lib/models";
+import { RiWebhookFill } from "@remixicon/react";
+import { Icon } from "@/components/ui/icon";
+import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, type ModelInfo } from "@/lib/models";
+import { useShapeAuth } from "@/lib/cloud/store";
 import {
     type AutoRunModeSetting,
     type ShapeSettings,
@@ -33,6 +36,57 @@ import {
 
 const FEATURED_COUNT = 4;
 
+function ApiKeyField({
+    value,
+    placeholder,
+    onSave,
+}: {
+    value: string;
+    placeholder: string;
+    onSave: (next: string) => void;
+}) {
+    const [draft, setDraft] = React.useState(value);
+    const [focused, setFocused] = React.useState(false);
+    React.useEffect(() => setDraft(value), [value]);
+    const dirty = draft !== value;
+    const showSave = focused || dirty;
+
+    return (
+        <div className="relative">
+            <Input
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={placeholder}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter" && dirty) {
+                        e.preventDefault();
+                        onSave(draft.trim());
+                    }
+                }}
+                className={cn("font-mono text-sm", showSave && "pr-16")}
+            />
+            {showSave ? (
+                <Button
+                    type="button"
+                    size="xs"
+                    variant={dirty ? "default" : "secondary"}
+                    disabled={!dirty}
+                    className="absolute top-1/2 right-1 z-10 -translate-y-1/2"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onSave(draft.trim())}
+                >
+                    Save
+                </Button>
+            ) : null}
+        </div>
+    );
+}
+
 function RulesEditor({ value }: { value: string }) {
     const [draft, setDraft] = React.useState(value);
     React.useEffect(() => setDraft(value), [value]);
@@ -42,7 +96,6 @@ function RulesEditor({ value }: { value: string }) {
         <SettingSection
             id="settings-ai-rules"
             title="Instructions"
-            description="Give Shape extra instructions and context for all chats. Repository instructions may also apply."
             action={
                 <Button
                     size="sm"
@@ -79,7 +132,12 @@ function ModelRow({
     return (
         <div className="flex items-start justify-between gap-4 px-4 py-3.5">
             <div className="min-w-0 space-y-0.5">
-                <div className="text-sm font-medium text-text-primary">{model.name}</div>
+                <div className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
+                    <span className="min-w-0 truncate">{model.name}</span>
+                    {isApiModel(model) ? (
+                        <Icon icon={RiWebhookFill} className="shrink-0 text-text-muted" />
+                    ) : null}
+                </div>
                 <div className="text-sm text-text-muted">
                     {unavailableReason ?? model.description}
                 </div>
@@ -155,8 +213,13 @@ export function AiSettingsPanel({
     settings: ShapeSettings;
 }) {
     const a = settings.ai;
+    const auth = useShapeAuth();
     useShapeCatalog();
-    const allModels = getCatalogModels();
+    const allModels = resolveChatModels(getCatalogModels(), {
+        openaiKey: Boolean(a.openaiApiKey.trim()),
+        openRouterKey: Boolean(a.openRouterApiKey.trim()),
+        signedIn: Boolean(auth.loggedIn && !auth.offline),
+    });
     const unavailableHint =
         "This model is not available on your plan.";
     const [showAllModels, setShowAllModels] = React.useState(false);
@@ -171,12 +234,13 @@ export function AiSettingsPanel({
     const [indexPhase, setIndexPhase] = React.useState<string | undefined>();
 
     const enabledModels = a.enabledModels;
-    const visibleModels = allModels.filter((m) => isModelEnabled(m.id, enabledModels));
+    const visibleModels = getVisibleModels(allModels, enabledModels);
     const defaultIds = getCatalogDefaultEnabledIds();
     const featuredIds = new Set(defaultIds.slice(0, FEATURED_COUNT));
-    const displayedModels = showAllModels
+    const usingApiKeys = Boolean(a.openaiApiKey.trim() || a.openRouterApiKey.trim());
+    const displayedModels = showAllModels || usingApiKeys
         ? allModels
-        : allModels.filter((m) => featuredIds.has(m.id));
+        : allModels.filter((m) => featuredIds.has(m.id) || m.id === "auto");
 
     React.useEffect(() => {
         void commands.getIndexStatus().then((s) => {
@@ -272,19 +336,23 @@ export function AiSettingsPanel({
                         enabled={isModelEnabled(model.id, enabledModels)}
                         onToggle={(on) => toggleModel(model.id, on)}
                         unavailableReason={
-                            !isCatalogModelAllowed(model.id) ? unavailableHint : undefined
+                            !isCatalogModelAllowed(model.id) && !isApiModel(model)
+                                ? unavailableHint
+                                : undefined
                         }
                     />
                 ))}
-                <Button
-                    type="button"
-                    variant="secondary"
-                    size="md"
-                    className="w-full bg-panel-hover! rounded-none py-6"
-                    onClick={() => setShowAllModels((v) => !v)}
-                >
-                    {showAllModels ? "Show fewer models" : "View all models"}
-                </Button>
+                {usingApiKeys ? null : (
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="md"
+                        className="w-full bg-panel-hover! rounded-none py-6"
+                        onClick={() => setShowAllModels((v) => !v)}
+                    >
+                        {showAllModels ? "Show fewer models" : "View all models"}
+                    </Button>
+                )}
             </SettingSection>
 
             <SettingSection title="Behavior">
@@ -402,40 +470,39 @@ export function AiSettingsPanel({
             <SettingSection
                 id="settings-ai-byok"
                 title="API keys"
+                description={
+                    a.openaiApiKey.trim() && !a.openRouterApiKey.trim()
+                        ? "OpenAI models call api.openai.com with your key. Shape is not billed."
+                        : a.openRouterApiKey.trim() && !a.openaiApiKey.trim()
+                          ? "Requests go to OpenRouter with your key. Shape is not billed."
+                          : a.openaiApiKey.trim() && a.openRouterApiKey.trim()
+                            ? "GPT models use OpenAI. Everything else uses OpenRouter."
+                            : "Saved keys call that provider directly. Otherwise Shape’s hosted AI is used."
+                }
                 card={false}
             >
-                <SettingRow title="OpenRouter" stack>
-                    <Input
-                        type="password"
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="sk-or-…"
-                        value={a.openRouterApiKey}
-                        onChange={(e) => {
-                            const openRouterApiKey = e.target.value;
-                            updateSettingSection("ai", { openRouterApiKey });
-                            void commands
-                                .setByokKeys(openRouterApiKey || null, a.openaiApiKey || null)
-                                .catch(() => { /* ignore */ });
-                        }}
-                        className="font-mono bg-panel-hover! text-sm"
-                    />
-                </SettingRow>
                 <SettingRow title="OpenAI" stack>
-                    <Input
-                        type="password"
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="sk-…"
+                    <ApiKeyField
                         value={a.openaiApiKey}
-                        onChange={(e) => {
-                            const openaiApiKey = e.target.value;
+                        placeholder="sk-…"
+                        onSave={(openaiApiKey) => {
                             updateSettingSection("ai", { openaiApiKey });
                             void commands
                                 .setByokKeys(a.openRouterApiKey || null, openaiApiKey || null)
-                                .catch(() => { /* ignore */ });
+                                .catch(() => {});
                         }}
-                        className="font-mono text-sm"
+                    />
+                </SettingRow>
+                <SettingRow title="OpenRouter" stack>
+                    <ApiKeyField
+                        value={a.openRouterApiKey}
+                        placeholder="sk-or-…"
+                        onSave={(openRouterApiKey) => {
+                            updateSettingSection("ai", { openRouterApiKey });
+                            void commands
+                                .setByokKeys(openRouterApiKey || null, a.openaiApiKey || null)
+                                .catch(() => {});
+                        }}
                     />
                 </SettingRow>
             </SettingSection>

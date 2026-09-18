@@ -30,6 +30,7 @@ import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { cn } from "@/lib/utils";
 import { GitMarkdown } from "@/features/git/ui/github/markdown";
 import { notify } from "@/features/notifications";
+import { selectPr, usePrUi } from "./store";
 
 type IssueStateFilter = "open" | "closed" | "all";
 type PrSort = "updated" | "created";
@@ -105,9 +106,10 @@ function ciFromStatus(state: string | undefined): PrItem["ci"] {
     return "unknown";
 }
 
-export function PullRequestsPanel() {
+export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" | "full" }) {
     const { project_path } = useProjectState();
     const auth = useGitHubAuth();
+    const prUi = usePrUi();
     const [query, setQuery] = useState("");
     const [state, setState] = useState<IssueStateFilter>("open");
     const [sort, setSort] = useState<PrSort>("updated");
@@ -115,7 +117,7 @@ export function PullRequestsPanel() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [repo, setRepo] = useState<{ owner: string; repo: string } | null>(null);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const selectedId = pane === "list" ? null : prUi.selectedId;
     const [files, setFiles] = useState<PrFile[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
     const [reviewers, setReviewers] = useState<PrReviewer[]>([]);
@@ -273,14 +275,11 @@ export function PullRequestsPanel() {
                 const requested = Array.isArray(detail.requested_reviewers)
                     ? (detail.requested_reviewers as { login?: string; avatar_url?: string }[])
                     : [];
-                const fromReviews = reviewList
-                    .map((row) => {
-                        const user = row.user as { login?: string; avatar_url?: string } | undefined;
-                        return user?.login
-                            ? { login: user.login, avatar: user.avatar_url }
-                            : null;
-                    })
-                    .filter((p): p is PrReviewer => Boolean(p));
+                const fromReviews: PrReviewer[] = [];
+                for (const row of reviewList) {
+                    const user = row.user as { login?: string; avatar_url?: string } | undefined;
+                    if (user?.login) fromReviews.push({ login: user.login, avatar: user.avatar_url });
+                }
                 const merged = [...requested.map((u) => ({ login: u.login || "", avatar: u.avatar_url })), ...fromReviews]
                     .filter((p) => p.login)
                     .filter((p, i, all) => all.findIndex((x) => x.login === p.login) === i);
@@ -338,18 +337,30 @@ export function PullRequestsPanel() {
         );
     };
 
-    if (selected) {
+    if (pane === "detail" && !selected) {
         return (
-            <div className="flex h-full min-h-0 flex-col bg-sidebar">
+            <div className="flex h-full min-h-0 items-center justify-center bg-panel px-6">
+                <p className="text-center text-sm text-text-muted">
+                    Select a pull request to see details
+                </p>
+            </div>
+        );
+    }
+
+    if (selected && pane !== "list") {
+        return (
+            <div className="flex h-full min-h-0 flex-col bg-panel">
                 <div className="flex shrink-0 items-start gap-2 px-3 pt-3 pb-2">
+                    {pane === "full" ? (
                     <button
                         type="button"
                         aria-label="Back to list"
-                        onClick={() => setSelectedId(null)}
+                        onClick={() => selectPr(null)}
                         className="mt-0.5 flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                     >
                         <Icon icon={RiArrowLeftLine} />
                     </button>
+                    ) : null}
                     <div className="min-w-0 flex-1">
                         <p className="text-xs text-text-muted">
                             {selected.repo} #{selected.number}
@@ -550,7 +561,7 @@ export function PullRequestsPanel() {
     }
 
     return (
-        <div className="flex h-full min-h-0 flex-col bg-sidebar">
+        <div className="flex h-full min-h-0 flex-col bg-panel">
             <div className="flex shrink-0 items-center gap-2 px-3 pb-2 pt-3">
                 <span className="text-sm font-medium text-text-primary">Pull Requests</span>
             </div>
@@ -627,7 +638,7 @@ export function PullRequestsPanel() {
                                 <li key={item.id}>
                                     <button
                                         type="button"
-                                        onClick={() => setSelectedId(item.id)}
+                                        onClick={() => selectPr(item.id)}
                                         className="flex w-full gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-panel-hover"
                                     >
                                         <Icon
@@ -688,16 +699,15 @@ export function PullRequestsPanel() {
     );
 }
 
-/** @deprecated PRs open in the right workspace panel. */
 export function ChatPullRequestsView({ onClose }: { onClose: () => void }) {
     return (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-full min-h-0 flex-col bg-panel">
             <div className="flex justify-end px-3 pt-2">
                 <Button variant="ghost" size="xs" onClick={onClose}>
                     Back to chat
                 </Button>
             </div>
-            <PullRequestsPanel />
+            <PullRequestsPanel pane="list" />
         </div>
     );
 }

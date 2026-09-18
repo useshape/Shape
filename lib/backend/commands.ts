@@ -457,6 +457,7 @@ export const commands = {
         },
         reasoningEffort?: string,
         serviceTier?: string | null,
+        byok?: { openRouterApiKey?: string | null; openaiApiKey?: string | null },
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -474,6 +475,8 @@ export const commands = {
             pluginDisabledActions: executionPolicy?.pluginDisabledActions ?? null,
             reasoningEffort: reasoningEffort ?? null,
             serviceTier: serviceTier ?? null,
+            openrouterApiKey: byok?.openRouterApiKey ?? null,
+            openaiApiKey: byok?.openaiApiKey ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -540,7 +543,7 @@ export const commands = {
             path: string;
             name: string;
             bytes: number;
-            kind: "image" | "font" | "video";
+            kind: "image" | "font" | "video" | "vector" | "style" | "component" | "code";
         }>>("list_design_assets", { projectPath }),
     resolveDesignElement: (
         projectPath: string,
@@ -579,6 +582,7 @@ export const commands = {
         };
         styles?: Record<string, string>;
         text?: string | null;
+        attributes?: Record<string, string>;
         operation?: "delete" | "duplicate" | null;
     }) =>
         invokeCommand<{ file: string; changed: boolean; line: number }>(
@@ -709,6 +713,8 @@ export const commands = {
     // MCP
     getMcpConfigPath: () => invokeCommand<string>("get_mcp_config_path"),
     ensureMcpConfig: () => invokeCommand<string>("ensure_mcp_config"),
+    readMcpConfig: () => invokeCommand<string>("read_mcp_config"),
+    writeMcpConfig: (content: string) => invokeCommand<void>("write_mcp_config", { content }),
     syncMcpServers: (servers: McpServerConfig[]) =>
         invokeCommand<McpStatusEntry[]>("sync_mcp_servers", { servers }),
     getMcpStatus: () => invokeCommand<McpStatusEntry[]>("get_mcp_status"),

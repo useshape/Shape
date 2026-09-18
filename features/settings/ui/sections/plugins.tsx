@@ -421,11 +421,8 @@ function PluginDetail({
             </div>
 
             <div className="mt-8">
-                <SettingSection
-                    title="Approval"
-                    description="Same modes as the terminal. Default for every plugin is ask every time."
-                >
-                    <SettingRow title="When the agent uses this plugin" description="Read-only discovery never asks. This applies to actions that run against the connected app.">
+                <SettingSection title="Approval">
+                    <SettingRow title="When the agent uses this plugin">
                         <SettingSelect
                             value={mode}
                             options={APPROVAL_OPTIONS}
@@ -437,7 +434,6 @@ function PluginDetail({
             {plugin.connected ? (
                 <SettingSection
                     title="Actions"
-                    description="Turn off anything you do not want the agent to call."
                     action={
                         tools.length > 0 ? (
                             <Button

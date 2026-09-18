@@ -1,22 +1,22 @@
 ---
 title: "4200 Language server"
-description: A language server failed to start or crashed.
+description: This code is unused. Shape does not run language servers.
 order: 42
 ---
 
 ## What it means
 
-IntelliSense, go-to-definition, or diagnostics stopped because a language server exited or never started. Editing still works; language features may be limited.
+This error code is leftover from an older editor. Shape’s current editor is CodeMirror and does not start language servers.
+
+If editing feels limited, that is expected: there is no TypeScript language service or go-to-definition.
 
 ## What to do
 
-1. Re-open the file or the project folder.
-2. Check **Settings → Features → Language Servers** and confirm the server for this file type is enabled.
-3. For TypeScript/JavaScript, ensure `node_modules` (or your toolchain) is installed.
-4. Watch **Output → LSP** for the underlying message, then retry.
+1. Use in-file search (**Ctrl+F**) and workspace search (**Ctrl+Shift+F**).
+2. Ask the agent to find symbols or explain types.
+3. Ignore this code if you see it in old logs.
 
 ## Related
 
-- [IntelliSense](/docs/editor/intellisense)
-- [Language servers](/docs/developing/language-servers)
+- [Completions](/docs/editor/intellisense)
 - [Troubleshooting](/docs/help/troubleshooting)

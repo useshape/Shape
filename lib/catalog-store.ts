@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import {
   catalogModelsAsModelInfo,
+  FALLBACK_CATALOG,
   fetchCatalog,
   isModelAllowedInCatalog,
   type ShapeCatalog,
@@ -41,21 +42,20 @@ export function getShapeCatalog(): ShapeCatalog | null {
 }
 
 export function getCatalogModels(): ModelInfo[] {
-  if (!state.catalog) return [];
-  return catalogModelsAsModelInfo(state.catalog);
+  return catalogModelsAsModelInfo(state.catalog ?? FALLBACK_CATALOG);
 }
 
 export function getCatalogProviderOrder(): readonly string[] {
-  return state.catalog?.providerOrder ?? ["Auto"];
+  return state.catalog?.providerOrder ?? FALLBACK_CATALOG.providerOrder;
 }
 
 export function getCatalogDefaultEnabledIds(): string[] {
-  return state.catalog?.defaultEnabledModelIds ?? ["auto"];
+  return (state.catalog ?? FALLBACK_CATALOG).defaultEnabledModelIds ?? ["auto"];
 }
 
 export function isCatalogModelAllowed(modelId: string): boolean {
-  if (!state.catalog) return modelId === "auto" || modelId === "openrouter/auto";
-  return isModelAllowedInCatalog(state.catalog, modelId);
+  const catalog = state.catalog ?? FALLBACK_CATALOG;
+  return isModelAllowedInCatalog(catalog, modelId);
 }
 
 export async function refreshShapeCatalog(token?: string | null): Promise<ShapeCatalog> {
@@ -76,5 +76,5 @@ export function useShapeCatalog() {
 }
 
 export function clearShapeCatalog() {
-  setState({ catalog: null, loading: false, error: null });
+  setState({ catalog: FALLBACK_CATALOG, loading: false, error: null });
 }

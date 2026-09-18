@@ -6,7 +6,7 @@ import { commands, useProjectState } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { formatCompactAgo, getRepoName, loadRepoHistory, type RepoHistoryEntry } from "@/lib/repo-history";
+import { formatCompactAgo, getRepoName } from "@/lib/repo-history";
 import { ProjectKindGlyph } from "@/features/detection/ui/kind-glyph";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SearchInput } from "@/components/ui/search";
@@ -27,6 +27,7 @@ import {
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import { ScrollArea } from "@/components/ui/scroll";
 
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
 
@@ -159,7 +160,7 @@ function ChatRow({
             <ContextMenuTrigger asChild>
                 <div
                     className={cn(
-                        "group/chat w-full rounded-lg px-2.5 py-2 text-sm",
+                        "group/chat w-full p-2 squircle-xl text-sm",
                         "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                         active
                             ? "bg-panel-hover text-text-primary"
@@ -222,60 +223,37 @@ function ChatRow({
                     )}
                 </div>
             </ContextMenuTrigger>
-            <ContextMenuContent className="min-w-40">
+            <ContextMenuContent className="min-w-44">
                 <ContextMenuItem onClick={openChat}>Open</ContextMenuItem>
                 <ContextMenuItem onClick={startRename}>Rename</ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() => {
+                        window.dispatchEvent(new CustomEvent("shape-chat-new"));
+                    }}
+                >
+                    New Chat
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                    onClick={() => {
+                        void navigator.clipboard.writeText(title);
+                    }}
+                >
+                    Copy Title
+                </ContextMenuItem>
+                {path ? (
+                    <ContextMenuItem
+                        onClick={() => {
+                            void commands.revealPath(path).catch(() => {});
+                        }}
+                    >
+                        Reveal Folder
+                    </ContextMenuItem>
+                ) : null}
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={remove}>Delete</ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>
-    );
-}
-
-function RecentProjects() {
-    const { project_path } = useProjectState();
-    const [recents, setRecents] = useState<RepoHistoryEntry[]>([]);
-
-    useEffect(() => {
-        const sync = () => setRecents(loadRepoHistory().slice(0, 8));
-        sync();
-        window.addEventListener("shape-repo-history-changed", sync);
-        return () => window.removeEventListener("shape-repo-history-changed", sync);
-    }, []);
-
-    if (recents.length === 0) return null;
-
-    return (
-        <div className="shrink-0 pb-1 pt-2">
-            <div className="flex items-center justify-between pl-3 pr-1 pb-1">
-                <span className="text-sm font-medium text-text-muted">Recent projects</span>
-            </div>
-            <div className="px-1.5">
-                {recents.map((r) => {
-                    const active = project_path === r.path;
-                    return (
-                        <button
-                            key={r.path}
-                            type="button"
-                            onClick={() =>
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-open-project", { detail: { path: r.path } }),
-                                )
-                            }
-                            className={cn(
-                                "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm",
-                                active
-                                    ? "bg-panel-hover text-text-primary"
-                                    : "text-text-primary hover:bg-panel-hover",
-                            )}
-                        >
-                            <ProjectKindGlyph path={r.path} className="size-4 shrink-0" />
-                            <span className="min-w-0 flex-1 truncate">{getRepoName(r.path)}</span>
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
     );
 }
 
@@ -386,7 +364,6 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
-            <RecentProjects />
             <div className="flex items-center justify-between pl-3 pr-1 pb-1 pt-3">
                 <span className="text-sm font-medium text-text-muted">Chats</span>
                 <div className="flex items-center">
@@ -424,33 +401,48 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                 </div>
             </div>
 
-            {searchOpen ? (
-                <div className="px-2 pb-2">
-                    <SearchInput
-                        ref={searchRef}
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search chats"
-                        onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                                e.preventDefault();
-                                setSearchOpen(false);
-                                setQuery("");
-                            }
-                        }}
-                    />
+            <div
+                className={cn(
+                    "grid transition-[grid-template-rows] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    searchOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                )}
+            >
+                <div className="min-h-0 overflow-hidden">
+                    <div
+                        className={cn(
+                            "origin-top px-2 mt-1 pb-2",
+                            "transition-[opacity,transform,filter] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+                            searchOpen
+                                ? "translate-y-0 opacity-100 blur-0"
+                                : "pointer-events-none -translate-y-1.5 opacity-0 blur-[2px]",
+                        )}
+                    >
+                        <SearchInput
+                            ref={searchRef}
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="Search chats"
+                            onKeyDown={(e) => {
+                                if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    setSearchOpen(false);
+                                    setQuery("");
+                                }
+                            }}
+                        />
+                    </div>
                 </div>
-            ) : null}
+            </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2 no-scrollbar">
+            <ScrollArea fadeFrom="from-sidebar" className="min-h-0 flex-1 px-1.5 pb-2">
                 {!project_path ? (
                     <button
                         type="button"
-                        onClick={() => window.dispatchEvent(new Event("open-folder-request"))}
+                        onClick={() => window.dispatchEvent(new Event("shape-new-project"))}
                         className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                     >
                         <Icon icon={RiFolderLine} />
-                        Open a repository
+                        New project
                     </button>
                 ) : visible.length === 0 ? (
                     <button
@@ -478,7 +470,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         ))}
                     </div>
                 )}
-            </div>
+            </ScrollArea>
         </div>
     );
 }

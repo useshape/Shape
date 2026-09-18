@@ -125,6 +125,7 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
         existing.history = history;
         existing.title = title;
         existing.timestamp = now_f64();
+        collapse_duplicate_assistants(&mut existing.history);
     } else {
         list.push(Conversation {
             id,
@@ -133,6 +134,9 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
             project_path: proj_path.to_string(),
             timestamp: now_f64(),
         });
+        if let Some(last) = list.last_mut() {
+            collapse_duplicate_assistants(&mut last.history);
+        }
     }
 
     save_conversations(proj_path, list);
@@ -158,6 +162,7 @@ pub fn upsert_conversation_snapshot(
         existing.history = history;
         existing.title = title.to_string();
         existing.timestamp = now_f64();
+        collapse_duplicate_assistants(&mut existing.history);
     } else {
         list.push(Conversation {
             id: id.to_string(),
@@ -166,9 +171,46 @@ pub fn upsert_conversation_snapshot(
             project_path: proj_path.to_string(),
             timestamp: now_f64(),
         });
+        if let Some(last) = list.last_mut() {
+            collapse_duplicate_assistants(&mut last.history);
+        }
     }
     save_conversations(proj_path, list);
     Ok(())
+}
+
+/// One assistant bubble per user turn. Mid-stream snapshots already store a
+/// partial assistant; finishing the turn must replace it, not append.
+pub fn replace_or_push_assistant(hist: &mut Vec<ChatMessage>, msg: ChatMessage) {
+    if hist.last().is_some_and(|m| m.role == "assistant") {
+        hist.pop();
+    }
+    hist.push(msg);
+}
+
+/// Drop consecutive assistant messages left by snapshot-then-append races.
+pub fn collapse_duplicate_assistants(hist: &mut Vec<ChatMessage>) {
+    let mut i = 1;
+    while i < hist.len() {
+        let prev_assistant = hist[i - 1].role == "assistant";
+        let this_assistant = hist[i].role == "assistant";
+        if prev_assistant && this_assistant {
+            let prev = &hist[i - 1].content;
+            let this = &hist[i].content;
+            let overlap = prev == this
+                || (!prev.is_empty() && this.starts_with(prev))
+                || (!this.is_empty() && prev.starts_with(this));
+            if overlap {
+                if this.len() >= prev.len() {
+                    hist.remove(i - 1);
+                } else {
+                    hist.remove(i);
+                }
+                continue;
+            }
+        }
+        i += 1;
+    }
 }
 
 /// Load disk history before mutating so a cold in-memory cache cannot overwrite
@@ -187,4 +229,39 @@ fn project_conversation_list<'a>(
         }
     }
     list
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn msg(role: &str, content: &str) -> ChatMessage {
+        ChatMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+            timestamp: 0.0,
+            stats: None,
+            model: None,
+        }
+    }
+
+    #[test]
+    fn replace_or_push_replaces_partial_assistant() {
+        let mut hist = vec![msg("user", "hi"), msg("assistant", "Hel")];
+        replace_or_push_assistant(&mut hist, msg("assistant", "Hello world"));
+        assert_eq!(hist.len(), 2);
+        assert_eq!(hist[1].content, "Hello world");
+    }
+
+    #[test]
+    fn collapse_keeps_final_when_partial_then_full() {
+        let mut hist = vec![
+            msg("user", "hi"),
+            msg("assistant", "Hel"),
+            msg("assistant", "Hello world"),
+        ];
+        collapse_duplicate_assistants(&mut hist);
+        assert_eq!(hist.len(), 2);
+        assert_eq!(hist[1].content, "Hello world");
+    }
 }

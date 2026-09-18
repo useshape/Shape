@@ -915,7 +915,11 @@ export default function Graph({
     return (
         <div
             ref={rootRef}
-            className={cn("flex flex-col h-full w-full select-none relative", className)}
+            className={cn(
+                "flex h-full w-full relative flex-col select-none",
+                surface === "editor" ? "bg-editor" : "bg-panel",
+                className,
+            )}
             style={{
                 ["--graph-surface" as string]:
                     surface === "editor" ? "var(--color-editor)" : "var(--color-panel)",

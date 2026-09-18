@@ -57,6 +57,7 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         spawn_subagent(),
         update_todos(),
         screenshot_page(),
+        inspect_runtime(),
         finish(),
     ]);
     tools
@@ -529,7 +530,7 @@ fn save_plan() -> Value {
 fn spawn_subagent() -> Value {
     tool(
         "spawn_subagent",
-        "Delegate a focused research task to a subagent. The subagent searches the project and reports findings; its live status appears as a card in the right panel (not as a full chat). Use for independent parallel investigations (e.g. explore auth while you work on UI). Pass a short title and a specific task. Do not use this for edits, terminal commands, or the main user request — you still own the outcome.",
+        "Delegate a focused research task to a subagent. The subagent searches the project, then writes a short answer from those results; its live status appears as a card in the right panel (not as a full chat). Use for independent parallel investigations (e.g. explore auth while you work on UI). Pass a short title and a specific task. Do not use this for edits, terminal commands, or the main user request — you still own the outcome.",
         json!({
             "type": "object",
             "properties": {
@@ -738,6 +739,25 @@ If capture is impossible (no preview, not a website), skip it and continue. At m
     )
 }
 
+fn inspect_runtime() -> Value {
+    tool(
+        "inspect_runtime",
+        "Attach Chromium DevTools Protocol to a running local website or an Electron/Tauri/Wails webview and return Network + console evidence (failed requests, 4xx/5xx, console errors/warnings, slow resources). \
+Same class of call as grep/search_files — no user approval. \
+ONLY for websites and Chromium-webview desktop apps (Electron, Tauri, Wails). \
+If this repo is a native app (SwiftUI, WinUI, GTK), a CLI, a game, or a headless API, do NOT call this; the tool will say so. Review source/tests/logs instead. \
+Needs a running local preview or debug port. Pass `path` (e.g. /stats) or `url` (http://localhost:…).",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Route on the local preview, e.g. /stats or /dashboard."},
+                "url": {"type": "string", "description": "Full local URL (http://localhost:5173/stats). Loopback only."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn visit_url() -> Value {
     tool(
         "visit_url",
@@ -814,6 +834,15 @@ mod tests {
         let tools = tools_for_mode_and_family("ask", ModelFamily::OpenAi, vec![]);
         let names = tool_names(&tools);
         assert!(!names.contains(&"screenshot_page".to_string()));
+        assert!(!names.contains(&"inspect_runtime".to_string()));
+    }
+
+    #[test]
+    fn review_mode_includes_inspect_runtime() {
+        let tools = tools_for_mode_and_family("review", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"inspect_runtime".to_string()));
+        assert!(names.contains(&"screenshot_page".to_string()));
     }
 
     #[test]

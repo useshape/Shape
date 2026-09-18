@@ -153,7 +153,8 @@ pub(super) fn record_tool_event(name: &str, outcome: &ToolOutcome, project_path:
         "delete_file" => "ai_file_deletes",
         "rename_file" => "ai_file_renames",
         "search_files" | "grep" | "search_codebase" | "web_search" | "visit_url"
-        | "plugin_list" | "plugin_search" | "plugin_tools" | "plugin_run" => "ai_searches",
+        | "plugin_list" | "plugin_search" | "plugin_tools" | "plugin_run"
+        | "inspect_runtime" => "ai_searches",
         "read_file" | "list_dir" | "read_terminal" | "list_terminals" => "ai_reads",
         "git_commit" => "ai_git_commits",
         "git_fetch" => "ai_git_fetches",

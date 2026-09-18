@@ -7,6 +7,8 @@ export type RepoHistoryEntry = {
 
 const REPO_HISTORY_KEY = "shape:repo-history";
 const MAX_REPO_HISTORY_ITEMS = 15;
+/** How many recents the composer/empty-state dropdown lists. Older entries stay in history. */
+export const MAX_REPO_DROPDOWN_ITEMS = 8;
 
 export function getRepoName(path: string): string {
     if (!path) return path;

@@ -478,7 +478,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
     ];
 
     return (
-        <div className="flex h-full min-h-0 flex-col bg-sidebar">
+        <div className="flex h-full min-h-0 flex-col bg-panel">
             {/* GitHub-style status strip — badge/text/CTA share the same tone */}
             <div
                 className="mx-2 flex h-9 shrink-0 items-center gap-2 rounded-lg px-1"

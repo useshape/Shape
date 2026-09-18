@@ -5,7 +5,7 @@ order: 1
 icon: ri-file-edit-line
 ---
 
-The Shape **editor** is built on Monaco, the same engine that powers VS Code. It provides syntax highlighting, multi-cursor editing, and language-aware features for web projects.
+The Shape **editor** is built on CodeMirror 6. It highlights common web languages, supports multi-cursor editing, and formats with Prettier when enabled.
 
 ## Open and create files
 
@@ -61,9 +61,10 @@ Format only the selection via the command palette: **Format Selection** (**Ctrl+
 ## Navigation within a file
 
 - **Go to Line**: **Ctrl+G**
-- **Go to Definition**: **F12** (requires language support)
+- **Find**: **Ctrl+F**
 - **Go to Bracket**: **Ctrl+Shift+\\**
-- **Back / Forward**: **Alt+Left** / **Alt+Right** through cursor history
+
+The editor does not run language servers. Completions come from CodeMirror language packs, not TypeScript or ESLint language services.
 
 ## Word wrap
 
@@ -77,6 +78,5 @@ Enable auto-save in **Settings → Editor**. Choose delay or save on focus chang
 
 - [Languages and tooling](/docs/editor/languages-and-tooling)
 - [Tabs and Splits](/docs/editor/tabs-and-splits)
-- [IntelliSense](/docs/editor/intellisense)
 - [Command Palette](/docs/workspace/command-palette)
 - [Editor Settings](/docs/settings/editor-settings)

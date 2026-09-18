@@ -34,6 +34,11 @@ describe("error catalog", () => {
         expect(classifyAiError("Missing build attestation").code).toBe(SHAPE_ERRORS.UNOFFICIAL_BUILD);
         expect(classifyAiError("429 Too Many Requests").code).toBe(SHAPE_ERRORS.AI_RATE_LIMITED);
         expect(classifyAiError("rate limit exceeded").code).toBe(SHAPE_ERRORS.AI_RATE_LIMITED);
+        expect(
+            classifyAiError(
+                'OpenAI API error 429 Too Many Requests: {"error":{"message":"You have no credits remaining. Add credits at https://platform.openai.com/settings/organization/billing/.","type":"insufficient_quota","code":"credit_balance_exhausted"}}',
+            ).code,
+        ).toBe(SHAPE_ERRORS.AI_CREDITS);
     });
 
     it("includes unofficial build error", () => {

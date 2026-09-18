@@ -34,7 +34,20 @@ function Card({ card }: { card: SubagentCard }) {
     const [open, setOpen] = useState(true);
 
     return (
-        <div className="flex flex-col gap-1 rounded-xl border border-border-subtle bg-surface-3 px-3 py-2.5">
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+                void import("./store").then(({ openSubagent }) => openSubagent(card.id));
+            }}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    void import("./store").then(({ openSubagent }) => openSubagent(card.id));
+                }
+            }}
+            className="flex cursor-pointer flex-col gap-1 squircle-2xl bg-surface-3 p-2.5 text-left"
+        >
             <div className="flex items-center gap-2">
                 <span className="flex size-4 shrink-0 items-center justify-center">
                     {providerIcon(card.model || "auto", 14)}
@@ -55,8 +68,11 @@ function Card({ card }: { card: SubagentCard }) {
                 <div className="flex flex-col gap-0.5">
                     <button
                         type="button"
-                        onClick={() => setOpen((v) => !v)}
-                        className="flex w-full items-center gap-2 py-0.5 text-left chat-text font-medium text-text-secondary hover:text-text-primary transition-colors"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setOpen((v) => !v);
+                        }}
+                        className="flex w-full items-center gap-2 py-0.5 text-left text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
                     >
                         <Icon icon={RiSparkling2Fill} className="shrink-0 text-text-secondary" />
                         <span className="min-w-0 flex-1 truncate">Reviewing changes...</span>
@@ -69,11 +85,6 @@ function Card({ card }: { card: SubagentCard }) {
                     {open ? (
                         <div className="flex flex-col gap-0.5 pl-0.5">
                             <ReadGroup files={card.reads ?? []} tokens={card.tokens} />
-                            {card.truncated ? (
-                                <p className="py-0.5 text-xs text-text-muted">
-                                    This diff was truncated because it exceeded the preview limit. The changes shown are incomplete.
-                                </p>
-                            ) : null}
                         </div>
                     ) : null}
                 </div>
@@ -98,7 +109,6 @@ export function SubagentCards({ className }: { className?: string }) {
             status?: string;
         }>("agent-subagent", (event) => {
             applySubagentEvent(event.payload);
-            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "agents" }));
         }).then((fn) => {
             unlisten = fn;
         });

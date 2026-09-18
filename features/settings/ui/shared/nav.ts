@@ -59,7 +59,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         id: "editor",
         label: "Editor",
         children: [
-            { id: "editor-font", label: "Tabs", icon: RiCodeLine, targetId: "settings-editor-font" },
+            { id: "editor-font", label: "Editor", icon: RiCodeLine, targetId: "settings-editor-font" },
             { id: "appearance", label: "Appearance", icon: RiPaletteLine, targetId: "settings-appearance" },
         ],
     },
@@ -78,7 +78,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
             { id: "keyboard-shortcuts", label: "Keyboard Shortcuts", icon: RiKeyboardLine, targetId: "settings-keyboard-shortcuts" },
             { id: "updates", label: "Updates", icon: RiDownloadLine, targetId: "settings-updates" },
             { id: "notifications", label: "Notifications", icon: RiNotification3Line, targetId: "settings-notifications" },
-            { id: "privacy", label: "Privacy", icon: RiShieldLine, targetId: "settings-privacy" },
+            { id: "privacy", label: "Data Control", icon: RiShieldLine, targetId: "settings-privacy" },
             { id: "developer", label: "Developer", icon: RiBugLine, targetId: "settings-developer" },
         ],
     },

@@ -509,6 +509,53 @@ pub(super) async fn tool_screenshot_page(args: &Value, ctx: &ToolCtx<'_>) -> Too
     }
 }
 
+pub(super) async fn tool_inspect_runtime(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    if is_read_only_mode(ctx.mode) {
+        return blocked_outcome(
+            "inspect_runtime",
+            "Runtime inspect is not available in Ask or Plan mode.",
+        );
+    }
+    let kind = crate::agent::tools::runtime_inspect::detect_runtime_kind(ctx.project_path);
+    if !kind.inspectable() {
+        return error_outcome(
+            "inspect_runtime",
+            &crate::agent::tools::runtime_inspect::unsupported_message(&kind),
+        );
+    }
+    let url_arg = args.get("url").and_then(|v| v.as_str());
+    let path_arg = args.get("path").and_then(|v| v.as_str());
+    let resolved = match crate::agent::tools::runtime_inspect::resolve_inspect_url(url_arg, path_arg)
+    {
+        Ok(u) => u,
+        Err(e) => return error_outcome("inspect_runtime", &e),
+    };
+
+    let report = match crate::agent::tools::runtime_inspect::inspect_url(&resolved).await {
+        Ok(r) => r,
+        Err(e) => {
+            return error_outcome(
+                "inspect_runtime",
+                &format!(
+                    "Could not attach DevTools to {resolved}: {e}. Start the local preview or app (Electron/Tauri/Wails), or pass a loopback url."
+                ),
+            );
+        }
+    };
+    let summary = report.lines().take(3).collect::<Vec<_>>().join(" · ");
+    let ui = format!(
+        "\n<inspect_runtime url=\"{}\" kind=\"{}\">\n{}\n</inspect_runtime>\n",
+        escape_xml_attr(&resolved),
+        escape_xml_attr(kind.label()),
+        escape_xml_text(&clip(&summary, 240)),
+    );
+    ToolOutcome {
+        tool_result: clip(&format!("Runtime kind: {}\n{report}", kind.label()), 8000),
+        ui_chunk: ui,
+        side_effect: None,
+    }
+}
+
 pub(super) fn tool_finish(args: &Value) -> ToolOutcome {
     let summary = args
         .get("summary")

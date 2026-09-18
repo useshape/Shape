@@ -1,7 +1,7 @@
 use crate::core::error::AppError;
 use git2::{DiffFormat, DiffOptions, Repository, StatusOptions};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -891,30 +891,93 @@ pub fn git_init(path: String) -> Result<(), AppError> {
 }
 
 pub fn git_branches(path: String) -> Result<Vec<String>, AppError> {
-    let repo = Repository::open(&path).map_err(|e| AppError::Git(e))?;
-    let branches = repo
-        .branches(Some(git2::BranchType::Local))
-        .map_err(|e| AppError::Git(e))?;
+    let output = git_cmd()?
+        .args([
+            "-C",
+            &path,
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=%(refname:short)",
+            "--count=80",
+            "refs/heads",
+        ])
+        .output()?;
 
     let mut result = Vec::new();
-    for b in branches {
-        let (branch, _) = b.map_err(|e| AppError::Git(e))?;
-        if let Ok(Some(name)) = branch.name() {
+    let mut seen = HashSet::new();
+    if output.status.success() {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let name = line.trim();
+            if name.is_empty() {
+                continue;
+            }
+            if seen.insert(name.to_string()) {
+                result.push(name.to_string());
+            }
+        }
+    }
+    if !result.is_empty() {
+        return Ok(result);
+    }
+
+    let repo = Repository::open(&path).map_err(AppError::Git)?;
+    if let Ok(head) = repo.head() {
+        if let Some(name) = head.shorthand() {
             result.push(name.to_string());
+            seen.insert(name.to_string());
+        }
+    }
+    let locals = repo
+        .branches(Some(git2::BranchType::Local))
+        .map_err(AppError::Git)?;
+    for b in locals {
+        if result.len() >= 80 {
+            break;
+        }
+        let (branch, _) = b.map_err(AppError::Git)?;
+        if let Ok(Some(name)) = branch.name() {
+            if seen.insert(name.to_string()) {
+                result.push(name.to_string());
+            }
         }
     }
     Ok(result)
 }
 
 pub fn git_remote_branches(path: String) -> Result<Vec<String>, AppError> {
-    let repo = Repository::open(&path).map_err(|e| AppError::Git(e))?;
+    let output = git_cmd()?
+        .args([
+            "-C",
+            &path,
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=%(refname:short)",
+            "--count=200",
+            "refs/remotes",
+        ])
+        .output()?;
+
+    if output.status.success() {
+        let mut result = Vec::new();
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let name = line.trim();
+            if !name.is_empty() {
+                result.push(name.to_string());
+            }
+        }
+        return Ok(result);
+    }
+
+    let repo = Repository::open(&path).map_err(AppError::Git)?;
     let branches = repo
         .branches(Some(git2::BranchType::Remote))
-        .map_err(|e| AppError::Git(e))?;
-
+        .map_err(AppError::Git)?;
     let mut result = Vec::new();
     for b in branches {
-        let (branch, _) = b.map_err(|e| AppError::Git(e))?;
+        if result.len() >= 200 {
+            break;
+        }
+        let (branch, _) = b.map_err(AppError::Git)?;
         if let Ok(Some(name)) = branch.name() {
             result.push(name.to_string());
         }

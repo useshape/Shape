@@ -89,7 +89,7 @@ describe("chat-mentions: formatMentionToken / round-trip", () => {
 
     it("parses @plugin:slack", () => {
         expect(parseMentionTokens("use @plugin:slack to post")).toEqual([
-            { kind: "plugin", path: "slack", id: "slack", label: "slack" },
+            { kind: "plugin", path: "slack", id: "slack", label: "Slack" },
         ]);
     });
 

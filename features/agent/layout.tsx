@@ -12,10 +12,14 @@ import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DesignStudio } from "@/features/preview/design/shell";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
 import { TerminalDock } from "./terminal-dock";
+import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
 
 const MIN_WORKSPACE = 360;
-const MAX_WORKSPACE_RATIO = 0.85;
-const MAX_WORKSPACE_PX = 1800;
+const MIN_CHAT = 380;
+const SIDEBAR_EXPANDED = 304;
+const SIDEBAR_COLLAPSED = 48;
+const MAX_WORKSPACE_RATIO = 0.72;
+const MAX_WORKSPACE_PX = 1200;
 const SPLASH_KEY = "shape-agent-splash-seen";
 
 /**
@@ -114,6 +118,18 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    const clampWorkspace = useCallback(
+        (x: number, winW = typeof window === "undefined" ? 1280 : window.innerWidth) => {
+            const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED;
+            const maxByChat = Math.max(0, winW - sidebar - MIN_CHAT);
+            const maxByRatio = Math.min(MAX_WORKSPACE_PX, Math.floor(winW * MAX_WORKSPACE_RATIO));
+            const max = Math.min(maxByChat, maxByRatio);
+            if (max < MIN_WORKSPACE) return 0;
+            return Math.min(max, Math.max(MIN_WORKSPACE, x));
+        },
+        [sidebarOpen],
+    );
+
     const prevActiveFile = useRef<string | null>(null);
     useEffect(() => {
         if (!active_file || active_file === prevActiveFile.current) {
@@ -184,7 +200,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 persistWorkspace(true);
                 return;
             }
-            if (["preview", "changes", "source", "graph", "git", "prs", "pulls"].includes(tabId)) {
+            if (["preview", "changes", "source", "graph", "git", "prs", "pulls", "agents"].includes(tabId)) {
                 setOverlay(null);
                 persistWorkspace(true);
             }
@@ -257,15 +273,10 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [project_path, persistWorkspace, toggleSidebar, toggleWorkspace]);
 
     useEffect(() => {
-        const clamp = (x: number) =>
-            Math.min(
-                Math.min(MAX_WORKSPACE_PX, Math.floor(window.innerWidth * MAX_WORKSPACE_RATIO)),
-                Math.max(MIN_WORKSPACE, x),
-            );
-
         const onMove = (e: MouseEvent) => {
             if (!dragging.current) return;
-            const next = clamp(window.innerWidth - e.clientX);
+            const next = clampWorkspace(window.innerWidth - e.clientX);
+            if (next < MIN_WORKSPACE) return;
             widthRef.current = next;
             setWorkspaceWidth(next);
         };
@@ -287,7 +298,24 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
         };
-    }, []);
+    }, [clampWorkspace]);
+
+    useEffect(() => {
+        const apply = () => {
+            const next = clampWorkspace(widthRef.current);
+            if (next === 0) {
+                persistWorkspace(false);
+                return;
+            }
+            if (next !== widthRef.current) {
+                widthRef.current = next;
+                setWorkspaceWidth(next);
+            }
+        };
+        apply();
+        window.addEventListener("resize", apply);
+        return () => window.removeEventListener("resize", apply);
+    }, [clampWorkspace, persistWorkspace, sidebarOpen]);
 
     const requestDesign = useCallback(() => {
         if (!project_path) return;
@@ -344,8 +372,9 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const rightExpanded = workspaceOpen && showWorkspace;
 
     return (
-        <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-sidebar">
+        <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-panel">
             <DevRunHost />
+            <ProjectQuickPickHost />
             {splash ? (
                 <div
                     className={cn(
@@ -387,7 +416,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                     window.dispatchEvent(
                         new CustomEvent("shape-command-palette", {
                             detail: {
-                                filter: "all",
                                 placeholder: "Search…",
                             },
                         }),
@@ -469,7 +497,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                     projectPath={project_path}
                                     expanded
                                     onExpand={() => persistWorkspace(true)}
-                                    onToggleRight={toggleWorkspace}
                                 />
                             </div>
                         </div>

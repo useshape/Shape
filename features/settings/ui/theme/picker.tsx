@@ -55,7 +55,7 @@ export function ThemePicker({
                             }
                         }}
                         className={cn(
-                            "overflow-hidden rounded-xl border border-border-subtle transition-colors hover:ring-2 hover:ring-border-focus bg-panel-hover text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                            "overflow-hidden squircle-xl border border-border-subtle transition-colors hover:ring-2 hover:ring-border-focus bg-panel-hover text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                         )}
                     >
                         <ThemeWorkbenchPreview theme={id} />

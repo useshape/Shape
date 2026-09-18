@@ -1,29 +1,15 @@
 "use client";
 
-import { RiLayoutRight2Line, RiLayoutLeft2Line, RiRadioButtonFill, RiSparkling2Fill, RiStopFill } from "@remixicon/react";
-import { useEffect, useState } from "react";
+import { RiLayoutRight2Line, RiLayoutLeft2Line, RiSparkling2Fill } from "@remixicon/react";
+import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown";
-import { useProjectState } from "@/lib/backend";
-import {
-    detectDevCommand,
-    isWebProject,
-    type DevCommandInfo,
-} from "@/features/detection/lib/lib";
-import { useDevRunStatus } from "@/features/preview/run-status";
 import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
 import { WindowControls } from "@/features/workbench/titlebar/ui/window-controls";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { dashboardUrl } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend/commands";
-import { Button } from "@/components/ui/button";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
 export const AGENT_CHROME_ACTIONS_SLOT = "shape-agent-chrome-actions";
@@ -58,7 +44,7 @@ function Btn({
     onClick: () => void;
     disabled?: boolean;
     active?: boolean;
-    children: React.ReactNode;
+    children: ReactNode;
 }) {
     return (
         <Tooltip content={label}>
@@ -81,115 +67,6 @@ function Btn({
     );
 }
 
-function RunStatusDot({
-    status,
-}: {
-    status: "idle" | "starting" | "running" | "error";
-}) {
-    if (status === "idle") return null;
-    if (status === "running") {
-        return (
-            <span
-                className="pointer-events-none absolute -bottom-px -right-px size-1.5 rounded-full bg-success"
-                aria-hidden
-            />
-        );
-    }
-    return (
-        <span
-            className={cn(
-                "pointer-events-none absolute -bottom-0.5 -right-0.5 size-2 rounded-full border-[1.5px] border-t-transparent animate-spin",
-                status === "starting" ? "border-accent" : "border-error",
-            )}
-            aria-hidden
-        />
-    );
-}
-
-function RunControl({
-    command,
-}: {
-    command: string;
-}) {
-    const run = useDevRunStatus();
-    const busy = run.status === "starting" || run.status === "running";
-
-    const start = () => {
-        window.dispatchEvent(
-            new CustomEvent("shape-terminal-run", { detail: { command } }),
-        );
-    };
-    const stop = () => {
-        window.dispatchEvent(new CustomEvent("shape-terminal-run-stop"));
-    };
-    const restart = () => {
-        window.dispatchEvent(
-            new CustomEvent("shape-terminal-run-restart", { detail: { command } }),
-        );
-    };
-
-    const label = busy ? (run.status === "starting" ? "Starting" : "Running") : "Run";
-    const trigger = (
-        <Button
-            variant="outline"
-            size="sm"
-            aria-label={busy ? label : `Run ${command}`}
-            onClick={busy ? undefined : start}
-            className="px-1.5 text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
-        >
-            <span className="relative inline-flex">
-                <Icon icon={busy ? (run.status === "starting" ? RiRadioButtonFill : RiStopFill) : RiRadioButtonFill} />
-                <RunStatusDot status={run.status} />
-            </span>
-            <span>{label}</span>
-        </Button>
-    );
-
-    if (!busy) return trigger;
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-36">
-                <DropdownMenuItem onClick={restart}>Restart</DropdownMenuItem>
-                <DropdownMenuItem onClick={stop}>Stop</DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-}
-
-export function RunDevButton() {
-    const { project_path } = useProjectState();
-    const [web, setWeb] = useState(false);
-    const [dev, setDev] = useState<DevCommandInfo | null>(null);
-
-    useEffect(() => {
-        if (!project_path) {
-            setWeb(false);
-            setDev(null);
-            return;
-        }
-        let cancelled = false;
-        void (async () => {
-            const isWeb = await isWebProject(project_path);
-            if (cancelled) return;
-            setWeb(isWeb);
-            if (!isWeb) {
-                setDev(null);
-                return;
-            }
-            const cmd = await detectDevCommand(project_path);
-            if (!cancelled) setDev(cmd);
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [project_path]);
-
-    if (!web || !dev) return null;
-    return <RunControl command={dev.command} />;
-}
-
 export function AgentChrome({
     rightOpen,
     onToggleRight,
@@ -202,7 +79,7 @@ export function AgentChrome({
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
-        <div className="relative flex h-titlebar shrink-0 items-stretch bg-panel" data-tauri-drag-region>
+        <div className="relative flex h-titlebar shrink-0 items-stretch overflow-hidden bg-panel" data-tauri-drag-region>
             {/* Title/tabs content — no data-no-drag so empty chrome stays draggable.
                 Interactive children opt out via data-no-drag / button CSS rules. */}
             <div

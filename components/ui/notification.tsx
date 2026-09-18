@@ -73,7 +73,7 @@ function ToastCard({
     return (
         <div
             className={cn(
-                "shape-toast pointer-events-auto relative w-full overflow-hidden rounded-2xl border border-border-subtle bg-surface-3 p-4 pr-11 text-left shadow-lg",
+                "shape-toast pointer-events-auto relative w-full overflow-hidden squircle-2xl border border-border-subtle bg-surface-3 p-2 text-left shadow-lg",
                 "transition-[opacity,transform,filter] duration-200 ease-[var(--ease-out)]",
                 entered && !leaving
                     ? "scale-100 opacity-100 blur-0"

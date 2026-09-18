@@ -4,7 +4,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from "@/lib/utils";
 import { convertFileSrc } from "@tauri-apps/api/core";

@@ -11,6 +11,8 @@ export type SearchInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>,
     isLoading?: boolean;
     /** Icon + field only — no chrome. Command palette / menu filters. */
     borderless?: boolean;
+    /** Fade the list under a sticky dropdown search so the edge isn’t a hard cut. */
+    stickyFade?: boolean;
     clearable?: boolean;
     onClear?: () => void;
 };
@@ -25,6 +27,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
             disabled,
             isLoading = false,
             borderless = false,
+            stickyFade,
             clearable = true,
             onClear,
             placeholder = "Search",
@@ -63,10 +66,14 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
             } as React.ChangeEvent<HTMLInputElement>);
         };
 
+        const fade = stickyFade ?? borderless;
+
         return (
             <div
+                data-dropdown-search={fade ? "" : undefined}
                 className={cn(
                     "relative flex min-w-0 items-center",
+                    fade && "dropdown-search-sticky",
                     !borderless && "h-chrome",
                     className,
                 )}
@@ -98,7 +105,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                         borderless
                             ? "rounded-none border-0 bg-transparent py-2 pl-9 pr-8 shadow-none focus-visible:ring-0"
                             : cn(
-                                  "rounded-lg border border-input-border bg-input-bg py-0 pl-9 pr-8",
+                                  "squircle-2xl border border-input-border bg-input-bg py-0 pl-9 pr-8",
                                   "focus-visible:border-border-focus focus-visible:ring-1 focus-visible:ring-border-focus",
                               ),
                     )}

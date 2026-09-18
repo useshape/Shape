@@ -15,22 +15,15 @@ The outline updates when you switch tabs. It reflects the active editor file onl
 
 ## What appears in the outline
 
-Symbols depend on the file language and LSP support:
+Symbols depend on the file language. The outline is not powered by a language server.
 
-| Language | Typical symbols |
-| --- | --- |
-| **TypeScript / JavaScript** | Functions, classes, interfaces, variables |
-| **CSS** | Rules and selectors |
-| **HTML** | Elements and sections |
-| **Markdown** | Headings |
-
-If symbols are missing, check that the correct language mode is set and the relevant LSP is enabled in [Lint and LSP](/docs/settings/lint-and-lsp).
+If symbols are missing, check that the correct language mode is set.
 
 ## Navigate symbols
 
 Click any entry to move the cursor to that symbol in the editor. The editor scrolls and focuses the definition.
 
-For project-wide symbol search, use **Ctrl+T** (**Go to Symbol in Workspace**).
+For project-wide text search, use **Ctrl+Shift+F**.
 
 ## Outline vs breadcrumbs
 
@@ -38,7 +31,7 @@ The titlebar breadcrumbs show the file path. The outline shows structure **insid
 
 ## Related
 
-- [IntelliSense](/docs/editor/intellisense)
+- [Completions](/docs/editor/intellisense)
 - [Command Palette](/docs/workspace/command-palette)
 - [Activity Bar](/docs/workspace/activity-bar)
 - [Editing Files](/docs/editor/editing-files)

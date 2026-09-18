@@ -45,7 +45,7 @@ export function Breadcrumb({
       ref={ref}
       aria-label={ariaLabel}
       className={cx(
-        "flex w-full items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "flex w-full items-center overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
     >

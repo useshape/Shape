@@ -51,6 +51,7 @@ pub struct ToolCtx<'a> {
     pub agent_state: &'a AgentState,
     pub client: &'a Client,
     pub api_key: &'a str,
+    pub model: &'a str,
     pub cancel: tokio_util::sync::CancellationToken,
     pub index_state: Option<&'a crate::agent::index::IndexState>,
     pub mcp_state: Option<&'a crate::mcp::McpState>,
@@ -160,6 +161,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "spawn_subagent" => subagent::tool_spawn_subagent(&args, ctx).await,
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
+        "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
         other => {

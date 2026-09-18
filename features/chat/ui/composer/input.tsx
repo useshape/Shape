@@ -1,6 +1,6 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiBrushFill, RiChat3Line, RiCheckLine, RiCodeLine, RiSpyFill, RiGitBranchLine, RiListCheck3, RiMicLine, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiShieldLine, RiStopCircleLine, RiTerminalBoxLine } from "@remixicon/react";
+import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiBrushFill, RiCheckLine, RiSpyFill, RiMicLine, RiStopCircleLine, RiChat2Fill, RiCalendarFill, RiCommandLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,7 @@ import {
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { MentionPicker } from "./mentions";
 import { PendingEditsPanel } from "./edits";
-import { ComposerContextBar } from "./context-bar";
+import { ComposerContextBar, ComposerRuntimeSelect } from "./context-bar";
 import {
     ComposerTasksStrip,
     type ComposerTaskItem,
@@ -36,14 +36,11 @@ import {
 import { QueuedMessagesPanel, type QueuedMessage } from "./queue";
 import { ComposerAttachments, ComposerAttachmentsStrip, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
-import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText, type ChatMention } from "@/lib/chat-mentions";
-import { FileIcon } from "@/components/ui/file-icon";
-import { Favicon } from "@/components/ui/favicon";
-import { PluginLogo } from "@/components/ui/plugin-logo";
+import { mentionRanges, shortenMentionTokensInText } from "@/lib/chat-mentions";
 import { resolveChatUsageDisplay } from "@/lib/usage-display";
 import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/last-turn-usage";
 import { UsageRing } from "./usage";
-import { getVisibleModels, type ModelInfo } from "@/lib/models";
+import { getVisibleModels, isApiModel, resolveChatModels, type ModelInfo } from "@/lib/models";
 import {
     getCatalogModels,
     getCatalogProviderOrder,
@@ -53,6 +50,7 @@ import {
 import { useSettings, hasByokApiKeys } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
+import { SearchInput } from "@/components/ui/search";
 
 type ChatInputProps = {
     inputValue: string;
@@ -102,59 +100,41 @@ function effortLabel(id: ReasoningEffort): string {
     return EFFORT_OPTIONS.find((o) => o.id === id)?.label ?? "Low";
 }
 
-function effortFastLabel(effort: ReasoningEffort, fast: boolean): string {
-    const base = effortLabel(effort);
-    return fast ? `${base} Fast` : base;
+
+
+function formatContextWindow(raw?: string): string {
+    const t = (raw ?? "").trim();
+    if (!t) return "";
+    return t.replace(/([0-9.]+)\s*K\b/i, "$1k").replace(/([0-9.]+)\s*M\b/i, "$1m");
 }
 
-
-
-/** Credits per $1 of catalog provider cost after TARGET_MARGIN (0.4) and $0.02/credit. */
-const CREDITS_PER_USD_PROVIDER = (1 + 0.4) / 0.02;
-
-function creditsPerMillion(usdPerMillion: number): number {
-    return Math.round(usdPerMillion * CREDITS_PER_USD_PROVIDER);
-}
-
-const ModelTooltip = ({ model }: { model: ModelInfo }) => {
+const ModelTooltip = ({
+    model,
+    effort,
+}: {
+    model: ModelInfo;
+    effort: ReasoningEffort;
+}) => {
     const isAuto = model.id === "auto" || model.id === "openrouter/auto";
-    const inCredits = creditsPerMillion(model.inputCost ?? 0);
-    const outCredits = creditsPerMillion(model.outputCost ?? 0);
+    const ctx = formatContextWindow(model.contextWindow);
+    const effortName = effortLabel(effort).toLowerCase();
 
     return (
-        <div className="flex flex-col gap-1.5 min-w-[200px] max-w-[260px] px-2.5 py-2 select-none">
-            <div className="flex items-center gap-1.5">
-                {providerIcon(model.id, 14)}
-                <span className="text-sm font-medium text-text-primary truncate">
-                    {isAuto ? "Auto" : model.name}
-                </span>
+        <div className="flex flex-col gap-1 min-w-[220px] max-w-[280px] p-3 select-none">
+            <div className="text-sm] font-medium leading-tight text-text-primary">
+                {isAuto ? "Auto" : model.name}
             </div>
-            <p className="text-xs text-text-muted leading-snug line-clamp-2">
+            <p className="text-xs leading-snug text-text-secondary">
                 {isAuto
-                    ? "Uses a fast included model. Counts toward your monthly Auto allowance."
+                    ? "Picks a fast model for everyday work."
                     : model.description}
             </p>
-            <div className="flex items-center justify-between gap-3 text-xs">
-                <span className="text-text-muted">Context</span>
-                <span className="text-text-primary tabular-nums">{model.contextWindow}</span>
-            </div>
-            {isAuto ? (
-                <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-text-muted">Cost</span>
-                    <span className="text-text-primary">Auto allowance</span>
-                </div>
-            ) : (
-                <div className="flex flex-col gap-0.5 text-xs">
-                    <div className="flex items-center justify-between gap-3">
-                        <span className="text-text-muted">Input</span>
-                        <span className="text-text-primary tabular-nums">~{inCredits} cr / 1M</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                        <span className="text-text-muted">Output</span>
-                        <span className="text-text-primary tabular-nums">~{outCredits} cr / 1M</span>
-                    </div>
-                </div>
-            )}
+            {ctx ? (
+                <p className="mt-1 text-xs text-text-muted">{ctx} context window</p>
+            ) : null}
+            <p className="mt-0.5 text-xs italic text-text-muted">
+                Version: {effortName} reasoning effort
+            </p>
         </div>
     );
 };
@@ -163,12 +143,14 @@ const ModelItem = ({
     model,
     isSelected,
     onSelect,
+    effort,
     disabled = false,
     disabledReason,
 }: {
     model: ModelInfo,
     isSelected: boolean,
     onSelect: (id: string) => void,
+    effort: ReasoningEffort,
     disabled?: boolean,
     disabledReason?: string,
 }) => {
@@ -187,7 +169,7 @@ const ModelItem = ({
                 disabled ? (
                     <span className="text-xs text-text-muted px-1">{unavailableTooltip}</span>
                 ) : (
-                    <ModelTooltip model={model} />
+                    <ModelTooltip model={model} effort={effort} />
                 )
             }
         >
@@ -216,6 +198,9 @@ const ModelItem = ({
                     <span className="flex-1 font-regular text-sm text-text-primary group-hover:text-text-primary transition-colors">
                         {model.name}
                     </span>
+                    {isApiModel(model) ? (
+                        <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
+                    ) : null}
                     {isSelected && <Icon icon={RiCheckLine} className="text-text-primary font-bold" />}
                 </div>
             </DropdownMenuItem>
@@ -270,67 +255,142 @@ function isAllowedFile(file: File): boolean {
     return isImageFile(file) || isCodeFile(file) || isAudioFile(file) || isAssetFile(file);
 }
 
-function ComposerMentionChip({ raw, mention }: { raw: string; mention: ChatMention }) {
-    const label = mentionDisplayLabel(mention);
+function ComposerMentionChip({ raw }: { raw: string }) {
     return (
-        <span className="relative">
-            <span className="invisible">{raw}</span>
-            <span className="absolute inset-0 inline-flex min-w-0 items-center gap-1 overflow-hidden rounded-md bg-accent-text-bg px-1 text-accent-text">
-                {mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs" ? (
-                    <FileIcon name={label} className="h-3 w-3 shrink-0" />
-                ) : mention.kind === "plugin" ? (
-                    <PluginLogo
-                        toolkit={mention.id || mention.path || label}
-                        name={label}
-                        size={12}
-                        className="rounded-sm"
-                    />
-                ) : mention.kind === "browser" ? (
-                    <Favicon url={mention.path || label} size={12} />
-                ) : (
-                    <Icon
-                        icon={
-                            mention.kind === "chat"
-                                ? RiChat3Line
-                                : mention.kind === "design"
-                                  ? RiPaletteLine
-                                  : mention.kind === "terminal"
-                                    ? RiTerminalBoxLine
-                                    : mention.kind === "branch"
-                                      ? RiGitBranchLine
-                                      : mention.kind === "codebase"
-                                        ? RiSearchLine
-                                        : mention.kind === "selection"
-                                          ? RiCodeLine
-                                          : mention.kind === "mcp"
-                                            ? RiPuzzle2Line
-                                            : RiChat3Line
-                        }
-                        className="shrink-0"
-                    />
-                )}
-                <span className="min-w-0 truncate">@{label}</span>
-            </span>
+        <span className="box-decoration-clone rounded-sm bg-accent-text-bg text-accent-text">
+            {raw}
         </span>
     );
 }
 
 const CHAT_MODES = [
-    { id: "Code", icon: RiCodeLine, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
-    { id: "Ask", icon: RiChat3Line, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
-    { id: "Plan", icon: RiListCheck3, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
+    { id: "Code", icon: RiCommandLine, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
+    { id: "Ask", icon: RiChat2Fill, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
+    { id: "Plan", icon: RiCalendarFill, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
     { id: "Visual", icon: RiBrushFill, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
     { id: "Review", icon: RiSpyFill, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
 ] as const;
 
 const COMPOSER_HINTS = [
-    "Plan, Build, / for skills, @ for context",
+    "Plan, Build, @ for context",
     "Drop an image or screenshot to redesign",
     "Ask to explore the codebase with @codebase",
     "Paste a stack trace to debug",
     "Describe a UI change and preview it in Visual",
     "Review a PR or file for bugs and edge cases",
 ] as const;
+
+function SwapText({
+    value,
+    className,
+}: {
+    value: string;
+    className?: string;
+}) {
+    const wrapRef = React.useRef<HTMLSpanElement>(null);
+    const measureNewRef = React.useRef<HTMLSpanElement>(null);
+    const measureOldRef = React.useRef<HTMLSpanElement>(null);
+    const [shown, setShown] = React.useState(value);
+    const [leaving, setLeaving] = React.useState<string | null>(null);
+    const [width, setWidth] = React.useState<number | null>(null);
+    const [ready, setReady] = React.useState(false);
+    const [clipping, setClipping] = React.useState(false);
+    const shownRef = React.useRef(value);
+
+    const fitWidth = React.useCallback(() => {
+        const wrap = wrapRef.current;
+        const measureNew = measureNewRef.current;
+        if (!wrap || !measureNew) return;
+        const wNew = measureNew.getBoundingClientRect().width;
+        const wOld = measureOldRef.current?.getBoundingClientRect().width ?? 0;
+        const natural = leaving ? Math.max(wOld, wNew) : wNew;
+
+        let constraint: HTMLElement | null = wrap.parentElement;
+        let maxInner = Number.POSITIVE_INFINITY;
+        while (constraint) {
+            const cs = getComputedStyle(constraint);
+            const maxW = parseFloat(cs.maxWidth);
+            if (!Number.isNaN(maxW) && cs.maxWidth !== "none") {
+                const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+                maxInner = Math.max(0, maxW - pad);
+                break;
+            }
+            constraint = constraint.parentElement;
+        }
+
+        const parent = wrap.parentElement;
+        let used = 0;
+        if (parent && Number.isFinite(maxInner)) {
+            const cs = getComputedStyle(parent);
+            const gap = parseFloat(cs.columnGap || cs.gap) || 0;
+            const others = Array.from(parent.children).filter((el) => el !== wrap);
+            used =
+                others.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0) +
+                gap * others.length;
+        }
+
+        const cap = Number.isFinite(maxInner) ? Math.max(0, maxInner - used) : Number.POSITIVE_INFINITY;
+        setWidth(Math.max(0, Math.min(natural, cap)));
+        requestAnimationFrame(() => {
+            const el = wrapRef.current;
+            if (!el) return;
+            setClipping(el.scrollWidth > el.clientWidth + 1);
+        });
+    }, [leaving]);
+
+    React.useLayoutEffect(() => {
+        fitWidth();
+        if (!ready) {
+            requestAnimationFrame(() => setReady(true));
+        }
+    }, [value, shown, leaving, fitWidth, ready]);
+
+    React.useEffect(() => {
+        const parent = wrapRef.current?.parentElement;
+        if (!parent) return;
+        const ro = new ResizeObserver(() => fitWidth());
+        ro.observe(parent);
+        return () => ro.disconnect();
+    }, [fitWidth]);
+
+    React.useEffect(() => {
+        if (value === shownRef.current) return;
+        const from = shownRef.current;
+        shownRef.current = value;
+        setLeaving(from || null);
+        setShown(value);
+        const t = window.setTimeout(() => setLeaving(null), 400);
+        return () => window.clearTimeout(t);
+    }, [value]);
+
+    return (
+        <span
+            ref={wrapRef}
+            data-ready={ready ? "true" : "false"}
+            data-fade={clipping ? "true" : "false"}
+            className={cn("t-swap", className)}
+            style={width != null ? { width } : undefined}
+            onTransitionEnd={(event) => {
+                if (event.propertyName === "width") setClipping(false);
+            }}
+        >
+            <span ref={measureNewRef} className="t-swap__measure" aria-hidden>
+                {value}
+            </span>
+            <span ref={measureOldRef} className="t-swap__measure" aria-hidden>
+                {leaving ?? ""}
+            </span>
+            {leaving ? (
+                <span className="t-swap__layer t-swap__layer--out" aria-hidden>
+                    {leaving}
+                </span>
+            ) : null}
+            {shown ? (
+                <span className={cn("t-swap__layer", leaving && "t-swap__layer--in")}>{shown}</span>
+            ) : null}
+        </span>
+    );
+}
 
 function RotatingComposerHint({
     paused,
@@ -399,6 +459,7 @@ function ModeMenu({
                     disabled={disabled}
                     className={cn(
                         "font-medium text-[color:var(--mode-fg)] bg-[var(--mode-bg)] hover:bg-[var(--mode-bg)] hover:text-[color:var(--mode-fg)] hover:brightness-110",
+                        "transition-[color,background-color,filter] duration-200 ease-[var(--ease-out)]",
                         compactTrigger ? "h-7 gap-1 rounded-full px-1.5" : "h-8 px-2",
                     )}
                     style={{
@@ -407,18 +468,18 @@ function ModeMenu({
                     }}
                     aria-label={selected.id}
                 >
-                    <div className="flex items-center gap-1.5 text-sm">
+                    <div className="flex items-center gap-1.5 text-sm ">
                         <Icon icon={selected.icon} style={{ color: selected.color }} />
-                        <span className="truncate">{selected.id}</span>
+                        <SwapText value={selected.id} />
                     </div>
                 </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-90">
+            </DropdownMenuTrigger >
+            <DropdownMenuContent align="start" className="w-100">
                 {CHAT_MODES.map((mode) => (
                     <DropdownMenuItem
                         key={mode.id}
                         onClick={() => setSelectedMode(mode.id)}
-                        className="items-start gap-2.5 py-2 rounded-xl"
+                        className="items-start gap-2.5 py-2"
                     >
                         <Icon
                             icon={mode.icon}
@@ -548,7 +609,11 @@ export function ChatInput({
     const compact = Boolean(settings.ai.compactComposer) && variant !== "empty";
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
-    const allModels = getCatalogModels();
+    const allModels = resolveChatModels(getCatalogModels(), {
+        openaiKey: Boolean(settings.ai.openaiApiKey.trim()),
+        openRouterKey: Boolean(settings.ai.openRouterApiKey.trim()),
+        signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
+    });
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const mentionOverlayRef = React.useRef<HTMLDivElement>(null);
     const [mentionOpen, setMentionOpen] = React.useState(false);
@@ -704,11 +769,12 @@ export function ChatInput({
         e.target.value = "";
     }, [addUploadedFiles]);
 
+    const [modelQuery, setModelQuery] = React.useState("");
     const MODELS = getVisibleModels(allModels, settings.ai.enabledModels);
     const autoModel = allModels.find((m) => m.id === "auto") ?? {
         id: "auto",
         name: "Auto",
-        description: "Uses a fast included model for everyday tasks.",
+        description: "Picks a fast model for everyday work.",
         provider: "Auto",
         inputCost: 0,
         cachedInputCost: 0,
@@ -716,8 +782,38 @@ export function ChatInput({
         contextWindow: "200K",
         releaseDate: "Rolling",
     };
-    const modelInfo = MODELS.find(m => m.id === selectedModel) || autoModel;
-    const providerOrder = getCatalogProviderOrder();
+    const modelInfo = MODELS.find((m) => m.id === selectedModel) || autoModel;
+    const modelName =
+        selectedModel === "auto" || modelInfo.name === "auto" ? "Auto" : modelInfo.name;
+    const modelTriggerLabel = compact
+        ? modelName
+        : [modelName, effortLabel(reasoningEffort), fastMode ? "Fast" : null]
+            .filter(Boolean)
+            .join(" ");
+    const providerOrder = React.useMemo(() => {
+        const seen = new Set<string>();
+        const order: string[] = [];
+        for (const p of getCatalogProviderOrder()) {
+            if (seen.has(p)) continue;
+            seen.add(p);
+            order.push(p);
+        }
+        for (const m of allModels) {
+            if (seen.has(m.provider)) continue;
+            seen.add(m.provider);
+            order.push(m.provider);
+        }
+        return order;
+    }, [allModels]);
+    const modelSearch = modelQuery.trim().toLowerCase();
+    const modelMatches = (m: { id: string; name: string; provider: string }) => {
+        if (!modelSearch) return true;
+        return (
+            m.name.toLowerCase().includes(modelSearch) ||
+            m.id.toLowerCase().includes(modelSearch) ||
+            m.provider.toLowerCase().includes(modelSearch)
+        );
+    };
     const needsSignIn =
         !shapeAuth.isLoading && !shapeAuth.loggedIn && !hasByokApiKeys(settings.ai);
 
@@ -733,10 +829,12 @@ export function ChatInput({
     );
 
     React.useEffect(() => {
-        if (!isCatalogModelAllowed(selectedModel)) {
+        if (selectedModel === "auto") return;
+        if (allModels.length <= 1) return;
+        if (!allModels.some((m) => m.id === selectedModel)) {
             setSelectedModel("auto");
         }
-    }, [catalog, selectedModel, setSelectedModel]);
+    }, [allModels, selectedModel, setSelectedModel]);
 
     // Build the accept string for the file input
     const acceptString = [
@@ -777,7 +875,7 @@ export function ChatInput({
                 <div
                     className={cn(
                         "relative flex w-full flex-col border border-border-subtle bg-surface-4 transition-colors focus-within:border-border",
-                        compact ? "rounded-full h-12 px-0.5" : "rounded-xl",
+                        compact ? "squircle-full h-12 px-0.5" : "squircle-3xl",
                         dragOver && "border-border-subtle bg-surface-3/80",
                         needsSignIn && "cursor-default",
                     )}
@@ -884,7 +982,6 @@ export function ChatInput({
                                     <ComposerMentionChip
                                         key={`m-${i}`}
                                         raw={raw}
-                                        mention={range.mention}
                                     />,
                                 );
                                 cursor = range.end;
@@ -929,7 +1026,7 @@ export function ChatInput({
                                 }
                                 rows={1}
                                 className={cn(
-                                    "relative z-[1] w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30",
+                                    "relative z-[1] w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30 whitespace-pre-wrap break-words",
                                     compact ? "h-7 min-h-7 max-h-7 p-0 leading-7" : "min-h-7 leading-relaxed",
                                 )}
                                 style={{ caretColor: "var(--text-primary)" }}
@@ -1022,30 +1119,39 @@ export function ChatInput({
                                 setSelectedMode={setSelectedMode}
                             />
                         ) : null}
-                        <DropdownMenu>
+                        <DropdownMenu
+                            onOpenChange={(open) => {
+                                if (!open) setModelQuery("");
+                            }}
+                        >
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     size="xs"
                                     className={cn(
-                                        "h-8 font-normal text-text-muted hover:text-text-primary",
-                                        compact ? "max-w-[148px] px-1.5" : "max-w-[200px] px-2",
+                                        "h-8 font-normal text-text-foreground font-medium hover:text-text-primary",
+                                        compact ? "max-w-[132px] px-1.5" : "max-w-[260px] px-2",
                                     )}
-                                    aria-label={
-                                        selectedModel === "auto" || modelInfo.name === "auto"
-                                            ? "Auto"
-                                            : modelInfo.name
-                                    }
+                                    aria-label={modelTriggerLabel}
                                 >
-                                    <div className={cn("flex min-w-0 items-center gap-1.5 text-sm", compact && "max-w-[140px]")}>
-                                        {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
-                                        <span className="truncate">
-                                            {selectedModel === "auto" || modelInfo.name === "auto"
-                                                ? "Auto"
-                                                : modelInfo.name}
-                                        </span>
-                                        <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-60" />
-                                    </div>
+                                    {compact ? (
+                                        <div className="flex min-w-0 max-w-[120px] items-center gap-1 text-sm">
+                                            {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
+                                            <span className="min-w-0 truncate">{modelName}</span>
+                                            <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-60" />
+                                        </div>
+                                    ) : (
+                                        <div className="flex min-w-0 items-center gap-1.5 text-sm">
+                                            {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
+                                            <span className="min-w-0 truncate">{modelName}</span>
+                                            {isApiModel(modelInfo) ? (
+                                                <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
+                                            ) : null}
+                                            <SwapText value={effortLabel(reasoningEffort)} />
+                                            <SwapText value={fastMode ? "Fast" : ""} />
+                                            <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-60" />
+                                        </div>
+                                    )}
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-[200px]">
@@ -1061,8 +1167,8 @@ export function ChatInput({
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
                                         <span className="text-sm text-text-primary">Effort</span>
-                                        <span className="flex items-center gap-1 text-sm text-text-muted">
-                                            {effortLabel(reasoningEffort)}
+                                        <span className="flex min-w-0 items-center gap-1 text-sm text-text-muted">
+                                            <SwapText value={effortLabel(reasoningEffort)} />
                                         </span>
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="w-40">
@@ -1085,47 +1191,69 @@ export function ChatInput({
                                 </DropdownMenuSub>
 
                                 <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
-                                        <span className="text-sm text-text-primary">Model</span>
-                                        <span className="min-w-0 truncate text-sm text-text-muted">
-                                            {selectedModel === "auto" ? "Auto" : modelInfo.name}
-                                        </span>
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-60">
-                                        <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
+                                <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
+                                    <span className="text-sm text-text-primary">Model</span>
+                                    <span className="min-w-0 truncate text-sm text-text-muted">
+                                        {selectedModel === "auto" ? "Auto" : modelInfo.name}
+                                    </span>
+                                </DropdownMenuSubTrigger>
+
+                                <DropdownMenuSubContent className="w-60">
+                                    <SearchInput
+                                        borderless
+                                        placeholder="Search models"
+                                        autoFocus
+                                        value={modelQuery}
+                                        onChange={(e) => setModelQuery(e.target.value)}
+                                        onKeyDown={(e) => e.stopPropagation()}
+                                        onKeyUp={(e) => e.stopPropagation()}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                    />
+
+                                    <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
+                                        {modelMatches(autoModel) ? (
                                             <ModelItem
                                                 model={autoModel}
                                                 isSelected={selectedModel === "auto"}
                                                 onSelect={() => setSelectedModel("auto")}
+                                                effort={reasoningEffort}
                                             />
-                                            {providerOrder.filter((p) => p !== "Auto").map((provider) => {
-                                                const providerModels = MODELS.filter(
-                                                    (m) => m.provider === provider,
-                                                );
-                                                if (providerModels.length === 0) return null;
-                                                return (
-                                                    <div key={provider}>
-                                                        <DropdownMenuLabel className="text-xs font-regular text-text-muted">
-                                                            {provider}
-                                                        </DropdownMenuLabel>
-                                                        {providerModels.map((m) => {
-                                                            const allowed = isCatalogModelAllowed(m.id);
-                                                            return (
-                                                                <ModelItem
-                                                                    key={m.id}
-                                                                    model={m}
-                                                                    isSelected={selectedModel === m.id}
-                                                                    onSelect={setSelectedModel}
-                                                                    disabled={!allowed}
-                                                                    disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
-                                                                />
-                                                            );
-                                                        })}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </DropdownMenuSubContent>
+                                        ) : null}
+                                        {providerOrder.filter((p) => p !== "Auto").map((provider) => {
+                                            const providerModels = MODELS.filter(
+                                                (m) => m.provider === provider && modelMatches(m),
+                                            );
+                                            if (providerModels.length === 0) return null;
+                                            return (
+                                                <div key={provider}>
+                                                    <DropdownMenuLabel className="text-xs font-regular text-text-muted">
+                                                        {provider}
+                                                    </DropdownMenuLabel>
+                                                    {providerModels.map((m) => {
+                                                        const allowed = isCatalogModelAllowed(m.id) || isApiModel(m);
+                                                        return (
+                                                            <ModelItem
+                                                                key={m.id}
+                                                                model={m}
+                                                                isSelected={selectedModel === m.id}
+                                                                onSelect={setSelectedModel}
+                                                                effort={reasoningEffort}
+                                                                disabled={!allowed}
+                                                                disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })}
+                                        {!modelMatches(autoModel) &&
+                                        !MODELS.some(modelMatches) ? (
+                                            <div className="px-2.5 py-3 text-sm text-text-muted">
+                                                No models match
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -1267,20 +1395,24 @@ export function ChatInput({
                             {inputPanel}
                         </div>
                         <div className="relative flex min-w-0 items-center gap-2 px-2 pt-1.5">
+                            {contextExtras}
                             <ComposerContextBar compact className="min-w-0 flex-1" />
                             <div className="flex shrink-0 items-center gap-0.5">
-                                {contextExtras}
+                                <ComposerRuntimeSelect compact />
                                 {usageChip}
                             </div>
                         </div>
                     </>
                 ) : (
                     <div className="relative flex flex-col">
-                        <div className="relative z-0 -mb-2.5 flex items-end mx-3 rounded-t-xl border border-b-0 border-border-subtle bg-surface-3 px-2 pt-1 pb-3.5">
+                        <div className="relative z-0 -mb-2.5 flex items-end mx-4 squircle-t-2xl! border border-b-0 border-border-subtle bg-surface-3 px-2 pt-1 pb-3.5">
                             <div className="flex h-7 w-full min-w-0 items-center gap-1">
-                                <ComposerContextBar compact className="min-w-0 flex-1" />
                                 {contextExtras}
-                                {usageChip}
+                                <ComposerContextBar compact className="min-w-0 flex-1" />
+                                <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                                    <ComposerRuntimeSelect compact />
+                                    {usageChip}
+                                </div>
                             </div>
                         </div>
                         <div className="relative z-10">{inputPanel}</div>

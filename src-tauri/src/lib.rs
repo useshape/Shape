@@ -319,6 +319,8 @@ pub fn run() {
             agent::commands::mcp_cmds::sync_mcp_servers,
             agent::commands::mcp_cmds::get_mcp_config_path,
             agent::commands::mcp_cmds::ensure_mcp_config,
+            agent::commands::mcp_cmds::read_mcp_config,
+            agent::commands::mcp_cmds::write_mcp_config,
             agent::commands::mcp_cmds::get_mcp_status,
             agent::commands::mcp_cmds::get_mcp_tools,
             agent::commands::mcp_cmds::restart_mcp_server,

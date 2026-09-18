@@ -49,7 +49,11 @@ export function listTrustedWorkspaces(): string[] {
 
 export function notifyWorkspaceOpened(path: string): void {
     if (typeof window === "undefined") return;
+    trustWorkspace(path);
     window.dispatchEvent(new CustomEvent("shape-workspace-opened", { detail: { path } }));
+    void import("@/lib/backend").then(({ commands }) => {
+        void commands.setWorkspaceTrusted(path, true);
+    });
 }
 
 export function notifyWorkspaceClosed(): void {

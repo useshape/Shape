@@ -219,7 +219,7 @@ fn strip_tool_markup_for_api(content: &str) -> String {
     let tags = [
         "<cat>", "</cat>", "<ls>", "</ls>", "<edit>", "</edit>",
         "<status>", "</status>", "<tool_result>", "</tool_result>",
-        "<search_result", "<terminal_command", "</terminal_command>",
+        "<search_result", "<inspect_runtime", "<terminal_command", "</terminal_command>",
     ];
     let mut out = strip_think_blocks(content);
     for tag in tags {

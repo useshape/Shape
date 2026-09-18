@@ -191,7 +191,7 @@ function AttachmentPill({
     return (
         <div
             className={cn(
-                "group/attach relative inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-full border border-border pl-1 pr-2",
+                "group/attach relative inline-flex h-9 max-w-[220px] items-center gap-1.5 squircle-2xl bg-panel-hover px-2",
                 "animate-in fade-in zoom-in-95 duration-200",
                 failed && "border-error/40",
             )}

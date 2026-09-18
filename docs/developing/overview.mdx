@@ -5,7 +5,7 @@ order: 1
 icon: ri-folder-line
 ---
 
-Shape is a Tauri 2 desktop IDE. The UI is a Next.js app exported as static assets. The Rust backend owns commands, files, Git, the agent, terminals, and language-server adapters.
+Shape is a Tauri 2 desktop app. The UI is a Next.js app exported as static assets. The Rust backend owns commands, files, Git, the agent, and terminals.
 
 ## Bird's-eye view
 
@@ -15,9 +15,9 @@ Shape is a Tauri 2 desktop IDE. The UI is a Next.js app exported as static asset
 | `features/` | Product surfaces — editor, chat, explorer, Git, terminal, preview/design mode, settings |
 | `lib/` | Shared TypeScript: backend wrappers, settings, auth |
 | `components/ui/` | Shared UI primitives |
-| `src-tauri/` | Rust crate, Tauri config, agent, Git, PTY, LSP |
+| `src-tauri/` | Rust crate, Tauri config, agent, Git, PTY |
 | `docs/` | User and contributor MDX |
-| `scripts/` | Preview runtime, Monaco workers, docs index, version sync, release notes |
+| `scripts/` | Preview runtime, docs index, version sync, release notes |
 | `tests/` | Vitest suites |
 
 ## Where to go next
@@ -26,6 +26,6 @@ Shape is a Tauri 2 desktop IDE. The UI is a Next.js app exported as static asset
 - [Architecture](/docs/developing/architecture) — frontend, shell, and Rust layers
 - [Tauri IPC](/docs/developing/tauri-ipc) — commands and events
 - [Agent tools](/docs/developing/agent-tools) — how chat tools are defined and dispatched
-- [Language servers](/docs/developing/language-servers) — LSP lifecycle
+- [Language servers](/docs/developing/language-servers) — editor has none; CodeMirror packs only
 - [Indexing and search](/docs/developing/indexing-and-search) — codebase search
 - [Client trust](/docs/developing/client-trust) — Cloud AI and server-side usage

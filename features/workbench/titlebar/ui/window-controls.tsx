@@ -123,7 +123,7 @@ export function WindowControls({
     );
 
     const bg =
-        surface === "sidebar" ? "bg-sidebar" : "bg-panel";
+        surface === "sidebar" ? "bg-sidebar" : surface === "chrome" ? "bg-surface-3" : "bg-panel";
 
     /** Same layer as Radix overlays (document.body) so blur cannot cover these. */
     const floatingEl = floating ? (

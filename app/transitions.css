@@ -5,11 +5,11 @@
   --goo-fancy-alpha: 19;
   --goo-fancy-bias: -9;
 
-  --dropdown-open-dur: 250ms;
-  --dropdown-close-dur: 150ms;
-  --dropdown-pre-scale: 0.97;
-  --dropdown-closing-scale: 0.99;
-  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dropdown-open-dur: 140ms;
+  --dropdown-close-dur: 90ms;
+  --dropdown-pre-scale: 0.96;
+  --dropdown-closing-scale: 0.98;
+  --dropdown-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
   --morph-open-dur: 320ms;
   --morph-close-dur: 240ms;
@@ -56,8 +56,9 @@
   --stream-blur: 1px;
   --stream-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --hint-swap: 320ms;
-  --hint-distance: 8px;
+  --hint-swap: 380ms;
+  --hint-distance: 10px;
+  --hint-blur: 6px;
   --hint-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   --check-opacity-dur: 400ms;
@@ -130,17 +131,16 @@
   box-sizing: border-box;
   width: var(--morph-w-closed, 40px);
   height: var(--morph-h-closed, 40px);
-  /* Half closed height = pill. Never 9999px — browsers glitch interpolating that. */
-  border-radius: var(--morph-r-closed, 16px);
+  border-radius: var(--radius-2xl);
+  corner-shape: squircle;
   overflow: hidden;
   /* Inset ring avoids border-box width fighting the measured trigger. */
   box-shadow: inset 0 0 0 1px var(--border-subtle);
   transform-origin: bottom left;
-  will-change: width, height, border-radius;
+  will-change: width, height;
   transition:
     width var(--morph-close-dur) var(--morph-close-ease),
-    height var(--morph-close-dur) var(--morph-close-ease),
-    border-radius var(--morph-close-dur) var(--morph-close-ease);
+    height var(--morph-close-dur) var(--morph-close-ease);
 }
 
 .t-morph[data-align="end"] {
@@ -155,11 +155,11 @@
 .t-morph[data-open="true"] {
   width: var(--morph-w-open, 183px);
   height: var(--morph-h-open, 172px);
-  border-radius: var(--morph-r-open, 16px);
+  border-radius: var(--radius-2xl);
+  corner-shape: squircle;
   transition:
     width var(--morph-open-dur) var(--morph-ease),
-    height var(--morph-open-dur) var(--morph-ease),
-    border-radius var(--morph-open-dur) var(--morph-ease);
+    height var(--morph-open-dur) var(--morph-ease);
 }
 
 /* Dropdown morph: closed chrome comes from the trigger button itself. */
@@ -559,6 +559,75 @@
   transform: translateY(var(--hint-distance));
 }
 
+.t-swap {
+  position: relative;
+  display: inline-grid;
+  max-width: 100%;
+  vertical-align: bottom;
+  overflow: hidden;
+  justify-items: start;
+}
+.t-swap[data-fade="true"] {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
+}
+.t-swap[data-ready="true"]:not(.t-swap--block) {
+  transition: width var(--hint-swap) var(--hint-ease);
+}
+.t-swap--block {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+.t-swap__measure {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  font: inherit;
+  letter-spacing: inherit;
+}
+.t-swap__layer {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+  width: max-content;
+}
+.t-swap--block .t-swap__layer {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.t-swap__layer--out {
+  animation: t-swap-out var(--hint-swap) var(--hint-ease) forwards;
+  pointer-events: none;
+}
+.t-swap__layer--in {
+  animation: t-swap-in var(--hint-swap) var(--hint-ease) both;
+}
+@keyframes t-swap-out {
+  to {
+    opacity: 0;
+    transform: translateY(calc(var(--hint-distance) * -1));
+    filter: blur(var(--hint-blur));
+  }
+}
+@keyframes t-swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--hint-distance));
+    filter: blur(var(--hint-blur));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shape-popover-content[data-state="open"],
   .shape-popover-content[data-state="closed"] {
@@ -571,6 +640,13 @@
   }
   .t-composer-hint__text {
     transition: none !important;
+  }
+  .t-swap__layer--out,
+  .t-swap__layer--in {
+    animation: none !important;
+    filter: none !important;
+    transform: none !important;
+    opacity: 1 !important;
   }
   .t-toggle-thumb {
     animation: none !important;

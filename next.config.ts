@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   experimental: {
-    optimizePackageImports: ["@remixicon/react", "@tauri-apps/api"],
+    optimizePackageImports: ["@remixicon/react", "@tauri-apps/api", "react-syntax-highlighter"],
   },
   // Cut noisy full reloads when Cargo/target or preview-runtime files change.
   webpack: (config, { dev }) => {

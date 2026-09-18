@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
  */
 
 const itemClasses =
-    "group relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1 text-sm outline-none focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
+    "group relative flex cursor-default select-none items-center gap-2 squircle-2xl px-2! py-1 text-sm outline-none transition-[background-color,color,transform] duration-[var(--transition-fast)] ease-[var(--ease-out)] focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
 const containerClasses =
-    "shape-popover-content z-dropdown overflow-hidden rounded-xl border border-border-secondary bg-surface-4/80 backdrop-blur-sm text-text-primary shadow-md";
+    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border-secondary bg-surface-4/80 backdrop-blur-sm text-text-primary shadow-md";
 const shortcutClasses =
     "ml-auto shrink-0 pr-1 text-sm text-text-muted group-focus:text-text-primary";
 /** Tight inset — rows sit near the panel edge (Cursor-style). */
@@ -47,6 +47,8 @@ function DropdownScrollArea({
     const [canUp, setCanUp] = React.useState(false);
     const [canDown, setCanDown] = React.useState(false);
 
+    const [hasStickySearch, setHasStickySearch] = React.useState(false);
+
     const update = React.useCallback(() => {
         const el = ref.current;
         if (!el) return;
@@ -54,6 +56,7 @@ function DropdownScrollArea({
         const overflow = scrollHeight > clientHeight + 1;
         setCanUp(overflow && scrollTop > 2);
         setCanDown(overflow && scrollTop + clientHeight < scrollHeight - 2);
+        setHasStickySearch(!!el.querySelector("[data-dropdown-search]"));
     }, []);
 
     React.useLayoutEffect(() => {
@@ -72,7 +75,7 @@ function DropdownScrollArea({
 
     return (
         <div className="relative min-h-0">
-            <DropdownScrollScrim side="up" visible={canUp} />
+            <DropdownScrollScrim side="up" visible={canUp && !hasStickySearch} />
             <div
                 ref={ref}
                 onScroll={update}

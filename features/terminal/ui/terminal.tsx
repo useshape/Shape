@@ -32,7 +32,6 @@ import {
     workbenchTabItemClass,
 } from "@/features/editor/ui/tabs/workbench-tab-styles";
 import { terminalSessionStore, type TerminalTab as SessionTab } from "@/features/terminal/session";
-
 type TerminalShell = SessionTab["shell"];
 type TerminalGroupId = SessionTab["group"];
 type TerminalTab = SessionTab;
@@ -74,7 +73,7 @@ const lastPtySize = new Map<number, { cols: number; rows: number }>();
 
 const globalTerminalStore = terminalSessionStore;
 
-async function refitAllTerminals() {
+export async function refitAllTerminals() {
     if (isLayoutResizing()) return;
     const { invoke } = await import("@tauri-apps/api/core");
     for (const [, inst] of globalTerminalStore.instances) {
@@ -154,6 +153,7 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                 fitAddon = existing.fitAddon;
                 ptyId = existing.ptyId;
                 unlistenOutput = existing.unlistenOutput;
+                if (!term) return;
                 if (terminalRef.current) {
                     if (term.element?.parentNode) term.element.parentNode.removeChild(term.element);
                     if (term.element) terminalRef.current.appendChild(term.element);
@@ -165,7 +165,7 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                     }, 50);
                 }
                 xtermRef.current = term;
-                fitAddonRef.current = fitAddon;
+                fitAddonRef.current = fitAddon ?? null;
                 return;
             }
 
@@ -902,7 +902,7 @@ export default function Terminal({
         onActivate: (id: string) => void,
         showShellMenu: boolean,
     ) => (
-        <div className={cn(WORKBENCH_TAB_BAR_CLASS, "bg-panel px-2")}>
+        <div className={cn(WORKBENCH_TAB_BAR_CLASS, "border-b border-border-subtle bg-panel px-2")}>
             {renderTerminalTabs(
                 tabs,
                 activeId,
@@ -921,6 +921,19 @@ export default function Terminal({
                     </Button>
                 </Tooltip>
                 {showShellMenu ? shellMenu : null}
+                {terminalOnly && onClose && group === "left" ? (
+                    <Tooltip content="Close terminal">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
+                            onClick={() => onClose()}
+                            aria-label="Close terminal"
+                        >
+                            <Icon icon={RiCloseLine} />
+                        </Button>
+                    </Tooltip>
+                ) : null}
             </div>
         </div>
     );
