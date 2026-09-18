@@ -6,7 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { diffLines } from "diff";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import type { Chunk } from "../md/renderer";
 import { openProjectFile } from "@/lib/window/open-project-file";
@@ -26,10 +26,11 @@ import { ShapeLogo } from "@/components/ui/shape-logo";
 import { Favicon } from "@/components/ui/favicon";
 import { isShapePluginMeta } from "@/lib/plugin-logos";
 import { parseWebSearchHits, WebSearchBlock } from "./search";
-import { GeneratingIndicator } from "./generating";
 import { ActionLine } from "./action-line";
 import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
+import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
+import { openSubagent, upsertSubagent } from "@/features/agent/subagents/store";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "1s";
@@ -133,6 +134,7 @@ function computeTurnStats(blocks: Chunk[]) {
             case "web_search":
             case "web_result":
             case "web_visit":
+            case "inspect_runtime":
                 searches += 1;
                 break;
             case "edit":
@@ -235,7 +237,7 @@ function ThoughtStep({
     return (
         <div className="py-0.5">
             {isActive ? (
-                <GeneratingIndicator label="Thinking" variantSeed={trimmed} showTimer={false} />
+                <span className="wf-summary-text">Thinking</span>
             ) : (
                 <button
                     type="button"
@@ -647,13 +649,30 @@ function StepRow({ block }: { block: Chunk }) {
 
     if (block.type === "subagent" || block.type === "subagent_ref") {
         const name = block.query || "agent";
+        const id = block.file || name;
         return (
-            <div className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80">
+            <button
+                type="button"
+                className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80 hover:text-text-primary"
+                onClick={() => {
+                    upsertSubagent({
+                        id,
+                        title: name,
+                        agent: name,
+                        model: block.command,
+                        activity: "Working…",
+                        task: block.type === "subagent_ref" ? block.content : undefined,
+                        transcript: block.type === "subagent" ? block.content : undefined,
+                        status: (block.commandStatus as "running" | "done" | "error" | "pending") || "running",
+                    });
+                    openSubagent(id);
+                }}
+            >
                 {providerIcon(block.command || "auto", 14)}
                 <span>
                     Spawned <span className="text-text-secondary">{name}</span>
                 </span>
-            </div>
+            </button>
         );
     }
 
@@ -665,6 +684,27 @@ function StepRow({ block }: { block: Chunk }) {
     if (block.type === "search" || block.type === "search_result") {
         const q = (block.query || block.content || "").trim();
         return <ActionLine action="Searched" detail={q} />;
+    }
+
+    if (block.type === "inspect_runtime") {
+        const url = (block.query || "").trim();
+        let detail = url;
+        try {
+            if (url) {
+                const parsed = new URL(url);
+                detail = `${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+            }
+        } catch {
+            /* keep raw url */
+        }
+        if (!detail) detail = (block.inspectKind || "runtime").trim();
+        return (
+            <ActionLine
+                action={block.isGenerating ? "Inspecting" : "Inspected"}
+                detail={detail}
+                extra={<ChromeBrowserIcon size={14} branded />}
+            />
+        );
     }
 
     if (block.type === "web_search" || block.type === "web_result") {

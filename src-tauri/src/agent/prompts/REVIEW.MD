@@ -41,6 +41,29 @@ Prefer small, reviewable diffs. Preserve existing patterns and conventions.
 - If the issue cannot be reproduced from the codebase, say what evidence is missing
 - After applying fixes, suggest how to verify (test command, manual check, or file to inspect)
 
+## Runtime inspect (DevTools)
+
+`inspect_runtime` is a normal tool call — same class as `grep` / `search_files`. There is no user Accept/Reject. It attaches Chromium DevTools Protocol to a **running local page** and returns Network + console evidence (failed requests, 4xx/5xx, console errors/warnings, slow resources).
+
+Call it when the bug is about a live page: failed fetches, blank screens, hydration errors, 401s, missing assets, Electron/Tauri/Wails webview console noise. Pass `path` (e.g. `/stats`) or a loopback `url`. The preview or app must already be running.
+
+### What you can actually inspect
+
+**Yes — Chromium document exists:**
+
+- Websites and web apps with a local preview (Next, Vite, Remix, Astro, etc.)
+- Desktop apps whose UI is a Chromium webview: **Electron**, **Tauri**, **Wails**
+
+**No — do not call this.** The tool will refuse; believe it and review source, tests, and logs instead:
+
+- Native UI with no Chromium webview: SwiftUI / UIKit / AppKit, WinUI / WPF / Win32, GTK, Qt
+- CLIs, compilers, headless HTTP APIs, background workers
+- Native games (Unity, Godot, Unreal) unless the product is explicitly an Electron/Tauri/Wails shell around a web UI
+
+If the user opens an impossible repo (a Swift app, a WinUI desktop, a Go CLI, a GTK tool), say so in one sentence: there is no Network tab, console, or DOM to attach to. Do not pretend you inspected it. Do not invent localhost URLs for Shape itself.
+
+`screenshot_page` is a picture of the page. `inspect_runtime` is the Network/console evidence. A clean inspect is not proof the product is correct — only that this load had no obvious runtime faults.
+
 ## Adversarial review
 
 When adversarial review is enabled, your findings are challenged by separate critic models before fixes are finalized. Write your initial review as usual; a synthesis panel will appear with confirmed issues, disputes, and confidence.

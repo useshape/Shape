@@ -96,13 +96,13 @@ export function CheckpointRestoreDialog() {
                 </AlertDialogBody>
                 <AlertDialogFooter>
                     <AlertDialogCancel asChild>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => finish(false)}>
+                        <Button type="button" variant="secondary" size="lg" className="w-full bg-panel-hover" onClick={() => finish(false)}>
                             Cancel
                             <span className="ml-1.5 text-xs text-text-muted">(esc)</span>
                         </Button>
                     </AlertDialogCancel>
                     <AlertDialogAction asChild>
-                        <Button type="button" variant="default" size="sm" onClick={() => finish(true)}>
+                        <Button type="button" variant="default" size="lg" className="w-full" onClick={() => finish(true)}>
                             Continue
                             <kbd className="ml-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded px-1 py-px font-sans text-xs leading-none text-text-foreground">
                                 ↵

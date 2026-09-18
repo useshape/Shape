@@ -29,6 +29,8 @@ export type UsageCheckResult = {
 
 export type TokenExchangeResponse = {
   accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
   user: { id: string; email: string; name: string | null };
   tier: ShapeTier;
   credits: number;

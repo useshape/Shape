@@ -48,6 +48,8 @@ pub async fn send_chat_message(
     plugin_disabled_actions: Option<HashMap<String, Vec<String>>>,
     reasoning_effort: Option<String>,
     service_tier: Option<String>,
+    openrouter_api_key: Option<String>,
+    openai_api_key: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -55,24 +57,27 @@ pub async fn send_chat_message(
     pty_state: tauri::State<'_, PtyState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    let auth_token = if let Some(provider) = state.byok_provider() {
-        provider.api_key("").to_string()
-    } else {
-        access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
+    if openrouter_api_key.is_some() || openai_api_key.is_some() {
+        state.set_byok_keys(openrouter_api_key, openai_api_key);
+    }
+    let raw_model = model
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| MODEL_DEFAULT.to_string());
+    let llm_provider = state
+        .byok_provider_for_model(&raw_model)
+        .unwrap_or(streaming::LlmProvider::Shape);
+    let auth_token = match &llm_provider {
+        streaming::LlmProvider::Shape => access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
             AppError::Env(
                 "Sign in to Shape to use AI chat, or add an OpenRouter / OpenAI API key in Settings."
                     .to_string(),
             )
-        })?
+        })?,
+        streaming::LlmProvider::OpenRouter { api_key }
+        | streaming::LlmProvider::OpenAi { api_key } => api_key.clone(),
     };
-    let llm_provider = state
-        .byok_provider()
-        .unwrap_or(streaming::LlmProvider::Shape);
-
     let client = Client::new();
     let current_proj_path = app_state.0.lock()?.project_path.clone();
-
-    let raw_model = model.unwrap_or_else(|| MODEL_DEFAULT.to_string());
     let selected_auto = model_router::is_auto_selection(&raw_model);
     let history_has_images = state
         .history
@@ -121,7 +126,9 @@ pub async fn send_chat_message(
     logging::info(
         "chat",
         &format!(
-            "send_chat_message: model={} (selected={}), mode={}, msg_len={}",
+            "send_chat_message: provider={} url={} model={} (selected={}), mode={}, msg_len={}",
+            llm_provider.label(),
+            llm_provider.completions_url(),
             model_to_use,
             if selected_auto { "auto" } else { &raw_model },
             mode_to_use,
@@ -722,7 +729,7 @@ pub async fn send_chat_message(
     if still_current && still_this_turn && !was_cancelled {
         {
             let mut hist = state.history.lock()?;
-            hist.push(assistant_message);
+            history::replace_or_push_assistant(&mut hist, assistant_message);
         }
 
         let _ = app_handle.emit(
@@ -776,15 +783,7 @@ pub async fn send_chat_message(
                     .map(|c| c.history.clone())
                     .unwrap_or_default()
             };
-            if hist
-                .last()
-                .map(|m| m.role == "assistant" && m.content == final_full_response)
-                .unwrap_or(false)
-            {
-                // already saved via in-flight merge
-            } else {
-                hist.push(assistant_message);
-            }
+            history::replace_or_push_assistant(&mut hist, assistant_message);
             let _ = history::upsert_conversation_snapshot(
                 &state,
                 path,
@@ -809,13 +808,7 @@ pub async fn send_chat_message(
         if !final_full_response.trim().is_empty() {
             {
                 let mut hist = state.history.lock()?;
-                let already = hist
-                    .last()
-                    .map(|m| m.role == "assistant" && m.content == final_full_response)
-                    .unwrap_or(false);
-                if !already {
-                    hist.push(assistant_message);
-                }
+                history::replace_or_push_assistant(&mut hist, assistant_message);
             }
             if let Some(path) = &current_proj_path {
                 let _ = history::save_current_conversation(&state, path);

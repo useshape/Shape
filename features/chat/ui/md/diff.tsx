@@ -3,7 +3,7 @@ import React from 'react';
 import { Icon } from "@/components/ui/icon";
 import { cn } from '@/lib/utils';
 import { commands } from '@/lib/backend';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
 import { getShapeSyntaxTheme } from '@/lib/ui/syntax-theme';
 
 type DiffRow = {
@@ -279,7 +279,7 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
                                             )}
                                             onClick={() => toggleRow(row.id)}
                                         >
-                                            {selectedRow ? "âœ“" : "â€“"}
+                                            {selectedRow ? "✓" : "–"}
                                         </button>
                                     ) : (
                                         <div className="w-4 h-4" />
@@ -311,7 +311,7 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
                                             )}
                                             onClick={() => toggleRow(row.id)}
                                         >
-                                            {selectedRow ? "âœ“" : "â€“"}
+                                            {selectedRow ? "✓" : "–"}
                                         </button>
                                     ) : (
                                         <div className="w-4 h-4" />

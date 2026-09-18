@@ -3,7 +3,7 @@
     {
       "id": "design-mode",
       "title": "Introducing Design Mode",
-      "body": "Inspect and edit your live preview like a design tool — then apply the changes back to source.",
+      "body": "Inspect and edit your live preview like a design tool.",
       "image": "/promo/paper.jpg",
       "trigger": {
         "pages": ["chat"],

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { AgentThinking } from "@/components/application/agent-thinking/agent-thinking";
+import { GeneratingIndicator } from "@/features/chat/ui/blocks/generating";
 import { cx } from "@/utils/cx";
 
 /**
@@ -331,7 +331,7 @@ export function WorkingRow({
       className={cx("overflow-hidden", className)}
     >
       <div className="py-1">
-        <AgentThinking variant="stars" label={label} />
+        <GeneratingIndicator label={label} />
       </div>
     </motion.div>
   );

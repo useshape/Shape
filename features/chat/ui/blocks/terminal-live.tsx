@@ -199,7 +199,7 @@ function TerminalCommandMenu({ command }: { command: string }) {
                     <Icon icon={RiMoreLine} />
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-76">
                 <div className="px-2 py-1.5 text-sm font-medium text-text-muted">Auto-run</div>
                 {AUTO_RUN_OPTIONS.map((opt) => {
                     const selected = settings.ai.autoRunMode === opt.value;
@@ -222,7 +222,6 @@ function TerminalCommandMenu({ command }: { command: string }) {
                 })}
                 <DropdownMenuItem
                     onClick={() => void navigator.clipboard.writeText(command)}
-                    className="mt-1 border-t border-border-subtle pt-2"
                 >
                     Copy command
                 </DropdownMenuItem>

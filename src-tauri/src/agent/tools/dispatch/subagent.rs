@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 use tauri::Emitter;
 
+use crate::agent::commands::streaming::{self, ProxyContext};
 use crate::agent::tools::search;
 
 use super::common::{clip, error_outcome, escape_xml_attr, get_str};
@@ -69,12 +70,38 @@ pub(super) async fn tool_spawn_subagent(args: &Value, ctx: &ToolCtx<'_>) -> Tool
     )
     .await;
 
-    let summary = format!(
-        "Task: {task}\n\nFile matches:\n{files}\n\nCode matches:\n{grep}"
-    );
-    let activity: String = grep
+    let fallback = format!("Task: {task}\n\nFile matches:\n{files}\n\nCode matches:\n{grep}");
+    let mut summary = fallback.clone();
+
+    if !ctx.cancel.is_cancelled() && !ctx.api_key.is_empty() {
+        emit_subagent(ctx, &id, &title, "Summarizing findings…", "running");
+        let prompt = format!(
+            "You are a research subagent for Shape. Using only the search results below, answer the task.\n\
+             Be concise and cite file paths. If the results are insufficient, say what is missing.\n\
+             Do not invent files or APIs.\n\n\
+             Task:\n{task}\n\nFile matches:\n{files}\n\nCode matches:\n{grep}"
+        );
+        let proxy = ProxyContext::new("subagent")
+            .with_turn(ctx.turn_id.clone(), ctx.conversation_id.clone())
+            .with_project_path(Some(ctx.project_path.to_string()));
+        if let Ok((content, _, _)) = streaming::complete_chat_with_max_tokens(
+            ctx.client,
+            ctx.api_key,
+            &prompt,
+            ctx.model,
+            900,
+            &proxy,
+        )
+        .await
+        {
+            if !content.trim().is_empty() {
+                summary = content;
+            }
+        }
+    }
+
+    let activity: String = summary
         .lines()
-        .chain(files.lines())
         .find(|l| !l.trim().is_empty())
         .unwrap_or("Done")
         .chars()

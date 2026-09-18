@@ -52,6 +52,7 @@ function SortableChatTab({
     onSelect,
     onClose,
     onCloseOthers,
+    onCloseToRight,
     onCloseAll,
 }: {
     tab: ChatTab;
@@ -60,6 +61,7 @@ function SortableChatTab({
     onSelect: (id: string) => void;
     onClose?: (id: string) => void;
     onCloseOthers?: (id: string) => void;
+    onCloseToRight?: (id: string) => void;
     onCloseAll?: () => void;
 }) {
     const {
@@ -131,30 +133,34 @@ function SortableChatTab({
                         ) : tab.models && tab.models.length > 0 ? (
                             <ModelAvatarStack models={tab.models} size={14} />
                         ) : null}
-                        <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
+                        <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 pr-1">
                             <FadeTruncate
                                 title={tab.title}
-                                className="min-w-0 max-w-[140px] truncate text-sm"
+                                className="min-w-0 max-w-[140px] text-sm"
                             >
                                 {tab.title || "New Chat"}
                             </FadeTruncate>
                         </div>
-                        {canClose && onClose ? (
-                            <div className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center">
-                                <button
-                                    type="button"
-                                    aria-label={`Close ${tab.title}`}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onClose(tab.id);
-                                    }}
-                                    className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
-                                >
-                                    <Icon icon={RiCloseLine} />
-                                </button>
-                            </div>
-                        ) : null}
                     </div>
+                    {canClose && onClose ? (
+                        <button
+                            type="button"
+                            aria-label={`Close ${tab.title}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClose(tab.id);
+                            }}
+                            className={cn(
+                                "absolute inset-y-0 right-0 z-[2] flex w-7 items-center justify-end pr-1 opacity-0 transition-opacity group-hover:opacity-100",
+                                "bg-linear-to-l to-transparent from-50%",
+                                isActive ? "from-surface-3" : "from-panel-hover",
+                            )}
+                        >
+                            <span className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}>
+                                <Icon icon={RiCloseLine} />
+                            </span>
+                        </button>
+                    ) : null}
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent className="min-w-44">
@@ -165,6 +171,11 @@ function SortableChatTab({
                 {onCloseOthers ? (
                     <ContextMenuItem onClick={() => onCloseOthers(tab.id)}>
                         Close Others
+                    </ContextMenuItem>
+                ) : null}
+                {onCloseToRight ? (
+                    <ContextMenuItem onClick={() => onCloseToRight(tab.id)}>
+                        Close to the Right
                     </ContextMenuItem>
                 ) : null}
                 {onCloseAll ? (
@@ -236,6 +247,16 @@ export function ChatTabBar({
         for (const t of tabs) onCloseTab(t.id);
     }, [onCloseTab, tabs]);
 
+    const closeToRight = useCallback(
+        (id: string) => {
+            if (!onCloseTab || !tabs) return;
+            const idx = tabs.findIndex((t) => t.id === id);
+            if (idx < 0) return;
+            for (const t of tabs.slice(idx + 1)) onCloseTab(t.id);
+        },
+        [onCloseTab, tabs],
+    );
+
     return (
         <TabBarShell
             dndId="agent-chat-tabs"
@@ -262,6 +283,7 @@ export function ChatTabBar({
                     onSelect={(id) => onSelectTab?.(id)}
                     onClose={onCloseTab}
                     onCloseOthers={onCloseTab ? closeOthers : undefined}
+                    onCloseToRight={onCloseTab ? closeToRight : undefined}
                     onCloseAll={onCloseTab ? closeAll : undefined}
                 />
             ))}

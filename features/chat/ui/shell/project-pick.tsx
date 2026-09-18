@@ -1,7 +1,7 @@
 "use client";
 
 import { RiFolderLine } from "@remixicon/react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
@@ -73,17 +73,28 @@ const CLONE_PLACEHOLDER: Record<CloneKind, string> = {
     azure: "org/project/repo",
 };
 
+type PickStep = "projects" | "sources" | "clone";
+
 export function ProjectQuickPick({
     open,
     onOpenChange,
+    initialStep = "projects",
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    initialStep?: Exclude<PickStep, "clone">;
 }) {
-    const [step, setStep] = useState<"projects" | "sources" | "clone">("projects");
+    const [step, setStep] = useState<PickStep>(initialStep);
     const [cloneKind, setCloneKind] = useState<CloneKind>("github");
     const [query, setQuery] = useState("");
     const recents = useMemo(() => loadRepoHistory().slice(0, 12), [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        setStep(initialStep);
+        setQuery("");
+        setCloneKind("github");
+    }, [open, initialStep]);
 
     const projectItems: QuickPickItem[] = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -97,7 +108,7 @@ export function ProjectQuickPick({
             .map((r, i) => ({
                 id: r.path,
                 label: getRepoName(r.path),
-                description: `Local · ${r.path}`,
+                description: r.path,
                 icon: RiFolderLine,
                 hint: i < 9 ? `Ctrl+${i + 1}` : undefined,
             }));
@@ -258,4 +269,28 @@ export function ProjectQuickPick({
             }}
         />
     );
+}
+
+export function ProjectQuickPickHost() {
+    const [open, setOpen] = useState(false);
+    const [initialStep, setInitialStep] = useState<Exclude<PickStep, "clone">>("projects");
+
+    useEffect(() => {
+        const onNew = () => {
+            setInitialStep("sources");
+            setOpen(true);
+        };
+        const onPick = () => {
+            setInitialStep("projects");
+            setOpen(true);
+        };
+        window.addEventListener("shape-new-project", onNew);
+        window.addEventListener("shape-open-project-pick", onPick);
+        return () => {
+            window.removeEventListener("shape-new-project", onNew);
+            window.removeEventListener("shape-open-project-pick", onPick);
+        };
+    }, []);
+
+    return <ProjectQuickPick open={open} onOpenChange={setOpen} initialStep={initialStep} />;
 }

@@ -21,7 +21,6 @@ import {
 import { isModelEnabled } from "@/lib/models";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { OnboardingWindowChrome } from "./window-chrome";
-import { OnboardingInset } from "./inset";
 import { LoginPanel } from "./login-panel";
 import {
     applyKeybindingPreset,
@@ -29,6 +28,7 @@ import {
     listKeybindingPresets,
     type KeybindingPresetId,
 } from "@/lib/ui/shortcuts";
+import { ICON_SIZE_MD } from "@/components/ui/icon";
 
 type Phase = "intro" | "content";
 
@@ -268,61 +268,31 @@ export default function Onboarding({
                 className={cn(
                     "relative flex min-h-0 flex-1 overflow-hidden transition-opacity duration-500 ease-out",
                     contentVisible ? "opacity-100" : "opacity-0",
-                    isLoginStep ? "flex-row" : "flex-col items-center justify-center px-6 py-10 pb-16",
+                    "flex-col items-center justify-center px-6 py-10 pb-16",
                 )}
             >
                 {isLoginStep ? (
-                    <>
-                        <div className="relative z-10 flex h-full min-h-0 w-[min(100%,24rem)] shrink-0 flex-col bg-background">
-                            <div className="flex min-h-0 flex-1 flex-col justify-center px-10">
-                                <LoginPanel
-                                    finishing={finishing}
-                                    onSignedIn={() => void finishOnboarding()}
-                                />
-                            </div>
-                            <div className="shrink-0 px-10 pb-6">
-                                {loginOnly ? null : (
-                                    <div
-                                        className="mb-4 flex items-center justify-center gap-1.5"
-                                        aria-hidden
-                                    >
-                                        {steps.map((id, i) => (
-                                            <span
-                                                key={id}
-                                                className={cn(
-                                                    "h-1.5 rounded-full transition-all duration-300",
-                                                    i === stepIndex
-                                                        ? "w-4 bg-accent"
-                                                        : "w-1.5 bg-text-muted/30",
-                                                )}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="px-0 text-text-muted hover:bg-transparent hover:text-text-primary"
-                                    disabled={finishing}
-                                    onClick={() => {
-                                        cancelLoginShape();
-                                        void finishOnboarding();
-                                    }}
-                                >
-                                    Skip
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 w-[min(72%,52rem)] overflow-hidden">
-                            <OnboardingInset
-                                tour
-                                workspace
-                                x={40}
-                                className="h-full min-h-0"
-                            />
-                        </div>
-                    </>
+                    <div className="flex w-full max-w-[200px] flex-col items-center">
+                        <LoginPanel
+                            finishing={finishing}
+                            onSignedIn={() => void finishOnboarding()}
+                        />
+                        {loginOnly ? null : (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="lg"
+                                className="mt-4 w-full"
+                                disabled={finishing}
+                                onClick={() => {
+                                    cancelLoginShape();
+                                    void finishOnboarding();
+                                }}
+                            >
+                                Skip
+                            </Button>
+                        )}
+                    </div>
                 ) : (
                     <div className="relative flex w-full max-w-xl flex-col items-center overflow-hidden">
                         <div
@@ -373,20 +343,19 @@ export default function Onboarding({
                                 type="button"
                                 onClick={goPrevious}
                                 disabled={finishing || stepIndex === 0}
-                                size="lg"
-                                variant="outline"
+                                size="md"
+                                variant="secondary"
                                 className="min-w-0 w-full"
                             >
                                 Previous
                             </Button>
                             <Button
                                 onClick={goNext}
-                                size="lg"
-                                className="min-w-0 w-full gap-2"
+                                size="md"
                                 disabled={!canNext}
                             >
                                 Next
-                                <EnterKeyIcon size={14} className="opacity-80" />
+                                <EnterKeyIcon size={ICON_SIZE_MD} />
                             </Button>
                         </div>
                     </div>
@@ -426,7 +395,7 @@ function PrivacyPanel({
 }) {
     return (
         <div>
-            <h1 className="text-center text-xl font-medium text-text-primary">
+            <h1 className="text-left px-1 text-2xl font-medium tracking-tight text-text-primary">
                 Privacy
             </h1>
             <div className="px-1 pt-3 flex flex-col gap-2" role="radiogroup" aria-label="Privacy">
@@ -436,17 +405,14 @@ function PrivacyPanel({
                     aria-checked={chosen && enabled}
                     onClick={onAllow}
                     className={cn(
-                        "w-full rounded-lg px-4 py-3 text-left transition-colors",
+                        "w-full p-2.5 squircle-2xl text-text-muted text-left transition-colors",
                         chosen && enabled
-                            ? "bg-surface-4"
-                            : "bg-card ring-2 ring-border hover:bg-panel-hover",
+                            ? "bg-surface-4 ring-2 ring-accent duration-300 transition-all"
+                            : "bg-surface-1 hover:bg-surface-3 duration-300 transition-all",
                     )}
                 >
                     <div className="text-sm font-medium text-text-primary">
                         Allow anonymous usage data
-                    </div>
-                    <div className="mt-0.5 text-xs font-medium text-text-muted">
-                        Never includes your code.
                     </div>
                 </button>
                 <button
@@ -455,10 +421,10 @@ function PrivacyPanel({
                     aria-checked={chosen && !enabled}
                     onClick={onDeny}
                     className={cn(
-                        "w-full rounded-lg px-4 py-3  text-left transition-colors",
+                        "w-full p-2.5 squircle-2xl text-left transition-colors",
                         chosen && !enabled
-                            ? "bg-surface-4"
-                            : "bg-card ring-2 ring-border hover:bg-panel-hover",
+                            ? "bg-surface-4 ring-2 ring-accent text-text-primary"
+                            : "bg-surface-1 hover:bg-surface-3",
                     )}
                 >
                     <div className="text-sm font-medium text-text-primary">Don&apos;t share data</div>
@@ -479,10 +445,10 @@ function NotificationsPanel({
 }) {
     return (
         <div>
-            <h1 className="text-center text-xl font-medium text-text-primary">
+            <h1 className="text-left px-1 text-2xl font-medium tracking-tight text-text-primary">
                 Notifications
             </h1>
-            <div className="mt-8 flex flex-col gap-2">
+            <div className="mt-3 flex flex-col gap-2">
                 <NotifRow
                     label="All notifications"
                     checked={desktop && !important}
@@ -514,7 +480,7 @@ function NotifRow({
     onCheckedChange: (v: boolean) => void;
 }) {
     return (
-        <div className="flex items-center gap-3 rounded-lg bg-surface-4 px-3 py-2.5">
+        <div className="flex items-center gap-3] squircle-2xl bg-surface-4 p-2.5">
             <span className="min-w-0 flex-1 text-sm text-text-primary">{label}</span>
             <Switch checked={checked} onCheckedChange={onCheckedChange} />
         </div>
@@ -551,10 +517,10 @@ function KeybindsPanel({
 
     return (
         <div>
-            <h1 className="text-center text-xl font-medium text-text-primary">
+            <h1 className="text-left px-1 text-2xl font-medium tracking-tight text-text-primary">
                 Keyboard shortcuts
             </h1>
-            <div className="mt-6 flex flex-col gap-2 p-1" role="radiogroup" aria-label="Keyboard shortcuts">
+            <div className="mt-3 flex flex-col gap-2" role="radiogroup" aria-label="Keyboard shortcuts">
                 {presets.map((p) => (
                     <button
                         key={p.id}
@@ -563,10 +529,10 @@ function KeybindsPanel({
                         aria-checked={selected === p.id}
                         onClick={() => onSelect(p.id)}
                         className={cn(
-                            "w-full rounded-lg px-4 py-3 text-left transition-colors",
+                            "w-full p-2.5 squircle-2xl text-left transition-colors",
                             selected === p.id
-                                ? "bg-surface-4"
-                                : "bg-card ring-2 ring-border hover:bg-panel-hover",
+                                ? "bg-surface-4 ring-2 ring-accent duration-300 transition-all"
+                                : "bg-surface-1 hover:bg-surface-3 duration-300 transition-all",
                         )}
                     >
                         <div className="text-sm font-medium text-text-primary">{p.label}</div>

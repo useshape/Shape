@@ -93,7 +93,20 @@ export function GitLabMark({ size = 16 }: { size?: number }) {
 }
 
 export function AzureDevOpsMark({ size = 16 }: { size?: number }) {
-    return <SimpleMark slug="azuredevops" color="0078D4" size={size} />;
+    return (
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            className="shrink-0"
+            aria-hidden
+        >
+            <path
+                fill="#0078D4"
+                d="M0 8.889 7.556 2.667v13.778L0 8.889Zm8.889-4.445v13.334L24 21.333V2.667L8.889 4.444Z"
+            />
+        </svg>
+    );
 }
 
 export function BitbucketMark({ size = 16 }: { size?: number }) {

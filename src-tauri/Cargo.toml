@@ -55,6 +55,7 @@ url = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["full"] }
+tokio-tungstenite = "0.26"
 backoff = { version = "0.4", features = ["tokio"] }
 specta = { version = "2.0.0-rc.20", features = ["derive"] }
 tauri-specta = { version = "2.0.0-rc.20", features = ["derive"] }

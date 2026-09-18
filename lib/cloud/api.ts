@@ -58,9 +58,9 @@ async function clientVersionHeader(): Promise<string> {
 
 export async function shapeApiFetch<T>(
   path: string,
-  options: RequestInit & { token?: string | null } = {},
+  options: RequestInit & { token?: string | null; skipAuthRefresh?: boolean } = {},
 ): Promise<T> {
-  const { token, ...init } = options;
+  const { token, skipAuthRefresh, ...init } = options;
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -89,6 +89,18 @@ export async function shapeApiFetch<T>(
   }
 
   if (!res.ok) {
+    if (
+      res.status === 401
+      && token
+      && !skipAuthRefresh
+      && path !== "/oauth/token"
+    ) {
+      const { refreshShapeAccessToken } = await import("./store");
+      const next = await refreshShapeAccessToken();
+      if (next && next !== token) {
+        return shapeApiFetch<T>(path, { ...options, token: next, skipAuthRefresh: true });
+      }
+    }
     const data = (await res.json().catch(() => ({}))) as {
       error?: string;
       message?: string;
@@ -176,12 +188,26 @@ export async function exchangeOAuthCode(
   const deviceId = await getShapeDeviceId();
   return shapeApiFetch<import("./types").TokenExchangeResponse>("/oauth/token", {
     method: "POST",
+    skipAuthRefresh: true,
     body: JSON.stringify({
+      grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
       client_id: "shape-desktop",
       code_verifier: codeVerifier,
       device_id: deviceId,
+    }),
+  });
+}
+
+export async function refreshAccessToken(refreshToken: string) {
+  return shapeApiFetch<import("./types").TokenExchangeResponse>("/oauth/token", {
+    method: "POST",
+    skipAuthRefresh: true,
+    body: JSON.stringify({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: "shape-desktop",
     }),
   });
 }

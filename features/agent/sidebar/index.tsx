@@ -1,7 +1,7 @@
 "use client";
 
 import type { RemixiconComponentType } from "@remixicon/react";
-import { RiAddLine, RiBrushFill, RiGithubFill, RiBrushLine, RiSearchLine, RiSettings3Line } from "@remixicon/react";
+import { RiAddLine, RiBrushLine, RiGithubFill, RiGitPullRequestLine, RiSearchLine, RiSettings3Line } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
@@ -10,7 +10,7 @@ import { ChatList } from "./chats";
 import { AccountRow } from "./account";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { SidebarToggleBtn } from "../chrome";
+import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
 import type { AgentOverlay } from "../overlay";
 
 export const AGENT_SIDEBAR_NAV_SLOT = "shape-agent-sidebar-nav";
@@ -98,23 +98,17 @@ export function AgentSidebar({
     return (
         <aside
             className={cn(
-                "flex h-full shrink-0 flex-col overflow-hidden bg-sidebar border-none! text-text-primary",
+                "relative z-20 flex h-full border-r border-border shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
                 "transition-[width] duration-[var(--transition-base)] ease-[var(--ease-out)]",
                 expanded ? "w-76" : "w-12",
             )}
         >
             {showHostedNav ? (
-                <div
-                    id={AGENT_SIDEBAR_NAV_SLOT}
-                    className="flex min-h-0 flex-1 flex-col overflow-hidden"
-                    data-collapsed={expanded ? "false" : "true"}
-                />
-            ) : (
                 <>
                     <div
                         className={cn(
-                            "flex h-10 shrink-0 items-center",
-                            expanded ? "justify-start px-2" : "justify-center px-1.5",
+                            "relative z-20 flex h-10 shrink-0 items-center",
+                            expanded ? "justify-between px-2" : "justify-center px-1.5",
                         )}
                     >
                         <SidebarToggleBtn
@@ -132,6 +126,53 @@ export function AgentSidebar({
                                 );
                             }}
                         />
+                        {expanded ? (
+                            <div id={AGENT_SIDEBAR_BACK_SLOT} className="flex items-center" />
+                        ) : null}
+                    </div>
+                    <div
+                        id={AGENT_SIDEBAR_NAV_SLOT}
+                        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                        data-collapsed={expanded ? "false" : "true"}
+                    />
+                </>
+            ) : (
+                <>
+                    <div
+                        className={cn(
+                            "relative z-20 flex h-10 shrink-0 items-center",
+                            expanded ? "justify-between px-2" : "justify-center px-1.5",
+                        )}
+                    >
+                        <SidebarToggleBtn
+                            open={expanded}
+                            collapsed={!expanded}
+                            onToggle={() => {
+                                if (onToggleSidebar) {
+                                    onToggleSidebar();
+                                    return;
+                                }
+                                window.dispatchEvent(
+                                    new CustomEvent("shape-layout-toggle", {
+                                        detail: { id: "primary-sidebar" },
+                                    }),
+                                );
+                            }}
+                        />
+                        {expanded ? (
+                            <Tooltip content="Search" side="bottom" delayDuration={80}>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Search"
+                                    onClick={onSearch}
+                                    className="size-7 shrink-0 text-text-secondary hover:text-text-primary"
+                                >
+                                    <Icon icon={RiSearchLine} />
+                                </Button>
+                            </Tooltip>
+                        ) : null}
                     </div>
                     <nav
                         className={cn(
@@ -140,30 +181,16 @@ export function AgentSidebar({
                         )}
                     >
                         {expanded ? (
-                            <div className="flex h-8 w-full items-center gap-0.5">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={newChat}
-                                    className="flex h-8 min-w-0 flex-1 items-center justify-start gap-3 px-1.5! text-left"
-                                >
-                                    <Icon icon={RiAddLine} className="shrink-0 text-text-muted" />
-                                    <span className="min-w-0 flex-1 truncate">New Chat</span>
-                                </Button>
-                                <Tooltip content="Search" side="bottom" delayDuration={80}>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label="Search"
-                                        onClick={onSearch}
-                                        className="size-8 shrink-0 text-text-secondary hover:text-text-primary"
-                                    >
-                                        <Icon icon={RiSearchLine} />
-                                    </Button>
-                                </Tooltip>
-                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={newChat}
+                                className="flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left"
+                            >
+                                <Icon icon={RiAddLine} className="shrink-0 text-text-muted" />
+                                <span className="min-w-0 flex-1 truncate">New Chat</span>
+                            </Button>
                         ) : (
                             <>
                                 <NavItem label="New Chat" icon={RiAddLine} onClick={newChat} collapsed />
@@ -218,6 +245,16 @@ export function AgentSidebar({
                     </>
                 ) : (
                     <div className="flex flex-col items-center gap-1">
+                        <Tooltip content="Pull requests" side="right" delayDuration={80}>
+                            <button
+                                type="button"
+                                onClick={() => window.dispatchEvent(new Event("shape-open-pull-requests"))}
+                                className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                                aria-label="Pull requests"
+                            >
+                                <Icon icon={RiGitPullRequestLine} />
+                            </button>
+                        </Tooltip>
                         <Tooltip content="Settings" side="right" delayDuration={80}>
                             <button
                                 type="button"

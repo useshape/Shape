@@ -1,19 +1,16 @@
 "use client";
 
 import { RiCheckLine, RiClipboardLine } from "@remixicon/react";
-import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { Icon } from "@/components/ui/icon";
+import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
 import { ChatLinkChip } from "./link-chip";
-
-const SyntaxHighlighter = lazy(() =>
-    import("react-syntax-highlighter").then((m) => ({ default: m.Prism as React.ComponentType<any> })),
-);
 
 function CodeBlock({ language, code, ...rest }: { language: string; code: string; [k: string]: unknown }) {
     const [copied, setCopied] = useState(false);
@@ -38,14 +35,7 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
                     <Icon icon={copied ? RiCheckLine : RiClipboardLine} />
                 </button>
             </div>
-            <Suspense
-                fallback={
-                    <pre className="m-0 overflow-x-auto px-3 pb-3 chat-text font-mono text-text-primary">
-                        <code>{code}</code>
-                    </pre>
-                }
-            >
-                <SyntaxHighlighter
+            <SyntaxHighlighter
                     style={getShapeSyntaxTheme()}
                     language={language}
                     PreTag="div"
@@ -54,7 +44,6 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
                 >
                     {code}
                 </SyntaxHighlighter>
-            </Suspense>
         </div>
     );
 }

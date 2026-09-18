@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
+import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { diffLines } from "diff";
@@ -26,6 +27,7 @@ import { providerIcon } from "@/lib/ui/provider-icon";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
+    "inspect_runtime",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
     "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
     "plugin_call",
@@ -326,7 +328,7 @@ function GitStatusBadge({ status }: { status: string }) {
                 ? "text-warning"
                 : "text-text-muted";
     return (
-        <span className={cn("ml-auto shrink-0 text-xs font-medium tabular-nums", color)}>
+        <span className={cn("ml-auto shrink-0 text-sm font-medium bg-panel-hover squircle-xl px-2.5 py-1 tabular-nums",)}>
             {label}
         </span>
     );
@@ -473,7 +475,6 @@ function GitStatusGroup({ lines }: { lines: GitStatusLine[] }) {
                 ) : null}
                 {unstaged.length > 0 ? (
                     <div className="flex flex-col py-0.5">
-                        <span className="px-2 py-1 text-xs text-text-disabled">Unstaged</span>
                         {unstaged.map((line) => (
                             <DropdownMenuItem
                                 key={`unstaged-${line.path}`}
@@ -659,7 +660,7 @@ export function ReadGroup({
 function computeGroupHeader(visible: Chunk[]) {
     const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
     const hasExplore = visible.some((b) =>
-        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit"].includes(b.type),
+        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit", "inspect_runtime"].includes(b.type),
     );
     const hasEdit = visible.some((b) =>
         ["edit", "create_file", "mkdir", "delete_file", "rename_file"].includes(b.type),
@@ -727,6 +728,26 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                     if (href) void commands.openUrlExternal(href);
                 },
             };
+        case "inspect_runtime": {
+            const url = (block.query || "").trim();
+            let detail = url;
+            try {
+                if (url) {
+                    const parsed = new URL(url);
+                    detail = `${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+                }
+            } catch {
+                /* keep raw url */
+            }
+            const kind = (block.inspectKind || "").trim();
+            return {
+                label: inFlight ? "Inspecting" : "Inspected",
+                query: detail || kind || "runtime",
+                expandable: !!block.content?.trim(),
+                content: block.content,
+                chromiumIcon: true,
+            };
+        }
         case "plugin_call":
             return {
                 label: block.pluginLabel || "Plugin",
@@ -1193,20 +1214,41 @@ export function ActionItem({
     }
 
     if (block.type === "subagent" || block.type === "subagent_ref") {
+        const name = block.query || "agent";
+        const id = block.file || name;
         return (
-            <div className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80">
+            <button
+                type="button"
+                className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80 hover:text-text-primary"
+                onClick={() => {
+                    void import("@/features/agent/subagents/store").then(({ openSubagent, upsertSubagent }) => {
+                        upsertSubagent({
+                            id,
+                            title: name,
+                            agent: name,
+                            model: block.command,
+                            activity: "Working…",
+                            task: block.type === "subagent_ref" ? block.content : undefined,
+                            transcript: block.type === "subagent" ? block.content : undefined,
+                            status: (block.commandStatus as "running" | "done" | "error" | "pending") || "running",
+                        });
+                        openSubagent(id);
+                    });
+                }}
+            >
                 {providerIcon(block.command || "auto", 14)}
                 <span>
-                    Spawned <span className="text-text-secondary">{block.query || "agent"}</span>
+                    Spawned <span className="text-text-secondary">{name}</span>
                 </span>
-            </div>
+            </button>
         );
     }
 
-    const useMarkdown =
+        const useMarkdown =
         isThink
         || block.type === "search_result"
         || block.type === "web_result"
+        || block.type === "inspect_runtime"
         || (block.type === "search" && !!config.content && looksLikeProseMarkdown(config.content));
 
     const editResolved = isEdit && block.file
@@ -1253,6 +1295,10 @@ export function ActionItem({
 
                 {"faviconUrl" in config && config.faviconUrl ? (
                     <Favicon url={String(config.faviconUrl)} size={14} />
+                ) : null}
+
+                {"chromiumIcon" in config && config.chromiumIcon ? (
+                    <ChromeBrowserIcon size={14} branded />
                 ) : null}
 
                 {"resultUrls" in config && Array.isArray(config.resultUrls) && config.resultUrls.length > 0 ? (

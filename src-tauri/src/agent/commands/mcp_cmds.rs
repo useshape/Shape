@@ -29,6 +29,18 @@ pub fn ensure_mcp_config() -> Result<String, AppError> {
 }
 
 #[tauri::command]
+pub fn read_mcp_config() -> Result<String, AppError> {
+    let path = ensure_mcp_config()?;
+    fs::read_to_string(&path).map_err(|e| AppError::Message(e.to_string()))
+}
+
+#[tauri::command]
+pub fn write_mcp_config(content: String) -> Result<(), AppError> {
+    let path = ensure_mcp_config()?;
+    fs::write(&path, content).map_err(|e| AppError::Message(e.to_string()))
+}
+
+#[tauri::command]
 pub fn sync_mcp_servers(
     servers: Vec<McpServerConfig>,
     mcp_state: tauri::State<'_, McpState>,

@@ -275,7 +275,9 @@ pub fn load_conversation(
     }
 
     *state.current_project.lock()? = Some(load_proj);
-    *state.history.lock()? = conv.history;
+    let mut history = conv.history;
+    history::collapse_duplicate_assistants(&mut history);
+    *state.history.lock()? = history;
     *state.title.lock()? = Some(conv.title);
     *state.current_conversation_id.lock()? = Some(id.clone());
     state.clear_design_preview_state();

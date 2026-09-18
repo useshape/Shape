@@ -101,7 +101,7 @@ export function MorphMenu({
                     aria-label={ariaLabel}
                     onClick={() => setOpen((v) => !v)}
                     className={cn(
-                        "inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface-3/80 backdrop-blur-sm px-3 text-sm text-text-secondary",
+                        "inline-flex h-8 items-center gap-1.5 squircle-2xl border border-border bg-surface-3/80 backdrop-blur-sm px-3 text-sm text-text-secondary",
                         "hover:bg-panel-hover hover:text-text-primary",
                         open && "bg-panel-active text-text-primary",
                     )}
@@ -111,7 +111,7 @@ export function MorphMenu({
                 {open ? (
                     <div
                         className={cn(
-                            "absolute bottom-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-border bg-surface-3/80 backdrop-blur-sm shadow-md",
+                            "absolute bottom-[calc(100%+8px)] z-50 overflow-hidden squircle-2xl border border-border bg-surface-3/80 backdrop-blur-sm shadow-md",
                             align === "end" ? "right-0" : "left-0",
                         )}
                         style={{ width: openWidth, maxHeight: openHeight }}
@@ -128,9 +128,9 @@ export function MorphMenu({
     const wClosed = closedW ?? 96;
     const wOpen = open ? lockedOpen.current.w : openWidth;
     const hOpen = open ? lockedOpen.current.h : openHeight;
-    // Half of closed height = true pill. Never 9999px (browsers glitch interpolating it).
-    const rClosed = closedHeight / 2;
-    const rOpen = 16;
+    // Keep closed and open on the same squircle so the morph doesn't tween into a pill.
+    const rClosed = 24;
+    const rOpen = 24;
 
     return (
         <div className={cn("relative inline-flex items-end", className)}>
@@ -144,7 +144,7 @@ export function MorphMenu({
             </span>
             <div
                 ref={ref}
-                className="t-morph bg-surface-3"
+                className="t-morph squircle-2xl bg-surface-3"
                 data-open={open ? "true" : "false"}
                 data-align={align}
                 data-ready={ready ? "true" : "false"}

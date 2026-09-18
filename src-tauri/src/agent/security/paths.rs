@@ -230,6 +230,11 @@ pub fn is_sensitive_path(path: &Path) -> bool {
 /// Block UI/IPC access to credential and secrets paths (even outside the project).
 /// Does not require a project root — used for desktop FS commands the IDE invokes.
 pub fn assert_ipc_path_allowed(path: &str) -> Result<(), AppError> {
+    let normalized = path.replace('\\', "/").to_ascii_lowercase();
+    // Shape's own MCP config lives in the app data dir and is edited from Settings.
+    if normalized.ends_with("/shape/mcp.json") {
+        return Ok(());
+    }
     let p = PathBuf::from(path);
     if is_sensitive_path(&p) {
         return Err(AppError::Message(format!(

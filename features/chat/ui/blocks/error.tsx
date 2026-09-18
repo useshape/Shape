@@ -1,108 +1,101 @@
 "use client";
 
-import { RiCloseCircleLine, RiCloseLine, RiErrorWarningLine } from "@remixicon/react";
 import React from "react";
-import { cn } from "@/lib/utils";
-import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogBody,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { classifyAiError, errorDocsUrl } from "@/lib/errors/catalog";
 import { commands } from "@/lib/backend";
 
-export function ChatErrorCard({
-  message,
-  onDismiss,
-  onRetry,
-  className,
+export function ChatErrorDialog({
+    message,
+    onDismiss,
+    onRetry,
 }: {
-  message: string;
-  onDismiss?: () => void;
-  onRetry?: () => void;
-  className?: string;
+    message: string | null;
+    onDismiss: () => void;
+    onRetry?: () => void;
 }) {
-  const entry = classifyAiError(message);
-  const docsUrl = errorDocsUrl(entry.code);
-  const isModelBusy = /model_busy|model is busy|high\s*(load|demand)/i.test(message);
-  const isTransient =
-    entry.code === 2100
-    || /rate\s*limit/i.test(message)
-    || isModelBusy
-    || /too many requests/i.test(message);
+    const entry = classifyAiError(message ?? "");
+    const openaiBilling = /platform\.openai\.com/i.test(message ?? "");
+    const isQuota = entry.code === 2001;
+    const docsUrl = openaiBilling
+        ? "https://platform.openai.com/settings/organization/billing/"
+        : errorDocsUrl(entry.code);
+    const isModelBusy = /model_busy|model is busy|high\s*(load|demand)/i.test(message ?? "");
+    const isTransient =
+        Boolean(message)
+        && !isQuota
+        && (entry.code === 2100
+            || /rate\s*limit/i.test(message ?? "")
+            || isModelBusy
+            || /too many requests/i.test(message ?? ""));
 
-  const retryAfterSec = (() => {
-    const m =
-      message.match(/retry(?:\s*after)?[:\s]+(\d+)\s*s/i)
-      || message.match(/"retryAfterMs"\s*:\s*(\d+)/i);
-    if (!m) return null;
-    const raw = Number(m[1]);
-    if (!Number.isFinite(raw)) return null;
-    // retryAfterMs values are large; seconds are small.
-    return raw > 120 ? Math.ceil(raw / 1000) : raw;
-  })();
+    const title = !message
+        ? entry.title
+        : isTransient
+            ? isModelBusy
+                ? "Model busy"
+                : "Rate limited"
+            : entry.title;
 
-  const title = isTransient
-    ? isModelBusy
-      ? "Model busy"
-      : "Rate limited"
-    : entry.title;
+    const hint = !message
+        ? ""
+        : isTransient
+            ? isModelBusy
+                ? "This model is under heavy load. Wait a moment or switch models."
+                : "Try again or switch models."
+            : openaiBilling || (isQuota && /openai api error/i.test(message))
+                ? "(api.openai.com) has exausted its credits, Add credits to continue."
+                : isQuota && /openrouter api error/i.test(message)
+                    ? "(openrouter.ai) has exausted its credits, Add credits to continue."
+                    : entry.description;
 
-  const hint = isTransient
-    ? retryAfterSec
-      ? `Try again in about ${retryAfterSec}s, or switch models.`
-      : isModelBusy
-        ? "This model is under heavy load. Wait a moment or switch models."
-        : "Try again or switch models."
-    : entry.description;
-
-  return (
-    <div
-      className={cn(
-        "rounded-xl border border-border-subtle bg-surface-3 px-3 py-2.5 text-sm shadow-sm",
-        "animate-in fade-in slide-in-from-bottom-1 duration-200",
-        className,
-      )}
-      role="alert"
-    >
-      <div className="flex items-start gap-2">
-        <Icon
-          icon={isTransient ? RiErrorWarningLine : RiCloseCircleLine}
-          className={cn("mt-0.5 shrink-0", isTransient ? "text-warn" : "text-error")}
-        />
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium text-text-primary">{title}</p>
-          {hint ? (
-            <p className="text-text-muted leading-snug">{hint}</p>
-          ) : null}
-          {!isTransient ? (
-            <button
-              type="button"
-              className="text-xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
-              onClick={() => void commands.openUrlExternal(docsUrl)}
-            >
-              Learn more
-            </button>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {onRetry ? (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="rounded-md bg-panel-hover px-2 py-1 text-xs font-medium text-text-primary hover:bg-surface-2"
-            >
-              Try again
-            </button>
-          ) : null}
-          {onDismiss ? (
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="rounded p-1 text-text-muted hover:bg-panel-hover hover:text-text-primary"
-              aria-label="Dismiss"
-            >
-              <Icon icon={RiCloseLine} />
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
+    return (
+        <AlertDialog open={Boolean(message)} onOpenChange={(open) => { if (!open) onDismiss(); }}>
+            <AlertDialogContent sizeClassName="max-w-[400px]">
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{title}</AlertDialogTitle>
+                    <AlertDialogDescription className="sr-only">{hint}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogBody className="flex flex-col text-start">
+                    {hint ? (
+                        <p className="text-sm text-text-secondary leading-snug">{hint}</p>
+                    ) : null}
+                </AlertDialogBody>
+                <AlertDialogFooter>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="lg"
+                        className="w-full bg-panel-hover"
+                        onClick={() => void commands.openUrlExternal(docsUrl)}
+                    >
+                        {openaiBilling ? "Add credits" : "Learn more"}
+                    </Button>
+                    {onRetry && isTransient ? (
+                        <AlertDialogAction asChild>
+                            <Button type="button" size="lg" className="w-full" onClick={onRetry}>
+                                Try again
+                            </Button>
+                        </AlertDialogAction>
+                    ) : (
+                        <AlertDialogAction asChild>
+                            <Button type="button" size="lg" className="w-full" onClick={onDismiss}>
+                                OK
+                            </Button>
+                        </AlertDialogAction>
+                    )}
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
 }

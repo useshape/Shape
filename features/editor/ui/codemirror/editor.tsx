@@ -22,6 +22,9 @@ import {
     indentWithTab,
     indentMore,
     indentLess,
+    undo,
+    redo,
+    selectAll,
 } from "@codemirror/commands";
 import {
     foldGutter,
@@ -41,6 +44,13 @@ import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { commands } from "@/lib/backend";
 import { languageForPath } from "./lang";
 import { shapeEditorChrome } from "./theme";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger,
+} from "@/components/ui/context";
 
 export function CodeMirrorEditor({
     path,
@@ -187,5 +197,83 @@ export function CodeMirrorEditor({
         });
     }, [content]);
 
-    return <div ref={hostRef} className="h-full min-h-0 w-full overflow-hidden bg-panel" />;
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
+                <div ref={hostRef} className="h-full min-h-0 w-full overflow-hidden bg-panel" />
+            </ContextMenuTrigger>
+            <ContextMenuContent className="min-w-44">
+                <ContextMenuItem
+                    onClick={() => {
+                        const v = viewRef.current;
+                        if (v) undo(v);
+                    }}
+                >
+                    Undo
+                </ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() => {
+                        const v = viewRef.current;
+                        if (v) redo(v);
+                    }}
+                >
+                    Redo
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                    onClick={() => {
+                        const v = viewRef.current;
+                        if (!v) return;
+                        const sel = v.state.selection.main;
+                        const text = v.state.sliceDoc(sel.from, sel.to);
+                        if (!text) return;
+                        void navigator.clipboard.writeText(text).then(() => {
+                            v.dispatch({ changes: { from: sel.from, to: sel.to, insert: "" } });
+                        });
+                    }}
+                >
+                    Cut
+                </ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() => {
+                        const v = viewRef.current;
+                        if (!v) return;
+                        const sel = v.state.selection.main;
+                        const text = v.state.sliceDoc(sel.from, sel.to);
+                        if (text) void navigator.clipboard.writeText(text);
+                    }}
+                >
+                    Copy
+                </ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() => {
+                        const v = viewRef.current;
+                        if (!v) return;
+                        void navigator.clipboard.readText().then((text) => {
+                            v.dispatch(v.state.replaceSelection(text));
+                        });
+                    }}
+                >
+                    Paste
+                </ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() => {
+                        const v = viewRef.current;
+                        if (v) selectAll(v);
+                    }}
+                >
+                    Select All
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                    onClick={() => {
+                        const v = viewRef.current;
+                        if (v) openSearchPanel(v);
+                    }}
+                >
+                    Find
+                </ContextMenuItem>
+            </ContextMenuContent>
+        </ContextMenu>
+    );
 }

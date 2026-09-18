@@ -6,6 +6,7 @@ import {
   fetchAccount,
   oauthAuthorizeUrl,
   pollOAuthCode,
+  refreshAccessToken,
   revokeToken,
   ShapeApiError,
   websiteLoginUrl,
@@ -16,6 +17,7 @@ import { clearShapeCatalog, refreshShapeCatalog } from "@/lib/catalog-store";
 import { identifyTelemetryUser } from "@/lib/telemetry";
 
 const STORAGE_KEY = "shape-auth-token";
+const REFRESH_KEY = "shape-auth-refresh-token";
 const PROFILE_KEY = "shape-auth-profile";
 const PENDING_OAUTH_KEY = "shape-auth-pending-oauth";
 const REDIRECT_URI = "shape://auth/callback";
@@ -73,6 +75,7 @@ let pollAttempt = 0;
 let loginPollGeneration = 0;
 let loginWaiter: ((success: boolean) => void) | null = null;
 let revalidateTimer: ReturnType<typeof setInterval> | null = null;
+let refreshInFlight: Promise<string | null> | null = null;
 
 function settleLoginWaiter(success: boolean) {
   if (!loginWaiter) return;
@@ -249,6 +252,49 @@ async function saveToken(token: string | null) {
   broadcastAuthChange();
 }
 
+function loadRefresh(): string | null {
+  try {
+    return localStorage.getItem(REFRESH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveRefresh(token: string | null) {
+  try {
+    if (token) localStorage.setItem(REFRESH_KEY, token);
+    else localStorage.removeItem(REFRESH_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Rotate the access token using the stored refresh token. Returns the new access token. */
+export async function refreshShapeAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const refresh = loadRefresh();
+    if (!refresh) return null;
+    try {
+      const result = await refreshAccessToken(refresh);
+      await saveToken(result.accessToken);
+      saveRefresh(result.refreshToken ?? refresh);
+      setState({
+        accessToken: result.accessToken,
+        loggedIn: true,
+        error: null,
+        offline: false,
+      });
+      return result.accessToken;
+    } catch {
+      return null;
+    }
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
 function broadcastAuthChange() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("shape-auth-changed"));
@@ -303,10 +349,11 @@ function setupAuthSync() {
     });
 }
 
-async function applyToken(token: string | null) {
+async function applyToken(token: string | null, allowRefresh = true) {
   if (!token) {
     clearShapeCatalog();
     saveCachedProfile(null);
+    saveRefresh(null);
     setState({
       ...DEFAULT_STATE,
       isLoading: false,
@@ -367,7 +414,15 @@ async function applyToken(token: string | null) {
       err instanceof ShapeApiError ? err.isNetworkError : true;
 
     if (isAuthError) {
+      if (allowRefresh) {
+        const next = await refreshShapeAccessToken();
+        if (next && next !== token) {
+          await applyToken(next, false);
+          return;
+        }
+      }
       await saveToken(null);
+      saveRefresh(null);
       saveCachedProfile(null);
       clearShapeCatalog();
       setState({
@@ -418,6 +473,7 @@ async function finishOAuth(code: string) {
     const result = await exchangeOAuthCode(code, REDIRECT_URI, pendingCodeVerifier ?? undefined);
     finishedOAuthCode = code;
     await saveToken(result.accessToken);
+    saveRefresh(result.refreshToken ?? null);
     pendingState = null;
     pendingCodeVerifier = null;
     clearPendingOAuth();
@@ -646,6 +702,7 @@ export async function logoutShape() {
     }
   }
   await saveToken(null);
+  saveRefresh(null);
   saveCachedProfile(null);
   clearShapeCatalog();
   setState({ ...DEFAULT_STATE, isLoading: false });
@@ -675,6 +732,7 @@ export async function refreshShapeAuth() {
 /** Call when an API response indicates the session is no longer valid. */
 export async function handleAuthFailure() {
   await saveToken(null);
+  saveRefresh(null);
   saveCachedProfile(null);
   clearShapeCatalog();
   setState({

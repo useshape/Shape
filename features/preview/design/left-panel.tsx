@@ -4,50 +4,131 @@ import {
     RiArrowDownSLine,
     RiArrowRightSLine,
     RiBox3Line,
+    RiBrushLine,
     RiCodeLine,
+    RiColorFilterLine,
     RiEyeOffLine,
     RiFileLine,
     RiImageLine,
-    RiSearchLine,
+    RiLink,
+    RiRefreshLine,
+    RiShapesLine,
     RiText,
 } from "@remixicon/react";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { ScrollArea } from "@/components/ui/scroll";
+import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
-import type { DesignLayerSnapshot } from "./bridge";
+import type { DesignElementSnapshot, DesignLayerSnapshot } from "./bridge";
+import { DesignComponentOptions, type ComponentOptionPatch } from "./panel/options";
+import {
+    componentFolder,
+    groupThemeTokens,
+    isEditableText,
+    layerKind,
+    layerTitle,
+    libraryGroup,
+    type ThemeToken,
+} from "./library";
 
-type PanelTab = "layers" | "pages" | "assets";
+type PanelTab = "layers" | "pages" | "library";
 
-function iconForLayer(layer: DesignLayerSnapshot) {
-    if (/^(img|picture|video|svg|canvas)$/.test(layer.tag)) return RiImageLine;
-    if (/^(h1|h2|h3|h4|h5|h6|p|span|label|a|button)$/.test(layer.tag)) return RiText;
+function kindIcon(kind: ReturnType<typeof layerKind>) {
+    if (kind === "text") return RiText;
+    if (kind === "link") return RiLink;
+    if (kind === "image") return RiImageLine;
+    if (kind === "vector") return RiShapesLine;
+    if (kind === "button") return RiBox3Line;
     return RiBox3Line;
+}
+
+function kindClass(kind: ReturnType<typeof layerKind>) {
+    if (kind === "frame") return "text-accent";
+    if (kind === "text") return "text-text-secondary";
+    if (kind === "link" || kind === "button") return "text-accent";
+    if (kind === "vector") return "text-success";
+    if (kind === "image") return "text-warning";
+    return "text-text-muted";
+}
+
+function Section({
+    title,
+    count,
+    open,
+    onToggle,
+    children,
+}: {
+    title: string;
+    count?: number;
+    open: boolean;
+    onToggle: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <div className="border-b border-border">
+            <button
+                type="button"
+                onClick={onToggle}
+                className="flex h-8 w-full items-center gap-2 px-3 text-left text-xs font-medium text-text-primary"
+            >
+                <span className="min-w-0 flex-1">{title}</span>
+                {count != null ? <span className="text-2xs text-text-muted">{count}</span> : null}
+                <Icon icon={open ? RiArrowDownSLine : RiArrowRightSLine} size={14} className="text-text-muted" />
+            </button>
+            {open ? <div className="pb-2">{children}</div> : null}
+        </div>
+    );
 }
 
 export function DesignLeftPanel({
     layers,
     selectedKey,
     onSelectLayer,
+    onChangeText,
     pages,
     activePage,
     onPageChange,
     assets,
-    projectRoot,
+    themeTokens,
+    onOpenPath,
+    onReload,
+    onOpenCode,
+    canOpenCode,
+    selectedElement,
+    onComponentPatch,
+    className,
 }: {
     layers: DesignLayerSnapshot[];
     selectedKey: string | null;
     onSelectLayer: (key: string) => void;
+    onChangeText?: (key: string, text: string) => void;
     pages: Array<{ path: string; label: string; source?: string }>;
     activePage: string;
     onPageChange: (path: string) => void;
-    assets: Array<{ path: string; name: string; bytes: number; kind: "image" | "font" | "video" }>;
-    projectRoot: string;
+    assets: Array<{ path: string; name: string; bytes: number; kind: string }>;
+    themeTokens: ThemeToken[];
+    onOpenPath?: (path: string) => void;
+    onReload?: () => void;
+    onOpenCode?: () => void;
+    canOpenCode?: boolean;
+    selectedElement?: DesignElementSnapshot | null;
+    onComponentPatch?: (patch: ComponentOptionPatch) => void;
+    className?: string;
 }) {
     const [tab, setTab] = useState<PanelTab>("layers");
     const [query, setQuery] = useState("");
     const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+        Templates: true,
+        Components: true,
+        Styles: true,
+        Vectors: true,
+        Code: false,
+    });
+
     const visibleLayers = useMemo(() => {
         const hiddenParents = new Set<string>();
         return layers.filter((layer) => {
@@ -56,16 +137,49 @@ export function DesignLeftPanel({
                 return false;
             }
             if (collapsed.has(layer.key)) hiddenParents.add(layer.key);
+            const title = layerTitle(layer);
             if (!query.trim()) return true;
-            return `${layer.label} ${layer.tag}`.toLowerCase().includes(query.toLowerCase());
+            return `${title} ${layer.tag} ${layer.text}`.toLowerCase().includes(query.toLowerCase());
         });
     }, [collapsed, layers, query]);
     const parentKeys = useMemo(() => new Set(layers.map((layer) => layer.parentKey).filter(Boolean)), [layers]);
 
+    const tokens = useMemo(() => groupThemeTokens(themeTokens), [themeTokens]);
+    const grouped = useMemo(() => {
+        const components: typeof assets = [];
+        const styles: typeof assets = [];
+        const vectors: typeof assets = [];
+        const code: typeof assets = [];
+        for (const asset of assets) {
+            const group = libraryGroup(asset.path, asset.kind);
+            if (group === "components") components.push(asset);
+            else if (group === "styles") styles.push(asset);
+            else if (group === "vectors") vectors.push(asset);
+            else if (group === "code") code.push(asset);
+        }
+        return { components, styles, vectors, code };
+    }, [assets]);
+    const componentFolders = useMemo(() => {
+        const map = new Map<string, typeof assets>();
+        for (const item of grouped.components) {
+            const folder = componentFolder(item.path);
+            const list = map.get(folder) ?? [];
+            list.push(item);
+            map.set(folder, list);
+        }
+        return [...map.entries()];
+    }, [grouped.components]);
+
+    const filtered = (path: string, name: string) => {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return path.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+    };
+
     return (
-        <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-panel">
+        <aside className={cn("relative flex h-full w-full min-w-0 flex-col border-r border-border bg-surface-3", className)}>
             <div className="grid h-9 shrink-0 grid-cols-3 border-b border-border px-1">
-                {(["layers", "pages", "assets"] as const).map((item) => (
+                {(["layers", "pages", "library"] as const).map((item) => (
                     <button
                         key={item}
                         type="button"
@@ -80,72 +194,98 @@ export function DesignLeftPanel({
                 ))}
             </div>
 
+            {tab !== "pages" ? (
+                <div className="shrink-0 border-b border-border p-2">
+                    <SearchInput
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder={tab === "layers" ? "Filter layers" : "Search"}
+                        className="h-7"
+                    />
+                </div>
+            ) : null}
+
             {tab === "layers" ? (
-                <>
-                    <div className="shrink-0 border-b border-border p-2">
-                        <label className="relative flex h-6 items-center rounded-md bg-input-bg text-text-muted">
-                            <span className="pointer-events-none absolute left-0 top-0 flex size-6 items-center justify-center">
-                                <Icon icon={RiSearchLine} size={ICON_SIZE_SM} />
-                            </span>
-                            <input
-                                value={query}
-                                onChange={(event) => setQuery(event.target.value)}
-                                placeholder="Filter layers"
-                                className="h-6 min-w-0 flex-1 bg-transparent pl-6 pr-2 text-xs leading-none text-text-primary outline-none placeholder:text-text-muted"
-                            />
-                        </label>
-                    </div>
-                    <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
-                        <div className="py-1">
-                            {visibleLayers.map((layer) => {
-                                const hasChildren = parentKeys.has(layer.key);
-                                const isCollapsed = collapsed.has(layer.key);
-                                const LayerIcon = iconForLayer(layer);
-                                return (
-                                    <button
-                                        key={layer.key}
-                                        type="button"
-                                        onClick={() => onSelectLayer(layer.key)}
-                                        className={cn(
-                                            "flex h-6 w-full items-center gap-1 px-1.5 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary",
-                                            selectedKey === layer.key && "bg-panel-active text-text-primary",
-                                        )}
-                                        style={{ paddingLeft: 6 + Math.min(layer.depth, 12) * 12 }}
+                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
+                    <div className="py-1">
+                        {selectedElement?.component && onComponentPatch ? (
+                            <div className="mb-2 border-b border-border">
+                                <DesignComponentOptions
+                                    element={selectedElement}
+                                    onPatch={onComponentPatch}
+                                />
+                            </div>
+                        ) : null}
+                        {visibleLayers.map((layer) => {
+                            const hasChildren = parentKeys.has(layer.key);
+                            const isCollapsed = collapsed.has(layer.key);
+                            const kind = layerKind(layer);
+                            const title = layerTitle(layer);
+                            const selected = selectedKey === layer.key;
+                            const editing = selected && isEditableText(layer) && onChangeText;
+                            const KindIcon = kindIcon(kind);
+                            return (
+                                <div
+                                    key={layer.key}
+                                    className={cn(
+                                        "flex h-6 w-full items-center gap-1 px-1.5 text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                        selected && "bg-panel-active text-text-primary",
+                                    )}
+                                    style={{ paddingLeft: 6 + Math.min(layer.depth, 12) * 12 }}
+                                >
+                                    <span
+                                        className="flex size-4 shrink-0 items-center justify-center"
+                                        onClick={() => {
+                                            if (!hasChildren) return;
+                                            setCollapsed((current) => {
+                                                const next = new Set(current);
+                                                if (next.has(layer.key)) next.delete(layer.key);
+                                                else next.add(layer.key);
+                                                return next;
+                                            });
+                                        }}
                                     >
-                                        <span
-                                            className="flex size-4 shrink-0 items-center justify-center"
-                                            onClick={(event) => {
-                                                if (!hasChildren) return;
-                                                event.stopPropagation();
-                                                setCollapsed((current) => {
-                                                    const next = new Set(current);
-                                                    if (next.has(layer.key)) next.delete(layer.key);
-                                                    else next.add(layer.key);
-                                                    return next;
-                                                });
+                                        {hasChildren ? (
+                                            <Icon icon={isCollapsed ? RiArrowRightSLine : RiArrowDownSLine} size={12} />
+                                        ) : null}
+                                    </span>
+                                    <Icon icon={KindIcon} size={ICON_SIZE_SM} className={kindClass(kind)} />
+                                    {editing ? (
+                                        <input
+                                            value={drafts[layer.key] ?? layer.text}
+                                            onChange={(event) =>
+                                                setDrafts((current) => ({ ...current, [layer.key]: event.target.value }))
+                                            }
+                                            onBlur={() => {
+                                                const next = drafts[layer.key];
+                                                if (next != null && next !== layer.text) onChangeText?.(layer.key, next);
                                             }}
+                                            className="h-5 min-w-0 flex-1 rounded-sm bg-input-bg px-1 text-xs text-text-primary outline-none"
+                                            onClick={(event) => event.stopPropagation()}
+                                            onKeyDown={(event) => {
+                                                if (event.key === "Enter") event.currentTarget.blur();
+                                            }}
+                                        />
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => onSelectLayer(layer.key)}
+                                            className="min-w-0 flex-1 truncate text-left"
                                         >
-                                            {hasChildren ? (
-                                                <Icon
-                                                    icon={isCollapsed ? RiArrowRightSLine : RiArrowDownSLine}
-                                                    size={12}
-                                                />
-                                            ) : null}
-                                        </span>
-                                        <Icon icon={LayerIcon} size={ICON_SIZE_SM} className="text-text-muted" />
-                                        <span className="min-w-0 flex-1 truncate">{layer.label}</span>
-                                        {layer.hidden ? <Icon icon={RiEyeOffLine} size={12} /> : null}
-                                    </button>
-                                );
-                            })}
-                            {layers.length === 0 ? (
-                                <p className="px-3 py-6 text-center text-xs leading-relaxed text-text-muted">
-                                    Layers appear when the live page is ready.
-                                </p>
-                            ) : null}
-                        </div>
-                    </ScrollArea>
-                </>
+                                            {title}
+                                        </button>
+                                    )}
+                                    {layer.hidden ? <Icon icon={RiEyeOffLine} size={12} /> : null}
+                                </div>
+                            );
+                        })}
+                        {layers.length === 0 ? (
+                            <p className="px-3 py-6 text-center text-xs leading-relaxed text-text-muted">
+                                Layers appear when the live page is ready.
+                            </p>
+                        ) : null}
+                    </div>
+                </ScrollArea>
             ) : null}
 
             {tab === "pages" ? (
@@ -170,53 +310,150 @@ export function DesignLeftPanel({
                 </ScrollArea>
             ) : null}
 
-            {tab === "assets" ? (
+            {tab === "library" ? (
                 <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
-                    <div className="grid grid-cols-2 gap-1.5 p-2">
-                        {assets.map((asset) => (
-                            <div
-                                key={asset.path}
-                                title={asset.path}
-                                className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-surface-2 text-left"
+                    <Section
+                        title="Templates"
+                        count={pages.length}
+                        open={openGroups.Templates}
+                        onToggle={() => setOpenGroups((c) => ({ ...c, Templates: !c.Templates }))}
+                    >
+                        {pages.filter((page) => filtered(page.path, page.label)).map((page) => (
+                            <button
+                                key={page.path}
+                                type="button"
+                                onClick={() => onPageChange(page.path)}
+                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                             >
-                                <span className="flex aspect-[4/3] w-full items-center justify-center bg-input-bg text-text-muted">
-                                    {asset.kind === "image" ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={convertFileSrc(
-                                                `${projectRoot.replace(/[/\\]+$/, "")}${projectRoot.includes("\\") ? "\\" : "/"}${asset.path}`,
-                                            )}
-                                            alt=""
-                                            className="h-full w-full object-cover"
-                                        />
-                                    ) : (
-                                        <Icon icon={RiFileLine} />
-                                    )}
-                                </span>
-                                <span className="w-full truncate px-2 pt-1.5 text-xs text-text-secondary">
-                                    {asset.name}
-                                </span>
-                                <span className="px-2 pb-1.5 text-2xs text-text-muted">
-                                    {asset.bytes < 1024 * 1024
-                                        ? `${Math.max(1, Math.round(asset.bytes / 1024))} KB`
-                                        : `${(asset.bytes / 1024 / 1024).toFixed(1)} MB`}
-                                </span>
+                                <Icon icon={RiFileLine} size={ICON_SIZE_SM} className="text-accent" />
+                                <span className="min-w-0 flex-1 truncate">{page.label}</span>
+                            </button>
+                        ))}
+                    </Section>
+                    <Section
+                        title="Components"
+                        count={grouped.components.length}
+                        open={openGroups.Components}
+                        onToggle={() => setOpenGroups((c) => ({ ...c, Components: !c.Components }))}
+                    >
+                        {componentFolders.map(([folder, items]) => (
+                            <div key={folder}>
+                                <p className="px-3 py-1 text-2xs text-text-muted">{folder}</p>
+                                {items.filter((item) => filtered(item.path, item.name)).map((item) => (
+                                    <button
+                                        key={item.path}
+                                        type="button"
+                                        onClick={() => onOpenPath?.(item.path)}
+                                        className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                                    >
+                                        <Icon icon={RiBox3Line} size={ICON_SIZE_SM} className="text-accent" />
+                                        <span className="min-w-0 flex-1 truncate">{item.name.replace(/\.(tsx|jsx)$/i, "")}</span>
+                                    </button>
+                                ))}
                             </div>
                         ))}
-                    </div>
-                    {assets.length === 0 ? (
-                        <p className="px-3 py-6 text-center text-xs leading-relaxed text-text-muted">
-                            No image, font, or video assets found.
-                        </p>
-                    ) : null}
+                    </Section>
+                    <Section
+                        title="Styles"
+                        open={openGroups.Styles}
+                        onToggle={() => setOpenGroups((c) => ({ ...c, Styles: !c.Styles }))}
+                    >
+                        {[
+                            ["Text", tokens.text, RiText],
+                            ["Link", tokens.link, RiLink],
+                            ["Color", tokens.color, RiColorFilterLine],
+                        ].map(([label, list, icon]) => (
+                            <div key={String(label)}>
+                                <p className="flex items-center gap-2 px-3 py-1 text-2xs text-text-muted">
+                                    <Icon icon={icon as typeof RiText} size={12} />
+                                    {String(label)}
+                                </p>
+                                {(list as ThemeToken[]).slice(0, 24).filter((token) => filtered(token.name, token.value)).map((token) => (
+                                    <div
+                                        key={token.name}
+                                        className="flex h-7 items-center gap-2 px-3 text-xs text-text-secondary"
+                                        title={`${token.name}: ${token.value}`}
+                                    >
+                                        {String(label) === "Color" ? (
+                                            <span
+                                                className="size-3 shrink-0 rounded-sm border border-border"
+                                                style={{ background: token.value }}
+                                            />
+                                        ) : (
+                                            <Icon icon={RiBrushLine} size={12} className="text-text-muted" />
+                                        )}
+                                        <span className="min-w-0 flex-1 truncate">{token.name}</span>
+                                    </div>
+                                ))}
+                                {grouped.styles.filter((item) => filtered(item.path, item.name)).map((item) => (
+                                    <button
+                                        key={item.path}
+                                        type="button"
+                                        onClick={() => onOpenPath?.(item.path)}
+                                        className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover"
+                                    >
+                                        <Icon icon={RiFileLine} size={ICON_SIZE_SM} />
+                                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        ))}
+                    </Section>
+                    <Section
+                        title="Vectors"
+                        count={grouped.vectors.length}
+                        open={openGroups.Vectors}
+                        onToggle={() => setOpenGroups((c) => ({ ...c, Vectors: !c.Vectors }))}
+                    >
+                        {grouped.vectors.filter((item) => filtered(item.path, item.name)).map((item) => (
+                            <button
+                                key={item.path}
+                                type="button"
+                                onClick={() => onOpenPath?.(item.path)}
+                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover"
+                            >
+                                <Icon icon={RiShapesLine} size={ICON_SIZE_SM} className="text-success" />
+                                <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                            </button>
+                        ))}
+                    </Section>
+                    <Section
+                        title="Code"
+                        count={grouped.code.length}
+                        open={openGroups.Code}
+                        onToggle={() => setOpenGroups((c) => ({ ...c, Code: !c.Code }))}
+                    >
+                        {grouped.code.filter((item) => filtered(item.path, item.name)).slice(0, 80).map((item) => (
+                            <button
+                                key={item.path}
+                                type="button"
+                                onClick={() => onOpenPath?.(item.path)}
+                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover"
+                            >
+                                <Icon icon={RiCodeLine} size={ICON_SIZE_SM} className="text-text-muted" />
+                                <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                            </button>
+                        ))}
+                    </Section>
                 </ScrollArea>
             ) : null}
 
-            <div className="shrink-0 border-t border-border p-1.5">
-                <div className="flex h-6 items-center gap-1.5 px-2 text-xs text-text-muted">
+            <div className="flex shrink-0 items-center gap-1 border-t border-border p-1.5">
+                <Button variant="ghost" size="sm" className="h-7 flex-1 justify-start gap-1.5 px-2 text-xs" onClick={onReload}>
+                    <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                    Reload
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 flex-1 justify-start gap-1.5 px-2 text-xs"
+                    disabled={!canOpenCode}
+                    accessibleDisabled={false}
+                    onClick={onOpenCode}
+                >
                     <Icon icon={RiCodeLine} size={ICON_SIZE_SM} />
-                    Source-backed canvas
-                </div>
+                    Source
+                </Button>
             </div>
         </aside>
     );

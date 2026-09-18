@@ -1,9 +1,6 @@
 "use client";
 
-import { RiCloseLine, RiTerminalBoxLine } from "@remixicon/react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Icon } from "@/components/ui/icon";
-import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const Terminal = lazy(() => import("@/features/terminal/ui/terminal"));
@@ -13,28 +10,46 @@ const DEFAULT_H = 220;
 const HEIGHT_KEY = "shape-agent-terminal-height";
 const OPEN_KEY = "shape-agent-terminal-open";
 
+function clearBodyResize() {
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    document.body.classList.remove("resizing-vertical");
+}
+
 export function TerminalDock() {
     const [open, setOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
     const [height, setHeight] = useState(DEFAULT_H);
     const [resizing, setResizing] = useState(false);
     const heightRef = useRef(DEFAULT_H);
     const dragging = useRef(false);
 
     useEffect(() => {
+        clearBodyResize();
         try {
             const h = Number(localStorage.getItem(HEIGHT_KEY));
             if (h >= MIN_H && h <= 800) {
                 setHeight(h);
                 heightRef.current = h;
             }
-            setOpen(localStorage.getItem(OPEN_KEY) === "true");
+            const wasOpen = localStorage.getItem(OPEN_KEY) === "true";
+            setOpen(wasOpen);
+            if (wasOpen) setMounted(true);
         } catch {
             /* ignore */
         }
     }, []);
 
     const persistOpen = useCallback((next: boolean) => {
-        setOpen(next);
+        if (!next) {
+            dragging.current = false;
+            setResizing(false);
+            clearBodyResize();
+            setOpen(false);
+        } else {
+            setMounted(true);
+            requestAnimationFrame(() => setOpen(true));
+        }
         try {
             localStorage.setItem(OPEN_KEY, String(next));
         } catch {
@@ -95,11 +110,9 @@ export function TerminalDock() {
             setHeight(next);
         };
         const onUp = () => {
-            if (!dragging.current) return;
             dragging.current = false;
             setResizing(false);
-            document.body.style.cursor = "";
-            document.body.style.userSelect = "";
+            clearBodyResize();
             try {
                 localStorage.setItem(HEIGHT_KEY, String(heightRef.current));
             } catch {
@@ -111,48 +124,56 @@ export function TerminalDock() {
         return () => {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
+            clearBodyResize();
         };
     }, []);
 
-    if (!open) return null;
+    useEffect(() => {
+        if (!open) return;
+        const t = window.setTimeout(() => {
+            void import("@/features/terminal/ui/terminal").then((m) => {
+                void m.refitAllTerminals();
+            }).catch(() => {
+                /* ignore */
+            });
+        }, 40);
+        return () => window.clearTimeout(t);
+    }, [open, height]);
+
+    if (!mounted) return null;
 
     return (
-        <div className="relative z-20 flex shrink-0 flex-col border-t border-border-subtle bg-panel" style={{ height }}>
-            <div
-                role="separator"
-                aria-orientation="horizontal"
-                aria-label="Resize terminal"
-                className="group absolute inset-x-0 -top-1 z-10 h-2 cursor-row-resize"
-                onMouseDown={(e) => {
-                    e.preventDefault();
-                    dragging.current = true;
-                    setResizing(true);
-                    document.body.style.cursor = "row-resize";
-                    document.body.style.userSelect = "none";
-                    document.body.classList.add("resizing-vertical");
-                }}
-                onMouseUp={() => document.body.classList.remove("resizing-vertical")}
-            >
-                <div className="pointer-events-none absolute inset-x-0 top-1 h-px bg-border-subtle transition-colors group-hover:bg-border-secondary" />
-            </div>
-            <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border-subtle px-2">
-                <Icon icon={RiTerminalBoxLine} className="text-text-muted" />
-                <span className="text-sm text-text-secondary">Terminal</span>
-                <span className="flex-1" />
-                <Tooltip content="Close terminal">
-                    <button
-                        type="button"
-                        aria-label="Close terminal"
-                        onClick={() => persistOpen(false)}
-                        className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                    >
-                        <Icon icon={RiCloseLine} />
-                    </button>
-                </Tooltip>
-            </div>
+        <div
+            className={cn(
+                "relative z-20 flex shrink-0 flex-col overflow-hidden bg-panel",
+                "transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                resizing && "transition-none",
+                open ? "border-t border-border-subtle" : "pointer-events-none border-0",
+            )}
+            style={{ height: open ? height : 0 }}
+            aria-hidden={!open}
+        >
+            {open ? (
+                <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Resize terminal"
+                    className="group absolute inset-x-0 -top-1 z-10 h-2 cursor-row-resize"
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        dragging.current = true;
+                        setResizing(true);
+                        document.body.style.cursor = "row-resize";
+                        document.body.style.userSelect = "none";
+                        document.body.classList.add("resizing-vertical");
+                    }}
+                >
+                    <div className="pointer-events-none absolute inset-x-0 top-1 h-px bg-border-subtle transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] group-hover:bg-border-secondary" />
+                </div>
+            ) : null}
             <div className={cn("min-h-0 flex-1 overflow-hidden", resizing && "pointer-events-none")}>
                 <Suspense fallback={<div className="h-full w-full bg-panel" />}>
-                    <Terminal terminalOnly isOpen />
+                    <Terminal terminalOnly isOpen={open} onClose={() => persistOpen(false)} />
                 </Suspense>
             </div>
         </div>

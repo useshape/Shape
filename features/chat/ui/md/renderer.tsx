@@ -95,7 +95,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'plugin_call';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'plugin_call';
     content?: string;
     file?: string;
     query?: string;
@@ -124,6 +124,7 @@ export type Chunk = {
     visitUrl?: string;
     visitHost?: string;
     visitTitle?: string;
+    inspectKind?: string;
     pluginToolkit?: string;
     pluginSlug?: string;
     pluginLabel?: string;
@@ -226,6 +227,22 @@ export function parseMessageContent(text: string): Chunk[] {
         const idx = chunks.findIndex((c) => c.type === 'todos');
         if (idx >= 0) chunks[idx] = chunk;
         else chunks.push(chunk);
+    };
+
+    const parseSubagentBlock = (tagFull: string, inner: string, isGenerating: boolean): Chunk => {
+        const getAttr = (name: string) => {
+            const m = tagFull.match(new RegExp(`${name}="([^"]*)"`));
+            return m ? m[1] : '';
+        };
+        return {
+            type: 'subagent',
+            file: getAttr('id'),
+            query: getAttr('agent') || getAttr('name'),
+            command: getAttr('model'),
+            content: inner.trim(),
+            commandStatus: getAttr('status') || (isGenerating ? 'running' : 'done'),
+            isGenerating,
+        };
     };
 
     const parseSubagentRefBlock = (tagFull: string, isGenerating: boolean): Chunk => {
@@ -350,6 +367,18 @@ export function parseMessageContent(text: string): Chunk[] {
         };
     };
 
+    const parseInspectRuntimeBlock = (tagFull: string, content: string, isGenerating: boolean): Chunk => {
+        const url = tagFull.match(/\burl="([^"]*)"/)?.[1] ?? "";
+        const kind = tagFull.match(/\bkind="([^"]*)"/)?.[1] ?? "";
+        return {
+            type: "inspect_runtime",
+            query: url,
+            inspectKind: kind,
+            content,
+            isGenerating,
+        };
+    };
+
     while (currentIndex < text.length) {
         const searchTags = [
             { type: 'edit', start: '<edit', end: '</edit>' },
@@ -358,6 +387,7 @@ export function parseMessageContent(text: string): Chunk[] {
             { type: 'design_previews', start: '<design_previews', end: '</design_previews>' },
             { type: 'review_debate', start: '<review_debate', end: '</review_debate>' },
             { type: 'question', start: '<question', end: '</question>' },
+            { type: 'inspect_runtime', start: '<inspect_runtime', end: '</inspect_runtime>' },
             { type: 'search_result', start: '<search_result', end: '</search_result>' },
             { type: 'search', start: '<search', end: '</search>' },
             { type: 'grep', start: '<grep', end: '</grep>' },
@@ -489,6 +519,8 @@ export function parseMessageContent(text: string): Chunk[] {
                 chunks.push(parseCatBlock(tagFull, content, false));
             } else if (firstMatch.type === 'subagent_ref') {
                 chunks.push(parseSubagentRefBlock(tagFull, false));
+            } else if (firstMatch.type === 'subagent') {
+                chunks.push(parseSubagentBlock(tagFull, content, false));
             } else if (firstMatch.type === 'design_previews') {
                 chunks.push(parseDesignPreviewsBlock(tagFull));
             } else if (firstMatch.type === 'review_debate') {
@@ -506,6 +538,8 @@ export function parseMessageContent(text: string): Chunk[] {
                 });
             } else if (firstMatch.type === 'web_visit') {
                 chunks.push(parseWebVisitBlock(tagFull, false));
+            } else if (firstMatch.type === 'inspect_runtime') {
+                chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_call') {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else {
@@ -561,6 +595,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'subagent_ref') {
                 const tagFull = text.slice(firstMatch.index, gtIndex + 1);
                 chunks.push(parseSubagentRefBlock(tagFull, true));
+            } else if (firstMatch.type === 'subagent') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseSubagentBlock(tagFull, content, true));
             } else if (firstMatch.type === 'design_previews') {
                 chunks.push(parseDesignPreviewsBlock(text.slice(firstMatch.index)));
             } else if (firstMatch.type === 'review_debate') {
@@ -586,6 +623,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'web_visit') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseWebVisitBlock(tagFull, true));
+            } else if (firstMatch.type === 'inspect_runtime') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseInspectRuntimeBlock(tagFull, content, true));
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
@@ -641,6 +681,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'subagent_ref') {
                 const tagFull = text.slice(firstMatch.index, endIndex + firstMatch.endTag.length);
                 chunks.push(parseSubagentRefBlock(tagFull, false));
+            } else if (firstMatch.type === 'subagent') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseSubagentBlock(tagFull, content, false));
             } else if (firstMatch.type === 'design_previews') {
                 chunks.push(parseDesignPreviewsBlock(fullBlock));
             } else if (firstMatch.type === 'review_debate') {
@@ -666,6 +709,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'web_visit') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseWebVisitBlock(tagFull, false));
+            } else if (firstMatch.type === 'inspect_runtime') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
@@ -795,12 +841,14 @@ export function MessageRenderer({
     activityLabel,
     isFileEditResolved,
     durationMs,
+    skipSubagentSync,
 }: {
     content: string;
     isGenerating?: boolean;
     activityLabel?: string | null;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
     durationMs?: number;
+    skipSubagentSync?: boolean;
 }) {
     const chunks = useMemo(() => {
         const parsed = parseMessageContent(content);
@@ -809,8 +857,9 @@ export function MessageRenderer({
     }, [content, isGenerating]);
 
     useEffect(() => {
+        if (skipSubagentSync) return;
         syncSubagentsFromChunks(chunks, Boolean(isGenerating));
-    }, [chunks, isGenerating]);
+    }, [chunks, isGenerating, skipSubagentSync]);
 
     const contentChunks = useMemo(() => mergeAdjacentTextChunks(chunks), [chunks]);
 
@@ -1001,10 +1050,10 @@ export function MessageRenderer({
 
     return (
         <div className="flex flex-col gap-0 overflow-hidden">
+            {renderedSegments}
             {showStatusLine && (
                 <GeneratingIndicator label={statusLabel} />
             )}
-            {renderedSegments}
         </div>
     );
 }

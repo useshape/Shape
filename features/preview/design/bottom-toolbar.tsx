@@ -1,14 +1,17 @@
 "use client";
 
 import {
-    RiArrowGoBackLine,
-    RiArrowGoForwardLine,
-    RiCameraLine,
-    RiCodeLine,
+    RiScreenshotFill,
+    RiCodeBlock,
     RiComputerLine,
     RiCursorLine,
+    RiEditBoxLine,
+    RiMouseLine,
+    RiDonutChartFill,
     RiSmartphoneLine,
     RiTabletLine,
+    RiWindow2Fill,
+    RiShapeFill,
 } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,11 +20,12 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type DesignViewport = "desktop" | "tablet" | "mobile";
+export type DesignToolMode = "select" | "normal" | "rotate";
 
 function Tool({
     label,
@@ -46,66 +50,116 @@ function Tool({
                 accessibleDisabled={false}
                 onClick={onClick}
                 aria-label={label}
-                className={cn("size-8 rounded-lg", active && "bg-accent text-accent-fg hover:bg-accent-hover hover:text-accent-fg")}
+                className={cn(
+                    "size-10 rounded-lg",
+                    active && "bg-panel-hover text-panel-fg hover:bg-panel-hover hover:text-panel-fg",
+                )}
             >
-                <Icon icon={icon} size={ICON_SIZE_SM} />
+                <Icon icon={icon} size={20} />
             </Button>
         </Tooltip>
     );
 }
 
 export function DesignBottomToolbar({
+    mode,
+    onModeChange,
     viewport,
     onViewportChange,
-    zoom,
-    onZoomChange,
-    onUndo,
-    onRedo,
-    onCapture,
+    onCaptureElement,
+    onCaptureScreen,
     onOpenCode,
     canCapture,
     canOpenCode,
+    canCaptureElement,
 }: {
+    mode: DesignToolMode;
+    onModeChange: (mode: DesignToolMode) => void;
     viewport: DesignViewport;
     onViewportChange: (viewport: DesignViewport) => void;
-    zoom: number;
-    onZoomChange: (zoom: number) => void;
-    onUndo: () => void;
-    onRedo: () => void;
-    onCapture: () => void;
+    onCaptureElement: () => void;
+    onCaptureScreen: () => void;
     onOpenCode: () => void;
     canCapture: boolean;
     canOpenCode: boolean;
+    canCaptureElement: boolean;
 }) {
     return (
-        <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border-secondary bg-surface-4/92 p-1 shadow-xl backdrop-blur-xl">
-            <Tool label="Select and move" icon={RiCursorLine} active />
-            <span className="mx-0.5 h-5 w-px bg-border" />
-            <Tool label="Undo visual edit" icon={RiArrowGoBackLine} onClick={onUndo} />
-            <Tool label="Redo visual edit" icon={RiArrowGoForwardLine} onClick={onRedo} />
-            <span className="mx-0.5 h-5 w-px bg-border" />
-            <Tool label="Capture canvas" icon={RiCameraLine} disabled={!canCapture} onClick={onCapture} />
-            <Tool label="Open selected source" icon={RiCodeLine} disabled={!canOpenCode} onClick={onOpenCode} />
-            <span className="mx-0.5 h-5 w-px bg-border" />
-            <div className="flex rounded-lg bg-input-bg p-0.5">
-                <Tool label="Desktop" icon={RiComputerLine} active={viewport === "desktop"} onClick={() => onViewportChange("desktop")} />
-                <Tool label="Tablet" icon={RiTabletLine} active={viewport === "tablet"} onClick={() => onViewportChange("tablet")} />
-                <Tool label="Mobile" icon={RiSmartphoneLine} active={viewport === "mobile"} onClick={() => onViewportChange("mobile")} />
-            </div>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 min-w-14 px-2 text-xs tabular-nums">
-                        {zoom}%
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-28">
-                    {[50, 67, 75, 80, 90, 100, 125, 150].map((value) => (
-                        <DropdownMenuItem key={value} onClick={() => onZoomChange(value)}>
-                            {value}%
+        <div className="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-surface-4 p-1 shadow-md/30">
+            <div className="flex items-center gap-0.5">
+                <Tool
+                    label="Edit"
+                    icon={RiEditBoxLine}
+                    active={mode === "select"}
+                    onClick={() => onModeChange("select")}
+                />
+                <Tool
+                    label="Normal"
+                    icon={RiMouseLine}
+                    active={mode === "normal"}
+                    onClick={() => onModeChange("normal")}
+                />
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={!canCapture && !canCaptureElement}
+                            accessibleDisabled={false}
+                            aria-label="Capture"
+                            className="size-10 rounded-lg"
+                        >
+                            <Icon icon={RiScreenshotFill} size={20} />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="min-w-36">
+                        <DropdownMenuItem
+                            disabled={!canCaptureElement}
+                            onClick={onCaptureElement}
+                        >
+                            <Icon icon={RiShapeFill} size={ICON_SIZE_SM} />
+                            Element
                         </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+                        <DropdownMenuItem disabled={!canCapture} onClick={onCaptureScreen}>
+                            <Icon icon={RiWindow2Fill} size={ICON_SIZE_SM} />
+                            Screen
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <Tool
+                    label="Open source"
+                    icon={RiCodeBlock}
+                    disabled={!canOpenCode}
+                    onClick={onOpenCode}
+                />
+                <Tool
+                    label="Radial"
+                    icon={RiDonutChartFill}
+                    active={mode === "rotate"}
+                    onClick={() => onModeChange("rotate")}
+                />
+            </div>
+            <span className="mx-0.5 h-5 w-px bg-border-secondary" />
+            <div className="flex rounded-lg bg-panel-hover p-0.5">
+                <Tool
+                    label="Desktop"
+                    icon={RiComputerLine}
+                    active={viewport === "desktop"}
+                    onClick={() => onViewportChange("desktop")}
+                />
+                <Tool
+                    label="Tablet"
+                    icon={RiTabletLine}
+                    active={viewport === "tablet"}
+                    onClick={() => onViewportChange("tablet")}
+                />
+                <Tool
+                    label="Mobile"
+                    icon={RiSmartphoneLine}
+                    active={viewport === "mobile"}
+                    onClick={() => onViewportChange("mobile")}
+                />
+            </div>
         </div>
     );
 }

@@ -82,14 +82,14 @@ const CATALOG: Record<number, ShapeErrorEntry> = {
         name: "Usage or credits",
         title: "Usage limit reached",
         description:
-            "You have reached a usage or credit limit. Upgrade your plan or wait for the allowance to reset.",
+            "This request hit a credit or quota limit on the provider that served it.",
     },
     [SHAPE_ERRORS.AI_BILLING_HOLD]: {
         code: SHAPE_ERRORS.AI_BILLING_HOLD,
         name: "Billing confirmation hold",
         title: "Billing check pending",
         description:
-            "Shape could not confirm billing for a recent request. Wait a minute and try again. This is not your monthly usage limit.",
+            "Shape could not confirm billing for a recent request. Wait a minute and try again.",
     },
     [SHAPE_ERRORS.AI_NETWORK]: {
         code: SHAPE_ERRORS.AI_NETWORK,
@@ -209,6 +209,15 @@ export function classifyAiError(raw: string): ShapeErrorEntry {
     }
     if (lower.includes("session expired") || lower.includes("invalid session") || lower.includes("revoked")) {
         return getError(SHAPE_ERRORS.SESSION_EXPIRED);
+    }
+    if (
+        lower.includes("insufficient_quota")
+        || lower.includes("credit_balance_exhausted")
+        || lower.includes("no credits remaining")
+        || lower.includes("insufficient_funds")
+        || (lower.includes("credit") && (lower.includes("remaining") || lower.includes("exhausted") || lower.includes("limit")))
+    ) {
+        return getError(SHAPE_ERRORS.AI_CREDITS);
     }
     if (
         lower.includes("429")

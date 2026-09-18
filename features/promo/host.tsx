@@ -97,7 +97,7 @@ export function PromoCardHost() {
     const node = (
         <div className="pointer-events-none fixed bottom-5 right-5 z-[210] flex justify-end">
             <div
-                className="pointer-events-auto w-[min(320px,calc(100vw-2.5rem))] overflow-hidden rounded-xl border border-border-subtle bg-surface-4 shadow-md/10"
+                className="pointer-events-auto w-[min(320px,calc(100vw-2.5rem))] overflow-hidden squircle-3xl border border-border bg-surface-4 shadow-md/10"
                 role="dialog"
                 aria-label={card.title}
             >
@@ -126,6 +126,9 @@ export function PromoCardHost() {
                 <div className="flex items-center justify-end p-3">
                     <Button
                         type="button"
+                        variant="default"
+                        size="lg"
+                        className="w-full"
                         onClick={() => {
                             if (card.action.kind === "try") runAction(card);
                             close();

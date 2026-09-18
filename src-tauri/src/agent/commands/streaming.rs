@@ -55,9 +55,78 @@ impl LlmProvider {
         }
     }
 
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Shape => "Shape",
+            Self::OpenRouter { .. } => "OpenRouter",
+            Self::OpenAi { .. } => "OpenAI",
+        }
+    }
+
     pub fn is_direct(&self) -> bool {
         !matches!(self, Self::Shape)
     }
+}
+
+fn nonempty_key(key: Option<&str>) -> Option<&str> {
+    key.map(str::trim).filter(|s| !s.is_empty())
+}
+
+/// OpenAI Chat Completions ids (with or without `openai/` prefix). Auto is not included.
+pub fn is_openai_direct_model(model: &str) -> bool {
+    if crate::agent::model_router::is_auto_selection(model) {
+        return false;
+    }
+    let m = crate::agent::model_router::normalize_model(model);
+    if m.strip_prefix("openai/").is_some() {
+        return true;
+    }
+    m.starts_with("gpt-")
+        || m.starts_with("o1")
+        || m.starts_with("o3")
+        || m.starts_with("o4")
+        || m.starts_with("chatgpt-")
+}
+
+/// Pick OpenAI vs OpenRouter from saved keys and the selected model.
+/// OpenAI models use the OpenAI key when present (api.openai.com), not the website.
+/// Auto uses OpenRouter if that key exists, otherwise OpenAI (`gpt-4o-mini`).
+pub fn select_byok_provider(
+    openrouter_key: Option<&str>,
+    openai_key: Option<&str>,
+    model: &str,
+) -> Option<LlmProvider> {
+    let openrouter = nonempty_key(openrouter_key);
+    let openai = nonempty_key(openai_key);
+    if openrouter.is_none() && openai.is_none() {
+        return None;
+    }
+
+    let auto = crate::agent::model_router::is_auto_selection(model);
+    if let Some(api_key) = openai {
+        if is_openai_direct_model(model) || (auto && openrouter.is_none()) {
+            return Some(LlmProvider::OpenAi {
+                api_key: api_key.to_string(),
+            });
+        }
+    }
+    if let Some(api_key) = openrouter {
+        return Some(LlmProvider::OpenRouter {
+            api_key: api_key.to_string(),
+        });
+    }
+    openai.map(|api_key| LlmProvider::OpenAi {
+        api_key: api_key.to_string(),
+    })
+}
+
+fn llm_http_error(provider: &LlmProvider, status: reqwest::StatusCode, text: &str) -> String {
+    format!(
+        "{} API error {}: {}",
+        provider.label(),
+        status,
+        &text[..text.floor_char_boundary(800)]
+    )
 }
 
 /// Map catalog / Auto model ids onto the provider's expected slug.
@@ -363,7 +432,9 @@ pub async fn stream_chat(
     logging::info(
         "stream",
         &format!(
-            "Starting stream: model={}, messages={}, tools={}",
+            "Starting stream: provider={}, url={}, model={}, messages={}, tools={}",
+            proxy_ctx.provider.label(),
+            proxy_ctx.provider.completions_url(),
             model,
             messages.len(),
             tools.len()
@@ -476,10 +547,10 @@ pub async fn stream_chat(
             }
         }
 
-        return Err(AppError::Message(format!(
-            "OpenRouter API error {}: {}",
+        return Err(AppError::Message(llm_http_error(
+            &proxy_ctx.provider,
             status,
-            &text[..text.floor_char_boundary(800)]
+            &text,
         )));
     }
 
@@ -1052,7 +1123,7 @@ pub async fn complete_chat_cancellable(
         return Err(AppError::Message("Cancelled".to_string()));
     }
 
-    let json = completion_json(resp).await?;
+    let json = completion_json(resp, &proxy_ctx.provider).await?;
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("New Chat")
@@ -1110,7 +1181,7 @@ pub async fn complete_chat_messages(
         return Err(AppError::Message("Cancelled".to_string()));
     }
 
-    let json = completion_json(resp).await?;
+    let json = completion_json(resp, &proxy_ctx.provider).await?;
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("")
@@ -1132,16 +1203,19 @@ fn api_error_message(json: &Value, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.chars().take(280).collect())
 }
 
-async fn completion_json(resp: reqwest::Response) -> Result<Value, AppError> {
+async fn completion_json(
+    resp: reqwest::Response,
+    provider: &LlmProvider,
+) -> Result<Value, AppError> {
     let status = resp.status();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     let json: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     if !status.is_success() {
         let msg = api_error_message(&json, &text);
         return Err(AppError::Message(if msg.is_empty() {
-            format!("AI request failed ({status})")
+            format!("{} API error ({status})", provider.label())
         } else {
-            msg
+            format!("{} API error {}: {}", provider.label(), status, msg)
         }));
     }
     Ok(json)
@@ -1168,7 +1242,7 @@ pub async fn complete_chat_with_max_tokens(
         .await
         .map_err(|e| AppError::Message(format!("Completion failed: {}", e)))?;
 
-    let json = completion_json(resp).await?;
+    let json = completion_json(resp, &proxy_ctx.provider).await?;
     let content = json["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("")
@@ -1246,5 +1320,42 @@ fn reasoning_config_for_model(model: &str, user_effort: Option<&str>) -> Option<
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn openai_key_only_uses_openai_for_auto_and_gpt() {
+        let auto = select_byok_provider(None, Some("sk-test"), "auto").unwrap();
+        assert_eq!(auto.label(), "OpenAI");
+        assert_eq!(auto.completions_url(), OPENAI_COMPLETIONS_URL);
+
+        let gpt = select_byok_provider(None, Some("sk-test"), "openai/gpt-4o").unwrap();
+        assert_eq!(gpt.label(), "OpenAI");
+        assert_eq!(rewrite_model_for_provider("openai/gpt-4o", &gpt).unwrap(), "gpt-4o");
+        assert_eq!(rewrite_model_for_provider("auto", &gpt).unwrap(), "gpt-4o-mini");
+    }
+
+    #[test]
+    fn both_keys_send_gpt_to_openai_and_claude_to_openrouter() {
+        let gpt = select_byok_provider(Some("sk-or"), Some("sk-oa"), "openai/gpt-4o").unwrap();
+        assert_eq!(gpt.label(), "OpenAI");
+        let claude = select_byok_provider(
+            Some("sk-or"),
+            Some("sk-oa"),
+            "anthropic/claude-sonnet-4.6",
+        )
+        .unwrap();
+        assert_eq!(claude.label(), "OpenRouter");
+        let auto = select_byok_provider(Some("sk-or"), Some("sk-oa"), "auto").unwrap();
+        assert_eq!(auto.label(), "OpenRouter");
+    }
+
+    #[test]
+    fn no_keys_means_shape_proxy() {
+        assert!(select_byok_provider(None, None, "openai/gpt-4o").is_none());
     }
 }

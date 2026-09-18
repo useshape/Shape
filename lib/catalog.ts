@@ -13,6 +13,7 @@ export type CatalogModel = {
   tags?: { label: string }[];
   tier?: "flagship" | "balanced" | "fast";
   minTier: string;
+  viaApi?: boolean;
 };
 
 export type ShapeCatalog = {
@@ -25,13 +26,13 @@ export type ShapeCatalog = {
   allowedModelIds?: string[];
 };
 
-const FALLBACK_CATALOG: ShapeCatalog = {
+export const FALLBACK_CATALOG: ShapeCatalog = {
   tiers: [],
   models: [
     {
       id: "auto",
       name: "Auto",
-      description: "Uses a fast included model for everyday tasks.",
+      description: "Picks a fast model for everyday work.",
       provider: "Auto",
       inputCost: 0,
       cachedInputCost: 0,
@@ -43,7 +44,7 @@ const FALLBACK_CATALOG: ShapeCatalog = {
     {
       id: "openai/gpt-4o-mini",
       name: "GPT-4o mini",
-      description: "Fast OpenAI model — works with an OpenAI or OpenRouter API key.",
+      description: "Fast everyday chat and coding.",
       provider: "OpenAI",
       inputCost: 0.15,
       cachedInputCost: 0.075,
@@ -52,11 +53,12 @@ const FALLBACK_CATALOG: ShapeCatalog = {
       releaseDate: "2024-07",
       tier: "fast",
       minTier: "free",
+      viaApi: true,
     },
     {
       id: "openai/gpt-4o",
       name: "GPT-4o",
-      description: "OpenAI flagship with vision — works with an OpenAI or OpenRouter API key.",
+      description: "Flagship with vision.",
       provider: "OpenAI",
       inputCost: 2.5,
       cachedInputCost: 1.25,
@@ -65,11 +67,12 @@ const FALLBACK_CATALOG: ShapeCatalog = {
       releaseDate: "2024-05",
       tier: "flagship",
       minTier: "free",
+      viaApi: true,
     },
     {
       id: "anthropic/claude-sonnet-4.6",
       name: "Claude Sonnet 4.6",
-      description: "Requires an OpenRouter API key (not native OpenAI).",
+      description: "Coding and agents.",
       provider: "Anthropic",
       inputCost: 3,
       cachedInputCost: 0.3,
@@ -78,6 +81,7 @@ const FALLBACK_CATALOG: ShapeCatalog = {
       releaseDate: "2025",
       tier: "balanced",
       minTier: "free",
+      viaApi: true,
     },
   ],
   providerOrder: ["Auto", "OpenAI", "Anthropic"],
@@ -147,5 +151,6 @@ export function catalogModelsAsModelInfo(catalog: ShapeCatalog) {
     releaseDate: m.releaseDate,
     tags: m.tags,
     tier: m.tier,
+    viaApi: m.viaApi,
   }));
 }

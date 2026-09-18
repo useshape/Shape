@@ -5,6 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import { commands, type FileEntry } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger,
+} from "@/components/ui/context";
 
 function sortEntries(list: FileEntry[]) {
     return [...list].sort((a, b) => {
@@ -42,9 +49,18 @@ function TreeNode({
 
     const pad = 8 + depth * 12;
 
+    const reveal = () => {
+        void commands.revealPath(entry.path).catch(() => {});
+    };
+    const copyPath = () => {
+        void navigator.clipboard.writeText(entry.path);
+    };
+
     if (entry.is_dir) {
         return (
             <div>
+                <ContextMenu>
+                    <ContextMenuTrigger asChild>
                 <button
                     type="button"
                     onClick={() => setOpen((v) => !v)}
@@ -61,6 +77,13 @@ function TreeNode({
                     />
                     <span className="min-w-0 truncate">{entry.name}</span>
                 </button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="min-w-40">
+                        <ContextMenuItem onClick={() => setOpen(true)}>Open</ContextMenuItem>
+                        <ContextMenuItem onClick={reveal}>Reveal in Explorer</ContextMenuItem>
+                        <ContextMenuItem onClick={copyPath}>Copy Path</ContextMenuItem>
+                    </ContextMenuContent>
+                </ContextMenu>
                 {open
                     ? children?.map((child) => (
                         <TreeNode
@@ -81,6 +104,8 @@ function TreeNode({
         && activePath.replace(/\\/g, "/").toLowerCase() === entry.path.replace(/\\/g, "/").toLowerCase();
 
     return (
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
         <button
             type="button"
             onClick={() => onOpenFile(entry.path)}
@@ -95,6 +120,23 @@ function TreeNode({
             <Icon icon={RiFileTextLine} className="shrink-0 text-text-muted" />
             <span className="min-w-0 truncate">{entry.name}</span>
         </button>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="min-w-40">
+                <ContextMenuItem onClick={() => onOpenFile(entry.path)}>Open</ContextMenuItem>
+                <ContextMenuItem onClick={reveal}>Reveal in Explorer</ContextMenuItem>
+                <ContextMenuItem onClick={copyPath}>Copy Path</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                    onClick={() => {
+                        window.dispatchEvent(
+                            new CustomEvent("shape-open-workspace-terminal", { detail: { path: entry.path } }),
+                        );
+                    }}
+                >
+                    Open Terminal
+                </ContextMenuItem>
+            </ContextMenuContent>
+        </ContextMenu>
     );
 }
 
@@ -135,7 +177,7 @@ export function FileTree({
     // Padding on the wrapper (not margin on the island) keeps the flex parent
     // from shifting — the island sits inset without pushing layout sideways.
     return (
-        <div className="box-border flex h-full min-h-0 w-full flex-col">
+        <div className="box-border flex h-full min-h-0 w-full flex-col bg-panel">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-text-muted">
                     <span className="truncate capitalize">{title}</span>

@@ -99,7 +99,7 @@ pub async fn generate_commit_message(
     agent_state: tauri::State<'_, AgentState>,
 ) -> Result<String, AppError> {
     let provider = agent_state
-        .byok_provider()
+        .byok_provider_for_model("auto")
         .unwrap_or(streaming::LlmProvider::Shape);
     let auth_token = match &provider {
         streaming::LlmProvider::Shape => access_token

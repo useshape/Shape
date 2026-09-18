@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
+import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { formatMentionToken, type ChatMention } from "@/lib/chat-mentions";
@@ -17,7 +18,7 @@ import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins-api";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 
-type CategoryId = "files" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "plugins" | "design" | null;
+type CategoryId = "files" | "code" | "docs" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "plugins" | "design" | null;
 
 const CATEGORIES: {
     id: Exclude<CategoryId, null>;
@@ -25,11 +26,13 @@ const CATEGORIES: {
     icon: RemixiconComponentType;
 }[] = [
     { id: "files", label: "Files & Folders", icon: RiFolderLine },
+    { id: "code", label: "Code", icon: RiCodeLine },
+    { id: "docs", label: "Docs", icon: RiFileLine },
+    { id: "branch", label: "Git", icon: RiGitBranchLine },
+    { id: "chats", label: "Past Chats", icon: RiChat3Line },
     { id: "plugins", label: "Plugins", icon: RiApps2Line },
     { id: "mcp", label: "MCP Servers", icon: RiPuzzle2Line },
     { id: "terminals", label: "Terminals", icon: RiTerminalBoxLine },
-    { id: "chats", label: "Past Chats", icon: RiChat3Line },
-    { id: "branch", label: "Branch (Diff with Main)", icon: RiGitBranchLine },
     { id: "browser", label: "Browser", icon: RiGlobalLine },
     { id: "design", label: "Design concepts", icon: RiPaletteLine },
 ];
@@ -67,6 +70,13 @@ export function MentionPicker({
     const [highlight, setHighlight] = useState(0);
     const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
     const [menuEl, setMenuEl] = useState<HTMLDivElement | null>(null);
+    const [filter, setFilter] = useState("");
+
+    useEffect(() => {
+        if (open) setFilter(query);
+    }, [open, query]);
+
+    const q = filter.trim().toLowerCase();
 
     useLayoutEffect(() => {
         if (!open) {
@@ -76,16 +86,15 @@ export function MentionPicker({
         const el = anchorRef?.current;
         const update = () => {
             if (!el) return;
-            // Anchor to the `@` character so the menu stays next to the mention, not the typing caret.
             const atIndex = typeof caretIndex === "number" ? caretIndex : el.selectionStart ?? 0;
             const caretRect = getTextareaCaretViewportRect(el, atIndex);
-            const width = 280;
+            const width = 320;
             const measured = menuEl?.offsetHeight;
-            const menuHeight = measured && measured > 0 ? measured : 240;
+            const menuHeight = measured && measured > 0 ? measured : 280;
             let left = caretRect.left;
-            let top = caretRect.top - menuHeight - 6;
+            let top = caretRect.top - menuHeight - 8;
             if (top < 8) {
-                top = caretRect.top + caretRect.height + 6;
+                top = caretRect.top + caretRect.height + 8;
             }
             left = Math.min(Math.max(8, left), window.innerWidth - width - 8);
             setPos({ left, top, width });
@@ -99,7 +108,7 @@ export function MentionPicker({
             window.removeEventListener("scroll", update, true);
             el?.removeEventListener("scroll", update);
         };
-    }, [open, anchorRef, caretIndex, query, activeCategory, menuEl, files.length, chats.length]);
+    }, [open, anchorRef, caretIndex, filter, activeCategory, menuEl, files.length, chats.length]);
 
     useEffect(() => {
         if (!open) {
@@ -113,7 +122,7 @@ export function MentionPicker({
         let cancelled = false;
         void (async () => {
             try {
-                const results = await commands.searchProjectFiles(query || "", 40);
+                const results = await commands.searchProjectFiles(filter || "", 40);
                 if (!cancelled) {
                     setFiles(results.map((r) => (r.relative_path || r.path).replace(/\\/g, "/")));
                 }
@@ -124,7 +133,7 @@ export function MentionPicker({
         return () => {
             cancelled = true;
         };
-    }, [open, project_path, query]);
+    }, [open, project_path, filter]);
 
     useEffect(() => {
         if (!open) return;
@@ -208,10 +217,9 @@ export function MentionPicker({
             }
         }
         return out;
-    }, [open, query]);
+    }, [open]);
 
     const fileMentions: ChatMention[] = useMemo(() => {
-        const q = query.trim().toLowerCase();
         return files
             .filter((path) => !q || path.toLowerCase().includes(q))
             .slice(0, 10)
@@ -220,18 +228,9 @@ export function MentionPicker({
                 path,
                 label: path.split("/").pop() || path,
             }));
-    }, [files, query]);
-
-    const staticTop: ChatMention[] = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        return [
-            { kind: "codebase" as const, label: "Codebase" },
-            { kind: "selection" as const, label: "Selection" },
-        ].filter((m) => !q || m.label.toLowerCase().includes(q));
-    }, [query]);
+    }, [files, q]);
 
     const pluginMentions: ChatMention[] = useMemo(() => {
-        const q = query.trim().toLowerCase();
         return plugins
             .filter((p) =>
                 !q
@@ -247,11 +246,27 @@ export function MentionPicker({
                 path: p.toolkit,
                 label: p.name,
             }));
-    }, [plugins, query]);
+    }, [plugins, q]);
 
     const categoryItems: ChatMention[] = useMemo(() => {
-        const q = query.trim().toLowerCase();
         if (activeCategory === "files") return fileMentions;
+        if (activeCategory === "docs") {
+            return files
+                .filter((path) => /\.(md|mdx|txt|rst)$/i.test(path) || /(^|\/)docs\//i.test(path))
+                .filter((path) => !q || path.toLowerCase().includes(q))
+                .slice(0, 20)
+                .map((path) => ({
+                    kind: "docs" as const,
+                    path,
+                    label: path.split("/").pop() || path,
+                }));
+        }
+        if (activeCategory === "code") {
+            return [
+                { kind: "codebase" as const, label: "Codebase" },
+                { kind: "selection" as const, label: "Selection" },
+            ].filter((m) => !q || m.label.toLowerCase().includes(q));
+        }
         if (activeCategory === "plugins") return pluginMentions;
         if (activeCategory === "chats") {
             return chats
@@ -285,7 +300,7 @@ export function MentionPicker({
             return [{ kind: "branch" as const, path: "main", label: "Diff with main" }];
         }
         if (activeCategory === "browser") {
-            const raw = query.trim();
+            const raw = filter.trim();
             const host = hostnameOf(raw);
             const currentUrl = getPreviewCurrentUrl();
             const items: ChatMention[] = [
@@ -307,32 +322,29 @@ export function MentionPicker({
             return items;
         }
         return [];
-    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, query]);
+    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, q, filter]);
 
     const rootItems = useMemo(() => {
         if (activeCategory) return categoryItems;
-        const q = query.trim().toLowerCase();
-        const designs = designItems
-            .filter((d) => !q || d.label.toLowerCase().includes(q))
-            .slice(0, 3);
-        const mcps = mcpServers
-            .filter((s) => !q || s.id.toLowerCase().includes(q))
-            .slice(0, 4)
-            .map((s) => ({
-                kind: "mcp" as const,
-                id: s.id,
-                path: s.id,
-                label: s.name || s.id,
-            }));
-        const pluginHits = pluginMentions.slice(0, 4);
-        return [...staticTop, ...pluginHits, ...mcps, ...fileMentions.slice(0, 8), ...designs];
-    }, [activeCategory, categoryItems, staticTop, fileMentions, designItems, mcpServers, pluginMentions, query]);
+        return fileMentions.slice(0, 8);
+    }, [activeCategory, categoryItems, fileMentions]);
 
-    const showCategories = !activeCategory && !query.trim();
+    const visibleCategories = useMemo(() => {
+        if (activeCategory) return [];
+        if (!q) return CATEGORIES;
+        return CATEGORIES.filter((c) => c.label.toLowerCase().includes(q));
+    }, [activeCategory, q]);
+
+    const showCategories = !activeCategory;
 
     useEffect(() => {
         setHighlight(0);
-    }, [activeCategory, query, rootItems.length]);
+    }, [activeCategory, filter, rootItems.length]);
+
+    const pickItem = (item: ChatMention) => {
+        onPick(`${formatMentionToken(item)} `);
+        onClose();
+    };
 
     useEffect(() => {
         if (!open) return;
@@ -351,119 +363,128 @@ export function MentionPicker({
                 setHighlight((h) => Math.max(h - 1, 0));
             } else if (e.key === "Enter" && rootItems[highlight]) {
                 e.preventDefault();
-                onPick(`${formatMentionToken(rootItems[highlight])} `);
-                onClose();
+                pickItem(rootItems[highlight]);
             }
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-    }, [open, activeCategory, rootItems, highlight, onPick, onClose]);
+    }, [open, activeCategory, rootItems, highlight, onClose]);
 
     if (!open || !pos) return null;
 
     return createPortal(
         <div
             ref={setMenuEl}
-            className="fixed z-[200] max-h-72 max-w-70 overflow-hidden rounded-xl border border-border bg-surface-3/80 backdrop-blur-sm shadow-md/30"
+            className="shape-popover-content fixed z-200 overflow-hidden squircle-2xl border border-border-secondary bg-surface-4/80 backdrop-blur-sm shadow-md"
             style={{ left: pos.left, top: pos.top, width: pos.width }}
         >
+            <SearchInput
+                borderless
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Add files, folders, docs..."
+                aria-label="Search mentions"
+            />
+
             {activeCategory ? (
                 <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-muted! font-regular hover:text-text-primary"
+                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setActiveCategory(null)}
                 >
-                    <Icon icon={RiArrowLeftLine} />
+                    <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
                     {CATEGORIES.find((c) => c.id === activeCategory)?.label ?? "Back"}
                 </button>
             ) : null}
 
-            <div className="max-h-64 overflow-y-auto py-1 px-1">
-                {rootItems.length === 0 && !showCategories ? (
-                    <div className="px-3 py-2 text-sm text-text-muted">No matches</div>
-                ) : (
-                    rootItems.map((item, idx) => (
-                        <button
-                            key={`${item.kind}-${item.id ?? item.path ?? item.label}-${idx}`}
-                            type="button"
-                            className={cn(
-                                "flex w-full items-center gap-2 py-1 px-2 text-text-muted rounded-md text-left text-sm font-regular",
-                                idx === highlight
-                                    ? "bg-panel-hover text-text-muted"
-                                    : "text-text-muted hover:bg-panel-hover hover:text-text-muted",
-                            )}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onMouseEnter={() => setHighlight(idx)}
-                            onClick={() => {
-                                onPick(`${formatMentionToken(item)} `);
-                                onClose();
-                            }}
-                        >
-                            {item.kind === "file" || item.kind === "folder" || item.kind === "docs" ? (
-                                <FileIcon name={item.label} className="h-3.5 w-3.5 shrink-0" />
-                            ) : item.kind === "plugin" ? (
-                                <PluginLogo
-                                    toolkit={item.id || item.path || item.label}
-                                    name={item.label}
-                                    size={ICON_SIZE_SM}
-                                    className="rounded-sm"
-                                />
-                            ) : item.kind === "browser" && item.path && item.path !== "current" ? (
-                                <Favicon url={item.path} size={14} />
-                            ) : (
-                                <Icon
-                                    icon={
-                                        item.kind === "codebase"
-                                            ? RiSearchLine
-                                            : item.kind === "selection"
-                                              ? RiCodeLine
-                                              : item.kind === "design"
-                                                ? RiPaletteLine
-                                                : item.kind === "chat"
-                                                  ? RiChat3Line
-                                                  : item.kind === "terminal"
-                                                    ? RiTerminalBoxLine
-                                                    : item.kind === "branch"
-                                                      ? RiGitBranchLine
-                                                      : item.kind === "browser"
-                                                        ? RiGlobalLine
-                                                        : item.kind === "mcp"
-                                                          ? RiPuzzle2Line
-                                                          : item.kind === "plugin"
-                                                            ? RiApps2Line
-                                                          : RiFileLine
-                                    }
-                                    className="shrink-0 text-text-muted" size={ICON_SIZE_SM}
-                                />
-                            )}
-                            <span className="min-w-0 truncate font-regular text-text-muted">
-                                {item.kind === "browser" && item.path && item.path !== "current"
-                                    ? `Visit ${item.label}`
-                                    : item.label}
-                            </span>
-                            {item.path && item.kind !== "design" && item.kind !== "browser" && item.kind !== "chat" ? (
-                                <span className="ml-auto max-w-[45%] truncate text-xs text-text-muted">
-                                    {pathDir(item.path) || item.path}
-                                </span>
-                            ) : null}
-                        </button>
-                    ))
-                )}
+            <div className="max-h-72 overflow-y-auto no-scrollbar px-1 pb-1">
+                {rootItems.length === 0 && (activeCategory || !showCategories) ? (
+                    <div className="px-2.5 py-2 text-sm text-text-muted">No matches</div>
+                ) : null}
 
-                {showCategories ? (
+                {rootItems.map((item, idx) => (
+                    <button
+                        key={`${item.kind}-${item.id ?? item.path ?? item.label}-${idx}`}
+                        type="button"
+                        className={cn(
+                            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm",
+                            idx === highlight
+                                ? "bg-panel-hover text-text-primary"
+                                : "text-text-primary hover:bg-panel-hover",
+                        )}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setHighlight(idx)}
+                        onClick={() => pickItem(item)}
+                    >
+                        {item.kind === "file" || item.kind === "folder" || item.kind === "docs" ? (
+                            <FileIcon
+                                name={item.label}
+                                isDir={item.kind === "folder"}
+                                className="h-4 w-4 shrink-0"
+                            />
+                        ) : item.kind === "plugin" ? (
+                            <PluginLogo
+                                toolkit={item.id || item.path || item.label}
+                                name={item.label}
+                                size={ICON_SIZE_SM}
+                                className="rounded-sm"
+                            />
+                        ) : item.kind === "browser" && item.path && item.path !== "current" ? (
+                            <Favicon url={item.path} size={14} />
+                        ) : (
+                            <Icon
+                                icon={
+                                    item.kind === "codebase"
+                                        ? RiSearchLine
+                                        : item.kind === "selection"
+                                          ? RiCodeLine
+                                          : item.kind === "design"
+                                            ? RiPaletteLine
+                                            : item.kind === "chat"
+                                              ? RiChat3Line
+                                              : item.kind === "terminal"
+                                                ? RiTerminalBoxLine
+                                                : item.kind === "branch"
+                                                  ? RiGitBranchLine
+                                                  : item.kind === "browser"
+                                                    ? RiGlobalLine
+                                                    : item.kind === "mcp"
+                                                      ? RiPuzzle2Line
+                                                      : item.kind === "plugin"
+                                                        ? RiApps2Line
+                                                        : RiFileLine
+                                }
+                                className="shrink-0 text-text-muted"
+                                size={ICON_SIZE_SM}
+                            />
+                        )}
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                            {item.kind === "browser" && item.path && item.path !== "current"
+                                ? `Visit ${item.label}`
+                                : item.label}
+                        </span>
+                        {item.path && item.kind !== "design" && item.kind !== "browser" && item.kind !== "chat" ? (
+                            <span className="ml-auto max-w-[48%] truncate text-sm text-text-muted">
+                                {pathDir(item.path) || item.path}
+                            </span>
+                        ) : null}
+                    </button>
+                ))}
+
+                {showCategories && visibleCategories.length > 0 ? (
                     <>
-                        <div className="my-1" />
-                        {CATEGORIES.map((cat) => (
+                        {rootItems.length > 0 ? <div className="my-1 h-px bg-border-subtle" /> : null}
+                        {visibleCategories.map((cat) => (
                             <button
                                 key={cat.id}
                                 type="button"
-                                className="flex w-full items-center gap-2 py-1 px-2 rounded-md text-left text-sm font-regular text-text-muted hover:bg-panel-hover hover:text-text-muted"
+                                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-text-primary hover:bg-panel-hover"
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => setActiveCategory(cat.id)}
                             >
                                 <Icon icon={cat.icon} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
-                                <span className="flex-1">{cat.label}</span>
+                                <span className="flex-1 font-medium">{cat.label}</span>
                                 <Icon icon={RiArrowRightSLine} className="text-text-muted" size={ICON_SIZE_SM} />
                             </button>
                         ))}

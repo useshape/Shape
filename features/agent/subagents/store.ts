@@ -8,6 +8,9 @@ export type SubagentCard = {
     agent?: string;
     model?: string;
     activity: string;
+    task?: string;
+    transcript?: string;
+    parentId?: string;
     status: SubagentStatus;
     phase?: SubagentPhase;
     reads?: SubagentRead[];
@@ -20,10 +23,103 @@ export type SubagentCard = {
 type Listener = () => void;
 
 let cards: SubagentCard[] = [];
+let activeId: string | null = null;
+let parentConversationId: string | null = null;
 const listeners = new Set<Listener>();
 
 function emit() {
     for (const l of listeners) l();
+}
+
+export function getActiveSubagentId(): string | null {
+    return activeId;
+}
+
+export function getActiveSubagent(): SubagentCard | null {
+    if (!activeId) return null;
+    return cards.find((c) => c.id === activeId) ?? null;
+}
+
+export function openSubagent(id: string) {
+    if (!id) return;
+    activeId = id;
+    emit();
+    window.dispatchEvent(new CustomEvent("shape-subagent-open", { detail: { id } }));
+}
+
+export function closeSubagent() {
+    activeId = null;
+    emit();
+}
+
+export function setSubagentParentConversation(id: string | null) {
+    parentConversationId = id;
+}
+
+export function subagentsForParent(parentId: string): SubagentCard[] {
+    return cards.filter((c) => c.parentId === parentId);
+}
+
+export function extractSubagentsFromText(text: string, parentId?: string): Array<{
+    id: string;
+    title: string;
+    task: string;
+    model?: string;
+    transcript?: string;
+    status: SubagentStatus;
+}> {
+    const out: Array<{
+        id: string;
+        title: string;
+        task: string;
+        model?: string;
+        transcript?: string;
+        status: SubagentStatus;
+    }> = [];
+    const seen = new Set<string>();
+    const attr = (tag: string, name: string) => tag.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+    const push = (id: string, title: string, task: string, model?: string, transcript?: string, statusRaw?: string) => {
+        const key = id || title;
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        const raw = (statusRaw || "").toLowerCase();
+        const status: SubagentStatus =
+            raw === "error" || raw === "failed"
+                ? "error"
+                : raw === "done" || raw === "completed"
+                  ? "done"
+                  : raw === "pending"
+                    ? "pending"
+                    : raw === "running"
+                      ? "running"
+                      : "done";
+        out.push({ id: key, title, task, model, transcript, status });
+        void parentId;
+    };
+    for (const m of text.matchAll(/<subagent_ref\b([^>]*)\/>/gi)) {
+        const tag = m[1] || "";
+        push(attr(tag, "id"), attr(tag, "agent") || "Subagent", attr(tag, "task"), attr(tag, "model") || undefined, undefined, attr(tag, "status"));
+    }
+    for (const m of text.matchAll(/<subagent\b([^>]*)>([\s\S]*?)<\/subagent>/gi)) {
+        const tag = m[1] || "";
+        push(attr(tag, "id"), attr(tag, "agent") || attr(tag, "name") || "Subagent", attr(tag, "task"), attr(tag, "model") || undefined, (m[2] || "").trim(), attr(tag, "status"));
+    }
+    return out;
+}
+
+export function subagentWorkflowContent(card: SubagentCard): string {
+    const transcript = card.transcript?.trim() ?? "";
+    if (transcript) return transcript;
+    const parts: string[] = [];
+    for (const read of card.reads ?? []) {
+        const start = read.start != null ? ` start="${read.start}"` : "";
+        const end = read.end != null ? ` end="${read.end}"` : "";
+        parts.push(`<cat${start}${end}>${read.path}</cat>`);
+    }
+    if (parts.length === 0 && card.activity?.trim()) {
+        parts.push(`<search>${card.activity.trim()}</search>`);
+    }
+    return parts.join("\n");
 }
 
 export function getSubagents(): SubagentCard[] {
@@ -65,6 +161,9 @@ export function upsertSubagent(next: Omit<SubagentCard, "updatedAt"> & { updated
         ...existing,
         ...next,
         activity,
+        task: next.task ?? existing?.task,
+        transcript: next.transcript ?? existing?.transcript,
+        parentId: next.parentId ?? existing?.parentId ?? parentConversationId ?? undefined,
         phase: inferPhase(activity, next.phase ?? existing?.phase),
         reads: next.reads ?? existing?.reads ?? parseReadsFromActivity(activity),
         tokens: next.tokens ?? existing?.tokens,
@@ -83,8 +182,15 @@ export function clearFinishedSubagents() {
     emit();
 }
 
+let demoTimer: ReturnType<typeof setInterval> | null = null;
+
 export function resetSubagents() {
+    if (demoTimer) {
+        clearInterval(demoTimer);
+        demoTimer = null;
+    }
     cards = [];
+    activeId = null;
     emit();
 }
 
@@ -122,13 +228,26 @@ export function applySubagentEvent(payload: {
     });
 }
 
-let demoTimer: ReturnType<typeof setTimeout> | null = null;
+const DEMO_ACTIVITY: Record<string, string[]> = {
+    "demo-sub-player": [
+        "Reviewing changes...",
+        "Reading WatchPlayer.ts",
+        "Checking TheaterLayout.ts",
+        "Comparing control clipping",
+    ],
+    "demo-sub-comments": [
+        "Editing CommentThread.tsx",
+        "Measuring live chat density",
+        "Aligning expander height",
+    ],
+    "demo-sub-ads": [
+        "Comparing Super Thanks chip vs ad pod",
+        "Scheduling midroll against Shorts shelf",
+        "Checking chip collision",
+    ],
+};
 
 export function seedDemoSubagents() {
-    if (demoTimer) {
-        clearTimeout(demoTimer);
-        demoTimer = null;
-    }
     resetSubagents();
     upsertSubagent({
         id: "demo-sub-player",
@@ -136,6 +255,7 @@ export function seedDemoSubagents() {
         agent: "Watch-page player",
         model: "auto",
         activity: "Reviewing changes...",
+        task: "Single measure pass for theater + compact two-col without clipping controls",
         status: "running",
         phase: "reviewing",
         reads: [
@@ -144,6 +264,14 @@ export function seedDemoSubagents() {
         ],
         tokens: 84000,
         truncated: true,
+        parentId: "__demo_chat__",
+        transcript: [
+            "<think>Theater + compact two-col have to share one measure pass or the controls clip when comments commit late.</think>",
+            "<status>Reviewing changes...</status>",
+            "<cat start=\"301\" end=\"561\">youtube/watch/player/WatchPlayer.ts</cat>",
+            "<cat start=\"12\" end=\"188\">youtube/watch/layout/TheaterLayout.ts</cat>",
+            "<search>layoutWatchPage theater controls clip</search>",
+        ].join("\n"),
         startedAt: Date.now() - 11 * 60 * 1000,
     });
     upsertSubagent({
@@ -152,8 +280,19 @@ export function seedDemoSubagents() {
         agent: "Comments density",
         model: "anthropic/claude-sonnet-4",
         activity: "Editing CommentThread.tsx",
+        task: "Comments + live chat share one measure; expander must not jump",
         status: "running",
         phase: "editing",
+        parentId: "__demo_chat__",
+        transcript: [
+            "<think>Comments and live chat must share the same measure or the expander jumps after paint.</think>",
+            "<status>Editing CommentThread.tsx</status>",
+            "<cat start=\"1\" end=\"220\">youtube/comments/CommentThread.tsx</cat>",
+            "<edit file=\"youtube/comments/CommentThread.tsx\">",
+            "<original>density: \"comfortable\"</original>",
+            "<replacement>density: ctx.live ? \"compact\" : density</replacement>",
+            "</edit>",
+        ].join("\n"),
         startedAt: Date.now() - 4 * 60 * 1000,
     });
     upsertSubagent({
@@ -162,35 +301,32 @@ export function seedDemoSubagents() {
         agent: "Midroll scheduler",
         model: "openai/gpt-5",
         activity: "Comparing Super Thanks chip vs ad pod",
+        task: "Midroll must not collide with Super Thanks chip or Shorts shelf",
         status: "running",
         phase: "working",
+        parentId: "__demo_chat__",
+        transcript: [
+            "<think>Midroll, Super Thanks chip, and Shorts shelf share the same vertical budget.</think>",
+            "<status>Comparing Super Thanks chip vs ad pod</status>",
+            "<cat start=\"40\" end=\"190\">youtube/ads/MidrollScheduler.ts</cat>",
+            "<cat start=\"12\" end=\"88\">youtube/super_thanks/ChipRail.tsx</cat>",
+            "<grep>scheduleMidroll</grep>",
+        ].join("\n"),
         startedAt: Date.now() - 2 * 60 * 1000,
     });
-    demoTimer = setTimeout(() => {
-        upsertSubagent({
-            id: "demo-sub-player",
-            title: "Watch-page player",
-            activity: "Done: theater + dense two-column without clipping controls",
-            status: "done",
-            phase: "working",
-            truncated: false,
-        });
-        upsertSubagent({
-            id: "demo-sub-comments",
-            title: "Comments density",
-            activity: "Done: sort + live chat share one measure pass",
-            status: "done",
-            phase: "working",
-        });
-        upsertSubagent({
-            id: "demo-sub-ads",
-            title: "Midroll scheduler",
-            activity: "Done: Super Thanks chip stays above the ad pod",
-            status: "done",
-            phase: "working",
-        });
-        demoTimer = null;
-    }, 8000);
+    let tick = 0;
+    demoTimer = setInterval(() => {
+        tick += 1;
+        for (const [id, lines] of Object.entries(DEMO_ACTIVITY)) {
+            const existing = cards.find((c) => c.id === id);
+            if (!existing) continue;
+            upsertSubagent({
+                ...existing,
+                activity: lines[tick % lines.length]!,
+                status: "running",
+            });
+        }
+    }, 4500);
 }
 
 export function syncSubagentsFromChunks(
@@ -221,12 +357,19 @@ export function syncSubagentsFromChunks(
                     : raw === "running" || chunk.isGenerating || generating
                       ? "running"
                       : "done";
+        const existing = cards.find((c) => c.id === id);
         upsertSubagent({
             id,
-            title: chunk.query || chunk.file || "Subagent",
+            title: chunk.query || chunk.file || existing?.title || "Subagent",
             agent: chunk.query,
             model: chunk.command,
-            activity: chunk.content || "Working…",
+            activity:
+                (chunk.type === "subagent" ? existing?.activity : chunk.content)
+                || existing?.activity
+                || "Working…",
+            task: chunk.type === "subagent_ref" ? chunk.content : existing?.task,
+            transcript: chunk.type === "subagent" ? chunk.content : existing?.transcript,
+            parentId: parentConversationId ?? existing?.parentId,
             status,
         });
     }

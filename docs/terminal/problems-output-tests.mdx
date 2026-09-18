@@ -8,7 +8,7 @@ icon: ri-error-warning-line
 Beyond the terminal, the bottom panel hosts tabs for diagnostics and tool output. Use them to track errors while you code.
 ## Problems
 
-The **Problems** tab aggregates diagnostics from language servers, ESLint, and design checks.
+The **Problems** tab aggregates diagnostics from ESLint (when enabled) and design checks.
 
 | Action | Shortcut |
 | --- | --- |
@@ -20,18 +20,14 @@ Click a row to jump to the file and line. The status bar also shows error and wa
 
 ### Sources
 
-- TypeScript and JavaScript (LSP)
 - ESLint (when enabled in settings)
 - Design diagnostics (contrast and accessibility)
-- CSS and HTML language services
 
-Fix issues in the editor or use **Quick Fix** (**Ctrl+.**) when available.
+Fix issues in the editor or from the Problems list.
 
 ## Output
 
-The **Output** tab shows logs from Shape tooling and language servers. Open it from the command palette: **View: Show Output**.
-
-Use Output when diagnosing why a language service failed to start or when an extension-like feature prints status messages.
+The **Output** tab shows logs from Shape tooling. Open it from the command palette: **View: Show Output**.
 
 ## Tests
 
@@ -49,7 +45,7 @@ Toggle the whole panel with **Ctrl+`** without losing tab contents.
 
 ## Related
 
-- [IntelliSense](/docs/editor/intellisense)
-- [Lint and LSP](/docs/settings/lint-and-lsp)
+- [Completions](/docs/editor/intellisense)
+- [Lint and format](/docs/settings/lint-and-lsp)
 - [Integrated Terminal](/docs/terminal/integrated-terminal)
 - [Titlebar and Panels](/docs/workspace/titlebar-and-panels)

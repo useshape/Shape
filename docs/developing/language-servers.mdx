@@ -1,18 +1,18 @@
 ---
 title: Language servers
-description: How Shape attaches language servers and surfaces diagnostics in the editor.
+description: Shape does not run language servers in the editor.
 order: 6
 icon: ri-lightbulb-line
 ---
 
 ## Overview
 
-Language server integration is driven from the editor feature (`features/editor/lsp/`) with Rust adapters where process management is required. Monaco hosts the editor; workers for tokenization and TypeScript are bundled into `public/monaco/` for production.
+The Shape editor is CodeMirror 6. Completions and highlighting come from language packs for the file type. There is no LSP client, no Monaco workers, and no `features/editor/lsp/` process.
 
-Workspace trust gates whether LSP and other project-local tooling start for a given folder.
+Workspace trust still gates whether the **agent** can edit files and run commands in a folder. It does not start language servers.
 
 ## Related
 
-- [IntelliSense](/docs/editor/intellisense)
-- [Lint and LSP settings](/docs/settings/lint-and-lsp)
+- [Completions](/docs/editor/intellisense)
+- [Lint and format](/docs/settings/lint-and-lsp)
 - [Architecture](/docs/developing/architecture)

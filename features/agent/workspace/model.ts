@@ -2,10 +2,11 @@ import type { RemixiconComponentType } from "@remixicon/react";
 import {
     RiFileTextLine,
     RiFolderLine,
+    RiGitBranchFill,
     RiGitBranchLine,
-    RiGitCommitLine,
     RiGitPullRequestLine,
-    RiRobot2Line,
+    RiGitRepositoryCommitsLine,
+    RiUserFollowLine,
 } from "@remixicon/react";
 
 export type TabKind = "changes" | "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs";
@@ -41,11 +42,11 @@ export const DEFAULT_TABS: WorkspaceTab[] = [
 export function iconFor(kind: TabKind): RemixiconComponentType {
     switch (kind) {
         case "changes":
-            return RiGitPullRequestLine;
+            return RiGitRepositoryCommitsLine;
         case "graph":
-            return RiGitCommitLine;
+            return RiGitBranchFill;
         case "agents":
-            return RiRobot2Line;
+            return RiUserFollowLine;
         case "plan":
             return RiGitBranchLine;
         case "diff":

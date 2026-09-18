@@ -2,7 +2,6 @@
 
 import type { RefObject, ReactNode } from "react";
 import { ChatMessageItem } from "./item";
-import { ChatErrorCard } from "../blocks/error";
 import type { ChatMessage } from "@/lib/backend";
 
 export function ChatMessageList({
@@ -10,9 +9,6 @@ export function ChatMessageList({
     messages,
     isLoading,
     activityLabel,
-    sendError,
-    onDismissError,
-    onRetryError,
     messagesEndRef,
     onRedo,
     onRestore,
@@ -23,9 +19,6 @@ export function ChatMessageList({
     messages: ChatMessage[];
     isLoading: boolean;
     activityLabel: string | null;
-    sendError: string | null;
-    onDismissError: () => void;
-    onRetryError?: () => void;
     messagesEndRef: RefObject<HTMLDivElement | null>;
     onRedo: (msgIdx: number) => void;
     onRestore: (msgIdx: number) => void;
@@ -80,15 +73,6 @@ export function ChatMessageList({
                     ))}
                 </>
             )}
-            {sendError ? (
-                <div className="mb-4 px-2">
-                    <ChatErrorCard
-                        message={sendError}
-                        onDismiss={onDismissError}
-                        onRetry={onRetryError}
-                    />
-                </div>
-            ) : null}
             <div ref={messagesEndRef} className="h-10 shrink-0" aria-hidden />
         </>
     );

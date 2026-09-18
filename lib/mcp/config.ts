@@ -51,9 +51,9 @@ export function parseMcpJson(content: string): McpServerConfig[] {
 }
 
 export async function loadMcpServersFromFile(): Promise<McpServerConfig[]> {
-    const path = await ensureMcpConfigFile();
+    await ensureMcpConfigFile();
     try {
-        const content = await commands.readFile(path);
+        const content = await commands.readMcpConfig();
         return parseMcpJson(content);
     } catch {
         return [];
@@ -61,7 +61,7 @@ export async function loadMcpServersFromFile(): Promise<McpServerConfig[]> {
 }
 
 export async function saveMcpServers(servers: McpServerConfig[]): Promise<void> {
-    const path = await ensureMcpConfigFile();
+    await ensureMcpConfigFile();
     const mcpServers: Record<string, RawMcpEntry> = {};
     for (const s of servers) {
         mcpServers[s.id] = {
@@ -77,7 +77,17 @@ export async function saveMcpServers(servers: McpServerConfig[]): Promise<void> 
         };
     }
     const content = JSON.stringify({ mcpServers }, null, 2);
-    await commands.saveFile(path, content);
+    await commands.writeMcpConfig(content);
+}
+
+export async function openMcpConfig(): Promise<void> {
+    const path = await ensureMcpConfigFile();
+    try {
+        await commands.readMcpConfig();
+    } catch {
+        await commands.writeMcpConfig(DEFAULT_MCP_JSON);
+    }
+    await commands.openFile(path, "mcp.json");
 }
 
 export async function mergePluginConfig(
@@ -105,15 +115,4 @@ export async function mergePluginConfig(
     const list = Array.from(merged.values());
     await saveMcpServers(list);
     return list;
-}
-
-export async function openMcpConfig(): Promise<void> {
-    const path = await ensureMcpConfigFile();
-    try {
-        await commands.readFile(path);
-    } catch {
-        await commands.createFile(path);
-        await commands.saveFile(path, DEFAULT_MCP_JSON);
-    }
-    await commands.openFile(path, "mcp.json");
 }

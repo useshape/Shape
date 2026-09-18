@@ -26,7 +26,7 @@ import {
     groupChatMessages,
 } from "./chat-session-utils";
 import { getSettings, hasByokApiKeys } from "@/lib/settings";
-import { getVisibleModels } from "@/lib/models";
+import { getVisibleModels, resolveChatModels } from "@/lib/models";
 import { getCatalogModels } from "@/lib/catalog-store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
@@ -34,6 +34,7 @@ import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
 import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat-mentions";
 import { buildPlanBuildMessage } from "@/lib/shape-continue-action";
+import { isolatePlanBranch } from "@/lib/plan-branch";
 import { loadProjectRules } from "@/lib/project-rules";
 import { isWorkspaceTrusted } from "@/lib/workspace-trust";
 import { clearAllDesignPreviewSessions } from "@/lib/agent-preview/store";
@@ -788,7 +789,13 @@ export function useChatSession() {
                 return false;
             }
 
-            const token = shapeAuth.accessToken ?? null;
+            const token = shapeAuth.accessToken ?? undefined;
+            const ai = getSettings().ai;
+            const byok = {
+                openRouterApiKey: ai.openRouterApiKey.trim() || null,
+                openaiApiKey: ai.openaiApiKey.trim() || null,
+            };
+            await commands.setByokKeys(byok.openRouterApiKey, byok.openaiApiKey).catch(() => {});
             const attachmentBlocks: string[] = [];
 
             for (const att of uploadedFiles) {
@@ -923,6 +930,7 @@ export function useChatSession() {
                 },
                 reasoningEffort,
                 fastMode ? "priority" : null,
+                byok,
             );
             await refreshMetadata();
             return true;
@@ -1003,13 +1011,19 @@ export function useChatSession() {
             if (!custom.detail?.path) return;
             if (isLoadingRef.current) return;
             setSelectedMode("Code");
-            void handleSendMessageRef.current(
-                buildPlanBuildMessage(custom.detail.path, custom.detail.title),
-            );
+            void (async () => {
+                const branch = await isolatePlanBranch(project_path, custom.detail.title);
+                const extra = branch
+                    ? `\n\nStay on git branch \`${branch}\`. Keep this work isolated there.`
+                    : "";
+                void handleSendMessageRef.current(
+                    `${buildPlanBuildMessage(custom.detail.path, custom.detail.title)}${extra}`,
+                );
+            })();
         };
         window.addEventListener("shape-build-plan", handleBuildPlan);
         return () => window.removeEventListener("shape-build-plan", handleBuildPlan);
-    }, []);
+    }, [project_path]);
 
     React.useEffect(() => {
         const handleInsertPrompt = (e: Event) => {
@@ -1149,10 +1163,15 @@ export function useChatSession() {
     );
 
     React.useEffect(() => {
-        const defaultModel = getSettings().ai.defaultModel;
-        const visible = getVisibleModels(getCatalogModels(), getSettings().ai.enabledModels);
-        if (visible.some((m) => m.id === defaultModel)) {
-            setSelectedModel(defaultModel);
+        const ai = getSettings().ai;
+        const keyed = resolveChatModels(getCatalogModels(), {
+            openaiKey: Boolean(ai.openaiApiKey.trim()),
+            openRouterKey: Boolean(ai.openRouterApiKey.trim()),
+            signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
+        });
+        const visible = getVisibleModels(keyed, ai.enabledModels);
+        if (visible.some((m) => m.id === ai.defaultModel)) {
+            setSelectedModel(ai.defaultModel);
         } else if (visible.length > 0) {
             setSelectedModel(visible[0].id);
         }

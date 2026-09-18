@@ -66,6 +66,8 @@ pub struct DesignSourcePatch {
     #[serde(default)]
     pub styles: BTreeMap<String, String>,
     pub text: Option<String>,
+    #[serde(default)]
+    pub attributes: BTreeMap<String, String>,
     pub operation: Option<String>,
 }
 
@@ -201,9 +203,28 @@ pub fn list_design_assets(project_path: String) -> Result<Vec<DesignAsset>, AppE
             .unwrap_or_default()
             .to_ascii_lowercase();
         let kind = match extension.as_str() {
-            "png" | "jpg" | "jpeg" | "gif" | "webp" | "avif" | "svg" => "image",
+            "svg" => "vector",
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "avif" => "image",
             "woff" | "woff2" | "ttf" | "otf" => "font",
             "mp4" | "webm" | "mov" => "video",
+            "css" => "style",
+            "tsx" | "jsx" => {
+                let rel = entry
+                    .path()
+                    .strip_prefix(&root)
+                    .unwrap_or(entry.path())
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    .to_ascii_lowercase();
+                if rel.contains("/app/") && (rel.ends_with("/page.tsx") || rel.ends_with("/layout.tsx") || rel.ends_with("/page.jsx")) {
+                    continue;
+                }
+                if rel.contains("/components/") || rel.contains("/ui/") {
+                    "component"
+                } else {
+                    "code"
+                }
+            }
             _ => continue,
         };
         let path = entry
@@ -323,6 +344,76 @@ fn quoted_attribute(opening: &str, names: &[&str]) -> Option<String> {
     None
 }
 
+fn merge_opening_attribute(opening: &str, name: &str, value: &str) -> Result<String, AppError> {
+    let html_value = value.replace('"', "&quot;").replace('\n', " ");
+    if let Some(idx) = attribute_index(opening, name) {
+        let after_name = idx + name.len();
+        let eq_at = opening[after_name..]
+            .find('=')
+            .map(|offset| after_name + offset)
+            .ok_or_else(|| AppError::Message(format!("Invalid {name} attribute.")))?;
+        let mut cursor = eq_at + 1;
+        while opening
+            .as_bytes()
+            .get(cursor)
+            .is_some_and(u8::is_ascii_whitespace)
+        {
+            cursor += 1;
+        }
+        let bytes = opening.as_bytes();
+        if bytes.get(cursor) == Some(&b'{') {
+            let rest = opening[cursor + 1..].trim_start();
+            let quote = rest.as_bytes().first().copied();
+            if quote != Some(b'"') && quote != Some(b'\'') {
+                return Err(AppError::Message(
+                    "This link is bound to a variable, so Shape left the code unchanged.".into(),
+                ));
+            }
+            let quote_at = opening.len() - rest.len();
+            let end = opening.as_bytes()[quote_at + 1..]
+                .iter()
+                .position(|b| *b == quote.unwrap())
+                .map(|v| quote_at + 1 + v)
+                .ok_or_else(|| AppError::Message(format!("Invalid {name} attribute.")))?;
+            let inner = if quote == Some(b'"') {
+                value.replace('\\', "\\\\").replace('"', "\\\"")
+            } else {
+                value.replace('\\', "\\\\").replace('\'', "\\'")
+            };
+            return Ok(format!("{}{}{}", &opening[..quote_at + 1], inner, &opening[end..]));
+        }
+        let quote = *bytes
+            .get(cursor)
+            .ok_or_else(|| AppError::Message(format!("Invalid {name} attribute.")))?;
+        if quote != b'"' && quote != b'\'' {
+            return Err(AppError::Message(
+                "This link is bound to a variable, so Shape left the code unchanged.".into(),
+            ));
+        }
+        let end = bytes[cursor + 1..]
+            .iter()
+            .position(|b| *b == quote)
+            .map(|v| cursor + 1 + v)
+            .ok_or_else(|| AppError::Message(format!("Invalid {name} attribute.")))?;
+        return Ok(format!(
+            "{}{}{}",
+            &opening[..cursor + 1],
+            html_value,
+            &opening[end..]
+        ));
+    }
+    let insert_at = opening
+        .rfind("/>")
+        .or_else(|| opening.rfind('>'))
+        .ok_or_else(|| AppError::Message("Invalid opening element.".into()))?;
+    Ok(format!(
+        "{} {name}=\"{}\"{}",
+        &opening[..insert_at],
+        html_value,
+        &opening[insert_at..]
+    ))
+}
+
 fn attribute_index(opening: &str, name: &str) -> Option<usize> {
     let mut from = 0;
     while let Some(found) = opening[from..].find(name) {
@@ -344,17 +435,76 @@ fn attribute_index(opening: &str, name: &str) -> Option<usize> {
     None
 }
 
+fn drop_content_hash(file_name: &str) -> String {
+    let Some((stem, ext)) = file_name.rsplit_once('.') else {
+        return file_name.to_string();
+    };
+    if let Some((base, hash)) = stem.rsplit_once('-') {
+        if hash.len() >= 8 && hash.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            return format!("{base}.{ext}");
+        }
+    }
+    file_name.to_string()
+}
+
+fn source_query_relatives(relative: &str) -> Vec<String> {
+    let mut rel = relative.trim_start_matches('/').to_string();
+    for prefix in [
+        "_next/static/chunks/",
+        "static/chunks/",
+        "static/js/",
+        "assets/",
+    ] {
+        if let Some(rest) = rel.strip_prefix(prefix) {
+            rel = rest.to_string();
+        }
+    }
+    if let Some((dir, name)) = rel.rsplit_once('/') {
+        rel = format!("{}/{}", dir, drop_content_hash(name));
+    } else {
+        rel = drop_content_hash(&rel);
+    }
+    let mut out = vec![rel.clone()];
+    if let Some(stem) = rel.strip_suffix(".js") {
+        out.push(format!("{stem}.tsx"));
+        out.push(format!("{stem}.jsx"));
+        out.push(format!("{stem}.ts"));
+    }
+    if let Some(stem) = rel.strip_suffix(".mjs") {
+        out.push(format!("{stem}.tsx"));
+    }
+    out
+}
+
 fn locate_source_path(root: &Path, raw: &str) -> Option<PathBuf> {
     let mut cleaned = raw.trim().replace('\\', "/");
     cleaned = cleaned
+        .trim_start_matches("webpack-internal:///")
+        .trim_start_matches("webpack:///")
+        .trim_start_matches("webpack://")
+        .trim_start_matches("turbopack:///[project]/")
+        .trim_start_matches("turbopack:///")
         .trim_start_matches("file:///")
         .trim_start_matches("file://")
         .trim_start_matches("/@fs/")
+        .trim_start_matches("(app-pages-browser)/")
+        .trim_start_matches("(rsc)/")
+        .trim_start_matches("(app-ssr)/")
+        .trim_start_matches("./")
         .to_string();
     if let Some((path, _)) = cleaned.split_once('?') {
         cleaned = path.to_string();
     }
-    let root_canon = root.canonicalize().ok()?;
+    if let Some((path, _)) = cleaned.split_once('#') {
+        cleaned = path.to_string();
+    }
+    if cleaned.starts_with("http://") || cleaned.starts_with("https://") {
+        if let Some(idx) = cleaned.find("://").and_then(|i| cleaned[i + 3..].find('/')) {
+            let start = cleaned.find("://").unwrap() + 3 + idx;
+            cleaned = cleaned[start..].to_string();
+        }
+    }
+    let root_canon = root.canonicalize().ok().unwrap_or_else(|| root.to_path_buf());
     let absolute = PathBuf::from(&cleaned);
     if absolute.is_absolute() {
         if let Ok(canon) = absolute.canonicalize() {
@@ -374,12 +524,54 @@ fn locate_source_path(root: &Path, raw: &str) -> Option<PathBuf> {
                 return Some(joined);
             }
         }
+        // Absolute path outside root — try matching by project-relative suffix.
+        for prefix in ["src/", "app/", "pages/", "components/", "lib/", "features/"] {
+            if let Some(idx) = file_s.find(prefix) {
+                let joined = root_canon.join(&file_s[idx..]);
+                if joined.is_file() && supported_source(&joined) && !skip_dir(&joined) {
+                    return Some(joined);
+                }
+            }
+        }
     }
     let relative = cleaned.trim_start_matches('/');
-    for base in [root, root_canon.as_path()] {
-        let joined = base.join(relative);
-        if joined.is_file() && supported_source(&joined) && !skip_dir(&joined) {
-            return Some(joined);
+    // Windows file URLs sometimes leave a leading slash before the drive letter.
+    let relative = relative
+        .strip_prefix('/')
+        .filter(|rest| {
+            rest.chars().nth(1) == Some(':')
+                && rest
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_alphabetic())
+                    .unwrap_or(false)
+        })
+        .unwrap_or(relative);
+    for query in source_query_relatives(relative) {
+        for base in [root, root_canon.as_path()] {
+            let joined = base.join(&query);
+            if joined.is_file() && supported_source(&joined) && !skip_dir(&joined) {
+                return Some(joined);
+            }
+            if let Ok(abs) = PathBuf::from(&query).canonicalize() {
+                if abs.is_file()
+                    && abs.starts_with(&root_canon)
+                    && supported_source(&abs)
+                    && !skip_dir(&abs)
+                {
+                    return Some(abs);
+                }
+            }
+            for folder in ["", "src", "app", "pages"] {
+                let joined = if folder.is_empty() {
+                    base.join(&query)
+                } else {
+                    base.join(folder).join(&query)
+                };
+                if joined.is_file() && supported_source(&joined) && !skip_dir(&joined) {
+                    return Some(joined);
+                }
+            }
         }
     }
     None
@@ -395,19 +587,85 @@ struct OpeningHit {
     column: usize,
 }
 
+fn opening_has_classes(opening: &str, classes: &[String]) -> bool {
+    if classes.is_empty() {
+        return true;
+    }
+    classes.iter().all(|class| opening.contains(class.as_str()))
+}
+
 fn pick_opening<'a>(
     hits: &'a [OpeningHit],
+    source: &str,
     tag: &str,
     line: usize,
     column: Option<usize>,
+    classes: &[String],
 ) -> Option<&'a OpeningHit> {
-    hits.iter()
+    let opening_of = |hit: &OpeningHit| -> &str {
+        source
+            .get(hit.opening_start..hit.opening_end)
+            .unwrap_or("")
+    };
+    let score = |hit: &OpeningHit| -> (u8, u8, usize, usize, usize) {
+        let tag_penalty: u8 = if hit.tag.eq_ignore_ascii_case(tag) {
+            0
+        } else {
+            1
+        };
+        let class_penalty: u8 = if opening_has_classes(opening_of(hit), classes) {
+            0
+        } else {
+            1
+        };
+        let line_dist = hit.line.abs_diff(line);
+        let col_dist = column.map(|col| hit.column.abs_diff(col)).unwrap_or(0);
+        (
+            tag_penalty,
+            class_penalty,
+            line_dist,
+            col_dist,
+            hit.opening_start,
+        )
+    };
+
+    // Prefer exact line + matching tag.
+    if let Some(hit) = hits
+        .iter()
+        .filter(|hit| hit.line == line && hit.tag.eq_ignore_ascii_case(tag))
+        .min_by_key(|hit| score(hit))
+    {
+        return Some(hit);
+    }
+    // Exact line, any tag (host vs component mismatch).
+    if let Some(hit) = hits
+        .iter()
         .filter(|hit| hit.line == line)
-        .min_by_key(|hit| {
-            let tag_penalty: u8 = if hit.tag.eq_ignore_ascii_case(tag) { 0 } else { 1 };
-            let col_dist = column.map(|col| hit.column.abs_diff(col)).unwrap_or(0);
-            (tag_penalty, col_dist, hit.opening_start)
-        })
+        .min_by_key(|hit| score(hit))
+    {
+        return Some(hit);
+    }
+
+    // React 19 debug stacks often land near the JSX expression, not the tag line.
+    let mut nearby: Vec<_> = hits
+        .iter()
+        .filter(|hit| hit.tag.eq_ignore_ascii_case(tag))
+        .filter(|hit| hit.line.abs_diff(line) <= 40)
+        .collect();
+    if !classes.is_empty() {
+        let with_classes: Vec<_> = nearby
+            .iter()
+            .copied()
+            .filter(|hit| opening_has_classes(opening_of(hit), classes))
+            .collect();
+        if with_classes.len() == 1 {
+            return Some(with_classes[0]);
+        }
+        if !with_classes.is_empty() {
+            nearby = with_classes;
+        }
+    }
+    nearby.into_iter().min_by_key(|hit| score(hit))
 }
 
 fn collect_jsx_openings(node: Node<'_>, source: &str, out: &mut Vec<OpeningHit>) {
@@ -554,10 +812,7 @@ pub fn resolve_design_element(
         .unwrap_or(&path)
         .to_string_lossy()
         .replace('\\', "/");
-    let line = query.source_line.unwrap_or(0);
-    if line == 0 {
-        return Ok(Vec::new());
-    }
+    let line = query.source_line.filter(|value| *value > 0).unwrap_or(1);
     let mut hits = Vec::new();
     let is_markup = matches!(
         path.extension().and_then(|value| value.to_str()),
@@ -573,7 +828,14 @@ pub fn resolve_design_element(
             }
         }
     }
-    let Some(hit) = pick_opening(&hits, &query.tag, line, query.source_column) else {
+    let Some(hit) = pick_opening(
+        &hits,
+        &source,
+        &query.tag,
+        line,
+        query.source_column,
+        &query.classes,
+    ) else {
         return Ok(Vec::new());
     };
     Ok(vec![hit_to_target(&relative, hit)])
@@ -870,7 +1132,9 @@ pub fn apply_design_source_patch(patch: DesignSourcePatch) -> Result<DesignPatch
         }
         None => {}
     }
-    if patch.operation.is_some() && (!patch.styles.is_empty() || patch.text.is_some()) {
+    if patch.operation.is_some()
+        && (!patch.styles.is_empty() || patch.text.is_some() || !patch.attributes.is_empty())
+    {
         return Err(AppError::Message(
             "Structural, text, and style changes are saved as separate safe edits.".into(),
         ));
@@ -887,8 +1151,29 @@ pub fn apply_design_source_patch(patch: DesignSourcePatch) -> Result<DesignPatch
             &updated,
         );
     }
+    if !patch.attributes.is_empty() {
+        if !patch.styles.is_empty() || patch.text.is_some() {
+            return Err(AppError::Message(
+                "Text, attribute, and style changes are saved as separate safe edits.".into(),
+            ));
+        }
+        let current = after[patch.target.opening_start..patch.target.opening_end].to_string();
+        let mut updated = current;
+        for (name, value) in &patch.attributes {
+            let key = name.trim();
+            if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
+                return Err(AppError::Message("Unsupported attribute name.".into()));
+            }
+            updated = merge_opening_attribute(&updated, key, value)?;
+        }
+        after.replace_range(
+            patch.target.opening_start..patch.target.opening_end,
+            &updated,
+        );
+    }
     if let Some(text) = patch.text.as_deref() {
-        if !patch.styles.is_empty() {
+        if !patch.styles.is_empty() || !patch.attributes.is_empty() {
             return Err(AppError::Message(
                 "Text and style changes are saved as separate safe edits.".into(),
             ));
@@ -1041,6 +1326,7 @@ mod tests {
             target: matches[0].clone(),
             styles,
             text: None,
+            attributes: BTreeMap::new(),
             operation: None,
         })
         .unwrap();
@@ -1102,6 +1388,93 @@ mod tests {
         )
         .unwrap();
         assert!(none.is_empty());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolves_webpack_internal_paths_and_nearby_lines() {
+        let root =
+            std::env::temp_dir().join(format!("shape-design-source-{}", uuid::Uuid::new_v4()));
+        let src = root.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"dependencies":{"vite":"7","react":"19"}}"#,
+        )
+        .unwrap();
+        let source = "export function App(){\n  return (\n    <main className=\"hero\">Hello</main>\n  );\n}\n";
+        std::fs::write(src.join("App.tsx"), source).unwrap();
+
+        let matches = resolve_design_element(
+            root.to_string_lossy().into_owned(),
+            DesignElementQuery {
+                tag: "main".into(),
+                id: None,
+                classes: vec!["hero".into()],
+                text: None,
+                route_source: None,
+                source_file: Some("webpack-internal:///./src/App.tsx".into()),
+                // Stack often points at the return line, not the tag line.
+                source_line: Some(2),
+                source_column: Some(3),
+            },
+        )
+        .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].file, "src/App.tsx");
+        assert_eq!(matches[0].tag, "main");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolves_next_chunk_url_to_app_page() {
+        let root =
+            std::env::temp_dir().join(format!("shape-design-next-{}", uuid::Uuid::new_v4()));
+        let app = root.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"dependencies":{"next":"16","react":"19"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            app.join("page.tsx"),
+            "export default function Page(){return <section className=\"hero\">Hi</section>}\n",
+        )
+        .unwrap();
+
+        let matches = resolve_design_element(
+            root.to_string_lossy().into_owned(),
+            DesignElementQuery {
+                tag: "section".into(),
+                id: None,
+                classes: vec!["hero".into()],
+                text: None,
+                route_source: None,
+                source_file: Some("http://127.0.0.1:3000/_next/static/chunks/app/page.js".into()),
+                source_line: Some(1),
+                source_column: Some(40),
+            },
+        )
+        .unwrap();
+        assert_eq!(matches.len(), 1, "{matches:?}");
+        assert_eq!(matches[0].file, "app/page.tsx");
+
+        let miss = resolve_design_element(
+            root.to_string_lossy().into_owned(),
+            DesignElementQuery {
+                tag: "section".into(),
+                id: None,
+                classes: vec!["hero".into()],
+                text: None,
+                route_source: None,
+                source_file: Some("http://127.0.0.1:3000/_next/static/chunks/main-app.js".into()),
+                source_line: Some(1),
+                source_column: Some(1),
+            },
+        )
+        .unwrap();
+        assert!(miss.is_empty(), "bundler runtime chunks must not map to app/page.tsx");
         let _ = std::fs::remove_dir_all(root);
     }
 }

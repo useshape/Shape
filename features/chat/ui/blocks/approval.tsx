@@ -1,11 +1,12 @@
 "use client";
 
-import { RiTerminalBoxLine } from "@remixicon/react";
+import { RiCornerDownLeftFill, RiTerminalBoxLine } from "@remixicon/react";
 import React, { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { RiArrowRightLine } from "@remixicon/react";
 
 function ShortcutKeys({ keys }: { keys: string[] }) {
     return (
@@ -66,7 +67,7 @@ export function ApprovalCard({
     return (
         <div
             className={cn(
-                "my-1 overflow-hidden rounded-xl border border-border-subtle bg-surface-3",
+                "my-1 overflow-hidden squircle-[20px] bg-surface-3",
                 className,
             )}
         >
@@ -83,12 +84,12 @@ export function ApprovalCard({
             <div className="flex items-center justify-between gap-2 px-2 py-2">
                 <div className="min-w-0">{footerLeft}</div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                    <Button type="button" variant="ghost" size="xs" disabled={isProcessing} onClick={onSkip}>
+                    <Button type="button" variant="ghost" size="sm" disabled={isProcessing} onClick={onSkip}>
                         {skipLabel}
                     </Button>
-                    <Button type="button" variant="default" size="xs" disabled={isProcessing} onClick={onAccept}>
+                    <Button type="button" variant="default" size="sm" disabled={isProcessing} onClick={onAccept}>
                         {acceptLabel}
-                        <ShortcutKeys keys={["↵"]} />
+                        <Icon icon={RiCornerDownLeftFill} size={ICON_SIZE_SM} />
                     </Button>
                 </div>
             </div>

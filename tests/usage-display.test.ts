@@ -76,7 +76,7 @@ describe("usage-display", () => {
         expect(formatMessageUsageRows(undefined, "auto")).toEqual([]);
     });
 
-    it("resolves chat ring from last-turn delta only as %, no token tooltip", () => {
+    it("resolves chat ring from monthly Auto or credits usage", () => {
         expect(
             resolveChatUsageDisplay(
                 "auto",
@@ -89,7 +89,12 @@ describe("usage-display", () => {
                 },
                 null,
             ),
-        ).toMatchObject({ mode: "auto", percent: 0, title: "0% used", tooltip: "0% used" });
+        ).toMatchObject({
+            mode: "auto",
+            percent: 18,
+            title: "18% used",
+            tooltip: "18% used this month (Auto)",
+        });
 
         expect(
             resolveChatUsageDisplay(
@@ -105,9 +110,9 @@ describe("usage-display", () => {
             ),
         ).toMatchObject({
             mode: "auto",
-            percent: 2,
-            title: "2% used",
-            tooltip: "2% used",
+            percent: 18,
+            title: "18% used",
+            tooltip: "18% used this month (Auto)",
         });
 
         expect(
@@ -124,9 +129,9 @@ describe("usage-display", () => {
             ),
         ).toMatchObject({
             mode: "credits",
-            percent: 5,
-            title: "5% used",
-            tooltip: "5% used",
+            percent: 20,
+            title: "20% used",
+            tooltip: "20% used this month",
         });
     });
 });

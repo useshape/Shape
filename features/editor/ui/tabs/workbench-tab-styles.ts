@@ -18,23 +18,23 @@ export const WORKBENCH_TAB_ROW_CLASS =
 export const WORKBENCH_TAB_LIST_CLASS = "flex h-full w-max shrink-0 items-center gap-1";
 
 export const WORKBENCH_TAB_FADE_CLASS =
-    "pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-linear-to-r from-transparent to-sidebar";
+    "pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-linear-to-r from-transparent to-panel";
 
 export const WORKBENCH_TAB_ACTIONS_CLASS =
     "box-border flex h-full shrink-0 items-center gap-0.5 px-1";
 
 export function workbenchTabItemClass(active: boolean, dragging?: boolean) {
     return cn(
-        "workbench-tab-item group relative box-border flex h-7.5 shrink-0 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-sm font-medium transition-colors",
+        "workbench-tab-item group relative box-border flex h-6 shrink-0 cursor-pointer select-none items-center gap-1.5 overflow-hidden whitespace-nowrap squircle-lg px-1.5 font-medium transition-colors",
         active
-            ? "is-active min-w-[72px] bg-surface-3 text-text-primary"
+            ? "is-active min-w-[60px] bg-surface-3 text-text-primary"
             : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
         dragging && "opacity-40",
     );
 }
 
 export const WORKBENCH_TAB_CLOSE_BUTTON_CLASS =
-    "invisible flex h-4 w-4 shrink-0 items-center justify-center text-text-muted group-hover:visible hover:text-text-primary";
+    "flex h-4 w-4 items-center justify-center text-text-muted hover:text-text-primary";
 
 export const WORKBENCH_TAB_CONTENT_CLASS =
     "workbench-tab-content relative z-[1] flex h-full min-w-0 items-center gap-1.5";

@@ -25,17 +25,20 @@ import {
     usePreviewStore,
 } from "../store";
 import {
-    DesignBottomToolbar,
-    type DesignViewport,
-} from "./bottom-toolbar";
-import {
     DESIGN_BRIDGE_SCRIPT,
     type DesignElementSnapshot,
     type DesignLayerSnapshot,
 } from "./bridge";
+import { DesignDeploy } from "./deploy";
+import { DEFAULT_DEVICE, type DesignDevice } from "./devices";
+import { guessSourceFromChunkUrl, isUserSourcePath } from "./library";
 import { DesignLeftPanel } from "./left-panel";
-import { DesignStylePanel } from "./style-panel";
+import { DesignStylePanel } from "./panel";
+import type { ComponentOptionPatch } from "./panel/options";
+import { DesignRail } from "./rail";
+import { DragEdge } from "./resize";
 import { DesignToolbar } from "./toolbar";
+import type { DesignToolMode } from "./bottom-toolbar";
 
 type SourceTarget = {
     file: string;
@@ -209,7 +212,7 @@ export function DesignStudio({
         path: string;
         name: string;
         bytes: number;
-        kind: "image" | "font" | "video";
+        kind: "image" | "font" | "video" | "vector" | "style" | "component" | "code";
     }>>([]);
     const [layers, setLayers] = useState<DesignLayerSnapshot[]>([]);
     const [selected, setSelected] = useState<DesignElementSnapshot | null>(null);
@@ -219,8 +222,14 @@ export function DesignStudio({
     const [ready, setReady] = useState(false);
     const [booting, setBooting] = useState(true);
     const [saved, setSaved] = useState(true);
-    const [viewport, setViewport] = useState<DesignViewport>("desktop");
     const [zoom, setZoom] = useState(100);
+    const [toolMode, setToolMode] = useState<DesignToolMode>("select");
+    const [device, setDevice] = useState<DesignDevice>(DEFAULT_DEVICE);
+    const [leftWidth, setLeftWidth] = useState(240);
+    const [rightWidth, setRightWidth] = useState(400);
+    const [deployOpen, setDeployOpen] = useState(false);
+    const [themeTokens, setThemeTokens] = useState<Array<{ name: string; value: string }>>([]);
+    const bridgeSynced = useRef(false);
 
     useEffect(() => {
         setBootRoot(projectPath);
@@ -238,16 +247,35 @@ export function DesignStudio({
 
     const resolveElement = useCallback(
         async (element: DesignElementSnapshot) => {
-            setMappingError(null);
+            if (!element.source?.fileName) {
+                setTarget(null);
+                return null;
+            }
+            let fileName = element.source.fileName;
+            let lineNumber = element.source.lineNumber;
+            let columnNumber = element.source.columnNumber;
+            if (!isUserSourcePath(fileName)) {
+                const guessed = guessSourceFromChunkUrl(fileName, designerRoot);
+                if (!guessed) {
+                    setTarget(null);
+                    return null;
+                }
+                fileName = guessed.fileName;
+                lineNumber = lineNumber || guessed.lineNumber;
+                columnNumber = columnNumber || guessed.columnNumber;
+            }
             const matches = await commands.resolveDesignElement(designerRoot, {
                 tag: element.tag,
-                sourceFile: element.source?.fileName,
-                sourceLine: element.source?.lineNumber,
-                sourceColumn: element.source?.columnNumber,
+                id: element.id,
+                classes: element.classes,
+                text: element.text || null,
+                sourceFile: fileName,
+                sourceLine: lineNumber,
+                sourceColumn: columnNumber,
             });
-            const target = matches.length === 1 ? matches[0] : null;
-            setTarget(target);
-            return target;
+            const next = matches[0] ?? null;
+            setTarget(next);
+            return next;
         },
         [designerRoot],
     );
@@ -263,6 +291,7 @@ export function DesignStudio({
         setLayers([]);
         setSelected(null);
         setTarget(null);
+        setThemeTokens([]);
         resetPreviewState();
         void (async () => {
             try {
@@ -352,6 +381,14 @@ export function DesignStudio({
     }, [bootRoot]);
 
     useEffect(() => {
+        if (!ready || bridgeSynced.current) return;
+        bridgeSynced.current = true;
+        void commands.registerDesignBridge(DESIGN_BRIDGE_SCRIPT).then(() => {
+            previewReload();
+        });
+    }, [ready]);
+
+    useEffect(() => {
         const onMessage = (event: MessageEvent) => {
             if (event.source !== iframeRef.current?.contentWindow) return;
             const data = event.data as {
@@ -360,15 +397,23 @@ export function DesignStudio({
                 layers?: DesignLayerSnapshot[];
                 styles?: Record<string, string>;
                 text?: string;
+                attributes?: Record<string, string>;
+                themeTokens?: Array<{ name: string; value: string }>;
             };
             if (data.type === "shape-design-ready") {
                 setReady(true);
                 setBooting(false);
+                if (Array.isArray(data.themeTokens)) setThemeTokens(data.themeTokens);
             } else if (data.type === "shape-design-tree" && Array.isArray(data.layers)) {
                 setLayers(data.layers);
-            } else if (data.type === "shape-design-selection" && data.element) {
-                setSelected(data.element);
-                void resolveElement(data.element);
+            } else if (data.type === "shape-design-selection") {
+                if (data.element) {
+                    setSelected(data.element);
+                    void resolveElement(data.element);
+                } else {
+                    setSelected(null);
+                    setTarget(null);
+                }
             } else if (data.type === "shape-design-commit-styles" && data.element && data.styles) {
                 setSelected(data.element);
                 void (async () => {
@@ -381,9 +426,11 @@ export function DesignStudio({
                             target: resolved,
                             styles: data.styles,
                         });
-                        await resolveElement(data.element!);
-                    } catch {
-                        previewReload();
+                        setMappingError(null);
+                    } catch (cause) {
+                        setMappingError(
+                            cause instanceof Error ? cause.message : String(cause),
+                        );
                     } finally {
                         setSaved(true);
                     }
@@ -399,8 +446,31 @@ export function DesignStudio({
                             target: resolved,
                             text: data.text ?? "",
                         });
-                    } catch {
-                        previewReload();
+                        setMappingError(null);
+                    } catch (cause) {
+                        setMappingError(
+                            cause instanceof Error ? cause.message : String(cause),
+                        );
+                    } finally {
+                        setSaved(true);
+                    }
+                })();
+            } else if (data.type === "shape-design-commit-attr" && data.element && data.attributes) {
+                void (async () => {
+                    const resolved = await resolveElement(data.element!);
+                    if (!resolved) return;
+                    setSaved(false);
+                    try {
+                        await commands.applyDesignSourcePatch({
+                            projectPath: designerRoot,
+                            target: resolved,
+                            attributes: data.attributes,
+                        });
+                        setMappingError(null);
+                    } catch (cause) {
+                        setMappingError(
+                            cause instanceof Error ? cause.message : String(cause),
+                        );
                     } finally {
                         setSaved(true);
                     }
@@ -436,19 +506,55 @@ export function DesignStudio({
     }, [designerRoot, resolveElement]);
 
     const previewStyles = useCallback((styles: Record<string, string>) => {
-        iframeRef.current?.contentWindow?.postMessage(
-            { type: "shape-design-apply-preview", styles },
-            "*",
-        );
+        const frame = iframeRef.current?.contentWindow;
+        const key = selected?.key;
+        if (frame) {
+            frame.postMessage(
+                { type: "shape-design-apply-preview", styles, key },
+                "*",
+            );
+        }
         setSelected((current) =>
             current ? { ...current, styles: { ...current.styles, ...styles } } : current,
         );
+    }, [selected?.key]);
+
+    useEffect(() => {
+        iframeRef.current?.contentWindow?.postMessage(
+            { type: "shape-design-set-mode", mode: toolMode, projectRoot: designerRoot },
+            "*",
+        );
+    }, [toolMode, ready, iframeSrc, designerRoot]);
+
+    useEffect(() => {
+        if (!ready) return;
+        iframeRef.current?.contentWindow?.postMessage(
+            { type: "shape-design-config", projectRoot: designerRoot },
+            "*",
+        );
+    }, [ready, designerRoot, iframeSrc]);
+
+    const undoDesign = useCallback(() => {
+        void commands.undoDesignSourcePatch().then((changed) => {
+            if (changed) previewReload();
+        });
+    }, []);
+
+    const redoDesign = useCallback(() => {
+        void commands.redoDesignSourcePatch().then((changed) => {
+            if (changed) previewReload();
+        });
     }, []);
 
     const commitStyles = useCallback(
         async (styles: Record<string, string>) => {
             const current = selected;
             if (!current) return;
+            // Keep the canvas updated even if source mapping fails.
+            iframeRef.current?.contentWindow?.postMessage(
+                { type: "shape-design-apply-preview", styles, key: current.key },
+                "*",
+            );
             const resolved = target ?? (await resolveElement(current));
             if (!resolved) return;
             setSaved(false);
@@ -458,15 +564,53 @@ export function DesignStudio({
                     target: resolved,
                     styles,
                 });
-                await resolveElement({ ...current, styles: { ...current.styles, ...styles } });
-            } catch {
-                previewReload();
+                setMappingError(null);
+            } catch (cause) {
+                setMappingError(
+                    cause instanceof Error ? cause.message : String(cause),
+                );
             } finally {
                 setSaved(true);
             }
         },
         [designerRoot, resolveElement, selected, target],
     );
+
+    const patchComponent = useCallback((patch: ComponentOptionPatch) => {
+        const frame = iframeRef.current?.contentWindow;
+        if (!frame) return;
+        setSelected((current) => {
+            if (!current?.component) return current;
+            const next = { ...current.component };
+            if (patch.key === current.key) {
+                if (patch.field === "open") next.open = Boolean(patch.value);
+                if (patch.field === "label") next.label = String(patch.value);
+                if (patch.field === "href" || patch.field === "src") next.href = String(patch.value);
+                if (patch.field === "alt") next.label = String(patch.value);
+            } else {
+                next.items = next.items.map((item) => {
+                    if (item.key !== patch.key) return item;
+                    if (patch.field === "label") return { ...item, label: String(patch.value) };
+                    if (patch.field === "href") return { ...item, href: String(patch.value) };
+                    return item;
+                });
+            }
+            return { ...current, component: next };
+        });
+        if (patch.field === "open") {
+            frame.postMessage({ type: "shape-design-set-open", key: patch.key, open: Boolean(patch.value) }, "*");
+            return;
+        }
+        if (patch.field === "label") {
+            frame.postMessage({ type: "shape-design-set-text", key: patch.key, text: String(patch.value) }, "*");
+            return;
+        }
+        const attr = patch.field === "alt" ? "alt" : patch.field === "src" ? "src" : "href";
+        frame.postMessage(
+            { type: "shape-design-set-attr", key: patch.key, name: attr, value: String(patch.value) },
+            "*",
+        );
+    }, []);
 
     const openSource = useCallback(() => {
         if (!target) return;
@@ -582,7 +726,9 @@ export function DesignStudio({
     );
 
     const canvasWidth =
-        viewport === "mobile" ? 390 : viewport === "tablet" ? 768 : "100%";
+        device.width === "fluid" ? "100%" : device.width;
+    const canvasHeight =
+        device.height === "fluid" ? "100%" : device.height;
     const selectedKey = selected?.key ?? null;
     const showPanels = ready && !bootError;
     const showBootOverlay = booting || !ready || Boolean(bootError);
@@ -624,7 +770,7 @@ export function DesignStudio({
     }
 
     return (
-        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-editor">
+        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-editor">
             {showPanels ? (
                 <DesignToolbar
                     onClose={onClose}
@@ -632,45 +778,82 @@ export function DesignStudio({
                     pages={pages}
                     activePage={activePage}
                     onPageChange={changePage}
-                    onReload={() => {
-                        setReady(false);
-                        previewReload();
-                    }}
-                    onOpenCode={openSource}
+                    onDeploy={() => setDeployOpen(true)}
                     saved={saved}
                 />
             ) : null}
             <div className="flex min-h-0 flex-1">
+                {showPanels ? <DesignRail
+                    mode={toolMode}
+                    onModeChange={setToolMode}
+                    onCaptureElement={() => { void exportSelection(2, "png"); }}
+                    onCaptureScreen={() => {
+                        if (ready && iframeSrc) {
+                            void commands.capturePagePreview(iframeSrc).catch(() => {});
+                        }
+                    }}
+                    canCapture={ready && Boolean(iframeSrc)}
+                    canCaptureElement={Boolean(selected)}
+                /> : null}
                 {showPanels ? (
-                    <DesignLeftPanel
-                        layers={layers}
-                        selectedKey={selectedKey}
-                        onSelectLayer={(key) => {
-                            iframeRef.current?.contentWindow?.postMessage(
-                                { type: "shape-design-select-key", key },
-                                "*",
-                            );
-                        }}
-                        pages={pages}
-                        activePage={activePage}
-                        onPageChange={changePage}
-                        assets={assets}
-                        projectRoot={designerRoot}
-                    />
+                    <div className="relative h-full shrink-0" style={{ width: leftWidth }}>
+                        <DesignLeftPanel
+                            layers={layers}
+                            selectedKey={selectedKey}
+                            onSelectLayer={(key) => {
+                                iframeRef.current?.contentWindow?.postMessage(
+                                    { type: "shape-design-select-key", key },
+                                    "*",
+                                );
+                            }}
+                            onChangeText={(key, text) => {
+                                setLayers((current) =>
+                                    current.map((layer) => (layer.key === key ? { ...layer, text } : layer)),
+                                );
+                                iframeRef.current?.contentWindow?.postMessage(
+                                    { type: "shape-design-set-text", key, text },
+                                    "*",
+                                );
+                            }}
+                            pages={pages}
+                            activePage={activePage}
+                            onPageChange={changePage}
+                            assets={assets}
+                            themeTokens={themeTokens}
+                            onOpenPath={(relative) => {
+                                const fullPath = joinProjectPath(designerRoot, relative);
+                                void commands.openFile(fullPath, relative.split("/").pop() ?? relative);
+                            }}
+                            onReload={() => {
+                                setReady(false);
+                                previewReload();
+                            }}
+                            onOpenCode={openSource}
+                            canOpenCode={Boolean(target)}
+                            selectedElement={selected}
+                            onComponentPatch={patchComponent}
+                        />
+                        <DragEdge
+                            side="right"
+                            onDrag={(start, dx) => setLeftWidth(Math.min(420, Math.max(180, start + dx)))}
+                        />
+                    </div>
                 ) : null}
                 <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-editor">
                     <div className="h-full overflow-hidden">
                     <div
                         className={cn(
                             "flex h-full min-h-90 min-w-full items-stretch justify-center",
-                            viewport !== "desktop" && showPanels && "p-5",
+                            device.width !== "fluid" && showPanels && "p-5",
                         )}
                     >
                         <div
                             className="relative h-full min-h-80 overflow-hidden bg-white transition-[width,transform] duration-300"
                             style={{
                                 width: showPanels ? canvasWidth : "100%",
+                                height: showPanels ? canvasHeight : "100%",
                                 maxWidth: "100%",
+                                maxHeight: "100%",
                                 transform: showPanels ? `scale(${zoom / 100})` : undefined,
                                 transformOrigin: "center center",
                             }}
@@ -731,56 +914,44 @@ export function DesignStudio({
                         </div>
                     ) : null}
                     </div>
-                    {showPanels ? (
-                        <DesignBottomToolbar
-                            viewport={viewport}
-                            onViewportChange={setViewport}
-                            zoom={zoom}
-                            onZoomChange={setZoom}
-                            onUndo={() => {
-                                void commands.undoDesignSourcePatch().then((changed) => {
-                                    if (changed) previewReload();
-                                });
-                            }}
-                            onRedo={() => {
-                                void commands.redoDesignSourcePatch().then((changed) => {
-                                    if (changed) previewReload();
-                                });
-                            }}
-                            onCapture={() => {
-                                if (ready && iframeSrc) {
-                                    void commands.capturePagePreview(iframeSrc).catch(() => {});
-                                }
-                            }}
-                            onOpenCode={openSource}
-                            canCapture={ready && Boolean(iframeSrc)}
-                            canOpenCode={Boolean(target)}
-                        />
-                    ) : null}
                 </main>
                 {showPanels ? (
-                    <DesignStylePanel
-                        key={selectedKey ?? "empty"}
-                        element={selected}
-                        source={target ? { file: target.file, line: target.line } : null}
-                        previewUrl={iframeSrc}
-                        zoom={zoom}
-                        onZoomChange={setZoom}
-                        onPreview={previewStyles}
-                        onCommit={(styles: Record<string, string>) => void commitStyles(styles)}
-                        onOpenSource={openSource}
-                        onAlign={(alignment: "center" | "center-x" | "center-y") =>
-                            iframeRef.current?.contentWindow?.postMessage(
-                                { type: "shape-design-align", alignment },
-                                "*",
-                            )
-                        }
-                        onDuplicate={() => void applyStructure("duplicate")}
-                        onDelete={() => void applyStructure("delete")}
-                        onExport={exportSelection}
-                    />
+                    <div className="relative h-full shrink-0 border-l border-border" style={{ width: rightWidth }}>
+                        <DesignStylePanel
+                            key={selectedKey ?? "empty"}
+                            element={selected}
+                            source={target ? { file: target.file, line: target.line } : null}
+                            previewUrl={iframeSrc}
+                            zoom={zoom}
+                            onZoomChange={setZoom}
+                            device={device}
+                            onDeviceChange={setDevice}
+                            onUndo={undoDesign}
+                            onRedo={redoDesign}
+                            onPreview={previewStyles}
+                            onCommit={(styles: Record<string, string>) => void commitStyles(styles)}
+                            onOpenSource={openSource}
+                            onAlign={(alignment: "center" | "center-x" | "center-y") =>
+                                iframeRef.current?.contentWindow?.postMessage(
+                                    { type: "shape-design-align", alignment },
+                                    "*",
+                                )
+                            }
+                            onDuplicate={() => void applyStructure("duplicate")}
+                            onDelete={() => void applyStructure("delete")}
+                            onExport={exportSelection}
+                            themeTokens={themeTokens}
+                            onComponentPatch={patchComponent}
+                            className="h-full w-full"
+                        />
+                        <DragEdge
+                            side="left"
+                            onDrag={(start, dx) => setRightWidth(Math.min(560, Math.max(280, start - dx)))}
+                        />
+                    </div>
                 ) : null}
             </div>
+            <DesignDeploy open={deployOpen} onClose={() => setDeployOpen(false)} projectPath={designerRoot} />
         </div>
     );
 }

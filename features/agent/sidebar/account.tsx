@@ -1,6 +1,6 @@
 "use client";
 
-import { RiLoginBoxLine, RiSettings3Line } from "@remixicon/react";
+import { RiGitPullRequestLine, RiLoginBoxLine, RiSettings3Line } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { useShapeAuth } from "@/lib/cloud/store";
@@ -57,6 +57,16 @@ export function AccountRow() {
                     <Icon icon={RiLoginBoxLine} />
                 </Button>
             )}
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => window.dispatchEvent(new Event("shape-open-pull-requests"))}
+                className="size-7 shrink-0 text-text-muted hover:text-text-primary"
+                aria-label="Pull requests"
+            >
+                <Icon icon={RiGitPullRequestLine} />
+            </Button>
             <Button
                 type="button"
                 variant="ghost"

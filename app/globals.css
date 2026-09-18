@@ -111,6 +111,8 @@
   --radius-xl: 12px;
   --radius-2xl: 24px;
   --radius-3xl: 32px;
+  --radius-4xl: 48px;
+  --radius-5xl: 64px;
   --radius-full: 9999px;
 
   /* Floating workbench panels (Git Manager, graph splits, etc.). */
@@ -170,10 +172,11 @@
   --tracking-normal: 0;
 
   /* ── Motion ────────────────────────────────────────────── */
-  --transition-fast: 120ms;
-  --transition-base: 180ms;
+  --transition-fast: 90ms;
+  --transition-base: 140ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
 
   --z-dropdown: 100;
   --z-modal: 200;
@@ -356,6 +359,7 @@
   --spacing-titlebar: var(--titlebar-height);
   --spacing-statusbar: var(--statusbar-height);
 
+  --radius-none: 0px;
   --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -363,6 +367,17 @@
   --radius-xl: 12px;
   --radius-2xl: 24px;
   --radius-3xl: 32px;
+  --radius-4xl: 48px;
+  --radius-5xl: 64px;
+  --radius-full: 9999px;
+  --radius-1: var(--radius-sm);
+  --radius-2: var(--radius-md);
+  --radius-3: var(--radius-lg);
+  --radius-4: var(--radius-xl);
+  --radius-5: var(--radius-2xl);
+  --radius-6: var(--radius-3xl);
+  --radius-7: var(--radius-4xl);
+  --radius-8: var(--radius-5xl);
 
   --z-index-dropdown: var(--z-dropdown);
   --z-index-modal: var(--z-modal);
@@ -386,7 +401,172 @@
 @utility rounded-xl { border-radius: var(--radius-xl); }
 @utility rounded-2xl { border-radius: var(--radius-2xl); }
 @utility rounded-3xl { border-radius: var(--radius-3xl); }
+@utility rounded-4xl { border-radius: var(--radius-4xl); }
+@utility rounded-5xl { border-radius: var(--radius-5xl); }
 @utility rounded-full { border-radius: 9999px; }
+
+/*
+ * Squircle — same API as rounded-* (sizes, sides, corners, logical, arbitrary).
+ * Use squircle-xl, squircle-t-3xl, squircle-tl-full, squircle-[18px], etc.
+ */
+@utility squircle {
+  border-radius: var(--radius);
+  corner-shape: squircle;
+}
+@utility squircle-* {
+  border-radius: --value(--radius-*, [length], [percentage]);
+  corner-shape: squircle;
+}
+
+@utility squircle-t {
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+  corner-top-left-shape: squircle;
+  corner-top-right-shape: squircle;
+}
+@utility squircle-t-* {
+  border-top-left-radius: --value(--radius-*, [length], [percentage]);
+  border-top-right-radius: --value(--radius-*, [length], [percentage]);
+  corner-top-left-shape: squircle;
+  corner-top-right-shape: squircle;
+}
+
+@utility squircle-b {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  corner-bottom-left-shape: squircle;
+  corner-bottom-right-shape: squircle;
+}
+@utility squircle-b-* {
+  border-bottom-left-radius: --value(--radius-*, [length], [percentage]);
+  border-bottom-right-radius: --value(--radius-*, [length], [percentage]);
+  corner-bottom-left-shape: squircle;
+  corner-bottom-right-shape: squircle;
+}
+
+@utility squircle-l {
+  border-top-left-radius: var(--radius);
+  border-bottom-left-radius: var(--radius);
+  corner-top-left-shape: squircle;
+  corner-bottom-left-shape: squircle;
+}
+@utility squircle-l-* {
+  border-top-left-radius: --value(--radius-*, [length], [percentage]);
+  border-bottom-left-radius: --value(--radius-*, [length], [percentage]);
+  corner-top-left-shape: squircle;
+  corner-bottom-left-shape: squircle;
+}
+
+@utility squircle-r {
+  border-top-right-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  corner-top-right-shape: squircle;
+  corner-bottom-right-shape: squircle;
+}
+@utility squircle-r-* {
+  border-top-right-radius: --value(--radius-*, [length], [percentage]);
+  border-bottom-right-radius: --value(--radius-*, [length], [percentage]);
+  corner-top-right-shape: squircle;
+  corner-bottom-right-shape: squircle;
+}
+
+@utility squircle-s {
+  border-start-start-radius: var(--radius);
+  border-end-start-radius: var(--radius);
+  corner-start-start-shape: squircle;
+  corner-end-start-shape: squircle;
+}
+@utility squircle-s-* {
+  border-start-start-radius: --value(--radius-*, [length], [percentage]);
+  border-end-start-radius: --value(--radius-*, [length], [percentage]);
+  corner-start-start-shape: squircle;
+  corner-end-start-shape: squircle;
+}
+
+@utility squircle-e {
+  border-start-end-radius: var(--radius);
+  border-end-end-radius: var(--radius);
+  corner-start-end-shape: squircle;
+  corner-end-end-shape: squircle;
+}
+@utility squircle-e-* {
+  border-start-end-radius: --value(--radius-*, [length], [percentage]);
+  border-end-end-radius: --value(--radius-*, [length], [percentage]);
+  corner-start-end-shape: squircle;
+  corner-end-end-shape: squircle;
+}
+
+@utility squircle-tl {
+  border-top-left-radius: var(--radius);
+  corner-top-left-shape: squircle;
+}
+@utility squircle-tl-* {
+  border-top-left-radius: --value(--radius-*, [length], [percentage]);
+  corner-top-left-shape: squircle;
+}
+
+@utility squircle-tr {
+  border-top-right-radius: var(--radius);
+  corner-top-right-shape: squircle;
+}
+@utility squircle-tr-* {
+  border-top-right-radius: --value(--radius-*, [length], [percentage]);
+  corner-top-right-shape: squircle;
+}
+
+@utility squircle-br {
+  border-bottom-right-radius: var(--radius);
+  corner-bottom-right-shape: squircle;
+}
+@utility squircle-br-* {
+  border-bottom-right-radius: --value(--radius-*, [length], [percentage]);
+  corner-bottom-right-shape: squircle;
+}
+
+@utility squircle-bl {
+  border-bottom-left-radius: var(--radius);
+  corner-bottom-left-shape: squircle;
+}
+@utility squircle-bl-* {
+  border-bottom-left-radius: --value(--radius-*, [length], [percentage]);
+  corner-bottom-left-shape: squircle;
+}
+
+@utility squircle-ss {
+  border-start-start-radius: var(--radius);
+  corner-start-start-shape: squircle;
+}
+@utility squircle-ss-* {
+  border-start-start-radius: --value(--radius-*, [length], [percentage]);
+  corner-start-start-shape: squircle;
+}
+
+@utility squircle-se {
+  border-start-end-radius: var(--radius);
+  corner-start-end-shape: squircle;
+}
+@utility squircle-se-* {
+  border-start-end-radius: --value(--radius-*, [length], [percentage]);
+  corner-start-end-shape: squircle;
+}
+
+@utility squircle-ee {
+  border-end-end-radius: var(--radius);
+  corner-end-end-shape: squircle;
+}
+@utility squircle-ee-* {
+  border-end-end-radius: --value(--radius-*, [length], [percentage]);
+  corner-end-end-shape: squircle;
+}
+
+@utility squircle-es {
+  border-end-start-radius: var(--radius);
+  corner-end-start-shape: squircle;
+}
+@utility squircle-es-* {
+  border-end-start-radius: --value(--radius-*, [length], [percentage]);
+  corner-end-start-shape: squircle;
+}
 
 /*
  * Design-token spacing utilities (named so they do not collide with max-w-sm etc.)
@@ -743,6 +923,10 @@ body[data-resizing] .xterm {
   -webkit-app-region: drag;
   app-region: drag;
 }
+[data-tauri-drag-region] input,
+[data-tauri-drag-region] textarea,
+[data-tauri-drag-region] select,
+[data-tauri-drag-region] [role="switch"],
 [data-no-drag],
 [data-tauri-drag-region] button,
 [data-tauri-drag-region] a,
@@ -933,22 +1117,34 @@ body[data-resizing] .xterm {
 
 /* ── Chat tab bar (sidebar) ── */
 .chat-tab-bar {
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 .chat-tab-scroll {
   overflow-x: auto;
-  overflow-block: clip;
+  scrollbar-width: none !important;
+}
+
+.chat-tab-scroll::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* ── Workbench tab bar ── */
 .workbench-tab-bar {
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 .workbench-tab-scroll {
   overflow-x: auto;
-  overflow-block: clip;
+  scrollbar-width: none !important;
+}
+
+.workbench-tab-scroll::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* ── Floating workbench panels ───────────────────────────── */
@@ -1085,6 +1281,32 @@ body[data-resizing] .xterm {
     opacity: 1;
     transform: translateY(-0.2rem);
   }
+}
+
+.dropdown-search-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: color-mix(in srgb, var(--surface-4) 94%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.dropdown-search-sticky::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 20px;
+  pointer-events: none;
+  z-index: 6;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--surface-4) 88%, transparent) 0%,
+    color-mix(in srgb, var(--surface-4) 40%, transparent) 45%,
+    transparent 100%
+  );
 }
 
 /* Send-button spiral loader (CSS port of Spiral; ease matches bubble dots) */

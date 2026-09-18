@@ -263,23 +263,16 @@ impl AgentState {
         }
     }
 
-    /// Prefer OpenRouter key, then OpenAI. `None` → use Shape proxy + session token.
-    pub fn byok_provider(&self) -> Option<crate::agent::commands::streaming::LlmProvider> {
-        if let Ok(g) = self.byok_openrouter_key.lock() {
-            if let Some(key) = g.as_ref().filter(|k| !k.is_empty()) {
-                return Some(crate::agent::commands::streaming::LlmProvider::OpenRouter {
-                    api_key: key.clone(),
-                });
-            }
-        }
-        if let Ok(g) = self.byok_openai_key.lock() {
-            if let Some(key) = g.as_ref().filter(|k| !k.is_empty()) {
-                return Some(crate::agent::commands::streaming::LlmProvider::OpenAi {
-                    api_key: key.clone(),
-                });
-            }
-        }
-        None
+    /// Prefer a key that matches the model. OpenAI ids hit api.openai.com when that
+    /// key is set. Auto uses OpenRouter if present, otherwise OpenAI.
+    pub fn byok_provider_for_model(&self, model: &str) -> Option<crate::agent::commands::streaming::LlmProvider> {
+        let openrouter = self.byok_openrouter_key.lock().ok().and_then(|g| g.clone());
+        let openai = self.byok_openai_key.lock().ok().and_then(|g| g.clone());
+        crate::agent::commands::streaming::select_byok_provider(
+            openrouter.as_deref(),
+            openai.as_deref(),
+            model,
+        )
     }
 
     /// Atomically claim the in-flight slot. Returns false if a turn is already running.

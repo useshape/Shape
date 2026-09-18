@@ -21,18 +21,18 @@ export type ButtonStatus = "idle" | "loading" | "waiting" | "error";
 
 const variantClasses: Record<ButtonVariant, string> = {
     default:
-        "bg-accent text-accent-fg hover:bg-accent-hover active:bg-accent-hover/90 aria-disabled:bg-accent/50 aria-disabled:text-accent-fg disabled:bg-accent/50 disabled:text-accent-fg",
+        "bg-accent text-accent-fg hover:bg-accent-hover aria-disabled:bg-accent/50 aria-disabled:text-accent-fg disabled:bg-accent/50 disabled:text-accent-fg",
     confirm:
-        "bg-accent text-accent-fg hover:bg-accent-hover active:bg-accent-hover/90 aria-disabled:bg-accent/50 aria-disabled:text-accent-fg disabled:bg-accent/50 disabled:text-accent-fg",
+        "bg-accent text-accent-fg hover:bg-accent-hover aria-disabled:bg-accent/50 aria-disabled:text-accent-fg disabled:bg-accent/50 disabled:text-accent-fg",
     secondary:
-        "bg-surface-3 text-text-secondary hover:bg-surface-4 hover:text-text-primary active:bg-panel-active aria-disabled:bg-surface-3 aria-disabled:text-text-disabled disabled:bg-surface-3 disabled:text-text-disabled",
-    ghost: "bg-transparent text-text-secondary hover:bg-panel-hover hover:text-text-primary active:bg-panel-active aria-disabled:bg-transparent aria-disabled:text-text-disabled disabled:bg-transparent disabled:text-text-disabled",
+        "bg-surface-3 text-text-secondary hover:bg-surface-4 hover:text-text-primary aria-disabled:bg-surface-3 aria-disabled:text-text-disabled disabled:bg-surface-3 disabled:text-text-disabled",
+    ghost: "bg-transparent text-text-secondary hover:bg-panel-hover hover:text-text-primary aria-disabled:bg-transparent aria-disabled:text-text-disabled disabled:bg-transparent disabled:text-text-disabled",
     outline:
-        "border border-input-border bg-transparent text-text-primary hover:bg-panel-hover active:bg-panel-active aria-disabled:border-border-subtle aria-disabled:text-text-disabled disabled:border-border-subtle disabled:text-text-disabled",
+        "border border-input-border bg-transparent text-text-primary hover:bg-panel-hover aria-disabled:border-border-subtle aria-disabled:text-text-disabled disabled:border-border-subtle disabled:text-text-disabled",
     destructive:
-        "bg-error text-white hover:bg-error/90 active:bg-error/80 aria-disabled:bg-error/50 aria-disabled:text-white disabled:bg-error/50 disabled:text-white",
-    danger: "bg-error text-white hover:bg-error/90 active:bg-error/80 aria-disabled:bg-error/50 aria-disabled:text-white disabled:bg-error/50 disabled:text-white",
-    link: "bg-transparent px-0 text-accent underline-offset-2 hover:underline hover:text-accent-hover active:text-accent-hover aria-disabled:text-text-disabled disabled:text-text-disabled",
+        "bg-error text-white hover:bg-error/90 aria-disabled:bg-error/50 aria-disabled:text-white disabled:bg-error/50 disabled:text-white",
+    danger: "bg-error text-white hover:bg-error/90 aria-disabled:bg-error/50 aria-disabled:text-white disabled:bg-error/50 disabled:text-white",
+    link: "bg-transparent px-0 text-accent underline-offset-2 hover:underline hover:text-accent-hover aria-disabled:text-text-disabled disabled:text-text-disabled",
 };
 
 const tertiaryOverride: Partial<Record<ButtonVariant, string>> = {
@@ -44,11 +44,11 @@ const tertiaryOverride: Partial<Record<ButtonVariant, string>> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-    xs: "h-7 min-h-7 px-2.5 text-xs rounded-md",
-    sm: "h-7.5 min-h-7.5 px-3 text-sm rounded-md",
-    md: "h-9 min-h-8 px-3.5 text-sm rounded-lg",
-    lg: "h-10 min-h-10 px-4 text-base rounded-lg",
-    icon: "size-7 min-h-7 min-w-7 shrink-0 overflow-visible p-0 rounded-md",
+    xs: "h-7 min-h-7 px-2.5 text-xs squircle-2xl",
+    sm: "h-7.5 min-h-7.5 px-3 text-sm squircle-2xl",
+    md: "h-9 min-h-8 px-3.5 text-sm squircle-2xl",
+    lg: "h-10 min-h-10 px-4 text-base squircle-3xl",
+    icon: "size-7 min-h-7 min-w-7 shrink-0 overflow-visible p-0 squircle-4xl",
 };
 
 const selectedClasses =
@@ -62,7 +62,6 @@ const spinnerClass: Record<ButtonSize, string> = {
     icon: "imsg-typing imsg-typing-sm",
 };
 
-/** Same three-dot indicator as an AI message while generating. */
 export function ButtonSpinner({
     className,
     size = "md",
@@ -97,22 +96,15 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
     variant?: ButtonVariant;
     category?: ButtonCategory;
     size?: ButtonSize;
-    /** Visual / busy state. `loading` and `waiting` show the AI-message typing dots. */
     status?: ButtonStatus;
-    /** GitLab-style spinner; keeps the control focusable. */
     loading?: boolean;
     selected?: boolean;
     block?: boolean;
     icon?: RemixiconComponentType;
     count?: number;
     countSrText?: string;
-    /** Render a non-interactive span styled as a button (button-group labels). */
     label?: boolean;
     href?: string;
-    /**
-     * Keep the button in tab order while inactive (`aria-disabled`).
-     * Default true, matching Pajamas. Set false for native `disabled`.
-     */
     accessibleDisabled?: boolean;
 }
 
@@ -138,6 +130,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             children,
             onClick,
             onKeyDown,
+            onKeyUp,
+            onPointerDown,
+            onPointerUp,
+            onPointerCancel,
+            onPointerLeave,
             "aria-pressed": ariaPressed,
             ...props
         },
@@ -150,10 +147,18 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         const iconOnly = Boolean(icon) && children == null;
         const useNativeDisabled = inactive && !accessibleDisabled && !href && !label;
         const ariaDisabled = inactive && !useNativeDisabled;
+        const [pressed, setPressed] = React.useState(false);
+
+        const endPress = React.useCallback(() => setPressed(false), []);
+        const startPress = React.useCallback(() => {
+            if (inactive || label) return;
+            setPressed(true);
+        }, [inactive, label]);
 
         const classes = cn(
             "relative inline-flex items-center justify-center gap-1.5 font-medium outline-none select-none",
-            "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+            "touch-manipulation [-webkit-tap-highlight-color:transparent]",
+            "transition-[color,background-color,border-color,opacity] duration-150 ease-out",
             "focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
             "[&_svg.shape-icon]:pointer-events-none [&_svg.shape-icon]:shrink-0",
             variantClasses[resolvedVariant],
@@ -167,7 +172,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             className,
         );
 
-        const content = aiBusy ? (
+        const face = aiBusy ? (
             <>
                 <span className="invisible inline-flex items-center justify-center gap-1.5">
                     {icon ? <Icon icon={icon} size={ICON_SIZE_SM} /> : null}
@@ -191,12 +196,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             </>
         );
 
-        const shared = {
-            className: classes,
-            "aria-busy": loading || aiBusy || undefined,
-            "aria-pressed": selected ? true : ariaPressed,
-            "aria-disabled": ariaDisabled || undefined,
-        };
+        const content = (
+            <span
+                className={cn(
+                    "pointer-events-none inline-flex h-full w-full items-center justify-center gap-1.5",
+                    "[transition:transform_160ms_cubic-bezier(0.32,0.72,0,1)]",
+                    pressed && !inactive ? "scale-[0.96]" : "scale-100",
+                )}
+            >
+                {face}
+            </span>
+        );
 
         const guardActivation = (event: React.SyntheticEvent) => {
             if (!inactive) return false;
@@ -219,7 +229,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                     ref={ref as React.Ref<HTMLAnchorElement>}
                     href={ariaDisabled ? undefined : href}
                     className={classes}
-                    aria-busy={shared["aria-busy"]}
+                    aria-busy={loading || aiBusy || undefined}
                     aria-disabled={ariaDisabled || undefined}
                     role={href === "#" ? "button" : undefined}
                     tabIndex={ariaDisabled ? -1 : 0}
@@ -227,6 +237,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                         if (guardActivation(e)) return;
                         onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                     }}
+                    onPointerDown={(e) => {
+                        if (e.button === 0) startPress();
+                    }}
+                    onPointerUp={endPress}
+                    onPointerCancel={endPress}
+                    onPointerLeave={endPress}
                 >
                     {content}
                 </a>
@@ -240,19 +256,40 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 disabled={useNativeDisabled || undefined}
                 {...props}
                 className={classes}
-                aria-busy={shared["aria-busy"]}
-                aria-pressed={shared["aria-pressed"]}
+                aria-busy={loading || aiBusy || undefined}
+                aria-pressed={selected ? true : ariaPressed}
                 aria-disabled={ariaDisabled || undefined}
                 onClick={(e) => {
                     if (guardActivation(e)) return;
                     onClick?.(e);
+                }}
+                onPointerDown={(e) => {
+                    onPointerDown?.(e);
+                    if (e.button === 0) startPress();
+                }}
+                onPointerUp={(e) => {
+                    onPointerUp?.(e);
+                    endPress();
+                }}
+                onPointerCancel={(e) => {
+                    onPointerCancel?.(e);
+                    endPress();
+                }}
+                onPointerLeave={(e) => {
+                    onPointerLeave?.(e);
+                    endPress();
                 }}
                 onKeyDown={(e) => {
                     if (inactive && (e.key === "Enter" || e.key === " ")) {
                         e.preventDefault();
                         return;
                     }
+                    if (!inactive && (e.key === "Enter" || e.key === " ")) startPress();
                     onKeyDown?.(e);
+                }}
+                onKeyUp={(e) => {
+                    if (e.key === "Enter" || e.key === " ") endPress();
+                    onKeyUp?.(e);
                 }}
             >
                 {content}
