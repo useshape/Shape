@@ -8,6 +8,7 @@ export function ActionLine({
     action,
     detail,
     extra,
+    icon,
     onClick,
     className,
     title,
@@ -15,6 +16,7 @@ export function ActionLine({
     action: string;
     detail?: ReactNode;
     extra?: ReactNode;
+    icon?: ReactNode;
     onClick?: () => void;
     className?: string;
     title?: string;
@@ -32,6 +34,7 @@ export function ActionLine({
                 className,
             )}
         >
+            {icon}
             <span className="min-w-0 truncate">
                 {action}
                 {detail ? (

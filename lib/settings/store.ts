@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { normalizeColorTheme, type ColorThemeId } from "@/lib/themes";
+import type { AgentWorkflow } from "@/lib/chat/workflows";
 
 export type WordWrapSetting = "off" | "on" | "bounded";
 export type AutoSaveSetting = "off" | "afterDelay" | "onFocusChange";
@@ -88,6 +89,8 @@ export interface ShapeSettings {
         customRules: string;
         mcpServers: McpServerConfig[];
         reviewAdversarialEnabled: boolean;
+        /** Trigger phrase → prompt (+ optional plugin tool) injected on send. */
+        workflows: AgentWorkflow[];
         /** Compact one-row composer chrome in ongoing chats. */
         compactComposer: boolean;
         /** Terminal command approval mode (Cursor-style run modes). */
@@ -253,6 +256,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         customRules: "",
         mcpServers: [],
         reviewAdversarialEnabled: true,
+        workflows: [],
         compactComposer: false,
         autoRunMode: "auto",
         requireEditApproval: false,
@@ -386,6 +390,7 @@ function mergeAiSettings(
     merged.pluginApprovalDefault = patch?.pluginApprovalDefault
         ?? base?.pluginApprovalDefault
         ?? DEFAULT_SETTINGS.ai.pluginApprovalDefault;
+    merged.workflows = patch?.workflows ?? base?.workflows ?? DEFAULT_SETTINGS.ai.workflows;
     // Legacy "System Instructions" fold into Rules — one concept for user guidance.
     const legacy = merged.customSystemPrompt?.trim();
     if (legacy) {
@@ -563,14 +568,6 @@ function persist() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSettings));
     } catch { /* ignore */ }
-    syncByokKeys();
-}
-
-function syncByokKeys() {
-    const { openRouterApiKey, openaiApiKey } = currentSettings.ai;
-    void import("@/lib/backend").then(({ commands }) => {
-        commands.setByokKeys(openRouterApiKey || null, openaiApiKey || null).catch(() => {});
-    });
 }
 
 export async function initSettings(): Promise<void> {
@@ -602,19 +599,11 @@ export async function initSettings(): Promise<void> {
         commands.setChatMemoryEnabled(currentSettings.ai.chatMemoryEnabled).catch(() => {
             /* desktop bridge may not be ready yet */
         });
-        commands
-            .setByokKeys(
-                currentSettings.ai.openRouterApiKey || null,
-                currentSettings.ai.openaiApiKey || null,
-            )
-            .catch(() => {
-                /* desktop bridge may not be ready yet */
-            });
     });
 }
 
-export function hasByokApiKeys(ai: ShapeSettings["ai"] = getSettings().ai): boolean {
-    return Boolean(ai.openRouterApiKey?.trim() || ai.openaiApiKey?.trim());
+export function hasByokApiKeys(_ai?: ShapeSettings["ai"]): boolean {
+    return false;
 }
 
 export function getSettings(): ShapeSettings {

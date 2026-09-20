@@ -98,16 +98,10 @@ pub async fn generate_commit_message(
     app_state: tauri::State<'_, AppState>,
     agent_state: tauri::State<'_, AgentState>,
 ) -> Result<String, AppError> {
-    let provider = agent_state
-        .byok_provider_for_model("auto")
-        .unwrap_or(streaming::LlmProvider::Shape);
-    let auth_token = match &provider {
-        streaming::LlmProvider::Shape => access_token
-            .filter(|t| !t.trim().is_empty())
-            .ok_or_else(|| AppError::Env("Sign in to Shape to use AI chat.".to_string()))?,
-        streaming::LlmProvider::OpenRouter { api_key }
-        | streaming::LlmProvider::OpenAi { api_key } => api_key.clone(),
-    };
+    let provider = streaming::LlmProvider::Shape;
+    let auth_token = access_token
+        .filter(|t| !t.trim().is_empty())
+        .ok_or_else(|| AppError::Env("Sign in to Shape to use AI chat.".to_string()))?;
     let client = Client::new();
     let model = "auto";
 

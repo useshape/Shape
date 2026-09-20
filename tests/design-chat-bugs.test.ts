@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseShapeContinueAction } from "@/lib/shape-continue-action";
+import { parseShapeContinueAction } from "@/lib/chat/continue-action";
 import { parseMessageContent } from "@/features/chat/ui/md/renderer";
 
 describe("parseShapeContinueAction", () => {

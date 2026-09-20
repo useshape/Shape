@@ -25,18 +25,18 @@ import {
     syncProposedEditsFromMessages,
     groupChatMessages,
 } from "./chat-session-utils";
-import { getSettings, hasByokApiKeys } from "@/lib/settings";
-import { getVisibleModels, resolveChatModels } from "@/lib/models";
-import { getCatalogModels } from "@/lib/catalog-store";
+import { getSettings } from "@/lib/settings";
+import { getVisibleModels, resolveChatModels } from "@/lib/chat/models";
+import { getCatalogModels } from "@/lib/catalog/store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
-import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat-mentions";
-import { buildPlanBuildMessage } from "@/lib/shape-continue-action";
-import { isolatePlanBranch } from "@/lib/plan-branch";
-import { loadProjectRules } from "@/lib/project-rules";
-import { isWorkspaceTrusted } from "@/lib/workspace-trust";
+import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat/mentions";
+import { buildPlanBuildMessage } from "@/lib/chat/continue-action";
+import { isolatePlanBranch } from "@/lib/plan/branch";
+import { loadProjectRules } from "@/lib/workspace/rules";
+import { isWorkspaceTrusted } from "@/lib/workspace/trust";
 import { clearAllDesignPreviewSessions } from "@/lib/agent-preview/store";
 import {
     createPendingAttachment,
@@ -775,10 +775,8 @@ export function useChatSession() {
         appendUserOptimistic(userMsg);
 
         try {
-            if ((!shapeAuth.loggedIn || !shapeAuth.accessToken) && !hasByokApiKeys()) {
-                setSendError(
-                    "Sign in to Shape, or add an OpenRouter / OpenAI API key in Settings → AI.",
-                );
+            if (!shapeAuth.loggedIn || !shapeAuth.accessToken) {
+                setSendError("Sign in to Shape to chat.");
                 setMessages((prev) => {
                     const last = prev[prev.length - 1];
                     if (last?.role === "assistant" && !last.content.trim()) {
@@ -790,12 +788,6 @@ export function useChatSession() {
             }
 
             const token = shapeAuth.accessToken ?? undefined;
-            const ai = getSettings().ai;
-            const byok = {
-                openRouterApiKey: ai.openRouterApiKey.trim() || null,
-                openaiApiKey: ai.openaiApiKey.trim() || null,
-            };
-            await commands.setByokKeys(byok.openRouterApiKey, byok.openaiApiKey).catch(() => {});
             const attachmentBlocks: string[] = [];
 
             for (const att of uploadedFiles) {
@@ -911,15 +903,18 @@ export function useChatSession() {
                 ? await loadProjectRules(project_path ?? null)
                 : "";
             const mergedRules = [settings.ai.customRules, projectRules].filter(Boolean).join("\n\n") || undefined;
+            const { applyWorkflows, matchWorkflows, workflowAllowKeys } = await import("@/lib/chat/workflows");
+            const messageWithWorkflows = applyWorkflows(expandedMessage, settings.ai.workflows);
+            const pluginAutoAllow = matchWorkflows(userMsg, settings.ai.workflows).flatMap(workflowAllowKeys);
 
             await commands.sendChatMessage(
-                expandedMessage,
+                messageWithWorkflows,
                 selectedModel,
                 selectedMode,
                 mergedRules,
                 token,
                 undefined,
-                selectedMode === "Review" ? settings.ai.reviewAdversarialEnabled : undefined,
+                settings.ai.reviewAdversarialEnabled,
                 {
                     autoRunMode: settings.ai.autoRunMode,
                     requireEditApproval: settings.ai.requireEditApproval,
@@ -927,10 +922,12 @@ export function useChatSession() {
                     pluginApprovalDefault: settings.ai.pluginApprovalDefault ?? "ask",
                     pluginApprovals: settings.ai.pluginApprovals,
                     pluginDisabledActions: settings.ai.pluginDisabledActions,
+                    pluginAutoAllow,
                 },
                 reasoningEffort,
                 fastMode ? "priority" : null,
-                byok,
+                undefined,
+                userMsg,
             );
             await refreshMetadata();
             return true;
@@ -1165,8 +1162,8 @@ export function useChatSession() {
     React.useEffect(() => {
         const ai = getSettings().ai;
         const keyed = resolveChatModels(getCatalogModels(), {
-            openaiKey: Boolean(ai.openaiApiKey.trim()),
-            openRouterKey: Boolean(ai.openRouterApiKey.trim()),
+            openaiKey: false,
+            openRouterKey: false,
             signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
         });
         const visible = getVisibleModels(keyed, ai.enabledModels);

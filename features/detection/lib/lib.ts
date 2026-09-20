@@ -1,6 +1,6 @@
 import { commands } from "@/lib/backend";
-import type { PackageManager } from "@/lib/package-manager";
-import { resolvePackageManager } from "@/lib/package-manager";
+import type { PackageManager } from "@/lib/workspace/package-manager";
+import { resolvePackageManager } from "@/lib/workspace/package-manager";
 
 const WEB_MARKERS = [
     "package.json",

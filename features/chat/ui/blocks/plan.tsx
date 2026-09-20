@@ -6,11 +6,11 @@ import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
-import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan-preview";
+import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan/preview";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Collapse } from "./collapse";
-import { ShimmerText } from "@/components/application/agent-log/agent-log";
+import { ShimmerText } from "@/components/ui/shimmer-text";
 
 type PlanStep = {
     label: string;

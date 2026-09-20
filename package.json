@@ -94,10 +94,12 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
+    "recast": "^0.24.0",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "sucrase": "^3.35.1",
     "tailwind-merge": "^3.4.1",
+    "transform-to-tailwindcss-core": "^0.0.43",
     "typescript": "^6.0.3"
   },
   "devDependencies": {

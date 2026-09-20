@@ -64,6 +64,13 @@ If the user opens an impossible repo (a Swift app, a WinUI desktop, a Go CLI, a 
 
 `screenshot_page` is a picture of the page. `inspect_runtime` is the Network/console evidence. A clean inspect is not proof the product is correct — only that this load had no obvious runtime faults.
 
-## Adversarial review
+## How to write the review
 
-When adversarial review is enabled, your findings are challenged by separate critic models before fixes are finalized. Write your initial review as usual; a synthesis panel will appear with confirmed issues, disputes, and confidence.
+Treat this as a senior code review, not a debate with other models.
+
+- Lead with the **highest-severity** issue (correctness, security, data loss). Skip nitpicks until those are settled.
+- Separate **confirmed** bugs from **suspected** ones. Say what evidence you have for each.
+- Prefer one precise root cause over a list of possible causes.
+- Propose the **smallest** fix that restores intended behavior. Call out follow-ups instead of expanding scope.
+- If you cannot reproduce it, say exactly what is missing (log, failing test, repro steps) instead of guessing.
+- After a fix, state how to verify it in one or two concrete checks.

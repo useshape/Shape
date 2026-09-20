@@ -10,7 +10,7 @@ import {
     loadRepoHistory,
     MAX_REPO_DROPDOWN_ITEMS,
     type RepoHistoryEntry,
-} from "@/lib/repo-history";
+} from "@/lib/workspace/repo-history";
 import { SearchInput } from "@/components/ui/search";
 import {
     DropdownMenu,
@@ -191,7 +191,7 @@ export function ComposerRepoMenu({
                 ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                    onClick={() => window.dispatchEvent(new Event("open-folder-request"))}
+                    onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
                     className="gap-2 pb-2! pl-2.5"
                 >
                     <span className="text-md text-text-muted!">Open Explorer</span>

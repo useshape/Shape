@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pathToFileUri } from "@/lib/path-uri";
+import { pathToFileUri } from "@/lib/path/uri";
 
 describe("pathToFileUri", () => {
     it("converts windows paths", () => {

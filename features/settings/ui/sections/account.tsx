@@ -12,7 +12,7 @@ import {
     refreshShapeAuth,
     useShapeAuth,
 } from "@/lib/cloud/store";
-import { requestShapeLogin } from "@/features/workbench/ui/login-prompt-dialog";
+import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend";
 import { cn } from "@/lib/utils";

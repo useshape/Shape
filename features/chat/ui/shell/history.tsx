@@ -15,7 +15,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { SidebarPanelActionButton } from "@/features/panels";
 import { commands } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
-import { toTimestampMs } from "@/lib/timestamp";
+import { toTimestampMs } from "@/lib/ui/timestamp";
 import { cn } from "@/lib/utils";
 
 export const CHAT_HISTORY_OPEN_EVENT = "shape-chat-open-history";

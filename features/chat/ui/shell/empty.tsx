@@ -1,7 +1,7 @@
 "use client";
 
 import { useProjectState } from "@/lib/backend";
-import { getRepoName } from "@/lib/repo-history";
+import { getRepoName } from "@/lib/workspace/repo-history";
 import { ComposerRepoMenu } from "../composer/context-bar";
 
 export function ChatEmptyState({

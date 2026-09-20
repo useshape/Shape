@@ -75,6 +75,17 @@ export function isLocalPreviewUrl(raw: string): boolean {
     }
 }
 
+export function isBrowserUrl(raw: string): boolean {
+    const s = raw.trim();
+    if (!s || /^(javascript|data|file|ftp):/i.test(s)) return false;
+    try {
+        const u = new URL(normalizePreviewUrl(s));
+        return u.protocol === "http:" || u.protocol === "https:";
+    } catch {
+        return false;
+    }
+}
+
 /** Normalize typed input into an absolute local URL; rewrite 0.0.0.0 → localhost. */
 export function normalizePreviewUrl(raw: string): string {
     let s = raw.trim();
@@ -153,7 +164,7 @@ function commitNavigation(url: string, opts?: { replace?: boolean; reload?: bool
         history,
         index,
         iframeSrc: url,
-        reloadKey: reload ? state.reloadKey + 1 : state.reloadKey + 1,
+        reloadKey: reload ? state.reloadKey + 1 : state.reloadKey,
         loading: false,
         error: null,
         urlBar: url,
@@ -185,9 +196,9 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
         });
         return;
     }
-    if (!isLocalPreviewUrl(url)) {
+    if (!isBrowserUrl(url)) {
         setState({
-            error: "ERR_CONNECTION_REFUSED",
+            error: "Enter a valid http or https URL.",
             urlBar: raw.trim() || state.urlBar,
             iframeSrc: null,
             loading: false,
@@ -195,22 +206,23 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
         return;
     }
 
-    setState({ loading: true, urlBar: url, iframeSrc: null });
+    setState({ loading: true, urlBar: url });
 
-    const reachable = await probePreviewReachable(url);
-    if (!reachable) {
-        setState({
-            loading: false,
-            iframeSrc: null,
-            error: "ERR_CONNECTION_REFUSED",
-            urlBar: url,
-            history: state.history,
-            index: state.index,
-        });
-        return;
+    if (isLocalPreviewUrl(url)) {
+        const reachable = await probePreviewReachable(url);
+        if (!reachable) {
+            setState({
+                loading: false,
+                error: "ERR_CONNECTION_REFUSED",
+                urlBar: url,
+                history: state.history,
+                index: state.index,
+            });
+            return;
+        }
     }
 
-    commitNavigation(url, { replace: opts?.replace, reload: true });
+    commitNavigation(url, { replace: opts?.replace, reload: false });
 }
 
 export function previewBack() {
@@ -223,7 +235,6 @@ export function previewBack() {
         index,
         iframeSrc: url,
         urlBar: url,
-        reloadKey: state.reloadKey + 1,
         loading: false,
         error: null,
     });
@@ -243,7 +254,6 @@ export function previewForward() {
         index,
         iframeSrc: url,
         urlBar: url,
-        reloadKey: state.reloadKey + 1,
         loading: false,
         error: null,
     });
@@ -265,7 +275,7 @@ export function recordPreviewLocation(raw: string) {
     } catch {
         return;
     }
-    if (!isLocalPreviewUrl(url)) return;
+    if (!isBrowserUrl(url)) return;
 
     if (applyingStackNav) {
         // Keep the flag until we land on the intended URL (or close enough).
@@ -379,7 +389,7 @@ export function ensurePreviewLoaded() {
 }
 
 export function openPreviewPanel(url?: string) {
-    void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
+    void import("@/lib/window/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
     if (url) {
         void navigatePreview(url);
     } else {

@@ -101,6 +101,16 @@ pub fn create_file(path: &str, content: &str, project_path: &str) -> Result<Stri
     Ok(format!("Created file {}", path))
 }
 
+/// Write raw bytes (images, SVGs from attachments or generated URLs).
+pub fn write_bytes(path: &str, bytes: &[u8], project_path: &str) -> Result<String, AppError> {
+    let target = paths::validate_write_path(path, project_path)?;
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(AppError::Io)?;
+    }
+    fs::write(&target, bytes).map_err(AppError::Io)?;
+    Ok(format!("Wrote {} ({} bytes)", path, bytes.len()))
+}
+
 /// Delete a single file. Directories cannot be deleted by the AI.
 /// Validated against the project root and sensitive file checks.
 pub fn delete_file(path: &str, project_path: &str) -> Result<String, AppError> {

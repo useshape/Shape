@@ -11,7 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { resolveProjectFilePath } from "@/lib/path-utils";
+import { resolveProjectFilePath } from "@/lib/path/utils";
 import { getProjectPath } from "@/lib/backend";
 import { Tooltip } from "@/components/ui/tooltip";
 

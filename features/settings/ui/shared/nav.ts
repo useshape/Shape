@@ -9,10 +9,10 @@ import {
     RiNotification3Line,
     RiPaletteLine,
     RiApps2Line,
-    RiPlugLine,
     RiSettings3Line,
     RiShieldLine,
     RiSparkling2Line,
+    RiFlowChart,
     RiStackLine,
     RiTerminalBoxLine,
     RiUserLine,
@@ -50,9 +50,9 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         children: [
             { id: "ai-models", label: "Models", icon: RiSparkling2Line, targetId: "settings-ai-models" },
             { id: "ai-rules", label: "Instructions", icon: RiFileTextLine, targetId: "settings-ai-rules" },
+            { id: "ai-workflows", label: "Workflows", icon: RiFlowChart, targetId: "settings-ai-workflows" },
             { id: "ai-context", label: "Context", icon: RiStackLine, targetId: "settings-ai-context" },
             { id: "plugins", label: "Plugins", icon: RiApps2Line, targetId: "settings-ai-plugins" },
-            { id: "mcp", label: "MCP", icon: RiPlugLine, targetId: "settings-ai-mcp" },
         ],
     },
     {
@@ -122,7 +122,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         id: "agents",
         label: "Agents",
         icon: RiSparkling2Line,
-        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context"],
+        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context", "workflows", "commands"],
     },
     {
         id: "editor",

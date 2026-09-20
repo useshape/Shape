@@ -11,22 +11,25 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { commands, useProjectState } from "@/lib/backend";
-import { useGitBranch } from "@/features/workbench/hooks/use-git-branch";
+import { useGitRepos } from "@/lib/git/repos";
+import { useGitBranch } from "@/features/agent/workbench/hooks/use-git-branch";
 
 const MAX_VISIBLE = 40;
 
 export function WorkspaceBranchSwitch() {
     const { project_path } = useProjectState();
-    const branch = useGitBranch(project_path);
+    const { scmRepoPath } = useGitRepos(project_path);
+    const repoPath = scmRepoPath ?? project_path;
+    const branch = useGitBranch(repoPath);
     const [branches, setBranches] = useState<string[]>([]);
     const [query, setQuery] = useState("");
     const [menuOpen, setMenuOpen] = useState(false);
 
     useEffect(() => {
-        if (!project_path || !menuOpen) return;
+        if (!repoPath) return;
         let cancelled = false;
         void commands
-            .gitBranches(project_path)
+            .gitBranches(repoPath)
             .then((list) => {
                 if (!cancelled) setBranches(list);
             })
@@ -36,7 +39,7 @@ export function WorkspaceBranchSwitch() {
         return () => {
             cancelled = true;
         };
-    }, [project_path, menuOpen]);
+    }, [repoPath, menuOpen]);
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -49,9 +52,9 @@ export function WorkspaceBranchSwitch() {
         : branches.length) - filtered.length);
 
     const switchTo = (name: string) => {
-        if (!project_path) return;
+        if (!repoPath) return;
         void commands
-            .gitSwitchBranch(project_path, name)
+            .gitSwitchBranch(repoPath, name)
             .then(() => {
                 window.dispatchEvent(new Event("shape-git-refresh"));
             })
@@ -67,10 +70,10 @@ export function WorkspaceBranchSwitch() {
                 if (!open) setQuery("");
             }}
         >
-            <DropdownMenuTrigger asChild disabled={!project_path}>
+            <DropdownMenuTrigger asChild disabled={!repoPath}>
                 <button
                     type="button"
-                    disabled={!project_path}
+                    disabled={!repoPath}
                     className="inline-flex max-w-40 items-center gap-1 rounded-md px-1.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled"
                 >
                     <Icon icon={RiGitBranchLine} className="shrink-0" size={ICON_SIZE_SM} />
@@ -80,6 +83,7 @@ export function WorkspaceBranchSwitch() {
             <DropdownMenuContent align="end" className="w-64 p-0">
                 <SearchInput
                     borderless
+                    stickyFade
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search branches"

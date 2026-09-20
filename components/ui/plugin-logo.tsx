@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { useSettings } from "@/lib/settings";
-import { isShapePluginMeta, pluginLetter, pluginLogoCandidates } from "@/lib/plugin-logos";
+import { isShapePluginMeta, pluginLogoCandidates } from "@/lib/plugins/logos";
 import { cn } from "@/lib/utils";
 
 export function PluginLogo({
@@ -28,19 +28,7 @@ export function PluginLogo({
     }
     const candidates = pluginLogoCandidates(toolkit, dark, logo);
     const src = candidates[failedAt] ?? null;
-    if (!src) {
-        return (
-            <div
-                className={cn(
-                    "flex shrink-0 items-center justify-center rounded-lg bg-accent/15 text-sm font-medium text-text-primary",
-                    className,
-                )}
-                style={{ width: size, height: size }}
-            >
-                {pluginLetter(name)}
-            </div>
-        );
-    }
+    if (!src) return null;
     return (
         // eslint-disable-next-line @next/next/no-img-element
         <img

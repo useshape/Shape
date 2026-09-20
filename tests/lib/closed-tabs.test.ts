@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { rememberClosedTab, reopenLastClosed } from "@/lib/closed-tabs";
+import { rememberClosedTab, reopenLastClosed } from "@/lib/workspace/closed-tabs";
 
 vi.mock("@/lib/backend/commands", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/backend/commands")>();

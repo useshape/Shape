@@ -2,7 +2,6 @@
 use crate::agent::context::{
     build_context_breakdown, build_context_with_options, context_options_for_query,
 };
-use super::adversarial_review;
 use super::history;
 use super::journals;
 use super::logging;
@@ -46,9 +45,13 @@ pub async fn send_chat_message(
     plugin_approval_default: Option<String>,
     plugin_approvals: Option<HashMap<String, String>>,
     plugin_disabled_actions: Option<HashMap<String, Vec<String>>>,
+    plugin_auto_allow: Option<Vec<String>>,
+    display_message: Option<String>,
     reasoning_effort: Option<String>,
     service_tier: Option<String>,
+    #[allow(unused_variables)]
     openrouter_api_key: Option<String>,
+    #[allow(unused_variables)]
     openai_api_key: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
@@ -57,25 +60,14 @@ pub async fn send_chat_message(
     pty_state: tauri::State<'_, PtyState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    if openrouter_api_key.is_some() || openai_api_key.is_some() {
-        state.set_byok_keys(openrouter_api_key, openai_api_key);
-    }
+    let review_adversarial_on = review_adversarial_enabled.unwrap_or(false);
     let raw_model = model
         .filter(|m| !m.trim().is_empty())
         .unwrap_or_else(|| MODEL_DEFAULT.to_string());
-    let llm_provider = state
-        .byok_provider_for_model(&raw_model)
-        .unwrap_or(streaming::LlmProvider::Shape);
-    let auth_token = match &llm_provider {
-        streaming::LlmProvider::Shape => access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
-            AppError::Env(
-                "Sign in to Shape to use AI chat, or add an OpenRouter / OpenAI API key in Settings."
-                    .to_string(),
-            )
-        })?,
-        streaming::LlmProvider::OpenRouter { api_key }
-        | streaming::LlmProvider::OpenAi { api_key } => api_key.clone(),
-    };
+    let llm_provider = streaming::LlmProvider::Shape;
+    let auth_token = access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
+        AppError::Env("Sign in to Shape to use AI chat.".to_string())
+    })?;
     let client = Client::new();
     let current_proj_path = app_state.0.lock()?.project_path.clone();
     let selected_auto = model_router::is_auto_selection(&raw_model);
@@ -180,11 +172,18 @@ pub async fn send_chat_message(
         }
     }
 
+    let stored_user_message = display_message
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&message)
+        .to_string();
+
     {
         let mut hist = state.history.lock()?;
         hist.push(ChatMessage {
             role: "user".to_string(),
-            content: message.clone(),
+            content: stored_user_message.clone(),
             timestamp: now_f64(),
             stats: None,
             model: Some(model_to_use.clone()),
@@ -234,13 +233,19 @@ pub async fn send_chat_message(
             .into_iter()
             .map(|(k, v)| (k.to_ascii_lowercase(), v))
             .collect(),
+        plugin_auto_allow: plugin_auto_allow
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect(),
     });
     if !state.try_begin_in_flight(turn_id.clone(), Some(owned_conversation_id.clone())) {
         // Roll back the optimistic user message we just pushed.
         if let Ok(mut hist) = state.history.lock() {
             if hist
                 .last()
-                .map(|m| m.role == "user" && m.content == message)
+                .map(|m| m.role == "user" && m.content == stored_user_message)
                 .unwrap_or(false)
             {
                 hist.pop();
@@ -602,6 +607,36 @@ pub async fn send_chat_message(
     let loop_count = turn_outcome.loop_count;
     let interrupt_error = turn_outcome.interrupt_error;
 
+    // Hostile second pass — only after huge writes, never for sidebar nits.
+    let mode_lc = mode_to_use.to_ascii_lowercase();
+    let review_mode_ok = matches!(
+        mode_lc.as_str(),
+        "code" | "visual" | "review" | "agent" | "edit"
+    );
+    if review_adversarial_on
+        && review_mode_ok
+        && !cancel.is_cancelled()
+        && super::adversarial_review::should_run(&final_full_response, turn_outcome.wrote_files)
+    {
+        match super::adversarial_review::run_adversarial_review(
+            &client,
+            &auth_token,
+            &final_full_response,
+            &project_path,
+            &proxy_base,
+        )
+        .await
+        {
+            Ok(xml) => {
+                streaming::emit_stream_token(&app_handle, &proxy_base, xml.clone());
+                final_full_response.push_str(&xml);
+            }
+            Err(e) => {
+                logging::warn("review", &format!("Adversarial review skipped: {e}"));
+            }
+        }
+    }
+
     // Keep the codebase index fresh after turns that changed files. The scan is
     // incremental (mtime manifest) and skipped when a job is already running.
     // Defer briefly so the next user turn isn't fighting disk I/O immediately,
@@ -629,45 +664,6 @@ pub async fn send_chat_message(
         });
     }
 
-    // Three extra model calls after the user hit Stop is the worst possible time to
-    // spend them, and a turn that ran out of tool loops has nothing worth critiquing.
-    let turn_exhausted_loops = loop_count >= run_turn::max_loops_for_mode(&mode_to_use);
-    if mode_to_use.eq_ignore_ascii_case("review")
-        && review_adversarial_enabled.unwrap_or(true)
-        && !cancel.is_cancelled()
-        && !turn_exhausted_loops
-        && adversarial_review::should_run(&final_full_response)
-    {
-        streaming::emit_chat_status(
-            &app_handle,
-            json!({ "phase": "review", "label": "Adversarial review…" }),
-        );
-        match adversarial_review::run_adversarial_review(
-            &client,
-            &auth_token,
-            &final_full_response,
-            &project_path,
-            &proxy_base,
-        )
-        .await
-        {
-            Ok(debate_chunk) if !debate_chunk.trim().is_empty() => {
-                final_full_response.push_str(&debate_chunk);
-                let _ = app_handle.emit(
-                    "chat_token",
-                    json!({
-                        "chunk": debate_chunk,
-                        "turnId": &turn_id,
-                        "conversationId": &owned_conversation_id,
-                    }),
-                );
-            }
-            Err(e) => {
-                logging::warn("review", &format!("Adversarial review failed: {e}"));
-            }
-            _ => {}
-        }
-    }
     let (total_input_tokens, total_output_tokens) = state.turn_meter_totals();
     let billed_tokens_raw = total_input_tokens + total_output_tokens;
     // Effort multiplier applies to billed tokens / credits so Ultra ≥ High ≥ Fast.

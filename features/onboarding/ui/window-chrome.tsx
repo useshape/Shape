@@ -1,7 +1,7 @@
 "use client";
 
-import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
-import { WindowControls } from "@/features/workbench/titlebar/ui/window-controls";
+import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
+import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
 
 /** Drag region + min / max / close only — no menu or logo. */
 export function OnboardingWindowChrome() {

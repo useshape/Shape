@@ -1,6 +1,6 @@
 "use client";
 
-import { Titlebar } from "@/features/workbench";
+import { Titlebar } from "@/features/agent/workbench";
 import { Button } from "@/components/ui/button";
 
 /**

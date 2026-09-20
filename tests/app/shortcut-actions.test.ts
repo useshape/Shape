@@ -56,7 +56,7 @@ describe("dispatchShortcutAction", () => {
     });
 
     it("handles open folder", () => {
-        const open = listenWindowEvent("open-folder-request");
+        const open = listenWindowEvent("shape-open-project-pick");
         expect(dispatchShortcutAction("Open Folder", "Ctrl+K Ctrl+O")).toBe(true);
         expect(open.events).toHaveLength(1);
         open.off();

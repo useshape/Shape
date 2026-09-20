@@ -286,8 +286,8 @@ export function KeyboardShortcutsView() {
     };
 
     return (
-        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-6 lg:px-8">
+        <div className="relative h-full min-h-0 bg-panel">
+            <div className="absolute inset-0 overflow-y-auto overscroll-contain scroll-auto px-6 pt-8 pb-6 lg:px-8 no-scrollbar">
                 <div className="mx-auto w-full max-w-5xl">
                     <h1 className="text-2xl font-medium text-text-primary">Shortcuts</h1>
                     <div className="mt-4 flex flex-wrap items-center gap-2">

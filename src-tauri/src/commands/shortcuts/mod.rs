@@ -20,7 +20,13 @@ pub fn setup_menu(app: &AppHandle) -> tauri::Result<()> {
     )?;
 
     let menu = Menu::with_items(app, &[&file_menu])?;
+    // Windows native decorations were never the goal — Shape draws its own
+    // titlebar. A native File menu still paints a second bar; keep the OS
+    // menu on macOS only.
+    #[cfg(target_os = "macos")]
     app.set_menu(menu)?;
+    #[cfg(not(target_os = "macos"))]
+    let _ = menu;
 
     Ok(())
 }

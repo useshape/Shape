@@ -7,9 +7,9 @@
 
   --dropdown-open-dur: 140ms;
   --dropdown-close-dur: 90ms;
-  --dropdown-pre-scale: 0.96;
-  --dropdown-closing-scale: 0.98;
-  --dropdown-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dropdown-pre-scale: 0.97;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   --morph-open-dur: 320ms;
   --morph-close-dur: 240ms;
@@ -75,28 +75,23 @@
   --check-ease-rotate: cubic-bezier(0.22, 1, 0.36, 1);
   --check-ease-bob: cubic-bezier(0.34, 1.35, 0.64, 1);
   --check-ease-path: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* iOS press: snap in, spring out (asymmetric — not one linear ease). */
+  --press-in-dur: 80ms;
+  --press-in-ease: cubic-bezier(0.3, 0.0, 0.2, 1);
+  --press-out-dur: 520ms;
+  --press-out-ease: cubic-bezier(0.22, 1.56, 0.32, 1);
+  --press-scale: 0.96;
 }
 
 @keyframes shape-popover-in {
-  from {
-    opacity: 0;
-    transform: scale(var(--dropdown-pre-scale));
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(var(--dropdown-pre-scale, 0.97)); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes shape-popover-out {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(var(--dropdown-closing-scale));
-  }
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(var(--dropdown-closing-scale, 0.99)); }
 }
 
 .shape-popover-content {
@@ -107,7 +102,6 @@
       var(--radix-tooltip-content-transform-origin, center)
     )
   );
-  will-change: opacity, transform;
 }
 
 .shape-popover-content[data-state="open"] {
@@ -116,6 +110,43 @@
 
 .shape-popover-content[data-state="closed"] {
   animation: shape-popover-out var(--dropdown-close-dur) var(--dropdown-ease);
+}
+
+/* Apple-style press: fast ease-out into the squash, spring with overshoot on release. */
+.press-spring {
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    transform var(--press-out-dur) var(--press-out-ease),
+    filter var(--press-out-dur) var(--press-out-ease),
+    background-color 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+.press-spring:hover:not(:disabled):not([aria-disabled="true"]):not([data-pressed="true"]) {
+  filter: brightness(1.05);
+}
+.press-spring:active:not(:disabled):not([aria-disabled="true"]):not([aria-haspopup]):not([aria-expanded="true"]),
+.press-spring[data-pressed="true"]:not(:disabled):not([aria-disabled="true"]):not([aria-haspopup]):not([aria-expanded="true"]) {
+  transform: scale(var(--press-scale));
+  filter: brightness(0.94);
+  transition:
+    transform var(--press-in-dur) var(--press-in-ease),
+    filter var(--press-in-dur) var(--press-in-ease),
+    background-color var(--press-in-dur) var(--press-in-ease),
+    color var(--press-in-dur) var(--press-in-ease),
+    border-color var(--press-in-dur) var(--press-in-ease),
+    opacity var(--press-in-dur) var(--press-in-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .press-spring,
+  .press-spring:active,
+  .press-spring[data-pressed="true"] {
+    transition: none;
+    transform: none;
+    filter: none;
+  }
 }
 
 .shape-goo-filters {
@@ -572,7 +603,7 @@
   mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
 }
 .t-swap[data-ready="true"]:not(.t-swap--block) {
-  transition: width var(--hint-swap) var(--hint-ease);
+  transition: width 80ms var(--ease-out);
 }
 .t-swap--block {
   display: grid;

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { formatCommandError } from "@/lib/format-error";
+import { formatCommandError } from "@/lib/errors/format";
 
 export type NotificationType = "info" | "warning" | "error" | "success";
 

@@ -40,7 +40,7 @@ import { RunsList } from "./runs-list";
 import { JobsPanel } from "./jobs-panel";
 import { LogsPanel } from "./logs-panel";
 import { DispatchDialog } from "./dispatch-dialog";
-import { formatCommandError } from "@/lib/format-error";
+import { formatCommandError } from "@/lib/errors/format";
 import { notify } from "@/features/notifications";
 import { save } from "@tauri-apps/plugin-dialog";
 import { GitListSkeleton } from "@/features/git/ui/shared/skeletons";

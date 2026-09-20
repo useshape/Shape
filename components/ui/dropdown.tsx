@@ -8,6 +8,7 @@ import * as MenubarPrimitive from "@radix-ui/react-menubar";
 
 
 import { cn } from "@/lib/utils";
+import { useOverlayRoot } from "@/lib/ui/overlay-root";
 
 /**
  * Shared Styles & Helpers
@@ -142,8 +143,10 @@ DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayNam
 const DropdownMenuSubContent = React.forwardRef<
     React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
     React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
->(({ className, sideOffset = 4, children, ...props }, ref) => (
-    <DropdownMenuPrimitive.Portal>
+>(({ className, sideOffset = 4, children, ...props }, ref) => {
+    const overlayRoot = useOverlayRoot();
+    return (
+    <DropdownMenuPrimitive.Portal container={overlayRoot}>
         <DropdownMenuPrimitive.SubContent
             ref={ref}
             sideOffset={sideOffset}
@@ -163,14 +166,18 @@ const DropdownMenuSubContent = React.forwardRef<
             </DropdownScrollArea>
         </DropdownMenuPrimitive.SubContent>
     </DropdownMenuPrimitive.Portal>
-));
+    );
+});
 DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
 
 const DropdownMenuContent = React.forwardRef<
     React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-    React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, align = "start", children, ...props }, ref) => (
-    <DropdownMenuPrimitive.Portal>
+    React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
+        portalled?: boolean;
+    }
+>(({ className, sideOffset = 4, align = "start", children, portalled = true, ...props }, ref) => {
+    const overlayRoot = useOverlayRoot();
+    const content = (
         <DropdownMenuPrimitive.Content
             ref={ref}
             sideOffset={sideOffset}
@@ -190,8 +197,14 @@ const DropdownMenuContent = React.forwardRef<
                 {children}
             </DropdownScrollArea>
         </DropdownMenuPrimitive.Content>
-    </DropdownMenuPrimitive.Portal>
-));
+    );
+    if (!portalled) return content;
+    return (
+        <DropdownMenuPrimitive.Portal container={overlayRoot}>
+            {content}
+        </DropdownMenuPrimitive.Portal>
+    );
+});
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const DropdownMenuItem = React.forwardRef<

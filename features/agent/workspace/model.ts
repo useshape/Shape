@@ -1,5 +1,6 @@
 import type { RemixiconComponentType } from "@remixicon/react";
 import {
+    RiChromeFill,
     RiFileTextLine,
     RiFolderLine,
     RiGitBranchFill,
@@ -9,7 +10,7 @@ import {
     RiUserFollowLine,
 } from "@remixicon/react";
 
-export type TabKind = "changes" | "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs";
+export type TabKind = "changes" | "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs" | "browser";
 
 export type WorkspaceTab = {
     id: string;
@@ -55,6 +56,8 @@ export function iconFor(kind: TabKind): RemixiconComponentType {
             return RiFolderLine;
         case "prs":
             return RiGitPullRequestLine;
+        case "browser":
+            return RiChromeFill;
         default:
             return RiFileTextLine;
     }

@@ -10,11 +10,12 @@ import { SearchInput } from "@/components/ui/search";
 
 import { getShortcutForLabel } from "@/lib/ui/shortcuts";
 import { SHAPE_MODAL_PANEL_CLASS, SHAPE_OVERLAY_CLASS, SHAPE_OVERLAY_CONTENT_CLASS } from "@/lib/ui/modal-overlay";
+import { useOverlayRoot } from "@/lib/ui/overlay-root";
 import { cn } from "@/lib/utils";
 import { isPopoutPath } from "@/lib/window/tauri-window";
 import { SETTINGS_CATEGORIES } from "@/features/settings/ui/shared/nav";
 import { openSettingsWindow } from "@/lib/window/open-settings";
-import { toTimestampMs } from "@/lib/timestamp";
+import { toTimestampMs } from "@/lib/ui/timestamp";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -172,6 +173,7 @@ function ShortcutBadge({ shortcut }: { shortcut: string }) {
 }
 
 export function CommandPalette() {
+    const overlayRoot = useOverlayRoot();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [actions, setActions] = useState<EditorAction[]>([]);
@@ -594,12 +596,12 @@ export function CommandPalette() {
 
     return (
         <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-            <Dialog.Portal>
+            <Dialog.Portal container={overlayRoot}>
                 <Dialog.Overlay className={SHAPE_OVERLAY_CLASS} />
                 <Dialog.Content className={cn(
                     SHAPE_OVERLAY_CONTENT_CLASS,
                     SHAPE_MODAL_PANEL_CLASS,
-                    "fixed top-[12%] left-1/2 z-50 -translate-x-1/2 flex bg-surface-4/95 squircle-3xl! backdrop-blur-lg w-full max-w-[600px] flex-col overflow-hidden shadow-md/50 focus:outline-none",
+                    "absolute top-[12%] left-1/2 z-50 -translate-x-1/2 flex squircle-2xl! w-[min(600px,calc(100%-2rem))] flex-col overflow-hidden focus:outline-none",
                 )}>
                     <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
                     <Dialog.Description className="sr-only">Search agents, files, and actions</Dialog.Description>
@@ -1294,15 +1296,39 @@ function getAppCommands(): EditorAction[] {
             id: "app.file.openFolder",
             label: "File: Open Folder",
             shortcut: shortcut("Open Folder"),
-            run: async () => {
-                const { open } = await import("@tauri-apps/plugin-dialog");
-                const selected = await open({ directory: true, multiple: false });
-                if (selected) {
-                    window.dispatchEvent(
-                        new CustomEvent("shape-open-project", { detail: { path: selected as string } }),
-                    );
-                }
-            },
+            run: () => window.dispatchEvent(new Event("shape-open-project-pick")),
+        },
+        {
+            id: "app.file.newNext",
+            label: "File: Create Next.js Project",
+            run: () =>
+                window.dispatchEvent(
+                    new CustomEvent("shape-scaffold-project", { detail: { kind: "next" } }),
+                ),
+        },
+        {
+            id: "app.file.newVite",
+            label: "File: Create Vite Project",
+            run: () =>
+                window.dispatchEvent(
+                    new CustomEvent("shape-scaffold-project", { detail: { kind: "vite" } }),
+                ),
+        },
+        {
+            id: "app.file.newAstro",
+            label: "File: Create Astro Project",
+            run: () =>
+                window.dispatchEvent(
+                    new CustomEvent("shape-scaffold-project", { detail: { kind: "astro" } }),
+                ),
+        },
+        {
+            id: "app.file.newRemix",
+            label: "File: Create Remix Project",
+            run: () =>
+                window.dispatchEvent(
+                    new CustomEvent("shape-scaffold-project", { detail: { kind: "remix" } }),
+                ),
         },
         {
             id: "app.file.save",
@@ -1321,7 +1347,7 @@ function getAppCommands(): EditorAction[] {
             label: "File: Close Folder",
             shortcut: shortcut("Close Folder"),
             run: () => {
-                void import("@/lib/last-project").then(({ saveLastProject }) => saveLastProject(null));
+                void import("@/lib/workspace/last-project").then(({ saveLastProject }) => saveLastProject(null));
                 void import("@/lib/backend").then(({ commands }) => commands.setProjectPath(null));
             },
         },

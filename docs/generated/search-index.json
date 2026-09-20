@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "builtAt": "2026-08-19T18:58:48.970Z",
+  "builtAt": "2026-09-20T22:29:48.287Z",
   "pages": [
     {
       "slug": [
@@ -48,19 +48,7 @@
       "order": 1,
       "section": "Workspace",
       "href": "/docs/workspace/workbench-tour",
-      "body": "The workbench is Shape's main editing surface. Everything you do, from editing files to running Git and chatting with AI, happens inside this layout. Shape divides the window into five regions: Activity bar : narrow strip on the far left; switches sidebar views and opens Browser or Settings Primary sidebar : file tree, search, Git, outline, and more Editor : tabbed Monaco code area in the center (also Browser, Settings, and diffs) Secondary sidebar : AI chat on the right Bottom panel : terminal and diagnostic views The titlebar holds: Menus : File, Edit, View, Go, Terminal, Window, Help Sidebar toggle : show or hide the primary sidebar Scripts dropdown : npm scripts for the open project Panel toggle : terminal and bottom views AI Chat toggle : right sidebar Settings and Reset Layout buttons Avatar menu : Shape account and GitHub sign in Drag the titlebar to move the window (on Windows, outside the menu buttons). Window → Git Manager opens a separate window for PRs, Actions, and checks. View → Preview opens the Browser tab. Without a folder open, the editor area shows the welcome screen with Open Project, Clone Repository, Terminal, and AI Chat shortcuts. See Quick Start. With a folder open but no file selected, the center prompts you to pick a file from the Explorer or press Ctrl+P . Every major region can be hidden for focus: Region How to toggle Primary sidebar Titlebar sidebar button, or click the active activity bar icon again Bottom panel Titlebar panel button, View → Terminal , or Ctrl+ AI chat Titlebar chat button, or View → AI Chat All chrome Zen Mode with Ctrl+K Z Use Reset Layout in the titlebar to restore the default arrangement. Settings and Keyboard Shortcuts open as editor tabs instead of separate windows when launched from the activity bar or menu. Close them like any other tab with Ctrl+W . Activity Bar Titlebar and Panels Visual Design Git Manager Layout and Zen Mode Quick Start"
-    },
-    {
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "title": "Activity Bar",
-      "description": "Switch between Explorer, Search, Git, Browser, and other views from the activity bar.",
-      "order": 2,
-      "section": "Workspace",
-      "href": "/docs/workspace/activity-bar",
-      "body": "The activity bar is the vertical strip on the far left of the workbench. Each icon opens a different view in the primary sidebar , except Browser and Settings , which open editor tabs. Icon View Purpose File Explorer Browse and open project files Branch Source Control Stage, commit, and review changes Commit Git Graph Visual commit history List Outline Symbols in the active file Search Search Find and replace across the workspace Click an icon to switch views. Click the same icon again to collapse the sidebar entirely. When you have unsaved files, the Explorer icon shows a small badge with the count of dirty tabs. Save with Ctrl+S or File → Save All to clear it. Below the view icons, the activity bar has two fixed buttons: Button Action Chrome icon Opens the Browser tab (Visual Design) Gear icon Opens Settings These are not sidebar views. Browser and Settings open as editor tabs. Every activity bar sidebar view is also available from View in the menu bar: View → Explorer ( Ctrl+Shift+E ) View → Search ( Ctrl+Shift+F ) View → Source Control ( Ctrl+Shift+G ) View → Git Graph View → Outline View → Preview (Browser tab) Git Manager is Window → Git Manager , not an activity bar icon. Some features live elsewhere: AI Chat : titlebar toggle or View → AI Chat (right sidebar) Terminal : bottom panel, not the activity bar Problems / Output : bottom panel tabs Bookmarks : keyboard only ( Ctrl+Alt+B ); no activity bar entry File Explorer Visual Design Workbench Tour Source Control Git Manager Bookmarks"
+      "body": "The workbench is Shape's main editing surface. Everything you do, from editing files to running Git and chatting with AI, happens inside this layout. Shape divides the window into five regions: Activity bar : narrow strip on the far left; switches sidebar views and opens Browser or Settings Primary sidebar : file tree, search, Git, outline, and more Editor : tabbed CodeMirror area in the center (also Browser, Settings, and diffs) Secondary sidebar : AI chat on the right Bottom panel : terminal and diagnostic views The titlebar holds: Menus : File, Edit, View, Go, Terminal, Window, Help Sidebar toggle : show or hide the primary sidebar Scripts dropdown : npm scripts for the open project Panel toggle : terminal and bottom views AI Chat toggle : right sidebar Settings and Reset Layout buttons Avatar menu : Shape account and GitHub sign in Drag the titlebar to move the window (on Windows, outside the menu buttons). Window → Git Manager opens a separate window for PRs, Actions, and checks. View → Preview opens the Browser tab. Without a folder open, the editor area shows the welcome screen with Open Project, Clone Repository, Terminal, and AI Chat shortcuts. See Quick Start. With a folder open but no file selected, the center prompts you to pick a file from the Explorer or press Ctrl+P . Every major region can be hidden for focus: Region How to toggle Primary sidebar Titlebar sidebar button, or click the active activity bar icon again Bottom panel Titlebar panel button, View → Terminal , or Ctrl+ AI chat Titlebar chat button, or View → AI Chat All chrome Zen Mode with Ctrl+K Z Use Reset Layout in the titlebar to restore the default arrangement. Settings and Keyboard Shortcuts open as editor tabs instead of separate windows when launched from the activity bar or menu. Close them like any other tab with Ctrl+W . Activity Bar Titlebar and Panels Visual Design Git Manager Layout and Zen Mode Quick Start"
     },
     {
       "slug": [
@@ -72,7 +60,7 @@
       "order": 3,
       "section": "Workspace",
       "href": "/docs/workspace/titlebar-and-panels",
-      "body": "The titlebar controls window level actions and layout. The bottom panel hosts the terminal and diagnostic output. App icon : branding (Windows) Sidebar toggle : show or hide the primary sidebar Menu bar : File, Edit, View, Go, Terminal, Window, Help On narrow windows, overflow menus collapse into a ⋯ menu so critical items stay reachable. When a file is open, the center shows the project path and filename. This region is draggable for window movement. Control Function Scripts Run npm scripts from package.json Panel Toggle the bottom panel (terminal, problems) AI Chat Toggle the right sidebar Settings Open Settings tab Reset Layout Restore default panel sizes Avatar Shape account and GitHub sign in View → Preview opens the Browser tab. Window → Git Manager opens Git Manager. Window → Settings is the same as the gear control. The bottom panel stacks tabbed views: Tab Opens from Purpose Terminal View → Terminal , Ctrl+ , panel toggle Shell in project directory Problems View → Problems , Ctrl+Shift+M , command palette ESLint, TypeScript, and LSP diagnostics Output Command palette View: Show Output Tool and extension logs Tests Test runner integration Test results when available Click a tab to switch views. Drag the top edge of the panel to resize it. When a package.json with a scripts section is in the open project, the Scripts button appears in the titlebar. 1. Click Scripts . 2. Choose a script (for example dev , build , test ). 3. Shape runs it in the integrated terminal and opens the panel if needed. See NPM Scripts for details. Primary sidebar (left): persistent project tools like files, Git, and search Secondary sidebar (right): AI chat Bottom panel : transient command output like terminal, problems, and tests Editor tabs : files, Browser, Settings, diffs Toggling the panel does not close your terminal session. It hides the panel until you show it again. If panels feel misplaced or too small, click Reset Layout (desktop windows icon) in the titlebar. This restores: Primary sidebar open Bottom panel open AI chat closed It does not close open files or change your project. Integrated Terminal Problems, Output, and Tests NPM Scripts Visual Design Workbench Tour"
+      "body": "The titlebar controls window level actions and layout. The bottom panel hosts the terminal and diagnostic output. App icon : branding (Windows) Sidebar toggle : show or hide the primary sidebar Menu bar : File, Edit, View, Go, Terminal, Window, Help On narrow windows, overflow menus collapse into a ⋯ menu so critical items stay reachable. When a file is open, the center shows the project path and filename. This region is draggable for window movement. Control Function Scripts Run npm scripts from package.json Panel Toggle the bottom panel (terminal, problems) AI Chat Toggle the right sidebar Settings Open Settings tab Reset Layout Restore default panel sizes Avatar Shape account and GitHub sign in View → Preview opens the Browser tab. Window → Git Manager opens Git Manager. Window → Settings is the same as the gear control. The bottom panel stacks tabbed views: Tab Opens from Purpose Terminal View → Terminal , Ctrl+ , panel toggle Shell in project directory Problems View → Problems , Ctrl+Shift+M , command palette ESLint and design diagnostics Output Command palette View: Show Output Tool and extension logs Tests Test runner integration Test results when available Click a tab to switch views. Drag the top edge of the panel to resize it. When a package.json with a scripts section is in the open project, the Scripts button appears in the titlebar. 1. Click Scripts . 2. Choose a script (for example dev , build , test ). 3. Shape runs it in the integrated terminal and opens the panel if needed. See NPM Scripts for details. Primary sidebar (left): persistent project tools like files, Git, and search Secondary sidebar (right): AI chat Bottom panel : transient command output like terminal, problems, and tests Editor tabs : files, Browser, Settings, diffs Toggling the panel does not close your terminal session. It hides the panel until you show it again. If panels feel misplaced or too small, click Reset Layout (desktop windows icon) in the titlebar. This restores: Primary sidebar open Bottom panel open AI chat closed It does not close open files or change your project. Integrated Terminal Problems, Output, and Tests NPM Scripts Visual Design Workbench Tour"
     },
     {
       "slug": [
@@ -84,7 +72,7 @@
       "order": 4,
       "section": "Workspace",
       "href": "/docs/workspace/command-palette",
-      "body": "The command palette is Shape's universal action search. Open it with Ctrl+Shift+P or from View → Command Palette… . Type to filter commands. Press Enter to run the selected action, or Escape to close. In default mode, the palette lists: Workbench commands : panels, settings, chat history, zen mode Editor commands from the active file: format, rename, fold, comment Commands show keyboard shortcuts on the right when assigned. Fuzzy matching works on both label and shortcut fragments. You can also open the palette from the activity bar bottom button (terminal icon). Go to File opens a dedicated files mode, not the full command list. 1. Press Ctrl+P (or Go → Go to File… ). 2. Type part of a filename. 3. Press Enter to open the match. This mode is optimized for speed. In Shape, Ctrl+Shift+P and Ctrl+P are separate shortcuts. Jump to a specific line (and optionally column): 1. Press Ctrl+G ( Go → Go to Line/Column… ). 2. Type a line number, or line:column (for example 42:8 ). 3. Press Enter . The editor scrolls and places the cursor at that position. Find functions, classes, and variables across the project: 1. Press Ctrl+T or run Go to Symbol in Workspace… from the palette. 2. Type a symbol name. 3. Select a result to open the defining file at that location. Indexing quality depends on language support and LSP configuration. See IntelliSense. Browse past AI conversations: 1. Open the command palette ( Ctrl+Shift+P ). 2. Run Chat: Show History . 3. Select a conversation to reopen it in the AI sidebar. Useful when you need to continue an earlier thread without scrolling the chat panel. Change syntax highlighting for the active file: 1. Open the palette and run Change Language Mode… . 2. Pick a language from the filtered list (TypeScript, Markdown, CSS, etc.). Shape remembers the association for that file path. Language mode affects highlighting, snippets, and LSP behavior. Quick Fix ( Ctrl+. ) is an editor action, not the palette, but you can find it by typing quick fix in the palette. Palette only commands (no default shortcut) include View: Show Problems , View: Show Output , Editor: Toggle Minimap , and Chat: Show History . When the palette is open, arrow keys navigate. Typing immediately filters. Keyboard Shortcuts Quick Start Workspace Search Chat Overview"
+      "body": "The command palette is Shape's universal action search. Open it with Ctrl+Shift+P or from View → Command Palette… . Type to filter commands. Press Enter to run the selected action, or Escape to close. In default mode, the palette lists: Workbench commands : panels, settings, chat history, zen mode Editor commands from the active file: format, rename, fold, comment Commands show keyboard shortcuts on the right when assigned. Fuzzy matching works on both label and shortcut fragments. You can also open the palette from the activity bar bottom button (terminal icon). Go to File opens a dedicated files mode, not the full command list. 1. Press Ctrl+P (or Go → Go to File… ). 2. Type part of a filename. 3. Press Enter to open the match. This mode is optimized for speed. In Shape, Ctrl+Shift+P and Ctrl+P are separate shortcuts. Jump to a specific line (and optionally column): 1. Press Ctrl+G ( Go → Go to Line/Column… ). 2. Type a line number, or line:column (for example 42:8 ). 3. Press Enter . The editor scrolls and places the cursor at that position. Find functions, classes, and variables across the project: 1. Press Ctrl+T or run Go to Symbol in Workspace… from the palette. 2. Type a symbol name. 3. Select a result to open the defining file at that location. Indexing quality depends on the project index, not a language server. See Workspace Search. Browse past AI conversations: 1. Open the command palette ( Ctrl+Shift+P ). 2. Run Chat: Show History . 3. Select a conversation to reopen it in the AI sidebar. Useful when you need to continue an earlier thread without scrolling the chat panel. Change syntax highlighting for the active file: 1. Open the palette and run Change Language Mode… . 2. Pick a language from the filtered list (TypeScript, Markdown, CSS, etc.). Shape remembers the association for that file path. Language mode affects highlighting and completions. Quick Fix ( Ctrl+. ) is an editor action, not the palette, but you can find it by typing quick fix in the palette. Palette only commands (no default shortcut) include View: Show Problems , View: Show Output , Editor: Toggle Minimap , and Chat: Show History . When the palette is open, arrow keys navigate. Typing immediately filters. Keyboard Shortcuts Quick Start Workspace Search Chat Overview"
     },
     {
       "slug": [
@@ -108,7 +96,7 @@
       "order": 1,
       "section": "Editor",
       "href": "/docs/editor/editing-files",
-      "body": "The Shape editor is built on Monaco, the same engine that powers VS Code. It provides syntax highlighting, multi cursor editing, and language aware features for web projects. Action Menu Shortcut Open file File → Open File Ctrl+O Open folder File → Open Folder Ctrl+K Ctrl+O New file File → New Text File Ctrl+N Quick open Go → Go to File… Ctrl+P New files from File → New Text File appear in the Explorer when saved. New Scratch File creates a temporary buffer without a path until you save. Action Shortcut Save Ctrl+S Save As Ctrl+Shift+S Save All Ctrl+K S Close tab Ctrl+W Close all tabs Ctrl+K E Dirty tabs show a dot indicator. The Explorer activity bar badge counts unsaved files. Standard text operations work as expected: Undo / Redo : Ctrl+Z / Ctrl+Y Cut / Copy / Paste : Ctrl+X / Ctrl+C / Ctrl+V Select All : Ctrl+A Hold Alt and click to add cursors. Use Ctrl+Alt+↑ and Ctrl+Alt+↓ to add cursors on adjacent lines. Ctrl+Shift+L selects all occurrences of the current selection. Action Shortcut Move line up/down Alt+↑ / Alt+↓ Duplicate line down Shift+Alt+↓ Toggle line comment Ctrl+/ Toggle block comment Shift+Alt+A Indent / outdent Ctrl+] / Ctrl+[ Format the whole file with Edit → Format Document or Alt+Shift+F . Shape uses Prettier when configured for the project. Format only the selection via the command palette: Format Selection ( Ctrl+K Ctrl+F ). Go to Line : Ctrl+G Go to Definition : F12 (requires language support) Go to Bracket : Ctrl+Shift+\\\\ Back / Forward : Alt+Left / Alt+Right through cursor history Toggle wrap from View → Word Wrap or the command palette ( Editor: Toggle Word Wrap , Alt+Z ). Enable auto save in Settings → Editor . Choose delay or save on focus change. See Editor Settings. Languages and tooling Tabs and Splits IntelliSense Command Palette Editor Settings"
+      "body": "The Shape editor is built on CodeMirror 6. It highlights common web languages, supports multi cursor editing, and formats with Prettier when enabled. Action Menu Shortcut Open file File → Open File Ctrl+O Open folder File → Open Folder Ctrl+K Ctrl+O New file File → New Text File Ctrl+N Quick open Go → Go to File… Ctrl+P New files from File → New Text File appear in the Explorer when saved. New Scratch File creates a temporary buffer without a path until you save. Action Shortcut Save Ctrl+S Save As Ctrl+Shift+S Save All Ctrl+K S Close tab Ctrl+W Close all tabs Ctrl+K E Dirty tabs show a dot indicator. The Explorer activity bar badge counts unsaved files. Standard text operations work as expected: Undo / Redo : Ctrl+Z / Ctrl+Y Cut / Copy / Paste : Ctrl+X / Ctrl+C / Ctrl+V Select All : Ctrl+A Hold Alt and click to add cursors. Use Ctrl+Alt+↑ and Ctrl+Alt+↓ to add cursors on adjacent lines. Ctrl+Shift+L selects all occurrences of the current selection. Action Shortcut Move line up/down Alt+↑ / Alt+↓ Duplicate line down Shift+Alt+↓ Toggle line comment Ctrl+/ Toggle block comment Shift+Alt+A Indent / outdent Ctrl+] / Ctrl+[ Format the whole file with Edit → Format Document or Alt+Shift+F . Shape uses Prettier when configured for the project. Format only the selection via the command palette: Format Selection ( Ctrl+K Ctrl+F ). Go to Line : Ctrl+G Find : Ctrl+F Go to Bracket : Ctrl+Shift+\\\\ The editor does not run language servers. Completions come from CodeMirror language packs, not TypeScript or ESLint language services. Toggle wrap from View → Word Wrap or the command palette ( Editor: Toggle Word Wrap , Alt+Z ). Enable auto save in Settings → Editor . Choose delay or save on focus change. See Editor Settings. Languages and tooling Tabs and Splits Command Palette Editor Settings"
     },
     {
       "slug": [
@@ -125,18 +113,6 @@
     {
       "slug": [
         "editor",
-        "markdown-preview"
-      ],
-      "title": "Markdown Preview in Shape",
-      "description": "Live Markdown preview and split view in the Shape IDE editor for .md and .mdx files.",
-      "order": 3,
-      "section": "Editor",
-      "href": "/docs/editor/markdown-preview",
-      "body": "Shape renders Markdown files with a built in preview powered by the same tab you use for source editing. Switch between source, split, and preview without leaving the workbench. Open any .md or .mdx file from the Explorer or with Ctrl+P . Syntax highlighting applies in source mode. Use the mode toggle on the tab bar to cycle views: Mode What you see Source Raw Markdown in the Monaco editor Split Editor on one side, rendered preview on the other Preview Full width rendered output Split view is useful when editing documentation and checking headings, links, and code blocks at the same time. The preview renders standard Markdown elements: Headings, paragraphs, and lists Links and images (relative paths resolve from the file location) Fenced code blocks with syntax highlighting Blockquotes and inline formatting Complex MDX components used in Shape's own docs site may not render identically in the IDE preview. The preview targets common Markdown, not full MDX execution. In split mode, edit on the left and confirm layout on the right. Save with Ctrl+S to persist changes. The preview updates when the file content changes. Use Ctrl+Shift+P and run Change Language Mode… if a file is not detected as Markdown. For long docs, Zen Mode plus split preview gives a focused writing surface. Pair preview with Bookmarks to jump between sections you are revising. Tabs and Splits Editing Files Design Tools"
-    },
-    {
-      "slug": [
-        "editor",
         "diff-and-merge"
       ],
       "title": "Diff and Merge",
@@ -144,7 +120,7 @@
       "order": 4,
       "section": "Editor",
       "href": "/docs/editor/diff-and-merge",
-      "body": "Shape shows file differences in dedicated diff tabs so you can review changes before committing or keeping AI edits. From Source Control , click a changed file to open a diff tab. Tabs are labeled with the filename and context: Label Meaning Working Tree Unstaged changes vs the index Index Staged changes vs the last commit The diff view uses Monaco's inline comparison with added and removed highlighting. A toolbar follows the hunk under the cursor: Diff Button Shortcut Working Tree Stage Ctrl+Y Working Tree Restore (toolbar) Index Unstage Ctrl+Shift+Y The label shows Hunk N/M . Select changed lines to stage, unstage, or restore only that selection instead of the whole hunk. Unstaged and staged diffs open as separate tabs so you can compare both states. In the Git Graph, right click a commit and choose Compare with Working Tree or View Changes to inspect historical diffs. When AI chat edits files, each change appears as a review card after it is written to disk (unless you require approval first). 1. Click the file in the pending strip to open a diff in the editor. 2. Compare the latest step against the previous version. 3. Keep leaves the file as written. Undo restores the baseline from before the unresolved edit chain. See Reviewing Edits for Keep/Undo and optional pre write approval. If a git pull or merge produces conflicts, Shape surfaces conflict markers in the affected files. Open the file in the editor and look for standard conflict sections: Resolve conflicts manually in the editor, then stage the file and commit. Shape does not yet provide a dedicated three way merge UI. Use the diff tabs and editor for manual resolution. Close diff tabs with Ctrl+W when review is done. Enable Git: Blame in settings to see line attribution while reviewing changes. Source Control Git Manager Reviewing Edits Tabs and Splits Git Graph"
+      "body": "Shape shows file differences in dedicated diff tabs so you can review changes before committing or keeping AI edits. From Source Control , click a changed file to open a diff tab. Tabs are labeled with the filename and context: Label Meaning Working Tree Unstaged changes vs the index Index Staged changes vs the last commit The diff view uses CodeMirror’s inline comparison with added and removed highlighting. A toolbar follows the hunk under the cursor: Diff Button Shortcut Working Tree Stage Ctrl+Y Working Tree Restore (toolbar) Index Unstage Ctrl+Shift+Y The label shows Hunk N/M . Select changed lines to stage, unstage, or restore only that selection instead of the whole hunk. Unstaged and staged diffs open as separate tabs so you can compare both states. In the Git Graph, right click a commit and choose Compare with Working Tree or View Changes to inspect historical diffs. When AI chat edits files, each change appears as a review card after it is written to disk (unless you require approval first). 1. Click the file in the pending strip to open a diff in the editor. 2. Compare the latest step against the previous version. 3. Keep leaves the file as written. Undo restores the baseline from before the unresolved edit chain. See Reviewing Edits for Keep/Undo and optional pre write approval. If a git pull or merge produces conflicts, Shape surfaces conflict markers in the affected files. Open the file in the editor and look for standard conflict sections: Resolve conflicts manually in the editor, then stage the file and commit. Shape does not yet provide a dedicated three way merge UI. Use the diff tabs and editor for manual resolution. Close diff tabs with Ctrl+W when review is done. Enable Git: Blame in settings to see line attribution while reviewing changes. Source Control Git Manager Reviewing Edits Tabs and Splits Git Graph"
     },
     {
       "slug": [
@@ -156,7 +132,7 @@
       "order": 5,
       "section": "Editor",
       "href": "/docs/editor/visual-design",
-      "body": "Visual design lets you inspect the running page, edit layout and appearance in a Design sidebar, then Apply those changes to project source. It lives in the Browser tab, not in the code editor. For Tailwind class panels on tokens in the file, see Design Tools. Chrome icon at the bottom of the activity bar View → Preview Command palette: search for Preview The tab is labeled Browser . It has back, forward, reload, a URL field, and an Open externally button. Start your app from Scripts or the terminal, then enter the local URL (often http://localhost:3000 ). Click the palette in the Browser toolbar, or press Ctrl+Shift+D . The Design sidebar opens on the right. The inspect control (eyedropper) is on while you select elements. Click the page to target a node. The overlay shows the tag and a short label, for example button.Get started . Action What it does Click Select one element Ctrl+click Add to the selection Shift drag Select a region Ctrl+I Toggle inspect vs interacting with the page Escape Clear the selection When inspect is off, you can click links and use the page as usual. After you select an element, the sidebar shows: Section What you edit Position X and Y offsets Layout Block, horizontal, vertical, or grid; width and height Appearance Radius, padding, overflow Fill Background or text color, opacity Stroke Border width, style, and color Effects Shadows and similar Export Copy or export related assets Changes preview live in the iframe. They are pending until you apply. The footer shows how many pending edits you have. 1. Undo reverts the last design change in the preview. 2. Apply writes matching updates to JSX, HTML, or CSS in the open project. 3. Reset (toolbar) clears pending preview edits without writing files. Apply needs an open project folder and a local preview it can map back to source. If a node cannot be located, the sidebar marks that element and leaves the rest applied. Ctrl+Z / Ctrl+Y undo and redo design mode history while the Browser tab is focused (outside text fields). With design mode on, the device control frames the preview at phone and tablet sizes (iPhone, Pixel, iPad, and Full). Full uses the whole tab. Design Tools Chat Modes (Visual mode in chat) Activity Bar First project tutorial"
+      "body": "Visual design opens the running website in a source backed canvas. Select, move, resize, duplicate, delete, or edit an element and Shape writes a deterministic source change — it does not ask an AI model to rewrite the file. Design mode supports: React projects running with Vite Next.js Astro Remix Other project types are left unchanged. For Tailwind class panels on tokens in the file, see Design Tools. Chrome icon at the bottom of the activity bar View → Preview Command palette: search for Preview The tab is labeled Browser . It has back, forward, reload, a URL field, and an Open externally button. Start your app from Scripts or the terminal, then enter the local URL (often http://localhost:3000 ). Click Design in the project sidebar, or press Ctrl+Shift+D . Shape discovers the project's routes, connects to the local development server, and opens the full designer. The animated canvas loader remains visible until the live page and source bridge are ready. The inspect control (eyedropper) is on while you select elements. Click the page to target a node. The overlay shows the tag and a short label, for example button.Get started . Action What it does Click Select the deepest control under the cursor (buttons/links preferred). Full page layout shells are ignored Drag ••• Move an element. Static elements are promoted to position: relative without changing their initial layout Resize handles Change width and height Double click text Edit direct static text in place Arrow keys Nudge by 1px; Shift nudges by 10px Ctrl+D Duplicate the selected source element Delete Delete the selected source element When inspect is off, you can click links and use the page as usual. The left panel contains the live DOM layer tree, project routes, and source backed assets. The bottom toolbar contains selection, undo/redo, capture, code, responsive frame, and zoom controls. There is no separate left activity toolbar. After you select an element, the sidebar shows: Section What you edit Position X and Y offsets Layout Block, horizontal, vertical, or grid; width and height Spacing and size Per side margin and padding, gap, min/max constraints, width and height Fill Background or text color, opacity Stroke Border width, style, and color Effects Shadows, filters, backdrop filters, transforms, opacity, blend mode Motion Transition property, duration, easing, transform, and transform origin Settings Source tag, ID, classes, attributes, and accessibility metadata Changes preview immediately in the iframe and are then committed through the source engine. The engine resolves the DOM element to a JSX or Astro source range, applies only the selected attribute or node operation, parses the result, and rejects the edit if the match is ambiguous, the expression is dynamic, or syntax would regress. Source files remain the single source of truth. No AI is used to apply visual edits. Existing dynamic style expressions are never overwritten. Direct text editing refuses nested or expression generated content. Every edit is syntax checked before writing. Undo and redo restore exact file snapshots. If more than one source node is an equally strong match, Shape asks for a more specific selection instead of guessing. Use the bottom toolbar to switch between full, tablet (768px), and mobile (390px) frames and to change canvas zoom. The Deploy dialog is a local placeholder. It walks through a fake build so you can see the hosting flow. Nothing is published and Visit stays disabled. When design mode misbehaves, check the Shape terminal (the one running tauri:dev ), not the project app logs. Look for blocks that start with shape/design and end with end . Copy that whole block into chat — it includes session id, event name, and structured context so the failure is diagnosable. Design Tools Chat Modes (Visual mode in chat) Activity Bar First project tutorial"
     },
     {
       "slug": [
@@ -168,19 +144,7 @@
       "order": 6,
       "section": "Editor",
       "href": "/docs/editor/design-tools",
-      "body": "Shape includes design aware tooling for web UI work in the editor . Completions, inline controls, and diagnostics help you edit Tailwind classes and CSS variables without leaving the file. To inspect a running page and apply changes from a Design sidebar, see Visual Design. When your cursor is inside a className string, Shape can show inline controls for common utilities: Flex / Grid : direction, wrap, justify content, align items. Click the swatch next to a flex or grid token Gap : column and row gap. Click a gap token Padding : per side padding. Click a p / px / pl token Radius : corner radius stops. Click a rounded token Color picker : Tailwind palette and project CSS variables Controls appear as a floating panel anchored to the token and follow editor scroll. Click a value to apply it directly to the source. Placing the cursor on a flex, gap, padding, or radius token also opens the matching panel after a short pause. Hold Alt and drag left/right over a scrubbable number ( gap 4 , p [24px] , or CSS padding: 16px ), or scroll the mouse wheel while hovering the underlined value. Scale values snap to Tailwind’s spacing scale. Panel inputs also accept wheel nudges (Shift for 1px steps). Toggle scrubbing, underlines, cursor bind, and wheel on inputs in Settings → Editor → Design . Hover a UI token to see a plain language “last changed” blurb from git blame. Disable via Settings → Editor → Design → Design Blame Hover . Right click a Tailwind spacing scale number (e.g. the 4 in gap 4 ) and choose Refactor spacing scale to surgically replace every matching scale value in the file. Shape suggests Tailwind utilities with project frequency, sibling context (e.g. after flex prefer items / gap ), fuzzy matching, and spacing scales — not prefix only regex. Enable or disable this in Settings → Editor → Design → Design Autocomplete . Opening a parent folder (for example a repo that contains shape/ and website/ as separate git roots) discovers each nested repository for Source Control and explorer decorations. Accessibility checks run on color contrast and related design issues in supported files (JSX, TSX, CSS). Violations appear as squiggles in the editor and in the Problems panel. Configure WCAG Contrast Warnings and Compliance Level ( AA or AAA ) in Settings → Editor → Design . The color picker reads from: Tailwind's default palette CSS variables defined in project files like design tokens.css Picking a color inserts the matching class or variable reference at the cursor. The chat panel includes a Visual mode for UI work. Ask it to preview a component in chat before adding it, or tell it to build without stopping. Pair that with Visual Design on the live page. See Chat Modes. Visual Design IntelliSense Lint and LSP AI Settings Chat Modes"
-    },
-    {
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "title": "IntelliSense",
-      "description": "Completions, hovers, go-to-definition, and diagnostics from language servers.",
-      "order": 7,
-      "section": "Editor",
-      "href": "/docs/editor/intellisense",
-      "body": "IntelliSense is the language aware assistance in the editor. Completions, hovers, diagnostics, and navigation. Start typing to see suggestions. Press Tab or Enter to accept. Shape includes language servers for common web stacks: Language Features TypeScript / JavaScript Types, imports, refactor hints CSS / HTML Selectors, tags, attributes JSON Schema aware keys and values Tailwind CSS Class name completions in className Toggle individual servers in Settings → Features → Language Servers . When a diagnostic offers a fix, a lightbulb appears in the gutter. Press Ctrl+. to open Quick Fix and choose an action. Common fixes include adding imports, fixing ESLint violations, and applying TypeScript corrections. Action Shortcut Go to Definition F12 Peek Definition Alt+F12 Find All References Shift+F12 Go to Symbol in Workspace Ctrl+T Go to Next Problem F8 Go to Previous Problem Shift+F8 Go to Symbol in Editor is available from the command palette for symbols in the current file. Hover over a symbol to see type information, documentation, and color previews for CSS values. Hold Ctrl and hover a symbol to peek its definition inline. Errors and warnings appear as squiggles in the editor and aggregate in the Problems panel ( Ctrl+Shift+M ). Sources include: TypeScript compiler ESLint (when enabled) Design diagnostics for contrast issues Tailwind CSS language service Fix issues in the editor or open Problems to jump between files. Place the cursor on a symbol and press F2 to rename it across the project. Preview changes before confirming. Lint and LSP Visual Design Design Tools Problems, Output, and Tests Command Palette"
+      "body": "Shape includes design aware tooling for web UI work in the editor . Completions, inline controls, and diagnostics help you edit Tailwind classes and CSS variables without leaving the file. To inspect a running page and apply changes from a Design sidebar, see Visual Design. When your cursor is inside a className string, Shape can show inline controls for common utilities: Flex / Grid : direction, wrap, justify content, align items. Click the swatch next to a flex or grid token Gap : column and row gap. Click a gap token Padding : per side padding. Click a p / px / pl token Radius : corner radius stops. Click a rounded token Color picker : Tailwind palette and project CSS variables Controls appear as a floating panel anchored to the token and follow editor scroll. Click a value to apply it directly to the source. Placing the cursor on a flex, gap, padding, or radius token also opens the matching panel after a short pause. Hold Alt and drag left/right over a scrubbable number ( gap 4 , p [24px] , or CSS padding: 16px ), or scroll the mouse wheel while hovering the underlined value. Scale values snap to Tailwind’s spacing scale. Panel inputs also accept wheel nudges (Shift for 1px steps). Toggle scrubbing, underlines, cursor bind, and wheel on inputs in Settings → Editor → Design . Hover a UI token to see a plain language “last changed” blurb from git blame. Disable via Settings → Editor → Design → Design Blame Hover . Right click a Tailwind spacing scale number (e.g. the 4 in gap 4 ) and choose Refactor spacing scale to surgically replace every matching scale value in the file. Shape suggests Tailwind utilities with project frequency, sibling context (e.g. after flex prefer items / gap ), fuzzy matching, and spacing scales — not prefix only regex. Enable or disable this in Settings → Editor → Design → Design Autocomplete . Opening a parent folder (for example a repo that contains shape/ and website/ as separate git roots) discovers each nested repository for Source Control and explorer decorations. Accessibility checks run on color contrast and related design issues in supported files (JSX, TSX, CSS). Violations appear as squiggles in the editor and in the Problems panel. Configure WCAG Contrast Warnings and Compliance Level ( AA or AAA ) in Settings → Editor → Design . The color picker reads from: Tailwind's default palette CSS variables defined in project files like design tokens.css Picking a color inserts the matching class or variable reference at the cursor. The chat panel includes a Visual mode for UI work. Ask it to preview a component in chat before adding it, or tell it to build without stopping. Pair that with Visual Design on the live page. See Chat Modes. Visual Design Completions Lint and format AI Settings Chat Modes"
     },
     {
       "slug": [
@@ -188,11 +152,11 @@
         "languages-and-tooling"
       ],
       "title": "Languages and tooling",
-      "description": "Languages Shape highlights, plus Prettier, ESLint, LSP, Emmet, and design tools.",
+      "description": "Languages Shape highlights, plus Prettier, ESLint, and design tools.",
       "order": 8,
       "section": "Editor",
       "href": "/docs/editor/languages-and-tooling",
-      "body": "Shape contains syntax highlighting for many languages. Change the language mode anytime with Change Language Mode in the command palette ( Ctrl+Shift+P ). These languages are available. Opening a file picks one automatically. Language Typical files Plain Text unknown extensions TypeScript .ts , .tsx JavaScript .js , .jsx , .mjs , .cjs JSON .json , .jsonc HTML .html , .htm (also used for .vue , .svelte , .astro highlighting) CSS / SCSS / Less .css , .scss , .sass , .less Handlebars / Pug / Twig / Liquid .hbs , .pug , .twig , .liquid Markdown / MDX .md , .mdx XML / YAML .xml , .yaml , .yml GraphQL .graphql , .gql (also .prisma highlighting) SQL / MySQL / PostgreSQL .sql and related Python .py Rust .rs Go .go Java .java C / F .cs , .fs C / C++ .c , .h , .cpp , .hpp Objective C .m , .mm PHP / Ruby / Swift / Kotlin / Dart / Scala matching extensions Clojure / Elixir / Lua / R / Julia / Perl matching extensions Shell / PowerShell / Batch .sh , .ps1 , .bat , .cmd Dockerfile Dockerfile , .dockerfile HCL / Terraform .tf , .hcl Bicep .bicep Ini / TOML / Env .ini , .toml , .env Protocol Buffers .proto Solidity .sol WGSL .wgsl TypeSpec .tsp Highlighting alone does not mean IntelliSense or formatting for that language. See the tables below for tooling coverage. Built in document formatter when Enable Prettier is on ( Settings → Features → ESLint & Prettier ). Formats with Prettier Extensions JavaScript / TypeScript .js , .jsx , .ts , .tsx JSON .json CSS / SCSS / Less .css , .scss , .less HTML .html Markdown .md Use Format Document ( Alt+Shift+F ), or turn on Format On Save in editor settings. Shape runs Prettier with your project config ( .prettierrc , prettier.config.js ). Linting for JavaScript and TypeScript projects ( Settings → Features → ESLint & Prettier ). Supported Extensions ESLint .js , .jsx , .ts , .tsx , .mjs , .cjs , .vue , .svelte Issues appear in the editor and the Problems panel. Optional Fix on save applies auto fixable rules. Server What it covers Notes TypeScript .ts , .tsx , .js , .jsx Completions, go to def, rename, quick fixes HTML .html Markup IntelliSense CSS .css , .scss , .less Stylesheet IntelliSense JSON .json , .jsonc Schema aware editing Python .py Pyright Markdown .md remark language service GraphQL .graphql GraphQL language service Tailwind CSS class aware editing when the project uses Tailwind Toggle in Features → Language Servers Vue / Svelte when those frameworks are detected in the project Best results when the file language mode matches Toggle the main servers under Settings → Features → Language Servers . Details: Lint and LSP and IntelliSense. HTML/CSS abbreviations and expansions in HTML, CSS/SCSS/Less, and JSX/TSX. Controlled by the Emmet toggle under Features → Language Servers . For UI work in web files: Tool What it does Visual design Inspect the live preview and apply layout, fill, and type to source Design autocomplete Suggests Tailwind style classes and project patterns in className Tailwind controls Inline panels for flex, gap, padding, colors Design diagnostics Contrast and related accessibility checks CSS variable IntelliSense Completions and hover for var( ) See Visual Design and Design Tools. Feature Where Bracket pair colorization Editor settings Indent and bracket guides Editor settings Multi cursor editing Monaco defaults — Editing Files Markdown / MDX preview Markdown Preview Format on save Editor settings (uses Prettier when enabled) Editing Files IntelliSense Lint and LSP Visual Design Design Tools Editor Settings"
+      "body": "Shape highlights many languages in CodeMirror. Completions follow the file extension. There is no language server process. Change the language mode anytime with Change Language Mode in the command palette ( Ctrl+Shift+P ). These languages are available. Opening a file picks one automatically. Language Typical files Plain Text unknown extensions TypeScript .ts , .tsx JavaScript .js , .jsx , .mjs , .cjs JSON .json , .jsonc HTML .html , .htm (also used for .vue , .svelte , .astro highlighting) CSS / SCSS / Less .css , .scss , .sass , .less Handlebars / Pug / Twig / Liquid .hbs , .pug , .twig , .liquid Markdown / MDX .md , .mdx XML / YAML .xml , .yaml , .yml GraphQL .graphql , .gql (also .prisma highlighting) SQL / MySQL / PostgreSQL .sql and related Python .py Rust .rs Go .go Java .java C / F .cs , .fs C / C++ .c , .h , .cpp , .hpp Objective C .m , .mm PHP / Ruby / Swift / Kotlin / Dart / Scala matching extensions Clojure / Elixir / Lua / R / Julia / Perl matching extensions Shell / PowerShell / Batch .sh , .ps1 , .bat , .cmd Dockerfile Dockerfile , .dockerfile HCL / Terraform .tf , .hcl Bicep .bicep Ini / TOML / Env .ini , .toml , .env Protocol Buffers .proto Solidity .sol WGSL .wgsl TypeSpec .tsp Highlighting alone does not mean completions or formatting for that language. CodeMirror packs cover the common web set listed under Completions. Built in document formatter when Enable Prettier is on ( Settings → Features → ESLint & Prettier ). Formats with Prettier Extensions JavaScript / TypeScript .js , .jsx , .ts , .tsx JSON .json CSS / SCSS / Less .css , .scss , .less HTML .html Markdown .md Use Format Document ( Alt+Shift+F ), or turn on Format On Save in editor settings. Shape runs Prettier with your project config ( .prettierrc , prettier.config.js ). Linting for JavaScript and TypeScript projects ( Settings → Features → ESLint & Prettier ). Supported Extensions ESLint .js , .jsx , .ts , .tsx , .mjs , .cjs , .vue , .svelte Issues appear in the Problems panel. Optional Fix on save applies auto fixable rules. See Completions. Shape does not start TypeScript, HTML, CSS, JSON, or Tailwind language servers. Completions Editing Files Visual Design Design Tools"
     },
     {
       "slug": [
@@ -216,31 +180,7 @@
       "order": 2,
       "section": "Files",
       "href": "/docs/files/workspace-search",
-      "body": "The Search sidebar finds text across your entire workspace. Use it for refactors, auditing string usage, and locating config keys. Click the search icon on the activity bar View → Search or Ctrl+Shift+F Edit → Find in Files from the menu 1. Type your search query in the search box. 2. Results appear grouped by file with line previews. 3. Click a result to open the file at that line. Search respects file exclude patterns from Settings → Editor → Files . Hidden folders like node modules are skipped by default. Switch to replace mode with Ctrl+H or the toggle in the search sidebar. 1. Enter find and replace strings. 2. Review matches in the results list. 3. Replace one match at a time, or replace all in a file or across the workspace. Confirm bulk replacements carefully. Shape modifies files on disk when you apply a replace. Use the buttons below the search field to toggle: Match case Match whole word Use regular expression Regex mode supports capture groups in replace strings. Feature Shortcut Scope Go to File Ctrl+P Filenames only Find in Files Ctrl+Shift+F File contents Workspace Symbols Ctrl+T Functions, classes, variables Use Ctrl+P when you know the file name. Use search when you need to find text inside files. Command Palette File Explorer IntelliSense Keyboard Shortcuts"
-    },
-    {
-      "slug": [
-        "files",
-        "outline"
-      ],
-      "title": "Outline",
-      "description": "Jump to functions, classes, and symbols in the active editor file.",
-      "order": 3,
-      "section": "Files",
-      "href": "/docs/files/outline",
-      "body": "The Outline sidebar lists symbols defined in the file you are editing. Use it to navigate long files without scrolling. Click the list icon on the activity bar View → Outline from the menu bar The outline updates when you switch tabs. It reflects the active editor file only, not the whole workspace. Symbols depend on the file language and LSP support: Language Typical symbols TypeScript / JavaScript Functions, classes, interfaces, variables CSS Rules and selectors HTML Elements and sections Markdown Headings If symbols are missing, check that the correct language mode is set and the relevant LSP is enabled in Lint and LSP. Click any entry to move the cursor to that symbol in the editor. The editor scrolls and focuses the definition. For project wide symbol search, use Ctrl+T ( Go to Symbol in Workspace ). The titlebar breadcrumbs show the file path. The outline shows structure inside the file. Use both together when working in large modules. IntelliSense Command Palette Activity Bar Editing Files"
-    },
-    {
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "title": "Bookmarks",
-      "description": "Mark lines in files and jump between bookmarks across the workspace.",
-      "order": 4,
-      "section": "Files",
-      "href": "/docs/files/bookmarks",
-      "body": "Bookmarks let you save positions in code and return to them later. Bookmarks persist in local storage across sessions. 1. Place the cursor on the line you want to mark. 2. Press Ctrl+Alt+B . A bookmark icon appears in the editor gutter. Press Ctrl+Alt+B again on the same line to remove it. Action Shortcut Next bookmark Ctrl+F2 Previous bookmark Shift+F2 Navigation wraps around. If the next bookmark is in another file, Shape opens that file and moves the cursor. Open the command palette ( Ctrl+Shift+P ) and search for Bookmarks to see the bookmark list panel. Each entry shows the file path, line number, and a short label. Click an entry to jump to that location. Remove bookmarks from the list when you no longer need them. By default, bookmarks use the label Line N . When you toggle a bookmark on a word, Shape may use that word as the label. Bookmarks are per workspace path and stored locally. They are not synced to Git or your Shape account. Clearing browser or app storage removes them. Bookmark failing tests, TODO comments, or sections you revisit during a refactor. Bookmarks have no activity bar icon. Use keyboard shortcuts or the command palette. Combine with Outline for within file structure and bookmarks for cross file anchors. Editing Files Activity Bar Keyboard Shortcuts Command Palette"
+      "body": "The Search sidebar finds text across your entire workspace. Use it for refactors, auditing string usage, and locating config keys. Click the search icon on the activity bar View → Search or Ctrl+Shift+F Edit → Find in Files from the menu 1. Type your search query in the search box. 2. Results appear grouped by file with line previews. 3. Click a result to open the file at that line. Search respects file exclude patterns from Settings → Editor → Files . Hidden folders like node modules are skipped by default. Switch to replace mode with Ctrl+H or the toggle in the search sidebar. 1. Enter find and replace strings. 2. Review matches in the results list. 3. Replace one match at a time, or replace all in a file or across the workspace. Confirm bulk replacements carefully. Shape modifies files on disk when you apply a replace. Use the buttons below the search field to toggle: Match case Match whole word Use regular expression Regex mode supports capture groups in replace strings. Feature Shortcut Scope Go to File Ctrl+P Filenames only Find in Files Ctrl+Shift+F File contents Workspace Symbols Ctrl+T Functions, classes, variables Use Ctrl+P when you know the file name. Use search when you need to find text inside files. Command Palette File Explorer Completions Keyboard Shortcuts"
     },
     {
       "slug": [
@@ -284,11 +224,11 @@
         "git-manager"
       ],
       "title": "Git Manager",
-      "description": "Issues, pull requests, Actions, and checks in a dedicated Git window.",
+      "description": "Source control, graph, pull requests, issues, and workflow runs.",
       "order": 4,
       "section": "Git",
       "href": "/docs/git/git-manager",
-      "body": "Git Manager is a separate window for local Git and GitHub work: source control, the graph, pull requests, Actions, and checks. Use it when you want PRs and CI next to the repo without leaving Shape. Day to day stage and commit still live in the Source Control sidebar. Window → Git Manager Shape logo in the Source Control or Git Graph sidebar header The window remembers the last section you had open. Section Purpose Source Control Stage, commit, pull, and push Git Graph Commit history as a lane diagram Branches Local and remote branches Tags Local tags These match the sidebar views, with more room for lists and diffs. Sign in with GitHub to load remote data for the open repository. Section Purpose Issues Open and closed issues, conversation, and details Pull requests PR list, conversation threads, commits, files, and checks Releases Published releases and notes On a pull request or issue you can: Read the conversation (authors, associations, review comments) Switch tabs for commits, files, and check runs Summarize with AI (needs a Shape account) Open on GitHub in your system browser Group What you see Actions Workflow runs, definitions, jobs, steps, live status, logs, artifacts Checks Check runs, suites, and commit statuses Deploy Deployments and deployment statuses Use these when you need CI status without opening github.com. Source Control Git Graph GitHub Sign In Diff and Merge"
+      "body": "Git Manager is Shape's Git workspace: local source control, the commit graph, pull requests, issues, and Actions. Open it from Window → Git Manager or the Shape logo in the Source Control sidebar. Day to day stage and commit still live in the Source Control sidebar. The window remembers the last section you had open. The current section title lives in the top bar with search and actions. Section Purpose Source Control Stage, commit, pull, and push Git Graph Commit history as a lane diagram — open a commit, then a file, to review the diff in a side panel Branches Local and remote branches Sign in with GitHub to load remote data for the open repository. Section Purpose Pull requests PR list, conversation, commits, files, and checks. Create pull request drafts title and body with AI from your branch diff, then publishes when you confirm. Opening a PR starts an AI review and surfaces failed checks. Issues Open and closed issues, conversation, and details On a pull request or issue you can: Read the conversation Switch tabs for commits, files, and check runs Review or Summarize with AI (needs a Shape account) Open on GitHub in your system browser Section Purpose Workflow runs Recent CI runs, jobs, logs, and artifacts Jobs Jobs and logs for the selected run Source Control Git Graph GitHub Sign In Diff and Merge"
     },
     {
       "slug": [
@@ -324,7 +264,7 @@
       "order": 2,
       "section": "AI",
       "href": "/docs/ai/chat-modes",
-      "body": "Each chat message runs in a mode that controls what the assistant can do. Pick the mode from the dropdown next to the input box before you send. Mode Behavior Best for Ask Read only. No file edits or terminal commands. Learning the codebase, explaining errors Code Can read, edit, and run commands. Edits show for Keep / Undo. Implementing features and fixes Plan Research only. Writes a markdown plan to .shape/plans/ . Designing an approach before coding Visual UI and styling focused. Follows existing design patterns. Optional in chat component preview. Layout, Tailwind, and component polish Review Systematic investigation of bugs, failures, and security issues. Tracking down runtime/build errors, auditing auth, input handling, and dependencies Safe default for exploration. The assistant reads your project and answers questions but cannot modify files or run the terminal. Use Ask when onboarding to a new repo. The default for implementation work. The assistant can: Read and search files Edit files, shown as review cards (Keep / Undo) Run terminal commands (see AI Settings for auto run) Call finish when the task is done Switch to Code when you are ready to apply changes. See Reviewing Edits. Plan mode researches the codebase and saves an implementation plan as markdown under .shape/plans/ . Plans include a Todos checklist. It does not edit project source files. When the plan is ready, review the file and click Build this plan (or switch to Code and ask to implement). During build, the assistant maintains a live todo checklist in chat via update todos . Visual mode is for UI work. It reuses your project’s component library when present; otherwise it defaults to Radix + Tailwind. Ask it to preview a component in chat before adding it, or tell it to build without stopping . There is no multi option gallery or Select UI — reply in chat. Pair Visual mode with Visual Design on the live preview and Design Tools in the editor. Older Design selections are treated as Visual. Review mode investigates bugs and security sensitive code: it reads errors, logs, and relevant files before suggesting fixes, and watches for patterns in auth flows, user input, and unsafe APIs. By default, Adversarial review in AI Settings runs a second critic pass after Review finishes. Turn that off if you want a single pass. Older Debug and Security selections are automatically migrated to Review — the two were folded into one mode. Change the mode between messages in the same thread. Earlier context carries over, but tool permissions follow the active mode for each new message. Chat Overview Reviewing Edits Visual Design Refactor with AI Tutorial AI Settings"
+      "body": "Each chat message runs in a mode that controls what the assistant can do. Pick the mode from the dropdown next to the input box before you send. Mode Behavior Best for Ask Read only. No file edits or terminal commands. Learning the codebase, explaining errors Code Can read, edit, and run commands. Edits show for Keep / Undo. Implementing features and fixes Plan Research only. Writes a markdown plan to .shape/plans/ . Designing an approach before coding Visual UI and styling focused. Follows existing design patterns. Optional in chat component preview. Layout, Tailwind, and component polish Review Systematic investigation of bugs, failures, and security issues. Tracking down runtime/build errors, auditing auth, input handling, and dependencies Safe default for exploration. The assistant reads your project and answers questions but cannot modify files or run the terminal. Use Ask when onboarding to a new repo. The default for implementation work. The assistant can: Read and search files Edit files, shown as review cards (Keep / Undo) Run terminal commands (see AI Settings for auto run) Call finish when the task is done Switch to Code when you are ready to apply changes. See Reviewing Edits. Plan mode researches the codebase and saves an implementation plan as markdown under .shape/plans/ . Plans include a Todos checklist. It does not edit project source files. When the plan is ready, review the file and click Build this plan (or switch to Code and ask to implement). During build, the assistant maintains a live todo checklist in chat via update todos . Visual mode is for UI work. It reuses your project’s component library when present; otherwise it defaults to Radix + Tailwind. Ask it to preview a component in chat before adding it, or tell it to build without stopping . There is no multi option gallery or Select UI — reply in chat. Pair Visual mode with Visual Design on the live preview and Design Tools in the editor. Older Design selections are treated as Visual. Review mode investigates bugs and security sensitive code: it reads errors, logs, and relevant files before suggesting fixes, and watches for patterns in auth flows, user input, and unsafe APIs. Write a structured review: highest severity first, confirmed vs suspected, smallest safe fix, and how to verify. Older Debug and Security selections are automatically migrated to Review — the two were folded into one mode. Change the mode between messages in the same thread. Earlier context carries over, but tool permissions follow the active mode for each new message. Chat Overview Reviewing Edits Visual Design Refactor with AI Tutorial AI Settings"
     },
     {
       "slug": [
@@ -360,7 +300,7 @@
       "order": 5,
       "section": "AI",
       "href": "/docs/ai/ai-settings",
-      "body": "Agent behavior is controlled from Settings → Agents . Open settings from the activity bar gear icon, Window → Settings , or Ctrl+, . Setting Purpose Enabled models Toggle which models appear in the chat picker Default model Pre selected model for new threads Disable models you never use to simplify the dropdown. Auto run mode controls how the agent runs shell commands and other gated tools: Mode Behavior Ask every time Prompt Run / Reject on each command Auto (safe commands) Default. Runs common safe commands without a prompt Run everything Runs commands except hard blocked ones Protect destructive git (on by default) always asks before git reset , clean , restore , force push, and similar. See Reviewing Edits. Setting Purpose Require edit approval Stage file edits for Accept / Skip before they are written Auto apply agent edits Skip the Keep / Undo strip after edits land These are independent. Approval gates the write; auto apply skips the review strip after the write. Adversarial review (on by default) runs critic models after Review mode finishes. Turn it off for a single pass. Max context lines limits how much surrounding code Shape sends when attaching a file. Higher values give the assistant more file context but use more credits. Semantic codebase index builds on project open and after agent edits. It powers search codebase . Re index after large refactors. Semantic embeddings (on by default when signed in) combine remote embeddings with keyword search. Off uses keyword search only. The Rules field guides assistant behavior (style, conventions, files to avoid). Shape also loads .shape/rules.md from the project. These append to the built in mode instructions for every message in the workspace. Model Context Protocol servers extend the assistant with external tools. Configure servers in Settings → Agents → MCP . Each server entry includes: Name and launch command Arguments and environment variables Enabled toggle Restart or reconnect after changing MCP configuration. Models and Pricing Chat Overview Settings Overview Reviewing Edits"
+      "body": "Agent behavior is controlled from Settings → Agents . Open settings from the activity bar gear icon, Window → Settings , or Ctrl+, . Setting Purpose Enabled models Toggle which models appear in the chat picker Default model Pre selected model for new threads Disable models you never use to simplify the dropdown. Auto run mode controls how the agent runs shell commands and other gated tools: Mode Behavior Ask every time Prompt Run / Reject on each command Auto (safe commands) Default. Runs common safe commands without a prompt Run everything Runs commands except hard blocked ones Protect destructive git (on by default) always asks before git reset , clean , restore , force push, and similar. See Reviewing Edits. Setting Purpose Require edit approval Stage file edits for Accept / Skip before they are written Auto apply agent edits Skip the Keep / Undo strip after edits land These are independent. Approval gates the write; auto apply skips the review strip after the write. Max context lines limits how much surrounding code Shape sends when attaching a file. Higher values give the assistant more file context but use more credits. Semantic codebase index builds on project open and after agent edits. It powers search codebase . Re index after large refactors. Semantic embeddings (on by default when signed in) combine remote embeddings with keyword search. Off uses keyword search only. The Rules field guides assistant behavior (style, conventions, files to avoid). Shape also loads .shape/rules.md from the project. These append to the built in mode instructions for every message in the workspace. Model Context Protocol servers extend the assistant with external tools. Configure servers in Settings → Agents → MCP . Each server entry includes: Name and launch command Arguments and environment variables Enabled toggle Restart or reconnect after changing MCP configuration. Models and Pricing Chat Overview Settings Overview Reviewing Edits"
     },
     {
       "slug": [
@@ -376,30 +316,6 @@
     },
     {
       "slug": [
-        "terminal",
-        "npm-scripts"
-      ],
-      "title": "NPM Scripts",
-      "description": "Run package.json scripts from the titlebar without typing commands.",
-      "order": 2,
-      "section": "Terminal",
-      "href": "/docs/terminal/npm-scripts",
-      "body": "When your project has a package.json with a scripts section, Shape surfaces those scripts in the titlebar Scripts dropdown. 1. Open a project folder that contains package.json . 2. Click Scripts in the titlebar (right side). 3. Choose a script (for example dev , build , lint ). Shape runs the equivalent of npm run (or your configured package manager) in the integrated terminal and opens the bottom panel if it was hidden. Shape detects the package manager from lockfiles and Settings → Features → Node.js : Lockfile Default manager bun.lock Bun pnpm lock.yaml pnpm yarn.lock Yarn package lock.json npm Override with the Package Manager setting if needed. Stdout and stderr appear in the terminal tab. Long running scripts like dev keep the tab open until you stop the process with Ctrl+C . The Scripts button appears only when: A folder is open package.json exists at the project root The scripts object has at least one entry Monorepos with scripts in subpackages still run from the root package.json . Use the terminal for workspace specific commands. Integrated Terminal Titlebar and Panels Settings Overview First Project Tutorial"
-    },
-    {
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "title": "Problems, Output, and Tests",
-      "description": "View diagnostics, tool logs, and test results in the bottom panel.",
-      "order": 3,
-      "section": "Terminal",
-      "href": "/docs/terminal/problems-output-tests",
-      "body": "Beyond the terminal, the bottom panel hosts tabs for diagnostics and tool output. Use them to track errors while you code. The Problems tab aggregates diagnostics from language servers, ESLint, and design checks. Action Shortcut Open Problems Ctrl+Shift+M or command palette View: Show Problems Next problem F8 Previous problem Shift+F8 Click a row to jump to the file and line. The status bar also shows error and warning counts when problems exist. TypeScript and JavaScript (LSP) ESLint (when enabled in settings) Design diagnostics (contrast and accessibility) CSS and HTML language services Fix issues in the editor or use Quick Fix ( Ctrl+. ) when available. The Output tab shows logs from Shape tooling and language servers. Open it from the command palette: View: Show Output . Use Output when diagnosing why a language service failed to start or when an extension like feature prints status messages. When test integration is available for your project, results appear in the Tests tab. Failed tests link to the asserting file. Run tests from the terminal ( npm test , etc.) or from task configurations. Shape surfaces structured results when the runner reports them. 1. Keep Problems visible while fixing a type error batch. 2. Switch to Terminal to run builds after fixes. 3. Check Output if Problems does not explain a missing language feature. Toggle the whole panel with Ctrl+ without losing tab contents. IntelliSense Lint and LSP Integrated Terminal Titlebar and Panels"
-    },
-    {
-      "slug": [
         "settings",
         "settings-overview"
       ],
@@ -408,7 +324,7 @@
       "order": 1,
       "section": "Settings",
       "href": "/docs/settings/settings-overview",
-      "body": "Shape stores preferences in a settings editor that opens as a tab in the workbench. Changes apply immediately or on the next relevant action. Click the gear icon on the activity bar Click Settings in the titlebar Window → Settings or Ctrl+, Close the settings tab with Ctrl+W like any editor tab. The left tree groups settings like this: Group Sections Account Profile, plan, updates channel Agents Models, rules, context, MCP Editor Font, indentation, caret, saving, files, Design Features Terminal, Source Control, language servers, Node.js, Python, ESLint & Prettier Application Updates, notifications, privacy, developer Select a leaf in the tree to jump to that section. Controls are toggles, dropdowns, and text fields. Design autocomplete, Tailwind controls, and diagnostics are under Editor → Design , not a separate top level category. Agent auto run, edit approval, and adversarial review are under Agents . See AI Settings and Design Tools. Settings are saved locally on your machine. They apply to all projects unless a project specific tool config overrides them (for example .prettierrc ). Individual settings can be restored by selecting the default value in each control. There is no single \"reset all\" button. Reinstalling Shape does not remove your saved settings file. Editor Settings Git Settings Terminal Settings AI Settings"
+      "body": "Shape stores preferences in a settings editor that opens as a tab in the workbench. Changes apply immediately or on the next relevant action. Click the gear icon on the activity bar Click Settings in the titlebar Window → Settings or Ctrl+, Close the settings tab with Ctrl+W like any editor tab. The left tree groups settings like this: Group Sections Account Profile, plan, updates channel Agents Models, rules, context, MCP Editor Font, indentation, caret, saving, files, Design Features Terminal, Source Control, Node.js, Python, ESLint & Prettier Application Updates, notifications, privacy, developer Select a leaf in the tree to jump to that section. Controls are toggles, dropdowns, and text fields. Design autocomplete, Tailwind controls, and diagnostics are under Editor → Design , not a separate top level category. Agent auto run, edit approval, and adversarial review are under Agents . See AI Settings and Design Tools. Settings are saved locally on your machine. They apply to all projects unless a project specific tool config overrides them (for example .prettierrc ). Individual settings can be restored by selecting the default value in each control. There is no single \"reset all\" button. Reinstalling Shape does not remove your saved settings file. Editor Settings Git Settings Terminal Settings AI Settings"
     },
     {
       "slug": [
@@ -416,11 +332,11 @@
         "editor-settings"
       ],
       "title": "Editor Settings",
-      "description": "Configure font, display, tabs, auto-save, and formatting in the Monaco editor.",
+      "description": "Configure font, display, tabs, auto-save, and formatting in the CodeMirror editor.",
       "order": 2,
       "section": "Settings",
       "href": "/docs/settings/editor-settings",
-      "body": "Settings → Editor controls how code looks and behaves in the Monaco editor. Setting Description Font family Monospace face (presets plus custom) Font size Editor text size in pixels Font ligatures Enable programming ligatures Minimap Right edge code overview Line numbers On, off, or relative Render whitespace None, selection, or all Line highlight Highlight active line, gutter, both, or none Bracket pair colorization Color matched brackets Indent guides Vertical indent lines Bracket guides Vertical lines for bracket pairs Setting Description Tab size Spaces per tab stop Insert spaces Spaces instead of tab characters Detect indentation Read indent style from file content Setting Description Word wrap Off, on, or bounded column Cursor style Line, block, or underline Smooth scrolling Animated scroll Scroll beyond last line Extra space below file end Image preview Inline preview for image files Setting Description Auto save Off, after delay, or on focus change Auto save delay Milliseconds when using delay mode Format on save Run formatter when saving Trim trailing whitespace Remove trailing spaces on save Insert final newline Ensure file ends with newline Format on save uses Prettier when enabled and configured for the project. Settings → Editor → Design toggles Tailwind inline controls, number scrubbing, design autocomplete, diagnostics, and design blame. See Design Tools. Live page inspect and apply is Visual Design, not this settings group. Some settings have keyboard shortcuts without opening settings: Action Shortcut Toggle word wrap Alt+Z Toggle minimap Command palette Editor: Toggle Minimap Format document Alt+Shift+F Editing Files Lint and LSP Settings Overview Visual Design Design Tools"
+      "body": "Settings → Editor controls how code looks and behaves in the CodeMirror editor. Setting Description Font family Monospace face (presets plus custom) Font size Editor text size in pixels Font ligatures Enable programming ligatures Minimap Right edge code overview Line numbers On, off, or relative Render whitespace None, selection, or all Line highlight Highlight active line, gutter, both, or none Bracket pair colorization Color matched brackets Indent guides Vertical indent lines Bracket guides Vertical lines for bracket pairs Setting Description Tab size Spaces per tab stop Insert spaces Spaces instead of tab characters Detect indentation Read indent style from file content Setting Description Word wrap Off, on, or bounded column Cursor style Line, block, or underline Smooth scrolling Animated scroll Scroll beyond last line Extra space below file end Image preview Inline preview for image files Setting Description Auto save Off, after delay, or on focus change Auto save delay Milliseconds when using delay mode Format on save Run formatter when saving Trim trailing whitespace Remove trailing spaces on save Insert final newline Ensure file ends with newline Format on save uses Prettier when enabled and configured for the project. Settings → Editor → Design toggles Tailwind inline controls, number scrubbing, design autocomplete, diagnostics, and design blame. See Design Tools. Live page inspect and apply is Visual Design, not this settings group. Some settings have keyboard shortcuts without opening settings: Action Shortcut Toggle word wrap Alt+Z Toggle minimap Command palette Editor: Toggle Minimap Format document Alt+Shift+F Editing Files Lint and format Settings Overview Visual Design Design Tools"
     },
     {
       "slug": [
@@ -451,12 +367,12 @@
         "settings",
         "lint-and-lsp"
       ],
-      "title": "Lint and LSP",
-      "description": "Enable ESLint, Prettier, and language servers for diagnostics and formatting.",
+      "title": "Lint and format",
+      "description": "Enable ESLint and Prettier for diagnostics and formatting.",
       "order": 5,
       "section": "Settings",
       "href": "/docs/settings/lint-and-lsp",
-      "body": "Shape bundles language tooling for web projects. Settings → Features → ESLint & Prettier and Settings → Features → Language Servers control diagnostics and formatters. Setting Description Enable ESLint Run ESLint on supported files Fix on save Apply auto fixable rules when saving ESLint reads your project's config ( .eslintrc , eslint.config.js , etc.). Errors appear in the editor and Problems panel. Setting Description Enable Prettier Use Prettier as the document formatter When enabled, Format Document ( Alt+Shift+F ) and format on save use Prettier with project config ( .prettierrc , prettier.config.js ). Toggle built in language services under Features → Language Servers : Server Languages TypeScript .ts , .tsx , .js , .jsx CSS .css , modules HTML .html JSON .json , .jsonc Tailwind CSS Class completions in markup Emmet HTML/CSS abbreviations Disabling a server stops its diagnostics and completions for that language. Settings → Features → Node.js includes Coding assistance for JavaScript tooling integration. Keep it enabled for npm package IntelliSense in import paths. Design autocomplete and diagnostics live under Settings → Editor → Design , not LSP. See Design Tools and Visual Design. If diagnostics never appear: 1. Confirm the language server toggle is on. 2. Open Problems ( Ctrl+Shift+M ) for silent errors. 3. Check Output via the command palette for server startup logs. 4. Ensure the project has the expected config files ( tsconfig.json , ESLint config). Languages and tooling IntelliSense Problems, Output, and Tests Editor Settings Settings Overview"
+      "body": "Shape can run ESLint and Prettier against the open project. The editor itself is CodeMirror — these tools are not language servers. Settings → Features → ESLint & Prettier controls diagnostics and formatters. Setting Description Enable ESLint Run ESLint on supported files Fix on save Apply auto fixable rules when saving ESLint reads your project's config ( .eslintrc , eslint.config.js , etc.). Errors appear in the Problems panel. Setting Description Enable Prettier Use Prettier as the document formatter When enabled, Format Document ( Alt+Shift+F ) and format on save use Prettier with project config ( .prettierrc , prettier.config.js ). Shape does not run a TypeScript, CSS, HTML, JSON, or Tailwind language server in the editor. Completions come from CodeMirror language packs. See Completions. Design autocomplete and diagnostics live under Settings → Editor → Design . See Design Tools and Visual Design. If diagnostics never appear: 1. Confirm ESLint is enabled. 2. Open Problems ( Ctrl+Shift+M ). 3. Ensure the project has the expected config files ( tsconfig.json , ESLint config). Languages and tooling Completions Problems, Output, and Tests Editor Settings Settings Overview"
     },
     {
       "slug": [
@@ -505,18 +421,6 @@
       "section": "Reference",
       "href": "/docs/reference/keyboard-shortcuts",
       "body": "Shape shortcuts come from shape/config/keybindings.json plus workbench and editor commands registered in the command palette. Most use Ctrl on Windows. Open the command palette ( Ctrl+Shift+P ) to find actions by name. Assigned shortcuts appear on the right. Action Shortcut New Text File Ctrl+N New Window Ctrl+Shift+N Open File Ctrl+O Open Folder Ctrl+K Ctrl+O Close Folder Ctrl+K Ctrl+W Save Ctrl+S Save As Ctrl+Shift+S Save All Ctrl+K S Close Tab Ctrl+W Close All Tabs Ctrl+K E Recent Files Ctrl+E Close Window Alt+F4 Action Shortcut Go to File Ctrl+P Command Palette Ctrl+Shift+P Go to Line/Column Ctrl+G Go to Symbol in Workspace Ctrl+T Find in Files Ctrl+Shift+F Replace in Files Ctrl+H Explorer Ctrl+Shift+E Search sidebar Ctrl+Shift+F Source Control Ctrl+Shift+G Action Shortcut Undo Ctrl+Z Redo Ctrl+Y Cut Ctrl+X Copy Ctrl+C Paste Ctrl+V Select All Ctrl+A Toggle Line Comment Ctrl+/ Toggle Block Comment Shift+Alt+A Indent Line Ctrl+] Outdent Line Ctrl+[ Move Line Up / Down Alt+↑ / Alt+↓ Duplicate Line Down Shift+Alt+↓ Add Cursor Above / Below Ctrl+Alt+↑ / Ctrl+Alt+↓ Join Lines Command palette Transform to Uppercase / Lowercase Command palette Action Shortcut Format Document Alt+Shift+F Format Selection Ctrl+K Ctrl+F Quick Fix Ctrl+. Rename Symbol F2 Organize Imports Shift+Alt+O Action Shortcut Go to Definition F12 Peek Definition Alt+F12 Find All References Shift+F12 Go to Next Problem F8 Go to Previous Problem Shift+F8 Action Shortcut Toggle Terminal Panel Ctrl+ New Terminal Ctrl+Shift+ Problems Ctrl+Shift+M Toggle Word Wrap Alt+Z Open Settings Ctrl+, Toggle AI Chat Ctrl+L Zen Mode Ctrl+K Z Fold All Ctrl+K Ctrl+0 Unfold All Ctrl+K Ctrl+J These apply while the Browser tab is focused. Action Shortcut Toggle design mode Ctrl+Shift+D Toggle inspect vs page interaction Ctrl+I Undo / redo design preview Ctrl+Z / Ctrl+Y Clear selection Escape Back / Forward Alt+← / Alt+→ In a Working Tree or Index diff tab: Action Shortcut Stage hunk (unstaged) Ctrl+Y Unstage hunk (staged) Ctrl+Shift+Y Action Shortcut Toggle Bookmark Ctrl+Alt+B Next Bookmark Ctrl+F2 Previous Bookmark Shift+F2 These commands have no default shortcut. Run them from Ctrl+Shift+P : View: Show Problems View: Show Output Editor: Toggle Minimap Editor: Toggle Inlay Hints Chat: Show History Change Language Mode… View: Toggle Zen Mode (also Ctrl+K Z ) Some shortcuts use two steps. Press the first chord, release, then press the second: Action Chord Zen Mode Ctrl+K , then Z Save All Ctrl+K , then S Close All Tabs Ctrl+K , then E Format Selection Ctrl+K , then Ctrl+F Fold All Ctrl+K , then Ctrl+0 Unfold All Ctrl+K , then Ctrl+J Command Palette Quick Start Visual Design Editing Files Bookmarks"
-    },
-    {
-      "slug": [
-        "help",
-        "getting-started"
-      ],
-      "title": "Getting started",
-      "description": "Install, sign in, and find help.",
-      "order": 1,
-      "section": "Help",
-      "href": "/docs/help/getting-started",
-      "body": "Day to day product guides live in the main docs. Use these pages when something is broken or you need account help. Install Quick Start Accounts Billing Visual Design Chat Overview Git Manager See Troubleshooting or Contact support."
     },
     {
       "slug": [
@@ -652,11 +556,11 @@
         "4200"
       ],
       "title": "4200 Language server",
-      "description": "A language server failed to start or crashed.",
+      "description": "This code is unused. Shape does not run language servers.",
       "order": 42,
       "section": "Help",
       "href": "/docs/help/errors/4200",
-      "body": "IntelliSense, go to definition, or diagnostics stopped because a language server exited or never started. Editing still works; language features may be limited. 1. Re open the file or the project folder. 2. Check Settings → Features → Language Servers and confirm the server for this file type is enabled. 3. For TypeScript/JavaScript, ensure node modules (or your toolchain) is installed. 4. Watch Output → LSP for the underlying message, then retry. IntelliSense Language servers Troubleshooting"
+      "body": "This error code is leftover from an older editor. Shape’s current editor is CodeMirror and does not start language servers. If editing feels limited, that is expected: there is no TypeScript language service or go to definition. 1. Use in file search ( Ctrl+F ) and workspace search ( Ctrl+Shift+F ). 2. Ask the agent to find symbols or explain types. 3. Ignore this code if you see it in old logs. Completions Troubleshooting"
     },
     {
       "slug": [
@@ -1038,7 +942,7 @@
       ],
       "href": "/docs/workspace/workbench-tour",
       "heading": "Layout overview",
-      "text": "Shape divides the window into five regions: Activity bar : narrow strip on the far left; switches sidebar views and opens Browser or Settings Primary sidebar : file tree, search, Git, outline, and more Editor : tabbed Monaco code area in the center (also Browser, Settings, and diffs) Secondary sidebar : AI chat on the right Bottom panel : terminal and diagnostic views",
+      "text": "Shape divides the window into five regions: Activity bar : narrow strip on the far left; switches sidebar views and opens Browser or Settings Primary sidebar : file tree, search, Git, outline, and more Editor : tabbed CodeMirror area in the center (also Browser, Settings, and diffs) Secondary sidebar : AI chat on the right Bottom panel : terminal and diagnostic views",
       "title": "Workbench Tour",
       "section": "Workspace"
     },
@@ -1115,90 +1019,6 @@
       "section": "Workspace"
     },
     {
-      "id": "workspace/activity-bar#intro",
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "href": "/docs/workspace/activity-bar",
-      "heading": null,
-      "text": "The activity bar is the vertical strip on the far left of the workbench. Each icon opens a different view in the primary sidebar , except Browser and Settings , which open editor tabs.",
-      "title": "Activity Bar",
-      "section": "Workspace"
-    },
-    {
-      "id": "workspace/activity-bar#sidebar-views",
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "href": "/docs/workspace/activity-bar",
-      "heading": "Sidebar views",
-      "text": "Icon View Purpose File Explorer Browse and open project files Branch Source Control Stage, commit, and review changes Commit Git Graph Visual commit history List Outline Symbols in the active file Search Search Find and replace across the workspace Click an icon to switch views. Click the same icon again to collapse the sidebar entirely.",
-      "title": "Activity Bar",
-      "section": "Workspace"
-    },
-    {
-      "id": "workspace/activity-bar#dirty-file-badge",
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "href": "/docs/workspace/activity-bar",
-      "heading": "Dirty file badge",
-      "text": "When you have unsaved files, the Explorer icon shows a small badge with the count of dirty tabs. Save with Ctrl+S or File → Save All to clear it.",
-      "title": "Activity Bar",
-      "section": "Workspace"
-    },
-    {
-      "id": "workspace/activity-bar#bottom-actions",
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "href": "/docs/workspace/activity-bar",
-      "heading": "Bottom actions",
-      "text": "Below the view icons, the activity bar has two fixed buttons: Button Action Chrome icon Opens the Browser tab (Visual Design) Gear icon Opens Settings These are not sidebar views. Browser and Settings open as editor tabs.",
-      "title": "Activity Bar",
-      "section": "Workspace"
-    },
-    {
-      "id": "workspace/activity-bar#opening-views-from-the-menu",
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "href": "/docs/workspace/activity-bar",
-      "heading": "Opening views from the menu",
-      "text": "Every activity bar sidebar view is also available from View in the menu bar: View → Explorer ( Ctrl+Shift+E ) View → Search ( Ctrl+Shift+F ) View → Source Control ( Ctrl+Shift+G ) View → Git Graph View → Outline View → Preview (Browser tab) Git Manager is Window → Git Manager , not an activity bar icon.",
-      "title": "Activity Bar",
-      "section": "Workspace"
-    },
-    {
-      "id": "workspace/activity-bar#what-is-not-on-the-activity-bar",
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "href": "/docs/workspace/activity-bar",
-      "heading": "What is not on the activity bar",
-      "text": "Some features live elsewhere: AI Chat : titlebar toggle or View → AI Chat (right sidebar) Terminal : bottom panel, not the activity bar Problems / Output : bottom panel tabs Bookmarks : keyboard only ( Ctrl+Alt+B ); no activity bar entry",
-      "title": "Activity Bar",
-      "section": "Workspace"
-    },
-    {
-      "id": "workspace/activity-bar#related",
-      "slug": [
-        "workspace",
-        "activity-bar"
-      ],
-      "href": "/docs/workspace/activity-bar",
-      "heading": "Related",
-      "text": "File Explorer Visual Design Workbench Tour Source Control Git Manager Bookmarks",
-      "title": "Activity Bar",
-      "section": "Workspace"
-    },
-    {
       "id": "workspace/titlebar-and-panels#intro",
       "slug": [
         "workspace",
@@ -1254,7 +1074,7 @@
       ],
       "href": "/docs/workspace/titlebar-and-panels",
       "heading": "Bottom panel",
-      "text": "The bottom panel stacks tabbed views: Tab Opens from Purpose Terminal View → Terminal , Ctrl+ , panel toggle Shell in project directory Problems View → Problems , Ctrl+Shift+M , command palette ESLint, TypeScript, and LSP diagnostics Output Command palette View: Show Output Tool and extension logs Tests Test runner integration Test results when available Click a tab to switch views. Drag the top edge of the panel to resize it.",
+      "text": "The bottom panel stacks tabbed views: Tab Opens from Purpose Terminal View → Terminal , Ctrl+ , panel toggle Shell in project directory Problems View → Problems , Ctrl+Shift+M , command palette ESLint and design diagnostics Output Command palette View: Show Output Tool and extension logs Tests Test runner integration Test results when available Click a tab to switch views. Drag the top edge of the panel to resize it.",
       "title": "Titlebar and Panels",
       "section": "Workspace"
     },
@@ -1362,7 +1182,7 @@
       ],
       "href": "/docs/workspace/command-palette",
       "heading": "Workspace symbols (Ctrl+T)",
-      "text": "Find functions, classes, and variables across the project: 1. Press Ctrl+T or run Go to Symbol in Workspace… from the palette. 2. Type a symbol name. 3. Select a result to open the defining file at that location. Indexing quality depends on language support and LSP configuration. See IntelliSense.",
+      "text": "Find functions, classes, and variables across the project: 1. Press Ctrl+T or run Go to Symbol in Workspace… from the palette. 2. Type a symbol name. 3. Select a result to open the defining file at that location. Indexing quality depends on the project index, not a language server. See Workspace Search.",
       "title": "Command Palette",
       "section": "Workspace"
     },
@@ -1386,7 +1206,7 @@
       ],
       "href": "/docs/workspace/command-palette",
       "heading": "Language mode",
-      "text": "Change syntax highlighting for the active file: 1. Open the palette and run Change Language Mode… . 2. Pick a language from the filtered list (TypeScript, Markdown, CSS, etc.). Shape remembers the association for that file path. Language mode affects highlighting, snippets, and LSP behavior.",
+      "text": "Change syntax highlighting for the active file: 1. Open the palette and run Change Language Mode… . 2. Pick a language from the filtered list (TypeScript, Markdown, CSS, etc.). Shape remembers the association for that file path. Language mode affects highlighting and completions.",
       "title": "Command Palette",
       "section": "Workspace"
     },
@@ -1542,7 +1362,7 @@
       ],
       "href": "/docs/editor/editing-files",
       "heading": null,
-      "text": "The Shape editor is built on Monaco, the same engine that powers VS Code. It provides syntax highlighting, multi cursor editing, and language aware features for web projects.",
+      "text": "The Shape editor is built on CodeMirror 6. It highlights common web languages, supports multi cursor editing, and formats with Prettier when enabled.",
       "title": "Editing Files",
       "section": "Editor"
     },
@@ -1626,7 +1446,7 @@
       ],
       "href": "/docs/editor/editing-files",
       "heading": "Navigation within a file",
-      "text": "Go to Line : Ctrl+G Go to Definition : F12 (requires language support) Go to Bracket : Ctrl+Shift+\\\\ Back / Forward : Alt+Left / Alt+Right through cursor history",
+      "text": "Go to Line : Ctrl+G Find : Ctrl+F Go to Bracket : Ctrl+Shift+\\\\ The editor does not run language servers. Completions come from CodeMirror language packs, not TypeScript or ESLint language services.",
       "title": "Editing Files",
       "section": "Editor"
     },
@@ -1662,7 +1482,7 @@
       ],
       "href": "/docs/editor/editing-files",
       "heading": "Related",
-      "text": "Languages and tooling Tabs and Splits IntelliSense Command Palette Editor Settings",
+      "text": "Languages and tooling Tabs and Splits Command Palette Editor Settings",
       "title": "Editing Files",
       "section": "Editor"
     },
@@ -1763,90 +1583,6 @@
       "section": "Editor"
     },
     {
-      "id": "editor/markdown-preview#intro",
-      "slug": [
-        "editor",
-        "markdown-preview"
-      ],
-      "href": "/docs/editor/markdown-preview",
-      "heading": null,
-      "text": "Shape renders Markdown files with a built in preview powered by the same tab you use for source editing. Switch between source, split, and preview without leaving the workbench.",
-      "title": "Markdown Preview in Shape",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/markdown-preview#open-a-markdown-file",
-      "slug": [
-        "editor",
-        "markdown-preview"
-      ],
-      "href": "/docs/editor/markdown-preview",
-      "heading": "Open a Markdown file",
-      "text": "Open any .md or .mdx file from the Explorer or with Ctrl+P . Syntax highlighting applies in source mode.",
-      "title": "Markdown Preview in Shape",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/markdown-preview#preview-modes",
-      "slug": [
-        "editor",
-        "markdown-preview"
-      ],
-      "href": "/docs/editor/markdown-preview",
-      "heading": "Preview modes",
-      "text": "Use the mode toggle on the tab bar to cycle views: Mode What you see Source Raw Markdown in the Monaco editor Split Editor on one side, rendered preview on the other Preview Full width rendered output Split view is useful when editing documentation and checking headings, links, and code blocks at the same time.",
-      "title": "Markdown Preview in Shape",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/markdown-preview#what-the-preview-supports",
-      "slug": [
-        "editor",
-        "markdown-preview"
-      ],
-      "href": "/docs/editor/markdown-preview",
-      "heading": "What the preview supports",
-      "text": "The preview renders standard Markdown elements: Headings, paragraphs, and lists Links and images (relative paths resolve from the file location) Fenced code blocks with syntax highlighting Blockquotes and inline formatting Complex MDX components used in Shape's own docs site may not render identically in the IDE preview. The preview targets common Markdown, not full MDX execution.",
-      "title": "Markdown Preview in Shape",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/markdown-preview#scroll-and-edit-workflow",
-      "slug": [
-        "editor",
-        "markdown-preview"
-      ],
-      "href": "/docs/editor/markdown-preview",
-      "heading": "Scroll and edit workflow",
-      "text": "In split mode, edit on the left and confirm layout on the right. Save with Ctrl+S to persist changes. The preview updates when the file content changes.",
-      "title": "Markdown Preview in Shape",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/markdown-preview#tips",
-      "slug": [
-        "editor",
-        "markdown-preview"
-      ],
-      "href": "/docs/editor/markdown-preview",
-      "heading": "Tips",
-      "text": "Use Ctrl+Shift+P and run Change Language Mode… if a file is not detected as Markdown. For long docs, Zen Mode plus split preview gives a focused writing surface. Pair preview with Bookmarks to jump between sections you are revising.",
-      "title": "Markdown Preview in Shape",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/markdown-preview#related",
-      "slug": [
-        "editor",
-        "markdown-preview"
-      ],
-      "href": "/docs/editor/markdown-preview",
-      "heading": "Related",
-      "text": "Tabs and Splits Editing Files Design Tools",
-      "title": "Markdown Preview in Shape",
-      "section": "Editor"
-    },
-    {
       "id": "editor/diff-and-merge#intro",
       "slug": [
         "editor",
@@ -1866,7 +1602,7 @@
       ],
       "href": "/docs/editor/diff-and-merge",
       "heading": "Git diff tabs",
-      "text": "From Source Control , click a changed file to open a diff tab. Tabs are labeled with the filename and context: Label Meaning Working Tree Unstaged changes vs the index Index Staged changes vs the last commit The diff view uses Monaco's inline comparison with added and removed highlighting.",
+      "text": "From Source Control , click a changed file to open a diff tab. Tabs are labeled with the filename and context: Label Meaning Working Tree Unstaged changes vs the index Index Staged changes vs the last commit The diff view uses CodeMirror’s inline comparison with added and removed highlighting.",
       "title": "Diff and Merge",
       "section": "Editor"
     },
@@ -1950,7 +1686,7 @@
       ],
       "href": "/docs/editor/visual-design",
       "heading": null,
-      "text": "Visual design lets you inspect the running page, edit layout and appearance in a Design sidebar, then Apply those changes to project source. It lives in the Browser tab, not in the code editor. For Tailwind class panels on tokens in the file, see Design Tools.",
+      "text": "Visual design opens the running website in a source backed canvas. Select, move, resize, duplicate, delete, or edit an element and Shape writes a deterministic source change — it does not ask an AI model to rewrite the file. Design mode supports: React projects running with Vite Next.js Astro Remix Other project types are left unchanged. For Tailwind class panels on tokens in the file, see Design Tools.",
       "title": "Visual Design",
       "section": "Editor"
     },
@@ -1974,31 +1710,31 @@
       ],
       "href": "/docs/editor/visual-design",
       "heading": "Turn on design mode",
-      "text": "Click the palette in the Browser toolbar, or press Ctrl+Shift+D . The Design sidebar opens on the right. The inspect control (eyedropper) is on while you select elements. Click the page to target a node. The overlay shows the tag and a short label, for example button.Get started . Action What it does Click Select one element Ctrl+click Add to the selection Shift drag Select a region Ctrl+I Toggle inspect vs interacting with the page Escape Clear the selection When inspect is off, you can click links and use the page as usual.",
+      "text": "Click Design in the project sidebar, or press Ctrl+Shift+D . Shape discovers the project's routes, connects to the local development server, and opens the full designer. The animated canvas loader remains visible until the live page and source bridge are ready. The inspect control (eyedropper) is on while you select elements. Click the page to target a node. The overlay shows the tag and a short label, for example button.Get started . Action What it does Click Select the deepest control under the cursor (buttons/links preferred). Full page layout shells are ignored Drag ••• Move an element. Static elements are promoted to position: relative without changing their initial layout Resize handles Change width and height Double click text Edit direct static text in place Arrow keys Nudge by 1px; Shift nudges by 10px Ctrl+D Duplicate the selected source element Delete Delete the selected source element When inspect is off, you can click links and use the page as usual.",
       "title": "Visual Design",
       "section": "Editor"
     },
     {
-      "id": "editor/visual-design#design-sidebar",
+      "id": "editor/visual-design#designer-panels",
       "slug": [
         "editor",
         "visual-design"
       ],
       "href": "/docs/editor/visual-design",
-      "heading": "Design sidebar",
-      "text": "After you select an element, the sidebar shows: Section What you edit Position X and Y offsets Layout Block, horizontal, vertical, or grid; width and height Appearance Radius, padding, overflow Fill Background or text color, opacity Stroke Border width, style, and color Effects Shadows and similar Export Copy or export related assets Changes preview live in the iframe. They are pending until you apply.",
+      "heading": "Designer panels",
+      "text": "The left panel contains the live DOM layer tree, project routes, and source backed assets. The bottom toolbar contains selection, undo/redo, capture, code, responsive frame, and zoom controls. There is no separate left activity toolbar. After you select an element, the sidebar shows: Section What you edit Position X and Y offsets Layout Block, horizontal, vertical, or grid; width and height Spacing and size Per side margin and padding, gap, min/max constraints, width and height Fill Background or text color, opacity Stroke Border width, style, and color Effects Shadows, filters, backdrop filters, transforms, opacity, blend mode Motion Transition property, duration, easing, transform, and transform origin Settings Source tag, ID, classes, attributes, and accessibility metadata Changes preview immediately in the iframe and are then committed through the source engine. The engine resolves the DOM element to a JSX or Astro source range, applies only the selected attribute or node operation, parses the result, and rejects the edit if the match is ambiguous, the expression is dynamic, or syntax would regress.",
       "title": "Visual Design",
       "section": "Editor"
     },
     {
-      "id": "editor/visual-design#apply-to-source",
+      "id": "editor/visual-design#source-safety",
       "slug": [
         "editor",
         "visual-design"
       ],
       "href": "/docs/editor/visual-design",
-      "heading": "Apply to source",
-      "text": "The footer shows how many pending edits you have. 1. Undo reverts the last design change in the preview. 2. Apply writes matching updates to JSX, HTML, or CSS in the open project. 3. Reset (toolbar) clears pending preview edits without writing files. Apply needs an open project folder and a local preview it can map back to source. If a node cannot be located, the sidebar marks that element and leaves the rest applied. Ctrl+Z / Ctrl+Y undo and redo design mode history while the Browser tab is focused (outside text fields).",
+      "heading": "Source safety",
+      "text": "Source files remain the single source of truth. No AI is used to apply visual edits. Existing dynamic style expressions are never overwritten. Direct text editing refuses nested or expression generated content. Every edit is syntax checked before writing. Undo and redo restore exact file snapshots. If more than one source node is an equally strong match, Shape asks for a more specific selection instead of guessing.",
       "title": "Visual Design",
       "section": "Editor"
     },
@@ -2010,7 +1746,31 @@
       ],
       "href": "/docs/editor/visual-design",
       "heading": "Device frames",
-      "text": "With design mode on, the device control frames the preview at phone and tablet sizes (iPhone, Pixel, iPad, and Full). Full uses the whole tab.",
+      "text": "Use the bottom toolbar to switch between full, tablet (768px), and mobile (390px) frames and to change canvas zoom.",
+      "title": "Visual Design",
+      "section": "Editor"
+    },
+    {
+      "id": "editor/visual-design#deploy",
+      "slug": [
+        "editor",
+        "visual-design"
+      ],
+      "href": "/docs/editor/visual-design",
+      "heading": "Deploy",
+      "text": "The Deploy dialog is a local placeholder. It walks through a fake build so you can see the hosting flow. Nothing is published and Visit stays disabled.",
+      "title": "Visual Design",
+      "section": "Editor"
+    },
+    {
+      "id": "editor/visual-design#troubleshooting-logs",
+      "slug": [
+        "editor",
+        "visual-design"
+      ],
+      "href": "/docs/editor/visual-design",
+      "heading": "Troubleshooting logs",
+      "text": "When design mode misbehaves, check the Shape terminal (the one running tauri:dev ), not the project app logs. Look for blocks that start with shape/design and end with end . Copy that whole block into chat — it includes session id, event name, and structured context so the failure is diagnosable.",
       "title": "Visual Design",
       "section": "Editor"
     },
@@ -2142,104 +1902,8 @@
       ],
       "href": "/docs/editor/design-tools",
       "heading": "Related",
-      "text": "Visual Design IntelliSense Lint and LSP AI Settings Chat Modes",
+      "text": "Visual Design Completions Lint and format AI Settings Chat Modes",
       "title": "Design Tools",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#intro",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": null,
-      "text": "IntelliSense is the language aware assistance in the editor. Completions, hovers, diagnostics, and navigation.",
-      "title": "IntelliSense",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#completions",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": "Completions",
-      "text": "Start typing to see suggestions. Press Tab or Enter to accept. Shape includes language servers for common web stacks: Language Features TypeScript / JavaScript Types, imports, refactor hints CSS / HTML Selectors, tags, attributes JSON Schema aware keys and values Tailwind CSS Class name completions in className Toggle individual servers in Settings → Features → Language Servers .",
-      "title": "IntelliSense",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#quick-fix",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": "Quick Fix",
-      "text": "When a diagnostic offers a fix, a lightbulb appears in the gutter. Press Ctrl+. to open Quick Fix and choose an action. Common fixes include adding imports, fixing ESLint violations, and applying TypeScript corrections.",
-      "title": "IntelliSense",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#navigation",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": "Navigation",
-      "text": "Action Shortcut Go to Definition F12 Peek Definition Alt+F12 Find All References Shift+F12 Go to Symbol in Workspace Ctrl+T Go to Next Problem F8 Go to Previous Problem Shift+F8 Go to Symbol in Editor is available from the command palette for symbols in the current file.",
-      "title": "IntelliSense",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#hovers",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": "Hovers",
-      "text": "Hover over a symbol to see type information, documentation, and color previews for CSS values. Hold Ctrl and hover a symbol to peek its definition inline.",
-      "title": "IntelliSense",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#diagnostics",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": "Diagnostics",
-      "text": "Errors and warnings appear as squiggles in the editor and aggregate in the Problems panel ( Ctrl+Shift+M ). Sources include: TypeScript compiler ESLint (when enabled) Design diagnostics for contrast issues Tailwind CSS language service Fix issues in the editor or open Problems to jump between files.",
-      "title": "IntelliSense",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#rename-symbol",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": "Rename symbol",
-      "text": "Place the cursor on a symbol and press F2 to rename it across the project. Preview changes before confirming.",
-      "title": "IntelliSense",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/intellisense#related",
-      "slug": [
-        "editor",
-        "intellisense"
-      ],
-      "href": "/docs/editor/intellisense",
-      "heading": "Related",
-      "text": "Lint and LSP Visual Design Design Tools Problems, Output, and Tests Command Palette",
-      "title": "IntelliSense",
       "section": "Editor"
     },
     {
@@ -2250,7 +1914,7 @@
       ],
       "href": "/docs/editor/languages-and-tooling",
       "heading": null,
-      "text": "Shape contains syntax highlighting for many languages. Change the language mode anytime with Change Language Mode in the command palette ( Ctrl+Shift+P ).",
+      "text": "Shape highlights many languages in CodeMirror. Completions follow the file extension. There is no language server process. Change the language mode anytime with Change Language Mode in the command palette ( Ctrl+Shift+P ).",
       "title": "Languages and tooling",
       "section": "Editor"
     },
@@ -2262,7 +1926,7 @@
       ],
       "href": "/docs/editor/languages-and-tooling",
       "heading": "Syntax highlighting",
-      "text": "These languages are available. Opening a file picks one automatically. Language Typical files Plain Text unknown extensions TypeScript .ts , .tsx JavaScript .js , .jsx , .mjs , .cjs JSON .json , .jsonc HTML .html , .htm (also used for .vue , .svelte , .astro highlighting) CSS / SCSS / Less .css , .scss , .sass , .less Handlebars / Pug / Twig / Liquid .hbs , .pug , .twig , .liquid Markdown / MDX .md , .mdx XML / YAML .xml , .yaml , .yml GraphQL .graphql , .gql (also .prisma highlighting) SQL / MySQL / PostgreSQL .sql and related Python .py Rust .rs Go .go Java .java C / F .cs , .fs C / C++ .c , .h , .cpp , .hpp Objective C .m , .mm PHP / Ruby / Swift / Kotlin / Dart / Scala matching extensions Clojure / Elixir / Lua / R / Julia / Perl matching extensions Shell / PowerShell / Batch .sh , .ps1 , .bat , .cmd Dockerfile Dockerfile , .dockerfile HCL / Terraform .tf , .hcl Bicep .bicep Ini / TOML / Env .ini , .toml , .env Protocol Buffers .proto Solidity .sol WGSL .wgsl TypeSpec .tsp Highlighting alone does not mean IntelliSense or formatting for that language. See the tables below for tooling coverage.",
+      "text": "These languages are available. Opening a file picks one automatically. Language Typical files Plain Text unknown extensions TypeScript .ts , .tsx JavaScript .js , .jsx , .mjs , .cjs JSON .json , .jsonc HTML .html , .htm (also used for .vue , .svelte , .astro highlighting) CSS / SCSS / Less .css , .scss , .sass , .less Handlebars / Pug / Twig / Liquid .hbs , .pug , .twig , .liquid Markdown / MDX .md , .mdx XML / YAML .xml , .yaml , .yml GraphQL .graphql , .gql (also .prisma highlighting) SQL / MySQL / PostgreSQL .sql and related Python .py Rust .rs Go .go Java .java C / F .cs , .fs C / C++ .c , .h , .cpp , .hpp Objective C .m , .mm PHP / Ruby / Swift / Kotlin / Dart / Scala matching extensions Clojure / Elixir / Lua / R / Julia / Perl matching extensions Shell / PowerShell / Batch .sh , .ps1 , .bat , .cmd Dockerfile Dockerfile , .dockerfile HCL / Terraform .tf , .hcl Bicep .bicep Ini / TOML / Env .ini , .toml , .env Protocol Buffers .proto Solidity .sol WGSL .wgsl TypeSpec .tsp Highlighting alone does not mean completions or formatting for that language. CodeMirror packs cover the common web set listed under Completions.",
       "title": "Languages and tooling",
       "section": "Editor"
     },
@@ -2286,55 +1950,19 @@
       ],
       "href": "/docs/editor/languages-and-tooling",
       "heading": "ESLint",
-      "text": "Linting for JavaScript and TypeScript projects ( Settings → Features → ESLint & Prettier ). Supported Extensions ESLint .js , .jsx , .ts , .tsx , .mjs , .cjs , .vue , .svelte Issues appear in the editor and the Problems panel. Optional Fix on save applies auto fixable rules.",
+      "text": "Linting for JavaScript and TypeScript projects ( Settings → Features → ESLint & Prettier ). Supported Extensions ESLint .js , .jsx , .ts , .tsx , .mjs , .cjs , .vue , .svelte Issues appear in the Problems panel. Optional Fix on save applies auto fixable rules.",
       "title": "Languages and tooling",
       "section": "Editor"
     },
     {
-      "id": "editor/languages-and-tooling#language-servers-intellisense",
+      "id": "editor/languages-and-tooling#completions",
       "slug": [
         "editor",
         "languages-and-tooling"
       ],
       "href": "/docs/editor/languages-and-tooling",
-      "heading": "Language servers (IntelliSense)",
-      "text": "Server What it covers Notes TypeScript .ts , .tsx , .js , .jsx Completions, go to def, rename, quick fixes HTML .html Markup IntelliSense CSS .css , .scss , .less Stylesheet IntelliSense JSON .json , .jsonc Schema aware editing Python .py Pyright Markdown .md remark language service GraphQL .graphql GraphQL language service Tailwind CSS class aware editing when the project uses Tailwind Toggle in Features → Language Servers Vue / Svelte when those frameworks are detected in the project Best results when the file language mode matches Toggle the main servers under Settings → Features → Language Servers . Details: Lint and LSP and IntelliSense.",
-      "title": "Languages and tooling",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/languages-and-tooling#emmet",
-      "slug": [
-        "editor",
-        "languages-and-tooling"
-      ],
-      "href": "/docs/editor/languages-and-tooling",
-      "heading": "Emmet",
-      "text": "HTML/CSS abbreviations and expansions in HTML, CSS/SCSS/Less, and JSX/TSX. Controlled by the Emmet toggle under Features → Language Servers .",
-      "title": "Languages and tooling",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/languages-and-tooling#design-tools",
-      "slug": [
-        "editor",
-        "languages-and-tooling"
-      ],
-      "href": "/docs/editor/languages-and-tooling",
-      "heading": "Design tools",
-      "text": "For UI work in web files: Tool What it does Visual design Inspect the live preview and apply layout, fill, and type to source Design autocomplete Suggests Tailwind style classes and project patterns in className Tailwind controls Inline panels for flex, gap, padding, colors Design diagnostics Contrast and related accessibility checks CSS variable IntelliSense Completions and hover for var( ) See Visual Design and Design Tools.",
-      "title": "Languages and tooling",
-      "section": "Editor"
-    },
-    {
-      "id": "editor/languages-and-tooling#other-editor-extras",
-      "slug": [
-        "editor",
-        "languages-and-tooling"
-      ],
-      "href": "/docs/editor/languages-and-tooling",
-      "heading": "Other editor extras",
-      "text": "Feature Where Bracket pair colorization Editor settings Indent and bracket guides Editor settings Multi cursor editing Monaco defaults — Editing Files Markdown / MDX preview Markdown Preview Format on save Editor settings (uses Prettier when enabled)",
+      "heading": "Completions",
+      "text": "See Completions. Shape does not start TypeScript, HTML, CSS, JSON, or Tailwind language servers.",
       "title": "Languages and tooling",
       "section": "Editor"
     },
@@ -2346,7 +1974,7 @@
       ],
       "href": "/docs/editor/languages-and-tooling",
       "heading": "Related",
-      "text": "Editing Files IntelliSense Lint and LSP Visual Design Design Tools Editor Settings",
+      "text": "Completions Editing Files Visual Design Design Tools",
       "title": "Languages and tooling",
       "section": "Editor"
     },
@@ -2538,176 +2166,8 @@
       ],
       "href": "/docs/files/workspace-search",
       "heading": "Related",
-      "text": "Command Palette File Explorer IntelliSense Keyboard Shortcuts",
+      "text": "Command Palette File Explorer Completions Keyboard Shortcuts",
       "title": "Workspace Search",
-      "section": "Files"
-    },
-    {
-      "id": "files/outline#intro",
-      "slug": [
-        "files",
-        "outline"
-      ],
-      "href": "/docs/files/outline",
-      "heading": null,
-      "text": "The Outline sidebar lists symbols defined in the file you are editing. Use it to navigate long files without scrolling.",
-      "title": "Outline",
-      "section": "Files"
-    },
-    {
-      "id": "files/outline#open-the-outline",
-      "slug": [
-        "files",
-        "outline"
-      ],
-      "href": "/docs/files/outline",
-      "heading": "Open the Outline",
-      "text": "Click the list icon on the activity bar View → Outline from the menu bar The outline updates when you switch tabs. It reflects the active editor file only, not the whole workspace.",
-      "title": "Outline",
-      "section": "Files"
-    },
-    {
-      "id": "files/outline#what-appears-in-the-outline",
-      "slug": [
-        "files",
-        "outline"
-      ],
-      "href": "/docs/files/outline",
-      "heading": "What appears in the outline",
-      "text": "Symbols depend on the file language and LSP support: Language Typical symbols TypeScript / JavaScript Functions, classes, interfaces, variables CSS Rules and selectors HTML Elements and sections Markdown Headings If symbols are missing, check that the correct language mode is set and the relevant LSP is enabled in Lint and LSP.",
-      "title": "Outline",
-      "section": "Files"
-    },
-    {
-      "id": "files/outline#navigate-symbols",
-      "slug": [
-        "files",
-        "outline"
-      ],
-      "href": "/docs/files/outline",
-      "heading": "Navigate symbols",
-      "text": "Click any entry to move the cursor to that symbol in the editor. The editor scrolls and focuses the definition. For project wide symbol search, use Ctrl+T ( Go to Symbol in Workspace ).",
-      "title": "Outline",
-      "section": "Files"
-    },
-    {
-      "id": "files/outline#outline-vs-breadcrumbs",
-      "slug": [
-        "files",
-        "outline"
-      ],
-      "href": "/docs/files/outline",
-      "heading": "Outline vs breadcrumbs",
-      "text": "The titlebar breadcrumbs show the file path. The outline shows structure inside the file. Use both together when working in large modules.",
-      "title": "Outline",
-      "section": "Files"
-    },
-    {
-      "id": "files/outline#related",
-      "slug": [
-        "files",
-        "outline"
-      ],
-      "href": "/docs/files/outline",
-      "heading": "Related",
-      "text": "IntelliSense Command Palette Activity Bar Editing Files",
-      "title": "Outline",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#intro",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": null,
-      "text": "Bookmarks let you save positions in code and return to them later. Bookmarks persist in local storage across sessions.",
-      "title": "Bookmarks",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#toggle-a-bookmark",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": "Toggle a bookmark",
-      "text": "1. Place the cursor on the line you want to mark. 2. Press Ctrl+Alt+B . A bookmark icon appears in the editor gutter. Press Ctrl+Alt+B again on the same line to remove it.",
-      "title": "Bookmarks",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#navigate-bookmarks",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": "Navigate bookmarks",
-      "text": "Action Shortcut Next bookmark Ctrl+F2 Previous bookmark Shift+F2 Navigation wraps around. If the next bookmark is in another file, Shape opens that file and moves the cursor.",
-      "title": "Bookmarks",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#view-all-bookmarks",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": "View all bookmarks",
-      "text": "Open the command palette ( Ctrl+Shift+P ) and search for Bookmarks to see the bookmark list panel. Each entry shows the file path, line number, and a short label. Click an entry to jump to that location. Remove bookmarks from the list when you no longer need them.",
-      "title": "Bookmarks",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#labels",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": "Labels",
-      "text": "By default, bookmarks use the label Line N . When you toggle a bookmark on a word, Shape may use that word as the label.",
-      "title": "Bookmarks",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#scope",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": "Scope",
-      "text": "Bookmarks are per workspace path and stored locally. They are not synced to Git or your Shape account. Clearing browser or app storage removes them.",
-      "title": "Bookmarks",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#tips",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": "Tips",
-      "text": "Bookmark failing tests, TODO comments, or sections you revisit during a refactor. Bookmarks have no activity bar icon. Use keyboard shortcuts or the command palette. Combine with Outline for within file structure and bookmarks for cross file anchors.",
-      "title": "Bookmarks",
-      "section": "Files"
-    },
-    {
-      "id": "files/bookmarks#related",
-      "slug": [
-        "files",
-        "bookmarks"
-      ],
-      "href": "/docs/files/bookmarks",
-      "heading": "Related",
-      "text": "Editing Files Activity Bar Keyboard Shortcuts Command Palette",
-      "title": "Bookmarks",
       "section": "Files"
     },
     {
@@ -3018,19 +2478,7 @@
       ],
       "href": "/docs/git/git-manager",
       "heading": null,
-      "text": "Git Manager is a separate window for local Git and GitHub work: source control, the graph, pull requests, Actions, and checks. Use it when you want PRs and CI next to the repo without leaving Shape. Day to day stage and commit still live in the Source Control sidebar.",
-      "title": "Git Manager",
-      "section": "Git"
-    },
-    {
-      "id": "git/git-manager#open-git-manager",
-      "slug": [
-        "git",
-        "git-manager"
-      ],
-      "href": "/docs/git/git-manager",
-      "heading": "Open Git Manager",
-      "text": "Window → Git Manager Shape logo in the Source Control or Git Graph sidebar header The window remembers the last section you had open.",
+      "text": "Git Manager is Shape's Git workspace: local source control, the commit graph, pull requests, issues, and Actions. Open it from Window → Git Manager or the Shape logo in the Source Control sidebar. Day to day stage and commit still live in the Source Control sidebar. The window remembers the last section you had open. The current section title lives in the top bar with search and actions.",
       "title": "Git Manager",
       "section": "Git"
     },
@@ -3042,7 +2490,7 @@
       ],
       "href": "/docs/git/git-manager",
       "heading": "Local",
-      "text": "Section Purpose Source Control Stage, commit, pull, and push Git Graph Commit history as a lane diagram Branches Local and remote branches Tags Local tags These match the sidebar views, with more room for lists and diffs.",
+      "text": "Section Purpose Source Control Stage, commit, pull, and push Git Graph Commit history as a lane diagram — open a commit, then a file, to review the diff in a side panel Branches Local and remote branches",
       "title": "Git Manager",
       "section": "Git"
     },
@@ -3054,19 +2502,19 @@
       ],
       "href": "/docs/git/git-manager",
       "heading": "GitHub",
-      "text": "Sign in with GitHub to load remote data for the open repository. Section Purpose Issues Open and closed issues, conversation, and details Pull requests PR list, conversation threads, commits, files, and checks Releases Published releases and notes On a pull request or issue you can: Read the conversation (authors, associations, review comments) Switch tabs for commits, files, and check runs Summarize with AI (needs a Shape account) Open on GitHub in your system browser",
+      "text": "Sign in with GitHub to load remote data for the open repository. Section Purpose Pull requests PR list, conversation, commits, files, and checks. Create pull request drafts title and body with AI from your branch diff, then publishes when you confirm. Opening a PR starts an AI review and surfaces failed checks. Issues Open and closed issues, conversation, and details On a pull request or issue you can: Read the conversation Switch tabs for commits, files, and check runs Review or Summarize with AI (needs a Shape account) Open on GitHub in your system browser",
       "title": "Git Manager",
       "section": "Git"
     },
     {
-      "id": "git/git-manager#actions-checks-and-deploy",
+      "id": "git/git-manager#actions",
       "slug": [
         "git",
         "git-manager"
       ],
       "href": "/docs/git/git-manager",
-      "heading": "Actions, checks, and deploy",
-      "text": "Group What you see Actions Workflow runs, definitions, jobs, steps, live status, logs, artifacts Checks Check runs, suites, and commit statuses Deploy Deployments and deployment statuses Use these when you need CI status without opening github.com.",
+      "heading": "Actions",
+      "text": "Section Purpose Workflow runs Recent CI runs, jobs, logs, and artifacts Jobs Jobs and logs for the selected run",
       "title": "Git Manager",
       "section": "Git"
     },
@@ -3390,7 +2838,7 @@
       ],
       "href": "/docs/ai/chat-modes",
       "heading": "Review mode",
-      "text": "Review mode investigates bugs and security sensitive code: it reads errors, logs, and relevant files before suggesting fixes, and watches for patterns in auth flows, user input, and unsafe APIs. By default, Adversarial review in AI Settings runs a second critic pass after Review finishes. Turn that off if you want a single pass. Older Debug and Security selections are automatically migrated to Review — the two were folded into one mode.",
+      "text": "Review mode investigates bugs and security sensitive code: it reads errors, logs, and relevant files before suggesting fixes, and watches for patterns in auth flows, user input, and unsafe APIs. Write a structured review: highest severity first, confirmed vs suspected, smallest safe fix, and how to verify. Older Debug and Security selections are automatically migrated to Review — the two were folded into one mode.",
       "title": "Chat Modes",
       "section": "AI"
     },
@@ -3635,18 +3083,6 @@
       "section": "AI"
     },
     {
-      "id": "ai/ai-settings#review",
-      "slug": [
-        "ai",
-        "ai-settings"
-      ],
-      "href": "/docs/ai/ai-settings",
-      "heading": "Review",
-      "text": "Adversarial review (on by default) runs critic models after Review mode finishes. Turn it off for a single pass.",
-      "title": "AI Settings",
-      "section": "AI"
-    },
-    {
       "id": "ai/ai-settings#context",
       "slug": [
         "ai",
@@ -3791,162 +3227,6 @@
       "section": "Terminal"
     },
     {
-      "id": "terminal/npm-scripts#intro",
-      "slug": [
-        "terminal",
-        "npm-scripts"
-      ],
-      "href": "/docs/terminal/npm-scripts",
-      "heading": null,
-      "text": "When your project has a package.json with a scripts section, Shape surfaces those scripts in the titlebar Scripts dropdown.",
-      "title": "NPM Scripts",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/npm-scripts#run-a-script",
-      "slug": [
-        "terminal",
-        "npm-scripts"
-      ],
-      "href": "/docs/terminal/npm-scripts",
-      "heading": "Run a script",
-      "text": "1. Open a project folder that contains package.json . 2. Click Scripts in the titlebar (right side). 3. Choose a script (for example dev , build , lint ). Shape runs the equivalent of npm run (or your configured package manager) in the integrated terminal and opens the bottom panel if it was hidden.",
-      "title": "NPM Scripts",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/npm-scripts#package-manager",
-      "slug": [
-        "terminal",
-        "npm-scripts"
-      ],
-      "href": "/docs/terminal/npm-scripts",
-      "heading": "Package manager",
-      "text": "Shape detects the package manager from lockfiles and Settings → Features → Node.js : Lockfile Default manager bun.lock Bun pnpm lock.yaml pnpm yarn.lock Yarn package lock.json npm Override with the Package Manager setting if needed.",
-      "title": "NPM Scripts",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/npm-scripts#script-output",
-      "slug": [
-        "terminal",
-        "npm-scripts"
-      ],
-      "href": "/docs/terminal/npm-scripts",
-      "heading": "Script output",
-      "text": "Stdout and stderr appear in the terminal tab. Long running scripts like dev keep the tab open until you stop the process with Ctrl+C .",
-      "title": "NPM Scripts",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/npm-scripts#when-scripts-is-hidden",
-      "slug": [
-        "terminal",
-        "npm-scripts"
-      ],
-      "href": "/docs/terminal/npm-scripts",
-      "heading": "When Scripts is hidden",
-      "text": "The Scripts button appears only when: A folder is open package.json exists at the project root The scripts object has at least one entry Monorepos with scripts in subpackages still run from the root package.json . Use the terminal for workspace specific commands.",
-      "title": "NPM Scripts",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/npm-scripts#related",
-      "slug": [
-        "terminal",
-        "npm-scripts"
-      ],
-      "href": "/docs/terminal/npm-scripts",
-      "heading": "Related",
-      "text": "Integrated Terminal Titlebar and Panels Settings Overview First Project Tutorial",
-      "title": "NPM Scripts",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/problems-output-tests#intro",
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "href": "/docs/terminal/problems-output-tests",
-      "heading": null,
-      "text": "Beyond the terminal, the bottom panel hosts tabs for diagnostics and tool output. Use them to track errors while you code.",
-      "title": "Problems, Output, and Tests",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/problems-output-tests#problems",
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "href": "/docs/terminal/problems-output-tests",
-      "heading": "Problems",
-      "text": "The Problems tab aggregates diagnostics from language servers, ESLint, and design checks. Action Shortcut Open Problems Ctrl+Shift+M or command palette View: Show Problems Next problem F8 Previous problem Shift+F8 Click a row to jump to the file and line. The status bar also shows error and warning counts when problems exist.",
-      "title": "Problems, Output, and Tests",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/problems-output-tests#sources",
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "href": "/docs/terminal/problems-output-tests",
-      "heading": "Sources",
-      "text": "TypeScript and JavaScript (LSP) ESLint (when enabled in settings) Design diagnostics (contrast and accessibility) CSS and HTML language services Fix issues in the editor or use Quick Fix ( Ctrl+. ) when available.",
-      "title": "Problems, Output, and Tests",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/problems-output-tests#output",
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "href": "/docs/terminal/problems-output-tests",
-      "heading": "Output",
-      "text": "The Output tab shows logs from Shape tooling and language servers. Open it from the command palette: View: Show Output . Use Output when diagnosing why a language service failed to start or when an extension like feature prints status messages.",
-      "title": "Problems, Output, and Tests",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/problems-output-tests#tests",
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "href": "/docs/terminal/problems-output-tests",
-      "heading": "Tests",
-      "text": "When test integration is available for your project, results appear in the Tests tab. Failed tests link to the asserting file. Run tests from the terminal ( npm test , etc.) or from task configurations. Shape surfaces structured results when the runner reports them.",
-      "title": "Problems, Output, and Tests",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/problems-output-tests#panel-workflow",
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "href": "/docs/terminal/problems-output-tests",
-      "heading": "Panel workflow",
-      "text": "1. Keep Problems visible while fixing a type error batch. 2. Switch to Terminal to run builds after fixes. 3. Check Output if Problems does not explain a missing language feature. Toggle the whole panel with Ctrl+ without losing tab contents.",
-      "title": "Problems, Output, and Tests",
-      "section": "Terminal"
-    },
-    {
-      "id": "terminal/problems-output-tests#related",
-      "slug": [
-        "terminal",
-        "problems-output-tests"
-      ],
-      "href": "/docs/terminal/problems-output-tests",
-      "heading": "Related",
-      "text": "IntelliSense Lint and LSP Integrated Terminal Titlebar and Panels",
-      "title": "Problems, Output, and Tests",
-      "section": "Terminal"
-    },
-    {
       "id": "settings/settings-overview#intro",
       "slug": [
         "settings",
@@ -3978,7 +3258,7 @@
       ],
       "href": "/docs/settings/settings-overview",
       "heading": "Categories",
-      "text": "The left tree groups settings like this: Group Sections Account Profile, plan, updates channel Agents Models, rules, context, MCP Editor Font, indentation, caret, saving, files, Design Features Terminal, Source Control, language servers, Node.js, Python, ESLint & Prettier Application Updates, notifications, privacy, developer Select a leaf in the tree to jump to that section. Controls are toggles, dropdowns, and text fields. Design autocomplete, Tailwind controls, and diagnostics are under Editor → Design , not a separate top level category. Agent auto run, edit approval, and adversarial review are under Agents . See AI Settings and Design Tools.",
+      "text": "The left tree groups settings like this: Group Sections Account Profile, plan, updates channel Agents Models, rules, context, MCP Editor Font, indentation, caret, saving, files, Design Features Terminal, Source Control, Node.js, Python, ESLint & Prettier Application Updates, notifications, privacy, developer Select a leaf in the tree to jump to that section. Controls are toggles, dropdowns, and text fields. Design autocomplete, Tailwind controls, and diagnostics are under Editor → Design , not a separate top level category. Agent auto run, edit approval, and adversarial review are under Agents . See AI Settings and Design Tools.",
       "title": "Shape Settings",
       "section": "Settings"
     },
@@ -4026,7 +3306,7 @@
       ],
       "href": "/docs/settings/editor-settings",
       "heading": null,
-      "text": "Settings → Editor controls how code looks and behaves in the Monaco editor.",
+      "text": "Settings → Editor controls how code looks and behaves in the CodeMirror editor.",
       "title": "Editor Settings",
       "section": "Settings"
     },
@@ -4110,7 +3390,7 @@
       ],
       "href": "/docs/settings/editor-settings",
       "heading": "Related",
-      "text": "Editing Files Lint and LSP Settings Overview Visual Design Design Tools",
+      "text": "Editing Files Lint and format Settings Overview Visual Design Design Tools",
       "title": "Editor Settings",
       "section": "Settings"
     },
@@ -4290,8 +3570,8 @@
       ],
       "href": "/docs/settings/lint-and-lsp",
       "heading": null,
-      "text": "Shape bundles language tooling for web projects. Settings → Features → ESLint & Prettier and Settings → Features → Language Servers control diagnostics and formatters.",
-      "title": "Lint and LSP",
+      "text": "Shape can run ESLint and Prettier against the open project. The editor itself is CodeMirror — these tools are not language servers. Settings → Features → ESLint & Prettier controls diagnostics and formatters.",
+      "title": "Lint and format",
       "section": "Settings"
     },
     {
@@ -4302,8 +3582,8 @@
       ],
       "href": "/docs/settings/lint-and-lsp",
       "heading": "ESLint",
-      "text": "Setting Description Enable ESLint Run ESLint on supported files Fix on save Apply auto fixable rules when saving ESLint reads your project's config ( .eslintrc , eslint.config.js , etc.). Errors appear in the editor and Problems panel.",
-      "title": "Lint and LSP",
+      "text": "Setting Description Enable ESLint Run ESLint on supported files Fix on save Apply auto fixable rules when saving ESLint reads your project's config ( .eslintrc , eslint.config.js , etc.). Errors appear in the Problems panel.",
+      "title": "Lint and format",
       "section": "Settings"
     },
     {
@@ -4315,7 +3595,7 @@
       "href": "/docs/settings/lint-and-lsp",
       "heading": "Prettier",
       "text": "Setting Description Enable Prettier Use Prettier as the document formatter When enabled, Format Document ( Alt+Shift+F ) and format on save use Prettier with project config ( .prettierrc , prettier.config.js ).",
-      "title": "Lint and LSP",
+      "title": "Lint and format",
       "section": "Settings"
     },
     {
@@ -4326,20 +3606,8 @@
       ],
       "href": "/docs/settings/lint-and-lsp",
       "heading": "Language servers",
-      "text": "Toggle built in language services under Features → Language Servers : Server Languages TypeScript .ts , .tsx , .js , .jsx CSS .css , modules HTML .html JSON .json , .jsonc Tailwind CSS Class completions in markup Emmet HTML/CSS abbreviations Disabling a server stops its diagnostics and completions for that language.",
-      "title": "Lint and LSP",
-      "section": "Settings"
-    },
-    {
-      "id": "settings/lint-and-lsp#nodejs-assistance",
-      "slug": [
-        "settings",
-        "lint-and-lsp"
-      ],
-      "href": "/docs/settings/lint-and-lsp",
-      "heading": "Node.js assistance",
-      "text": "Settings → Features → Node.js includes Coding assistance for JavaScript tooling integration. Keep it enabled for npm package IntelliSense in import paths.",
-      "title": "Lint and LSP",
+      "text": "Shape does not run a TypeScript, CSS, HTML, JSON, or Tailwind language server in the editor. Completions come from CodeMirror language packs. See Completions.",
+      "title": "Lint and format",
       "section": "Settings"
     },
     {
@@ -4350,8 +3618,8 @@
       ],
       "href": "/docs/settings/lint-and-lsp",
       "heading": "Design tooling",
-      "text": "Design autocomplete and diagnostics live under Settings → Editor → Design , not LSP. See Design Tools and Visual Design.",
-      "title": "Lint and LSP",
+      "text": "Design autocomplete and diagnostics live under Settings → Editor → Design . See Design Tools and Visual Design.",
+      "title": "Lint and format",
       "section": "Settings"
     },
     {
@@ -4362,8 +3630,8 @@
       ],
       "href": "/docs/settings/lint-and-lsp",
       "heading": "Troubleshooting",
-      "text": "If diagnostics never appear: 1. Confirm the language server toggle is on. 2. Open Problems ( Ctrl+Shift+M ) for silent errors. 3. Check Output via the command palette for server startup logs. 4. Ensure the project has the expected config files ( tsconfig.json , ESLint config).",
-      "title": "Lint and LSP",
+      "text": "If diagnostics never appear: 1. Confirm ESLint is enabled. 2. Open Problems ( Ctrl+Shift+M ). 3. Ensure the project has the expected config files ( tsconfig.json , ESLint config).",
+      "title": "Lint and format",
       "section": "Settings"
     },
     {
@@ -4374,8 +3642,8 @@
       ],
       "href": "/docs/settings/lint-and-lsp",
       "heading": "Related",
-      "text": "Languages and tooling IntelliSense Problems, Output, and Tests Editor Settings Settings Overview",
-      "title": "Lint and LSP",
+      "text": "Languages and tooling Completions Problems, Output, and Tests Editor Settings Settings Overview",
+      "title": "Lint and format",
       "section": "Settings"
     },
     {
@@ -4883,42 +4151,6 @@
       "section": "Reference"
     },
     {
-      "id": "help/getting-started#intro",
-      "slug": [
-        "help",
-        "getting-started"
-      ],
-      "href": "/docs/help/getting-started",
-      "heading": null,
-      "text": "Day to day product guides live in the main docs. Use these pages when something is broken or you need account help.",
-      "title": "Getting started",
-      "section": "Help"
-    },
-    {
-      "id": "help/getting-started#common-tasks",
-      "slug": [
-        "help",
-        "getting-started"
-      ],
-      "href": "/docs/help/getting-started",
-      "heading": "Common tasks",
-      "text": "Install Quick Start Accounts Billing Visual Design Chat Overview Git Manager",
-      "title": "Getting started",
-      "section": "Help"
-    },
-    {
-      "id": "help/getting-started#still-stuck",
-      "slug": [
-        "help",
-        "getting-started"
-      ],
-      "href": "/docs/help/getting-started",
-      "heading": "Still stuck?",
-      "text": "See Troubleshooting or Contact support.",
-      "title": "Getting started",
-      "section": "Help"
-    },
-    {
       "id": "help/faq#is-shape-free",
       "slug": [
         "help",
@@ -5391,7 +4623,7 @@
       ],
       "href": "/docs/help/errors/4200",
       "heading": "What it means",
-      "text": "IntelliSense, go to definition, or diagnostics stopped because a language server exited or never started. Editing still works; language features may be limited.",
+      "text": "This error code is leftover from an older editor. Shape’s current editor is CodeMirror and does not start language servers. If editing feels limited, that is expected: there is no TypeScript language service or go to definition.",
       "title": "4200 Language server",
       "section": "Help"
     },
@@ -5404,7 +4636,7 @@
       ],
       "href": "/docs/help/errors/4200",
       "heading": "What to do",
-      "text": "1. Re open the file or the project folder. 2. Check Settings → Features → Language Servers and confirm the server for this file type is enabled. 3. For TypeScript/JavaScript, ensure node modules (or your toolchain) is installed. 4. Watch Output → LSP for the underlying message, then retry.",
+      "text": "1. Use in file search ( Ctrl+F ) and workspace search ( Ctrl+Shift+F ). 2. Ask the agent to find symbols or explain types. 3. Ignore this code if you see it in old logs.",
       "title": "4200 Language server",
       "section": "Help"
     },
@@ -5417,7 +4649,7 @@
       ],
       "href": "/docs/help/errors/4200",
       "heading": "Related",
-      "text": "IntelliSense Language servers Troubleshooting",
+      "text": "Completions Troubleshooting",
       "title": "4200 Language server",
       "section": "Help"
     },

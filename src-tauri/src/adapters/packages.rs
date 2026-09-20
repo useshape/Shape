@@ -45,3 +45,8 @@ pub async fn run_install_all(
 ) -> Result<(), AppError> {
     service::run_install_all(project_path, package_manager).await
 }
+
+#[tauri::command]
+pub async fn scaffold_web_project(kind: String, directory: String) -> Result<String, AppError> {
+    service::scaffold_web_project(kind, directory).await
+}

@@ -3,7 +3,7 @@ import { parseMessageContent } from "@/features/chat/ui/md/renderer";
 import {
     buildPlanBuildMessage,
     parseShapeContinueAction,
-} from "@/lib/shape-continue-action";
+} from "@/lib/chat/continue-action";
 
 describe("parseMessageContent todos", () => {
     it("parses live todo checklist XML", () => {

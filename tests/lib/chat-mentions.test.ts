@@ -11,7 +11,7 @@ import {
     parseMentionTokens,
     stripMentionTokens,
     type SelectionSnapshot,
-} from "@/lib/chat-mentions";
+} from "@/lib/chat/mentions";
 
 const mockedInvoke = vi.mocked(invoke);
 
@@ -205,5 +205,16 @@ describe("chat-mentions: buildMessageWithMentions file/folder/codebase", () => {
         mockedInvoke.mockRejectedValueOnce(new Error("not found"));
         const result = await buildMessageWithMentions("check @file:missing.ts", "/proj");
         expect(result).toBe("check");
+    });
+
+    it("does not inline binary font files", async () => {
+        mockedInvoke.mockClear();
+        const result = await buildMessageWithMentions(
+            "use @file:apps/design-system/app/fonts/CustomFont-BoldItalic.woff2",
+            "/proj",
+        );
+        expect(mockedInvoke).not.toHaveBeenCalled();
+        expect(result).toContain('binary="true"');
+        expect(result).not.toContain("wOF2");
     });
 });

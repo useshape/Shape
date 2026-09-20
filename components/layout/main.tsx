@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { useProjectState, commands, getProjectSnapshot } from "@/lib/backend";
 import { usePathname } from "next/navigation";
-import { AgentLayout, openProject, normalizeProjectPath } from "@/features/agent";
+import { AgentLayout, openProject } from "@/features/agent";
 import { dispatchShortcutAction } from "@/lib/ui/shortcut-actions";
-import { upsertRepoHistory } from "@/lib/repo-history";
-import { saveLastProject, loadLastProject } from "@/lib/last-project";
-import { clearClosedTabs } from "@/lib/closed-tabs";
+import { upsertRepoHistory } from "@/lib/workspace/repo-history";
+import { saveLastProject, loadLastProject } from "@/lib/workspace/last-project";
+import { clearClosedTabs } from "@/lib/workspace/closed-tabs";
 import { isMainTauriWindow, isTauriRuntime } from "@/lib/window/tauri-window";
 
 function TauriShortcutBridge() {
@@ -97,12 +97,8 @@ export default function Main({ children }: { children: React.ReactNode }) {
                 await commands.openFile(selected, name);
             }
         };
-        const handleOpenFolderRequest = async () => {
-            const { open } = await import("@tauri-apps/plugin-dialog");
-            const selected = await open({ directory: true, multiple: false });
-            if (typeof selected === "string" && selected.trim()) {
-                await openProject(normalizeProjectPath(selected));
-            }
+        const handleOpenFolderRequest = () => {
+            window.dispatchEvent(new Event("shape-open-project-pick"));
         };
 
         window.addEventListener("shape-open-settings", handleOpenSettings);

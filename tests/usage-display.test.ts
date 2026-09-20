@@ -5,7 +5,7 @@ import {
     formatModelLabel,
     isAutoModelId,
     resolveChatUsageDisplay,
-} from "@/lib/usage-display";
+} from "@/lib/chat/usage-display";
 
 describe("usage-display", () => {
     it("detects auto models", () => {
@@ -61,7 +61,7 @@ describe("usage-display", () => {
     });
 
     it("splits usage into separate rows and omits empty fields", async () => {
-        const { formatMessageUsageRows } = await import("@/lib/usage-display");
+        const { formatMessageUsageRows } = await import("@/lib/chat/usage-display");
         expect(
             formatMessageUsageRows(
                 { usedAuto: true, tokens: 100_000, inputTokens: 80_000, outputTokens: 20_000 },
@@ -130,8 +130,8 @@ describe("usage-display", () => {
         ).toMatchObject({
             mode: "credits",
             percent: 20,
-            title: "20% used",
-            tooltip: "20% used this month",
+            title: "300.00 out of 1,500.00",
+            tooltip: "300.00 out of 1,500.00 this month",
         });
     });
 });

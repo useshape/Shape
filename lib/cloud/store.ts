@@ -13,7 +13,7 @@ import {
   websiteProviderSignInUrl,
 } from "./api";
 import type { ShapeAuthState, ShapeTier } from "./types";
-import { clearShapeCatalog, refreshShapeCatalog } from "@/lib/catalog-store";
+import { clearShapeCatalog, refreshShapeCatalog } from "@/lib/catalog/store";
 import { identifyTelemetryUser } from "@/lib/telemetry";
 
 const STORAGE_KEY = "shape-auth-token";
@@ -434,7 +434,7 @@ async function applyToken(token: string | null, allowRefresh = true) {
     }
 
     if (cached && isNetwork) {
-      // Soft offline: keep cached session, no toast — BYOK / local chats still work.
+      // Soft offline: keep cached session, no toast.
       setState({
         loggedIn: true,
         isLoading: false,

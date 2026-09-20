@@ -28,6 +28,7 @@ export function AgentOverlayView({
     useEffect(() => {
         if (overlay.type !== "settings") return;
         if (!overlay.category && !overlay.section) return;
+        if (overlay.section === "mcp" || overlay.section === "integrations") return;
         window.dispatchEvent(
             new CustomEvent("shape-settings-navigate", {
                 detail: {
@@ -55,7 +56,7 @@ export function AgentOverlayView({
 
     if (overlay.type === "settings") {
         return (
-            <div className="h-full min-h-0 w-full overflow-hidden animate-in fade-in duration-300 ease-[var(--ease-out)]">
+            <div className="h-full min-h-0 w-full overflow-hidden">
                 <Suspense fallback={<div className="h-full bg-panel" />}>
                     <SettingsView
                         navPortalTarget={navPortalTarget}
@@ -68,7 +69,7 @@ export function AgentOverlayView({
     }
 
     return (
-        <div className="h-full min-h-0 w-full overflow-hidden animate-in fade-in duration-300 ease-[var(--ease-out)]">
+        <div className="h-full min-h-0 w-full overflow-hidden">
             <FilterProvider>
                 <GitManager
                     embedded

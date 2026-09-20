@@ -132,8 +132,21 @@ export function isEditableText(info: LayerInfo) {
 export function isUserSourcePath(file: string) {
     const name = file.replace(/\\/g, "/").toLowerCase();
     if (!name) return false;
-    if (name.includes("/node_modules/") || name.startsWith("node_modules/")) return false;
-    if (name.includes("/.next/") || name.includes("/.turbo/")) return false;
+    const blocked = [
+        "node_modules",
+        ".git",
+        ".next",
+        ".turbo",
+        "dist",
+        "build",
+        "out",
+        "coverage",
+        "target",
+        "_next",
+        "static/chunks",
+    ];
+    const parts = name.split("/");
+    if (parts.some((part) => blocked.includes(part))) return false;
     if (name.includes("/_next/") || name.includes("/static/chunks/")) return false;
     return true;
 }

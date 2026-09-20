@@ -4,7 +4,7 @@ import { RiLoginBoxLine, RiLogoutBoxLine, RiUploadCloud2Fill, RiUserLine } from 
 import { useCallback, useState, type ReactNode } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
-import { requestShapeLogin } from "@/features/workbench/ui/login-prompt-dialog";
+import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { logoutGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
@@ -62,7 +62,7 @@ export function ProfileAvatar({
 
 async function checkForUpdates() {
     try {
-        const { checkForAppUpdates } = await import("@/lib/updater");
+        const { checkForAppUpdates } = await import("@/lib/window/updater");
         const status = await checkForAppUpdates({ force: true });
         if (status.kind === "available") {
             notify.info("Update available", `Shape ${status.version} is available.`);

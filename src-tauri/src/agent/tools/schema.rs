@@ -58,6 +58,9 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         update_todos(),
         screenshot_page(),
         inspect_runtime(),
+        generate_svg(),
+        generate_image(),
+        save_media(),
         finish(),
     ]);
     tools
@@ -719,6 +722,53 @@ fn plugin_run() -> Value {
     )
 }
 
+fn generate_svg() -> Value {
+    tool(
+        "generate_svg",
+        "Generate a vector SVG via the svg tool (not a chat model). Use for icons, logos, and illustrations the user asked to create as SVG. Preview appears in chat. Do not write it into the project unless they asked to save or use the file — then call save_media with the returned url.",
+        json!({
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "What to draw. Be specific about style, colors, and use (icon, logo, illustration)."}
+            },
+            "required": ["prompt"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn generate_image() -> Value {
+    tool(
+        "generate_image",
+        "Generate a raster image (PNG) via the image tool (not a chat model). Cheap quality suitable for mock assets, photos, and UI pictures. Preview appears in chat. Do not write it into the project unless they asked to save or use the file — then call save_media with the returned url.",
+        json!({
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "What to generate. Be specific about subject, style, and framing."}
+            },
+            "required": ["prompt"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn save_media() -> Value {
+    tool(
+        "save_media",
+        "Write an image/SVG into the project. ONLY when the user asked to save, move, or use attached/generated media as a file. Pass `attachment` for a file they attached in chat, or `url` for a generate_svg/generate_image result. Do not call this just because they attached or generated something.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative destination, e.g. public/hero.png or src/assets/logo.svg."},
+                "attachment": {"type": "string", "description": "Filename of a user-attached image in this chat."},
+                "url": {"type": "string", "description": "https URL returned by generate_svg or generate_image."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn screenshot_page() -> Value {
     tool(
         "screenshot_page",
@@ -818,6 +868,9 @@ mod tests {
         assert!(names.contains(&"read_lints".to_string()));
         assert!(names.contains(&"plugin_list".to_string()));
         assert!(!names.contains(&"plugin_run".to_string()));
+        assert!(!names.contains(&"generate_svg".to_string()));
+        assert!(!names.contains(&"generate_image".to_string()));
+        assert!(!names.contains(&"save_media".to_string()));
     }
 
     #[test]
@@ -827,6 +880,9 @@ mod tests {
         assert!(names.contains(&"plugin_run".to_string()));
         assert!(names.contains(&"plugin_list".to_string()));
         assert!(names.contains(&"screenshot_page".to_string()));
+        assert!(names.contains(&"generate_svg".to_string()));
+        assert!(names.contains(&"generate_image".to_string()));
+        assert!(names.contains(&"save_media".to_string()));
     }
 
     #[test]

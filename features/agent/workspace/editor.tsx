@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { isBrowserTab } from "@/lib/browser-tab";
+import { isBrowserTab } from "@/lib/window/browser-tab";
 import { WorkspacePreview } from "./preview";
 
 export function FileEditor({ path }: { path: string }) {

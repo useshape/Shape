@@ -2,7 +2,6 @@
 
 import { RiAddLine } from "@remixicon/react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { IconButton } from "./field";
 
 export function PanelSection({
@@ -30,18 +29,17 @@ export function PanelSection({
 
     return (
         <section className="border-t border-border">
-            <div className="flex h-10 items-center px-3">
+            <div className="flex h-10 items-center gap-2 px-3">
                 {canToggle ? (
-                    <Button
-                        variant="ghost"
-                        size="sm"
+                    <button
+                        type="button"
                         onClick={() => setOpenInternal((current) => !current)}
-                        className="-ml-2 min-w-0 flex-1 justify-start px-2 text-xs font-medium text-text-primary hover:bg-transparent"
+                        className="min-w-0 flex-1 text-left text-xs font-medium text-text-primary"
                     >
                         {title}
-                    </Button>
+                    </button>
                 ) : (
-                    <span className="-ml-2 min-w-0 flex-1 px-2 text-xs font-medium text-text-primary">
+                    <span className="min-w-0 flex-1 text-left text-xs font-medium text-text-primary">
                         {title}
                     </span>
                 )}

@@ -10,6 +10,7 @@ import {
     SHAPE_OVERLAY_CLASS,
     SHAPE_OVERLAY_CONTENT_CLASS,
 } from "@/lib/ui/modal-overlay";
+import { useOverlayRoot } from "@/lib/ui/overlay-root";
 
 export type QuickPickItem = {
     id: string;
@@ -51,6 +52,7 @@ export function QuickPick({
     onSubmitQuery,
     emptyText = "No results",
 }: Props) {
+    const overlayRoot = useOverlayRoot();
     const [selected, setSelected] = React.useState(0);
     const inputRef = React.useRef<HTMLInputElement>(null);
     const showInput = query !== undefined && onQueryChange !== undefined;
@@ -84,12 +86,12 @@ export function QuickPick({
 
     return (
         <Dialog.Root open={open} onOpenChange={onOpenChange}>
-            <Dialog.Portal>
+            <Dialog.Portal container={overlayRoot}>
                 <Dialog.Overlay className={cn(SHAPE_OVERLAY_CLASS, "z-[200]")} />
                 <Dialog.Content
                     className={cn(
                         SHAPE_OVERLAY_CONTENT_CLASS,
-                        "fixed left-1/2 top-[14%] z-[201] w-[min(520px,92vw)] -translate-x-1/2 outline-none",
+                        "absolute left-1/2 top-[14%] z-[201] w-[min(520px,calc(100%-2rem))] -translate-x-1/2 outline-none",
                     )}
                     aria-describedby={undefined}
                     onKeyDown={(e) => {

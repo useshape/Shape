@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { statusProgress } from "@/lib/status-progress";
+import { statusProgress } from "@/lib/ui/status-progress";
 
 describe("status progress", () => {
     beforeEach(() => {

@@ -280,6 +280,7 @@ pub fn run() {
             adapters::packages::npm_uninstall,
             adapters::packages::npm_update,
             adapters::packages::run_install_all,
+            adapters::packages::scaffold_web_project,
             // outline
             adapters::outline::get_outline,
             // agent

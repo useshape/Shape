@@ -85,15 +85,6 @@ export function resolveChatModels(
         }
     }
 
-    if (opts.openRouterKey) {
-        for (const model of catalog) {
-            if (model.id === "auto" || model.id === "openrouter/auto") continue;
-            add({ ...model, viaApi: true });
-        }
-    } else if (opts.openaiKey) {
-        for (const model of OPENAI_API_MODELS) add(model);
-    }
-
     return [...byId.values()];
 }
 

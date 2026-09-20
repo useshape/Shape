@@ -8,7 +8,7 @@ import {
     getRepoName,
     loadRepoHistory,
     type RepoHistoryEntry,
-} from "@/lib/repo-history";
+} from "@/lib/workspace/repo-history";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { openShapeBilling } from "@/lib/cloud/store";
 import { cn } from "@/lib/utils";

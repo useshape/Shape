@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     packageManagerLabel,
     resolvePackageManager,
-} from "@/lib/package-manager";
+} from "@/lib/workspace/package-manager";
 import { withSettings } from "../helpers/settings";
 
 describe("package-manager", () => {

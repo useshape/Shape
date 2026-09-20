@@ -72,7 +72,7 @@ export function ChatMoreMenu() {
                     Configure Rules
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                    onClick={() => void openSettingsWindow({ category: "ai", section: "rules" })}
+                    onClick={() => void openSettingsWindow({ category: "ai", section: "workflows" })}
                 >
                     Configure Workflows
                 </DropdownMenuItem>

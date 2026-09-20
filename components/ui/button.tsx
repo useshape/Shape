@@ -150,15 +150,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         const [pressed, setPressed] = React.useState(false);
 
         const endPress = React.useCallback(() => setPressed(false), []);
-        const startPress = React.useCallback(() => {
+        const startPress = React.useCallback((el?: HTMLElement | null) => {
             if (inactive || label) return;
+            if (el?.getAttribute("aria-haspopup") || el?.getAttribute("aria-expanded") === "true") return;
             setPressed(true);
         }, [inactive, label]);
 
         const classes = cn(
-            "relative inline-flex items-center justify-center gap-1.5 font-medium outline-none select-none",
+            "press-spring relative inline-flex items-center justify-center gap-1.5 font-medium outline-none select-none",
             "touch-manipulation [-webkit-tap-highlight-color:transparent]",
-            "transition-[color,background-color,border-color,opacity] duration-150 ease-out",
             "focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
             "[&_svg.shape-icon]:pointer-events-none [&_svg.shape-icon]:shrink-0",
             variantClasses[resolvedVariant],
@@ -196,17 +196,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             </>
         );
 
-        const content = (
-            <span
-                className={cn(
-                    "pointer-events-none inline-flex h-full w-full items-center justify-center gap-1.5",
-                    "[transition:transform_160ms_cubic-bezier(0.32,0.72,0,1)]",
-                    pressed && !inactive ? "scale-[0.96]" : "scale-100",
-                )}
-            >
-                {face}
-            </span>
-        );
+        const content = face;
 
         const guardActivation = (event: React.SyntheticEvent) => {
             if (!inactive) return false;
@@ -229,6 +219,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                     ref={ref as React.Ref<HTMLAnchorElement>}
                     href={ariaDisabled ? undefined : href}
                     className={classes}
+                    data-pressed={pressed && !ariaDisabled ? true : undefined}
                     aria-busy={loading || aiBusy || undefined}
                     aria-disabled={ariaDisabled || undefined}
                     role={href === "#" ? "button" : undefined}
@@ -238,7 +229,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                         onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                     }}
                     onPointerDown={(e) => {
-                        if (e.button === 0) startPress();
+                        if (e.button === 0) startPress(e.currentTarget);
                     }}
                     onPointerUp={endPress}
                     onPointerCancel={endPress}
@@ -256,6 +247,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 disabled={useNativeDisabled || undefined}
                 {...props}
                 className={classes}
+                data-pressed={pressed && !inactive ? true : undefined}
                 aria-busy={loading || aiBusy || undefined}
                 aria-pressed={selected ? true : ariaPressed}
                 aria-disabled={ariaDisabled || undefined}
@@ -265,7 +257,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 }}
                 onPointerDown={(e) => {
                     onPointerDown?.(e);
-                    if (e.button === 0) startPress();
+                    if (e.button === 0) startPress(e.currentTarget);
                 }}
                 onPointerUp={(e) => {
                     onPointerUp?.(e);
@@ -284,7 +276,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                         e.preventDefault();
                         return;
                     }
-                    if (!inactive && (e.key === "Enter" || e.key === " ")) startPress();
+                    if (!inactive && (e.key === "Enter" || e.key === " ")) startPress(e.currentTarget);
                     onKeyDown?.(e);
                 }}
                 onKeyUp={(e) => {

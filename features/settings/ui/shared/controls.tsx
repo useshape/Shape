@@ -33,7 +33,10 @@ export function SettingSection({
     children: React.ReactNode;
 }) {
     return (
-        <div id={id} className="mb-8 last:mb-0 scroll-mt-3">
+        <div
+            id={id}
+            className="mb-8 last:mb-0 scroll-mt-3 [content-visibility:auto] [contain-intrinsic-size:auto_280px]"
+        >
             <div className="mb-2.5 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <h2 className="text-md font-regular text-text-primary">{title}</h2>
@@ -42,7 +45,7 @@ export function SettingSection({
                 {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
             </div>
             {card ? (
-                <div className="flex flex-col overflow-hidden squircle-2xl! border-none bg-surface-3 divide-y divide-border">
+                <div className="flex flex-col overflow-hidden squircle-2xl bg-surface-3 divide-y divide-border">
                     {children}
                 </div>
             ) : (

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { cancelLoginShape, useShapeAuth } from "@/lib/cloud/store";
+import { useShapeAuth } from "@/lib/cloud/store";
 import { markOnboardingComplete } from "@/features/onboarding/config";
 import { updateSettingSection, useSettings } from "@/lib/settings";
 import { applyTelemetryPreference } from "@/lib/telemetry";
@@ -17,8 +17,8 @@ import {
     getCatalogDefaultEnabledIds,
     getCatalogModels,
     useShapeCatalog,
-} from "@/lib/catalog-store";
-import { isModelEnabled } from "@/lib/models";
+} from "@/lib/catalog/store";
+import { isModelEnabled } from "@/lib/chat/models";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { OnboardingWindowChrome } from "./window-chrome";
 import { LoginPanel } from "./login-panel";
@@ -101,6 +101,7 @@ export default function Onboarding({
     const canNext = stepId !== "privacy" || privacyChosen;
 
     const finishOnboarding = async () => {
+        if (isLoginStep && !shapeAuth.loggedIn) return;
         setFinishing(true);
         try {
             if (!loginOnly) {
@@ -277,21 +278,6 @@ export default function Onboarding({
                             finishing={finishing}
                             onSignedIn={() => void finishOnboarding()}
                         />
-                        {loginOnly ? null : (
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="lg"
-                                className="mt-4 w-full"
-                                disabled={finishing}
-                                onClick={() => {
-                                    cancelLoginShape();
-                                    void finishOnboarding();
-                                }}
-                            >
-                                Skip
-                            </Button>
-                        )}
                     </div>
                 ) : (
                     <div className="relative flex w-full max-w-xl flex-col items-center overflow-hidden">
@@ -574,10 +560,10 @@ function ModelsPanel({
                             type="button"
                             onClick={() => toggle(model.id)}
                             className={cn(
-                                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
+                                "inline-flex items-center gap-1.5 squircle-2xl press-spring border border-border-subtle px-2 py-1.5 text-sm transition-colors duration-300]",
                                 on
-                                    ? "border-accent bg-accent/15 text-text-primary"
-                                    : "border-border-subtle bg-surface-2 text-text-muted hover:text-text-secondary",
+                                    ? "ring-2 ring-accent text-text-primary"
+                                    : "bg-surface-2 text-text-muted hover:text-text-secondary",
                             )}
                         >
                             {providerIcon(model.id, 14)}

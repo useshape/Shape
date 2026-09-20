@@ -395,7 +395,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 const { stats, model, error, conversationId, turnId: completeTurnId, content } =
                     event.payload ?? {};
                 if (!error && stats) {
-                    void import("@/lib/last-turn-usage").then(({ setLastTurnUsage }) => {
+                    void import("@/lib/chat/last-turn-usage").then(({ setLastTurnUsage }) => {
                         setLastTurnUsage({
                             tokens: stats.tokens ?? ((stats.inputTokens ?? 0) + (stats.outputTokens ?? 0)),
                             creditsCharged: stats.creditsCharged ?? 0,
@@ -413,20 +413,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 setChatGenerating(NEW_CHAT_TAB_ID, false);
                 if (!forLive) {
                     if (!error) {
-                        const background = document.hidden || !document.hasFocus();
-                        if (background) {
-                            void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
-                                showDesktopNotification(
-                                    "generationComplete",
-                                    "Shape",
-                                    "Generation finished",
-                                ),
-                            );
-                        } else {
-                            void import("@/features/notifications").then(({ notify }) => {
-                                notify.info("Shape", "Generation finished");
-                            });
-                        }
+                        void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
+                            showDesktopNotification("generationComplete", "Shape", "Generation finished"),
+                        );
                     }
                     return;
                 }
@@ -452,20 +441,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                             }
                         })();
                     } else if (!error) {
-                        const background = document.hidden || !document.hasFocus();
-                        if (background) {
-                            void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
-                                showDesktopNotification(
-                                    "generationComplete",
-                                    "Shape",
-                                    "Generation finished",
-                                ),
-                            );
-                        } else {
-                            void import("@/features/notifications").then(({ notify }) => {
-                                notify.info("Shape", "Generation finished");
-                            });
-                        }
+                        void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
+                            showDesktopNotification("generationComplete", "Shape", "Generation finished"),
+                        );
                     }
                     return;
                 }
@@ -477,13 +455,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 setTurnId(null);
                 if (error && error !== "Cancelled") {
                     setSendError(error);
-                } else if (!error && (document.hidden || !document.hasFocus())) {
-                    void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
-                        showDesktopNotification(
-                            "generationComplete",
-                            "Shape",
-                            "Generation finished",
-                        ),
+                } else if (!error) {
+                    void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
+                        showDesktopNotification("generationComplete", "Shape", "Generation finished"),
                     );
                 }
                 // Cancelled turns are persisted server-side — resync so Stop
@@ -537,11 +511,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             const key = id?.trim() || `${title}:${body}`;
             if (notifiedApprovalIds.has(key)) return;
             notifiedApprovalIds.add(key);
-            if (document.hidden || !document.hasFocus()) {
-                void import("@/lib/desktop-notifications").then(({ showDesktopNotification }) =>
-                    showDesktopNotification("approvalRequired", title, body),
-                );
-            }
+            void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
+                showDesktopNotification("approvalRequired", title, body),
+            );
         };
 
         register(

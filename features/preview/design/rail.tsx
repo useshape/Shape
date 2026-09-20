@@ -2,6 +2,7 @@
 
 import {
     RiDonutChartFill,
+    RiLayoutGridLine,
     RiEditBoxLine,
     RiMouseLine,
     RiScreenshotFill,
@@ -70,7 +71,7 @@ export function DesignRail({
         <div className="flex h-full w-11 shrink-0 flex-col items-center border-r border-border bg-surface-3 py-2">
             <div className="flex flex-col items-center gap-0.5">
                 <RailBtn
-                    label="Edit"
+                    label="Inspect"
                     icon={RiEditBoxLine}
                     active={mode === "select"}
                     onClick={() => onModeChange("select")}
@@ -80,6 +81,12 @@ export function DesignRail({
                     icon={RiMouseLine}
                     active={mode === "normal"}
                     onClick={() => onModeChange("normal")}
+                />
+                <RailBtn
+                    label="Auto layout"
+                    icon={RiLayoutGridLine}
+                    active={mode === "autolayout"}
+                    onClick={() => onModeChange("autolayout")}
                 />
                 <RailBtn
                     label="Rotate"

@@ -369,8 +369,13 @@ pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         .get(&toolkit)
         .copied()
         .unwrap_or(policy.plugin_approval_default);
+    let preapproved = {
+        let slug_l = slug.to_ascii_lowercase();
+        let pair = format!("{}:{}", toolkit, slug_l);
+        policy.plugin_auto_allow.contains(&slug_l) || policy.plugin_auto_allow.contains(&pair)
+    };
 
-    if !plugin_needs_approval(mode, &slug) {
+    if preapproved || !plugin_needs_approval(mode, &slug) {
         return execute_plugin_run_ui(&toolkit, &slug, &label, &arguments, ctx, None).await;
     }
 

@@ -10,14 +10,27 @@ export type DesignComponentItem = {
     source: { fileName: string; lineNumber: number; columnNumber: number } | null;
 };
 
-export type DesignComponentSnapshot = {
-    kind: "dropdown" | "nav" | "link" | "button" | "image";
+export type DesignComponentProperty = {
     name: string;
+    kind: "text" | "boolean" | "variant" | "instance";
+    attr: string;
+    value: string;
+    options?: string[];
+};
+
+export type DesignComponentSnapshot = {
+    kind: "dropdown" | "nav" | "link" | "button" | "image" | "component";
+    name: string;
+    tag: string;
     open: boolean;
     trigger: string;
     href: string;
     label: string;
     items: DesignComponentItem[];
+    properties: DesignComponentProperty[];
+    variable: boolean;
+    sourceLabel: string;
+    source: { fileName: string; lineNumber: number; columnNumber: number } | null;
 };
 
 export type DesignElementSnapshot = {
@@ -46,6 +59,7 @@ export type DesignLayerSnapshot = {
     role: string;
     depth: number;
     hidden: boolean;
+    variable: boolean;
 };
 
 /**
@@ -55,17 +69,27 @@ export type DesignLayerSnapshot = {
 export const DESIGN_BRIDGE_SCRIPT = String.raw`
 (function () {
   if (window.__shapeDesignBridge) {
-    window.__shapeDesignBridge.refresh();
+    try { window.__shapeDesignBridge.refresh(); } catch (_) {}
+    try {
+      window.parent.postMessage({
+        type: "shape-design-ready",
+        title: document.title,
+        url: location.href
+      }, "*");
+    } catch (_) {}
     return;
   }
 
   var PREFIX = "__shape_design_";
   var selected = null;
   var hovered = null;
-  var mode = "select";
+  var mode = "normal";
+  var selectHint = null;
   var keyMap = new WeakMap();
   var keySeed = 0;
   var drag = null;
+  var pendingMove = null;
+  var pendingAddToChat = false;
 
   function post(type, detail) {
     try { window.parent.postMessage(Object.assign({ type: type }, detail || {}), "*"); } catch (_) {}
@@ -73,6 +97,15 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
   function keyFor(el) {
     if (!keyMap.has(el)) keyMap.set(el, PREFIX + (++keySeed));
     return keyMap.get(el);
+  }
+  function unknownDomAttr(el, name) {
+    var tag = (el && el.tagName ? String(el.tagName) : "").toLowerCase();
+    if (!name || !tag) return true;
+    if (tag.indexOf("-") >= 0) return false;
+    if (name.indexOf("data-") === 0 || name.indexOf("aria-") === 0) return false;
+    if (/^on[A-Z]/.test(name)) return false;
+    if (/^[a-z][a-z0-9-]*$/.test(name)) return false;
+    return true;
   }
   function isEditorNode(el) {
     return !el || el.id === PREFIX + "overlay" || !!el.closest("#" + PREFIX + "overlay");
@@ -434,6 +467,17 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
   function nodeText(el) {
     return String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
   }
+  function leafText(el) {
+    if (!el) return "";
+    if (!el.childElementCount) return String(el.textContent || "").replace(/\s+/g, " ").trim();
+    var allowed = /^(SPAN|STRONG|EM|B|I|BR|CODE|MARK|SMALL|U)$/;
+    var ok = true;
+    Array.prototype.forEach.call(el.children || [], function (child) {
+      if (!allowed.test(child.tagName)) ok = false;
+    });
+    if (!ok) return "";
+    return String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+  }
   function classBlob(el) {
     return (String(el.className && el.className.baseVal != null ? el.className.baseVal : el.className || "") + " " + (el.id || "")).toLowerCase();
   }
@@ -550,51 +594,162 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       menu.style.setProperty("transform", "none", "important");
     }
   }
-  function inspectComponent(el) {
-    var tag = el.tagName.toLowerCase();
-    if (tag === "img") {
+  function uniqueOptions(current, extras) {
+    var seen = {};
+    var out = [];
+    extras.concat([current]).forEach(function (item) {
+      var value = String(item || "").trim();
+      if (!value || seen[value]) return;
+      seen[value] = 1;
+      out.push(value);
+    });
+    return out;
+  }
+  function namedClass(el) {
+    var list = el.classList || [];
+    for (var i = 0; i < list.length; i++) {
+      var name = String(list[i] || "");
+      if (!name || name.indexOf("__shape") === 0) continue;
+      if (!/^(sm:|md:|lg:|xl:|2xl:|hover:|focus:|dark:)?[a-z]+-/.test(name) && name.length > 2) return name;
+    }
+    return "";
+  }
+  function typeName(type) {
+    if (!type) return "";
+    if (typeof type === "string") return type;
+    if (typeof type === "function") return type.displayName || type.name || "";
+    if (typeof type === "object") {
+      if (type.displayName) return String(type.displayName);
+      if (type.render) return typeName(type.render);
+      if (type.type) return typeName(type.type);
+    }
+    return "";
+  }
+  function prettyProp(name) {
+    return String(name || "")
+      .replace(/_/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/^./, function (ch) { return ch.toUpperCase(); })
+      .trim();
+  }
+  function isSkippedInstance(name) {
+    return /^(Slot|Primitive|VisuallyHidden|FocusScope|DismissableLayer|Portal|Presence|CollectionProvider|Popper|PopperAnchor|PopperContent|Provider|Consumer|Fragment|Suspense|StrictMode)$/.test(name);
+  }
+  function nearestInstance(el) {
+    var fiber = hostFiber(el);
+    var guard = 0;
+    var found = null;
+    while (fiber && guard++ < 50) {
+      var name = typeName(fiber.type || fiber.elementType);
+      if (name && /^[A-Z]/.test(name) && !isSkippedInstance(name)) {
+        var loc = syncFiberLoc(fiber);
+        var user = loc && loc.fileName && isUserFile(loc.fileName);
+        found = { name: name, fiber: fiber, loc: loc || null };
+        if (user) break;
+      }
+      fiber = fiber._debugOwner || fiber.return || null;
+    }
+    return found;
+  }
+  function instanceProps(fiber) {
+    var raw = (fiber && (fiber.pendingProps || fiber.memoizedProps)) || {};
+    var out = {};
+    Object.keys(raw).forEach(function (key) {
+      if (key === "ref" || key === "key" || key === "style" || key === "className" || key === "class" || key === "asChild" || key.charAt(0) === "_") return;
+      out[key] = raw[key];
+    });
+    return out;
+  }
+  function childText(value) {
+    if (value == null || value === false) return "";
+    if (typeof value === "string" || typeof value === "number") return String(value);
+    if (Array.isArray(value)) {
+      return value.map(childText).filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    }
+    return "";
+  }
+  function elementTypeName(value) {
+    if (!value || typeof value !== "object") return "";
+    if (value.$$typeof && value.type) return typeName(value.type);
+    return typeName(value);
+  }
+  var VARIANT_KEYS = /^(variant|size|intent|tone|appearance|color|state|orientation|align|side|radius|weight)$/i;
+  var VARIANT_OPTIONS = {
+    variant: ["default", "primary", "secondary", "destructive", "outline", "ghost", "link"],
+    size: ["default", "xs", "sm", "md", "lg", "icon"],
+    intent: ["default", "primary", "secondary", "destructive"],
+    state: ["default", "hover", "open", "closed", "disabled", "checked"]
+  };
+  function classifyProp(name, value) {
+    if (typeof value === "boolean") {
+      return { kind: "boolean", value: value ? "true" : "false", options: ["true", "false"] };
+    }
+    if (typeof value === "function") return null;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      var swap = elementTypeName(value);
+      if (!swap) return null;
+      return { kind: "instance", value: swap, options: [swap] };
+    }
+    if (typeof value === "number") {
+      return { kind: "text", value: String(value) };
+    }
+    if (typeof value !== "string") return null;
+    if (VARIANT_KEYS.test(name) || (/^(type|mode)$/i.test(name) && value.length < 24 && value.indexOf(" ") < 0)) {
+      var key = name.toLowerCase();
       return {
-        kind: "image",
-        name: "Image",
-        open: false,
-        trigger: "",
-        href: el.getAttribute("src") || "",
-        label: el.getAttribute("alt") || "",
-        items: []
+        kind: "variant",
+        value: value,
+        options: uniqueOptions(value, VARIANT_OPTIONS[key] || [])
       };
     }
-    var root = findComponentRoot(el);
-    var items = collectItems(root);
-    var href = el.getAttribute("href") || el.getAttribute("to") || root.getAttribute("href") || "";
-    var label = nodeText(el) || el.getAttribute("aria-label") || "";
-    var kind = null;
-    var name = "Component";
-    if (root.tagName === "NAV" || (root.getAttribute("role") || "") === "navigation" || (items.length > 1 && root.tagName !== "SELECT" && /(nav)/.test(classBlob(root)))) {
-      kind = "nav";
-      name = "Navigation";
-    } else if (root.tagName === "SELECT" || root.tagName === "DETAILS" || items.length > 1 || isMenuish(root)) {
-      kind = "dropdown";
-      name = "Dropdown";
-    } else if (tag === "a" || href) {
-      kind = "link";
-      name = "Link";
-    } else if (tag === "button") {
-      kind = "button";
-      name = "Button";
+    return { kind: "text", value: value };
+  }
+  function inspectComponent(el) {
+    var inst = nearestInstance(el);
+    if (!inst) return null;
+    var props = instanceProps(inst.fiber);
+    var properties = [];
+    Object.keys(props).forEach(function (key) {
+      if (key === "children") return;
+      var classified = classifyProp(key, props[key]);
+      if (!classified) return;
+      properties.push({
+        name: prettyProp(key),
+        kind: classified.kind,
+        attr: key,
+        value: classified.value,
+        options: classified.options || []
+      });
+    });
+    var text = childText(props.children);
+    if (text && text.length <= 120) {
+      properties.push({
+        name: "Text",
+        kind: "text",
+        attr: "",
+        value: text
+      });
     }
-    if (!kind) return null;
-    var trigger = nodeText(root.querySelector("summary, [data-radix-collection-item], button, a") || root) || label;
-    if (kind === "link" || kind === "button") {
-      items = [];
-    }
+    var order = { variant: 0, boolean: 1, instance: 2, text: 3 };
+    properties.sort(function (a, b) {
+      return (order[a.kind] || 9) - (order[b.kind] || 9);
+    });
+    if (!properties.length) return null;
+    var loc = inst.loc;
+    var sourceLabel = loc && loc.fileName ? String(loc.fileName).split("/").pop() : "From this file";
     return {
-      kind: kind,
-      name: name,
-      open: pinnedRoot === root || root.open === true || root.getAttribute("aria-expanded") === "true",
-      trigger: String(trigger).slice(0, 80),
-      href: href,
-      label: String(label || trigger).slice(0, 80),
-      items: items
+      kind: "component",
+      name: prettyProp(inst.name),
+      tag: inst.name,
+      open: false,
+      trigger: "",
+      href: typeof props.href === "string" ? props.href : (typeof props.src === "string" ? props.src : ""),
+      label: text,
+      items: [],
+      properties: properties,
+      variable: properties.some(function (prop) { return prop.kind === "variant" || prop.kind === "boolean"; }),
+      sourceLabel: sourceLabel,
+      source: loc && loc.fileName ? loc : null
     };
   }
   function snapshot(el, source) {
@@ -610,7 +765,7 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       classes: Array.prototype.slice.call(el.classList || []).filter(function (name) {
         return !name.startsWith(PREFIX);
       }),
-      text: (el.childElementCount === 0 ? el.textContent : "").replace(/\s+/g, " ").trim().slice(0, 240),
+      text: leafText(el).slice(0, 240),
       attributes: attrs,
       source: source === undefined ? sourceOfSync(el) : source,
       rect: rectOf(el),
@@ -625,22 +780,17 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
     "html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}" +
     "html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}" +
     "#" + PREFIX + "overlay{position:fixed;inset:0;z-index:2147483646;pointer-events:none;font-family:Inter,system-ui,sans-serif}" +
-    "." + PREFIX + "box{position:fixed;border:1.5px solid #3b82f6;box-sizing:border-box;display:none}" +
-    "." + PREFIX + "hover{border-color:rgba(59,130,246,.72);background:rgba(59,130,246,.055)}" +
-    "." + PREFIX + "label{position:absolute;left:-1px;bottom:100%;max-width:220px;padding:3px 6px;border-radius:4px 4px 0 0;background:#2563eb;color:white;font:500 11px/1.2 Inter,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
-    "." + PREFIX + "handle{position:absolute;width:8px;height:8px;border:1px solid white;border-radius:2px;background:#2563eb;pointer-events:auto}" +
+    "." + PREFIX + "box{position:fixed;border:1.5px solid #0d99ff;box-sizing:border-box;display:none;pointer-events:none}" +
+    "." + PREFIX + "hover{border-color:rgba(13,153,255,.72);background:rgba(13,153,255,.06)}" +
+    "." + PREFIX + "label{position:absolute;left:-1px;top:-18px;max-width:220px;padding:2px 6px;border-radius:4px 4px 0 0;background:#0d99ff;color:white;font:500 11px/1.2 Inter,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+    "." + PREFIX + "handle{position:absolute;width:8px;height:8px;border:1px solid white;border-radius:2px;background:#0d99ff;pointer-events:auto}" +
     "." + PREFIX + "nw{left:-5px;top:-5px;cursor:nwse-resize}." + PREFIX + "ne{right:-5px;top:-5px;cursor:nesw-resize}" +
     "." + PREFIX + "sw{left:-5px;bottom:-5px;cursor:nesw-resize}." + PREFIX + "se{right:-5px;bottom:-5px;cursor:nwse-resize}" +
-    "." + PREFIX + "move{left:50%;top:-22px;width:28px;height:18px;transform:translateX(-50%);cursor:move;border-radius:4px;color:white;font:600 12px/16px Inter;text-align:center}" +
-    "." + PREFIX + "rotate{width:10px;height:10px;border-radius:999px;background:#22c55e;border:1.5px solid white;cursor:grab}" +
-    "." + PREFIX + "rot-n{left:50%;top:-18px;transform:translateX(-50%)}" +
-    "." + PREFIX + "rot-e{right:-18px;top:50%;transform:translateY(-50%)}" +
-    "." + PREFIX + "rot-s{left:50%;bottom:-18px;transform:translateX(-50%)}" +
-    "." + PREFIX + "rot-w{left:-18px;top:50%;transform:translateY(-50%)}" +
-    "." + PREFIX + "rot-ne{right:-14px;top:-14px}." + PREFIX + "rot-nw{left:-14px;top:-14px}" +
-    "." + PREFIX + "rot-se{right:-14px;bottom:-14px}." + PREFIX + "rot-sw{left:-14px;bottom:-14px}" +
+    "." + PREFIX + "rotate{width:10px;height:10px;border-radius:999px;background:#0d99ff;border:1.5px solid white;cursor:grab}" +
+    "." + PREFIX + "rot-n{left:50%;top:-22px;transform:translateX(-50%)}" +
     "." + PREFIX + "guide{position:fixed;display:none;background:#ff4d9d;box-shadow:0 0 0 1px rgba(0,0,0,.18);z-index:2147483647}" +
     "." + PREFIX + "guide-x{top:0;bottom:0;width:2px}." + PREFIX + "guide-y{left:0;right:0;height:2px}" +
+    "." + PREFIX + "insert{position:fixed;display:none;background:#0d99ff;border-radius:999px;z-index:2147483647;pointer-events:none;box-shadow:0 0 0 1px rgba(13,153,255,.35)}" +
     "[data-shape-pin-open]{visibility:visible!important;pointer-events:auto!important}";
   document.documentElement.appendChild(style);
 
@@ -655,23 +805,30 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
     '<i data-handle="ne" class="' + PREFIX + 'handle ' + PREFIX + 'ne"></i>' +
     '<i data-handle="sw" class="' + PREFIX + 'handle ' + PREFIX + 'sw"></i>' +
     '<i data-handle="se" class="' + PREFIX + 'handle ' + PREFIX + 'se"></i>' +
-    '<i data-handle="move" class="' + PREFIX + 'handle ' + PREFIX + 'move">•••</i>' +
-    '<i data-handle="rotate-n" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-n"></i>' +
-    '<i data-handle="rotate-e" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-e"></i>' +
-    '<i data-handle="rotate-s" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-s"></i>' +
-    '<i data-handle="rotate-w" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-w"></i>' +
-    '<i data-handle="rotate-ne" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-ne"></i>' +
-    '<i data-handle="rotate-nw" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-nw"></i>' +
-    '<i data-handle="rotate-se" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-se"></i>' +
-    '<i data-handle="rotate-sw" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-sw"></i></div>';
+    '<i data-handle="rotate-n" class="' + PREFIX + 'handle ' + PREFIX + 'rotate ' + PREFIX + 'rot-n"></i></div>' +
+    '<div class="' + PREFIX + 'insert"></div>';
   document.documentElement.appendChild(overlay);
   var guideX = overlay.children[0];
   var guideY = overlay.children[1];
   var hoverBox = overlay.children[2];
   var selectBox = overlay.children[3];
+  var insertBar = overlay.children[4];
   var selectLabel = selectBox.querySelector("span");
   var resizeHandles = selectBox.querySelectorAll("[data-handle]:not([data-handle^=rotate])");
   var rotateHandles = selectBox.querySelectorAll("[data-handle^=rotate]");
+
+  function overlayActive() {
+    return mode === "select" || mode === "rotate" || mode === "autolayout";
+  }
+  function syncOverlay() {
+    overlay.style.pointerEvents = "none";
+  }
+  function hitPage(x, y) {
+    overlay.style.pointerEvents = "none";
+    var el = document.elementFromPoint(x, y);
+    if (el && isEditorNode(el)) el = el.parentElement;
+    return el;
+  }
 
   function setHandleVisibility() {
     var showResize = mode === "select";
@@ -708,6 +865,7 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
     return raw + " " + next;
   }
   setHandleVisibility();
+  syncOverlay();
 
   function place(box, el) {
     if (!el || !el.isConnected) { box.style.display = "none"; return; }
@@ -718,22 +876,155 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
     box.style.width = r.width + "px";
     box.style.height = r.height + "px";
   }
+  function rememberHint(el) {
+    if (!el) {
+      selectHint = null;
+      return;
+    }
+    var r = el.getBoundingClientRect();
+    selectHint = {
+      tag: el.tagName,
+      classes: Array.prototype.slice.call(el.classList || []),
+      text: leafText(el).slice(0, 80),
+      x: r.left + r.width / 2,
+      y: r.top + r.height / 2
+    };
+  }
+  function recoverSelected() {
+    if (selected && selected.isConnected) return selected;
+    if (!selectHint || !document.body) return null;
+    var nodes = document.body.getElementsByTagName(selectHint.tag);
+    var best = null;
+    var bestScore = -1;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (isEditorNode(el)) continue;
+      var score = 0;
+      var classes = el.classList || [];
+      selectHint.classes.forEach(function (name) {
+        if (name && classes.contains(name)) score += 8;
+      });
+      var text = leafText(el).slice(0, 80);
+      if (selectHint.text && text === selectHint.text) score += 30;
+      else if (selectHint.text && text && text.indexOf(selectHint.text.slice(0, 24)) >= 0) score += 12;
+      var r = el.getBoundingClientRect();
+      var dx = (r.left + r.width / 2) - selectHint.x;
+      var dy = (r.top + r.height / 2) - selectHint.y;
+      score += Math.max(0, 20 - Math.sqrt(dx * dx + dy * dy) / 8);
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+    if (best && bestScore >= 28) {
+      selected = best;
+      rememberHint(best);
+      return best;
+    }
+    return null;
+  }
+  function layoutParent(el) {
+    var cur = el && el.parentElement;
+    while (cur && cur !== document.body) {
+      var display = getComputedStyle(cur).display;
+      if (display === "flex" || display === "inline-flex" || display === "grid") return cur;
+      cur = cur.parentElement;
+    }
+    return el ? el.parentElement : null;
+  }
+  function hideInsert() {
+    if (insertBar) insertBar.style.display = "none";
+  }
+  function layoutSiblings(el) {
+    var parent = layoutParent(el);
+    if (!parent) return [];
+    return Array.prototype.filter.call(parent.children, function (child) {
+      return child.nodeType === 1 && !isEditorNode(child);
+    });
+  }
+  function pickInsert(el, x, y) {
+    var parent = layoutParent(el);
+    var siblings = layoutSiblings(el);
+    if (!parent || siblings.length < 2) return { before: null, vertical: true };
+    var display = getComputedStyle(parent).display;
+    var vertical = display === "grid" || getComputedStyle(parent).flexDirection.indexOf("column") === 0;
+    var before = null;
+    for (var i = 0; i < siblings.length; i++) {
+      var sib = siblings[i];
+      if (sib === el) continue;
+      var r = sib.getBoundingClientRect();
+      var mid = vertical ? r.top + r.height / 2 : r.left + r.width / 2;
+      var pos = vertical ? y : x;
+      if (pos < mid) {
+        before = sib;
+        break;
+      }
+    }
+    return { before: before, vertical: vertical, parent: parent };
+  }
+  function placeInsert(el, target) {
+    if (!insertBar || !el) {
+      hideInsert();
+      return;
+    }
+    var parent = target.parent || layoutParent(el);
+    if (!parent) {
+      hideInsert();
+      return;
+    }
+    var vertical = target.vertical;
+    var before = target.before;
+    var r = before ? before.getBoundingClientRect() : parent.getBoundingClientRect();
+    insertBar.style.display = "block";
+    if (vertical) {
+      insertBar.style.height = "2px";
+      insertBar.style.width = Math.max(12, (before ? r.width : r.width) - 4) + "px";
+      insertBar.style.left = (before ? r.left : r.left) + 2 + "px";
+      insertBar.style.top = (before ? r.top - 1 : r.bottom - 1) + "px";
+    } else {
+      insertBar.style.width = "2px";
+      insertBar.style.height = Math.max(12, (before ? r.height : r.height) - 4) + "px";
+      insertBar.style.top = (before ? r.top : r.top) + 2 + "px";
+      insertBar.style.left = (before ? r.left - 1 : r.right - 1) + "px";
+    }
+  }
+  function applyReorder(el, before) {
+    var parent = layoutParent(el);
+    if (!parent || !el.parentElement) return false;
+    if (before && before.parentElement !== parent) return false;
+    if (before === el) return false;
+    if (before && el.nextElementSibling === before) return false;
+    if (!before && parent.lastElementChild === el) return false;
+    if (before) parent.insertBefore(el, before);
+    else parent.appendChild(el);
+    return true;
+  }
   function refresh() {
     if (selected && !selected.isConnected) {
-      selected = null;
-      hovered = null;
-      post("shape-design-selection", { element: null });
+      var recovered = recoverSelected();
+      if (!recovered) {
+        selected = null;
+        hovered = null;
+        hideInsert();
+        post("shape-design-selection", { element: null });
+      } else {
+        post("shape-design-selection", { element: snapshot(recovered) });
+      }
     }
     if (mode === "normal") {
       hoverBox.style.display = "none";
       selectBox.style.display = "none";
+      hideInsert();
       clearGuides();
+      syncOverlay();
       return;
     }
-    place(hoverBox, mode === "select" && hovered && hovered !== selected ? hovered : null);
+    syncOverlay();
+    place(hoverBox, (mode === "select" || mode === "autolayout") && hovered && hovered !== selected ? hovered : null);
     place(selectBox, selected);
     setHandleVisibility();
     if (selected) selectLabel.textContent = selected.tagName.toLowerCase() + " · " + labelFor(selected);
+    if (!(drag && drag.kind === "reorder")) hideInsert();
   }
   function collectThemeTokens() {
     var tokens = [];
@@ -745,6 +1036,17 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       seen[name] = 1;
       tokens.push({ name: name, value: trimmed });
     }
+    try {
+      var roots = [document.documentElement, document.body];
+      for (var r = 0; r < roots.length; r++) {
+        if (!roots[r]) continue;
+        var computed = getComputedStyle(roots[r]);
+        for (var ci = 0; ci < computed.length; ci++) {
+          var cprop = computed[ci];
+          if (cprop && cprop.indexOf("--") === 0) add(cprop, computed.getPropertyValue(cprop));
+        }
+      }
+    } catch (_) {}
     try {
       var sheets = document.styleSheets;
       for (var i = 0; i < sheets.length; i++) {
@@ -762,7 +1064,7 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       }
     } catch (_) {}
     tokens.sort(function (a, b) { return a.name.localeCompare(b.name); });
-    return tokens.slice(0, 120);
+    return tokens.slice(0, 400);
   }
   function sendTree() {
     var layers = [];
@@ -772,6 +1074,7 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       if (layers.length >= 500 || isEditorNode(el)) return;
       var r = el.getBoundingClientRect();
       var s = getComputedStyle(el);
+      var component = inspectComponent(el);
       layers.push({
         key: keyFor(el),
         parentKey: el.parentElement && el.parentElement !== document.documentElement ? keyFor(el.parentElement) : null,
@@ -785,7 +1088,8 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
         ariaLabel: el.getAttribute("aria-label") || "",
         role: el.getAttribute("role") || "",
         depth: depth,
-        hidden: s.display === "none" || s.visibility === "hidden" || r.width === 0 || r.height === 0
+        hidden: s.display === "none" || s.visibility === "hidden" || r.width === 0 || r.height === 0,
+        variable: !!(component && component.variable)
       });
       Array.prototype.forEach.call(el.children, function (child) { walk(child, depth + 1); });
     }
@@ -796,6 +1100,7 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
     if (!el || isEditorNode(el)) return;
     selected = el;
     hovered = null;
+    rememberHint(el);
     var root = findComponentRoot(el);
     if (isMenuish(root) && root.tagName !== "NAV") pinOpen(root, true);
     else if (pinnedRoot && pinnedRoot !== root) unpin();
@@ -803,7 +1108,9 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
     var token = el;
     sourceOfAsync(el).then(function (source) {
       if (selected !== token) return;
-      post("shape-design-selection", { element: snapshot(el, source) });
+      var addToChat = pendingAddToChat;
+      pendingAddToChat = false;
+      post("shape-design-selection", { element: snapshot(el, source), addToChat: addToChat });
     });
   }
 
@@ -895,7 +1202,23 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
   }
 
   document.addEventListener("pointermove", function (event) {
+    if (pendingMove && !drag) {
+      var pdx = event.clientX - pendingMove.x;
+      var pdy = event.clientY - pendingMove.y;
+      if (pdx * pdx + pdy * pdy > 9) {
+        drag = pendingMove;
+        pendingMove = null;
+      }
+    }
     if (drag) {
+      if (drag.kind === "reorder") {
+        var nextInsert = pickInsert(drag.el, event.clientX, event.clientY);
+        drag.before = nextInsert.before;
+        refresh();
+        placeInsert(drag.el, nextInsert);
+        event.preventDefault();
+        return;
+      }
       if (drag.kind === "rotate") {
         var angle = Math.atan2(event.clientY - drag.cy, event.clientX - drag.cx) * (180 / Math.PI);
         var nextDeg = drag.startRotation + (angle - drag.startAngle);
@@ -931,15 +1254,32 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       event.preventDefault();
       return;
     }
-    if (mode !== "select") return;
-    var el = document.elementFromPoint(event.clientX, event.clientY);
+    if (mode !== "select" && mode !== "autolayout") return;
+    var el = hitPage(event.clientX, event.clientY);
     if (!el || isEditorNode(el)) return;
     hovered = el;
     refresh();
   }, true);
 
+  function beginMove(el, event) {
+    var computed = getComputedStyle(el);
+    drag = {
+      kind: "box",
+      el: el,
+      handle: "move",
+      x: event.clientX,
+      y: event.clientY,
+      width: el.getBoundingClientRect().width,
+      height: el.getBoundingClientRect().height,
+      rect: el.getBoundingClientRect(),
+      left: parseFloat(computed.left) || 0,
+      top: parseFloat(computed.top) || 0,
+      position: computed.position
+    };
+  }
+
   document.addEventListener("pointerdown", function (event) {
-    if (mode === "normal") return;
+    if (!overlayActive()) return;
     var handle = event.target && event.target.getAttribute && event.target.getAttribute("data-handle");
     if (handle && selected) {
       if (String(handle).indexOf("rotate") === 0) {
@@ -981,17 +1321,52 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       event.stopPropagation();
       return;
     }
-    if (mode !== "select") return;
-    var el = event.target;
+    var el = hitPage(event.clientX, event.clientY);
     if (!el || isEditorNode(el)) return;
-    select(el);
+    if (mode === "autolayout") {
+      select(el);
+      drag = { kind: "reorder", el: el, x: event.clientX, y: event.clientY, before: null };
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (mode === "select" && selected && (el === selected || selected.contains(el))) {
+      beginMove(selected, event);
+      pendingMove = drag;
+      drag = null;
+    } else {
+      if (event.altKey) pendingAddToChat = true;
+      select(el);
+    }
     event.preventDefault();
     event.stopPropagation();
   }, true);
 
+  ["click", "auxclick", "submit"].forEach(function (type) {
+    document.addEventListener(type, function (event) {
+      if (!overlayActive()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+  });
+
   document.addEventListener("pointerup", function () {
+    pendingMove = null;
     if (!drag) return;
     clearGuides();
+    if (drag.kind === "reorder") {
+      var moved = applyReorder(drag.el, drag.before);
+      hideInsert();
+      refresh();
+      if (moved) {
+        post("shape-design-reorder", {
+          element: snapshot(drag.el),
+          before: drag.before ? snapshot(drag.before) : null
+        });
+      }
+      drag = null;
+      return;
+    }
     var styles = {};
     if (drag.kind === "rotate") {
       styles.transform = replaceRotate(drag.baseTransform, drag.currentDeg || drag.startRotation || 0);
@@ -1012,7 +1387,7 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
 
   document.addEventListener("dblclick", function (event) {
     if (mode !== "select") return;
-    var el = event.target;
+    var el = hitPage(event.clientX, event.clientY);
     if (!el || el.childElementCount !== 0 || isEditorNode(el)) return;
     select(el);
     var before = el.textContent || "";
@@ -1031,7 +1406,7 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
   }, true);
 
   document.addEventListener("keydown", function (event) {
-    if (!selected || (mode !== "select" && mode !== "rotate")) return;
+    if (!selected || (mode !== "select" && mode !== "rotate" && mode !== "autolayout")) return;
     var editing = event.target && (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName));
     if (editing) return;
     if (event.key === "Delete" || event.key === "Backspace") {
@@ -1045,6 +1420,25 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       return;
     }
     if (/^Arrow(Left|Right|Up|Down)$/.test(event.key)) {
+      if (mode === "autolayout") {
+        var sibs = layoutSiblings(selected);
+        var at = sibs.indexOf(selected);
+        var delta = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
+        var nextAt = at + delta;
+        if (at < 0 || nextAt < 0 || nextAt >= sibs.length) return;
+        var beforeNode = delta > 0 ? (sibs[nextAt + 1] || null) : sibs[nextAt];
+        if (applyReorder(selected, beforeNode)) {
+          refresh();
+          var afterSibs = layoutSiblings(selected);
+          var idx = afterSibs.indexOf(selected);
+          post("shape-design-reorder", {
+            element: snapshot(selected),
+            before: idx >= 0 && idx + 1 < afterSibs.length ? snapshot(afterSibs[idx + 1]) : null
+          });
+        }
+        event.preventDefault();
+        return;
+      }
       var computed = getComputedStyle(selected);
       var step = event.shiftKey ? 10 : 1;
       var left = parseFloat(computed.left) || 0;
@@ -1079,7 +1473,23 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
     var toKids = to.children;
     for (var j = 0; j < fromKids.length && j < toKids.length; j++) copyComputed(fromKids[j], toKids[j]);
   }
-  function exportNode(scale, requestId) {
+  function collectFontCss() {
+    var css = "";
+    try {
+      var sheets = document.styleSheets;
+      for (var i = 0; i < sheets.length; i++) {
+        var rules;
+        try { rules = sheets[i].cssRules; } catch (_) { continue; }
+        if (!rules) continue;
+        for (var j = 0; j < rules.length; j++) {
+          if (rules[j] && String(rules[j].cssText || "").indexOf("@font-face") === 0) css += rules[j].cssText + "\n";
+        }
+      }
+    } catch (_) {}
+    return css;
+  }
+  function exportNode(scale, requestId, resultType) {
+    var type = resultType || "shape-design-export-result";
     try {
       var el = selected || document.documentElement;
       var rect = el.getBoundingClientRect();
@@ -1090,39 +1500,54 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       clone.style.margin = "0";
       clone.style.position = "static";
       clone.style.transform = "none";
+      clone.style.background = "transparent";
       clone.style.width = rect.width + "px";
       clone.style.height = rect.height + "px";
       clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-      var serialized = new XMLSerializer().serializeToString(clone);
+      var wrap = document.createElement("div");
+      wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      wrap.setAttribute("style", "background:transparent;font-family:" + (getComputedStyle(el).fontFamily || "system-ui,sans-serif") + ";font-size:" + (getComputedStyle(el).fontSize || "16px") + ";font-weight:" + (getComputedStyle(el).fontWeight || "400") + ";color:" + (getComputedStyle(el).color || "#111") + ";");
+      var fontStyle = document.createElement("style");
+      fontStyle.textContent = collectFontCss();
+      wrap.appendChild(fontStyle);
+      wrap.appendChild(clone);
+      var serialized = new XMLSerializer().serializeToString(wrap);
       var svg =
         '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
         '<foreignObject width="100%" height="100%">' + serialized + "</foreignObject></svg>";
-      var image = new Image();
-      image.onload = function () {
-        var canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        var ctx = canvas.getContext("2d");
-        if (!ctx) {
-          post("shape-design-export-result", { requestId: requestId });
-          return;
-        }
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(image, 0, 0, width, height);
-        post("shape-design-export-result", {
-          requestId: requestId,
-          dataUrl: canvas.toDataURL("image/png"),
-          width: width,
-          height: height
-        });
+      var finish = function () {
+        var image = new Image();
+        image.onload = function () {
+          var canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          var ctx = canvas.getContext("2d");
+          if (!ctx) {
+            post(type, { requestId: requestId, req: requestId });
+            return;
+          }
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          post(type, {
+            requestId: requestId,
+            req: requestId,
+            dataUrl: canvas.toDataURL("image/png"),
+            width: width,
+            height: height
+          });
+        };
+        image.onerror = function () {
+          post(type, { requestId: requestId, req: requestId });
+        };
+        image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
       };
-      image.onerror = function () {
-        post("shape-design-export-result", { requestId: requestId });
-      };
-      image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(finish).catch(finish);
+      } else {
+        finish();
+      }
     } catch (_) {
-      post("shape-design-export-result", { requestId: requestId });
+      post(type, { requestId: requestId, req: requestId });
     }
   }
   function alignSelected(alignment) {
@@ -1150,10 +1575,14 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
   window.addEventListener("message", function (event) {
     var data = event.data || {};
     if (data.type === "shape-design-set-mode") {
-      mode = data.mode || "select";
+      if (typeof data.mode === "string" && data.mode) mode = data.mode;
       if (typeof data.projectRoot === "string") projectRoot = data.projectRoot;
-      if (mode === "normal") hovered = null;
-      drag = null;
+      if (mode === "normal") {
+        hovered = null;
+        drag = null;
+        pendingMove = null;
+        hideInsert();
+      }
       refresh();
     }
     if (data.type === "shape-design-config") {
@@ -1163,9 +1592,16 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       var all = document.body ? document.body.querySelectorAll("*") : [];
       for (var i = 0; i < all.length; i++) if (keyFor(all[i]) === data.key) { select(all[i]); break; }
     }
-    if (data.type === "shape-design-refresh") { refresh(); sendTree(); }
+    if (data.type === "shape-design-refresh") {
+      refresh();
+      sendTree();
+      post("shape-design-tokens", { themeTokens: collectThemeTokens() });
+    }
     if (data.type === "shape-design-align") alignSelected(data.alignment);
     if (data.type === "shape-design-export") exportNode(data.scale || 2, data.requestId);
+    if (data.type === "shape-preview-screenshot") {
+      exportNode(1, data.req || data.requestId, "shape-preview-screenshot-result");
+    }
     if (data.type === "shape-design-set-text" && data.key) {
       var textNodes = document.body ? document.body.querySelectorAll("*") : [];
       for (var ti = 0; ti < textNodes.length; ti++) {
@@ -1197,7 +1633,9 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
           if (attrName === "href" && attrNodes[ai].hasAttribute("to") && !attrNodes[ai].hasAttribute("href")) {
             attrName = "to";
           }
-          attrNodes[ai].setAttribute(attrName, data.value || "");
+          if (!unknownDomAttr(attrNodes[ai], attrName)) {
+            attrNodes[ai].setAttribute(attrName, data.value || "");
+          }
           post("shape-design-commit-attr", {
             element: snapshot(attrNodes[ai]),
             attributes: (function () { var o = {}; o[attrName] = data.value || ""; return o; })()
@@ -1225,13 +1663,35 @@ export const DESIGN_BRIDGE_SCRIPT = String.raw`
       Object.keys(data.styles).forEach(function (name) {
         selected.style.setProperty(name, data.styles[name], "important");
       });
+      var classList = selected.classList;
+      if (classList) {
+        var drop = [];
+        Array.prototype.forEach.call(classList, function (cls) {
+          var c = String(cls);
+          if (data.styles.width && /(^|:)w-/.test(c)) drop.push(c);
+          if (data.styles.height && /(^|:)h-/.test(c)) drop.push(c);
+          if (data.styles.left && /(^|:)left-/.test(c)) drop.push(c);
+          if (data.styles.top && /(^|:)top-/.test(c)) drop.push(c);
+          if (data.styles.transform && /(^|:)rotate-/.test(c)) drop.push(c);
+          if (data.styles["border-radius"] && /(^|:)rounded/.test(c)) drop.push(c);
+        });
+        drop.forEach(function (cls) { classList.remove(cls); });
+      }
       refresh();
       post("shape-design-selection", { element: snapshot(selected) });
     }
   });
 
-  var observer = new MutationObserver(function () { refresh(); });
-  if (document.body) observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+  var observer = new MutationObserver(function (records) {
+    for (var i = 0; i < records.length; i++) {
+      var target = records[i].target;
+      if (target === overlay || isEditorNode(target)) continue;
+      if (drag && selected && (target === selected || selected.contains(target))) continue;
+      refresh();
+      return;
+    }
+  });
+  if (document.body) observer.observe(document.body, { childList: true, subtree: true });
   window.__shapeDesignBridge = { refresh: refresh, select: select };
   setTimeout(function () {
     sendTree();

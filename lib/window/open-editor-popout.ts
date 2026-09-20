@@ -41,9 +41,9 @@ export async function openEditorPopout(filePath: string) {
             minWidth: 480,
             minHeight: 320,
             decorations: false,
+            transparent: false,
             center: true,
             resizable: true,
-            shadow: true,
             visible: false,
             focus: true,
         });

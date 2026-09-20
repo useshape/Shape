@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import React, { createContext, useCallback, useContext, useState } from "react";
-import { statusProgress } from "@/lib/status-progress";
+import { statusProgress } from "@/lib/ui/status-progress";
 
 interface LoadingContextType {
     isLoading: boolean;

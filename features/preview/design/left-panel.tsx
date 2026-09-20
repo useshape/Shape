@@ -11,18 +11,17 @@ import {
     RiFileLine,
     RiImageLine,
     RiLink,
-    RiRefreshLine,
     RiShapesLine,
     RiText,
 } from "@remixicon/react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
 import { ScrollArea } from "@/components/ui/scroll";
 import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
 import type { DesignElementSnapshot, DesignLayerSnapshot } from "./bridge";
-import { DesignComponentOptions, type ComponentOptionPatch } from "./panel/options";
+import { type ComponentOptionPatch } from "./panel/options";
 import {
     componentFolder,
     groupThemeTokens,
@@ -71,11 +70,11 @@ function Section({
             <button
                 type="button"
                 onClick={onToggle}
-                className="flex h-8 w-full items-center gap-2 px-3 text-left text-xs font-medium text-text-primary"
+                className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm font-medium text-text-primary"
             >
                 <span className="min-w-0 flex-1">{title}</span>
-                {count != null ? <span className="text-2xs text-text-muted">{count}</span> : null}
-                <Icon icon={open ? RiArrowDownSLine : RiArrowRightSLine} size={14} className="text-text-muted" />
+                {count != null ? <span className="text-xs text-text-muted">{count}</span> : null}
+                <Icon icon={open ? RiArrowDownSLine : RiArrowRightSLine} size={ICON_SIZE_MD} className="text-text-muted" />
             </button>
             {open ? <div className="pb-2">{children}</div> : null}
         </div>
@@ -93,11 +92,8 @@ export function DesignLeftPanel({
     assets,
     themeTokens,
     onOpenPath,
-    onReload,
-    onOpenCode,
-    canOpenCode,
-    selectedElement,
-    onComponentPatch,
+    selectedElement: _selectedElement,
+    onComponentPatch: _onComponentPatch,
     className,
 }: {
     layers: DesignLayerSnapshot[];
@@ -110,9 +106,6 @@ export function DesignLeftPanel({
     assets: Array<{ path: string; name: string; bytes: number; kind: string }>;
     themeTokens: ThemeToken[];
     onOpenPath?: (path: string) => void;
-    onReload?: () => void;
-    onOpenCode?: () => void;
-    canOpenCode?: boolean;
     selectedElement?: DesignElementSnapshot | null;
     onComponentPatch?: (patch: ComponentOptionPatch) => void;
     className?: string;
@@ -178,44 +171,36 @@ export function DesignLeftPanel({
 
     return (
         <aside className={cn("relative flex h-full w-full min-w-0 flex-col border-r border-border bg-surface-3", className)}>
-            <div className="grid h-9 shrink-0 grid-cols-3 border-b border-border px-1">
+            <div className="grid h-9 shrink-0 grid-cols-3 pt-1">
                 {(["layers", "pages", "library"] as const).map((item) => (
-                    <button
+                    <Button
                         key={item}
-                        type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setTab(item)}
                         className={cn(
-                            "relative text-xs capitalize text-text-muted transition-colors hover:text-text-primary",
-                            tab === item && "text-text-primary after:absolute after:inset-x-2 after:bottom-0 after:h-px after:bg-accent",
+                            "relative text-sm capitalize text-text-muted transition-colors hover:bg-transparent hover:text-text-primary",
+                            tab === item && "text-text-primary",
                         )}
                     >
                         {item}
-                    </button>
+                    </Button>
                 ))}
             </div>
 
             {tab !== "pages" ? (
-                <div className="shrink-0 border-b border-border p-2">
+                <div className="shrink-0 px-2 pb-2">
                     <SearchInput
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder={tab === "layers" ? "Filter layers" : "Search"}
-                        className="h-7"
                     />
                 </div>
             ) : null}
 
             {tab === "layers" ? (
-                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
+                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-surface-3">
                     <div className="py-1">
-                        {selectedElement?.component && onComponentPatch ? (
-                            <div className="mb-2 border-b border-border">
-                                <DesignComponentOptions
-                                    element={selectedElement}
-                                    onPatch={onComponentPatch}
-                                />
-                            </div>
-                        ) : null}
                         {visibleLayers.map((layer) => {
                             const hasChildren = parentKeys.has(layer.key);
                             const isCollapsed = collapsed.has(layer.key);
@@ -228,10 +213,10 @@ export function DesignLeftPanel({
                                 <div
                                     key={layer.key}
                                     className={cn(
-                                        "flex h-6 w-full items-center gap-1 px-1.5 text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                        "flex h-8 w-full items-center gap-1.5 px-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary",
                                         selected && "bg-panel-active text-text-primary",
                                     )}
-                                    style={{ paddingLeft: 6 + Math.min(layer.depth, 12) * 12 }}
+                                    style={{ paddingLeft: 9 + Math.min(layer.depth, 12) * 12 }}
                                 >
                                     <span
                                         className="flex size-4 shrink-0 items-center justify-center"
@@ -246,10 +231,14 @@ export function DesignLeftPanel({
                                         }}
                                     >
                                         {hasChildren ? (
-                                            <Icon icon={isCollapsed ? RiArrowRightSLine : RiArrowDownSLine} size={12} />
+                                            <Icon icon={isCollapsed ? RiArrowRightSLine : RiArrowDownSLine} size={ICON_SIZE_SM} />
                                         ) : null}
                                     </span>
-                                    <Icon icon={KindIcon} size={ICON_SIZE_SM} className={kindClass(kind)} />
+                                    <Icon
+                                        icon={KindIcon}
+                                        size={ICON_SIZE_SM}
+                                        className={layer.variable ? "text-violet-400" : kindClass(kind)}
+                                    />
                                     {editing ? (
                                         <input
                                             value={drafts[layer.key] ?? layer.text}
@@ -260,7 +249,7 @@ export function DesignLeftPanel({
                                                 const next = drafts[layer.key];
                                                 if (next != null && next !== layer.text) onChangeText?.(layer.key, next);
                                             }}
-                                            className="h-5 min-w-0 flex-1 rounded-sm bg-input-bg px-1 text-xs text-text-primary outline-none"
+                                            className="h-5 min-w-0 flex-1 squircle-xl bg-input-bg px-1 text-sm text-text-primary outline-none"
                                             onClick={(event) => event.stopPropagation()}
                                             onKeyDown={(event) => {
                                                 if (event.key === "Enter") event.currentTarget.blur();
@@ -280,7 +269,7 @@ export function DesignLeftPanel({
                             );
                         })}
                         {layers.length === 0 ? (
-                            <p className="px-3 py-6 text-center text-xs leading-relaxed text-text-muted">
+                            <p className="px-3 py-6 text-center text-sm leading-relaxed text-text-muted">
                                 Layers appear when the live page is ready.
                             </p>
                         ) : null}
@@ -289,7 +278,7 @@ export function DesignLeftPanel({
             ) : null}
 
             {tab === "pages" ? (
-                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
+                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-surface-3">
                     <div className="p-1.5">
                         {pages.map((page) => (
                             <button
@@ -297,7 +286,7 @@ export function DesignLeftPanel({
                                 type="button"
                                 onClick={() => onPageChange(page.path)}
                                 className={cn(
-                                    "flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                    "flex min-h-8 w-full items-center gap-2 squircle-xl px-2 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary",
                                     activePage === page.path && "bg-panel-active text-text-primary",
                                 )}
                             >
@@ -311,7 +300,7 @@ export function DesignLeftPanel({
             ) : null}
 
             {tab === "library" ? (
-                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
+                <ScrollArea className="min-h-0 flex-1" fadeFrom="from-surface-3">
                     <Section
                         title="Templates"
                         count={pages.length}
@@ -323,7 +312,7 @@ export function DesignLeftPanel({
                                 key={page.path}
                                 type="button"
                                 onClick={() => onPageChange(page.path)}
-                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                                className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                             >
                                 <Icon icon={RiFileLine} size={ICON_SIZE_SM} className="text-accent" />
                                 <span className="min-w-0 flex-1 truncate">{page.label}</span>
@@ -338,13 +327,13 @@ export function DesignLeftPanel({
                     >
                         {componentFolders.map(([folder, items]) => (
                             <div key={folder}>
-                                <p className="px-3 py-1 text-2xs text-text-muted">{folder}</p>
+                                <p className="px-3 py-1 text-xs font-medium text-text-muted">{folder}</p>
                                 {items.filter((item) => filtered(item.path, item.name)).map((item) => (
                                     <button
                                         key={item.path}
                                         type="button"
                                         onClick={() => onOpenPath?.(item.path)}
-                                        className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                                        className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                                     >
                                         <Icon icon={RiBox3Line} size={ICON_SIZE_SM} className="text-accent" />
                                         <span className="min-w-0 flex-1 truncate">{item.name.replace(/\.(tsx|jsx)$/i, "")}</span>
@@ -364,23 +353,23 @@ export function DesignLeftPanel({
                             ["Color", tokens.color, RiColorFilterLine],
                         ].map(([label, list, icon]) => (
                             <div key={String(label)}>
-                                <p className="flex items-center gap-2 px-3 py-1 text-2xs text-text-muted">
-                                    <Icon icon={icon as typeof RiText} size={12} />
+                                <p className="flex items-center gap-2 px-3 py-1 text-xs font-medium text-text-muted">
+                                    <Icon icon={icon as typeof RiText} size={ICON_SIZE_SM} />
                                     {String(label)}
                                 </p>
                                 {(list as ThemeToken[]).slice(0, 24).filter((token) => filtered(token.name, token.value)).map((token) => (
                                     <div
                                         key={token.name}
-                                        className="flex h-7 items-center gap-2 px-3 text-xs text-text-secondary"
+                                        className="flex h-8 items-center gap-2 px-3 text-sm text-text-secondary"
                                         title={`${token.name}: ${token.value}`}
                                     >
                                         {String(label) === "Color" ? (
                                             <span
-                                                className="size-3 shrink-0 rounded-sm border border-border"
+                                                className="size-3 shrink-0 squircle-sm border border-border"
                                                 style={{ background: token.value }}
                                             />
                                         ) : (
-                                            <Icon icon={RiBrushLine} size={12} className="text-text-muted" />
+                                            <Icon icon={RiBrushLine} size={ICON_SIZE_SM} className="text-text-muted" />
                                         )}
                                         <span className="min-w-0 flex-1 truncate">{token.name}</span>
                                     </div>
@@ -390,7 +379,7 @@ export function DesignLeftPanel({
                                         key={item.path}
                                         type="button"
                                         onClick={() => onOpenPath?.(item.path)}
-                                        className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover"
+                                        className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                                     >
                                         <Icon icon={RiFileLine} size={ICON_SIZE_SM} />
                                         <span className="min-w-0 flex-1 truncate">{item.name}</span>
@@ -410,7 +399,7 @@ export function DesignLeftPanel({
                                 key={item.path}
                                 type="button"
                                 onClick={() => onOpenPath?.(item.path)}
-                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover"
+                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                             >
                                 <Icon icon={RiShapesLine} size={ICON_SIZE_SM} className="text-success" />
                                 <span className="min-w-0 flex-1 truncate">{item.name}</span>
@@ -428,7 +417,7 @@ export function DesignLeftPanel({
                                 key={item.path}
                                 type="button"
                                 onClick={() => onOpenPath?.(item.path)}
-                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-xs text-text-secondary hover:bg-panel-hover"
+                                className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                             >
                                 <Icon icon={RiCodeLine} size={ICON_SIZE_SM} className="text-text-muted" />
                                 <span className="min-w-0 flex-1 truncate">{item.name}</span>
@@ -437,24 +426,6 @@ export function DesignLeftPanel({
                     </Section>
                 </ScrollArea>
             ) : null}
-
-            <div className="flex shrink-0 items-center gap-1 border-t border-border p-1.5">
-                <Button variant="ghost" size="sm" className="h-7 flex-1 justify-start gap-1.5 px-2 text-xs" onClick={onReload}>
-                    <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
-                    Reload
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 flex-1 justify-start gap-1.5 px-2 text-xs"
-                    disabled={!canOpenCode}
-                    accessibleDisabled={false}
-                    onClick={onOpenCode}
-                >
-                    <Icon icon={RiCodeLine} size={ICON_SIZE_SM} />
-                    Source
-                </Button>
-            </div>
         </aside>
     );
 }
