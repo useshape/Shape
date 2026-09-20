@@ -5,6 +5,8 @@ import {
     RiAlignJustify,
     RiAlignLeft,
     RiAlignRight,
+    RiAlignTop,
+    RiAlignBottom,
     RiAlignVertically,
     RiArrowDownLine,
     RiArrowDownSLine,
@@ -17,7 +19,6 @@ import {
     RiCodeLine,
     RiContrastDropLine,
     RiDeleteBinLine,
-    RiEqualizer2Line,
     RiExpandDiagonalLine,
     RiExpandHeightLine,
     RiExpandWidthLine,
@@ -69,6 +70,7 @@ import {
     SelectField,
 } from "./field";
 import { FontField, WeightField } from "./font";
+import { FormatMenu } from "./format";
 import { FlexAlignmentGrid } from "./layout";
 import { DesignComponentOptions, type ComponentOptionPatch } from "./options";
 import { PanelSection } from "./section";
@@ -123,6 +125,10 @@ export function DesignStylePanel({
     themeTokens = [],
     className,
     onComponentPatch,
+    onCommitText: _onCommitText,
+    onCommitAttr,
+    onCreateToken,
+    chrome = true,
 }: {
     element: DesignElementSnapshot | null;
     source: { file: string; line: number } | null;
@@ -143,6 +149,10 @@ export function DesignStylePanel({
     themeTokens?: ThemeToken[];
     className?: string;
     onComponentPatch?: (patch: ComponentOptionPatch) => void;
+    onCommitText?: (text: string) => void;
+    onCommitAttr?: (name: string, value: string) => void;
+    onCreateToken?: (name: string, value: string) => void | Promise<void>;
+    chrome?: boolean;
 }) {
     const style = element?.styles ?? {};
     const setStyle = (property: string, value: string) => {
@@ -154,6 +164,7 @@ export function DesignStylePanel({
         && (/^(a|button|h1|h2|h3|h4|h5|h6|label|li|p|span|strong|em)$/i.test(element.tag)
             || element.text.trim()),
     );
+    const href = element?.attributes?.href || element?.attributes?.to || "";
     const filterFunctions = parseCssFunctions(css(style, "filter", "none"));
     const boxShadow = parseBoxShadow(css(style, "box-shadow", "none"));
     const hasShadow = boxShadow != null;
@@ -210,7 +221,7 @@ export function DesignStylePanel({
                     </div>
                     <p className="text-sm font-medium text-text-primary">Nothing selected</p>
                     <p className="mt-1 text-sm leading-relaxed text-text-muted">
-                        Select an element on the canvas or in Layers.
+                        Select an element on the page.
                     </p>
                 </div>
             </aside>
@@ -218,7 +229,8 @@ export function DesignStylePanel({
     }
 
     return (
-        <aside className={cn("flex h-full min-w-0 flex-col bg-surface-3", className)}>
+        <aside className={cn("flex h-full min-w-0 flex-col bg-panel", className)}>
+            {chrome ? (
             <div className="shrink-0 px-3 pb-2.5 pt-2.5">
                 <div className="mb-1.5 flex h-6 items-center gap-0.5">
                     <IconButton label="Undo" icon={RiArrowGoBackLine} onClick={onUndo} />
@@ -269,11 +281,95 @@ export function DesignStylePanel({
                     <span className="ml-1.5 font-medium text-sm text-text-muted">Ctrl + L</span>
                 </Button>
             </div>
+            ) : null}
 
             <ScrollArea className="min-h-0 flex-1" fadeFrom="from-panel">
                 <div className="pb-40">
-                    {onComponentPatch ? (
-                        <DesignComponentOptions element={element} onPatch={onComponentPatch} />
+                    {onComponentPatch && element.component ? (
+                        <DesignComponentOptions
+                            element={element}
+                            onPatch={onComponentPatch}
+                            onOpenSource={onOpenSource}
+                        />
+                    ) : null}
+                    {textual ? (
+                        <PanelSection
+                            title="Text"
+                            action={
+                                <FormatMenu
+                                    style={style}
+                                    setStyle={setStyle}
+                                    onPreview={onPreview}
+                                    onCommit={onCommit}
+                                />
+                            }
+                        >
+                            {element.tag === "a" && onCommitAttr ? (
+                                <label className="flex min-h-8 items-center gap-2">
+                                    <span className="w-18 shrink-0 text-xs text-text-muted">Link</span>
+                                    <input
+                                        className={cn(CONTROL, "min-w-0 flex-1 rounded-md border border-border bg-panel-hover px-2")}
+                                        defaultValue={href}
+                                        onBlur={(event) => {
+                                            const next = event.target.value;
+                                            if (next !== href) onCommitAttr("href", next);
+                                        }}
+                                    />
+                                </label>
+                            ) : null}
+                            <div className="flex gap-1">
+                                <FontField
+                                    value={css(style, "font-family").split(",")[0]?.replace(/['"]/g, "") || "System Sans-Serif"}
+                                    onChange={(value) => setStyle("font-family", value === "System Sans-Serif" ? "system-ui, sans-serif" : value)}
+                                />
+                            </div>
+                            <WeightField
+                                value={style["font-weight"]}
+                                onChange={(value) => setStyle("font-weight", value)}
+                            />
+                            <div className="flex gap-2">
+                                <Field icon={RiFontSize} value={style["font-size"]} property="font-size" onPreview={onPreview} onCommit={onCommit} />
+                                <Field icon={RiArrowUpDownLine} value={style["line-height"]} property="line-height" onPreview={onPreview} onCommit={onCommit} />
+                                <Field icon={RiTextSpacing} value={style["letter-spacing"]} property="letter-spacing" onPreview={onPreview} onCommit={onCommit} />
+                            </div>
+                            <div className="flex gap-1">
+                                <Segment
+                                    value={style["text-align"] || "left"}
+                                    onChange={(value) => setStyle("text-align", value)}
+                                    items={[
+                                        { value: "left", icon: RiAlignLeft, title: "Align left" },
+                                        { value: "center", icon: RiAlignCenter, title: "Align center" },
+                                        { value: "right", icon: RiAlignRight, title: "Align right" },
+                                    ]}
+                                />
+                                <Segment
+                                    value={
+                                        style["align-items"] === "flex-end" || style["vertical-align"] === "bottom"
+                                            ? "bottom"
+                                            : style["align-items"] === "center" || style["vertical-align"] === "middle"
+                                              ? "middle"
+                                              : "top"
+                                    }
+                                    onChange={(value) => {
+                                        const align =
+                                            value === "bottom"
+                                                ? "flex-end"
+                                                : value === "middle"
+                                                  ? "center"
+                                                  : "flex-start";
+                                        const vertical =
+                                            value === "bottom" ? "bottom" : value === "middle" ? "middle" : "top";
+                                        onPreview({ "align-items": align, "vertical-align": vertical });
+                                        onCommit({ "align-items": align, "vertical-align": vertical });
+                                    }}
+                                    items={[
+                                        { value: "top", icon: RiAlignTop, title: "Align top" },
+                                        { value: "middle", icon: RiAlignVertically, title: "Align middle" },
+                                        { value: "bottom", icon: RiAlignBottom, title: "Align bottom" },
+                                    ]}
+                                />
+                            </div>
+                        </PanelSection>
                     ) : null}
                     <PanelSection
                         title="Layout"
@@ -540,84 +636,16 @@ export function DesignStylePanel({
                             style={style}
                             setStyle={setStyle}
                             themeTokens={themeTokens}
+                            paint={
+                                /^(a|h1|h2|h3|h4|h5|h6|label|li|p|span|strong|em)$/i.test(element.tag)
+                                    ? "color"
+                                    : "background"
+                            }
+                            onCreateToken={onCreateToken}
                             onPreview={onPreview}
                             onCommit={onCommit}
                         />
                     </PanelSection>
-
-                    {textual ? (
-                        <PanelSection
-                            title="Text"
-                            action={
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            icon={RiEqualizer2Line}
-                                            aria-label="Text case"
-                                            title="Text case"
-                                        />
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="min-w-36">
-                                        {(
-                                            [
-                                                ["none", "As typed"],
-                                                ["uppercase", "Uppercase"],
-                                                ["lowercase", "Lowercase"],
-                                                ["capitalize", "Capitalize"],
-                                            ] as const
-                                        ).map(([value, label]) => (
-                                            <DropdownMenuItem
-                                                key={value}
-                                                onClick={() => setStyle("text-transform", value)}
-                                                className={cn(
-                                                    style["text-transform"] === value && "bg-panel-active",
-                                                )}
-                                            >
-                                                {label}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            }
-                        >
-                            <div className="flex gap-1">
-                                <FontField
-                                    value={css(style, "font-family").split(",")[0]?.replace(/['"]/g, "") || "System Sans-Serif"}
-                                    onChange={(value) => setStyle("font-family", value === "System Sans-Serif" ? "system-ui, sans-serif" : value)}
-                                />
-                                <WeightField
-                                    value={style["font-weight"]}
-                                    onChange={(value) => setStyle("font-weight", value)}
-                                    className="max-w-28"
-                                />
-                            </div>
-                            <div className="flex gap-2">
-                                <Field icon={RiFontSize} value={style["font-size"]} property="font-size" onPreview={onPreview} onCommit={onCommit} />
-                                <Field icon={RiArrowUpDownLine} value={style["line-height"]} property="line-height" onPreview={onPreview} onCommit={onCommit} />
-                                <Field icon={RiTextSpacing} value={style["letter-spacing"]} property="letter-spacing" onPreview={onPreview} onCommit={onCommit} />
-                            </div>
-                            <Segment
-                                value={style["text-align"]}
-                                onChange={(value) => setStyle("text-align", value)}
-                                items={[
-                                    { value: "left", icon: RiAlignLeft, title: "Align left" },
-                                    { value: "center", icon: RiAlignCenter, title: "Align center" },
-                                    { value: "right", icon: RiAlignRight, title: "Align right" },
-                                    { value: "justify", icon: RiAlignJustify, title: "Justify" },
-                                ]}
-                            />
-                            <ColorField
-                                value={style.color}
-                                property="color"
-                                themeTokens={themeTokens}
-                                onPreview={onPreview}
-                                onCommit={onCommit}
-                            />
-                        </PanelSection>
-                    ) : null}
 
                     {textual ? (
                         <PanelSection
@@ -636,6 +664,7 @@ export function DesignStylePanel({
                                         value={style["text-decoration-color"] || style.color}
                                         property="text-decoration-color"
                                         themeTokens={themeTokens}
+                                        onCreateToken={onCreateToken}
                                         onPreview={onPreview}
                                         onCommit={onCommit}
                                     />
@@ -653,6 +682,7 @@ export function DesignStylePanel({
                             value={style["border-color"]}
                             property="border-color"
                             themeTokens={themeTokens}
+                            onCreateToken={onCreateToken}
                             onPreview={onPreview}
                             onCommit={onCommit}
                         />
@@ -682,6 +712,7 @@ export function DesignStylePanel({
                                     value={boxShadow?.color}
                                     property="box-shadow"
                                     themeTokens={themeTokens}
+                                    onCreateToken={onCreateToken}
                                     mapValue={(value) => composeShadow("color", value)}
                                     onPreview={onPreview}
                                     onCommit={onCommit}

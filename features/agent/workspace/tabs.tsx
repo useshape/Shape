@@ -206,6 +206,10 @@ export function WorkspaceTabs({
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => onNew("browser")}>
+                    <Icon icon={iconFor("browser")} size={ICON_SIZE_MD} />
+                    <span className="flex-1">Browser</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("files")}>
                     <Icon icon={iconFor("files")} size={ICON_SIZE_MD} />
                     <span className="flex-1">Files</span>

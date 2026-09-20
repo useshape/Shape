@@ -1,6 +1,6 @@
 import { commands, getProjectSnapshot } from "@/lib/backend";
-import { clearExtraWorkspaceFolders } from "@/lib/workspace-folders";
-import { notifyWorkspaceOpened } from "@/lib/workspace-trust";
+import { clearExtraWorkspaceFolders } from "@/lib/workspace/folders";
+import { notifyWorkspaceOpened } from "@/lib/workspace/trust";
 
 export function normalizeProjectPath(path: string): string {
     return path

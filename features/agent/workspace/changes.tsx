@@ -8,7 +8,7 @@ import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
 import { discoverGitRepos, pickDefaultRepo } from "@/lib/git/repos";
-import { useGitBranch } from "@/features/workbench/hooks/use-git-branch";
+import { useGitBranch } from "@/features/agent/workbench/hooks/use-git-branch";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { openFileDiffTab } from "./file-diff";
 import { resolveOwnerRepo } from "@/features/git/ui/actions/utils";

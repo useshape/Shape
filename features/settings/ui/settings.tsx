@@ -12,11 +12,12 @@ import {
 } from "@/lib/settings";
 import { commands, useProjectState } from "@/lib/backend";
 import type { PackageDep, PackageInfo } from "@/lib/backend/types";
-import { resolvePackageManager } from "@/lib/package-manager";
+import { resolvePackageManager } from "@/lib/workspace/package-manager";
 import { notify } from "@/features/notifications";
 import { appRoute } from "@/lib/window/app-route";
 import { listen, WebviewWindow } from "@/lib/tauri/client-api";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { SearchInput } from "@/components/ui/search";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,7 @@ import {
 import { AiSettingsPanel } from "./sections/ai";
 import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
-import { clearRepoHistory } from "@/lib/repo-history";
+import { clearRepoHistory } from "@/lib/workspace/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
@@ -51,6 +52,7 @@ import { useShapeAuth } from "@/lib/cloud/store";
 import {
     AlertDialog,
     AlertDialogAction,
+    AlertDialogBody,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -582,12 +584,6 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                         onChange={(v) => updateSettingSection("privacy", { showWelcomeOnStartup: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Show sign-in prompt on launch">
-                    <SettingSwitch
-                        checked={p.showLoginPromptOnLaunch}
-                        onChange={(v) => updateSettingSection("privacy", { showLoginPromptOnLaunch: v })}
-                    />
-                </SettingRow>
             </SettingSection>
             <SettingSection id="settings-notifications" title="Notifications">
                 <SettingRow title="Desktop notifications">
@@ -596,7 +592,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                         onChange={(v) => {
                             updateSettingSection("notifications", { desktopEnabled: v });
                             if (v) {
-                                void import("@/lib/desktop-notifications").then(({ ensureNotificationPermission }) =>
+                                void import("@/lib/notifications/desktop").then(({ ensureNotificationPermission }) =>
                                     ensureNotificationPermission(),
                                 );
                             }
@@ -660,6 +656,7 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                     />
                 </SettingRow>
             </SettingSection>
+            <FeedbackSection />
             <SettingSection title="Legal">
                 <div className="px-3.5 py-3 space-y-2 text-sm">
                     <button
@@ -682,6 +679,67 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
     );
 }
 
+function FeedbackSection() {
+    const [open, setOpen] = useState(false);
+    const [message, setMessage] = useState("");
+
+    const close = (nextOpen: boolean) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setMessage("");
+    };
+
+    return (
+        <>
+            <SettingSection title="Feedback">
+                <SettingRow title="Send feedback" description="What’s working and what isn’t.">
+                    <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+                        Feedback
+                    </Button>
+                </SettingRow>
+            </SettingSection>
+            <AlertDialog open={open} onOpenChange={close}>
+                <AlertDialogContent
+                    sizeClassName="max-w-md"
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Feedback</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Tell us what to keep or change.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogBody>
+                        <Textarea
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            placeholder="Your feedback…"
+                            className="min-h-32"
+                            autoFocus
+                        />
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel asChild>
+                            <Button type="button" variant="ghost" size="sm">
+                                Cancel
+                            </Button>
+                        </AlertDialogCancel>
+                        <AlertDialogAction asChild>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={!message.trim()}
+                                onClick={() => close(false)}
+                            >
+                                Send
+                            </Button>
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
+    );
+}
+
 function PythonSettings({ settings }: { settings: ShapeSettings }) {
     const { project_path } = useProjectState();
     const selected = settings.python?.interpreterPath ?? "auto";
@@ -689,7 +747,7 @@ function PythonSettings({ settings }: { settings: ShapeSettings }) {
 
     useEffect(() => {
         let cancelled = false;
-        void import("@/lib/python-interpreters").then(({ discoverPythonInterpreters }) =>
+        void import("@/lib/editor/python-interpreters").then(({ discoverPythonInterpreters }) =>
             discoverPythonInterpreters(project_path).then((list) => {
                 if (!cancelled) setInterpreters(list);
             }),
@@ -798,8 +856,9 @@ export function SettingsView({
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "plugins") return "settings-ai-plugins";
-        if (section === "mcp" || section === "integrations") return "settings-ai-mcp";
+        if (section === "mcp" || section === "integrations") return null;
         if (section === "rules") return "settings-ai-rules";
+        if (section === "workflows") return "settings-ai-workflows";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
         switch (category) {
@@ -809,8 +868,6 @@ export function SettingsView({
             case "ai":
             case "agents":
                 return "settings-ai-models";
-            case "integrations":
-                return "settings-ai-mcp";
             case "editor":
                 return "settings-editor-font";
             case "terminal":
@@ -894,46 +951,6 @@ export function SettingsView({
         };
     }, [applyNavigation, router]);
 
-    const activeLeafRef = React.useRef(activeLeafId);
-    activeLeafRef.current = activeLeafId;
-
-    useEffect(() => {
-        const root = settingsScrollRef.current;
-        const targets = allSettingsLeaves()
-            .map((l) => l.targetId)
-            .filter((id): id is string => !!id);
-        const elements = targets
-            .map((id) => document.getElementById(id))
-            .filter((el): el is HTMLElement => !!el);
-        if (elements.length === 0) return;
-
-        let frame = 0;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (scrollingToRef.current) return;
-                const visible = entries
-                    .filter((e) => e.isIntersecting)
-                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-                const first = visible[0];
-                if (!first?.target.id) return;
-                const leaf = allSettingsLeaves().find((l) => l.targetId === first.target.id);
-                if (!leaf || leaf.id === activeLeafRef.current) return;
-                cancelAnimationFrame(frame);
-                frame = requestAnimationFrame(() => {
-                    if (scrollingToRef.current || leaf.id === activeLeafRef.current) return;
-                    activeLeafRef.current = leaf.id;
-                    setActiveLeafId(leaf.id);
-                });
-            },
-            { root: root ?? null, rootMargin: "-12% 0px -70% 0px", threshold: 0 },
-        );
-        for (const el of elements) observer.observe(el);
-        return () => {
-            cancelAnimationFrame(frame);
-            observer.disconnect();
-        };
-    }, []);
-
     const filteredNav = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (!q) return SETTINGS_NAV;
@@ -976,7 +993,7 @@ export function SettingsView({
     return (
         <div
             className={cn(
-                "flex h-full w-full min-w-0 overflow-hidden select-none",
+                "flex h-full min-h-0 w-full min-w-0 overflow-hidden",
                 navPortalTarget ? "bg-panel" : "bg-background",
             )}
         >
@@ -1046,32 +1063,34 @@ export function SettingsView({
                     </aside>
                 );
             })()}
-            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-no-drag>
-                <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-                    {activeLeafId === "keyboard-shortcuts" ? (
-                        <div id="settings-keyboard-shortcuts" className="flex h-full min-h-0 flex-col">
-                            <KeyboardShortcutsView />
+            <section className="relative min-h-0 min-w-0 flex-1 bg-panel" data-no-drag>
+                {activeLeafId === "keyboard-shortcuts" ? (
+                    <div id="settings-keyboard-shortcuts" className="absolute inset-0 flex min-h-0 flex-col">
+                        <KeyboardShortcutsView />
+                    </div>
+                ) : activeLeafId === "plugins" ? (
+                    <div id="settings-ai-plugins" className="absolute inset-0 flex min-h-0 flex-col">
+                        <PluginsSettingsView />
+                    </div>
+                ) : (
+                    <div
+                        ref={settingsScrollRef}
+                        className={cn(
+                            "absolute inset-0 overflow-y-scroll overscroll-contain [scrollbar-gutter:stable] custom-scrollbar px-6 pb-8 lg:px-8",
+                            navPortalTarget ? "pt-3" : "pt-8",
+                        )}
+                        data-no-drag
+                    >
+                        <div className="mx-auto w-full max-w-5xl space-y-2">
+                            <AccountSettingsPanel />
+                            <AiSettings settings={settings} />
+                            <EditorSettings settings={settings} />
+                            <TerminalSettings settings={settings} />
+                            <GitSettings settings={settings} />
+                            <AdvancedSettings settings={settings} />
                         </div>
-                    ) : activeLeafId === "plugins" ? (
-                        <div id="settings-ai-plugins" className="flex h-full min-h-0 flex-col">
-                            <PluginsSettingsView />
-                        </div>
-                    ) : (
-                            <div
-                                ref={settingsScrollRef}
-                                className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-auto px-6 pt-8 pb-8 no-scrollbar lg:px-8"
-                            >
-                                <div className="mx-auto w-full max-w-5xl space-y-2">
-                                    <AccountSettingsPanel />
-                                    <AiSettings settings={settings} />
-                                    <EditorSettings settings={settings} />
-                                    <TerminalSettings settings={settings} />
-                                    <GitSettings settings={settings} />
-                                    <AdvancedSettings settings={settings} />
-                                </div>
-                            </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </section>
 
             <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>

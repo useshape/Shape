@@ -1,7 +1,7 @@
 export const SETTINGS_TAB_PATH = "shape://settings";
 export const SETTINGS_TAB_NAME = "Settings";
 
-import { isBrowserTab } from "@/lib/browser-tab";
+import { isBrowserTab } from "@/lib/window/browser-tab";
 import { isDesignPreviewTab } from "@/lib/agent-preview/tab";
 
 export function isSettingsTab(path: string | null | undefined): boolean {

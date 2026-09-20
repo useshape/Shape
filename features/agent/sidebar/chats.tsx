@@ -6,13 +6,13 @@ import { commands, useProjectState } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { formatCompactAgo, getRepoName } from "@/lib/repo-history";
+import { formatCompactAgo, getRepoName } from "@/lib/workspace/repo-history";
 import { ProjectKindGlyph } from "@/features/detection/ui/kind-glyph";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SearchInput } from "@/components/ui/search";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
-import { useGitBranch } from "@/features/workbench/hooks/use-git-branch";
+import { useGitBranch } from "@/features/agent/workbench/hooks/use-git-branch";
 import {
     ContextMenu,
     ContextMenuContent,

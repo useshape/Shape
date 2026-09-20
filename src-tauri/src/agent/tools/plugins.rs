@@ -44,7 +44,7 @@ fn sanitize_plugin_error(raw: &str) -> String {
     }
 }
 
-async fn plugin_request(
+pub(crate) async fn plugin_request(
     method: &str,
     path: &str,
     access_token: &str,

@@ -17,7 +17,7 @@ import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { cn } from "@/lib/utils";
 import { useFilter } from "@/features/git/ui/manager/filter-context";
 import { statusIcon } from "@/features/git/ui/actions/utils";
-import { formatCommandError } from "@/lib/format-error";
+import { formatCommandError } from "@/lib/errors/format";
 import { notify } from "@/features/notifications";
 import { Tooltip } from "@/components/ui/tooltip";
 import { GitHubDetailPane } from "./detail";

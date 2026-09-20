@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan-preview";
+import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan/preview";
 
 describe("plan-preview", () => {
     it("parses goal and todos from plan markdown", () => {

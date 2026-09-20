@@ -22,9 +22,10 @@ import {
     formatMessageUsageRows,
     formatMessageModelLabel,
     type MessageUsageStats,
-} from "@/lib/usage-display";
-import { parseShapeContinueAction } from "@/lib/shape-continue-action";
-import { mentionRanges, mentionDisplayLabel } from "@/lib/chat-mentions";
+} from "@/lib/chat/usage-display";
+import { parseShapeContinueAction } from "@/lib/chat/continue-action";
+import { mentionRanges, mentionDisplayLabel } from "@/lib/chat/mentions";
+import { designTokenById } from "@/lib/chat/design-mentions";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { Favicon } from "@/components/ui/favicon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
@@ -35,7 +36,7 @@ import { useShapeAuth } from "@/lib/cloud/store";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { UserMessageCard } from "./bubble";
 import { GeneratingIndicator } from "../blocks/generating";
-import { isAutoModelId } from "@/lib/usage-display";
+import { isAutoModelId } from "@/lib/chat/usage-display";
 import { parseUserAttachments } from "../../lib/user-attachments";
 import type { ParsedUserAttachment } from "../../lib/user-attachments";
 
@@ -44,7 +45,7 @@ function UserMessageAvatar() {
     const auth = useShapeAuth();
     const [failed, setFailed] = React.useState(false);
 
-    // Hide identity when not connected to Shape (offline / signed out) — BYOK users stay anonymous.
+    // Hide identity when not connected to Shape (offline / signed out).
     if (!auth.loggedIn || auth.offline) return null;
 
     const src =
@@ -216,6 +217,14 @@ function MentionRichText({ text }: { text: string }) {
                 ) : mention.kind === "browser" ? (
                     <span className="chat-link-favicon">
                         <Favicon url={mention.path || label} size={12} />
+                    </span>
+                ) : mention.kind === "design" && designTokenById(mention.id || mention.path) ? (
+                    <span className="chat-link-favicon">
+                        <Icon
+                            icon={designTokenById(mention.id || mention.path)!.icon}
+                            className="text-accent-text"
+                            size={12}
+                        />
                     </span>
                 ) : null}
                 <span>@{label}</span>

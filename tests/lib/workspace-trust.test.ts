@@ -5,7 +5,7 @@ import {
     normalizeWorkspacePath,
     trustWorkspace,
     untrustWorkspace,
-} from "@/lib/workspace-trust";
+} from "@/lib/workspace/trust";
 
 describe("workspace-trust", () => {
     beforeEach(() => {

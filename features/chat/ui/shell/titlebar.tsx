@@ -1,12 +1,12 @@
 "use client";
 
-import { RiArrowDownSLine, RiLayoutBottomLine } from "@remixicon/react";
+import { RiLayoutBottomLine } from "@remixicon/react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
-import { Breadcrumb, BreadcrumbItem } from "@/components/base/breadcrumb/breadcrumb";
-import { getRepoName } from "@/lib/repo-history";
+import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
+import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
 import { ProjectKindGlyph } from "@/features/detection/ui/kind-glyph";
 import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
@@ -133,7 +133,6 @@ export function ChatTitlebar({
                         )}
                     >
                         <span className="min-w-0 truncate">{title}</span>
-                        <Icon icon={RiArrowDownSLine} className="size-3.5 shrink-0 opacity-60" />
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-52">

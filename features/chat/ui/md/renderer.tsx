@@ -15,7 +15,8 @@ import { GeneratingIndicator } from '../blocks/generating';
 import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
 import { ReviewDebatePanel } from '../blocks/debate';
-import { hostnameOf } from '@/lib/favicon';
+import { AgentScreen } from '../blocks/agent-screen';
+import { hostnameOf } from '@/lib/ui/favicon';
 
 function hostnameFromUrl(url: string): string {
     return hostnameOf(url);
@@ -95,7 +96,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'plugin_call';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'plugin_call' | 'generated_svg' | 'generated_image';
     content?: string;
     file?: string;
     query?: string;
@@ -128,6 +129,8 @@ export type Chunk = {
     pluginToolkit?: string;
     pluginSlug?: string;
     pluginLabel?: string;
+    mediaPrompt?: string;
+    mediaCredits?: string;
 };
 
 export function parseMessageContent(text: string): Chunk[] {
@@ -352,6 +355,23 @@ export function parseMessageContent(text: string): Chunk[] {
         };
     };
 
+    const parseGeneratedMediaBlock = (
+        type: "generated_svg" | "generated_image",
+        tagFull: string,
+        content: string,
+        isGenerating: boolean,
+    ): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type,
+            content: content.trim(),
+            mediaPrompt: get("prompt") || undefined,
+            mediaCredits: get("credits") || undefined,
+            query: get("prompt") || undefined,
+            isGenerating,
+        };
+    };
+
     const parseWebVisitBlock = (tagFull: string, isGenerating: boolean): Chunk => {
         const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
         const url = get("url");
@@ -401,6 +421,9 @@ export function parseMessageContent(text: string): Chunk[] {
             { type: 'todos', start: '<todos', end: '</todos>' },
             { type: 'web_result', start: '<web_result', end: '</web_result>' },
             { type: 'web_visit', start: '<web_visit', end: '</web_visit>' },
+            { type: 'generated_svg', start: '<generated_svg', end: '</generated_svg>' },
+            { type: 'generated_svg', start: '<recraft_svg', end: '</recraft_svg>' },
+            { type: 'generated_image', start: '<generated_image', end: '</generated_image>' },
             { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
             { type: 'ls', start: '<ls', end: '</ls>' },
             { type: 'cat', start: '<cat', end: '</cat>' },
@@ -542,6 +565,8 @@ export function parseMessageContent(text: string): Chunk[] {
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_call') {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, false));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -629,6 +654,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, true));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -715,6 +743,9 @@ export function parseMessageContent(text: string): Chunk[] {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, false));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -1008,26 +1039,11 @@ export function MessageRenderer({
             const src = chunk.content?.trim() || "";
             if (!src) return null;
             return (
-                <button
+                <AgentScreen
                     key={`image-${index}`}
-                    type="button"
-                    className="my-2 block w-[min(100%,28rem)] overflow-hidden rounded-lg border border-border-subtle"
-                    onClick={() => {
-                        window.dispatchEvent(
-                            new CustomEvent("shape-open-media", {
-                                detail: { src, kind: "image", title: "Attached" },
-                            }),
-                        );
-                    }}
-                >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={src}
-                        alt="Attached"
-                        className="h-auto w-full max-h-[22rem] object-contain object-left block"
-                        draggable={false}
-                    />
-                </button>
+                    src={src}
+                    title={chunk.file || "Agent's screen"}
+                />
             );
         }
         if (chunk.type === 'design_previews') {

@@ -160,14 +160,34 @@ export function LiveTerminalOutput({
 
     if (!text.trim()) return null;
 
+    const lines = text.replace(/\s+$/, "").split("\n");
+
     return (
         <div
             ref={scrollRef}
             onScroll={onScroll}
             style={{ maxHeight }}
-            className="my-1 overflow-y-auto custom-scrollbar font-mono text-sm leading-relaxed text-text-secondary whitespace-pre-wrap break-words"
+            className="my-1 overflow-y-auto custom-scrollbar font-mono text-[12px] leading-[1.55] text-text-secondary"
         >
-            {text}
+            {lines.map((line, i) => {
+                const warn = /\[warn\]|\bwarn(ing)?:/i.test(line);
+                const err = /\[error\]|\berror:/i.test(line);
+                return (
+                    <div
+                        key={i}
+                        className={cn(
+                            "flex gap-3 px-1 py-px whitespace-pre-wrap break-words",
+                            warn && "bg-warning/15 text-warning",
+                            err && "text-error",
+                        )}
+                    >
+                        <span className="shrink-0 select-none tabular-nums text-text-disabled">
+                            {String(i + 1).padStart(2, " ")}
+                        </span>
+                        <span>{line || " "}</span>
+                    </div>
+                );
+            })}
         </div>
     );
 }
@@ -300,8 +320,8 @@ function TerminalCommandRow({
                 ) : null}
             </button>
             <Collapse open={expanded && canExpand}>
-                <div className="relative mt-1 mb-1 pl-0.5">
-                    <div className="absolute right-0 top-0 z-[1]">
+                <div className="relative mt-1 mb-1 rounded-lg border border-border-subtle bg-transparent px-3 py-2">
+                    <div className="absolute right-2 top-2 z-[1]">
                         <TerminalCommandMenu command={command} />
                     </div>
                     {output.trim() ? (
@@ -414,11 +434,19 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
     const [isProcessing, setIsProcessing] = useState(false);
 
     // Live events can outrun the transcript chunk (approval → start → exit).
+        const transcriptSettled =
+            !block.isGenerating
+            && chunkStatus !== "pending"
+            && chunkStatus !== "running"
+            && chunkStatus !== "background";
     const couldBeLive =
-        chunkStatus === "pending"
-        || chunkStatus === "running"
-        || chunkStatus === "background"
-        || Boolean(block.isGenerating);
+        !transcriptSettled
+        && (
+            chunkStatus === "pending"
+            || chunkStatus === "running"
+            || chunkStatus === "background"
+            || Boolean(block.isGenerating)
+        );
     const stream = useAgentTerminalStream(block.commandId, couldBeLive);
 
     // Approval resolution flips the card before any stream/chunk update lands.
@@ -443,11 +471,24 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
             if (stream.cancelled) return "cancelled";
             return (stream.exitCode ?? 0) === 0 ? "completed" : "failed";
         }
-        if (stream.phase === "running") return "running";
         if (stream.phase === "background") return "background";
+        if (stream.phase === "running") return "running";
+
+        const transcriptDone =
+            !block.isGenerating
+            && chunkStatus !== "pending"
+            && chunkStatus !== "running"
+            && chunkStatus !== "background";
+        if (transcriptDone) return chunkStatus;
+
+        // Approved locally but the exit event was missed (fast fail / reload).
+        if (localStatus === "running" && !block.isGenerating && stream.phase === "idle") {
+            if (chunkStatus === "pending" || chunkStatus === "running") return "completed";
+            return chunkStatus;
+        }
         if (localStatus) return localStatus;
         return chunkStatus;
-    }, [stream.phase, stream.cancelled, stream.exitCode, localStatus, chunkStatus]);
+    }, [stream.phase, stream.cancelled, stream.exitCode, localStatus, chunkStatus, block.isGenerating]);
 
     const exitCode = stream.exitCode ?? block.exitCode;
 

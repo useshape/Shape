@@ -8,6 +8,7 @@ import {
     RiEditBoxLine,
     RiMouseLine,
     RiDonutChartFill,
+    RiLayoutGridLine,
     RiSmartphoneLine,
     RiTabletLine,
     RiWindow2Fill,
@@ -25,7 +26,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type DesignViewport = "desktop" | "tablet" | "mobile";
-export type DesignToolMode = "select" | "normal" | "rotate";
+export type DesignToolMode = "select" | "normal" | "rotate" | "autolayout";
 
 function Tool({
     label,
@@ -88,7 +89,7 @@ export function DesignBottomToolbar({
         <div className="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-surface-4 p-1 shadow-md/30">
             <div className="flex items-center gap-0.5">
                 <Tool
-                    label="Edit"
+                    label="Inspect"
                     icon={RiEditBoxLine}
                     active={mode === "select"}
                     onClick={() => onModeChange("select")}
@@ -98,6 +99,12 @@ export function DesignBottomToolbar({
                     icon={RiMouseLine}
                     active={mode === "normal"}
                     onClick={() => onModeChange("normal")}
+                />
+                <Tool
+                    label="Auto layout"
+                    icon={RiLayoutGridLine}
+                    active={mode === "autolayout"}
+                    onClick={() => onModeChange("autolayout")}
                 />
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -133,7 +140,7 @@ export function DesignBottomToolbar({
                     onClick={onOpenCode}
                 />
                 <Tool
-                    label="Radial"
+                    label="Rotate"
                     icon={RiDonutChartFill}
                     active={mode === "rotate"}
                     onClick={() => onModeChange("rotate")}

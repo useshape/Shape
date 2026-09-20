@@ -88,6 +88,13 @@ export async function openMcpConfig(): Promise<void> {
         await commands.writeMcpConfig(DEFAULT_MCP_JSON);
     }
     await commands.openFile(path, "mcp.json");
+    window.dispatchEvent(new CustomEvent("shape-agent-overlay", { detail: null }));
+    window.dispatchEvent(
+        new CustomEvent("shape-open-workspace-file", { detail: { path } }),
+    );
+    window.dispatchEvent(
+        new CustomEvent("shape-layout-toggle", { detail: { id: "agent-workspace", value: true } }),
+    );
 }
 
 export async function mergePluginConfig(

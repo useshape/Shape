@@ -39,7 +39,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             return true;
         case "Close Folder":
             window.dispatchEvent(new Event("shape-design-exit"));
-            void import("@/lib/last-project").then(({ saveLastProject }) => saveLastProject(null));
+            void import("@/lib/workspace/last-project").then(({ saveLastProject }) => saveLastProject(null));
             void commands.setProjectPath(null);
             return true;
         case "New Window":
@@ -72,7 +72,10 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             );
             return true;
         case "Toggle Design Mode":
-            window.dispatchEvent(new Event("shape-toggle-design-mode"));
+            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "browser" }));
+            window.dispatchEvent(
+                new CustomEvent("shape-layout-toggle", { detail: { id: "agent-workspace", value: true } }),
+            );
             return true;
         case "Go to Line/Column...":
             window.dispatchEvent(new CustomEvent("shape-command-palette", {
@@ -128,7 +131,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(new Event("open-file-request"));
             return true;
         case "Open Folder":
-            window.dispatchEvent(new Event("open-folder-request"));
+            window.dispatchEvent(new Event("shape-open-project-pick"));
             return true;
         case "Save As":
             void (async () => {

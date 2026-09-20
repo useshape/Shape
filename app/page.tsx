@@ -6,7 +6,6 @@ import { useProjectState } from "@/lib/backend";
 import { openProject } from "@/features/agent";
 import {
     WelcomeCloneDialog,
-    WelcomeOpenDialog,
     WelcomeSshDialog,
 } from "./welcome-dialogs";
 import { WelcomeScreen, useRecentFolders } from "./welcome-screen";
@@ -20,7 +19,6 @@ import { getProjectSnapshot } from "@/lib/backend";
 export default function Home() {
     const { project_path } = useProjectState();
     const [cloneOpen, setCloneOpen] = useState(false);
-    const [openProjectOpen, setOpenProjectOpen] = useState(false);
     const [sshOpen, setSshOpen] = useState(false);
     const recentFolders = useRecentFolders();
     const [restoringProject, setRestoringProject] = useState(
@@ -43,12 +41,6 @@ export default function Home() {
 
     const dialogs = (
         <>
-            <WelcomeOpenDialog
-                open={openProjectOpen}
-                onOpenChange={setOpenProjectOpen}
-                recentFolders={recentFolders}
-                onOpen={handleOpen}
-            />
             <WelcomeCloneDialog
                 open={cloneOpen}
                 onOpenChange={setCloneOpen}
@@ -77,7 +69,7 @@ export default function Home() {
             <WelcomeScreen
                 recentFolders={recentFolders}
                 onOpenProject={handleOpen}
-                onPickFolder={() => setOpenProjectOpen(true)}
+                onPickFolder={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
                 onClone={() => setCloneOpen(true)}
                 onSsh={() => setSshOpen(true)}
                 onConnectGitHub={() => void loginGitHub()}

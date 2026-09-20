@@ -5,7 +5,7 @@ import React from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
-import { hostnameOf } from "@/lib/favicon";
+import { hostnameOf } from "@/lib/ui/favicon";
 import {
     DropdownMenu,
     DropdownMenuContent,

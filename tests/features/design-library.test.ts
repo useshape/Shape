@@ -65,6 +65,11 @@ describe("source mapping from Next chunks", () => {
         expect(guessSourceFromChunkUrl("http://127.0.0.1:3000/_next/static/chunks/webpack.js")).toBeNull();
         expect(isUserSourcePath("/_next/static/chunks/app/page.js")).toBe(false);
         expect(isUserSourcePath("app/page.tsx")).toBe(true);
+        expect(isUserSourcePath("node_modules/@radix-ui/react-dialog/dist/index.mjs")).toBe(false);
+        expect(isUserSourcePath("src/components/header.tsx")).toBe(true);
+        expect(isUserSourcePath(".next/server/app/page.js")).toBe(false);
+        expect(isUserSourcePath("dist/assets/index.js")).toBe(false);
+        expect(DESIGN_BRIDGE_SCRIPT).toContain("function unknownDomAttr");
         expect(
             normalizeSourcePath("webpack://_N_E/./src/components/Hero.tsx"),
         ).toBe("src/components/Hero.tsx");

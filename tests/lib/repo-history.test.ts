@@ -6,7 +6,7 @@ import {
     upsertRepoHistory,
     loadRepoHistory,
     clearRepoHistory,
-} from "@/lib/repo-history";
+} from "@/lib/workspace/repo-history";
 
 describe("repo-history", () => {
     it("extracts repo name from path", () => {

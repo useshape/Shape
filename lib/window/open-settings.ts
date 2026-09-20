@@ -85,6 +85,7 @@ export async function openSettingsWindow(options?: {
             minWidth: 720,
             minHeight: 480,
             decorations: false,
+            transparent: false,
             center: true,
             resizable: true,
             visible: true,

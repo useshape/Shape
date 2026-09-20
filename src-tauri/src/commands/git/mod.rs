@@ -16,6 +16,12 @@ pub(super) fn git_cmd() -> Result<Command, AppError> {
     crate::core::git_bin::git_command()
 }
 
+fn open_git_repo(path: &str) -> Result<Repository, AppError> {
+    Repository::discover(path)
+        .or_else(|_| Repository::open(path))
+        .map_err(AppError::Git)
+}
+
 #[derive(Serialize, Clone)]
 pub struct GitRepoInfo {
     pub path: String,
@@ -891,28 +897,31 @@ pub fn git_init(path: String) -> Result<(), AppError> {
 }
 
 pub fn git_branches(path: String) -> Result<Vec<String>, AppError> {
-    let output = git_cmd()?
-        .args([
-            "-C",
-            &path,
-            "for-each-ref",
-            "--sort=-committerdate",
-            "--format=%(refname:short)",
-            "--count=80",
-            "refs/heads",
-        ])
-        .output()?;
-
     let mut result = Vec::new();
     let mut seen = HashSet::new();
-    if output.status.success() {
-        for line in String::from_utf8_lossy(&output.stdout).lines() {
-            let name = line.trim();
-            if name.is_empty() {
-                continue;
-            }
-            if seen.insert(name.to_string()) {
-                result.push(name.to_string());
+    if let Ok(mut cmd) = git_cmd() {
+        if let Ok(output) = cmd
+            .args([
+                "-C",
+                &path,
+                "for-each-ref",
+                "--sort=-committerdate",
+                "--format=%(refname:short)",
+                "--count=80",
+                "refs/heads",
+            ])
+            .output()
+        {
+            if output.status.success() {
+                for line in String::from_utf8_lossy(&output.stdout).lines() {
+                    let name = line.trim();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    if seen.insert(name.to_string()) {
+                        result.push(name.to_string());
+                    }
+                }
             }
         }
     }
@@ -920,7 +929,7 @@ pub fn git_branches(path: String) -> Result<Vec<String>, AppError> {
         return Ok(result);
     }
 
-    let repo = Repository::open(&path).map_err(AppError::Git)?;
+    let repo = open_git_repo(&path)?;
     if let Ok(head) = repo.head() {
         if let Some(name) = head.shorthand() {
             result.push(name.to_string());
@@ -968,7 +977,7 @@ pub fn git_remote_branches(path: String) -> Result<Vec<String>, AppError> {
         return Ok(result);
     }
 
-    let repo = Repository::open(&path).map_err(AppError::Git)?;
+    let repo = open_git_repo(&path)?;
     let branches = repo
         .branches(Some(git2::BranchType::Remote))
         .map_err(AppError::Git)?;
@@ -1038,7 +1047,7 @@ pub fn git_switch_branch(repo_path: String, branch_name: String) -> Result<(), A
 }
 
 pub fn git_current_branch(path: String) -> Result<String, AppError> {
-    let repo = Repository::open(&path).map_err(|e| AppError::Git(e))?;
+    let repo = open_git_repo(&path)?;
     let head = match repo.head() {
         Ok(h) => h,
         Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {

@@ -6,8 +6,8 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
 import { useChatStreamOptional } from "@/features/chat/lib/chat-stream-store";
-import { humanizePlanTitle } from "@/lib/plan-preview";
-import { planSlugFromPath } from "@/lib/plan-file";
+import { humanizePlanTitle } from "@/lib/plan/preview";
+import { planSlugFromPath } from "@/lib/plan/file";
 import { Button } from "@/components/ui/button";
 
 function modKeyLabel(): string {

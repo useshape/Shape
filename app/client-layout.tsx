@@ -4,16 +4,17 @@ import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { ONBOARDING_CONFIG, isOnboardingComplete } from "@/features/onboarding/config";
 import Main from "@/components/layout/main";
-import { Titlebar } from "@/features/workbench";
+import { Titlebar } from "@/features/agent/workbench";
 import { LoadingProvider } from "@/features/loading/context";
 import { NotificationProvider } from "@/components/ui/notification";
 import { GlobalContextMenu } from "@/core/providers/menu";
 import { ChatStreamProvider } from "@/features/chat/lib/chat-stream-store";
 import { initSettings } from "@/lib/settings";
 import { initGitHubAuth } from "@/lib/github/store";
-import { LoginPromptDialog } from "@/features/workbench/ui/login-prompt-dialog";
+import { useShapeAuth } from "@/lib/cloud/store";
+import { LoginPromptDialog } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { CheckpointRestoreDialog } from "@/features/chat/ui/shell/checkpoint-restore-dialog";
-import { UpdateBootstrap } from "@/features/workbench/update-bootstrap";
+import { UpdateBootstrap } from "@/features/agent/workbench/update-bootstrap";
 import { installBenignErrorFilters } from "@/lib/editor/benign-errors";
 import { isMainTauriWindow, isTauriRuntime } from "@/lib/window/tauri-window";
 import { FilterProvider } from "@/features/git/ui/manager/filter-context";
@@ -107,7 +108,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         // Give save-all a moment; then close.
                         await new Promise((r) => setTimeout(r, 400));
                     } else {
-                        const { clearDirtyBuffer } = await import("@/lib/dirty-buffers");
+                        const { clearDirtyBuffer } = await import("@/lib/workspace/dirty-buffers");
                         for (const f of dirty) {
                             clearDirtyBuffer(f.path);
                             void commands.markFileDirty(f.path, false);
@@ -186,13 +187,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <GlobalContextMenu>
                         <div
                             id="shape-popout"
-                            className="flex h-screen w-full flex-col overflow-hidden bg-titlebar font-sans text-sm text-text-primary select-none"
+                            className="relative flex h-screen w-full flex-col overflow-hidden bg-titlebar font-sans text-sm text-text-primary select-none"
                         >
                             <Titlebar focus />
                             <main className="min-h-0 flex-1 overflow-hidden bg-editor">
                                 {children}
                             </main>
                             <CommandPaletteBridge />
+                            <div id="shape-overlays" />
                         </div>
                     </GlobalContextMenu>
                 </NotificationProvider>
@@ -211,11 +213,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if (isSettings || isBranch) {
         const windowTitle = isBranch ? "Git" : "Settings";
         const body = (
-            <div id="shape-settings" className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
+            <div id="shape-settings" className="relative flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
                 <Titlebar settings title={windowTitle} />
                 <main className="min-h-0 flex-1 overflow-hidden bg-background" data-tauri-drag-region>
                     {children}
                 </main>
+                <RequireShapeLogin />
+                <div id="shape-overlays" />
             </div>
         );
         return (
@@ -246,7 +250,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
 function Content({ children }: { children: React.ReactNode }) {
     const [showOnboarding, setShowOnboarding] = React.useState(false);
-    const [showLogin, setShowLogin] = React.useState(false);
+    const auth = useShapeAuth();
+    const needsLogin = !auth.loggedIn;
 
     React.useEffect(() => {
         const refresh = () => {
@@ -259,12 +264,6 @@ function Content({ children }: { children: React.ReactNode }) {
             window.removeEventListener("shape-onboarding-complete", refresh);
             window.removeEventListener("shape-onboarding-restart", refresh);
         };
-    }, []);
-
-    React.useEffect(() => {
-        const onLogin = () => setShowLogin(true);
-        window.addEventListener("shape-show-login", onLogin);
-        return () => window.removeEventListener("shape-show-login", onLogin);
     }, []);
 
     return (
@@ -281,22 +280,31 @@ function Content({ children }: { children: React.ReactNode }) {
                 <PromoCardHost />
                 <DesignPreviewCaptureHost />
             </div>
-            {showOnboarding ? (
+            {needsLogin ? (
+                <div className="absolute inset-0 z-[80] bg-background">
+                    {auth.isLoading ? null : (
+                        <Onboarding embedded loginOnly />
+                    )}
+                </div>
+            ) : showOnboarding ? (
                 <div className="absolute inset-0 z-[80] bg-background">
                     <Onboarding
                         embedded
                         onComplete={() => setShowOnboarding(false)}
                     />
                 </div>
-            ) : showLogin ? (
-                <div className="absolute inset-0 z-[80] bg-background">
-                    <Onboarding
-                        embedded
-                        loginOnly
-                        onComplete={() => setShowLogin(false)}
-                    />
-                </div>
             ) : null}
+            <div id="shape-overlays" />
+        </div>
+    );
+}
+
+function RequireShapeLogin() {
+    const auth = useShapeAuth();
+    if (auth.loggedIn) return null;
+    return (
+        <div className="absolute inset-0 z-[80] bg-background">
+            {auth.isLoading ? null : <Onboarding embedded loginOnly />}
         </div>
     );
 }

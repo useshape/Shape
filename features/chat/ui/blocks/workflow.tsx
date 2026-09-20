@@ -19,7 +19,7 @@ import { Chunk } from "../md/renderer";
 import { ChatMarkdown } from "../md/view";
 import { looksLikeProseMarkdown } from "../md/stream";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { resolveProjectFilePath } from "@/lib/path-utils";
+import { resolveProjectFilePath } from "@/lib/path/utils";
 import { TerminalCommandStep } from "./terminal-live";
 import { parseWebSearchHits, WebSearchBlock } from "./search";
 import { ActionLine } from "./action-line";
@@ -31,6 +31,8 @@ export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
     "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
     "plugin_call",
+    "generated_svg",
+    "generated_image",
     "subagent",
     "subagent_ref",
 ]);
@@ -396,11 +398,34 @@ function GitActionChip({
         <div className="w-fit max-w-full py-0.5">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-72 max-h-72 overflow-y-auto">
+                <DropdownMenuContent align="start" className="w-80 max-h-96 overflow-y-auto">
                     {children}
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>
+    );
+}
+
+export function GeneratedMediaStep({ block }: { block: Chunk }) {
+    const src = (block.content || "").trim();
+    const isSvg = block.type === "generated_svg";
+    const labelNoun = isSvg ? "SVG" : "image";
+    const prompt = block.mediaPrompt || block.query || labelNoun;
+    const credits = block.mediaCredits;
+    if (!src && !block.isGenerating) return null;
+    if (block.isGenerating && !src) {
+        return <GitActionChip label={`Generating ${labelNoun}`} detail={prompt} />;
+    }
+    return (
+        <GitActionChip label={`Generated ${labelNoun}`} detail={prompt}>
+            <div className="flex flex-col gap-2 p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={prompt} className="max-h-56 w-full object-contain rounded-lg bg-surface-2" />
+                {credits ? (
+                    <div className="px-1 text-xs text-text-muted tabular-nums">{credits} credits</div>
+                ) : null}
+            </div>
+        </GitActionChip>
     );
 }
 
@@ -753,6 +778,16 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 label: block.pluginLabel || "Plugin",
                 query: block.pluginToolkit,
                 expandable: false,
+                content: block.content,
+            };
+        case "generated_svg":
+        case "generated_image":
+            return {
+                label: block.isGenerating
+                    ? `Generating ${block.type === "generated_svg" ? "SVG" : "image"}`
+                    : `Generated ${block.type === "generated_svg" ? "SVG" : "image"}`,
+                query: block.mediaPrompt || block.query,
+                expandable: true,
                 content: block.content,
             };
         case "subagent":
@@ -1162,6 +1197,10 @@ export function ActionItem({
                 </span>
             </div>
         );
+    }
+
+    if (block.type === "generated_svg" || block.type === "generated_image") {
+        return <GeneratedMediaStep block={block} />;
     }
 
     if (block.type === "git_operation" && block.gitOp === "status" && config.gitStatusLines?.length) {

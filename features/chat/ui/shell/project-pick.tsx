@@ -1,12 +1,12 @@
 "use client";
 
-import { RiFolderLine } from "@remixicon/react";
+import { RiFolderAddLine, RiFolderLine } from "@remixicon/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
 import { invalidateGitRepoCache } from "@/lib/git/repos";
-import { getRepoName, loadRepoHistory } from "@/lib/repo-history";
+import { getRepoName, loadRepoHistory } from "@/lib/workspace/repo-history";
 import {
     AzureDevOpsMark,
     BitbucketMark,
@@ -14,6 +14,26 @@ import {
     GitLabMark,
     GitUrlMark,
 } from "./brand-marks";
+
+export type ScaffoldKind = "next" | "vite" | "astro" | "remix";
+
+export const DESIGN_SCAFFOLDS: Array<{
+    id: ScaffoldKind;
+    label: string;
+    description: string;
+}> = [
+    { id: "next", label: "Create Next.js project", description: "App Router, TypeScript, Tailwind" },
+    { id: "vite", label: "Create Vite project", description: "React + TypeScript" },
+    { id: "astro", label: "Create Astro project", description: "Minimal TypeScript starter" },
+    { id: "remix", label: "Create Remix project", description: "Remix + TypeScript" },
+];
+
+const SCAFFOLD_ITEMS: QuickPickItem[] = DESIGN_SCAFFOLDS.map((item) => ({
+    id: `scaffold:${item.id}`,
+    label: item.label,
+    description: item.description,
+    icon: RiFolderAddLine,
+}));
 
 type CloneKind = "git" | "github" | "gitlab" | "bitbucket" | "azure";
 
@@ -73,7 +93,35 @@ const CLONE_PLACEHOLDER: Record<CloneKind, string> = {
     azure: "org/project/repo",
 };
 
+const SCAFFOLD_NOTIFY: Record<ScaffoldKind, string> = {
+    next: "Creating Next.js project…",
+    vite: "Creating Vite project…",
+    astro: "Creating Astro project…",
+    remix: "Creating Remix project…",
+};
+
 type PickStep = "projects" | "sources" | "clone";
+
+function matchesQuery(item: QuickPickItem, q: string): boolean {
+    if (!q) return true;
+    return (
+        item.label.toLowerCase().includes(q) ||
+        (item.description ?? "").toLowerCase().includes(q)
+    );
+}
+
+export async function scaffoldDesignProject(kind: ScaffoldKind): Promise<void> {
+    const directory = await pickDirectory("Choose a folder for the new project");
+    if (!directory) return;
+    notify.info("Project", SCAFFOLD_NOTIFY[kind]);
+    try {
+        const path = await commands.scaffoldWebProject(kind, directory);
+        notify.success("Project", "Project created.");
+        openProject(path);
+    } catch (err) {
+        notify.error(err instanceof Error ? err.message : String(err));
+    }
+}
 
 export function ProjectQuickPick({
     open,
@@ -96,6 +144,26 @@ export function ProjectQuickPick({
         setCloneKind("github");
     }, [open, initialStep]);
 
+    const close = () => {
+        setStep("projects");
+        setQuery("");
+        setCloneKind("github");
+        onOpenChange(false);
+    };
+
+    const browseLocal = async () => {
+        const path = await pickDirectory("Open project");
+        if (path) {
+            close();
+            openProject(path);
+        }
+    };
+
+    const runScaffold = async (kind: ScaffoldKind) => {
+        close();
+        await scaffoldDesignProject(kind);
+    };
+
     const projectItems: QuickPickItem[] = useMemo(() => {
         const q = query.trim().toLowerCase();
         const rows = recents
@@ -112,10 +180,12 @@ export function ProjectQuickPick({
                 icon: RiFolderLine,
                 hint: i < 9 ? `Ctrl+${i + 1}` : undefined,
             }));
-        return [
-            ...rows,
-            { id: "__sources__", label: "New project", icon: RiFolderLine, description: "Browse sources" },
+        const extras: QuickPickItem[] = [
+            { id: "__browse__", label: "Open folder", description: "Browse a folder on disk", icon: RiFolderLine },
+            ...SCAFFOLD_ITEMS,
+            { id: "__sources__", label: "Clone from Git…", icon: RiFolderLine, description: "GitHub, GitLab, URL" },
         ];
+        return [...rows, ...extras.filter((item) => matchesQuery(item, q))];
     }, [query, recents]);
 
     const mark = (node: ReactNode): ReactNode => (
@@ -123,7 +193,8 @@ export function ProjectQuickPick({
     );
 
     const sourceItems: QuickPickItem[] = [
-        { id: "local", label: "Local folder", description: "Browse a folder on disk", icon: RiFolderLine },
+        { id: "local", label: "Open folder", description: "Browse a folder on disk", icon: RiFolderLine },
+        ...SCAFFOLD_ITEMS,
         {
             id: "git",
             label: "Git URL",
@@ -165,9 +236,7 @@ export function ProjectQuickPick({
             invalidateGitRepoCache();
             window.dispatchEvent(new Event("shape-git-refresh"));
             notify.success("Git", "Repository cloned.");
-            setStep("projects");
-            setQuery("");
-            onOpenChange(false);
+            close();
             openProject(clonedPath);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : String(err));
@@ -178,6 +247,18 @@ export function ProjectQuickPick({
         setStep("projects");
         setQuery("");
         setCloneKind("github");
+    };
+
+    const handleScaffoldOrLocal = (id: string): boolean => {
+        if (id === "local" || id === "__browse__") {
+            void browseLocal();
+            return true;
+        }
+        if (id.startsWith("scaffold:")) {
+            void runScaffold(id.slice("scaffold:".length) as ScaffoldKind);
+            return true;
+        }
+        return false;
     };
 
     if (!open) return null;
@@ -209,6 +290,7 @@ export function ProjectQuickPick({
     }
 
     if (step === "sources") {
+        const q = query.trim().toLowerCase();
         return (
             <QuickPick
                 open={open}
@@ -216,29 +298,12 @@ export function ProjectQuickPick({
                     if (!next) reset();
                     onOpenChange(next);
                 }}
-                placeholder="Search..."
+                placeholder="Open folder, create a project, or clone…"
                 query={query}
                 onQueryChange={setQuery}
-                items={sourceItems.filter((item) => {
-                    const q = query.trim().toLowerCase();
-                    if (!q) return true;
-                    return (
-                        item.label.toLowerCase().includes(q) ||
-                        (item.description ?? "").toLowerCase().includes(q)
-                    );
-                })}
+                items={sourceItems.filter((item) => matchesQuery(item, q))}
                 onSelect={(item) => {
-                    if (item.id === "local") {
-                        void (async () => {
-                            const path = await pickDirectory("Open project");
-                            if (path) {
-                                reset();
-                                onOpenChange(false);
-                                openProject(path);
-                            }
-                        })();
-                        return;
-                    }
+                    if (handleScaffoldOrLocal(item.id)) return;
                     setQuery("");
                     setCloneKind(item.id as CloneKind);
                     setStep("clone");
@@ -254,7 +319,7 @@ export function ProjectQuickPick({
                 if (!next) reset();
                 onOpenChange(next);
             }}
-            placeholder="Search..."
+            placeholder="Open folder or create a project…"
             query={query}
             onQueryChange={setQuery}
             items={projectItems}
@@ -264,6 +329,7 @@ export function ProjectQuickPick({
                     setStep("sources");
                     return;
                 }
+                if (handleScaffoldOrLocal(item.id)) return;
                 onOpenChange(false);
                 openProject(item.id);
             }}
@@ -284,11 +350,18 @@ export function ProjectQuickPickHost() {
             setInitialStep("projects");
             setOpen(true);
         };
+        const onScaffold = (event: Event) => {
+            const kind = (event as CustomEvent<{ kind?: ScaffoldKind }>).detail?.kind;
+            if (!kind) return;
+            void scaffoldDesignProject(kind);
+        };
         window.addEventListener("shape-new-project", onNew);
         window.addEventListener("shape-open-project-pick", onPick);
+        window.addEventListener("shape-scaffold-project", onScaffold);
         return () => {
             window.removeEventListener("shape-new-project", onNew);
             window.removeEventListener("shape-open-project-pick", onPick);
+            window.removeEventListener("shape-scaffold-project", onScaffold);
         };
     }, []);
 

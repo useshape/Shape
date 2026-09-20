@@ -1,13 +1,12 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowUpSLine } from "@remixicon/react";
 import React, { useMemo, useState } from "react";
-import { Icon } from "@/components/ui/icon";
 import { ChatMarkdown } from "../md/view";
 import { Collapse } from "./collapse";
+import { ActionLine } from "./action-line";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { AUTO_DISPLAY_MODEL } from "../message/bubble";
-import { isAutoModelId } from "@/lib/usage-display";
+import { isAutoModelId } from "@/lib/chat/usage-display";
 
 function formatReviewContent(raw: string): string | null {
     const trimmed = raw
@@ -74,7 +73,7 @@ export function ReviewDebatePanel({
     content: string;
     model?: string;
 }) {
-    const [open, setOpen] = useState(true);
+    const [open, setOpen] = useState(false);
     const display = useMemo(() => formatReviewContent(content), [content]);
     const iconModel =
         model && !isAutoModelId(model) ? model : AUTO_DISPLAY_MODEL;
@@ -82,25 +81,18 @@ export function ReviewDebatePanel({
     if (!display?.trim()) return null;
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
-            <button
-                type="button"
-                className="flex w-full items-center gap-2 p-2 text-left hover:bg-panel-hover/40 transition-colors"
+        <div className="my-0.5">
+            <ActionLine
+                action="Adversarial review"
+                icon={
+                    <span className="flex size-4 shrink-0 items-center justify-center overflow-visible">
+                        {providerIcon(iconModel, 14)}
+                    </span>
+                }
                 onClick={() => setOpen((v) => !v)}
-            >
-                <span className="flex size-5 shrink-0 items-center justify-center overflow-visible">
-                    {providerIcon(iconModel, 16)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-muted">
-                    Adversarial review
-                </span>
-                <Icon
-                    icon={open ? RiArrowUpSLine : RiArrowDownSLine}
-                    className="shrink-0 text-text-muted"
-                />
-            </button>
+            />
             <Collapse open={open}>
-                <div className="px-3 py-2.5 text-sm font-medium text-text-primary prose-compact chat-markdown">
+                <div className="pl-5.5 py-1 text-sm font-medium text-text-primary prose-compact chat-markdown">
                     <ChatMarkdown content={display} />
                 </div>
             </Collapse>

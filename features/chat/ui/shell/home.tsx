@@ -1,6 +1,6 @@
 import React from "react";
 import type { Conversation } from "@/lib/backend/types";
-import { toTimestampMs } from "@/lib/timestamp";
+import { toTimestampMs } from "@/lib/ui/timestamp";
 
 const formatRelative = (timestamp: number) => {
     const diffMs = Date.now() - toTimestampMs(timestamp);

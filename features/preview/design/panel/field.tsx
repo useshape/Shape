@@ -2,7 +2,7 @@
 
 import { RiArrowDownSLine } from "@remixicon/react";
 import type { RemixiconComponentType } from "@remixicon/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { Styles } from "./types";
+import { isTokenProperty, TokenMenu } from "./tokens";
 
 /** Inspector control height — keep in sync with panel rows; do not shrink. */
 export const CONTROL = "h-8 min-h-8 text-sm leading-none";
@@ -41,16 +42,15 @@ export function Field({
     mapValue?: (value: string) => string;
 }) {
     const [draft, setDraft] = useState(value ?? "");
+    const dragged = useRef(false);
     useEffect(() => {
         setDraft(value ?? "");
     }, [value]);
     const hasPrefix = Boolean(label || icon);
-    const scrub = (event: React.PointerEvent<HTMLDivElement>) => {
+    const tokenable = hasPrefix && isTokenProperty(property);
+    const scrub = (event: React.PointerEvent<HTMLElement>) => {
         const match = (draft ?? "").trim().match(/^(-?\d*\.?\d+)(.*)$/);
         if (!match) return;
-        event.preventDefault();
-        event.stopPropagation();
-        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
         const startX = event.clientX;
         const startValue = Number.parseFloat(match[1] ?? "0");
         const inferredLength =
@@ -60,7 +60,16 @@ export function Field({
         const unit = match[2] || (inferredLength ? "px" : "");
         const precision = event.shiftKey ? 0.1 : 1;
         let latest = draft;
+        const target = event.currentTarget;
         const move = (pointer: PointerEvent) => {
+            if (Math.abs(pointer.clientX - startX) <= 3) return;
+            if (!dragged.current) {
+                dragged.current = true;
+                if (!tokenable) {
+                    pointer.preventDefault();
+                    target.setPointerCapture(pointer.pointerId);
+                }
+            }
             const next = Math.round((startValue + (pointer.clientX - startX) * precision) * 10) / 10;
             latest = `${next}${unit}`;
             setDraft(latest);
@@ -69,14 +78,38 @@ export function Field({
         const up = () => {
             window.removeEventListener("pointermove", move);
             window.removeEventListener("pointerup", up);
-            onCommit({ [property]: mapValue(latest) });
+            if (dragged.current) onCommit({ [property]: mapValue(latest) });
         };
+        if (!tokenable) {
+            event.preventDefault();
+            event.stopPropagation();
+            target.setPointerCapture(event.pointerId);
+        }
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up, { once: true });
     };
-    // shadcn Input Group pattern: flex row + inline-start addon (not absolute).
-    // https://ui.shadcn.com/docs/components/base/input-group
-    // Overflow fade: mask the value (inputs clip glyphs internally — overlays can't fade clipped text).
+    const prefix = hasPrefix ? (
+        <div
+            role={tokenable ? "button" : "presentation"}
+            tabIndex={tokenable ? 0 : undefined}
+            aria-label={tokenable ? `Tokens for ${property}` : undefined}
+            data-align="inline-start"
+            onPointerDown={(event) => {
+                dragged.current = false;
+                scrub(event);
+            }}
+            onClick={(event) => {
+                if (dragged.current) event.preventDefault();
+            }}
+            className="order-first flex h-full shrink-0 cursor-ew-resize items-center justify-center pl-2 text-text-muted"
+        >
+            {icon ? (
+                <Icon icon={icon} size={ICON_SIZE_MD} />
+            ) : (
+                <span className="text-sm font-medium leading-none">{label}</span>
+            )}
+        </div>
+    ) : null;
     return (
         <div
             role="group"
@@ -87,20 +120,11 @@ export function Field({
                 className,
             )}
         >
-            {hasPrefix ? (
-                <div
-                    role="presentation"
-                    data-align="inline-start"
-                    onPointerDown={scrub}
-                    className="order-first flex h-full shrink-0 cursor-ew-resize items-center justify-center pl-2 text-text-muted"
-                >
-                    {icon ? (
-                        <Icon icon={icon} size={ICON_SIZE_MD} />
-                    ) : (
-                        <span className="text-sm font-medium leading-none">{label}</span>
-                    )}
-                </div>
-            ) : null}
+            {tokenable && prefix ? (
+                <TokenMenu property={property}>{prefix}</TokenMenu>
+            ) : (
+                prefix
+            )}
             <Input
                 value={draft}
                 onChange={(event) => {
@@ -305,5 +329,30 @@ export function RangeField({
                 className="max-w-20"
             />
         </div>
+    );
+}
+
+export function TextContentField({
+    value,
+    onCommit,
+}: {
+    value: string;
+    onCommit: (next: string) => void;
+}) {
+    const [draft, setDraft] = useState(value);
+    useEffect(() => {
+        setDraft(value);
+    }, [value]);
+    return (
+        <textarea
+            className={cn(
+                "min-h-16 w-full resize-y rounded-md border border-border bg-panel-hover px-2 py-1.5 text-sm leading-snug text-text-primary",
+            )}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => {
+                if (draft !== value) onCommit(draft);
+            }}
+        />
     );
 }

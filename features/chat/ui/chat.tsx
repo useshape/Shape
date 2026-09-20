@@ -37,8 +37,10 @@ function stickyPromptText(content: string): string {
 
 export default function Chat({
     className,
+    embedded,
 }: {
     className?: string;
+    embedded?: boolean;
     /** @deprecated unused in shell */
     onClose?: () => void;
     sidebarSide?: "left" | "right";
@@ -250,36 +252,28 @@ export default function Chat({
             queuedMessages={session.messageQueue}
             onEditQueuedMessage={session.handleEditQueuedMessage}
             onRemoveQueuedMessage={session.handleRemoveQueuedMessage}
-            variant={isEmpty ? "empty" : "default"}
+            variant={embedded || !isEmpty ? "default" : "empty"}
+            density={embedded ? "compact" : "auto"}
         />
     );
 
+    const insetX = embedded ? "px-2" : "px-5 md:px-6";
+    const columnWidth = embedded ? "max-w-none" : "max-w-4xl";
+
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
-            {tabsSlot ? createPortal(titlebar, tabsSlot) : null}
+            {embedded ? null : tabsSlot ? createPortal(titlebar, tabsSlot) : null}
 
             <div className="relative flex min-h-0 flex-1 flex-col">
-                <div className="pointer-events-none relative z-20 h-0 shrink-0 overflow-visible">
-                    <div
-                        className="absolute inset-x-0 top-0 h-16 transition-opacity duration-200"
-                        style={{
-                            opacity: session.scrolledFromTop ? 1 : 0,
-                            background:
-                                "linear-gradient(to bottom, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 55%, transparent) 55%, transparent 100%)",
-                        }}
-                        aria-hidden
-                    />
-                </div>
-
                 {activeSubagent ? (
                     <div className="relative min-h-0 flex-1">
                         <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
                             <SubagentChatView />
                         </div>
                     </div>
-                ) : isEmpty ? (
-                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 pb-8 md:px-6">
-                        <div className="flex w-full max-w-4xl flex-col items-center gap-5">
+                ) : isEmpty && !embedded ? (
+                    <div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center pb-8", insetX)}>
+                        <div className={cn("flex w-full flex-col items-center gap-5", columnWidth)}>
                             <ChatEmptyState
                                 onSelectMode={(mode) => {
                                     session.setSelectedMode(mode);
@@ -309,9 +303,9 @@ export default function Chat({
                                     sel?.removeAllRanges();
                                     sel?.addRange(range);
                                 }}
-                                className="absolute inset-0 z-0 flex flex-col overflow-y-auto px-5 no-scrollbar select-text md:px-6"
+                                className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto no-scrollbar select-text", insetX)}
                             >
-                                <div className="mx-auto flex min-h-full w-full min-w-0 max-w-4xl flex-col pb-72 pt-8">
+                                <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-8 pt-3" : "pb-48 pt-8")}>
                                     <ChatMessageList
                                         messageGroups={session.messageGroups}
                                         messages={session.messages}
@@ -325,7 +319,12 @@ export default function Chat({
                                     />
                                 </div>
                             </div>
-                            {turnCount >= 2 ? (
+                            <div
+                                className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-linear-to-b from-panel to-transparent transition-opacity duration-200"
+                                style={{ opacity: session.scrolledFromTop ? 1 : 0 }}
+                                aria-hidden
+                            />
+                            {turnCount >= 2 && !embedded ? (
                                 <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 py-6 md:flex lg:right-3">
                                     <div className="pointer-events-auto flex h-full w-full items-stretch justify-end">
                                         <ChatHistoryStepper
@@ -340,14 +339,10 @@ export default function Chat({
                             ) : null}
                         </div>
 
-                        <div className="relative z-20 w-full shrink-0 overflow-visible px-5 md:px-6">
-                            <div className="relative mx-auto w-full max-w-4xl overflow-visible">
+                        <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
+                            <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
                                 <div
-                                    className="pointer-events-none absolute inset-x-0 bottom-full h-16"
-                                    style={{
-                                        background:
-                                            "linear-gradient(to top, var(--color-panel) 0%, color-mix(in srgb, var(--color-panel) 55%, transparent) 55%, transparent 100%)",
-                                    }}
+                                    className="pointer-events-none absolute inset-x-0 bottom-full h-20 bg-linear-to-t from-panel to-transparent"
                                     aria-hidden
                                 />
                                 {composer}

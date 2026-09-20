@@ -34,6 +34,9 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "save_plan",
     "git_stage",
     "plugin_run",
+    "save_media",
+    "generate_svg",
+    "generate_image",
 ];
 
 const WORKSPACE_UNTRUSTED_MSG: &str =
@@ -102,7 +105,13 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         return blocked_outcome(name, DESIGN_GATE_BLOCK_MSG);
     }
 
-    if is_read_only_mode(ctx.mode) && (name.starts_with("mcp_") || name == "plugin_run") {
+    if is_read_only_mode(ctx.mode)
+        && (name.starts_with("mcp_")
+            || name == "plugin_run"
+            || name == "generate_svg"
+            || name == "generate_image"
+            || name == "save_media")
+    {
         return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
     }
 
@@ -142,6 +151,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "plugin_run" => discover::tool_plugin_run(&args, ctx).await,
         "create_directory" => files::tool_create_directory(&args, ctx),
         "create_file" => files::tool_create_file(&args, ctx).await,
+        "save_media" => files::tool_save_media(&args, ctx).await,
         "edit_file" => files::tool_edit_file(&args, ctx).await,
         "apply_patch" => files::tool_apply_patch(&args, ctx).await,
         "read_lints" => files::tool_read_lints(&args, ctx),
@@ -162,6 +172,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
+        "generate_svg" => crate::agent::tools::generate::tool_generate_svg(&args, ctx).await,
+        "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
         other => {

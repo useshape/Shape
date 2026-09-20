@@ -1,16 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RiArrowDownSLine, RiCodeLine, RiMoreLine } from "@remixicon/react";
 import { SettingSwitch } from "@/features/settings/ui/shared/controls";
+import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
-import type { DesignComponentSnapshot, DesignElementSnapshot } from "../bridge";
-import { CONTROL } from "./field";
+import type { DesignComponentProperty, DesignElementSnapshot } from "../bridge";
+import { CONTROL, SelectField } from "./field";
 import { PanelSection } from "./section";
 
 export type ComponentOptionPatch = {
     key: string;
-    field: "label" | "href" | "open" | "alt" | "src";
+    field: "label" | "href" | "open" | "alt" | "src" | "text" | "attr";
     value: string | boolean;
+    attr?: string;
 };
 
 function Row({
@@ -21,8 +31,8 @@ function Row({
     children: React.ReactNode;
 }) {
     return (
-        <label className="flex items-center gap-2">
-            <span className="w-14 shrink-0 text-xs text-text-muted">{label}</span>
+        <label className="flex min-h-8 items-center gap-2">
+            <span className="w-18 shrink-0 text-xs text-text-muted">{label}</span>
             <div className="min-w-0 flex-1">{children}</div>
         </label>
     );
@@ -57,105 +67,119 @@ function OptionInput({
     );
 }
 
+function PropertyRow({
+    property,
+    onCommit,
+}: {
+    property: DesignComponentProperty;
+    onCommit: (value: string) => void;
+}) {
+    if (property.kind === "boolean") {
+        return (
+            <div className="flex min-h-8 items-center justify-between gap-3">
+                <span className="text-xs text-text-primary">{property.name}</span>
+                <SettingSwitch
+                    checked={property.value !== "false"}
+                    onChange={(on) => onCommit(on ? "true" : "false")}
+                />
+            </div>
+        );
+    }
+    if (property.kind === "variant" || property.kind === "instance") {
+        const options = property.options?.length ? property.options : [property.value];
+        return (
+            <Row label={property.name}>
+                <SelectField
+                    value={property.value}
+                    options={options}
+                    onChange={onCommit}
+                />
+            </Row>
+        );
+    }
+    return (
+        <Row label={property.name}>
+            <OptionInput value={property.value} onCommit={onCommit} />
+        </Row>
+    );
+}
+
 export function DesignComponentOptions({
     element,
     onPatch,
+    onOpenSource,
 }: {
     element: DesignElementSnapshot;
     onPatch: (patch: ComponentOptionPatch) => void;
+    onOpenSource?: () => void;
 }) {
-    const component: DesignComponentSnapshot | null = element.component;
-    if (!component) return null;
-    const isMenu = component.kind === "dropdown" || component.kind === "nav";
-    const isLink = component.kind === "link" || component.kind === "button";
-    const isImage = component.kind === "image";
+    const component = element.component;
+    if (!component?.properties.length) return null;
+    const variants = component.properties.filter((property) => property.kind === "variant");
+    const rest = component.properties.filter((property) => property.kind !== "variant");
 
     return (
-        <PanelSection title={component.name} defaultOpen>
-            {isMenu ? (
-                <div className="flex items-center justify-between gap-3 py-1">
-                    <span className="text-xs text-text-muted">Keep open</span>
-                    <SettingSwitch
-                        checked={component.open}
-                        onChange={(open) => onPatch({ key: element.key, field: "open", value: open })}
-                    />
-                </div>
-            ) : null}
-            {isMenu ? (
-                <Row label="Trigger">
-                    <OptionInput
-                        value={component.trigger}
-                        onCommit={(value) => onPatch({ key: element.key, field: "label", value })}
-                    />
-                </Row>
-            ) : null}
-            {isLink ? (
-                <>
-                    <Row label="Label">
-                        <OptionInput
-                            value={component.label}
-                            onCommit={(value) => onPatch({ key: element.key, field: "label", value })}
-                        />
-                    </Row>
-                    <Row label="Link">
-                        <OptionInput
-                            value={component.href}
-                            placeholder="/path or https://"
-                            onCommit={(value) => onPatch({ key: element.key, field: "href", value })}
-                        />
-                    </Row>
-                </>
-            ) : null}
-            {isImage ? (
-                <>
-                    <Row label="Alt">
-                        <OptionInput
-                            value={component.label}
-                            onCommit={(value) => onPatch({ key: element.key, field: "alt", value })}
-                        />
-                    </Row>
-                    <Row label="Src">
-                        <OptionInput
-                            value={component.href}
-                            onCommit={(value) => onPatch({ key: element.key, field: "src", value })}
-                        />
-                    </Row>
-                </>
-            ) : null}
-            {isMenu && component.items.length > 0 ? (
-                <div className="space-y-3 pt-2">
-                    <p className="text-xs font-medium text-text-primary">Items</p>
-                    {component.items.map((item, index) => (
-                        <div
-                            key={item.key}
-                            className="space-y-1.5 rounded-md border border-border-subtle p-2"
-                        >
-                            <p className="text-2xs text-text-muted">Item {index + 1}</p>
-                            <Row label="Label">
-                                <OptionInput
-                                    value={item.label}
-                                    onCommit={(value) =>
-                                        onPatch({ key: item.key, field: "label", value })
-                                    }
-                                />
-                            </Row>
-                            <Row label="Link">
-                                <OptionInput
-                                    value={item.href}
-                                    placeholder="/path or https://"
-                                    onCommit={(value) =>
-                                        onPatch({ key: item.key, field: "href", value })
-                                    }
-                                />
-                            </Row>
-                        </div>
-                    ))}
-                </div>
-            ) : isMenu ? (
-                <p className="pt-1 text-xs text-text-muted">
-                    Pin the menu open to list its links, or select an item in Layers.
-                </p>
-            ) : null}
+        <PanelSection
+            title={component.name}
+            defaultOpen
+            action={
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="Instance actions" className="size-7">
+                            <Icon icon={RiMoreLine} size={ICON_SIZE_SM} />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-48">
+                        <DropdownMenuItem disabled={!onOpenSource} onClick={onOpenSource}>
+                            <Icon icon={RiCodeLine} size={ICON_SIZE_SM} />
+                            Go to main component
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            }
+        >
+            <Row label="Instance">
+                <button
+                    type="button"
+                    className={`${CONTROL} flex w-full items-center justify-between px-2 text-left text-xs text-text-secondary`}
+                    disabled
+                >
+                    <span className="truncate">{component.sourceLabel}</span>
+                    <Icon icon={RiArrowDownSLine} size={12} className="opacity-40" />
+                </button>
+            </Row>
+            {variants.map((property) => (
+                <PropertyRow
+                    key={`${property.name}:${property.attr}`}
+                    property={property}
+                    onCommit={(value) =>
+                        onPatch({
+                            key: element.key,
+                            field: "attr",
+                            attr: property.attr,
+                            value,
+                        })
+                    }
+                />
+            ))}
+            {rest.map((property) => (
+                <PropertyRow
+                    key={`${property.name}:${property.attr}`}
+                    property={property}
+                    onCommit={(value) => {
+                        if (!property.attr) {
+                            onPatch({ key: element.key, field: "text", value });
+                            return;
+                        }
+                        onPatch({
+                            key: element.key,
+                            field: "attr",
+                            attr: property.attr,
+                            value,
+                        });
+                    }}
+                />
+            ))}
         </PanelSection>
     );
 }

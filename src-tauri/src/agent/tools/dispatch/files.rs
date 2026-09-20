@@ -170,6 +170,124 @@ pub(super) async fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
     }
 }
 
+pub(super) async fn tool_save_media(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    if is_read_only_mode(ctx.mode) {
+        return blocked_outcome(
+            "save_media",
+            "Saving media is not allowed in Ask or Plan mode.",
+        );
+    }
+    let path = match get_str(args, "path") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("save_media", &e),
+    };
+    let attachment = args
+        .get("attachment")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let url = args
+        .get("url")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let bytes = if let Some(name) = attachment {
+        match find_attached_bytes(ctx, name) {
+            Ok(b) => b,
+            Err(e) => return error_outcome("save_media", &e),
+        }
+    } else if let Some(href) = url {
+        if !(href.starts_with("https://") || href.starts_with("http://")) {
+            return error_outcome("save_media", "url must be http(s).");
+        }
+        match ctx.client.get(href).send().await {
+            Ok(resp) if resp.status().is_success() => match resp.bytes().await {
+                Ok(b) => b.to_vec(),
+                Err(e) => return error_outcome("save_media", &e.to_string()),
+            },
+            Ok(resp) => {
+                return error_outcome(
+                    "save_media",
+                    &format!("Could not download media ({})", resp.status()),
+                );
+            }
+            Err(e) => return error_outcome("save_media", &e.to_string()),
+        }
+    } else {
+        return error_outcome(
+            "save_media",
+            "Pass `attachment` (user file name) or `url` (generated media).",
+        );
+    };
+
+    match files::write_bytes(&path, &bytes, ctx.project_path) {
+        Ok(msg) => {
+            let _ = ctx.app_handle.emit("shape-file-edited", &path);
+            record_checkpoint(ctx, &path, None);
+            ToolOutcome {
+                tool_result: msg,
+                ui_chunk: format!("\n<create_file>{}</create_file>\n", path),
+                side_effect: Some(SideEffect::FileWritten {
+                    path,
+                    content: String::new(),
+                }),
+            }
+        }
+        Err(e) => error_outcome("save_media", &e.to_string()),
+    }
+}
+
+fn find_attached_bytes(ctx: &ToolCtx<'_>, name: &str) -> Result<Vec<u8>, String> {
+    let history = ctx
+        .agent_state
+        .history
+        .lock()
+        .map_err(|_| "Could not read chat history.".to_string())?;
+    let needle = name.to_ascii_lowercase();
+    for msg in history.iter().rev() {
+        if msg.role != "user" {
+            continue;
+        }
+        if let Some(bytes) = decode_attached_image(&msg.content, &needle) {
+            return Ok(bytes);
+        }
+    }
+    Err(format!(
+        "No attached file named '{name}' in this chat. Use the filename from the user's attachment."
+    ))
+}
+
+fn decode_attached_image(content: &str, name_lc: &str) -> Option<Vec<u8>> {
+    let mut rest = content;
+    while let Some(start) = rest.find("<attached_image") {
+        let after = &rest[start..];
+        let end = after.find("</attached_image>")?;
+        let tag = &after[..end];
+        let close = tag.find('>')?;
+        let attrs = &tag[..close].to_ascii_lowercase();
+        let body = tag[close + 1..].trim();
+        let name_ok = attrs.contains(&format!("name=\"{name_lc}\""))
+            || attrs.contains(&format!("name='{name_lc}'"))
+            || (name_lc.is_empty() && attrs.contains("name="));
+        if name_ok || (!name_lc.is_empty() && attrs.contains(name_lc)) {
+            if let Some(comma) = body.find(',') {
+                if body[..comma].contains("base64") {
+                    let data = body[comma + 1..].trim();
+                    if let Ok(bytes) = base64::Engine::decode(
+                        &base64::engine::general_purpose::STANDARD,
+                        data,
+                    ) {
+                        return Some(bytes);
+                    }
+                }
+            }
+        }
+        rest = &after[end + "</attached_image>".len()..];
+    }
+    None
+}
+
 /// Wait until the user approves/rejects a staged edit, or the turn is
 /// cancelled. Same no-timeout contract as command approvals.
 pub(super) async fn wait_for_edit_decision(edit_id: &str, ctx: &ToolCtx<'_>) -> ApprovalDecision {

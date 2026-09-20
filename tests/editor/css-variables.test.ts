@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
     formatVariableDisplayName,
+    insertCssVariableInContent,
     isGlobalCssFile,
     normalizeVariableName,
     parseCssVariables,
     renameCssVariableInContent,
     updateCssVariableInContent,
-} from "@/lib/css-variables";
+} from "@/lib/ui/css-variables";
 
 describe("css-variables", () => {
     it("normalizes variable names", () => {
@@ -42,5 +43,12 @@ describe("css-variables", () => {
         expect(renamed).toContain("--new: red");
         expect(renamed).toContain("var(--new)");
         expect(renamed).not.toContain("var(--old)");
+    });
+
+    it("inserts a new token into :root", () => {
+        const content = `:root {\n  --primary: #fff;\n}`;
+        const updated = insertCssVariableInContent(content, "brand", "#111111");
+        expect(updated).toContain("--brand: #111111");
+        expect(updated).toContain("--primary: #fff");
     });
 });

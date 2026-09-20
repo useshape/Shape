@@ -53,3 +53,9 @@ pub async fn run_install_all(project_path: String, package_manager: Option<Strin
     .await
     .map_err(|e| AppError::Message(e.to_string()))?
 }
+
+pub async fn scaffold_web_project(kind: String, directory: String) -> Result<String, AppError> {
+    tauri::async_runtime::spawn_blocking(move || packages::scaffold_web_project(kind, directory))
+        .await
+        .map_err(|e| AppError::Message(e.to_string()))?
+}

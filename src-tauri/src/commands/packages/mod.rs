@@ -237,6 +237,156 @@ pub fn npm_update(
     Ok(())
 }
 
+fn npm_exe() -> &'static str {
+    if cfg!(windows) {
+        "npm.cmd"
+    } else {
+        "npm"
+    }
+}
+
+fn npx_exe() -> &'static str {
+    if cfg!(windows) {
+        "npx.cmd"
+    } else {
+        "npx"
+    }
+}
+
+fn run_scaffold_cli(dir: &str, program: &str, args: &[&str]) -> Result<(), AppError> {
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = Command::new(program);
+    cmd.current_dir(dir)
+        .args(args)
+        .env("CI", "1")
+        .env("npm_config_yes", "true")
+        .env("NPM_CONFIG_YES", "true");
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd.output().map_err(|e| {
+        AppError::Message(format!(
+            "Could not run {program}. Install Node.js and npm, then try again. ({e})"
+        ))
+    })?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let msg = if !stderr.trim().is_empty() {
+        stderr.to_string()
+    } else {
+        stdout.to_string()
+    };
+    Err(AppError::Message(
+        msg.trim()
+            .lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("Project scaffold failed")
+            .to_string(),
+    ))
+}
+
+/// Scaffold a design-mode stack (Next.js, Vite React, Astro, Remix) into `directory`.
+pub fn scaffold_web_project(kind: String, directory: String) -> Result<String, AppError> {
+    match kind.as_str() {
+        "next" | "vite" | "astro" | "remix" => {}
+        other => {
+            return Err(AppError::Message(format!(
+                "Unknown project type '{other}'. Use next, vite, astro, or remix."
+            )));
+        }
+    }
+
+    let dir = Path::new(&directory);
+    if !dir.exists() {
+        std::fs::create_dir_all(dir).map_err(AppError::Io)?;
+    }
+    if !dir.is_dir() {
+        return Err(AppError::Message("Selected path is not a folder".into()));
+    }
+    if dir.join("package.json").exists() {
+        return Err(AppError::Message(
+            "That folder already has a package.json. Pick an empty folder.".into(),
+        ));
+    }
+
+    match kind.as_str() {
+        "next" => run_scaffold_cli(
+            &directory,
+            npx_exe(),
+            &[
+                "--yes",
+                "create-next-app@latest",
+                ".",
+                "--yes",
+                "--ts",
+                "--tailwind",
+                "--eslint",
+                "--app",
+                "--src-dir",
+                "--import-alias",
+                "@/*",
+                "--use-npm",
+            ],
+        )?,
+        "vite" => run_scaffold_cli(
+            &directory,
+            npm_exe(),
+            &[
+                "create",
+                "vite@latest",
+                ".",
+                "--yes",
+                "--",
+                "--template",
+                "react-ts",
+            ],
+        )?,
+        "astro" => run_scaffold_cli(
+            &directory,
+            npm_exe(),
+            &[
+                "create",
+                "astro@latest",
+                ".",
+                "--yes",
+                "--",
+                "--template",
+                "minimal",
+                "--install",
+                "--no-git",
+                "--typescript",
+                "strict",
+            ],
+        )?,
+        "remix" => run_scaffold_cli(
+            &directory,
+            npx_exe(),
+            &["--yes", "create-remix@latest", ".", "--yes"],
+        )?,
+        _ => unreachable!(),
+    }
+
+    Ok(directory)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scaffold_web_project;
+
+    #[test]
+    fn rejects_unknown_kind() {
+        let err = scaffold_web_project("webpack".into(), "/tmp/shape-scaffold-test".into());
+        assert!(err.is_err());
+        assert!(format!("{}", err.unwrap_err()).contains("Unknown project type"));
+    }
+}
+
 pub fn run_install_all(project_path: String, package_manager: Option<String>) -> Result<(), AppError> {
     let pm = normalize_pm(package_manager);
     let output = match pm.as_str() {

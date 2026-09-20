@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OPENAI_API_MODELS, resolveChatModels, type ModelInfo } from "@/lib/models";
+import { resolveChatModels, type ModelInfo } from "@/lib/chat/models";
 
 function model(partial: Partial<ModelInfo> & Pick<ModelInfo, "id" | "name" | "provider">): ModelInfo {
     return {
@@ -21,47 +21,23 @@ const list: ModelInfo[] = [
 ];
 
 describe("resolveChatModels", () => {
-    it("unsigned with no keys only keeps Auto", () => {
+    it("unsigned only keeps Auto", () => {
         const ids = resolveChatModels(list, {
-            openaiKey: false,
-            openRouterKey: false,
+            openaiKey: true,
+            openRouterKey: true,
             signedIn: false,
         }).map((m) => m.id);
         expect(ids).toEqual(["auto"]);
     });
 
-    it("OpenAI key uses the static OpenAI list, not the catalog", () => {
+    it("API keys do not unlock extra models", () => {
         const ids = resolveChatModels(list, {
             openaiKey: true,
-            openRouterKey: false,
+            openRouterKey: true,
             signedIn: false,
         }).map((m) => m.id);
-        expect(ids).toEqual(["auto", ...OPENAI_API_MODELS.map((m) => m.id)]);
+        expect(ids).not.toContain("openai/gpt-4o");
         expect(ids).not.toContain("anthropic/claude-sonnet-4.6");
-    });
-
-    it("OpenRouter key keeps catalog API models including Claude", () => {
-        const ids = resolveChatModels(list, {
-            openaiKey: false,
-            openRouterKey: true,
-            signedIn: false,
-        }).map((m) => m.id);
-        expect(ids).toEqual([
-            "auto",
-            "openai/gpt-4o",
-            "anthropic/claude-sonnet-4.6",
-            "anthropic/claude-opus-5",
-        ]);
-    });
-
-    it("both keys still include Claude from the catalog", () => {
-        const ids = resolveChatModels(list, {
-            openaiKey: true,
-            openRouterKey: true,
-            signedIn: false,
-        }).map((m) => m.id);
-        expect(ids).toContain("anthropic/claude-sonnet-4.6");
-        expect(ids).toContain("openai/gpt-4o");
     });
 
     it("signed in keeps Shape-hosted models", () => {

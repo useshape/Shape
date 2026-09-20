@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -51,6 +51,8 @@ pub struct TurnPolicy {
     pub plugin_approvals: HashMap<String, AutoRunMode>,
     /// Disabled Composio slugs per toolkit.
     pub plugin_disabled_actions: HashMap<String, Vec<String>>,
+    /// Workflow-preapproved plugin slugs (`toolkit:slug` and/or slug).
+    pub plugin_auto_allow: HashSet<String>,
 }
 
 impl Default for TurnPolicy {
@@ -62,6 +64,7 @@ impl Default for TurnPolicy {
             plugin_approval_default: AutoRunMode::Ask,
             plugin_approvals: HashMap::new(),
             plugin_disabled_actions: HashMap::new(),
+            plugin_auto_allow: HashSet::new(),
         }
     }
 }

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
 import { Switch } from "@/components/ui/switch";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
@@ -26,11 +26,11 @@ import {
     startPluginConnect,
     type PluginRow,
     type PluginToolHint,
-} from "@/lib/plugins-api";
+} from "@/lib/plugins/api";
 import {
     cleanPluginActionDescription,
     humanizePluginActionName,
-} from "@/lib/plugin-logos";
+} from "@/lib/plugins/logos";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -169,7 +169,7 @@ function PluginCard({
         <button
             type="button"
             onClick={onOpen}
-            className="flex h-full w-full items-start gap-3 rounded-lg border border-border bg-surface-4 p-4 text-left transition-colors hover:bg-panel-hover"
+            className="flex h-full w-full items-start gap-3 squircle-2xl bg-surface-4 p-3 text-left transition-colors hover:bg-panel-hover"
         >
             <PluginLogo toolkit={plugin.toolkit} name={plugin.name} logo={plugin.logo} size={36} />
             <div className="min-w-0 flex-1">
@@ -198,14 +198,14 @@ function ConnectedList({
     return (
         <section className="space-y-3">
             <h2 className="text-md font-medium text-text-muted">Connected</h2>
-            <div className="overflow-hidden rounded-lg border border-border bg-surface-4">
+            <div className="overflow-hidden squircle-2xl bg-surface-4">
                 {plugins.map((plugin, index) => (
                     <button
                         key={plugin.id}
                         type="button"
                         onClick={() => onOpen(plugin)}
                         className={cn(
-                            "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-panel-hover",
+                            "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-panel-hover",
                             index > 0 && "border-t border-border-subtle",
                         )}
                     >
@@ -398,9 +398,9 @@ function PluginDetail({
                 onClick={onBack}
                 variant="outline"
                 size="md"
-                className="mb-10"
+                className="mb-10 squircle-2xl bg-surface-3"
             >
-                <Icon icon={RiArrowLeftLine} />
+                <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
                 Back
             </Button>
             <div className="flex items-start gap-4">
@@ -410,7 +410,7 @@ function PluginDetail({
                     <p className="mt-1 text-sm text-text-muted">{plugin.description}</p>
                 </div>
                 {plugin.connected ? (
-                    <Button variant="secondary" size="md" disabled={busy} onClick={onDisconnect}>
+                    <Button variant="outline" size="md" disabled={busy} onClick={onDisconnect}>
                         Disconnect
                     </Button>
                 ) : (
@@ -593,8 +593,8 @@ export function PluginsSettingsView() {
     }
 
     return (
-        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-8">
+        <div className="relative h-full min-h-0 bg-panel">
+            <div className="absolute inset-0 overflow-y-auto overscroll-contain scroll-auto px-6 pt-8 pb-8 no-scrollbar">
                 {openPlugin ? (
                     <PluginDetail
                         plugin={openPlugin}
@@ -612,7 +612,7 @@ export function PluginsSettingsView() {
                                     <Button
                                         variant="outline"
                                         size="md"
-                                        className="min-w-[110px] justify-between gap-2 bg-panel-hover! rounded-lg"
+                                        className="bg-surface-3 squircle-2xl"
                                     >
                                         {categoryLabel}
                                         <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
@@ -639,19 +639,19 @@ export function PluginsSettingsView() {
 
                         <div className="mt-6 space-y-8">
                             {!pluginsAvailable ? (
-                                <div className="rounded-xl border border-border-subtle bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">
+                                <div className="squircle-2xl bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">
                                     {auth.loggedIn
                                         ? "Connect to Shape to manage cloud plugins. Local MCP servers still work under MCP."
                                         : "Sign in to Shape to connect plugins. Local MCP servers still work under MCP."}
                                 </div>
                             ) : !configured ? (
-                                <div className="rounded-xl border border-border-subtle bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">
+                                <div className="rounded-xl bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">
                                     Plugins are not configured on the server.
                                 </div>
                             ) : loading && plugins.length === 0 ? (
                                 <PluginsCatalogSkeleton />
                             ) : filtered.length === 0 ? (
-                                <div className="rounded-xl border border-border-subtle bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">
+                                <div className="rounded-xl bg-surface-2 px-4 py-10 text-center text-sm text-text-muted">
                                     No plugins match
                                 </div>
                             ) : (

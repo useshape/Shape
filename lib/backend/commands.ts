@@ -94,6 +94,15 @@ export const commands = {
         rememberFileContent(path, content);
         return content;
     },
+    readFileFromDisk: async (path: string) => {
+        fileContentCache.delete(path);
+        const content = await invokeCommand<string>("read_file", { path });
+        rememberFileContent(path, content);
+        return content;
+    },
+    primeFileCache: (path: string, content: string) => {
+        rememberFileContent(path, content);
+    },
     readFileBytes: (path: string) =>
         invokeCommand<number[]>("read_file_bytes", { path }),
     saveFile: async (path: string, content: string) => {
@@ -454,10 +463,12 @@ export const commands = {
             pluginApprovalDefault?: string;
             pluginApprovals?: Record<string, string>;
             pluginDisabledActions?: Record<string, string[]>;
+            pluginAutoAllow?: string[];
         },
         reasoningEffort?: string,
         serviceTier?: string | null,
         byok?: { openRouterApiKey?: string | null; openaiApiKey?: string | null },
+        displayMessage?: string | null,
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -473,10 +484,12 @@ export const commands = {
             pluginApprovalDefault: executionPolicy?.pluginApprovalDefault ?? null,
             pluginApprovals: executionPolicy?.pluginApprovals ?? null,
             pluginDisabledActions: executionPolicy?.pluginDisabledActions ?? null,
+            pluginAutoAllow: executionPolicy?.pluginAutoAllow ?? null,
             reasoningEffort: reasoningEffort ?? null,
             serviceTier: serviceTier ?? null,
             openrouterApiKey: byok?.openRouterApiKey ?? null,
             openaiApiKey: byok?.openaiApiKey ?? null,
+            displayMessage: displayMessage ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -584,13 +597,20 @@ export const commands = {
         text?: string | null;
         attributes?: Record<string, string>;
         operation?: "delete" | "duplicate" | null;
+        content?: string | null;
     }) =>
         invokeCommand<{ file: string; changed: boolean; line: number }>(
             "apply_design_source_patch",
             { patch },
         ),
-    undoDesignSourcePatch: () => invokeCommand<boolean>("undo_design_source_patch"),
-    redoDesignSourcePatch: () => invokeCommand<boolean>("redo_design_source_patch"),
+    undoDesignSourcePatch: () =>
+        invokeCommand<{ changed: boolean; file: string | null; content: string | null }>(
+            "undo_design_source_patch",
+        ),
+    redoDesignSourcePatch: () =>
+        invokeCommand<{ changed: boolean; file: string | null; content: string | null }>(
+            "redo_design_source_patch",
+        ),
     stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
     getChatHistory: () => invokeCommand<ChatMessage[]>("get_chat_history"),
     getChatGenerationState: () =>
@@ -814,6 +834,8 @@ export const commands = {
         invokeCommand<boolean>("is_workspace_trusted", { path }),
     gitClone: (url: string, parentDir: string) =>
         invokeCommand<string>("git_clone", { url, parentDir }),
+    scaffoldWebProject: (kind: "next" | "vite" | "astro" | "remix", directory: string) =>
+        invokeCommand<string>("scaffold_web_project", { kind, directory }),
     // Project statistics (local)
     getProjectStats: (projectPath?: string) =>
         invokeCommand<ProjectStatsSnapshot>("get_project_stats", {

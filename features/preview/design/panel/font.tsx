@@ -62,8 +62,10 @@ export function weightLabel(value?: string) {
     return match ? match[1] : value || "Regular";
 }
 
-const MENU =
+export const FONT_MENU =
     "!p-0 z-9999 w-82 overflow-hidden bg-surface-4/70 backdrop-blur-sm";
+
+const MENU = FONT_MENU;
 
 export function FontField({
     value,

@@ -3,7 +3,7 @@
 import { RiGlobalLine } from "@remixicon/react";
 import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { faviconUrl, hostnameOf } from "@/lib/favicon";
+import { faviconUrl, hostnameOf } from "@/lib/ui/favicon";
 import { cn } from "@/lib/utils";
 
 export function Favicon({

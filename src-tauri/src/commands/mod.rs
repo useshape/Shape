@@ -8,12 +8,10 @@ pub mod history;
 pub mod lint;
 pub mod packages;
 pub mod python;
-pub mod design_sandbox;
-pub mod design_proxy;
-pub mod design_bridge;
-pub mod design_css;
-pub mod design_source;
-pub mod preview_render;
+pub mod preview;
+pub use preview::{
+    design_bridge, design_proxy, design_sandbox, design_source, preview_render,
+};
 pub mod outline;
 pub mod pty;
 pub mod shortcuts;

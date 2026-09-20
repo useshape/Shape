@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/search";
 import { useFilter } from "./filter-context";
-import { titlebarIconButtonClass } from "@/features/workbench/titlebar/ui/layout-controls";
+import { titlebarIconButtonClass } from "@/features/agent/workbench/titlebar/ui/layout-controls";
 
 /** Titlebar filter — icon that expands into a field for the active manager section. */
 export function TitlebarSearch() {

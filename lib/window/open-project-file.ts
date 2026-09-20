@@ -1,7 +1,7 @@
 "use client";
 
 import { commands, getProjectPath } from "@/lib/backend";
-import { resolveProjectFilePath } from "@/lib/path-utils";
+import { resolveProjectFilePath } from "@/lib/path/utils";
 import { notify } from "@/features/notifications";
 
 /** Reveal a directory in the explorer tree (folders have no editor tab). */

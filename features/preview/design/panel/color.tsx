@@ -1,10 +1,14 @@
 "use client";
 
 import {
+    RiAddLine,
     RiCloseLine,
+    RiContrast2Fill,
     RiEyeLine,
     RiEyeOffLine,
-    RiShapesLine,
+    RiImageLine,
+    RiLinkUnlink,
+    RiSquareFill,
     RiSubtractLine,
 } from "@remixicon/react";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -18,12 +22,12 @@ import {
 } from "@/components/ui/dropdown";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
-import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
-import { cssColorToHex } from "../css";
+import { cssColorToHex, cssVarName, defaultCssGradient, parseCssGradient, serializeCssGradient, type CssGradient } from "../css";
 import { CONTROL, IconButton, Segment, SelectField } from "./field";
+import { TokenMenu } from "./tokens";
 import { css, type Styles, type ThemeToken } from "./types";
-import { sidebarEdgeOffset } from "./edge";
+import { formatVariableDisplayName } from "@/lib/ui/css-variables";
 
 type Hsv = { h: number; s: number; v: number };
 
@@ -91,27 +95,11 @@ function parseBackgroundImageUrl(value?: string): string | null {
 }
 
 function parseGradientStartColor(value?: string): string | null {
-    const raw = (value ?? "").trim();
-    if (!/gradient\(/i.test(raw)) return null;
-    // linear-gradient(135deg, #RRGGBBAA, transparent) or rgb(...)
-    const afterArgs = raw.replace(/^(?:repeating-)?(?:linear|radial|conic)-gradient\(\s*/i, "");
-    const skipAngle = afterArgs.replace(/^(?:to\s+[\w\s]+|-?\d*\.?\d+(?:deg|rad|turn|grad)?)\s*,\s*/i, "");
-    const extracted = skipAngle.match(
-        /^(#[0-9a-f]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|[a-z]+)/i,
-    );
-    return extracted?.[1] ?? null;
+    return parseCssGradient(value)?.stops[0]?.color ?? null;
 }
 
 function gradientFromColor(color?: string) {
-    const { hex, alpha } = cssColorToHex(color);
-    const start =
-        alpha >= 100
-            ? `#${hex}`
-            : `#${hex}${Math.round((alpha / 100) * 255)
-                  .toString(16)
-                  .padStart(2, "0")
-                  .toUpperCase()}`;
-    return `linear-gradient(135deg, ${start}, transparent)`;
+    return serializeCssGradient(defaultCssGradient(color && color !== "transparent" ? color : "#DDDDDD"));
 }
 
 export function ColorField({
@@ -122,18 +110,23 @@ export function ColorField({
     mapValue = (next) => next,
     swatchStyle,
     themeTokens = [],
+    onCreateToken: _onCreateToken,
+    compact,
 }: {
     value?: string;
     property: string;
     onPreview: (styles: Styles) => void;
     onCommit: (styles: Styles) => void;
     mapValue?: (value: string) => string;
-    /** Optional overlay for the trigger swatch (e.g. fill gradient). */
     swatchStyle?: React.CSSProperties;
     themeTokens?: ThemeToken[];
+    onCreateToken?: (name: string, value: string) => void | Promise<void>;
+    compact?: boolean;
 }) {
     const colorValue = value ?? "";
-    const parsedColor = cssColorToHex(colorValue);
+    const bound = cssVarName(colorValue);
+    const boundToken = themeTokens.find((token) => token.name === bound);
+    const parsedColor = cssColorToHex(boundToken?.value || colorValue);
     const [draft, setDraft] = useState(parsedColor.hex);
     const [alpha, setAlpha] = useState(parsedColor.alpha);
     const [hsv, setHsv] = useState<Hsv>(() => {
@@ -142,9 +135,6 @@ export function ColorField({
     });
     const [visible, setVisible] = useState(colorValue !== "transparent");
     const [open, setOpen] = useState(false);
-    const [tokenQuery, setTokenQuery] = useState("");
-    const [tokenEdge, setTokenEdge] = useState(12);
-    const tokenTriggerRef = useRef<HTMLButtonElement>(null);
     const svRef = useRef<HTMLDivElement>(null);
     const hueRef = useRef<HTMLDivElement>(null);
     const alphaRef = useRef<HTMLDivElement>(null);
@@ -164,6 +154,19 @@ export function ColorField({
 
     const normalizedHex = draft.replace(/^#/, "").slice(0, 6).toUpperCase();
     const color = /^[0-9A-F]{6}$/.test(normalizedHex) ? `#${normalizedHex}` : "#FFFFFF";
+    const colorTokens = themeTokens.filter((token) => {
+        const v = token.value.trim();
+        return (
+            v.startsWith("#")
+            || /^(rgb|hsl|oklch|oklab|lab|color)\(/i.test(v)
+            || /color|background|foreground|accent|fill|stroke/i.test(token.name)
+        );
+    });
+    const detach = () => {
+        const resolved = cssColor(normalizedHex, alpha);
+        onPreview({ [property]: mapValue(resolved) });
+        onCommit({ [property]: mapValue(resolved) });
+    };
 
     const cssColor = (hex: string, opacity = alpha) => {
         if (!/^[0-9A-F]{6}$/.test(hex)) return `#${hex}`;
@@ -246,27 +249,37 @@ export function ColorField({
                     "focus-within:border-border-focus focus-within:ring-1 focus-within:ring-border-focus",
                 )}
             >
+                <TokenMenu
+                    property={property}
+                    tokens={colorTokens.length ? colorTokens : undefined}
+                    onPick={(cssValue) => {
+                        onPreview({ [property]: mapValue(cssValue) });
+                        onCommit({ [property]: mapValue(cssValue) });
+                    }}
+                    onCustom={() => setOpen(true)}
+                >
+                    <span
+                        className="ml-1.5 size-4 shrink-0 cursor-pointer overflow-hidden rounded-[3px] border border-border"
+                        style={{
+                            backgroundImage: CHECKER,
+                            backgroundSize: "6px 6px",
+                            backgroundPosition: "0 0,0 3px,3px -3px,-3px 0",
+                        }}
+                        aria-label={`${property} tokens`}
+                    >
+                        <span
+                            className="block size-full"
+                            style={
+                                swatchStyle ?? {
+                                    backgroundColor: cssColor(normalizedHex),
+                                }
+                            }
+                        />
+                    </span>
+                </TokenMenu>
                 <DropdownMenu open={open} onOpenChange={setOpen}>
                     <DropdownMenuTrigger asChild>
-                        <button
-                            type="button"
-                            className="ml-1.5 size-4 shrink-0 overflow-hidden rounded-[3px] border border-border"
-                            style={{
-                                backgroundImage: CHECKER,
-                                backgroundSize: "6px 6px",
-                                backgroundPosition: "0 0,0 3px,3px -3px,-3px 0",
-                            }}
-                            aria-label={`${property} color`}
-                        >
-                            <span
-                                className="block size-full"
-                                style={
-                                    swatchStyle ?? {
-                                        backgroundColor: cssColor(normalizedHex),
-                                    }
-                                }
-                            />
-                        </button>
+                        <button type="button" className="sr-only" tabIndex={-1} aria-hidden />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                         side="left"
@@ -383,8 +396,15 @@ export function ColorField({
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <Input
-                    value={draft}
-                    onChange={(event) => updateColor(event.target.value)}
+                    value={bound ? formatVariableDisplayName(bound) : draft}
+                    onChange={(event) => {
+                        const next = event.target.value;
+                        if (bound) {
+                            updateColor(next.replace(/^#/, ""));
+                            return;
+                        }
+                        updateColor(next);
+                    }}
                     onBlur={() => updateColor(draft, true)}
                     onKeyDown={(event) => {
                         if (event.key === "Enter") event.currentTarget.blur();
@@ -401,85 +421,11 @@ export function ColorField({
                 />
                 <span className="pr-2 text-xs font-medium text-text-muted">%</span>
             </div>
-            <DropdownMenu
-                modal={false}
-                onOpenChange={(next) => {
-                    if (next) setTokenEdge(sidebarEdgeOffset(tokenTriggerRef.current));
-                }}
-            >
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        ref={tokenTriggerRef}
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        icon={RiShapesLine}
-                        aria-label="Theme tokens"
-                        title="Theme tokens"
-                        onPointerDown={() => setTokenEdge(sidebarEdgeOffset(tokenTriggerRef.current))}
-                    />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="end"
-                    side="left"
-                    sideOffset={tokenEdge}
-                    avoidCollisions={false}
-                    collisionPadding={0}
-                    className="!p-0 z-9999 w-64 overflow-hidden rounded-xl border border-border bg-surface-4"
-                >
-                    {themeTokens.length ? (
-                        <>
-                            <div className="border-b border-border p-2">
-                                <SearchInput
-                                    value={tokenQuery}
-                                    onChange={(event) => setTokenQuery(event.target.value)}
-                                    onKeyDown={(event) => event.stopPropagation()}
-                                    placeholder="Search variables"
-                                    className="h-8"
-                                />
-                            </div>
-                            <div className="max-h-64 overflow-y-auto p-1">
-                                {themeTokens
-                                    .filter((token) =>
-                                        token.name
-                                            .toLowerCase()
-                                            .includes(tokenQuery.trim().toLowerCase()),
-                                    )
-                                    .map((token) => (
-                                        <DropdownMenuItem
-                                            key={token.name}
-                                            onClick={() => {
-                                                onPreview({
-                                                    [property]: mapValue(`var(${token.name})`),
-                                                });
-                                                onCommit({
-                                                    [property]: mapValue(`var(${token.name})`),
-                                                });
-                                            }}
-                                            className="gap-2"
-                                        >
-                                            <span
-                                                className="size-3.5 shrink-0 rounded-[3px] border border-border"
-                                                style={{ background: token.value }}
-                                            />
-                                            <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                                                {token.name}
-                                            </span>
-                                        </DropdownMenuItem>
-                                    ))}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
-                            <Icon icon={RiShapesLine} className="text-text-muted" />
-                            <p className="text-sm font-medium text-text-primary">Theme tokens</p>
-                            <p className="text-xs text-text-muted">
-                                No CSS variables found on this page.
-                            </p>
-                        </div>
-                    )}
-                </DropdownMenuContent>
-            </DropdownMenu>
+            {bound ? (
+                <IconButton label="Detach token" icon={RiLinkUnlink} onClick={detach} />
+            ) : null}
+            {compact ? null : (
+            <>
             <IconButton
                 label="Toggle visibility"
                 icon={visible ? RiEyeLine : RiEyeOffLine}
@@ -500,6 +446,8 @@ export function ColorField({
                     onCommit({ [property]: mapValue("transparent") });
                 }}
             />
+            </>
+            )}
         </div>
     );
 }
@@ -611,18 +559,169 @@ function fillModeFromStyle(style: Styles): "solid" | "gradient" | "image" {
     return "solid";
 }
 
+function GradientEditor({
+    value,
+    fallbackColor,
+    paint,
+    themeTokens,
+    onPreview,
+    onCommit,
+    onCreateToken,
+}: {
+    value?: string;
+    fallbackColor?: string;
+    paint: "color" | "background";
+    themeTokens: ThemeToken[];
+    onPreview: (styles: Styles) => void;
+    onCommit: (styles: Styles) => void;
+    onCreateToken?: (name: string, value: string) => void | Promise<void>;
+}) {
+    const parsed = parseCssGradient(value) ?? defaultCssGradient(fallbackColor);
+    const [selected, setSelected] = useState(0);
+    const barRef = useRef<HTMLDivElement>(null);
+    const active = parsed.stops[Math.min(selected, parsed.stops.length - 1)] ?? parsed.stops[0]!;
+
+    const write = (next: CssGradient, commit: boolean) => {
+        const image = serializeCssGradient(next);
+        const styles: Styles =
+            paint === "color"
+                ? {
+                      "background-image": image,
+                      "background-clip": "text",
+                      "-webkit-background-clip": "text",
+                      color: "transparent",
+                  }
+                : {
+                      "background-image": image,
+                      "background-color": next.stops[0]?.color ?? fallbackColor ?? "#FFFFFF",
+                  };
+        onPreview(styles);
+        if (commit) onCommit(styles);
+    };
+
+    const patchStop = (index: number, patch: Partial<CssGradient["stops"][number]>, commit: boolean) => {
+        const stops = parsed.stops.map((stop, i) => (i === index ? { ...stop, ...patch } : stop));
+        write({ ...parsed, stops }, commit);
+    };
+
+    const scrubBar = (event: React.PointerEvent) => {
+        const el = barRef.current;
+        if (!el) return;
+        event.preventDefault();
+        el.setPointerCapture(event.pointerId);
+        const move = (pointer: PointerEvent) => {
+            const rect = el.getBoundingClientRect();
+            const at = Math.max(0, Math.min(100, ((pointer.clientX - rect.left) / rect.width) * 100));
+            patchStop(selected, { at }, false);
+        };
+        const up = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            write(parseCssGradient(value) ?? parsed, true);
+        };
+        move(event.nativeEvent);
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up, { once: true });
+    };
+
+    return (
+        <div className="space-y-1.5">
+            <div
+                ref={barRef}
+                className="relative h-6 cursor-ew-resize overflow-visible rounded-md border border-border"
+                style={{ backgroundImage: serializeCssGradient({ ...parsed, kind: "linear", angle: 90 }) }}
+                onPointerDown={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const at = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+                    const nearest = parsed.stops.reduce(
+                        (best, stop, index) =>
+                            Math.abs(stop.at - at) < Math.abs(parsed.stops[best]!.at - at) ? index : best,
+                        0,
+                    );
+                    if (Math.abs(parsed.stops[nearest]!.at - at) < 8) {
+                        setSelected(nearest);
+                        scrubBar(event);
+                        return;
+                    }
+                    const stops = [...parsed.stops, { color: active.color, at }].sort((a, b) => a.at - b.at);
+                    setSelected(stops.findIndex((stop) => stop.at === at));
+                    write({ ...parsed, stops }, true);
+                }}
+            >
+                {parsed.stops.map((stop, index) => (
+                    <button
+                        key={`${stop.color}-${stop.at}-${index}`}
+                        type="button"
+                        title={`Stop ${index + 1}`}
+                        onPointerDown={(event) => {
+                            event.stopPropagation();
+                            setSelected(index);
+                            scrubBar(event);
+                        }}
+                        className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-white shadow"
+                        style={{ left: `${stop.at}%`, background: stop.color }}
+                    />
+                ))}
+            </div>
+            <div className="flex items-center gap-1">
+                <SelectField
+                    value={parsed.kind}
+                    options={[
+                        ["linear", "Linear"],
+                        ["radial", "Radial"],
+                        ["conic", "Conic"],
+                    ]}
+                    onChange={(kind) => write({ ...parsed, kind: kind as CssGradient["kind"] }, true)}
+                />
+                <IconButton
+                    label="Add stop"
+                    icon={RiAddLine}
+                    onClick={() => {
+                        const at = 50;
+                        const stops = [...parsed.stops, { color: active.color, at }].sort((a, b) => a.at - b.at);
+                        setSelected(stops.findIndex((stop) => stop.at === at && stop.color === active.color));
+                        write({ ...parsed, stops }, true);
+                    }}
+                />
+            </div>
+            {parsed.stops.map((stop, index) => (
+                <ColorField
+                    key={`${index}-${stop.at}`}
+                    compact
+                    value={stop.color}
+                    property="background-color"
+                    themeTokens={themeTokens}
+                    onCreateToken={onCreateToken}
+                    onPreview={(styles) => {
+                        const color = styles["background-color"];
+                        if (color) patchStop(index, { color }, false);
+                    }}
+                    onCommit={(styles) => {
+                        const color = styles["background-color"];
+                        if (color) patchStop(index, { color }, true);
+                    }}
+                />
+            ))}
+        </div>
+    );
+}
+
 export function FillControls({
     style,
-    setStyle,
+    setStyle: _setStyle,
     onPreview,
     onCommit,
     themeTokens = [],
+    paint = "background",
+    onCreateToken,
 }: {
     style: Styles;
     setStyle: (property: string, value: string) => void;
     onPreview: (styles: Styles) => void;
     onCommit: (styles: Styles) => void;
     themeTokens?: ThemeToken[];
+    paint?: "color" | "background";
+    onCreateToken?: (name: string, value: string) => void | Promise<void>;
 }) {
     const derived = fillModeFromStyle(style);
     const [imageIntent, setImageIntent] = useState(false);
@@ -634,17 +733,12 @@ export function FillControls({
         imageIntent && derived !== "gradient" ? "image" : derived;
 
     const gradientImage = css(style, "background-image", "none");
-    const gradientColor =
-        parseGradientStartColor(gradientImage) ?? style["background-color"] ?? "#FFFFFF";
+    const solidProperty = paint === "color" ? "color" : "background-color";
+    const solidValue = paint === "color" ? style.color : style["background-color"];
 
-    const writeGradientColor = (color: string, commit: boolean) => {
-        const gradient = gradientFromColor(color);
-        const styles = {
-            "background-color": color,
-            "background-image": gradient,
-        };
-        onPreview(styles);
-        if (commit) onCommit(styles);
+    const clearTextClip = {
+        "background-clip": "border-box",
+        "-webkit-background-clip": "border-box",
     };
 
     return (
@@ -655,31 +749,51 @@ export function FillControls({
                     const next = value as "solid" | "gradient" | "image";
                     if (next === "solid") {
                         setImageIntent(false);
-                        setStyle("background-image", "none");
+                        onPreview({
+                            "background-image": "none",
+                            ...clearTextClip,
+                            ...(paint === "color"
+                                ? { color: parseGradientStartColor(gradientImage) || style.color || "#000000" }
+                                : {}),
+                        });
+                        onCommit({
+                            "background-image": "none",
+                            ...clearTextClip,
+                            ...(paint === "color"
+                                ? { color: parseGradientStartColor(gradientImage) || style.color || "#000000" }
+                                : {}),
+                        });
                         return;
                     }
                     if (next === "gradient") {
                         setImageIntent(false);
                         const color =
                             parseGradientStartColor(gradientImage)
-                            ?? style["background-color"]
-                            ?? "#FFFFFF";
-                        onPreview({
-                            "background-color": color,
-                            "background-image": gradientFromColor(color),
-                        });
-                        onCommit({
-                            "background-color": color,
-                            "background-image": gradientFromColor(color),
-                        });
+                            ?? (paint === "color" ? style.color : style["background-color"])
+                            ?? "#DDDDDD";
+                        const image = gradientFromColor(color);
+                        const styles: Styles =
+                            paint === "color"
+                                ? {
+                                      "background-image": image,
+                                      "background-clip": "text",
+                                      "-webkit-background-clip": "text",
+                                      color: "transparent",
+                                  }
+                                : {
+                                      "background-color": color,
+                                      "background-image": image,
+                                  };
+                        onPreview(styles);
+                        onCommit(styles);
                         return;
                     }
                     setImageIntent(true);
                 }}
                 items={[
-                    { value: "solid", label: "Solid", title: "Solid fill" },
-                    { value: "gradient", label: "Gradient", title: "Gradient fill" },
-                    { value: "image", label: "Image", title: "Image fill" },
+                    { value: "solid", icon: RiSquareFill, title: "Solid fill" },
+                    { value: "gradient", icon: RiContrast2Fill, title: "Gradient fill" },
+                    { value: "image", icon: RiImageLine, title: "Image fill" },
                 ]}
             />
             {mode === "image" ? (
@@ -690,29 +804,21 @@ export function FillControls({
                     onCommit={onCommit}
                 />
             ) : mode === "gradient" ? (
-                <ColorField
-                    value={gradientColor}
-                    property="background-color"
+                <GradientEditor
+                    value={gradientImage}
+                    fallbackColor={paint === "color" ? style.color : style["background-color"]}
+                    paint={paint}
                     themeTokens={themeTokens}
-                    swatchStyle={{
-                        backgroundImage: gradientFromColor(gradientColor),
-                    }}
-                    onPreview={(styles) => {
-                        const color = styles["background-color"];
-                        if (color) writeGradientColor(color, false);
-                        else onPreview(styles);
-                    }}
-                    onCommit={(styles) => {
-                        const color = styles["background-color"];
-                        if (color) writeGradientColor(color, true);
-                        else onCommit(styles);
-                    }}
+                    onPreview={onPreview}
+                    onCommit={onCommit}
+                    onCreateToken={onCreateToken}
                 />
             ) : (
                 <ColorField
-                    value={style["background-color"]}
-                    property="background-color"
+                    value={solidValue}
+                    property={solidProperty}
                     themeTokens={themeTokens}
+                    onCreateToken={onCreateToken}
                     onPreview={onPreview}
                     onCommit={onCommit}
                 />

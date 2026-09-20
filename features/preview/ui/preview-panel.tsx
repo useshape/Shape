@@ -1,12 +1,14 @@
 "use client";
 
-import { RiArrowLeftLine, RiArrowRightLine, RiExternalLinkLine, RiGlobalLine, RiRefreshLine } from "@remixicon/react";
-import React, { useCallback, useEffect, useRef } from "react";
+import { RiArrowLeftLine, RiArrowRightLine, RiExternalLinkLine, RiGlobalLine, RiPaletteLine, RiRefreshLine } from "@remixicon/react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
-import { commands } from "@/lib/backend";
+import { commands, useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
+import { isWebProject } from "@/features/detection/lib/lib";
+import { DesignInspectOverlay } from "../design/inspect-bar";
 import {
     getPreviewCurrentUrl,
     navigatePreview,
@@ -28,6 +30,9 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
     const { history, index, urlBar, iframeSrc, reloadKey, error, loading } = usePreviewStore();
     const inputRef = useRef<HTMLInputElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const { project_path } = useProjectState();
+    const [webProject, setWebProject] = useState<boolean | null>(null);
+    const [designOn, setDesignOn] = useState(false);
     const canBack = index > 0;
     const canForward = index >= 0 && index < history.length - 1;
     const currentUrl = getPreviewCurrentUrl();
@@ -37,6 +42,28 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
         seedPreviewFromDevUrl(getLastDevUrl());
         ensurePreviewLoaded();
     }, []);
+
+    useEffect(() => {
+        if (!project_path) {
+            setWebProject(null);
+            return;
+        }
+        void isWebProject(project_path).then(setWebProject).catch(() => setWebProject(false));
+    }, [project_path]);
+
+    const localSite = isLocalPreviewUrl(currentUrl);
+    const designReady = webProject === true && localSite;
+    const designTooltip =
+        webProject === false
+            ? "Design mode is for websites. This project doesn't look like a web app."
+            : !localSite
+              ? "Open the running local site in Browser to use Design mode."
+              : designOn
+                ? "Exit design mode"
+                : "Design mode";
+    useEffect(() => {
+        if (!designReady && designOn) setDesignOn(false);
+    }, [designReady, designOn]);
 
     // Track cross-origin iframe document loads via Resource Timing when we can't read location.
     useEffect(() => {
@@ -218,6 +245,26 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                     </Button>
                 </form>
 
+                <Tooltip content={designTooltip}>
+                    <span className="inline-flex">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                                "h-7 w-7 shrink-0",
+                                designOn && designReady
+                                    ? "text-accent"
+                                    : "text-text-muted hover:text-text-primary",
+                            )}
+                            disabled={!designReady}
+                            onClick={() => setDesignOn((v) => !v)}
+                            aria-label={designTooltip}
+                        >
+                            <Icon icon={RiPaletteLine} />
+                        </Button>
+                    </span>
+                </Tooltip>
                 <Tooltip content="Open in browser">
                     <Button
                         type="button"
@@ -253,7 +300,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                     <iframe
                         key={`${iframeSrc}::${reloadKey}`}
                         ref={iframeRef}
-                        title="Local preview"
+                        title="Browser"
                         src={iframeSrc}
                         className="h-full w-full border-0 bg-white"
                         onLoad={onIframeLoad}
@@ -264,10 +311,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                 ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
                         <Icon icon={RiGlobalLine} className="text-text-muted" />
-                        <p>Preview local sites here (localhost only).</p>
-                        <p className="text-xs">
-                            Enter a URL and press Go, or open Preview after your dev server starts.
-                        </p>
+                        <p>Enter a URL and press Enter.</p>
                         <Button
                             type="button"
                             variant="ghost"
@@ -281,6 +325,13 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                 )}
                 {loading ? (
                     <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 animate-pulse bg-accent" />
+                ) : null}
+                {designOn && designReady ? (
+                    <DesignInspectOverlay
+                        iframeRef={iframeRef}
+                        enabled={designOn}
+                        onToggle={() => setDesignOn(false)}
+                    />
                 ) : null}
             </div>
         </div>

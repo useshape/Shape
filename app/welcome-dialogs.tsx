@@ -6,7 +6,7 @@ import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
 import { invalidateGitRepoCache } from "@/lib/git/repos";
-import { getRepoName, type RepoHistoryEntry } from "@/lib/repo-history";
+import { getRepoName, type RepoHistoryEntry } from "@/lib/workspace/repo-history";
 import { loginGitHub } from "@/lib/github/store";
 
 async function pickDirectory(title: string): Promise<string | null> {

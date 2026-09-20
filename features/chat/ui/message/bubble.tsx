@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { formatMessageModelLabel, isAutoModelId } from "@/lib/usage-display";
+import { formatMessageModelLabel, isAutoModelId } from "@/lib/chat/usage-display";
 
 /** Model id used for Auto UI mark (backend still routes via MODEL_FAST). */
 export const AUTO_DISPLAY_MODEL = "deepseek/deepseek-v4-flash";

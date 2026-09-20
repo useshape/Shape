@@ -1,7 +1,7 @@
 "use client";
 
 import type { RemixiconComponentType } from "@remixicon/react";
-import { RiAddLine, RiBrushLine, RiGithubFill, RiGitPullRequestLine, RiSearchLine, RiSettings3Line } from "@remixicon/react";
+import { RiChromeFill, RiEqualizer3Fill, RiGithubFill, RiGitPullRequestLine, RiMessage3Fill, RiSearchLine } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
@@ -20,11 +20,13 @@ function NavItem({
     icon,
     onClick,
     collapsed,
+    active,
 }: {
     label: string;
     icon: RemixiconComponentType;
     onClick: () => void;
     collapsed?: boolean;
+    active?: boolean;
 }) {
     if (collapsed) {
         return (
@@ -39,7 +41,11 @@ function NavItem({
                     size="icon"
                     onClick={onClick}
                     aria-label={label}
-                    className="size-9 shrink-0 text-text-secondary hover:text-text-primary"
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                        "size-9 shrink-0 text-text-secondary hover:text-text-primary",
+                        active && "bg-panel-active text-text-primary",
+                    )}
                 >
                     <Icon icon={icon} />
                 </Button>
@@ -53,7 +59,11 @@ function NavItem({
             variant="ghost"
             size="sm"
             onClick={onClick}
-            className={cn("flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left")}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+                "flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left",
+                active && "bg-panel-active",
+            )}
         >
             <Icon icon={icon} className="shrink-0 text-text-muted" />
             <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -65,27 +75,27 @@ export function AgentSidebar({
     onSearch,
     expanded,
     overlay,
-    onDesign,
-    showDesign,
+    onBrowser,
+    showBrowser,
     onToggleSidebar,
 }: {
     onSearch: () => void;
     expanded: boolean;
     overlay: AgentOverlay;
-    onDesign?: () => void;
-    showDesign?: boolean;
+    onBrowser?: () => void;
+    showBrowser?: boolean;
     onToggleSidebar?: () => void;
 }) {
     const github = useGitHubAuth();
     const showHostedNav = Boolean(overlay);
 
     const items = [
-        ...(showDesign && onDesign
-            ? [{ label: "Design", icon: RiBrushLine, onClick: onDesign }]
+        ...(showBrowser && onBrowser
+            ? [{ label: "Browser", icon: RiChromeFill, onClick: onBrowser }]
             : []),
         {
             label: "Customize",
-            icon: RiSettings3Line,
+            icon: RiEqualizer3Fill,
             onClick: () => void openSettingsWindow(),
         },
     ];
@@ -98,7 +108,7 @@ export function AgentSidebar({
     return (
         <aside
             className={cn(
-                "relative z-20 flex h-full border-r border-border shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
+                "relative z-20 flex h-full shrink-0 flex-col overflow-hidden border-r border-border-secondary bg-sidebar text-text-primary",
                 "transition-[width] duration-[var(--transition-base)] ease-[var(--ease-out)]",
                 expanded ? "w-76" : "w-12",
             )}
@@ -107,7 +117,7 @@ export function AgentSidebar({
                 <>
                     <div
                         className={cn(
-                            "relative z-20 flex h-10 shrink-0 items-center",
+                            "relative z-20 flex h-titlebar shrink-0 items-center",
                             expanded ? "justify-between px-2" : "justify-center px-1.5",
                         )}
                     >
@@ -140,7 +150,7 @@ export function AgentSidebar({
                 <>
                     <div
                         className={cn(
-                            "relative z-20 flex h-10 shrink-0 items-center",
+                            "relative z-20 flex h-titlebar shrink-0 items-center",
                             expanded ? "justify-between px-2" : "justify-center px-1.5",
                         )}
                     >
@@ -188,12 +198,12 @@ export function AgentSidebar({
                                 onClick={newChat}
                                 className="flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left"
                             >
-                                <Icon icon={RiAddLine} className="shrink-0 text-text-muted" />
+                                <Icon icon={RiMessage3Fill} className="shrink-0 text-text-muted" />
                                 <span className="min-w-0 flex-1 truncate">New Chat</span>
                             </Button>
                         ) : (
                             <>
-                                <NavItem label="New Chat" icon={RiAddLine} onClick={newChat} collapsed />
+                                <NavItem label="New Chat" icon={RiMessage3Fill} onClick={newChat} collapsed />
                                 <NavItem label="Search" icon={RiSearchLine} onClick={onSearch} collapsed />
                             </>
                         )}
@@ -204,6 +214,7 @@ export function AgentSidebar({
                                 icon={item.icon}
                                 onClick={item.onClick}
                                 collapsed={!expanded}
+                                active={"active" in item ? Boolean(item.active) : false}
                             />
                         ))}
                     </nav>
@@ -262,7 +273,7 @@ export function AgentSidebar({
                                 className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 aria-label="Settings"
                             >
-                                <Icon icon={RiSettings3Line} />
+                                <Icon icon={RiEqualizer3Fill} />
                             </button>
                         </Tooltip>
                     </div>

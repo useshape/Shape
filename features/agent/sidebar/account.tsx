@@ -5,7 +5,7 @@ import { Icon } from "@/components/ui/icon";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { useGitHubAuth } from "@/lib/github/store";
-import { requestShapeLogin } from "@/features/workbench/ui/login-prompt-dialog";
+import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { AccountMenu, ProfileAvatar } from "./menu";
 import { Button } from "@/components/ui/button";
 

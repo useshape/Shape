@@ -36,17 +36,18 @@ import {
 import { QueuedMessagesPanel, type QueuedMessage } from "./queue";
 import { ComposerAttachments, ComposerAttachmentsStrip, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
-import { mentionRanges, shortenMentionTokensInText } from "@/lib/chat-mentions";
-import { resolveChatUsageDisplay } from "@/lib/usage-display";
-import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/last-turn-usage";
+import { FileIcon } from "@/components/ui/file-icon";
+import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText, type ChatMention } from "@/lib/chat/mentions";
+import { resolveChatUsageDisplay } from "@/lib/chat/usage-display";
+import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
 import { UsageRing } from "./usage";
-import { getVisibleModels, isApiModel, resolveChatModels, type ModelInfo } from "@/lib/models";
+import { getVisibleModels, isApiModel, resolveChatModels, type ModelInfo } from "@/lib/chat/models";
 import {
     getCatalogModels,
     getCatalogProviderOrder,
     isCatalogModelAllowed,
     useShapeCatalog,
-} from "@/lib/catalog-store";
+} from "@/lib/catalog/store";
 import { useSettings, hasByokApiKeys } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
@@ -255,10 +256,19 @@ function isAllowedFile(file: File): boolean {
     return isImageFile(file) || isCodeFile(file) || isAudioFile(file) || isAssetFile(file);
 }
 
-function ComposerMentionChip({ raw }: { raw: string }) {
+function ComposerMentionChip({ mention }: { mention: ChatMention }) {
+    const label = mentionDisplayLabel(mention);
+    const showFile = mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs";
     return (
-        <span className="box-decoration-clone rounded-sm bg-accent-text-bg text-accent-text">
-            {raw}
+        <span className="box-decoration-clone inline-flex items-baseline rounded-md bg-accent-text-bg px-0.5 text-accent-text">
+            {showFile ? (
+                <FileIcon
+                    name={label}
+                    isDir={mention.kind === "folder"}
+                    className="mr-0.5 inline h-3 w-3 translate-y-px"
+                />
+            ) : null}
+            @{label}
         </span>
     );
 }
@@ -616,9 +626,12 @@ export function ChatInput({
     });
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const mentionOverlayRef = React.useRef<HTMLDivElement>(null);
+    const composerBoxRef = React.useRef<HTMLDivElement>(null);
     const [mentionOpen, setMentionOpen] = React.useState(false);
     const [mentionQuery, setMentionQuery] = React.useState("");
     const [mentionCaret, setMentionCaret] = React.useState(0);
+    const [slashOpen, setSlashOpen] = React.useState(false);
+    const [slashQuery, setSlashQuery] = React.useState("");
 
     const handleInputChangeWithMentions = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const raw = e.target.value;
@@ -643,14 +656,24 @@ export function ChatInput({
         const before = val.slice(0, caretNow);
         // Allow hostnames / paths after @ (sites, files). Anchor menu at the `@`, not caret end.
         const atMatch = before.match(/@([\w./:-]*)$/);
+        const slashMatch = before.match(/(?:^|\s)(\/[^\s]*)$/);
         if (atMatch) {
             const atStart = caretNow - atMatch[0].length;
             setMentionOpen(true);
             setMentionQuery(atMatch[1] ?? "");
             setMentionCaret(atStart);
+            setSlashOpen(false);
+            setSlashQuery("");
+        } else if (slashMatch) {
+            setSlashOpen(true);
+            setSlashQuery((slashMatch[1] ?? "/").replace(/^\//, ""));
+            setMentionOpen(false);
+            setMentionQuery("");
         } else {
             setMentionOpen(false);
             setMentionQuery("");
+            setSlashOpen(false);
+            setSlashQuery("");
         }
     }, [onInputChange]);
 
@@ -675,17 +698,33 @@ export function ChatInput({
         onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
         setMentionOpen(false);
         setMentionQuery("");
+        setSlashOpen(false);
+        requestAnimationFrame(() => textarea.focus());
+    }, [inputValue, onInputChange]);
+
+    const insertSlash = React.useCallback((token: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        const val = inputValue;
+        const caret = textarea.selectionStart ?? val.length;
+        const before = val.slice(0, caret);
+        const after = val.slice(caret);
+        const slashIndex = before.lastIndexOf("/");
+        if (slashIndex === -1) return;
+        const next = `${before.slice(0, slashIndex)}${token}${after}`;
+        onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
+        setSlashOpen(false);
+        setSlashQuery("");
         requestAnimationFrame(() => textarea.focus());
     }, [inputValue, onInputChange]);
 
     const onComposerKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (mentionOpen && (e.key === "Enter" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape")) {
-            // MentionPicker handles these via window capture; don't send the message.
+        if ((mentionOpen || slashOpen) && (e.key === "Enter" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape")) {
             e.preventDefault();
             return;
         }
         onKeyDown(e);
-    }, [mentionOpen, onKeyDown]);
+    }, [mentionOpen, slashOpen, onKeyDown]);
 
     React.useEffect(() => {
         const textarea = textareaRef.current;
@@ -879,6 +918,7 @@ export function ChatInput({
                         dragOver && "border-border-subtle bg-surface-3/80",
                         needsSignIn && "cursor-default",
                     )}
+                    ref={composerBoxRef}
                     onDrop={needsSignIn ? undefined : handleDrop}
                     onDragEnter={needsSignIn ? undefined : handleDragEnter}
                     onDragLeave={needsSignIn ? undefined : handleDragLeave}
@@ -890,11 +930,17 @@ export function ChatInput({
                     </div>
                 ) : null}
                 <MentionPicker
-                    open={mentionOpen}
-                    query={mentionQuery}
-                    onPick={insertMention}
-                    onClose={() => setMentionOpen(false)}
+                    open={mentionOpen || slashOpen}
+                    query={slashOpen ? slashQuery : mentionQuery}
+                    mode={slashOpen ? "slash" : "mention"}
+                    workflows={settings.ai.workflows ?? []}
+                    onPick={slashOpen ? insertSlash : insertMention}
+                    onClose={() => {
+                        setMentionOpen(false);
+                        setSlashOpen(false);
+                    }}
                     anchorRef={textareaRef}
+                    boxRef={composerBoxRef}
                     caretIndex={mentionCaret}
                 />
                 <div
@@ -977,11 +1023,10 @@ export function ChatInput({
                                 if (range.start > cursor) {
                                     nodes.push(inputValue.slice(cursor, range.start));
                                 }
-                                const raw = inputValue.slice(range.start, range.end);
                                 nodes.push(
                                     <ComposerMentionChip
                                         key={`m-${i}`}
-                                        raw={raw}
+                                        mention={range.mention}
                                     />,
                                 );
                                 cursor = range.end;
@@ -1002,16 +1047,24 @@ export function ChatInput({
                                 onKeyDown={onComposerKeyDown}
                                 onPaste={handlePaste}
                                 onSelect={(e) => {
-                                    if (!mentionOpen) return;
+                                    if (!mentionOpen && !slashOpen) return;
                                     const el = e.currentTarget;
                                     const caret = el.selectionStart ?? 0;
                                     const before = el.value.slice(0, caret);
                                     const atMatch = before.match(/@([\w./:-]*)$/);
+                                    const slashMatch = before.match(/(?:^|\s)(\/[^\s]*)$/);
                                     if (atMatch) {
                                         setMentionCaret(caret - atMatch[0].length);
                                         setMentionQuery(atMatch[1] ?? "");
+                                        setMentionOpen(true);
+                                        setSlashOpen(false);
+                                    } else if (slashMatch) {
+                                        setSlashQuery((slashMatch[1] ?? "/").replace(/^\//, ""));
+                                        setSlashOpen(true);
+                                        setMentionOpen(false);
                                     } else {
                                         setMentionOpen(false);
+                                        setSlashOpen(false);
                                     }
                                 }}
                                 onScroll={(e) => {

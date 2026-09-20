@@ -23,15 +23,70 @@ type ActiveCapture = {
 /** Slightly under Rust's own 15-30s wait so we always resolve first when possible. */
 const CAPTURE_READY_TIMEOUT_MS = 14_000;
 
+async function copyComputedTree(from: Element, to: Element) {
+    if (!(from instanceof HTMLElement) || !(to instanceof HTMLElement)) return;
+    const computed = getComputedStyle(from);
+    let cssText = "";
+    for (let i = 0; i < computed.length; i++) {
+        const prop = computed[i];
+        cssText += `${prop}:${computed.getPropertyValue(prop)};`;
+    }
+    to.setAttribute("style", cssText);
+    const fromKids = from.children;
+    const toKids = to.children;
+    for (let j = 0; j < fromKids.length && j < toKids.length; j++) {
+        const childFrom = fromKids[j];
+        const childTo = toKids[j];
+        if (childFrom && childTo) await copyComputedTree(childFrom, childTo);
+    }
+}
+
+function collectFontCss(doc: Document): string {
+    let css = "";
+    try {
+        const sheets = doc.styleSheets;
+        for (let i = 0; i < sheets.length; i++) {
+            let rules: CSSRuleList | undefined;
+            try {
+                rules = sheets[i]?.cssRules ?? undefined;
+            } catch {
+                continue;
+            }
+            if (!rules) continue;
+            for (let j = 0; j < rules.length; j++) {
+                const rule = rules[j];
+                if (rule && rule.constructor.name === "CSSFontFaceRule") css += `${rule.cssText}\n`;
+            }
+        }
+    } catch {
+        /* ignore */
+    }
+    return css;
+}
+
 async function rasterizeIframe(iframe: HTMLIFrameElement, width: number, height: number): Promise<Uint8Array> {
     const doc = iframe.contentDocument;
     if (!doc?.documentElement) {
         throw new Error("Preview document is not accessible for capture");
     }
+    if (doc.fonts?.ready) {
+        await doc.fonts.ready.catch(() => undefined);
+    }
 
     const clone = doc.documentElement.cloneNode(true) as HTMLElement;
+    await copyComputedTree(doc.documentElement, clone);
     clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-    const serialized = new XMLSerializer().serializeToString(clone);
+    const wrap = doc.createElement("div");
+    wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+    wrap.setAttribute(
+        "style",
+        `background:transparent;font-family:${getComputedStyle(doc.documentElement).fontFamily || "system-ui,sans-serif"};`,
+    );
+    const fontStyle = doc.createElement("style");
+    fontStyle.textContent = collectFontCss(doc);
+    wrap.appendChild(fontStyle);
+    wrap.appendChild(clone);
+    const serialized = new XMLSerializer().serializeToString(wrap);
     const svg =
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
         `<foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
@@ -49,8 +104,7 @@ async function rasterizeIframe(iframe: HTMLIFrameElement, width: number, height:
     canvas.height = height;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas 2D context unavailable for preview capture");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, width, height);
+    ctx.clearRect(0, 0, width, height);
     ctx.drawImage(img, 0, 0, width, height);
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));

@@ -11,10 +11,10 @@ import {
     getCatalogModels,
     isCatalogModelAllowed,
     useShapeCatalog,
-} from "@/lib/catalog-store";
+} from "@/lib/catalog/store";
 import { RiWebhookFill } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
-import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, type ModelInfo } from "@/lib/models";
+import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, type ModelInfo } from "@/lib/chat/models";
 import { useShapeAuth } from "@/lib/cloud/store";
 import {
     type AutoRunModeSetting,
@@ -22,9 +22,7 @@ import {
     updateSettingSection,
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/cloud/store";
-import { openMcpConfig } from "@/lib/mcp/config";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import {
     SettingSection,
     SettingRow,
@@ -33,59 +31,9 @@ import {
     SettingNumberSelect,
     MAX_CONTEXT_PRESETS,
 } from "../shared/controls";
+import { WorkflowsEditor } from "./workflows";
 
 const FEATURED_COUNT = 4;
-
-function ApiKeyField({
-    value,
-    placeholder,
-    onSave,
-}: {
-    value: string;
-    placeholder: string;
-    onSave: (next: string) => void;
-}) {
-    const [draft, setDraft] = React.useState(value);
-    const [focused, setFocused] = React.useState(false);
-    React.useEffect(() => setDraft(value), [value]);
-    const dirty = draft !== value;
-    const showSave = focused || dirty;
-
-    return (
-        <div className="relative">
-            <Input
-                type="password"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={placeholder}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter" && dirty) {
-                        e.preventDefault();
-                        onSave(draft.trim());
-                    }
-                }}
-                className={cn("font-mono text-sm", showSave && "pr-16")}
-            />
-            {showSave ? (
-                <Button
-                    type="button"
-                    size="xs"
-                    variant={dirty ? "default" : "secondary"}
-                    disabled={!dirty}
-                    className="absolute top-1/2 right-1 z-10 -translate-y-1/2"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => onSave(draft.trim())}
-                >
-                    Save
-                </Button>
-            ) : null}
-        </div>
-    );
-}
 
 function RulesEditor({ value }: { value: string }) {
     const [draft, setDraft] = React.useState(value);
@@ -216,8 +164,8 @@ export function AiSettingsPanel({
     const auth = useShapeAuth();
     useShapeCatalog();
     const allModels = resolveChatModels(getCatalogModels(), {
-        openaiKey: Boolean(a.openaiApiKey.trim()),
-        openRouterKey: Boolean(a.openRouterApiKey.trim()),
+        openaiKey: false,
+        openRouterKey: false,
         signedIn: Boolean(auth.loggedIn && !auth.offline),
     });
     const unavailableHint =
@@ -237,8 +185,7 @@ export function AiSettingsPanel({
     const visibleModels = getVisibleModels(allModels, enabledModels);
     const defaultIds = getCatalogDefaultEnabledIds();
     const featuredIds = new Set(defaultIds.slice(0, FEATURED_COUNT));
-    const usingApiKeys = Boolean(a.openaiApiKey.trim() || a.openRouterApiKey.trim());
-    const displayedModels = showAllModels || usingApiKeys
+    const displayedModels = showAllModels
         ? allModels
         : allModels.filter((m) => featuredIds.has(m.id) || m.id === "auto");
 
@@ -342,17 +289,15 @@ export function AiSettingsPanel({
                         }
                     />
                 ))}
-                {usingApiKeys ? null : (
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        size="md"
-                        className="w-full bg-panel-hover! rounded-none py-6"
-                        onClick={() => setShowAllModels((v) => !v)}
-                    >
-                        {showAllModels ? "Show fewer models" : "View all models"}
-                    </Button>
-                )}
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    className="w-full bg-panel-hover! rounded-none py-6"
+                    onClick={() => setShowAllModels((v) => !v)}
+                >
+                    {showAllModels ? "Show fewer models" : "View all models"}
+                </Button>
             </SettingSection>
 
             <SettingSection title="Behavior">
@@ -418,15 +363,6 @@ export function AiSettingsPanel({
                 </SettingRow>
             </SettingSection>
 
-            <SettingSection title="Review">
-                <SettingRow title="Adversarial review">
-                    <SettingSwitch
-                        checked={a.reviewAdversarialEnabled}
-                        onChange={(on) => updateSettingSection("ai", { reviewAdversarialEnabled: on })}
-                    />
-                </SettingRow>
-            </SettingSection>
-
             <SettingSection id="settings-ai-context" title="Context">
                 <SettingRow title="Max context lines per file">
                     <SettingNumberSelect
@@ -467,55 +403,21 @@ export function AiSettingsPanel({
                 </div>
             </SettingSection>
 
-            <SettingSection
-                id="settings-ai-byok"
-                title="API keys"
-                description={
-                    a.openaiApiKey.trim() && !a.openRouterApiKey.trim()
-                        ? "OpenAI models call api.openai.com with your key. Shape is not billed."
-                        : a.openRouterApiKey.trim() && !a.openaiApiKey.trim()
-                          ? "Requests go to OpenRouter with your key. Shape is not billed."
-                          : a.openaiApiKey.trim() && a.openRouterApiKey.trim()
-                            ? "GPT models use OpenAI. Everything else uses OpenRouter."
-                            : "Saved keys call that provider directly. Otherwise Shape’s hosted AI is used."
-                }
-                card={false}
-            >
-                <SettingRow title="OpenAI" stack>
-                    <ApiKeyField
-                        value={a.openaiApiKey}
-                        placeholder="sk-…"
-                        onSave={(openaiApiKey) => {
-                            updateSettingSection("ai", { openaiApiKey });
-                            void commands
-                                .setByokKeys(a.openRouterApiKey || null, openaiApiKey || null)
-                                .catch(() => {});
-                        }}
-                    />
-                </SettingRow>
-                <SettingRow title="OpenRouter" stack>
-                    <ApiKeyField
-                        value={a.openRouterApiKey}
-                        placeholder="sk-or-…"
-                        onSave={(openRouterApiKey) => {
-                            updateSettingSection("ai", { openRouterApiKey });
-                            void commands
-                                .setByokKeys(openRouterApiKey || null, a.openaiApiKey || null)
-                                .catch(() => {});
-                        }}
-                    />
-                </SettingRow>
-            </SettingSection>
-
             <RulesEditor value={a.customRules} />
-
-            <SettingSection id="settings-ai-mcp" title="MCP">
-                <SettingRow title="Servers">
-                    <Button variant="secondary" size="sm" onClick={() => void openMcpConfig()}>
-                        Edit mcp.json
-                    </Button>
+            <SettingSection id="settings-ai-review" title="Review">
+                <SettingRow
+                    title="Adversarial review"
+                    description="After huge multi-file writes, run a second-pass critique as a tool row. Skips small UI nits."
+                >
+                    <SettingSwitch
+                        checked={a.reviewAdversarialEnabled}
+                        onChange={(reviewAdversarialEnabled) =>
+                            updateSettingSection("ai", { reviewAdversarialEnabled })
+                        }
+                    />
                 </SettingRow>
             </SettingSection>
+            <WorkflowsEditor value={a.workflows ?? []} />
         </>
     );
 }

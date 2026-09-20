@@ -5,11 +5,10 @@ import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
-import { useWindowControls } from "@/features/workbench/titlebar/hooks/use-window-controls";
-import { WindowControls } from "@/features/workbench/titlebar/ui/window-controls";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { dashboardUrl } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend/commands";
+import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
 export const AGENT_CHROME_ACTIONS_SLOT = "shape-agent-chrome-actions";
@@ -55,7 +54,7 @@ function Btn({
                 disabled={disabled}
                 onClick={onClick}
                 className={cn(
-                    "flex size-7 items-center justify-center rounded-md text-text-muted transition-colors",
+                    "flex size-7 items-center justify-center rounded-md text-text-muted press-spring",
                     "hover:bg-panel-hover hover:text-text-primary",
                     active && "text-text-primary",
                     "disabled:pointer-events-none disabled:text-text-disabled",
@@ -71,15 +70,17 @@ export function AgentChrome({
     rightOpen,
     onToggleRight,
     canToggleRight = true,
+    showRightToggle = true,
+    padWindowControls = false,
 }: {
     rightOpen: boolean;
     onToggleRight: () => void;
     canToggleRight?: boolean;
+    showRightToggle?: boolean;
+    padWindowControls?: boolean;
 }) {
-    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
-
     return (
-        <div className="relative flex h-titlebar shrink-0 items-stretch overflow-hidden bg-panel" data-tauri-drag-region>
+        <div className="relative z-10 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent" data-tauri-drag-region>
             {/* Title/tabs content — no data-no-drag so empty chrome stays draggable.
                 Interactive children opt out via data-no-drag / button CSS rules. */}
             <div
@@ -90,25 +91,17 @@ export function AgentChrome({
             <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
                 <div id={AGENT_CHROME_ACTIONS_SLOT} className="flex items-center gap-0.5" />
                 <GetPlusButton />
-                <Btn
-                    label={rightOpen ? "Hide panel" : "Show panel"}
-                    disabled={!canToggleRight}
-                    active={rightOpen}
-                    onClick={onToggleRight}
-                >
-                    <Icon icon={RiLayoutRight2Line} />
-                </Btn>
-            </div>
-            <div className="relative z-10 flex h-full shrink-0 items-center" data-no-drag>
-                <WindowControls
-                    isMaximized={isMaximized}
-                    onMinimize={minimize}
-                    onToggleMaximize={() => void toggleMaximize()}
-                    onClose={close}
-                    surface="panel"
-                    spacer={!rightOpen}
-                    floating
-                />
+                {showRightToggle ? (
+                    <Btn
+                        label={rightOpen ? "Hide panel" : "Show panel"}
+                        disabled={!canToggleRight}
+                        active={rightOpen}
+                        onClick={onToggleRight}
+                    >
+                        <Icon icon={RiLayoutRight2Line} />
+                    </Btn>
+                ) : null}
+                {padWindowControls ? <WindowControlsSpacer /> : null}
             </div>
         </div>
     );

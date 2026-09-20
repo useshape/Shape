@@ -7,22 +7,22 @@
   color-scheme: dark;
 
   /* ── Surface ladder ────────────────────────────────────── */
-  --surface-0: #171717;
-  --surface-1: #1a1a1a;
-  --surface-2: #212121;
-  --surface-3: #212121;
+  --surface-0: #181818;
+  --surface-1: #181818;
+  --surface-2: #181818;
+  --surface-3: #252525;
   --surface-4: #252525;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
-  --chrome: #191919;
-  --sidebar: #212121;
+  --chrome: #1E1E1E;
+  --sidebar: #1B1B1B;
   --editor: #191919;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #191919;
+  --panel: #1E1E1E;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.04);
@@ -40,9 +40,9 @@
   --text-active: #ffffff;
 
   /* ── Borders / stroke ──────────────────────────────────── */
-  --border: rgba(255, 255, 255, 0.048);
-  --border-subtle: rgba(255, 255, 255, 0.025);
-  --border-secondary: rgba(255, 255, 255, 0.062);
+  --border: rgba(255, 255, 255, 0.034);
+  --border-subtle: rgba(255, 255, 255, 0.034);
+  --border-secondary: rgba(255, 255, 255, 0.068);
   --stroke: 1px;
 
   /* ── Actions ───────────────────────────────────────────── */
@@ -117,7 +117,9 @@
 
   /* Floating workbench panels (Git Manager, graph splits, etc.). */
   --workbench-gap: 8px;
-  --workbench-panel-radius: var(--radius-xl);
+  --workbench-panel-radius: var(--radius-3xl);
+  --window-radius: var(--radius-2xl);
+  --window-stroke: rgba(255, 255, 255, 0.178);
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -178,7 +180,7 @@
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
 
-  --z-dropdown: 100;
+  --z-dropdown: 1102;
   --z-modal: 200;
   --z-overlay: 1000;
   --z-overlay-content: 1001;
@@ -233,15 +235,15 @@
   --surface-0: #F9F9F9;
   --surface-1: #F9F9F9;
   --surface-2: #f3f3f3;
-  --surface-3: #EAEAEA;
+  --surface-3: #ffffff;
   --surface-4: #f3f3f3;
-  --chrome: #F9F9F9;
-  --sidebar: #EAEAEA;
-  --editor: #F9F9F9;
+  --chrome: #ffffff;
+  --sidebar: #f4f4f4;
+  --editor: #ffffff;
   --base: #141414;
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #F9F9F9;
+  --panel: #ffffff;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(0, 0, 0, 0.06);
   --panel-hover: rgba(0, 0, 0, 0.04);
@@ -255,9 +257,11 @@
   --text-muted: #737373;
   --text-disabled: #a3a3a3;
   --text-active: #0a0a0a;
-  --border: rgba(0, 0, 0, 0.062);
-  --border-subtle: rgba(0, 0, 0, 0.014);
-  --border-secondary: rgba(0, 0, 0, 0.082);
+  --border: rgba(0, 0, 0, 0.12);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-secondary: rgba(0, 0, 0, 0.14);
+  --input-bg: #ffffff;
+  --window-stroke: rgba(0, 0, 0, 0.14);
 }
 
 @theme inline {
@@ -1093,7 +1097,7 @@ body[data-resizing] .xterm {
 
 /* ── Modal overlays (global) ─────────────────────────────── */
 .shape-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: var(--z-overlay);
   background-color: var(--overlay-scrim);
@@ -1107,7 +1111,20 @@ body[data-resizing] .xterm {
 }
 
 .shape-overlay-content {
+  position: absolute !important;
   z-index: var(--z-overlay-content);
+}
+
+/* Out-of-flow host so dialogs cannot become flex items and shove the app. */
+#shape-overlays {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  overflow: hidden;
+  pointer-events: none;
+}
+#shape-overlays > * {
+  pointer-events: auto;
 }
 
 .titlebar-window-controls {
@@ -1147,11 +1164,17 @@ body[data-resizing] .xterm {
   height: 0 !important;
 }
 
+/* Native window chrome — HWND is opaque and Windows owns snap/maximize rounding. */
+#shape-workbench {
+  overflow: hidden;
+}
+
 /* ── Floating workbench panels ───────────────────────────── */
 .workbench-panel {
   height: 100%;
   width: 100%;
   border-radius: var(--workbench-panel-radius);
+  corner-shape: squircle;
   overflow: hidden;
 }
 
@@ -1161,6 +1184,7 @@ body[data-resizing] .xterm {
   margin: var(--workbench-gap);
   border: var(--stroke) solid var(--border);
   border-radius: var(--workbench-panel-radius);
+  corner-shape: squircle;
   background: var(--panel);
   overflow: hidden;
 }

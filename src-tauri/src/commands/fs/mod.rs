@@ -615,15 +615,22 @@ pub async fn open_in_app(app: String, path: String) -> Result<(), AppError> {
             return Ok::<(), AppError>(());
         }
 
-        #[allow(unused_mut)]
-        let mut cmd = Command::new(exe);
-        cmd.arg(&path);
         #[cfg(windows)]
         {
+            // `code` / `cursor` are `.cmd` shims. CREATE_NO_WINDOW on the bare
+            // name fails; `cmd /C start` finds PATHEXT shims and GUI apps.
             const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", "start", "", exe, &path]);
             cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd.spawn().map_err(|e| AppError::Io(e))?;
+            return Ok::<(), AppError>(());
         }
-        cmd.spawn().map_err(|e| AppError::Io(e))?;
+
+        Command::new(exe)
+            .arg(&path)
+            .spawn()
+            .map_err(|e| AppError::Io(e))?;
         Ok::<(), AppError>(())
     })
     .await

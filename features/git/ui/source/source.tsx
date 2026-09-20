@@ -30,7 +30,7 @@ import {
     GitLogEntry,
 } from "@/lib/backend";
 import { notify } from "@/features/notifications";
-import { statusProgress } from "@/lib/status-progress";
+import { statusProgress } from "@/lib/ui/status-progress";
 import { getSettings, useSettings } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/cloud/store";
 import { Tooltip } from "@/components/ui/tooltip";

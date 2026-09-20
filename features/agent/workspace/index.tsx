@@ -10,9 +10,11 @@ import { FileEditor } from "./editor";
 import { FileTree } from "./tree";
 import { SingleFileDiffEditor, type FileDiffTabInfo } from "./file-diff";
 import Graph from "@/features/git/ui/graph/graph";
-import { WindowControlsSpacer } from "@/features/workbench/titlebar/ui/window-controls";
+import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
 import { PullRequestsPanel } from "@/features/chat/ui/prs/view";
 import { subscribePrUi, getPrUi } from "@/features/chat/ui/prs/store";
+import { WorkspacePreview } from "./preview";
+import { isBrowserTab } from "@/lib/window/browser-tab";
 import {
     DEFAULT_TABS,
     uid,
@@ -53,19 +55,16 @@ export function AgentWorkspace({
         if (kind === "plan" || kind === "file" || kind === "diff" || kind === "agents") return;
         const expand = Boolean(opts?.expand);
         const title =
-            kind === "agents"
-                ? "Agents"
-                : kind === "files"
-                  ? "Files"
-                  : kind === "graph"
-                    ? "Graph"
-                    : kind === "prs"
-                      ? "Pull requests"
+            kind === "files"
+                ? "Files"
+                : kind === "graph"
+                  ? "Graph"
+                  : kind === "prs"
+                    ? "Pull requests"
+                    : kind === "browser"
+                      ? "Browser"
                       : "Changes";
-        const tabId =
-            kind === "graph" || kind === "prs" || kind === "changes" || kind === "files" || kind === "agents"
-                ? kind
-                : uid(kind);
+        const tabId = kind;
         setTabs((prev) => {
             const existing = prev.find((t) => t.kind === kind);
             if (existing) {
@@ -166,6 +165,9 @@ export function AgentWorkspace({
         const onTab = (e: Event) => {
             const tabId = (e as CustomEvent<string>).detail?.toLowerCase();
             if (!tabId) return;
+            if (tabId === "preview" || tabId === "browser") {
+                addTab("browser", { expand: true });
+            }
             if (tabId === "changes" || tabId === "source") {
                 addTab("changes", { expand: true });
             }
@@ -194,6 +196,10 @@ export function AgentWorkspace({
         const onOpenFile = (e: Event) => {
             const path = (e as CustomEvent<{ path?: string }>).detail?.path;
             if (!path) return;
+            if (isBrowserTab(path)) {
+                addTab("browser", { expand: true });
+                return;
+            }
             openFile(path);
         };
         const onOpenDiff = (e: Event) => {
@@ -214,6 +220,16 @@ export function AgentWorkspace({
             window.removeEventListener("shape-open-file-diff", onOpenDiff as EventListener);
         };
     }, [addTab, onExpand, openDiff, openFile, openPlan]);
+
+    useEffect(() => {
+        if (!active_file) return;
+        if (isBrowserTab(active_file)) {
+            addTab("browser", { expand: true });
+            return;
+        }
+        if (active_file.startsWith("shape://")) return;
+        openFile(active_file);
+    }, [active_file, addTab, openFile]);
 
     useEffect(() => {
         const openDetail = () => {
@@ -279,6 +295,8 @@ export function AgentWorkspace({
                         />
                     ) : active?.kind === "prs" ? (
                         <PullRequestsPanel pane="full" />
+                    ) : active?.kind === "browser" ? (
+                        <WorkspacePreview />
                     ) : active?.kind === "plan" && (active.path || active.markdown) ? (
                         <PlanTabView path={active.path || ""} markdown={active.markdown} />
                     ) : active?.kind === "file" && active.path ? (

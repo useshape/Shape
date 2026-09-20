@@ -148,7 +148,7 @@ export function useFileContent(
                 } else {
                     const data = await commands.readFile(path);
                     if (cancelled) return;
-                    const { loadDirtyBuffer } = await import("@/lib/dirty-buffers");
+                    const { loadDirtyBuffer } = await import("@/lib/workspace/dirty-buffers");
                     const dirty = loadDirtyBuffer(path);
                     if (dirty && dirty.content !== data) {
                         setContent(dirty.content);
@@ -160,7 +160,7 @@ export function useFileContent(
                         savedContentRef.current = data;
                         currentContent = data;
                         if (dirty) {
-                            const { clearDirtyBuffer } = await import("@/lib/dirty-buffers");
+                            const { clearDirtyBuffer } = await import("@/lib/workspace/dirty-buffers");
                             clearDirtyBuffer(path);
                         }
                     }
@@ -218,7 +218,7 @@ export function useFileContent(
             const cleanPath = path.replace(/\\/g, '/').toLowerCase();
             if (cleanPayload === cleanPath) {
                 commands.invalidateFileCache(path);
-                void import("@/lib/dirty-buffers").then(async ({ clearDirtyBuffer, loadDirtyBuffer }) => {
+                void import("@/lib/workspace/dirty-buffers").then(async ({ clearDirtyBuffer, loadDirtyBuffer }) => {
                     const dirty = loadDirtyBuffer(path);
                     clearDirtyBuffer(path);
                     void commands.markFileDirty(path, false);

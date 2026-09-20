@@ -23,7 +23,7 @@ import { CodeMirrorEditor } from "../codemirror/editor";
 import { DiffView } from "../diff/diff-view";
 
 import type { EditorGroupId } from "@/core/providers/editor";
-import { isPlanFilePath } from "@/lib/plan-file";
+import { isPlanFilePath } from "@/lib/plan/file";
 
 // Main file viewer component handling various file types (text, image, markdown)
 export default function FileViewer({ path, group: _group = "left" }: { path: string; group?: EditorGroupId }) {
@@ -287,7 +287,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                 savedContentRef.current = content;
                 isDirtyRef.current = false;
                 await commands.markFileDirty(path, false);
-                const { clearDirtyBuffer } = await import("@/lib/dirty-buffers");
+                const { clearDirtyBuffer } = await import("@/lib/workspace/dirty-buffers");
                 clearDirtyBuffer(path);
             } catch (e) {
                 const { notify } = await import("@/features/notifications");
@@ -307,7 +307,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                 const dirty = prev !== savedContentRef.current;
                 isDirtyRef.current = dirty;
                 void commands.markFileDirty(path, dirty);
-                void import("@/lib/dirty-buffers").then(({ saveDirtyBuffer, clearDirtyBuffer }) => {
+                void import("@/lib/workspace/dirty-buffers").then(({ saveDirtyBuffer, clearDirtyBuffer }) => {
                     if (dirty) saveDirtyBuffer(path, prev, savedContentRef.current);
                     else clearDirtyBuffer(path);
                 });
@@ -319,7 +319,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                 const dirty = next !== savedContentRef.current;
                 isDirtyRef.current = dirty;
                 void commands.markFileDirty(path, dirty);
-                void import("@/lib/dirty-buffers").then(({ saveDirtyBuffer, clearDirtyBuffer }) => {
+                void import("@/lib/workspace/dirty-buffers").then(({ saveDirtyBuffer, clearDirtyBuffer }) => {
                     if (dirty) saveDirtyBuffer(path, next, savedContentRef.current);
                     else clearDirtyBuffer(path);
                 });
@@ -502,7 +502,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         } catch {
             /* ignore */
         }
-        const { saveDirtyBuffer } = await import("@/lib/dirty-buffers");
+        const { saveDirtyBuffer } = await import("@/lib/workspace/dirty-buffers");
         saveDirtyBuffer(path, next, savedContentRef.current);
     };
 

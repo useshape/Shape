@@ -71,6 +71,12 @@ function matchingParen(input: string, openAt: number): number {
 
 function extractColor(input: string): { color: string; rest: string } {
     const trimmed = input.trim();
+    if (trimmed.toLowerCase().startsWith("var(")) {
+        const end = matchingParen(trimmed, 3);
+        if (end > 0) {
+            return { color: trimmed.slice(0, end + 1), rest: trimmed.slice(end + 1).trim() };
+        }
+    }
     const startFn = trimmed.match(COLOR_FN);
     if (startFn) {
         const end = matchingParen(trimmed, (startFn[0].length || 1) - 1);
@@ -118,6 +124,88 @@ export function serializeBoxShadow(shadow: BoxShadowValue, part?: keyof BoxShado
     return [next.inset ? "inset" : null, next.x, next.y, next.blur, next.spread, next.color]
         .filter(Boolean)
         .join(" ");
+}
+
+export type CssGradientKind = "linear" | "radial" | "conic";
+export type CssGradientStop = { color: string; at: number };
+export type CssGradient = {
+    kind: CssGradientKind;
+    angle: number;
+    stops: CssGradientStop[];
+};
+
+function parseGradientAngle(raw: string): number {
+    const value = raw.trim().toLowerCase();
+    if (value.includes("to top")) return 0;
+    if (value.includes("to right")) return 90;
+    if (value.includes("to bottom")) return 180;
+    if (value.includes("to left")) return 270;
+    const deg = value.match(/(-?\d*\.?\d+)\s*deg/);
+    if (deg) return Number(deg[1]);
+    const turn = value.match(/(-?\d*\.?\d+)\s*turn/);
+    if (turn) return Number(turn[1]) * 360;
+    return 180;
+}
+
+function looksLikeGradientHint(part: string) {
+    return /^(to\s|from\s|circle|ellipse|at\s|-?\d)/i.test(part.trim()) && !/^#|^rgb|^hsl|^oklch|^var\(/i.test(part.trim());
+}
+
+export function parseCssGradient(value?: string | null): CssGradient | null {
+    const raw = (value ?? "").trim();
+    const kindMatch = raw.match(/^(?:repeating-)?(linear|radial|conic)-gradient\(/i);
+    if (!kindMatch?.[1]) return null;
+    const kind = kindMatch[1].toLowerCase() as CssGradientKind;
+    const open = raw.indexOf("(");
+    const close = matchingParen(raw, open);
+    if (close < 0) return null;
+    const parts = splitCommaRespectingParens(raw.slice(open + 1, close));
+    let angle = kind === "linear" ? 180 : 0;
+    let start = 0;
+    if (parts[0] && looksLikeGradientHint(parts[0])) {
+        if (kind === "linear" || kind === "conic") angle = parseGradientAngle(parts[0].replace(/^from\s+/i, ""));
+        start = 1;
+    }
+    const colorParts = parts.slice(start);
+    const stops = colorParts.map((part, index) => {
+        const extracted = extractColor(part);
+        const pct = extracted.rest.match(/(-?\d*\.?\d+)\s*%/);
+        const at =
+            pct != null
+                ? Number(pct[1])
+                : colorParts.length <= 1
+                  ? 0
+                  : (index / (colorParts.length - 1)) * 100;
+        return { color: extracted.color, at: Math.max(0, Math.min(100, at)) };
+    }).filter((stop) => stop.color);
+    if (!stops.length) return null;
+    return { kind, angle, stops };
+}
+
+export function serializeCssGradient(gradient: CssGradient) {
+    const stops = [...gradient.stops]
+        .sort((a, b) => a.at - b.at)
+        .map((stop) => `${stop.color} ${Math.round(stop.at)}%`)
+        .join(", ");
+    if (gradient.kind === "linear") return `linear-gradient(${Math.round(gradient.angle)}deg, ${stops})`;
+    if (gradient.kind === "conic") return `conic-gradient(from ${Math.round(gradient.angle)}deg, ${stops})`;
+    return `radial-gradient(circle at 50% 50%, ${stops})`;
+}
+
+export function defaultCssGradient(color = "#DDDDDD"): CssGradient {
+    return {
+        kind: "linear",
+        angle: 90,
+        stops: [
+            { color, at: 0 },
+            { color: "#A4A4A4", at: 100 },
+        ],
+    };
+}
+
+export function cssVarName(value?: string | null): string | null {
+    const match = (value ?? "").trim().match(/^var\(\s*(--[A-Za-z0-9-_]+)/);
+    return match?.[1] ?? null;
 }
 
 export function cssColorToHex(value?: string | null): { hex: string; alpha: number } {

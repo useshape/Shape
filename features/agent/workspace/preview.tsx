@@ -7,7 +7,7 @@ const PreviewPanel = lazy(() => import("@/features/preview/ui/preview-panel"));
 export function WorkspacePreview() {
     return (
         <Suspense fallback={<div className="h-full bg-panel" />}>
-            <PreviewPanel hideToolbar />
+            <PreviewPanel />
         </Suspense>
     );
 }

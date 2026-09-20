@@ -1,6 +1,6 @@
 "use client";
 
-import { RiArrowRightSLine, RiPencilLine } from "@remixicon/react";
+import { RiArrowRightSLine, RiCheckLine, RiCloseLine, RiPencilLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
@@ -19,18 +19,20 @@ import {
     groupWorkflowRows,
     isRenderableWorkflowBlock,
     parseGitStagePath,
+    GeneratedMediaStep,
 } from "./workflow";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { Favicon } from "@/components/ui/favicon";
-import { isShapePluginMeta } from "@/lib/plugin-logos";
+import { isShapePluginMeta, humanizePluginActionName } from "@/lib/plugins/logos";
 import { parseWebSearchHits, WebSearchBlock } from "./search";
 import { ActionLine } from "./action-line";
 import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
 import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
 import { openSubagent, upsertSubagent } from "@/features/agent/subagents/store";
+import { Button } from "@/components/ui/button";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "1s";
@@ -509,7 +511,14 @@ function PluginCallStep({ block }: { block: Chunk }) {
     const [isProcessing, setIsProcessing] = useState(false);
     const status = localStatus ?? block.commandStatus ?? "ok";
     const toolkit = block.pluginToolkit || "plugins";
-    const label = block.pluginLabel || "Plugin";
+    const label = humanizePluginActionName(block.pluginSlug || "", block.pluginLabel) || "Plugin";
+    const detail = (block.content || "")
+        .replace(/^(Awaiting approval|Rejected|Cancelled)\s*[·:]?\s*/i, "")
+        .replace(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const truncated =
+        detail.length > 72 ? `${detail.slice(0, 69).trimEnd()}…` : detail;
 
     useEffect(() => {
         if (status !== "pending" || !block.commandId) return;
@@ -548,26 +557,45 @@ function PluginCallStep({ block }: { block: Chunk }) {
     }, [block.commandId, isProcessing]);
 
     if (status === "pending") {
+        const subtitle = truncated || "Waiting for approval";
         return (
-            <ApprovalCard
-                icon={
-                    isShapePluginMeta(toolkit, block.pluginSlug) ? (
-                        <ShapeLogo size={12} />
+            <div className="my-1 flex items-center gap-3 squircle-xl bg-surface-3 px-3 py-2.5">
+                <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden squircle-xl bg-surface-2">
+                    {isShapePluginMeta(toolkit, block.pluginSlug) ? (
+                        <ShapeLogo size={ICON_SIZE_MD} />
                     ) : (
-                        <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={14} className="rounded-sm" />
-                    )
-                }
-                title={
-                    <>
-                        Allow <span className="text-text-primary">{label}</span>
-                    </>
-                }
-                isProcessing={isProcessing}
-                onSkip={handleReject}
-                onAccept={handleAccept}
-                skipLabel="Reject"
-                acceptLabel="Allow"
-            />
+                        <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={22} />
+                    )}
+                </span>
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-md font-medium text-text-primary">{label}</div>
+                    <div className="truncate text-xs font-medium text-text-muted">{subtitle}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-0.5 border border-border-secondary squircle-2xl px-1 divide-x divide-border-secondary">
+                    <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="rounded-none hover:bg-transparent"
+                        aria-label="Reject"
+                        disabled={isProcessing}
+                        onClick={handleReject}
+                    >
+                        <Icon icon={RiCloseLine} size={ICON_SIZE_MD} />
+                    </Button>
+                    <Button
+                        type="button"
+                        aria-label="Allow"
+                        size="icon"
+                        variant="ghost"
+                        className="rounded-none hover:bg-transparent"
+                        disabled={isProcessing}
+                        onClick={handleAccept}
+                    >
+                        <Icon icon={RiCheckLine} size={ICON_SIZE_MD} />
+                    </Button>
+                </div>
+            </div>
         );
     }
 
@@ -633,6 +661,10 @@ function StepRow({ block }: { block: Chunk }) {
 
     if (block.type === "plugin_call") {
         return <PluginCallStep block={block} />;
+    }
+
+    if (block.type === "generated_svg" || block.type === "generated_image") {
+        return <GeneratedMediaStep block={block} />;
     }
 
     if (block.type === "cat") {

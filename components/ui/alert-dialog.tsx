@@ -3,11 +3,8 @@
 import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { cn } from "@/lib/utils";
-import {
-    SHAPE_MODAL_PANEL_CLASS,
-    SHAPE_OVERLAY_CLASS,
-    SHAPE_OVERLAY_CONTENT_CLASS,
-} from "@/lib/ui/modal-overlay";
+import { SHAPE_MODAL_PANEL_CLASS, SHAPE_OVERLAY_CLASS, SHAPE_OVERLAY_CONTENT_CLASS } from "@/lib/ui/modal-overlay";
+import { useOverlayRoot } from "@/lib/ui/overlay-root";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
@@ -33,15 +30,17 @@ const AlertDialogContent = React.forwardRef<
         /** Max width utility, e.g. max-w-[440px] */
         sizeClassName?: string;
     }
->(({ className, sizeClassName = "max-w-[440px]", children, ...props }, ref) => (
-    <AlertDialogPortal>
+>(({ className, sizeClassName = "max-w-[440px]", children, ...props }, ref) => {
+    const overlayRoot = useOverlayRoot();
+    return (
+    <AlertDialogPortal container={overlayRoot}>
         <AlertDialogOverlay />
         <AlertDialogPrimitive.Content
             ref={ref}
             className={cn(
                 SHAPE_OVERLAY_CONTENT_CLASS,
                 SHAPE_MODAL_PANEL_CLASS,
-                "fixed top-1/2 left-1/2 z-1001 w-full -translate-x-1/2 -translate-y-1/2 overflow-hidden p-0",
+                "absolute top-1/2 left-1/2 z-1001 w-[min(100%,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-visible p-1",
                 sizeClassName,
                 className,
             )}
@@ -50,11 +49,12 @@ const AlertDialogContent = React.forwardRef<
             {children}
         </AlertDialogPrimitive.Content>
     </AlertDialogPortal>
-));
+    );
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 function AlertDialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-    return <div className={cn("px-3 py-2", className)} {...props} />;
+    return <div className={cn("p-1", className)} {...props} />;
 }
 
 function AlertDialogBody({ className, ...props }: React.ComponentProps<"div">) {

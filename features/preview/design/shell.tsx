@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { RiAlertLine, RiCloseLine } from "@remixicon/react";
-import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -14,14 +13,19 @@ import {
     subscribePreviewReady,
 } from "@/features/terminal/background-run";
 import { commands } from "@/lib/backend";
+import { insertCssVariableInContent, setCachedGlobalsCssContent } from "@/lib/ui/css-variables";
+import { invalidateGlobalsCssCache, resolveGlobalsCss } from "@/lib/ui/css-variables-loader";
 import { cn } from "@/lib/utils";
-import { discoverDesignPages, previewUrlForPage, type DesignPage } from "../lib/discover-routes";
+import { discoverDesignPages, type DesignPage } from "../lib/discover-routes";
 import {
-    getLastDevUrl,
     getPreviewCurrentUrl,
+    inferPreviewUrlFromPerformance,
+    isLocalPreviewUrl,
     navigatePreview,
     previewReload,
+    recordPreviewLocation,
     resetPreviewState,
+    setPreviewUrlBar,
     usePreviewStore,
 } from "../store";
 import {
@@ -29,15 +33,15 @@ import {
     type DesignElementSnapshot,
     type DesignLayerSnapshot,
 } from "./bridge";
-import { DesignDeploy } from "./deploy";
 import { DEFAULT_DEVICE, type DesignDevice } from "./devices";
-import { guessSourceFromChunkUrl, isUserSourcePath } from "./library";
-import { DesignLeftPanel } from "./left-panel";
+import { guessSourceFromChunkUrl, isUserSourcePath, isUtilityClass } from "./library";
+import { locateJsx, patchHtmlOpening, patchJsx, reorderJsx, isSafeDomAttribute } from "./jsx-source";
 import { DesignStylePanel } from "./panel";
 import type { ComponentOptionPatch } from "./panel/options";
-import { DesignRail } from "./rail";
+import { DesignThemeContext } from "./panel/tokens";
 import { DragEdge } from "./resize";
-import { DesignToolbar } from "./toolbar";
+import { DesignToolbar, createBrowserTab, faviconFromUrl, pushTabUrl, tabTitleFromUrl, type BrowserTab } from "./toolbar";
+import { DesignSelectionPrompt } from "./selection-prompt";
 import type { DesignToolMode } from "./bottom-toolbar";
 
 type SourceTarget = {
@@ -51,73 +55,24 @@ type SourceTarget = {
     confidence: number;
 };
 
-function LoadingCanvas({
-    label,
-    detail,
-    failed,
-    onPickPackage,
-    onClose,
-}: {
-    label: string;
-    detail: string;
-    failed?: boolean;
-    onPickPackage?: () => void;
-    onClose?: () => void;
-}) {
-    return (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-editor">
-            <div className="flex max-w-md flex-col items-center px-6 text-center">
-                {!failed ? (
-                    <div className="relative size-24">
-                        <motion.div
-                            className="absolute inset-0 rounded-[28px] border border-accent/30"
-                            animate={{ rotate: 360, borderRadius: ["28px", "48px", "28px"] }}
-                            transition={{ duration: 4.2, ease: "linear", repeat: Infinity }}
-                        />
-                        <motion.div
-                            className="absolute inset-3 rounded-full border border-text-muted/30"
-                            animate={{ rotate: -360, scale: [0.88, 1.08, 0.88] }}
-                            transition={{ duration: 3.1, ease: "easeInOut", repeat: Infinity }}
-                        >
-                            <motion.span
-                                className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-accent shadow-[0_0_18px_var(--accent)]"
-                                animate={{ scale: [0.7, 1.25, 0.7] }}
-                                transition={{ duration: 1.4, repeat: Infinity }}
-                            />
-                        </motion.div>
-                        <motion.div
-                            className="absolute inset-7.5 rounded-lg bg-accent/15 ring-1 ring-accent/50"
-                            animate={{ rotate: [0, 90, 180, 270, 360] }}
-                            transition={{ duration: 2.8, ease: "easeInOut", repeat: Infinity }}
-                        />
-                    </div>
-                ) : (
-                    <Icon icon={RiAlertLine} className="size-10 text-warning" />
-                )}
-                <p className="mt-5 text-sm font-medium text-text-primary">{label}</p>
-                <p className="mt-1 text-sm text-text-muted">{detail}</p>
-                {failed ? (
-                    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                        {onPickPackage ? (
-                            <Button variant="secondary" size="sm" onClick={onPickPackage}>
-                                Choose package.json
-                            </Button>
-                        ) : null}
-                        {onClose ? (
-                            <Button variant="ghost" size="sm" onClick={onClose}>
-                                Close
-                            </Button>
-                        ) : null}
-                    </div>
-                ) : null}
-            </div>
-        </div>
-    );
+function CanvasLoadBar() {
+    return <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-0.5 bg-accent animate-pulse" />;
 }
 
 function joinProjectPath(root: string, relative: string) {
     const separator = root.includes("\\") ? "\\" : "/";
     return `${root.replace(/[/\\]+$/, "")}${separator}${relative.replace(/[/\\]/g, separator)}`;
+}
+
+let persistQueue: Promise<void> = Promise.resolve();
+
+function enqueuePersist<T>(work: () => Promise<T>): Promise<T> {
+    const run = persistQueue.then(work, work);
+    persistQueue = run.then(
+        () => undefined,
+        () => undefined,
+    );
+    return run;
 }
 
 function concatBytes(...chunks: Uint8Array[]) {
@@ -196,7 +151,7 @@ function loopbackPreviewUrl(raw: string): string {
 }
 
 export function DesignStudio({
-    onClose,
+    onClose: _onClose,
     projectPath,
 }: {
     onClose: () => void;
@@ -223,13 +178,18 @@ export function DesignStudio({
     const [booting, setBooting] = useState(true);
     const [saved, setSaved] = useState(true);
     const [zoom, setZoom] = useState(100);
-    const [toolMode, setToolMode] = useState<DesignToolMode>("select");
+    const [toolMode, setToolMode] = useState<DesignToolMode>("normal");
+    const [tabs, setTabs] = useState<BrowserTab[]>([]);
+    const [activeTabId, setActiveTabId] = useState("tab-1");
+    const [promptOpen, setPromptOpen] = useState(false);
     const [device, setDevice] = useState<DesignDevice>(DEFAULT_DEVICE);
-    const [leftWidth, setLeftWidth] = useState(240);
-    const [rightWidth, setRightWidth] = useState(400);
-    const [deployOpen, setDeployOpen] = useState(false);
+    const [rightWidth, setRightWidth] = useState(300);
     const [themeTokens, setThemeTokens] = useState<Array<{ name: string; value: string }>>([]);
-    const bridgeSynced = useRef(false);
+    const injectedBridge = useRef("");
+    const toolModeRef = useRef(toolMode);
+    const designerRootRef = useRef(designerRoot);
+    toolModeRef.current = toolMode;
+    designerRootRef.current = designerRoot;
 
     useEffect(() => {
         setBootRoot(projectPath);
@@ -245,39 +205,315 @@ export function DesignStudio({
         }
     }, [currentUrl]);
 
+    useEffect(() => {
+        if (tabs.length) return;
+        const url = currentUrl || iframeSrc || "";
+        if (!url) return;
+        const tab = createBrowserTab(url);
+        setTabs([tab]);
+        setActiveTabId(tab.id);
+    }, [currentUrl, iframeSrc, tabs.length]);
+
+    const activeTabIdRef = useRef(activeTabId);
+    activeTabIdRef.current = activeTabId;
+
+    const applyTabLocation = useCallback((raw: string, meta?: { title?: string; favicon?: string | null }) => {
+        if (!raw || !isLocalPreviewUrl(raw)) return;
+        recordPreviewLocation(raw);
+        const id = activeTabIdRef.current;
+        setTabs((prev) =>
+            prev.map((tab) => {
+                if (tab.id !== id) return tab;
+                const next = pushTabUrl(tab, raw);
+                return {
+                    ...next,
+                    title: meta?.title?.trim() || next.title || tabTitleFromUrl(raw),
+                    favicon: meta?.favicon || next.favicon || faviconFromUrl(raw),
+                };
+            }),
+        );
+    }, []);
+
+    useEffect(() => {
+        const onMessage = (event: MessageEvent) => {
+            const data = event.data;
+            if (!data || typeof data !== "object") return;
+            if ((data as { type?: string }).type !== "shape-preview-navigate") return;
+            const url = (data as { url?: string }).url;
+            if (typeof url !== "string" || !url.trim()) return;
+            applyTabLocation(url);
+        };
+        window.addEventListener("message", onMessage);
+        return () => window.removeEventListener("message", onMessage);
+    }, [applyTabLocation]);
+
+    useEffect(() => {
+        if (typeof PerformanceObserver === "undefined") return;
+        const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                const name = entry.name;
+                if (!isLocalPreviewUrl(name)) continue;
+                if (/\.(js|css|map|png|jpe?g|gif|svg|woff2?|ttf|ico)(\?|$)/i.test(name)) continue;
+                const rt = entry as PerformanceResourceTiming;
+                if (rt.initiatorType === "iframe" || rt.initiatorType === "other" || rt.initiatorType === "") {
+                    applyTabLocation(name);
+                }
+            }
+        });
+        try {
+            observer.observe({ type: "resource", buffered: true });
+        } catch {
+            try {
+                observer.observe({ entryTypes: ["resource"] });
+            } catch {
+                /* unsupported */
+            }
+        }
+        return () => observer.disconnect();
+    }, [applyTabLocation]);
+
     const resolveElement = useCallback(
         async (element: DesignElementSnapshot) => {
-            if (!element.source?.fileName) {
-                setTarget(null);
-                return null;
-            }
-            let fileName = element.source.fileName;
-            let lineNumber = element.source.lineNumber;
-            let columnNumber = element.source.columnNumber;
-            if (!isUserSourcePath(fileName)) {
-                const guessed = guessSourceFromChunkUrl(fileName, designerRoot);
-                if (!guessed) {
-                    setTarget(null);
-                    return null;
+            const files: string[] = [];
+            const pushFile = (raw?: string | null) => {
+                if (!raw) return;
+                let fileName = raw;
+                if (!isUserSourcePath(fileName)) {
+                    const guessed = guessSourceFromChunkUrl(fileName, designerRoot);
+                    if (!guessed) return;
+                    fileName = guessed.fileName;
                 }
-                fileName = guessed.fileName;
-                lineNumber = lineNumber || guessed.lineNumber;
-                columnNumber = columnNumber || guessed.columnNumber;
-            }
-            const matches = await commands.resolveDesignElement(designerRoot, {
+                const normalized = fileName.replace(/\\/g, "/").replace(/^\.?\//, "");
+                if (!normalized || !isUserSourcePath(normalized) || files.includes(normalized)) return;
+                files.push(normalized);
+            };
+            pushFile(element.source?.fileName);
+            const page = pages.find((item) => item.path === activePage);
+            pushFile(page?.source);
+            for (const item of pages) pushFile(item.source);
+
+            const query = {
                 tag: element.tag,
-                id: element.id,
-                classes: element.classes,
+                classes: (element.classes || []).filter((name) => !isUtilityClass(name)).slice(0, 6),
                 text: element.text || null,
-                sourceFile: fileName,
-                sourceLine: lineNumber,
-                sourceColumn: columnNumber,
-            });
-            const next = matches[0] ?? null;
-            setTarget(next);
-            return next;
+                line: element.source?.lineNumber || null,
+                column: element.source?.columnNumber || null,
+            };
+            if (!query.classes.length) query.classes = (element.classes || []).slice(0, 4);
+
+            for (const file of files) {
+                try {
+                    const source = await commands.readFileFromDisk(joinProjectPath(designerRoot, file));
+                    const hit = locateJsx(source, query);
+                    if (!hit) continue;
+                    const next = {
+                        file,
+                        tag: hit.tag,
+                        openingStart: 0,
+                        openingEnd: 1,
+                        nodeStart: 0,
+                        nodeEnd: 1,
+                        line: hit.line,
+                        confidence: 80,
+                    };
+                    setTarget(next);
+                    return next;
+                } catch {
+                    /* try the next file */
+                }
+            }
+
+            if (element.source?.fileName && isUserSourcePath(element.source.fileName)) {
+                const matches = await commands.resolveDesignElement(designerRoot, {
+                    tag: element.tag,
+                    id: element.id,
+                    classes: element.classes,
+                    text: element.text || null,
+                    sourceFile: element.source.fileName,
+                    sourceLine: element.source.lineNumber,
+                    sourceColumn: element.source.columnNumber,
+                });
+                const next = matches[0] ?? null;
+                setTarget(next);
+                return next;
+            }
+            setTarget(null);
+            return null;
         },
-        [designerRoot],
+        [activePage, designerRoot, pages],
+    );
+
+    const resolveInstance = useCallback(
+        async (element: DesignElementSnapshot) => {
+            const tag = element.component?.tag;
+            if (!tag) return null;
+            const files: string[] = [];
+            const pushFile = (raw?: string | null) => {
+                if (!raw) return;
+                let fileName = raw;
+                if (!isUserSourcePath(fileName)) {
+                    const guessed = guessSourceFromChunkUrl(fileName, designerRoot);
+                    if (!guessed) return;
+                    fileName = guessed.fileName;
+                }
+                const normalized = fileName.replace(/\\/g, "/").replace(/^\.?\//, "");
+                if (!normalized || !isUserSourcePath(normalized) || files.includes(normalized)) return;
+                files.push(normalized);
+            };
+            pushFile(element.component?.source?.fileName);
+            const page = pages.find((item) => item.path === activePage);
+            pushFile(page?.source);
+            for (const item of pages) pushFile(item.source);
+            const query = {
+                tag,
+                line: element.component?.source?.lineNumber || null,
+                column: element.component?.source?.columnNumber || null,
+            };
+            for (const file of files) {
+                try {
+                    const source = await commands.readFileFromDisk(joinProjectPath(designerRoot, file));
+                    const hit = locateJsx(source, query);
+                    if (!hit || hit.tag !== tag) continue;
+                    return {
+                        file,
+                        tag: hit.tag,
+                        openingStart: 0,
+                        openingEnd: 1,
+                        nodeStart: 0,
+                        nodeEnd: 1,
+                        line: hit.line,
+                        confidence: 90,
+                    };
+                } catch {
+                    /* next file */
+                }
+            }
+            return null;
+        },
+        [activePage, designerRoot, pages],
+    );
+
+    const persistJsx = useCallback(
+        async (
+            element: DesignElementSnapshot,
+            patch: { styles?: Record<string, string>; text?: string | null; attributes?: Record<string, string> },
+            opts?: { instance?: boolean },
+        ) => {
+            return enqueuePersist(async () => {
+                const instance =
+                    Boolean(opts?.instance) ||
+                    Boolean(
+                        patch.attributes &&
+                            element.component &&
+                            Object.keys(patch.attributes).some(
+                                (name) => !isSafeDomAttribute(element.tag, name),
+                            ),
+                    );
+                const resolved = instance
+                    ? await resolveInstance(element)
+                    : await resolveElement(element);
+                if (!resolved) {
+                    throw new Error("Could not find this element in the project source.");
+                }
+                if (!isUserSourcePath(resolved.file)) {
+                    throw new Error("Shape will not edit third-party or generated files.");
+                }
+                const abs = joinProjectPath(designerRoot, resolved.file);
+                if (resolved.file.replace(/\\/g, "/").toLowerCase().endsWith(".astro")) {
+                    if (instance) {
+                        throw new Error("Could not find this element in the project source.");
+                    }
+                    const before = await commands.readFileFromDisk(abs);
+                    let after = before;
+                    if (patch.styles && Object.keys(patch.styles).length) {
+                        after = patchHtmlOpening(before, resolved.openingStart, resolved.openingEnd, patch.styles);
+                    }
+                    if (patch.text != null || patch.attributes) {
+                        await commands.applyDesignSourcePatch({
+                            projectPath: designerRoot,
+                            target: resolved,
+                            text: patch.text,
+                            attributes: patch.attributes,
+                        });
+                        commands.invalidateFileCache(abs);
+                        return;
+                    }
+                    if (after === before) return;
+                    await commands.applyDesignSourcePatch({
+                        projectPath: designerRoot,
+                        target: resolved,
+                        content: after,
+                    });
+                    commands.primeFileCache(abs, after);
+                    return;
+                }
+                const before = await commands.readFileFromDisk(abs);
+                const after = patchJsx(
+                    before,
+                    instance
+                        ? {
+                              tag: element.component?.tag || resolved.tag,
+                              line: element.component?.source?.lineNumber || resolved.line,
+                              column: element.component?.source?.columnNumber || null,
+                          }
+                        : {
+                              tag: element.tag,
+                              classes: element.classes,
+                              text: element.text || null,
+                              line: resolved.line || element.source?.lineNumber || null,
+                              column: element.source?.columnNumber || null,
+                          },
+                    patch,
+                );
+                if (after === before) return;
+                await commands.applyDesignSourcePatch({
+                    projectPath: designerRoot,
+                    target: resolved,
+                    content: after,
+                });
+                commands.primeFileCache(abs, after);
+            });
+        },
+        [designerRoot, resolveElement, resolveInstance],
+    );
+
+    const persistReorder = useCallback(
+        async (element: DesignElementSnapshot, before: DesignElementSnapshot | null) => {
+            return enqueuePersist(async () => {
+                const resolved = await resolveElement(element);
+                if (!resolved) throw new Error("Could not find this element in the project source.");
+                if (!isUserSourcePath(resolved.file)) {
+                    throw new Error("Shape will not edit third-party or generated files.");
+                }
+                const abs = joinProjectPath(designerRoot, resolved.file);
+                const source = await commands.readFileFromDisk(abs);
+                const query = {
+                    tag: element.tag,
+                    classes: (element.classes || []).filter((name) => !isUtilityClass(name)).slice(0, 6),
+                    text: element.text || null,
+                    line: resolved.line || element.source?.lineNumber || null,
+                    column: element.source?.columnNumber || null,
+                };
+                const beforeQuery = before
+                    ? {
+                          tag: before.tag,
+                          classes: (before.classes || []).filter((name) => !isUtilityClass(name)).slice(0, 6),
+                          text: before.text || null,
+                          line: before.source?.lineNumber || null,
+                          column: before.source?.columnNumber || null,
+                      }
+                    : null;
+                const after = reorderJsx(source, query, beforeQuery);
+                if (after === source) return;
+                await commands.applyDesignSourcePatch({
+                    projectPath: designerRoot,
+                    target: resolved,
+                    content: after,
+                });
+                commands.primeFileCache(abs, after);
+            });
+        },
+        [designerRoot, resolveElement],
     );
 
     useEffect(() => {
@@ -381,10 +617,12 @@ export function DesignStudio({
     }, [bootRoot]);
 
     useEffect(() => {
-        if (!ready || bridgeSynced.current) return;
-        bridgeSynced.current = true;
+        if (!ready) return;
+        if (injectedBridge.current === DESIGN_BRIDGE_SCRIPT) return;
+        const first = injectedBridge.current === "";
+        injectedBridge.current = DESIGN_BRIDGE_SCRIPT;
         void commands.registerDesignBridge(DESIGN_BRIDGE_SCRIPT).then(() => {
-            previewReload();
+            if (!first) previewReload();
         });
     }, [ready]);
 
@@ -394,6 +632,8 @@ export function DesignStudio({
             const data = event.data as {
                 type?: string;
                 element?: DesignElementSnapshot;
+                addToChat?: boolean;
+                before?: DesignElementSnapshot | null;
                 layers?: DesignLayerSnapshot[];
                 styles?: Record<string, string>;
                 text?: string;
@@ -404,28 +644,39 @@ export function DesignStudio({
                 setReady(true);
                 setBooting(false);
                 if (Array.isArray(data.themeTokens)) setThemeTokens(data.themeTokens);
+                iframeRef.current?.contentWindow?.postMessage(
+                    { type: "shape-design-set-mode", mode: toolModeRef.current, projectRoot: designerRootRef.current },
+                    "*",
+                );
+            } else if (data.type === "shape-design-tokens" && Array.isArray(data.themeTokens)) {
+                setThemeTokens(data.themeTokens);
             } else if (data.type === "shape-design-tree" && Array.isArray(data.layers)) {
                 setLayers(data.layers);
             } else if (data.type === "shape-design-selection") {
                 if (data.element) {
                     setSelected(data.element);
+                    setPromptOpen(false);
                     void resolveElement(data.element);
+                    if (data.addToChat) {
+                        const label = data.element.component?.name || data.element.component?.tag || data.element.tag;
+                        window.dispatchEvent(
+                            new CustomEvent("shape-composer-insert-mention", {
+                                detail: { kind: "design", id: data.element.key, label },
+                            }),
+                        );
+                        window.dispatchEvent(new Event("shape-chat-focus-input"));
+                    }
                 } else {
                     setSelected(null);
                     setTarget(null);
+                    setPromptOpen(false);
                 }
             } else if (data.type === "shape-design-commit-styles" && data.element && data.styles) {
                 setSelected(data.element);
                 void (async () => {
-                    const resolved = await resolveElement(data.element!);
-                    if (!resolved) return;
                     setSaved(false);
                     try {
-                        await commands.applyDesignSourcePatch({
-                            projectPath: designerRoot,
-                            target: resolved,
-                            styles: data.styles,
-                        });
+                        await persistJsx(data.element!, { styles: data.styles });
                         setMappingError(null);
                     } catch (cause) {
                         setMappingError(
@@ -437,15 +688,9 @@ export function DesignStudio({
                 })();
             } else if (data.type === "shape-design-commit-text" && data.element) {
                 void (async () => {
-                    const resolved = await resolveElement(data.element!);
-                    if (!resolved) return;
                     setSaved(false);
                     try {
-                        await commands.applyDesignSourcePatch({
-                            projectPath: designerRoot,
-                            target: resolved,
-                            text: data.text ?? "",
-                        });
+                        await persistJsx(data.element!, { text: data.text ?? "" });
                         setMappingError(null);
                     } catch (cause) {
                         setMappingError(
@@ -457,15 +702,23 @@ export function DesignStudio({
                 })();
             } else if (data.type === "shape-design-commit-attr" && data.element && data.attributes) {
                 void (async () => {
-                    const resolved = await resolveElement(data.element!);
-                    if (!resolved) return;
                     setSaved(false);
                     try {
-                        await commands.applyDesignSourcePatch({
-                            projectPath: designerRoot,
-                            target: resolved,
-                            attributes: data.attributes,
-                        });
+                        await persistJsx(data.element!, { attributes: data.attributes });
+                        setMappingError(null);
+                    } catch (cause) {
+                        setMappingError(
+                            cause instanceof Error ? cause.message : String(cause),
+                        );
+                    } finally {
+                        setSaved(true);
+                    }
+                })();
+            } else if (data.type === "shape-design-reorder" && data.element) {
+                void (async () => {
+                    setSaved(false);
+                    try {
+                        await persistReorder(data.element!, data.before ?? null);
                         setMappingError(null);
                     } catch (cause) {
                         setMappingError(
@@ -481,7 +734,12 @@ export function DesignStudio({
             ) {
                 void (async () => {
                     const resolved = await resolveElement(data.element!);
-                    if (!resolved) return;
+                    if (!resolved) {
+                        setMappingError(
+                            "Could not map this element to a source file. Select it again, then retry.",
+                        );
+                        return;
+                    }
                     setSaved(false);
                     try {
                         await commands.applyDesignSourcePatch({
@@ -503,7 +761,7 @@ export function DesignStudio({
         };
         window.addEventListener("message", onMessage);
         return () => window.removeEventListener("message", onMessage);
-    }, [designerRoot, resolveElement]);
+    }, [designerRoot, persistJsx, persistReorder, resolveElement]);
 
     const previewStyles = useCallback((styles: Record<string, string>) => {
         const frame = iframeRef.current?.contentWindow;
@@ -534,17 +792,72 @@ export function DesignStudio({
         );
     }, [ready, designerRoot, iframeSrc]);
 
+    const applyHistoryResult = useCallback(
+        (result: { changed: boolean; file: string | null; content: string | null }) => {
+            if (!result.changed) return;
+            if (result.file && result.content != null) {
+                commands.primeFileCache(result.file, result.content);
+            }
+            iframeRef.current?.contentWindow?.postMessage({ type: "shape-design-refresh" }, "*");
+        },
+        [],
+    );
+
     const undoDesign = useCallback(() => {
-        void commands.undoDesignSourcePatch().then((changed) => {
-            if (changed) previewReload();
+        void enqueuePersist(async () => {
+            applyHistoryResult(await commands.undoDesignSourcePatch());
         });
-    }, []);
+    }, [applyHistoryResult]);
 
     const redoDesign = useCallback(() => {
-        void commands.redoDesignSourcePatch().then((changed) => {
-            if (changed) previewReload();
+        void enqueuePersist(async () => {
+            applyHistoryResult(await commands.redoDesignSourcePatch());
         });
+    }, [applyHistoryResult]);
+
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "d") {
+                event.preventDefault();
+                setToolMode((mode) => (mode === "normal" ? "select" : "normal"));
+                return;
+            }
+            const key = event.key.toLowerCase();
+            if (!(event.ctrlKey || event.metaKey) || (key !== "z" && key !== "y")) return;
+            const target = event.target as HTMLElement | null;
+            if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+            event.preventDefault();
+            if (key === "y" || (key === "z" && event.shiftKey)) redoDesign();
+            else undoDesign();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [redoDesign, undoDesign]);
+
+    useEffect(() => {
+        if (toolMode === "normal") setPromptOpen(false);
+    }, [toolMode]);
+
+    useEffect(() => {
+        const onToggleInspect = () => {
+            setToolMode((mode) => (mode === "normal" ? "select" : "normal"));
+        };
+        window.addEventListener("shape-toggle-browser-design-mode", onToggleInspect);
+        return () => window.removeEventListener("shape-toggle-browser-design-mode", onToggleInspect);
     }, []);
+
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "l") return;
+            if (toolMode === "normal" || !selected) return;
+            const targetEl = event.target as HTMLElement | null;
+            if (targetEl && (targetEl.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(targetEl.tagName))) return;
+            event.preventDefault();
+            setPromptOpen(true);
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [selected, toolMode]);
 
     const commitStyles = useCallback(
         async (styles: Record<string, string>) => {
@@ -555,15 +868,9 @@ export function DesignStudio({
                 { type: "shape-design-apply-preview", styles, key: current.key },
                 "*",
             );
-            const resolved = target ?? (await resolveElement(current));
-            if (!resolved) return;
             setSaved(false);
             try {
-                await commands.applyDesignSourcePatch({
-                    projectPath: designerRoot,
-                    target: resolved,
-                    styles,
-                });
+                await persistJsx(current, { styles });
                 setMappingError(null);
             } catch (cause) {
                 setMappingError(
@@ -573,56 +880,122 @@ export function DesignStudio({
                 setSaved(true);
             }
         },
-        [designerRoot, resolveElement, selected, target],
+        [persistJsx, selected],
+    );
+
+    const createToken = useCallback(
+        async (name: string, value: string) => {
+            const resolved = await resolveGlobalsCss(designerRoot);
+            if (!resolved.path) {
+                throw new Error("Could not find a theme CSS file to store this token.");
+            }
+            const before = resolved.content || (await commands.readFileFromDisk(resolved.path));
+            const next = insertCssVariableInContent(before, name, value);
+            await commands.saveFile(resolved.path, next);
+            invalidateGlobalsCssCache();
+            setCachedGlobalsCssContent(next);
+            setThemeTokens((now) => {
+                const index = now.findIndex((token) => token.name === name);
+                if (index >= 0) {
+                    return now.map((token, i) => (i === index ? { name, value } : token));
+                }
+                return [...now, { name, value }];
+            });
+        },
+        [designerRoot],
+    );
+
+    const commitText = useCallback(
+        async (text: string) => {
+            const current = selected;
+            if (!current) return;
+            iframeRef.current?.contentWindow?.postMessage(
+                { type: "shape-design-set-text", key: current.key, text },
+                "*",
+            );
+            setSelected({ ...current, text });
+            setSaved(false);
+            try {
+                await persistJsx(current, { text });
+                setMappingError(null);
+            } catch (cause) {
+                setMappingError(cause instanceof Error ? cause.message : String(cause));
+            } finally {
+                setSaved(true);
+            }
+        },
+        [persistJsx, selected],
+    );
+
+    const commitAttr = useCallback(
+        async (name: string, value: string) => {
+            const current = selected;
+            if (!current) return;
+            iframeRef.current?.contentWindow?.postMessage(
+                { type: "shape-design-set-attr", key: current.key, name, value },
+                "*",
+            );
+            setSelected({
+                ...current,
+                attributes: { ...current.attributes, [name]: value },
+            });
+            setSaved(false);
+            try {
+                await persistJsx(current, { attributes: { [name]: value } });
+                setMappingError(null);
+            } catch (cause) {
+                setMappingError(cause instanceof Error ? cause.message : String(cause));
+            } finally {
+                setSaved(true);
+            }
+        },
+        [persistJsx, selected],
     );
 
     const patchComponent = useCallback((patch: ComponentOptionPatch) => {
         const frame = iframeRef.current?.contentWindow;
-        if (!frame) return;
-        setSelected((current) => {
-            if (!current?.component) return current;
-            const next = { ...current.component };
-            if (patch.key === current.key) {
-                if (patch.field === "open") next.open = Boolean(patch.value);
-                if (patch.field === "label") next.label = String(patch.value);
-                if (patch.field === "href" || patch.field === "src") next.href = String(patch.value);
-                if (patch.field === "alt") next.label = String(patch.value);
-            } else {
-                next.items = next.items.map((item) => {
-                    if (item.key !== patch.key) return item;
-                    if (patch.field === "label") return { ...item, label: String(patch.value) };
-                    if (patch.field === "href") return { ...item, href: String(patch.value) };
-                    return item;
-                });
-            }
-            return { ...current, component: next };
+        const current = selected;
+        if (!current?.component) return;
+        setSelected((now) => {
+            if (!now?.component) return now;
+            const properties = now.component.properties.map((property) => {
+                if (patch.attr && property.attr !== patch.attr) return property;
+                if (!patch.attr && property.kind === "text" && !property.attr && patch.field === "text") {
+                    return { ...property, value: String(patch.value) };
+                }
+                if (patch.field === "attr" && property.attr === patch.attr) {
+                    return { ...property, value: String(patch.value) };
+                }
+                return property;
+            });
+            return { ...now, component: { ...now.component, properties } };
         });
-        if (patch.field === "open") {
-            frame.postMessage({ type: "shape-design-set-open", key: patch.key, open: Boolean(patch.value) }, "*");
+        if (patch.field === "text") {
+            frame?.postMessage({ type: "shape-design-set-text", key: patch.key, text: String(patch.value) }, "*");
+            void persistJsx(current, { text: String(patch.value) });
             return;
         }
-        if (patch.field === "label") {
-            frame.postMessage({ type: "shape-design-set-text", key: patch.key, text: String(patch.value) }, "*");
-            return;
+        if (patch.field === "attr" && patch.attr) {
+            void persistJsx(current, { attributes: { [patch.attr]: String(patch.value) } }, { instance: true });
         }
-        const attr = patch.field === "alt" ? "alt" : patch.field === "src" ? "src" : "href";
-        frame.postMessage(
-            { type: "shape-design-set-attr", key: patch.key, name: attr, value: String(patch.value) },
-            "*",
-        );
-    }, []);
+    }, [persistJsx, selected]);
 
     const openSource = useCallback(() => {
         if (!target) return;
         const fullPath = joinProjectPath(designerRoot, target.file);
-        void commands.openFile(fullPath, target.file.split("/").pop() ?? target.file).then(onClose);
-    }, [designerRoot, onClose, target]);
+        void commands.openFile(fullPath, target.file.split("/").pop() ?? target.file).then(_onClose);
+    }, [designerRoot, _onClose, target]);
 
     const applyStructure = useCallback(
         async (operation: "delete" | "duplicate") => {
             const current = selected;
             const resolved = target ?? (current ? await resolveElement(current) : null);
-            if (!resolved) return;
+            if (!resolved) {
+                setMappingError(
+                    "Could not map this element to a source file. Select it again, then retry.",
+                );
+                return;
+            }
             setSaved(false);
             try {
                 await commands.applyDesignSourcePatch({
@@ -713,25 +1086,8 @@ export function DesignStudio({
         await commands.saveFileBytes(path, Array.from(bytes));
     }, []);
 
-    const changePage = useCallback(
-        (path: string) => {
-            const base = currentUrl || getLastDevUrl();
-            if (!base) return;
-            setReady(false);
-            setSelected(null);
-            setTarget(null);
-            void navigatePreview(previewUrlForPage(base, path));
-        },
-        [currentUrl],
-    );
-
-    const canvasWidth =
-        device.width === "fluid" ? "100%" : device.width;
-    const canvasHeight =
-        device.height === "fluid" ? "100%" : device.height;
     const selectedKey = selected?.key ?? null;
-    const showPanels = ready && !bootError;
-    const showBootOverlay = booting || !ready || Boolean(bootError);
+    const canvasBusy = booting || !ready;
 
     const pickPackageJson = useCallback(async () => {
         const { open } = await import("@tauri-apps/plugin-dialog");
@@ -755,150 +1111,140 @@ export function DesignStudio({
         setBootRoot(base);
     }, [bootRoot]);
 
-    if (bootError && !iframeSrc) {
-        return (
-            <div className="relative h-full min-h-0 w-full overflow-hidden bg-editor">
-                <LoadingCanvas
-                    failed
-                    label="Preview did not start"
-                    detail={bootError}
-                    onPickPackage={() => void pickPackageJson()}
-                    onClose={onClose}
-                />
-            </div>
-        );
-    }
+    const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 
     return (
-        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-editor">
-            {showPanels ? (
-                <DesignToolbar
-                    onClose={onClose}
-                    projectPath={designerRoot}
-                    pages={pages}
-                    activePage={activePage}
-                    onPageChange={changePage}
-                    onDeploy={() => setDeployOpen(true)}
-                    saved={saved}
-                />
-            ) : null}
-            <div className="flex min-h-0 flex-1">
-                {showPanels ? <DesignRail
-                    mode={toolMode}
-                    onModeChange={setToolMode}
-                    onCaptureElement={() => { void exportSelection(2, "png"); }}
-                    onCaptureScreen={() => {
-                        if (ready && iframeSrc) {
-                            void commands.capturePagePreview(iframeSrc).catch(() => {});
+        <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-editor">
+            <DesignToolbar
+                tabs={tabs.length ? tabs : [createBrowserTab(currentUrl || "")]}
+                activeTabId={activeTabId}
+                onSelectTab={(id) => {
+                    const tab = tabs.find((item) => item.id === id);
+                    if (!tab) return;
+                    setActiveTabId(id);
+                    if (tab.url) void navigatePreview(tab.url, { replace: true });
+                }}
+                onCloseTab={(id) => {
+                    setTabs((prev) => {
+                        if (prev.length <= 1) return prev;
+                        const next = prev.filter((tab) => tab.id !== id);
+                        if (id === activeTabId) {
+                            const fallback = next[next.length - 1];
+                            if (fallback) {
+                                setActiveTabId(fallback.id);
+                                if (fallback.url) void navigatePreview(fallback.url, { replace: true });
+                            }
                         }
-                    }}
-                    canCapture={ready && Boolean(iframeSrc)}
-                    canCaptureElement={Boolean(selected)}
-                /> : null}
-                {showPanels ? (
-                    <div className="relative h-full shrink-0" style={{ width: leftWidth }}>
-                        <DesignLeftPanel
-                            layers={layers}
-                            selectedKey={selectedKey}
-                            onSelectLayer={(key) => {
-                                iframeRef.current?.contentWindow?.postMessage(
-                                    { type: "shape-design-select-key", key },
-                                    "*",
-                                );
-                            }}
-                            onChangeText={(key, text) => {
-                                setLayers((current) =>
-                                    current.map((layer) => (layer.key === key ? { ...layer, text } : layer)),
-                                );
-                                iframeRef.current?.contentWindow?.postMessage(
-                                    { type: "shape-design-set-text", key, text },
-                                    "*",
-                                );
-                            }}
-                            pages={pages}
-                            activePage={activePage}
-                            onPageChange={changePage}
-                            assets={assets}
-                            themeTokens={themeTokens}
-                            onOpenPath={(relative) => {
-                                const fullPath = joinProjectPath(designerRoot, relative);
-                                void commands.openFile(fullPath, relative.split("/").pop() ?? relative);
-                            }}
-                            onReload={() => {
-                                setReady(false);
-                                previewReload();
-                            }}
-                            onOpenCode={openSource}
-                            canOpenCode={Boolean(target)}
-                            selectedElement={selected}
-                            onComponentPatch={patchComponent}
-                        />
-                        <DragEdge
-                            side="right"
-                            onDrag={(start, dx) => setLeftWidth(Math.min(420, Math.max(180, start + dx)))}
-                        />
-                    </div>
-                ) : null}
-                <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-editor">
-                    <div className="h-full overflow-hidden">
-                    <div
-                        className={cn(
-                            "flex h-full min-h-90 min-w-full items-stretch justify-center",
-                            device.width !== "fluid" && showPanels && "p-5",
-                        )}
-                    >
-                        <div
-                            className="relative h-full min-h-80 overflow-hidden bg-white transition-[width,transform] duration-300"
-                            style={{
-                                width: showPanels ? canvasWidth : "100%",
-                                height: showPanels ? canvasHeight : "100%",
-                                maxWidth: "100%",
-                                maxHeight: "100%",
-                                transform: showPanels ? `scale(${zoom / 100})` : undefined,
-                                transformOrigin: "center center",
-                            }}
-                        >
+                        return next;
+                    });
+                }}
+                onNewTab={() => {
+                    const url = currentUrl || iframeSrc || "http://localhost:3000";
+                    const tab = createBrowserTab(url);
+                    setTabs((prev) => [...prev, tab]);
+                    setActiveTabId(tab.id);
+                    if (url) void navigatePreview(url, { replace: true });
+                }}
+                url={urlBar || activeTab?.url || currentUrl || ""}
+                onUrlChange={setPreviewUrlBar}
+                onNavigate={(value) => {
+                    void navigatePreview(value);
+                    applyTabLocation(value);
+                }}
+                onReload={() => {
+                    setReady(false);
+                    previewReload();
+                }}
+                onBack={() => {
+                    if (!activeTab || activeTab.index <= 0) return;
+                    const index = activeTab.index - 1;
+                    const url = activeTab.history[index];
+                    if (!url) return;
+                    setTabs((prev) =>
+                        prev.map((tab) =>
+                            tab.id === activeTab.id ? { ...tab, index, url } : tab,
+                        ),
+                    );
+                    void navigatePreview(url, { replace: true });
+                }}
+                onForward={() => {
+                    if (!activeTab || activeTab.index < 0 || activeTab.index >= activeTab.history.length - 1) return;
+                    const index = activeTab.index + 1;
+                    const url = activeTab.history[index];
+                    if (!url) return;
+                    setTabs((prev) =>
+                        prev.map((tab) =>
+                            tab.id === activeTab.id ? { ...tab, index, url } : tab,
+                        ),
+                    );
+                    void navigatePreview(url, { replace: true });
+                }}
+                canBack={Boolean(activeTab && activeTab.index > 0)}
+                canForward={Boolean(activeTab && activeTab.index >= 0 && activeTab.index < activeTab.history.length - 1)}
+                onUndo={undoDesign}
+                mode={toolMode}
+                onModeChange={setToolMode}
+            />
+            <div className="flex min-h-0 flex-1">
+                <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-white">
+                    <div className="relative h-full overflow-hidden">
                             {iframeSrc ? (
                                 <iframe
-                                    key={`${iframeSrc}:${reloadKey}`}
+                                    key={`${activeTabId}::${iframeSrc}::${reloadKey}`}
                                     ref={iframeRef}
                                     src={iframeSrc}
-                                    title="Design canvas"
-                                    className="h-full w-full border-0 bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                    title="Browser"
+                                    className="h-full w-full border-0 bg-white"
                                     sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
                                     referrerPolicy="no-referrer"
                                     onLoad={() => {
                                         window.setTimeout(() => {
-                                            iframeRef.current?.contentWindow?.postMessage(
-                                                { type: "shape-design-refresh" },
+                                            const frame = iframeRef.current?.contentWindow;
+                                            frame?.postMessage(
+                                                {
+                                                    type: "shape-design-set-mode",
+                                                    mode: toolModeRef.current,
+                                                    projectRoot: designerRootRef.current,
+                                                },
                                                 "*",
                                             );
+                                            frame?.postMessage({ type: "shape-design-refresh" }, "*");
+                                            try {
+                                                const href = frame?.location?.href;
+                                                if (href && href !== "about:blank") {
+                                                    const iconLink = frame.document.querySelector('link[rel*="icon"]') as HTMLLinkElement | null;
+                                                    applyTabLocation(href, {
+                                                        title: frame.document.title?.trim(),
+                                                        favicon: iconLink?.href || faviconFromUrl(href),
+                                                    });
+                                                }
+                                            } catch {
+                                                const inferred = inferPreviewUrlFromPerformance();
+                                                if (inferred) applyTabLocation(inferred);
+                                            }
                                         }, 80);
                                     }}
                                 />
                             ) : null}
-                            {showBootOverlay ? (
-                                <LoadingCanvas
-                                    failed={Boolean(bootError)}
-                                    label={
-                                        bootError
-                                            ? "Preview did not start"
-                                            : !iframeSrc
-                                              ? `Starting ${framework ? framework.replace("-", " + ") : "project"}`
-                                              : "Preparing the canvas"
-                                    }
-                                    detail={
-                                        bootError
-                                            ?? (iframeSrc
-                                                ? "Mapping the live page to source"
-                                                : "Waiting for the development server")
-                                    }
-                                    onPickPackage={bootError ? () => void pickPackageJson() : undefined}
-                                    onClose={bootError ? onClose : undefined}
+                            {canvasBusy ? <CanvasLoadBar /> : null}
+                            {bootError ? (
+                                <div className="absolute inset-x-0 top-0.5 z-20 flex items-center gap-2 border-b border-border bg-surface-4 px-3 py-2 text-sm text-text-secondary">
+                                    <Icon icon={RiAlertLine} className="text-warning" />
+                                    <span className="min-w-0 flex-1 truncate">{bootError}</span>
+                                    <Button variant="ghost" size="sm" onClick={() => void pickPackageJson()}>
+                                        Choose package.json
+                                    </Button>
+                                </div>
+                            ) : null}
+                            {selected && toolMode !== "normal" ? (
+                                <DesignSelectionPrompt
+                                    selected={selected}
+                                    file={target?.file}
+                                    open={promptOpen}
+                                    onOpen={() => setPromptOpen(true)}
+                                    onClose={() => setPromptOpen(false)}
                                 />
                             ) : null}
-                        </div>
-                    </div>
                     {mappingError ? (
                         <div className="absolute left-1/2 top-3 z-30 flex max-w-[min(520px,80%)] -translate-x-1/2 items-center gap-2 rounded-lg border border-border-secondary bg-surface-4/95 px-3 py-2 text-sm text-text-secondary shadow-lg backdrop-blur">
                             <Icon icon={RiAlertLine} className="text-warning" />
@@ -915,8 +1261,17 @@ export function DesignStudio({
                     ) : null}
                     </div>
                 </main>
-                {showPanels ? (
-                    <div className="relative h-full shrink-0 border-l border-border" style={{ width: rightWidth }}>
+                {toolMode !== "normal" ? (
+                <div className="relative h-full shrink-0 border-l border-border" style={{ width: rightWidth }}>
+                        <DesignThemeContext.Provider
+                            value={{
+                                tokens: themeTokens,
+                                onPick: (property, cssValue) => {
+                                    previewStyles({ [property]: cssValue });
+                                    void commitStyles({ [property]: cssValue });
+                                },
+                            }}
+                        >
                         <DesignStylePanel
                             key={selectedKey ?? "empty"}
                             element={selected}
@@ -930,6 +1285,9 @@ export function DesignStudio({
                             onRedo={redoDesign}
                             onPreview={previewStyles}
                             onCommit={(styles: Record<string, string>) => void commitStyles(styles)}
+                            onCommitText={(text) => void commitText(text)}
+                            onCommitAttr={(name, value) => void commitAttr(name, value)}
+                            onCreateToken={(name, value) => void createToken(name, value)}
                             onOpenSource={openSource}
                             onAlign={(alignment: "center" | "center-x" | "center-y") =>
                                 iframeRef.current?.contentWindow?.postMessage(
@@ -942,16 +1300,17 @@ export function DesignStudio({
                             onExport={exportSelection}
                             themeTokens={themeTokens}
                             onComponentPatch={patchComponent}
+                            chrome={false}
                             className="h-full w-full"
                         />
+                        </DesignThemeContext.Provider>
                         <DragEdge
                             side="left"
-                            onDrag={(start, dx) => setRightWidth(Math.min(560, Math.max(280, start - dx)))}
+                            onDrag={(start, dx) => setRightWidth(Math.min(480, Math.max(240, start - dx)))}
                         />
                     </div>
                 ) : null}
             </div>
-            <DesignDeploy open={deployOpen} onClose={() => setDeployOpen(false)} projectPath={designerRoot} />
         </div>
     );
 }

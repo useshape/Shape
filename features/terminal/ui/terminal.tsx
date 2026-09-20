@@ -182,13 +182,36 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
 
             const style = getComputedStyle(document.documentElement);
             const termSettings = getSettings().terminal;
+            const fg = style.getPropertyValue("--text-secondary").trim() || "#a1a1aa";
+            const bg = style.getPropertyValue("--panel").trim() || "#1e1e20";
+            const muted = style.getPropertyValue("--text-muted").trim() || "#71717a";
+            const warn = style.getPropertyValue("--warning").trim() || "#f59e0b";
+            const err = style.getPropertyValue("--error").trim() || "#ef4444";
+            const acc = style.getPropertyValue("--accent").trim() || "#3b82f6";
             term = new XTerm({
                 cursorBlink: true,
                 fontFamily: termSettings.fontFamily || style.getPropertyValue('--font-mono').trim() || "monospace",
                 fontSize: termSettings.fontSize,
                 scrollback: termSettings.scrollback,
                 convertEol: true,
-                theme: { background: style.getPropertyValue('--panel').trim() || "#1e1e20" }
+                theme: {
+                    background: bg,
+                    foreground: fg,
+                    cursor: fg,
+                    selectionBackground: "rgba(255,255,255,0.12)",
+                    black: "#27272a",
+                    red: err,
+                    green: acc,
+                    yellow: warn,
+                    blue: acc,
+                    magenta: "#a78bfa",
+                    cyan: "#67e8f9",
+                    white: fg,
+                    brightBlack: muted,
+                    brightRed: err,
+                    brightYellow: warn,
+                    brightWhite: style.getPropertyValue("--text-primary").trim() || "#fafafa",
+                },
             });
 
             term.onSelectionChange(() => {
@@ -212,10 +235,19 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                 term.write(`Agent Terminal\r\n\r\n`);
                 unlistenOutput = await listen<{ type: string; command?: string; data?: string; exitCode?: number }>("shape-terminal-ai-action", (e) => {
                     const pay = e.payload;
+                    const ts = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
                     if (pay.type === "start") {
-                        term?.write(`\r\n\x1b[38;2;120;120;120m$ ${pay.command}\x1b[0m\r\n`);
+                        term?.write(`\x1b[38;2;113;113;122m${ts}\x1b[0m  \x1b[38;2;120;120;120m$ ${pay.command}\x1b[0m\r\n`);
                     } else if (pay.type === "data" && pay.data) {
-                        term?.write(pay.data);
+                        const warn = /\[warn\]|warn(ing)?:/i.test(pay.data);
+                        const err = /\[error\]|error:/i.test(pay.data);
+                        if (warn) {
+                            term?.write(`\x1b[48;2;180;83;9m\x1b[38;2;255;255;255m${ts}\x1b[0m  ${pay.data}`);
+                        } else if (err) {
+                            term?.write(`\x1b[38;2;239;68;68m${ts}\x1b[0m  ${pay.data}`);
+                        } else {
+                            term?.write(`\x1b[38;2;113;113;122m${ts}\x1b[0m  ${pay.data}`);
+                        }
                     } else if (pay.type === "finish") {
                         term?.write(`\r\n\x1b[38;2;120;120;120m[Process exited with code ${pay.exitCode}]\x1b[0m\r\n\r\n`);
                         term?.scrollToBottom();
@@ -468,7 +500,7 @@ export default function Terminal({
 
     useEffect(() => {
         const handleOpenBrowser = () => {
-            void import("@/lib/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
+            void import("@/lib/window/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
         };
         window.addEventListener("shape-open-preview", handleOpenBrowser);
         return () => {

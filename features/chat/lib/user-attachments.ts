@@ -15,13 +15,25 @@ export type ParsedUserAttachment = {
     dataUrl?: string;
 };
 
+/** Drop model-only XML that must never show in the composer or bubbles. */
+export function stripHiddenUserContext(text: string): string {
+    return text
+        .replace(/<mention_context\b[^>]*>[\s\S]*?<\/mention_context>/gi, "")
+        .replace(/<workflow\b[^>]*>[\s\S]*?<\/workflow>/gi, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
 /** Split a stored user message into display text + structured attachments. */
 export function parseUserAttachments(content: string): {
     text: string;
     attachments: ParsedUserAttachment[];
 } {
-    if (!content.includes("<attached_")) {
+    if (!content.includes("<attached_") && !content.includes("<mention_context") && !content.includes("<workflow")) {
         return { text: content, attachments: [] };
+    }
+    if (!content.includes("<attached_")) {
+        return { text: stripHiddenUserContext(content), attachments: [] };
     }
 
     const attachments: ParsedUserAttachment[] = [];
@@ -44,7 +56,7 @@ export function parseUserAttachments(content: string): {
         })
         .trim();
 
-    return { text, attachments };
+    return { text: stripHiddenUserContext(text), attachments };
 }
 
 function newId() {

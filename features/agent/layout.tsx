@@ -9,10 +9,11 @@ import { AgentSidebar, AGENT_SIDEBAR_NAV_SLOT } from "./sidebar";
 import { AgentChrome } from "./chrome";
 import { AgentWorkspace } from "./workspace";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
-import { DesignStudio } from "@/features/preview/design/shell";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
 import { TerminalDock } from "./terminal-dock";
 import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
+import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
+import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
 
 const MIN_WORKSPACE = 360;
 const MIN_CHAT = 380;
@@ -31,7 +32,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [workspaceOpen, setWorkspaceOpen] = useState(true);
     const [overlay, setOverlay] = useState<AgentOverlay>(null);
-    const [designOpen, setDesignOpen] = useState(false);
     const [workspaceWidth, setWorkspaceWidth] = useState(560);
     const [splash, setSplash] = useState(false);
     const [splashVisible, setSplashVisible] = useState(false);
@@ -138,7 +138,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         }
         prevActiveFile.current = active_file;
         setOverlay(null);
-        if (active_file.startsWith("shape://")) return;
         persistWorkspace(true);
         window.dispatchEvent(
             new CustomEvent("shape-open-workspace-file", { detail: { path: active_file } }),
@@ -179,7 +178,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, []);
 
     const toggleWorkspace = useCallback(() => {
-        if (!project_path || overlay) return;
+        if (!project_path) return;
         setWorkspaceOpen((prev) => {
             const next = !prev;
             try {
@@ -189,7 +188,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             }
             return next;
         });
-    }, [project_path, overlay]);
+    }, [project_path]);
 
     useEffect(() => {
         const onTab = (e: Event) => {
@@ -200,7 +199,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 persistWorkspace(true);
                 return;
             }
-            if (["preview", "changes", "source", "graph", "git", "prs", "pulls", "agents"].includes(tabId)) {
+            if (["preview", "browser", "changes", "source", "graph", "git", "prs", "pulls", "agents"].includes(tabId)) {
                 setOverlay(null);
                 persistWorkspace(true);
             }
@@ -217,7 +216,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 else toggleWorkspace();
             }
             if (id === "panel" || id === "terminal") {
-                setDesignOpen(false);
                 setOverlay(null);
                 return;
             }
@@ -317,35 +315,26 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener("resize", apply);
     }, [clampWorkspace, persistWorkspace, sidebarOpen]);
 
-    const requestDesign = useCallback(() => {
+    const openBrowser = useCallback(() => {
         if (!project_path) return;
-        setDesignOpen(true);
-    }, [project_path]);
+        persistWorkspace(true);
+        window.dispatchEvent(
+            new CustomEvent("shape-set-active-tab", { detail: "browser" }),
+        );
+    }, [project_path, persistWorkspace]);
 
     useEffect(() => {
-        if (!project_path) setDesignOpen(false);
-    }, [project_path]);
-
-    useEffect(() => {
-        const onToggle = () => {
-            if (designOpen) {
-                setDesignOpen(false);
-                return;
-            }
-            void requestDesign();
-        };
-        const onExit = () => setDesignOpen(false);
-        window.addEventListener("shape-toggle-design-mode", onToggle);
-        window.addEventListener("shape-design-exit", onExit);
+        const onOpenBrowser = () => openBrowser();
+        window.addEventListener("shape-toggle-design-mode", onOpenBrowser);
+        window.addEventListener("shape-open-browser", onOpenBrowser);
         return () => {
-            window.removeEventListener("shape-toggle-design-mode", onToggle);
-            window.removeEventListener("shape-design-exit", onExit);
+            window.removeEventListener("shape-toggle-design-mode", onOpenBrowser);
+            window.removeEventListener("shape-open-browser", onOpenBrowser);
         };
-    }, [designOpen, requestDesign]);
+    }, [openBrowser]);
 
     /** Terminal lives in the chat column dock, not the right workspace. */
     const openWorkspaceTerminal = useCallback(() => {
-        setDesignOpen(false);
         setOverlay(null);
         window.dispatchEvent(
             new CustomEvent("shape-layout-toggle", { detail: { id: "terminal", value: true } }),
@@ -368,8 +357,10 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         };
     }, [openWorkspaceTerminal]);
 
-    const showWorkspace = Boolean(project_path) && !overlay && !designOpen;
+    const overlayOpen = overlay != null;
+    const showWorkspace = Boolean(project_path) && !overlayOpen;
     const rightExpanded = workspaceOpen && showWorkspace;
+    const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
         <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-panel">
@@ -399,46 +390,40 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 </div>
             ) : null}
 
-            {designOpen && project_path ? (
-                <DesignStudio
-                    projectPath={project_path}
-                    onClose={() => setDesignOpen(false)}
-                />
-            ) : (
-                <>
             <AgentSidebar
                 expanded={sidebarOpen}
                 overlay={overlay}
                 onToggleSidebar={toggleSidebar}
-                showDesign={Boolean(project_path)}
-                onDesign={requestDesign}
+                showBrowser={Boolean(project_path)}
+                onBrowser={openBrowser}
                 onSearch={() => {
                     window.dispatchEvent(
                         new CustomEvent("shape-command-palette", {
-                            detail: {
-                                placeholder: "Search…",
-                            },
+                            detail: { placeholder: "Search…" },
                         }),
                     );
                 }}
             />
 
-            {/* Chrome sits on the chat column; workspace is full-window height. */}
             <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-panel">
                     <AgentChrome
                         rightOpen={rightExpanded}
                         onToggleRight={toggleWorkspace}
-                        canToggleRight={Boolean(project_path) && !overlay}
+                        canToggleRight={Boolean(project_path) && !overlayOpen}
+                        showRightToggle={!overlayOpen}
+                        padWindowControls={!rightExpanded}
                     />
                     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                             {overlay ? (
-                                <AgentOverlayView
-                                    overlay={overlay}
-                                    onClose={() => setOverlay(null)}
-                                    navPortalTarget={navSlot}
-                                    sidebarExpanded={sidebarOpen}
-                                />
+                                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                                    <AgentOverlayView
+                                        overlay={overlay}
+                                        onClose={() => setOverlay(null)}
+                                        navPortalTarget={navSlot}
+                                        sidebarExpanded={sidebarOpen}
+                                    />
+                                </div>
                             ) : project_path ? (
                                 <>
                                     <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -503,8 +488,14 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                     </>
                 ) : null}
             </div>
-                </>
-            )}
+            <WindowControls
+                isMaximized={isMaximized}
+                onMinimize={minimize}
+                onToggleMaximize={() => void toggleMaximize()}
+                onClose={close}
+                surface="panel"
+                spacer={false}
+            />
         </div>
     );
 }
