@@ -238,7 +238,7 @@ async function captureLivePage(req: CaptureRequestPayload, container: HTMLDivEle
 
 /**
  * Listens for `design-preview-capture` requests emitted by
- * `capture_html_preview` (src-tauri/src/commands/preview_render.rs), renders
+ * `capture_html_preview` (src-tauri/src/commands/preview/preview_render.rs), renders
  * the requested HTML in an offscreen iframe, rasterizes it once the document
  * signals readiness, and writes the resulting PNG back so the Rust-side
  * oneshot in `PreviewCaptureState` resolves.

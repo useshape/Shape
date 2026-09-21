@@ -261,7 +261,9 @@ export interface ChatMessage {
         reasoningEffort?: string;
         mode?: string;
         latencyMs?: number;
+        contextBreakdown?: Record<string, number> | null;
     };
+    feedback?: "up" | "down" | null;
 }
 
 export interface Conversation {

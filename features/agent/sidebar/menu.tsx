@@ -1,11 +1,11 @@
 "use client";
 
-import { RiLoginBoxLine, RiLogoutBoxLine, RiUploadCloud2Fill, RiUserLine } from "@remixicon/react";
+import { RiGithubFill, RiLoginBoxLine, RiLogoutBoxLine, RiUploadCloud2Fill } from "@remixicon/react";
 import { useCallback, useState, type ReactNode } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
-import { logoutGitHub, useGitHubAuth } from "@/lib/github/store";
+import { logoutGitHub, loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { notify } from "@/features/notifications";
@@ -15,6 +15,9 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown";
 
 export function ProfileAvatar({
@@ -36,14 +39,7 @@ export function ProfileAvatar({
         ?? (shapeUserId && !offline ? `${SHAPE_API_BASE}/api/avatar/${shapeUserId}` : null);
 
     if (!imageSrc || failed) {
-        return (
-            <span
-                className="flex shrink-0 items-center justify-center rounded-full bg-panel-hover text-text-muted"
-                style={{ width: size, height: size }}
-            >
-                <Icon icon={RiUserLine} size={Math.round(size * 0.55)} />
-            </span>
-        );
+        return null;
     }
 
     return (
@@ -87,10 +83,6 @@ export function AccountMenu({ children }: { children: ReactNode }) {
         (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
         ?? (githubAuth.loggedIn && githubAuth.username ? githubAuth.username : null)
         ?? "Sign in";
-    const email =
-        shapeAuth.email?.trim()
-        || (githubAuth.loggedIn && githubAuth.username ? `@${githubAuth.username}` : null)
-        || "Not signed in";
 
     const handleGitHubLogout = useCallback(async () => {
         try {
@@ -138,15 +130,46 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                     Check for updates
                 </DropdownMenuItem>
 
-                {githubAuth.loggedIn ? (
-                    <DropdownMenuItem
-                        className="cursor-pointer"
-                        onClick={() => void handleGitHubLogout()}
-                    >
-                        <Icon icon={RiLogoutBoxLine} size={ICON_SIZE_SM} />
-                        Log out of GitHub
-                    </DropdownMenuItem>
-                ) : null}
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-pointer">
+                        <Icon icon={RiGithubFill} size={ICON_SIZE_SM} />
+                        GitHub
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-56">
+                        {githubAuth.loggedIn ? (
+                            <>
+                                <div className="flex items-center gap-2 px-2 py-1.5">
+                                    {githubAuth.avatarUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={githubAuth.avatarUrl}
+                                            alt=""
+                                            className="size-6 shrink-0 rounded-full object-cover"
+                                        />
+                                    ) : null}
+                                    <span className="min-w-0 truncate text-sm font-medium text-text-primary">
+                                        {githubAuth.username || "GitHub"}
+                                    </span>
+                                </div>
+                                <DropdownMenuItem
+                                    className="cursor-pointer"
+                                    onClick={() => void handleGitHubLogout()}
+                                >
+                                    <Icon icon={RiLogoutBoxLine} size={ICON_SIZE_SM} />
+                                    Log out
+                                </DropdownMenuItem>
+                            </>
+                        ) : (
+                            <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={() => void loginGitHub()}
+                            >
+                                <Icon icon={RiLoginBoxLine} size={ICON_SIZE_SM} />
+                                Log in
+                            </DropdownMenuItem>
+                        )}
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
                 {shapeAuth.loggedIn ? (
                     <DropdownMenuItem
                         className="cursor-pointer text-danger hover:text-danger hover:bg-danger/10"

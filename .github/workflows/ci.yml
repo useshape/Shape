@@ -34,8 +34,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Build preview runtime
-        run: npm run build:preview-runtime
+      - name: Build runtime
+        run: npm run build:runtime
 
       - name: Test
         run: npm run test:all

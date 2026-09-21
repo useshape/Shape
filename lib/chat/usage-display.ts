@@ -17,6 +17,7 @@ export type MessageUsageStats = {
     reasoningEffort?: string;
     mode?: string;
     latencyMs?: number;
+    contextBreakdown?: Record<string, number> | null;
 };
 
 export function isAutoModelId(model?: string | null): boolean {

@@ -242,6 +242,7 @@ mod tests {
             timestamp: 0.0,
             stats: None,
             model: None,
+            feedback: None,
         }
     }
 

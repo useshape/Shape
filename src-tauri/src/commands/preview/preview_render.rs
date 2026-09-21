@@ -280,7 +280,7 @@ pub async fn capture_html_preview_inner(
     tokio::fs::create_dir_all(&preview_dir)
         .await
         .map_err(|e| AppError::Env(format!("Failed to create preview dir: {e}")))?;
-    design_sandbox::ensure_preview_runtime_bundle(&preview_dir)?;
+    design_sandbox::ensure_runtime_bundle(&preview_dir)?;
 
     let bundle_path = preview_dir.join(design_sandbox::PREVIEW_BUNDLE_FILENAME);
     let bundle_src = asset_url_for_path(&bundle_path)?.to_string();

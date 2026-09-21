@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
-import { COLOR_THEMES, COLOR_THEME_ORDER, type ColorThemeId } from "@/lib/themes";
+import { COLOR_THEMES, COLOR_THEME_ORDER, type ColorThemeId } from "@/lib/settings/themes";
 import { ThemeWorkbenchPreview } from "./workbench-preview";
 
 /** Theme cards, side by side. */

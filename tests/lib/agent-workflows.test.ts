@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyWorkflows, matchWorkflows, type AgentWorkflow } from "@/lib/chat/workflows";
+import { applyWorkflows, matchWorkflows, slashCommandRanges, workflowSlashToken, type AgentWorkflow } from "@/lib/chat/workflows";
 
 const workflows: AgentWorkflow[] = [
     {
@@ -41,5 +41,26 @@ describe("agent-workflows", () => {
         expect(applyWorkflows("change the sidebar padding", workflows)).toBe(
             "change the sidebar padding",
         );
+    });
+
+    it("maps a trigger to a /token and highlights it in the composer", () => {
+        const w: AgentWorkflow = {
+            id: "3",
+            name: "Tests",
+            trigger: "/test",
+            prompt: "Run the test suite.",
+        };
+        expect(workflowSlashToken(w)).toBe("/test");
+        const ranges = slashCommandRanges("/test then fix it", [w]);
+        expect(ranges).toEqual([
+            { start: 0, end: 5, token: "/test", workflow: w },
+        ]);
+    });
+
+    it("highlights /send-proposal from a phrase trigger", () => {
+        expect(workflowSlashToken(workflows[0]!)).toBe("/send-proposal");
+        const ranges = slashCommandRanges("Please /send-proposal today", workflows);
+        expect(ranges).toHaveLength(1);
+        expect(ranges[0]?.token).toBe("/send-proposal");
     });
 });

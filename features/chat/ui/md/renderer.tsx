@@ -14,8 +14,11 @@ import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
 import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
+import { DesignPreviewGallery } from '../blocks/gallery';
+import { GeneratedMediaCard } from '../blocks/generated-media';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { AgentScreen } from '../blocks/agent-screen';
+import { QuestionsCard, parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
 
 function hostnameFromUrl(url: string): string {
@@ -96,7 +99,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'plugin_call' | 'generated_svg' | 'generated_image';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image';
     content?: string;
     file?: string;
     query?: string;
@@ -131,6 +134,8 @@ export type Chunk = {
     pluginLabel?: string;
     mediaPrompt?: string;
     mediaCredits?: string;
+    questions?: AgentQuestion[];
+    answers?: QuestionAnswers | null;
 };
 
 export function parseMessageContent(text: string): Chunk[] {
@@ -293,32 +298,57 @@ export function parseMessageContent(text: string): Chunk[] {
         };
     };
 
+function unescapeXml(s: string): string {
+    return s
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&");
+}
+
     const parseDesignPreviewsBlock = (block: string): Chunk => {
-        const selectedMatch = block.match(/selected="([^"]*)"/);
+        const selectedMatch = block.match(/\bselected="([^"]*)"/);
         const selected = selectedMatch?.[1] ?? "";
+        const id = block.match(/<design_previews\b[^>]*\bid="([^"]*)"/)?.[1];
+        const status = block.match(/<design_previews\b[^>]*\bstatus="([^"]*)"/)?.[1];
         const previews: DesignPreviewItem[] = [];
-        const re = /<design_preview\s+([^>]+)\/>/g;
-        let match: RegExpExecArray | null;
-        while ((match = re.exec(block)) !== null) {
-            const attrs = match[1];
+        const pushPreview = (attrs: string, inner: string) => {
             const get = (name: string) => attrs.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
             const kindAttr = get("kind");
-            const id = get("id");
+            const previewId = get("id");
             const path = get("path");
-            if (!id.trim() || !path.trim()) continue;
-            if (previews.some((p) => p.id === id)) continue;
+            const source = unescapeXml(inner).trim() || unescapeXml(get("source")).trim();
+            if (!previewId.trim()) return;
+            if (!path.trim() && !source) return;
+            if (previews.some((p) => p.id === previewId)) return;
             previews.push({
-                id,
+                id: previewId,
                 name: get("name"),
                 style: get("style"),
                 path,
+                source: source || undefined,
                 width: Number.parseInt(get("width"), 10) || 1280,
                 height: Number.parseInt(get("height"), 10) || 800,
                 renderMs: Number.parseInt(get("render_ms"), 10) || undefined,
-                kind: kindAttr === "html" || kindAttr === "png" ? kindAttr : undefined,
+                kind: kindAttr === "html" || kindAttr === "png" || kindAttr === "react" ? kindAttr : undefined,
             });
+        };
+        const paired = /<design_preview\s+([^>]*)>([\s\S]*?)<\/design_preview>/g;
+        let match: RegExpExecArray | null;
+        while ((match = paired.exec(block)) !== null) {
+            pushPreview(match[1] ?? "", match[2] ?? "");
         }
-        return { type: "design_previews", designPreviews: previews, selectedConcept: selected };
+        const selfClosing = /<design_preview\s+([^>]+)\/>/g;
+        while ((match = selfClosing.exec(block)) !== null) {
+            pushPreview(match[1] ?? "", "");
+        }
+        return {
+            type: "design_previews",
+            designPreviews: previews,
+            selectedConcept: selected,
+            commandId: id,
+            commandStatus: status,
+        };
     };
 
     const parseReviewDebateBlock = (block: string): Chunk => {
@@ -335,9 +365,21 @@ export function parseMessageContent(text: string): Chunk[] {
     };
 
     const parseQuestionBlock = (block: string): Chunk => {
-        // Questions feature removed — keep a no-op parser so old transcripts don't break.
-        void block;
-        return { type: "question", content: "" };
+        const id = block.match(/\bid="([^"]*)"/)?.[1];
+        const status = block.match(/\bstatus="([^"]*)"/)?.[1];
+        const inner = block
+            .replace(/^<questions?[^>]*>/i, "")
+            .replace(/<\/questions?>\s*$/i, "")
+            .trim();
+        const { questions, answers } = parseQuestionsPayload(inner);
+        return {
+            type: "question",
+            content: inner,
+            commandId: id,
+            commandStatus: status,
+            questions,
+            answers,
+        };
     };
 
     const parsePluginCallBlock = (tagFull: string, content: string, isGenerating: boolean): Chunk => {
@@ -406,6 +448,7 @@ export function parseMessageContent(text: string): Chunk[] {
             { type: 'edit_pending', start: '<edit_pending', end: '</edit_pending>' },
             { type: 'design_previews', start: '<design_previews', end: '</design_previews>' },
             { type: 'review_debate', start: '<review_debate', end: '</review_debate>' },
+            { type: 'questions', start: '<questions', end: '</questions>' },
             { type: 'question', start: '<question', end: '</question>' },
             { type: 'inspect_runtime', start: '<inspect_runtime', end: '</inspect_runtime>' },
             { type: 'search_result', start: '<search_result', end: '</search_result>' },
@@ -548,7 +591,7 @@ export function parseMessageContent(text: string): Chunk[] {
                 chunks.push(parseDesignPreviewsBlock(tagFull));
             } else if (firstMatch.type === 'review_debate') {
                 chunks.push(parseReviewDebateBlock(tagFull));
-            } else if (firstMatch.type === 'question') {
+            } else if (firstMatch.type === 'question' || firstMatch.type === 'questions') {
                 chunks.push(parseQuestionBlock(tagFull));
             } else if (firstMatch.type === 'run') {
                 chunks.push({ type: 'run', content, command: '' });
@@ -627,7 +670,7 @@ export function parseMessageContent(text: string): Chunk[] {
                 chunks.push(parseDesignPreviewsBlock(text.slice(firstMatch.index)));
             } else if (firstMatch.type === 'review_debate') {
                 chunks.push(parseReviewDebateBlock(text.slice(firstMatch.index)));
-            } else if (firstMatch.type === 'question') {
+            } else if (firstMatch.type === 'question' || firstMatch.type === 'questions') {
                 chunks.push(parseQuestionBlock(text.slice(firstMatch.index)));
             } else if (firstMatch.type === 'run') {
                 chunks.push({
@@ -716,7 +759,7 @@ export function parseMessageContent(text: string): Chunk[] {
                 chunks.push(parseDesignPreviewsBlock(fullBlock));
             } else if (firstMatch.type === 'review_debate') {
                 chunks.push(parseReviewDebateBlock(fullBlock));
-            } else if (firstMatch.type === 'question') {
+            } else if (firstMatch.type === 'question' || firstMatch.type === 'questions') {
                 chunks.push(parseQuestionBlock(fullBlock));
             } else if (firstMatch.type === 'run') {
                 chunks.push({
@@ -922,13 +965,16 @@ export function MessageRenderer({
         lastSegment?.kind === 'chunk'
         && lastSegment.chunk.type === 'text'
         && !!lastSegment.chunk.content?.trim();
-    const hasPendingApproval = workflowSegments.some((s) =>
-        s.blocks.some(
-            (b) =>
-                (b.type === 'terminal_command' || b.type === 'edit_pending' || b.type === 'plugin_call')
-                && b.commandStatus === 'pending',
-        ),
-    );
+    const hasPendingApproval =
+        workflowSegments.some((s) =>
+            s.blocks.some(
+                (b) =>
+                    (b.type === 'terminal_command' || b.type === 'edit_pending' || b.type === 'plugin_call')
+                    && b.commandStatus === 'pending',
+            ),
+        )
+        || contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
+        || contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending');
     const lastWorkflowBlock = workflowSegments.at(-1)?.blocks.at(-1);
     const isThinking = !!isGenerating
         && (lastWorkflowBlock?.type === 'think' || lastWorkflowBlock?.type === 'thought')
@@ -940,7 +986,11 @@ export function MessageRenderer({
         .find((b) => b.type === "edit" || b.type === "edit_pending")
         ?.file?.split(/[\\/]/).pop();
     const statusLabel = hasPendingApproval
-        ? "Waiting for approval"
+        ? (contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
+            ? "Waiting for your answers"
+            : contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending')
+              ? "Waiting for you to pick a design"
+              : "Waiting for approval")
         : lastIsEdit || activityIsEdit
           ? `Editing ${editFileName || "file"}`
           : (activityLabel?.trim() || (isThinking ? "Thinking" : (workflowSegments.length > 0 ? "Working" : undefined)));
@@ -1047,7 +1097,27 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'design_previews') {
-            return null;
+            return (
+                <DesignPreviewGallery
+                    key={`design-previews-${chunk.commandId || index}`}
+                    previews={chunk.designPreviews || []}
+                    selectedId={chunk.selectedConcept}
+                    pickId={chunk.commandId}
+                    status={chunk.commandStatus}
+                />
+            );
+        }
+        if (chunk.type === 'generated_svg' || chunk.type === 'generated_image') {
+            return (
+                <GeneratedMediaCard
+                    key={`media-${index}`}
+                    kind={chunk.type === "generated_svg" ? "svg" : "image"}
+                    src={chunk.content}
+                    prompt={chunk.mediaPrompt || chunk.query}
+                    credits={chunk.mediaCredits}
+                    loading={!!chunk.isGenerating && !chunk.content?.trim()}
+                />
+            );
         }
         if (chunk.type === 'review_debate') {
             return (
@@ -1059,7 +1129,15 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'question') {
-            return null;
+            return (
+                <QuestionsCard
+                    key={`question-${chunk.commandId || index}`}
+                    askId={chunk.commandId}
+                    status={chunk.commandStatus}
+                    questions={chunk.questions || []}
+                    answers={chunk.answers}
+                />
+            );
         }
         return null;
     });

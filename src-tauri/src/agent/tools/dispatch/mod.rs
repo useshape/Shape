@@ -20,7 +20,7 @@ use crate::core::workspace_trust::WorkspaceTrustState;
 use common::{blocked_outcome, error_outcome, is_read_only_mode, record_tool_event};
 use meta::design_gate_blocks_tool;
 
-const DESIGN_GATE_BLOCK_MSG: &str = "Design preview phase is active. Call render_design_previews with React JSX concepts first and wait for the user to pick one. Do not scaffold projects (create-next-app, npm init), run terminal commands, or edit files until a concept is selected.";
+const DESIGN_GATE_BLOCK_MSG: &str = "The user is still choosing a component preview. Do not edit files or run commands until they pick one (or skip).";
 
 const TRUST_GATED_TOOLS: &[&str] = &[
     "run_terminal",
@@ -172,6 +172,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
+        "ask_user" => meta::tool_ask_user(&args, ctx).await,
         "generate_svg" => crate::agent::tools::generate::tool_generate_svg(&args, ctx).await,
         "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,

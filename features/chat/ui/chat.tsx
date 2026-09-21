@@ -314,6 +314,8 @@ export default function Chat({
                                         messagesEndRef={session.messagesEndRef}
                                         onRedo={session.handleRedo}
                                         onRestore={session.handleRestore}
+                                        onFork={session.handleFork}
+                                        onFeedback={session.handleFeedback}
                                         isFileEditResolved={session.isEditResolved}
                                         activeChatTabId={session.activeChatTabId}
                                     />

@@ -40,6 +40,12 @@ function slashKey(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/^\/+/, "");
 }
 
+/** Canonical `/name` token inserted into the composer when a workflow is picked. */
+export function workflowSlashToken(w: AgentWorkflow): string {
+    const key = slashKey(w.trigger || w.name);
+    return key ? `/${key}` : "";
+}
+
 function triggerHits(message: string, trigger: string): boolean {
     const t = trigger.trim();
     if (!t) return false;
@@ -56,6 +62,30 @@ function triggerHits(message: string, trigger: string): boolean {
 export function matchWorkflows(message: string, workflows: AgentWorkflow[] | undefined): AgentWorkflow[] {
     if (!workflows?.length) return [];
     return workflows.filter((w) => triggerHits(message, w.trigger));
+}
+
+/** Highlight ranges for `/command` tokens that match a saved workflow. */
+export function slashCommandRanges(
+    text: string,
+    workflows: AgentWorkflow[] | undefined,
+): { start: number; end: number; token: string; workflow: AgentWorkflow }[] {
+    if (!workflows?.length) return [];
+    const byKey = new Map<string, AgentWorkflow>();
+    for (const w of workflows) {
+        const key = slashKey(w.trigger || w.name);
+        if (key && !byKey.has(key)) byKey.set(key, w);
+    }
+    const re = /(^|\s)(\/[A-Za-z0-9_-]+)/g;
+    const ranges: { start: number; end: number; token: string; workflow: AgentWorkflow }[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+        const token = match[2]!;
+        const workflow = byKey.get(slashKey(token));
+        if (!workflow) continue;
+        const start = match.index + match[1]!.length;
+        ranges.push({ start, end: start + token.length, token, workflow });
+    }
+    return ranges;
 }
 
 export function applyWorkflows(message: string, workflows: AgentWorkflow[] | undefined): string {

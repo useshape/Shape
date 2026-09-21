@@ -69,6 +69,14 @@ export function AccountSettingsPanel() {
     }, [auth.creditsIncluded, auth.creditsRemaining]);
 
     const freeAutoPercent = auth.freeAutoPercent ?? 0;
+    const resetLabel = useMemo(() => {
+        const iso = auth.currentPeriodEnd;
+        const date = iso
+            ? new Date(iso)
+            : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+        if (Number.isNaN(date.getTime())) return "Resets next month";
+        return `Resets ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    }, [auth.currentPeriodEnd]);
 
     if (auth.isLoading) {
         return (
@@ -179,17 +187,17 @@ export function AccountSettingsPanel() {
                     </div>
                     <UsageBar
                         label="Auto · monthly"
-                        detail="Resets each month"
+                        detail={resetLabel}
                         percent={freeAutoPercent}
                     />
                     <UsageBar
                         label="Premium credits"
                         detail={
                             auth.creditsIncluded > 0
-                                ? `${auth.creditsRemaining.toLocaleString()} left`
+                                ? `${auth.creditsRemaining.toLocaleString()} left · ${resetLabel}`
                                 : auth.tier === "free"
                                   ? "Upgrade for premium models"
-                                  : `${auth.creditsRemaining.toLocaleString()} remaining`
+                                  : `${auth.creditsRemaining.toLocaleString()} remaining · ${resetLabel}`
                         }
                         percent={auth.creditsIncluded > 0 ? creditPercent : 0}
                         trailing={

@@ -1,4 +1,4 @@
-import { RiArrowGoBackLine, RiClipboardLine, RiMoreLine, RiMusic2Line, RiRefreshLine } from "@remixicon/react";
+import { RiArrowGoBackLine, RiClipboardLine, RiFolder5Fill, RiGitForkLine, RiMoreLine, RiMusic2Line, RiRefreshLine, RiThumbDownLine, RiThumbUpLine } from "@remixicon/react";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
@@ -19,26 +19,36 @@ import {
 } from "@/components/ui/context";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
-    formatMessageUsageRows,
     formatMessageModelLabel,
     type MessageUsageStats,
 } from "@/lib/chat/usage-display";
 import { parseShapeContinueAction } from "@/lib/chat/continue-action";
 import { mentionRanges, mentionDisplayLabel } from "@/lib/chat/mentions";
-import { designTokenById } from "@/lib/chat/design-mentions";
+import { slashCommandRanges } from "@/lib/chat/workflows";
+import { useSettings } from "@/lib/settings";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { Favicon } from "@/components/ui/favicon";
-import { PluginLogo } from "@/components/ui/plugin-logo";
 import { WebSourcesMenu } from "../blocks/search";
 import { Button } from "@/components/ui/button";
 import { useGitHubAuth } from "@/lib/github/store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { UserMessageCard } from "./bubble";
+import { ContextChip, MentionChipIcon, WorkflowChipIcon } from "./context-chip";
 import { GeneratingIndicator } from "../blocks/generating";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 import { parseUserAttachments } from "../../lib/user-attachments";
 import type { ParsedUserAttachment } from "../../lib/user-attachments";
+import { ContextWindowMenu } from "./context-window";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function UserMessageAvatar() {
     const github = useGitHubAuth();
@@ -81,6 +91,9 @@ type ChatMessageItemProps = {
     index?: number;
     onRedo?: (index: number) => void;
     onRestore?: (index: number) => void;
+    onFork?: (index: number) => void;
+    onFeedback?: (index: number, value: "up" | "down" | null) => void;
+    feedback?: "up" | "down" | null;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
 };
 
@@ -111,7 +124,23 @@ function SentAttachmentPill({ att }: { att: ParsedUserAttachment }) {
 }
 
 function MentionRichText({ text }: { text: string }) {
-    const ranges = mentionRanges(text);
+    const workflows = useSettings().ai.workflows ?? [];
+    const mentionRs = mentionRanges(text);
+    const slashRs = slashCommandRanges(text, workflows);
+    const ranges: (
+        | { kind: "mention"; start: number; end: number; mention: (typeof mentionRs)[number]["mention"] }
+        | { kind: "slash"; start: number; end: number; workflow: (typeof slashRs)[number]["workflow"]; token: string }
+    )[] = [
+        ...mentionRs.map((r) => ({ kind: "mention" as const, ...r })),
+        ...slashRs.map((r) => ({ kind: "slash" as const, ...r })),
+    ].sort((a, b) => a.start - b.start);
+
+    const merged: typeof ranges = [];
+    for (const r of ranges) {
+        const prev = merged[merged.length - 1];
+        if (prev && r.start < prev.end) continue;
+        merged.push(r);
+    }
 
     /** Color backtick spans and bare paths even when there are no @mentions. */
     const paintPlain = (chunk: string, keyPrefix: string): React.ReactNode[] => {
@@ -167,69 +196,46 @@ function MentionRichText({ text }: { text: string }) {
         return out.length > 0 ? out : [<span key={`${keyPrefix}-all`} className="whitespace-pre-wrap">{chunk}</span>];
     };
 
-    if (ranges.length === 0) {
+    if (merged.length === 0) {
         return <span className="select-text">{paintPlain(text, "root")}</span>;
     }
     const nodes: React.ReactNode[] = [];
     let cursor = 0;
-    ranges.forEach((range, i) => {
+    merged.forEach((range, i) => {
         if (range.start > cursor) {
             nodes.push(...paintPlain(text.slice(cursor, range.start), `pre-${i}`));
         }
-        const { mention } = range;
-        const openable =
-            (mention.kind === "file" || mention.kind === "folder") && !!mention.path;
-        const label = mentionDisplayLabel(mention);
-        nodes.push(
-            <span
-                key={`m-${i}`}
-                role={openable ? "button" : undefined}
-                tabIndex={openable ? 0 : undefined}
-                onClick={
-                    openable
-                        ? () => {
-                              const path =
-                                  mention.kind === "folder" && !mention.path!.endsWith("/")
-                                      ? `${mention.path}/`
-                                      : mention.path!;
-                              void openProjectFile(path, label);
-                          }
-                        : undefined
-                }
-                className={cn(
-                    "mx-0.5 inline-flex items-center gap-1 rounded-lg bg-accent-text-bg px-1.5 py-0.5 chat-text font-medium text-accent-text align-middle",
-                    openable && "cursor-pointer hover:bg-accent-text/20 transition-colors",
-                )}
-            >
-                {mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs" ? (
-                    <span className="chat-link-favicon">
-                        <FileIcon name={label} className="h-3 w-3 shrink-0" />
-                    </span>
-                ) : mention.kind === "plugin" ? (
-                    <span className="chat-link-favicon">
-                        <PluginLogo
-                            toolkit={mention.id || mention.path || label}
-                            name={label}
-                            size={12}
-                            className="rounded-sm"
-                        />
-                    </span>
-                ) : mention.kind === "browser" ? (
-                    <span className="chat-link-favicon">
-                        <Favicon url={mention.path || label} size={12} />
-                    </span>
-                ) : mention.kind === "design" && designTokenById(mention.id || mention.path) ? (
-                    <span className="chat-link-favicon">
-                        <Icon
-                            icon={designTokenById(mention.id || mention.path)!.icon}
-                            className="text-accent-text"
-                            size={12}
-                        />
-                    </span>
-                ) : null}
-                <span>@{label}</span>
-            </span>,
-        );
+        if (range.kind === "slash") {
+            nodes.push(
+                <ContextChip key={`s-${i}`} icon={<WorkflowChipIcon workflow={range.workflow} />}>
+                    {range.token}
+                </ContextChip>,
+            );
+        } else {
+            const { mention } = range;
+            const openable =
+                (mention.kind === "file" || mention.kind === "folder") && !!mention.path;
+            const label = mentionDisplayLabel(mention);
+            nodes.push(
+                <ContextChip
+                    key={`m-${i}`}
+                    icon={<MentionChipIcon mention={mention} />}
+                    onClick={
+                        openable
+                            ? () => {
+                                  const path =
+                                      mention.kind === "folder" && !mention.path!.endsWith("/")
+                                          ? `${mention.path}/`
+                                          : mention.path!;
+                                  void openProjectFile(path, label);
+                              }
+                            : undefined
+                    }
+                >
+                    @{label}
+                </ContextChip>,
+            );
+        }
         cursor = range.end;
     });
     if (cursor < text.length) {
@@ -247,6 +253,15 @@ function selectNodeContents(el: HTMLElement | null) {
     sel?.addRange(range);
 }
 
+function parseForkedFrom(content: string): { id: string; title: string; rest: string } | null {
+    const match = content.match(/^<forked_from\b([^>]*)\/>\s*/);
+    if (!match) return null;
+    const attrs = match[1] ?? "";
+    const id = attrs.match(/\bid="([^"]*)"/)?.[1] ?? "";
+    const title = attrs.match(/\btitle="([^"]*)"/)?.[1] ?? "previous chat";
+    return { id, title, rest: content.slice(match[0].length) };
+}
+
 function ChatMessageItemInner({
     role,
     content,
@@ -258,9 +273,13 @@ function ChatMessageItemInner({
     index = -1,
     onRedo,
     onRestore,
+    onFork,
+    onFeedback,
+    feedback,
     isFileEditResolved,
 }: ChatMessageItemProps) {
     const [expanded, setExpanded] = React.useState(false);
+    const [forkOpen, setForkOpen] = React.useState(false);
     const bodyRef = React.useRef<HTMLDivElement>(null);
 
     const getCopyText = () => {
@@ -409,6 +428,8 @@ function ChatMessageItemInner({
     }
 
     const showTypingOnly = Boolean(isGenerating && !content.trim());
+    const forked = role === "assistant" ? parseForkedFrom(content) : null;
+    const renderContent = forked?.rest ?? content;
 
     return (
         <ContextMenu>
@@ -424,8 +445,25 @@ function ChatMessageItemInner({
                         <GeneratingIndicator label="Thinking" />
                     ) : (
                         <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
+                            {forked ? (
+                                <button
+                                    type="button"
+                                    className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                                    onClick={() => {
+                                        if (!forked.id) return;
+                                        window.dispatchEvent(
+                                            new CustomEvent("shape-chat-load", { detail: { id: forked.id } }),
+                                        );
+                                    }}
+                                >
+                                    <Icon icon={RiGitForkLine} className="size-3.5 shrink-0" />
+                                    <span>Forked from</span>
+                                    <Icon icon={RiFolder5Fill} className="size-3.5 shrink-0 text-text-muted" />
+                                    <span className="min-w-0 truncate font-medium text-text-secondary">{forked.title}</span>
+                                </button>
+                            ) : null}
                             <MessageRenderer
-                                content={content}
+                                content={renderContent}
                                 isGenerating={isGenerating}
                                 activityLabel={activityLabel}
                                 isFileEditResolved={isFileEditResolved}
@@ -447,6 +485,35 @@ function ChatMessageItemInner({
                             <Icon icon={RiClipboardLine} />
                         </Button>
                     </Tooltip>
+                    {role === "assistant" ? (
+                        <>
+                            <Tooltip content="Good response" side="bottom">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={feedback === "up" ? "text-text-primary" : ""}
+                                    onClick={() => onFeedback?.(index, feedback === "up" ? null : "up")}
+                                >
+                                    <Icon icon={RiThumbUpLine} />
+                                </Button>
+                            </Tooltip>
+                            <Tooltip content="Bad response" side="bottom">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={feedback === "down" ? "text-text-primary" : ""}
+                                    onClick={() => onFeedback?.(index, feedback === "down" ? null : "down")}
+                                >
+                                    <Icon icon={RiThumbDownLine} />
+                                </Button>
+                            </Tooltip>
+                            <Tooltip content="Fork chat" side="bottom">
+                                <Button variant="ghost" size="icon" onClick={() => setForkOpen(true)}>
+                                    <Icon icon={RiGitForkLine} />
+                                </Button>
+                            </Tooltip>
+                        </>
+                    ) : null}
                     {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
                     {role === "assistant" ? (
                     <DropdownMenu>
@@ -455,7 +522,7 @@ function ChatMessageItemInner({
                                 <Icon icon={RiMoreLine} />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-64">
+                        <DropdownMenuContent align="start" className="w-72">
                             <div className="flex flex-col gap-2 p-1 chat-text">
                                 {formatMessageModelLabel(model, stats) ? (
                                     <DetailRow label="Model" value={formatMessageModelLabel(model, stats)} />
@@ -480,9 +547,6 @@ function ChatMessageItemInner({
                                         }
                                     />
                                 ) : null}
-                                {formatMessageUsageRows(stats, model).map((row) => (
-                                    <DetailRow key={row.label} label={row.label} value={row.value} />
-                                ))}
                                 {stats?.timeMs != null ? (
                                     <DetailRow
                                         label="Elapsed"
@@ -493,12 +557,11 @@ function ChatMessageItemInner({
                                         }
                                     />
                                 ) : null}
-                                {stats?.latencyMs != null ? (
-                                    <DetailRow
-                                        label="Latency"
-                                        value={`${Math.round(stats.latencyMs)}ms`}
-                                    />
-                                ) : null}
+                                <ContextWindowMenu
+                                    breakdown={stats?.contextBreakdown}
+                                    inputTokens={stats?.inputTokens}
+                                    outputTokens={stats?.outputTokens}
+                                />
                             </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -519,6 +582,27 @@ function ChatMessageItemInner({
             </ContextMenuItem>
         </ContextMenuContent>
         </ContextMenu>
+        <AlertDialog open={forkOpen} onOpenChange={setForkOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Fork this chat?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        A new chat starts from this message and keeps everything above it. The original chat is unchanged.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={() => {
+                            setForkOpen(false);
+                            onFork?.(index);
+                        }}
+                    >
+                        Fork chat
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }
 

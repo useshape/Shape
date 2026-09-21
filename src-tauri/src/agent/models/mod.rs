@@ -13,6 +13,20 @@ pub struct DesignPreviewState {
     pub sandbox_session_id: Option<String>,
 }
 
+/// Live component examples waiting for the user to pick one (`render_design_previews`).
+#[derive(Debug, Clone)]
+pub struct PendingDesignPick {
+    pub id: String,
+    pub concepts: Vec<DesignPickConcept>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DesignPickConcept {
+    pub id: String,
+    pub name: String,
+    pub style: String,
+}
+
 /// How the agent handles command execution approval for the current turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AutoRunMode {
@@ -97,6 +111,8 @@ pub struct MessageStats {
     pub mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latency_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_breakdown: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -108,6 +124,8 @@ pub struct ChatMessage {
     pub stats: Option<MessageStats>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -117,6 +135,14 @@ pub struct Conversation {
     pub history: Vec<ChatMessage>,
     pub project_path: String,
     pub timestamp: f64,
+}
+
+/// Click-through questions the agent is waiting on (`ask_user`).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingAsk {
+    pub id: String,
+    pub questions_json: String,
 }
 
 /// Represents a terminal command proposed by the AI that needs user approval.
@@ -190,6 +216,14 @@ pub struct AgentState {
     pub pending_edits: Mutex<HashMap<String, PendingEdit>>,
     /// User decisions for pending edits: id -> approved.
     pub edit_decisions: Mutex<HashMap<String, bool>>,
+    /// `ask_user` prompts waiting for click-through answers.
+    pub pending_asks: Mutex<HashMap<String, PendingAsk>>,
+    /// JSON answers (or `"__skipped__"`) keyed by ask id.
+    pub ask_answers: Mutex<HashMap<String, String>>,
+    /// Component preview sets waiting for a pick (`render_design_previews`).
+    pub pending_design_picks: Mutex<HashMap<String, PendingDesignPick>>,
+    /// Chosen concept id (or `"__skipped__"`) keyed by pick id.
+    pub design_pick_answers: Mutex<HashMap<String, String>>,
     /// Execution policy for the active turn (auto-run mode, edit approval).
     pub turn_policy: Mutex<TurnPolicy>,
     /// Accumulates input/output tokens for the active user turn.
@@ -233,6 +267,10 @@ impl AgentState {
             command_decisions: Mutex::new(HashMap::new()),
             pending_edits: Mutex::new(HashMap::new()),
             edit_decisions: Mutex::new(HashMap::new()),
+            pending_asks: Mutex::new(HashMap::new()),
+            ask_answers: Mutex::new(HashMap::new()),
+            pending_design_picks: Mutex::new(HashMap::new()),
+            design_pick_answers: Mutex::new(HashMap::new()),
             turn_policy: Mutex::new(TurnPolicy::default()),
             turn_meter: Mutex::new((0, 0)),
             history_summary: Mutex::new(None),
@@ -479,6 +517,7 @@ impl AgentState {
             }),
             stats: None,
             model: None,
+            feedback: None,
         });
         history
     }
@@ -679,6 +718,12 @@ impl AgentState {
         if let Ok(mut g) = self.edit_decisions.lock() {
             g.clear();
         }
+        if let Ok(mut g) = self.pending_asks.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.ask_answers.lock() {
+            g.clear();
+        }
     }
 
     /// Drop unresolved approval waiters on Stop without wiping Accept/Reject
@@ -688,6 +733,12 @@ impl AgentState {
             g.clear();
         }
         if let Ok(mut g) = self.pending_edits.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.pending_asks.lock() {
+            g.clear();
+        }
+        if let Ok(mut g) = self.pending_design_picks.lock() {
             g.clear();
         }
     }

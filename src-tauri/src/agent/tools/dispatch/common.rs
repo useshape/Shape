@@ -59,6 +59,80 @@ pub(super) fn cleanup_pending_command(cmd_id: &str, ctx: &ToolCtx<'_>) {
     }
 }
 
+pub(super) async fn wait_for_ask_answer(ask_id: &str, ctx: &ToolCtx<'_>) -> Option<String> {
+    loop {
+        if let Ok(mut answers) = ctx.agent_state.ask_answers.lock() {
+            if let Some(payload) = answers.remove(ask_id) {
+                return Some(payload);
+            }
+        }
+        if ctx.cancel.is_cancelled() {
+            return None;
+        }
+        let still_pending = ctx
+            .agent_state
+            .pending_asks
+            .lock()
+            .map(|p| p.contains_key(ask_id))
+            .unwrap_or(false);
+        if !still_pending {
+            if let Ok(mut answers) = ctx.agent_state.ask_answers.lock() {
+                if let Some(payload) = answers.remove(ask_id) {
+                    return Some(payload);
+                }
+            }
+            return None;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
+}
+
+pub(super) fn cleanup_pending_ask(ask_id: &str, ctx: &ToolCtx<'_>) {
+    if let Ok(mut pendings) = ctx.agent_state.pending_asks.lock() {
+        pendings.remove(ask_id);
+    }
+    if let Ok(mut answers) = ctx.agent_state.ask_answers.lock() {
+        answers.remove(ask_id);
+    }
+}
+
+pub(super) async fn wait_for_design_pick(pick_id: &str, ctx: &ToolCtx<'_>) -> Option<String> {
+    loop {
+        if let Ok(mut answers) = ctx.agent_state.design_pick_answers.lock() {
+            if let Some(payload) = answers.remove(pick_id) {
+                return Some(payload);
+            }
+        }
+        if ctx.cancel.is_cancelled() {
+            return None;
+        }
+        let still_pending = ctx
+            .agent_state
+            .pending_design_picks
+            .lock()
+            .map(|p| p.contains_key(pick_id))
+            .unwrap_or(false);
+        if !still_pending {
+            if let Ok(mut answers) = ctx.agent_state.design_pick_answers.lock() {
+                if let Some(payload) = answers.remove(pick_id) {
+                    return Some(payload);
+                }
+            }
+            return None;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
+}
+
+pub(super) fn cleanup_pending_design_pick(pick_id: &str, ctx: &ToolCtx<'_>) {
+    if let Ok(mut pendings) = ctx.agent_state.pending_design_picks.lock() {
+        pendings.remove(pick_id);
+    }
+    if let Ok(mut answers) = ctx.agent_state.design_pick_answers.lock() {
+        answers.remove(pick_id);
+    }
+}
+
 pub(super) fn emit_command_resolved(ctx: &ToolCtx<'_>, cmd_id: &str, approved: bool) {
     let _ = ctx.app_handle.emit(
         "agent-command-resolved",
@@ -131,6 +205,10 @@ pub(super) fn escape_xml_attr(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+pub(super) fn escape_xml_preview_source(s: &str) -> String {
+    escape_xml_attr(s)
+}
+
 pub(super) fn escape_todo_content(s: &str) -> String {
     s.replace("</todo>", "</todo\u{200B}>")
         .replace("</todos>", "</todos\u{200B}>")
@@ -163,6 +241,7 @@ pub(super) fn record_tool_event(name: &str, outcome: &ToolOutcome, project_path:
         "save_plan" => "ai_plan_saves",
         "spawn_subagent" => "ai_subagents",
         "update_todos" => "ai_todo_updates",
+        "ask_user" => "ai_todo_updates",
         _ if name.starts_with("mcp_") => "ai_mcp_calls",
         _ => return,
     };

@@ -220,6 +220,7 @@ fn strip_tool_markup_for_api(content: &str) -> String {
         "<cat>", "</cat>", "<ls>", "</ls>", "<edit>", "</edit>",
         "<status>", "</status>", "<tool_result>", "</tool_result>",
         "<search_result", "<inspect_runtime", "<terminal_command", "</terminal_command>",
+        "<questions", "</questions>", "<question", "</question>",
     ];
     let mut out = strip_think_blocks(content);
     for tag in tags {
@@ -379,6 +380,7 @@ pub fn apply_summary(history: &[ChatMessage], summary: Option<&str>) -> Vec<Chat
         timestamp: now_f64(),
         stats: None,
         model: None,
+        feedback: None,
     });
     let start = history.len().saturating_sub(KEEP_RECENT_MESSAGES);
     out.extend_from_slice(&history[start..]);
@@ -454,6 +456,7 @@ mod tests {
                 timestamp: 0.0,
                 stats: None,
                 model: None,
+                feedback: None,
             })
             .collect();
         let trimmed = trim_middle_history(&history, 50_000);
@@ -477,6 +480,7 @@ mod tests {
             timestamp: 0.0,
             stats: None,
             model: None,
+            feedback: None,
         }
     }
 

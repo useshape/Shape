@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { normalizeColorTheme, type ColorThemeId } from "@/lib/themes";
+import { normalizeColorTheme, type ColorThemeId } from "./themes";
 import type { AgentWorkflow } from "@/lib/chat/workflows";
 
 export type WordWrapSetting = "off" | "on" | "bounded";

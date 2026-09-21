@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { ColorThemeId } from "@/lib/themes";
+import type { ColorThemeId } from "@/lib/settings/themes";
 
 /**
  * Theme card mockup: canvas to a window with sidebar and main panes,

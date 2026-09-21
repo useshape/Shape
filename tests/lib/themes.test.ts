@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyAppearanceSettings, DEFAULT_SETTINGS, type ShapeSettings } from "@/lib/settings";
-import { COLOR_THEMES, isColorThemeId, normalizeColorTheme } from "@/lib/themes";
+import { COLOR_THEMES, isColorThemeId, normalizeColorTheme } from "@/lib/settings/themes";
 
 function withColorTheme(colorTheme: unknown): ShapeSettings {
     return {

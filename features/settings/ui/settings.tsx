@@ -42,7 +42,7 @@ import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import { ThemePicker } from "./theme/picker";
-import { normalizeColorTheme } from "@/lib/themes";
+import { normalizeColorTheme } from "@/lib/settings/themes";
 import { SETTINGS_NAV, SETTINGS_PAGE_LEAF_IDS, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
 import { KeyboardShortcutsView } from "./sections/shortcuts";
 import { PluginsSettingsView } from "./sections/plugins";

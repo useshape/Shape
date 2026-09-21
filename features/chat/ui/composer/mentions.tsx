@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { formatMentionToken, type ChatMention } from "@/lib/chat/mentions";
 import { DESIGN_TOKEN_MENTIONS, designTokenById } from "@/lib/chat/design-mentions";
-import type { AgentWorkflow } from "@/lib/chat/workflows";
-import { listDesignPreviewSessions } from "@/lib/agent-preview/store";
+import { workflowSlashToken, type AgentWorkflow } from "@/lib/chat/workflows";
+import { listDesignPreviewSessions, trySelectPendingDesignConcept } from "@/lib/agent-preview/store";
 import { hostnameOf } from "@/lib/ui/favicon";
 import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins/api";
@@ -368,12 +368,15 @@ export function MentionPicker({
     }, [activeCategory, filter, rootItems.length, slashItems.length, mode]);
 
     const pickItem = (item: ChatMention) => {
+        if (item.kind === "design" && item.id) {
+            void trySelectPendingDesignConcept(item.id);
+        }
         onPick(`${formatMentionToken(item)} `);
         onClose();
     };
 
     const pickSlash = (w: AgentWorkflow) => {
-        onPick(`${w.trigger.trim()} `);
+        onPick(`${workflowSlashToken(w)} `);
         onClose();
     };
 
@@ -413,17 +416,13 @@ export function MentionPicker({
             className="shape-popover-content fixed z-dropdown overflow-hidden squircle-2xl border border-border-secondary bg-surface-4/80 backdrop-blur-sm shadow-md"
             style={{ left: pos.left, top: pos.top, width: pos.width }}
         >
-            {mode === "mention" ? (
-                <SearchInput
-                    borderless
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    placeholder="Add files, folders, docs..."
-                    aria-label="Search mentions"
-                />
-            ) : (
-                <div className="px-3 py-2 text-sm font-medium text-text-muted">Commands</div>
-            )}
+            <SearchInput
+                borderless
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder={mode === "slash" ? "Search workflows…" : "Add files, folders, docs..."}
+                aria-label={mode === "slash" ? "Search workflows" : "Search mentions"}
+            />
 
             {mode === "mention" && activeCategory ? (
                 <button
@@ -468,7 +467,7 @@ export function MentionPicker({
                                 ) : (
                                     <Icon icon={RiCommandLine} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
                                 )}
-                                <span className="min-w-0 flex-1 truncate font-medium">{w.trigger.trim()}</span>
+                                <span className="min-w-0 flex-1 truncate font-medium">{workflowSlashToken(w)}</span>
                                 <span className="ml-auto max-w-[50%] truncate text-sm text-text-muted">{w.name}</span>
                             </button>
                         ))

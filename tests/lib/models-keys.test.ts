@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveChatModels, type ModelInfo } from "@/lib/chat/models";
+import { resolveChatModels, type ModelInfo } from "@/lib/settings/models";
 
 function model(partial: Partial<ModelInfo> & Pick<ModelInfo, "id" | "name" | "provider">): ModelInfo {
     return {

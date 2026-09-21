@@ -36,12 +36,12 @@ import {
 import { QueuedMessagesPanel, type QueuedMessage } from "./queue";
 import { ComposerAttachments, ComposerAttachmentsStrip, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
-import { FileIcon } from "@/components/ui/file-icon";
-import { mentionRanges, mentionDisplayLabel, shortenMentionTokensInText, type ChatMention } from "@/lib/chat/mentions";
+import { mentionRanges, shortenMentionTokensInText } from "@/lib/chat/mentions";
+import { slashCommandRanges } from "@/lib/chat/workflows";
 import { resolveChatUsageDisplay } from "@/lib/chat/usage-display";
 import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
 import { UsageRing } from "./usage";
-import { getVisibleModels, isApiModel, resolveChatModels, type ModelInfo } from "@/lib/chat/models";
+import { getVisibleModels, isApiModel, resolveChatModels, type ModelInfo } from "@/lib/settings/models";
 import {
     getCatalogModels,
     getCatalogProviderOrder,
@@ -256,19 +256,14 @@ function isAllowedFile(file: File): boolean {
     return isImageFile(file) || isCodeFile(file) || isAudioFile(file) || isAssetFile(file);
 }
 
-function ComposerMentionChip({ mention }: { mention: ChatMention }) {
-    const label = mentionDisplayLabel(mention);
-    const showFile = mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs";
+function ComposerContextHighlight({ text }: { text: string }) {
     return (
-        <span className="box-decoration-clone inline-flex items-baseline rounded-md bg-accent-text-bg px-0.5 text-accent-text">
-            {showFile ? (
-                <FileIcon
-                    name={label}
-                    isDir={mention.kind === "folder"}
-                    className="mr-0.5 inline h-3 w-3 translate-y-px"
-                />
-            ) : null}
-            @{label}
+        <span className="relative">
+            <span
+                aria-hidden
+                className="absolute inset-y-0 -inset-x-0.5 rounded-md bg-accent-text-bg"
+            />
+            <span className="relative text-accent-text">{text}</span>
         </span>
     );
 }
@@ -282,12 +277,12 @@ const CHAT_MODES = [
 ] as const;
 
 const COMPOSER_HINTS = [
-    "Plan, Build, @ for context",
-    "Drop an image or screenshot to redesign",
-    "Ask to explore the codebase with @codebase",
+    "@ files, / for workflows",
+    "Visual: ask to see a few button styles first",
+    "Drop a screenshot to redesign",
+    "Ask with @codebase before you build",
     "Paste a stack trace to debug",
-    "Describe a UI change and preview it in Visual",
-    "Review a PR or file for bugs and edge cases",
+    "Review a PR or file for edge cases",
 ] as const;
 
 function SwapText({
@@ -1013,20 +1008,31 @@ export function ChatInput({
                         )}
                     >
                         {(() => {
-                            const ranges = mentionRanges(inputValue);
-                            if (ranges.length === 0) {
+                            const mentionRs = mentionRanges(inputValue);
+                            const slashRs = slashCommandRanges(inputValue, settings.ai.workflows ?? []);
+                            const ranges = [
+                                ...mentionRs.map((r) => ({ kind: "mention" as const, ...r })),
+                                ...slashRs.map((r) => ({ kind: "slash" as const, ...r })),
+                            ].sort((a, b) => a.start - b.start);
+                            const merged: typeof ranges = [];
+                            for (const r of ranges) {
+                                const prev = merged[merged.length - 1];
+                                if (prev && r.start < prev.end) continue;
+                                merged.push(r);
+                            }
+                            if (merged.length === 0) {
                                 return inputValue.endsWith("\n") ? `${inputValue}\n` : inputValue || "\u00a0";
                             }
                             const nodes: React.ReactNode[] = [];
                             let cursor = 0;
-                            ranges.forEach((range, i) => {
+                            merged.forEach((range, i) => {
                                 if (range.start > cursor) {
                                     nodes.push(inputValue.slice(cursor, range.start));
                                 }
                                 nodes.push(
-                                    <ComposerMentionChip
-                                        key={`m-${i}`}
-                                        mention={range.mention}
+                                    <ComposerContextHighlight
+                                        key={`${range.kind}-${i}`}
+                                        text={inputValue.slice(range.start, range.end)}
                                     />,
                                 );
                                 cursor = range.end;

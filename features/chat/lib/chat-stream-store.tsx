@@ -20,6 +20,7 @@ const TOOL_LABELS: Record<string, string> = {
     read_terminal: "Reading terminal",
     list_terminals: "Listing terminals",
     inspect_runtime: "Inspecting page",
+    ask_user: "Asking a question",
     render_design_previews: "Creating preview",
     update_todos: "Updating todos",
     save_plan: "Saving plan",
@@ -385,6 +386,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     reasoningEffort?: string;
                     mode?: string;
                     latencyMs?: number;
+                    contextBreakdown?: Record<string, number> | null;
                 };
                 model?: string;
                 error?: string;
@@ -554,6 +556,15 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     "Edit approval required",
                     reason ? `${file}: ${reason}` : file,
                 );
+            }),
+        );
+
+        register(
+            listen<{ id?: string }>("agent-ask-pending", () => {
+                patchLive((live) => {
+                    live.turnPhase = "awaiting_approval";
+                    live.activityLabel = "Waiting for your answers";
+                });
             }),
         );
 

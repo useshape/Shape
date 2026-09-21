@@ -45,5 +45,55 @@ export function upsertTaggedBlockInContent(content: string, chunk: string): stri
     }
   }
 
+  const askStart = chunk.indexOf("<questions");
+  if (askStart >= 0) {
+    const idMatch = chunk.match(/<questions\b[^>]*\bid="([^"]+)"/);
+    const askEnd = chunk.indexOf("</questions>");
+    if (idMatch && askEnd >= 0) {
+      const id = idMatch[1];
+      const block = chunk.slice(askStart, askEnd + "</questions>".length);
+      const marker = `id="${id}"`;
+      const markerPos = content.lastIndexOf(marker);
+      if (markerPos >= 0) {
+        const start = content.lastIndexOf("<questions", markerPos);
+        const existingEnd = content.indexOf("</questions>", markerPos);
+        if (start >= 0 && existingEnd >= 0) {
+          return (
+            content.slice(0, start) +
+            block +
+            content.slice(existingEnd + "</questions>".length) +
+            chunk.slice(0, askStart) +
+            chunk.slice(askEnd + "</questions>".length)
+          );
+        }
+      }
+    }
+  }
+
+  const previewStart = chunk.indexOf("<design_previews");
+  if (previewStart >= 0) {
+    const idMatch = chunk.match(/<design_previews\b[^>]*\bid="([^"]+)"/);
+    const previewEnd = chunk.indexOf("</design_previews>");
+    if (idMatch && previewEnd >= 0) {
+      const id = idMatch[1];
+      const block = chunk.slice(previewStart, previewEnd + "</design_previews>".length);
+      const marker = `id="${id}"`;
+      const markerPos = content.lastIndexOf(marker);
+      if (markerPos >= 0) {
+        const start = content.lastIndexOf("<design_previews", markerPos);
+        const existingEnd = content.indexOf("</design_previews>", markerPos);
+        if (start >= 0 && existingEnd >= 0) {
+          return (
+            content.slice(0, start) +
+            block +
+            content.slice(existingEnd + "</design_previews>".length) +
+            chunk.slice(0, previewStart) +
+            chunk.slice(previewEnd + "</design_previews>".length)
+          );
+        }
+      }
+    }
+  }
+
   return content + chunk;
 }

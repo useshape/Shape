@@ -12,36 +12,36 @@ pub const PREVIEW_READY_TITLE_SUFFIX: &str = "|ready";
 pub const PREVIEW_BUNDLE_FILENAME: &str = "bundle.js";
 pub const PREVIEW_TAILWIND_FILENAME: &str = "tailwind-browser.js";
 
-static PREVIEW_RUNTIME_BUNDLE: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/preview-runtime/bundle.js"));
+static RUNTIME_BUNDLE: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/runtime/bundle.js"));
 
-static PREVIEW_TAILWIND_BROWSER: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/preview-runtime/tailwind-browser.js"));
+static RUNTIME_TAILWIND_BROWSER: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/runtime/tailwind-browser.js"));
 
 #[allow(dead_code)]
-pub fn preview_runtime_bundle_bytes() -> &'static str {
-    PREVIEW_RUNTIME_BUNDLE
+pub fn runtime_bundle_bytes() -> &'static str {
+    RUNTIME_BUNDLE
 }
 
-pub fn ensure_preview_runtime_bundle(dir: &Path) -> Result<(), AppError> {
+pub fn ensure_runtime_bundle(dir: &Path) -> Result<(), AppError> {
     std::fs::create_dir_all(dir)
         .map_err(|e| AppError::Env(format!("Failed to create preview dir: {e}")))?;
     let bundle_path = dir.join(PREVIEW_BUNDLE_FILENAME);
     let needs_bundle = match std::fs::metadata(&bundle_path) {
-        Ok(meta) => meta.len() as usize != PREVIEW_RUNTIME_BUNDLE.len(),
+        Ok(meta) => meta.len() as usize != RUNTIME_BUNDLE.len(),
         Err(_) => true,
     };
     if needs_bundle {
-        std::fs::write(&bundle_path, PREVIEW_RUNTIME_BUNDLE)
+        std::fs::write(&bundle_path, RUNTIME_BUNDLE)
             .map_err(|e| AppError::Env(format!("Failed to write preview runtime bundle: {e}")))?;
     }
     let tailwind_path = dir.join(PREVIEW_TAILWIND_FILENAME);
     let needs_tailwind = match std::fs::metadata(&tailwind_path) {
-        Ok(meta) => meta.len() as usize != PREVIEW_TAILWIND_BROWSER.len(),
+        Ok(meta) => meta.len() as usize != RUNTIME_TAILWIND_BROWSER.len(),
         Err(_) => true,
     };
     if needs_tailwind {
-        std::fs::write(&tailwind_path, PREVIEW_TAILWIND_BROWSER).map_err(|e| {
+        std::fs::write(&tailwind_path, RUNTIME_TAILWIND_BROWSER).map_err(|e| {
             AppError::Env(format!("Failed to write preview tailwind browser: {e}"))
         })?;
     }
@@ -115,14 +115,14 @@ fn replace_script_src_containing(html: &str, needle: &str, replacement: &str) ->
 /// Inline React + Tailwind browser bundles into the document.
 /// Required for live iframes on Windows: WebView2 often cannot load sibling
 /// `asset.localhost` script URLs from inside an iframe (`convertFileSrc` HTML).
-pub fn inline_preview_runtime_scripts(document: &str) -> String {
+pub fn inline_runtime_scripts(document: &str) -> String {
     let tw_tag = format!(
         "<script>\n{}\n</script>",
-        escape_for_inline_script(PREVIEW_TAILWIND_BROWSER)
+        escape_for_inline_script(RUNTIME_TAILWIND_BROWSER)
     );
     let bundle_tag = format!(
         "<script>\n{}\n</script>",
-        escape_for_inline_script(PREVIEW_RUNTIME_BUNDLE)
+        escape_for_inline_script(RUNTIME_BUNDLE)
     );
     let with_tw = replace_script_src_containing(document, "tailwind-browser.js", &tw_tag);
     replace_script_src_containing(&with_tw, "bundle.js", &bundle_tag)
@@ -134,7 +134,7 @@ pub fn write_live_preview_document(
     concept_id: &str,
     document: &str,
 ) -> Result<PathBuf, AppError> {
-    let html = inline_preview_runtime_scripts(document);
+    let html = inline_runtime_scripts(document);
     write_concept_document(session_id, concept_id, &html)
 }
 
@@ -438,13 +438,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn inline_preview_runtime_scripts_embeds_bundles() {
+    fn inline_runtime_scripts_embeds_bundles() {
         let shell = build_react_sandbox_html(
             r#"function App() { return <div className="p-8">Hello</div>; }"#,
             None,
             false,
         );
-        let inlined = inline_preview_runtime_scripts(&shell);
+        let inlined = inline_runtime_scripts(&shell);
         assert!(!inlined.contains(r#"src="bundle.js""#));
         assert!(!inlined.contains(r#"src="tailwind-browser.js""#));
         assert!(inlined.contains("ShapePreviewRuntime"));
@@ -491,8 +491,8 @@ mod tests {
 
     #[test]
     fn bundle_is_embedded() {
-        assert!(PREVIEW_RUNTIME_BUNDLE.contains("ShapePreviewRuntime"));
-        assert!(PREVIEW_TAILWIND_BROWSER.contains("tailwindcss"));
+        assert!(RUNTIME_BUNDLE.contains("ShapePreviewRuntime"));
+        assert!(RUNTIME_TAILWIND_BROWSER.contains("tailwindcss"));
     }
 
     #[test]

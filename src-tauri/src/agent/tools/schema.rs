@@ -61,6 +61,7 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         generate_svg(),
         generate_image(),
         save_media(),
+        ask_user(),
         finish(),
     ]);
     tools
@@ -80,6 +81,7 @@ fn ask_tools() -> Vec<Value> {
         plugin_tools(),
         read_lints(),
         spawn_subagent(),
+        ask_user(),
         finish(),
     ]
 }
@@ -116,6 +118,7 @@ pub fn tools_for_mode_family_and_memory(
         "ask" => ask_tools(),
         "visual" | "design" => {
             let mut tools = all_tools_for_family(family);
+            insert_before_finish(&mut tools, render_design_previews());
             tools.extend(extra);
             tools
         }
@@ -597,6 +600,47 @@ fn finish() -> Value {
     )
 }
 
+fn ask_user() -> Value {
+    tool(
+        "ask_user",
+        "Pause and show click-through multiple-choice questions in chat. The user picks an option (or types something else) and you continue with their answers. Use sparingly: only when a real user decision would change the work and you cannot infer it from the project. Not for every turn, not design-only. Prefer defaults. Do not ask the same thing in prose. Batch related questions in one call. Wait for the tool result.",
+        json!({
+            "type": "object",
+            "properties": {
+                "questions": {
+                    "type": "array",
+                    "description": "1–6 questions. Each needs a prompt and 2–8 options. Mark one option recommended when you have a lean.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "description": "Stable id (q1, palette). Optional; assigned if omitted."},
+                            "prompt": {"type": "string", "description": "The question shown to the user."},
+                            "allow_multiple": {"type": "boolean", "description": "If true, more than one option can be selected."},
+                            "options": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {"type": "string"},
+                                        "label": {"type": "string"},
+                                        "recommended": {"type": "boolean"}
+                                    },
+                                    "required": ["label"],
+                                    "additionalProperties": false
+                                }
+                            }
+                        },
+                        "required": ["prompt", "options"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["questions"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn list_chats() -> Value {
     tool(
         "list_chats",
@@ -628,28 +672,27 @@ fn read_chat() -> Value {
     )
 }
 
-#[allow(dead_code)]
 fn render_design_previews() -> Value {
     tool(
         "render_design_previews",
-        "Show ONE interactive component preview in chat (Visual mode). Call ONLY when the user asks to see / preview / mock a component before adding it. Do NOT call for routine builds — if they say build it / add it / don't stop, edit the project directly. Exactly one concept. Prefer jsx with function App(). Use the project's UI kit when present; otherwise Radix-style primitives + Tailwind. No remote images. No multi-option galleries. The preview frame is full-width and centers #root — keep the component in normal document flow (no full-bleed absolute positioning that clips). Leave room for menus/popovers. Prefer width≈640 height≈360. After the preview renders, call finish immediately with a short note; do not keep calling tools.",
+        "Visual mode only. Show 1–3 style variants of ONE component in chat (e.g. three buttons, or three dropdowns — never mix types), then WAIT for the user to pick one (or @mention it). Call ONLY when they explicitly ask to see options, mock a component, or generate a small design-system of a single control before you add it. Do NOT call for routine 'build/add this'. Never full pages. Prefer jsx with function App(). Match the project's UI kit; otherwise Radix + Tailwind. No remote images. After this tool returns the chosen id, implement that variant.",
         json!({
             "type": "object",
             "properties": {
                 "concepts": {
                     "type": "array",
                     "minItems": 1,
-                    "maxItems": 1,
+                    "maxItems": 3,
                     "items": {
                         "type": "object",
                         "properties": {
                             "id": {"type": "string"},
-                            "name": {"type": "string", "description": "Internal component name (not shown in chat)."},
-                            "style": {"type": "string", "description": "Internal note (not shown in chat)."},
-                            "jsx": {"type": "string", "description": "React source defining App (function App() { return (...); }). No export/import. Tailwind className only. Keep the component centered; avoid position:fixed/absolute that pins to the iframe corner."},
+                            "name": {"type": "string", "description": "Short label shown on the card (e.g. Soft, Solid)."},
+                            "style": {"type": "string", "description": "One-line difference vs the other variants."},
+                            "jsx": {"type": "string", "description": "React source defining App (function App() { return (...); }). No export/import. Tailwind className only. One component, not a page."},
                             "html": {"type": "string", "description": "Legacy fallback: raw body HTML only (prefer jsx)."},
                             "width": {"type": "integer", "description": "Logical viewport width (default 640)."},
-                            "height": {"type": "integer", "description": "Preview card height (default 360)."}
+                            "height": {"type": "integer", "description": "Preview frame height (default 360)."}
                         },
                         "required": ["id", "name", "style"],
                         "additionalProperties": false
@@ -725,7 +768,7 @@ fn plugin_run() -> Value {
 fn generate_svg() -> Value {
     tool(
         "generate_svg",
-        "Generate a vector SVG via the svg tool (not a chat model). Use for icons, logos, and illustrations the user asked to create as SVG. Preview appears in chat. Do not write it into the project unless they asked to save or use the file — then call save_media with the returned url.",
+        "Generate a vector SVG via the svg tool (not a chat model). Use for icons, logos, and illustrations the user asked to create as SVG. Preview appears in chat at the tool call. If this tool errors as not configured or unavailable, do not retry generate_image, and do not write an SVG file into the project unless they explicitly asked to create a file.",
         json!({
             "type": "object",
             "properties": {
@@ -740,7 +783,7 @@ fn generate_svg() -> Value {
 fn generate_image() -> Value {
     tool(
         "generate_image",
-        "Generate a raster image (PNG) via the image tool (not a chat model). Cheap quality suitable for mock assets, photos, and UI pictures. Preview appears in chat. Do not write it into the project unless they asked to save or use the file — then call save_media with the returned url.",
+        "Generate a raster image (PNG) via the image tool (not a chat model). Cheap quality suitable for mock assets, photos, and UI pictures. Preview appears in chat at the tool call. If this tool errors as not configured or unavailable, do not retry generate_svg, and do not write an image file into the project unless they explicitly asked to create a file.",
         json!({
             "type": "object",
             "properties": {
@@ -871,6 +914,7 @@ mod tests {
         assert!(!names.contains(&"generate_svg".to_string()));
         assert!(!names.contains(&"generate_image".to_string()));
         assert!(!names.contains(&"save_media".to_string()));
+        assert!(names.contains(&"ask_user".to_string()));
     }
 
     #[test]
@@ -883,6 +927,7 @@ mod tests {
         assert!(names.contains(&"generate_svg".to_string()));
         assert!(names.contains(&"generate_image".to_string()));
         assert!(names.contains(&"save_media".to_string()));
+        assert!(names.contains(&"ask_user".to_string()));
     }
 
     #[test]
@@ -899,6 +944,16 @@ mod tests {
         let names = tool_names(&tools);
         assert!(names.contains(&"inspect_runtime".to_string()));
         assert!(names.contains(&"screenshot_page".to_string()));
+    }
+
+    #[test]
+    fn visual_mode_has_design_previews_code_does_not() {
+        let visual = tools_for_mode_and_family("visual", ModelFamily::OpenAi, vec![]);
+        let code = tools_for_mode_and_family("code", ModelFamily::OpenAi, vec![]);
+        let v = tool_names(&visual);
+        let c = tool_names(&code);
+        assert!(v.contains(&"render_design_previews".to_string()));
+        assert!(!c.contains(&"render_design_previews".to_string()));
     }
 
     #[test]

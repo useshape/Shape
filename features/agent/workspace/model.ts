@@ -38,6 +38,7 @@ export const DEFAULT_TABS: WorkspaceTab[] = [
     { id: "changes", kind: "changes", title: "Changes" },
     { id: "graph", kind: "graph", title: "Graph" },
     { id: "files", kind: "files", title: "Files" },
+    { id: "browser", kind: "browser", title: "Browser" },
 ];
 
 export function iconFor(kind: TabKind): RemixiconComponentType {

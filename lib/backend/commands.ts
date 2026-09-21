@@ -752,6 +752,24 @@ export const commands = {
     // Edit approval (when "require edit approval" is enabled)
     resolveEditApproval: (id: string, approved: boolean) =>
         invokeCommand<void>("resolve_edit_approval", { id, approved }),
+    answerAskUser: (id: string, answers: string, skipped?: boolean) =>
+        invokeCommand<void>("answer_ask_user", { id, answers, skipped: skipped ?? false }),
+    selectDesignPreview: (id: string, conceptId?: string, skipped?: boolean, tweaks?: string) =>
+        invokeCommand<void>("select_design_preview", {
+            id,
+            skipped: skipped ?? false,
+            ...(conceptId ? { concept_id: conceptId } : {}),
+            ...(tweaks ? { tweaks } : {}),
+        }),
+    forkConversation: (messageIndex: number) =>
+        invokeCommand<{ id: string; title: string }>("fork_conversation", {
+            message_index: messageIndex,
+        }),
+    setMessageFeedback: (index: number, feedback?: "up" | "down" | null) =>
+        invokeCommand<void>("set_message_feedback", {
+            index,
+            feedback: feedback ?? null,
+        }),
     setIndexEmbeddings: (enabled: boolean) =>
         invokeCommand<void>("set_index_embeddings", { enabled }),
     setChatMemoryEnabled: (enabled: boolean) =>

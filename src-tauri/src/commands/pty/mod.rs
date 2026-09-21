@@ -1201,6 +1201,11 @@ async fn spawn_pty_with_command(
         let mut buf = [0u8; 8192];
         loop {
             if token.is_cancelled() {
+                meta.mark_exited(meta.exit_code().or(Some(-1)));
+                if let Some(cb) = &callbacks {
+                    (cb.on_exit)(session_id, meta.exit_code().unwrap_or(-1));
+                }
+                let _ = app_for_thread.emit("pty-exit", PtyExit { id: session_id });
                 break;
             }
             match reader.read(&mut buf) {
