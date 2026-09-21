@@ -8,7 +8,7 @@ import {
   isModelAllowedInCatalog,
   type ShapeCatalog,
 } from "@/lib/catalog";
-import type { ModelInfo } from "@/lib/chat/models";
+import type { ModelInfo } from "@/lib/settings/models";
 
 type CatalogState = {
   catalog: ShapeCatalog | null;

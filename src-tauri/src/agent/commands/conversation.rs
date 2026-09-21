@@ -321,3 +321,86 @@ pub fn get_open_turn_journals() -> Vec<journals::TurnJournal> {
     journals::list_open_turn_journals()
 }
 
+#[tauri::command]
+pub fn fork_conversation(
+    message_index: usize,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, AppError> {
+    let proj_path = app_state
+        .0
+        .lock()?
+        .project_path
+        .clone()
+        .ok_or_else(|| AppError::Message("No project is open.".to_string()))?;
+    let _ = history::save_current_conversation(&state, &proj_path);
+
+    let source_id = state
+        .current_conversation_id
+        .lock()?
+        .clone()
+        .unwrap_or_default();
+    let source_title = state
+        .title
+        .lock()?
+        .clone()
+        .unwrap_or_else(|| "Chat".to_string());
+    let history = state.history.lock()?.clone();
+    if history.is_empty() {
+        return Err(AppError::Message("Nothing to fork.".to_string()));
+    }
+    let end = message_index.min(history.len().saturating_sub(1));
+    let mut sliced = history[..=end].to_vec();
+    let attr_title = source_title.replace('&', "&amp;").replace('"', "&quot;");
+    let banner = format!(
+        "<forked_from id=\"{}\" title=\"{}\" />\n",
+        source_id.replace('"', ""),
+        attr_title
+    );
+    if let Some(msg) = sliced.get_mut(end) {
+        if msg.role == "assistant" && !msg.content.contains("<forked_from") {
+            msg.content = format!("{}{}", banner, msg.content);
+        }
+    }
+
+    let new_id = format!("fork-{}", history::now_f64() as u64);
+    let new_title = format!("Fork of {source_title}");
+    history::upsert_conversation_snapshot(
+        &state,
+        &proj_path,
+        &new_id,
+        &new_title,
+        sliced.clone(),
+    )?;
+
+    *state.history.lock()? = sliced;
+    *state.title.lock()? = Some(new_title.clone());
+    *state.current_conversation_id.lock()? = Some(new_id.clone());
+    state.clear_design_preview_state();
+    state.clear_file_checkpoints();
+
+    Ok(serde_json::json!({ "id": new_id, "title": new_title }))
+}
+
+#[tauri::command]
+pub fn set_message_feedback(
+    index: usize,
+    feedback: Option<String>,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    {
+        let mut hist = state.history.lock()?;
+        let Some(msg) = hist.get_mut(index) else {
+            return Err(AppError::Message("Message not found.".to_string()));
+        };
+        msg.feedback = feedback
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| s == "up" || s == "down");
+    }
+    if let Some(path) = app_state.0.lock()?.project_path.clone() {
+        let _ = history::save_current_conversation(&state, &path);
+    }
+    Ok(())
+}
+

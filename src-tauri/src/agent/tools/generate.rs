@@ -27,11 +27,21 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         .unwrap_or("")
         .trim();
     if prompt.is_empty() {
-        return fail(kind, "prompt is required.");
+        return fail(kind, "prompt is required.", false);
     }
     if ctx.api_key.is_empty() {
-        return fail(kind, "Sign in to Shape to generate media.");
+        return fail(kind, "Sign in to Shape to generate media.", false);
     }
+
+    let tag = if kind == "svg" {
+        "generated_svg"
+    } else {
+        "generated_image"
+    };
+    ctx.emit_ui_token(&format!(
+        "<{tag} prompt=\"{}\">",
+        xml_attr(prompt)
+    ));
 
     match super::plugins::plugin_request(
         "POST",
@@ -45,7 +55,8 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
     {
         Ok(data) => {
             if let Some(err) = data.get("error").and_then(|v| v.as_str()) {
-                return fail(kind, err);
+                ctx.emit_ui_token(&format!("</{tag}>\n"));
+                return fail(kind, err, true);
             }
             let url = data
                 .get("url")
@@ -53,46 +64,53 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
                 .unwrap_or("")
                 .trim();
             if url.is_empty() {
-                return fail(kind, "Generation did not return an image.");
+                ctx.emit_ui_token(&format!("</{tag}>\n"));
+                return fail(kind, "Generation did not return an image.", true);
             }
             let credits = data
                 .get("creditsCharged")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
-            let tag = if kind == "svg" {
-                "generated_svg"
-            } else {
-                "generated_image"
-            };
+            ctx.emit_ui_token(&format!("{url}</{tag}>\n"));
             let label = if kind == "svg" { "SVG" } else { "image" };
-            let ui = format!(
-                "<{tag} prompt=\"{}\" credits=\"{:.2}\">{url}</{tag}>\n",
-                xml_attr(prompt),
-                credits
-            );
             let result = format!(
                 "Generated an {label} (tool call, billed {:.2} Shape credits). Preview is in the chat UI. Do not dump binary/markup unless they asked. Only write it into the project with `save_media` if they asked to save or use it as a file.\nurl: {url}",
                 credits
             );
             ToolOutcome {
                 tool_result: result,
-                ui_chunk: ui,
+                ui_chunk: String::new(),
                 side_effect: None,
             }
         }
-        Err(e) => fail(kind, &e),
+        Err(e) => {
+            ctx.emit_ui_token(&format!("</{tag}>\n"));
+            fail(kind, &e, true)
+        }
     }
 }
 
-fn fail(kind: &str, message: &str) -> ToolOutcome {
+fn fail(kind: &str, message: &str, already_streamed_card: bool) -> ToolOutcome {
     let name = if kind == "svg" {
         "generate_svg"
     } else {
         "generate_image"
     };
+    let configured = !message.to_ascii_lowercase().contains("not configured");
+    let extra = if configured {
+        String::new()
+    } else {
+        " Do not retry generate_svg or generate_image. Do not write an SVG or image file into the project unless the user explicitly asked for a file. Briefly tell them generation is unavailable."
+            .to_string()
+    };
+    let ui = if already_streamed_card {
+        String::new()
+    } else {
+        format!("\n<tool_result>\n[{name}] ERROR: {message}\n</tool_result>\n")
+    };
     ToolOutcome {
-        tool_result: format!("ERROR: {message}"),
-        ui_chunk: format!("\n<tool_result>\n[{name}] ERROR: {message}\n</tool_result>\n"),
+        tool_result: format!("ERROR: {message}.{extra}"),
+        ui_chunk: ui,
         side_effect: None,
     }
 }

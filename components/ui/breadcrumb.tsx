@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Children, Fragment, isValidElement } from "react";
 import type { ComponentType, ReactNode, Ref } from "react";
 import { RiArrowRightSLine } from "@remixicon/react";
-import { cn as cx } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 
 /**
@@ -44,7 +44,7 @@ export function Breadcrumb({
     <nav
       ref={ref}
       aria-label={ariaLabel}
-      className={cx(
+      className={cn(
         "flex w-full items-center overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
@@ -93,7 +93,7 @@ export function BreadcrumbItem({
     return (
       <li
         aria-current="page"
-        className={cx(
+        className={cn(
           "flex items-center gap-1.5 text-sm whitespace-nowrap text-text-secondary",
           className,
         )}
@@ -103,7 +103,7 @@ export function BreadcrumbItem({
     );
   }
 
-  const interactiveClass = cx(
+  const interactiveClass = cn(
     "-mx-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-md whitespace-nowrap text-text-tertiary",
     "transition-colors duration-150 ease outline-none",
     "hover:bg-background-primary-hover hover:text-text-secondary",
@@ -118,7 +118,7 @@ export function BreadcrumbItem({
           {content}
         </Link>
       ) : (
-        <button type="button" onClick={onClick} className={cx("cursor-pointer", interactiveClass)}>
+        <button type="button" onClick={onClick} className={cn("cursor-pointer", interactiveClass)}>
           {content}
         </button>
       )}

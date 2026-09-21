@@ -1,6 +1,6 @@
 "use client";
 
-import { RiArrowLeftLine, RiArrowRightLine, RiExternalLinkLine, RiGlobalLine, RiPaletteLine, RiRefreshLine } from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowRightLine, RiExternalLinkLine, RiPaletteLine, RiRefreshLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -41,6 +41,10 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
     useEffect(() => {
         seedPreviewFromDevUrl(getLastDevUrl());
         ensurePreviewLoaded();
+        const last = getLastDevUrl();
+        if (last && !getPreviewCurrentUrl()) {
+            void navigatePreview(last);
+        }
     }, []);
 
     useEffect(() => {
@@ -309,19 +313,14 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                         referrerPolicy="no-referrer"
                     />
                 ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-                        <Icon icon={RiGlobalLine} className="text-text-muted" />
-                        <p>Enter a URL and press Enter.</p>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="mt-2 h-7 px-3 text-xs"
-                            onClick={() => void navigatePreview(urlBar || "http://localhost:3000")}
-                        >
-                            Load {urlBar || "http://localhost:3000"}
-                        </Button>
-                    </div>
+                    <iframe
+                        title="Browser"
+                        className="h-full w-full border-0 bg-editor"
+                        srcDoc={`<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,sans-serif;background:#191919;color:#9a9a9a}
+p{margin:8px 0 0;font-size:13px}
+</style></head><body><p>Browser</p><p>Enter a URL above and press Enter.</p></body></html>`}
+                    />
                 )}
                 {loading ? (
                     <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 animate-pulse bg-accent" />

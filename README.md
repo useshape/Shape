@@ -1,103 +1,79 @@
-![Shape](https://github.com/useshape/Shape/blob/main/public/hero.png)
+<p align="center">
+  <a href="https://useshape.org">
+    <img src="./public/logos/logo.svg" width="72" alt="Shape logo" />
+  </a>
+</p>
 
-Shape is a desktop IDE with agentic AI, design tools, Git management, and language tooling.
+<h2 align="center">The desktop IDE for agentic software</h2>
 
-**[Download for Windows ➝](https://useshape.org/download)** 
+<p align="center">
+  <a href="https://useshape.org"><img src="https://img.shields.io/badge/Website-useshape.org-181818" alt="Website" /></a>
+  ·
+  <a href="https://useshape.org/docs/introduction/quick-start">Documentation</a>
+  ·
+  <a href="https://useshape.org/download">Download</a>
+</p>
 
-Other platforms are not yet available.
+# Why Shape
 
-### [Read the docs ➝](https://useshape.org/docs/introduction/quick-start)
+Shape is a signed-in desktop IDE: chat, editor, Git, terminal, and a real in-app browser in one window. The agent reads the repo, edits files, runs commands, and can pause on click-through questions when it actually needs a decision.
 
-## Documentation
+You ship the app like the rest of your stack — locally, with tests, and with a native Windows build.
 
-- Introduction
-  - [Installing Shape](https://useshape.org/docs/introduction/install)
-  - [Quick Start](https://useshape.org/docs/introduction/quick-start)
-  - [Accounts](https://useshape.org/docs/introduction/accounts)
-- Workspace
-  - [Workbench Tour](https://useshape.org/docs/workspace/workbench-tour)
-  - [Titlebar and Panels](https://useshape.org/docs/workspace/titlebar-and-panels)
-  - [Layout and Zen Mode](https://useshape.org/docs/workspace/layout-and-zen-mode)
-  - [Command Palette](https://useshape.org/docs/workspace/command-palette)
-  - [Activity Bar](https://useshape.org/docs/workspace/activity-bar)
-- Editor
-  - [Editing Files](https://useshape.org/docs/editor/editing-files)
-  - [Languages and tooling](https://useshape.org/docs/editor/languages-and-tooling)
-  - [Tabs and Splits](https://useshape.org/docs/editor/tabs-and-splits)
-  - [IntelliSense](https://useshape.org/docs/editor/intellisense)
-  - [Diff and Merge](https://useshape.org/docs/editor/diff-and-merge)
-  - [Markdown Preview](https://useshape.org/docs/editor/markdown-preview)
-  - [Design Tools](https://useshape.org/docs/editor/design-tools)
-- Files
-  - [File Explorer](https://useshape.org/docs/files/file-explorer)
-  - [Workspace Search](https://useshape.org/docs/files/workspace-search)
-  - [Outline](https://useshape.org/docs/files/outline)
-  - [Bookmarks](https://useshape.org/docs/files/bookmarks)
-- Git
-  - [Source Control](https://useshape.org/docs/git/source-control)
-  - [Branches and Remotes](https://useshape.org/docs/git/branches-and-remotes)
-  - [Git Graph](https://useshape.org/docs/git/git-graph)
-  - [GitHub Sign In](https://useshape.org/docs/git/github-sign-in)
-- AI
-  - [Chat Overview](https://useshape.org/docs/ai/chat-overview)
-  - [Chat Modes](https://useshape.org/docs/ai/chat-modes)
-  - [Reviewing Edits](https://useshape.org/docs/ai/reviewing-edits)
-  - [Models and Pricing](https://useshape.org/docs/ai/models-and-credits)
-  - [AI Settings](https://useshape.org/docs/ai/ai-settings)
-- Terminal
-  - [Integrated Terminal](https://useshape.org/docs/terminal/integrated-terminal)
-  - [NPM Scripts](https://useshape.org/docs/terminal/npm-scripts)
-  - [Problems, Output, and Tests](https://useshape.org/docs/terminal/problems-output-tests)
-- Settings
-  - [Settings Overview](https://useshape.org/docs/settings/settings-overview)
-  - [Editor Settings](https://useshape.org/docs/settings/editor-settings)
-  - [Git Settings](https://useshape.org/docs/settings/git-settings)
-  - [Terminal Settings](https://useshape.org/docs/settings/terminal-settings)
-  - [Lint and LSP](https://useshape.org/docs/settings/lint-and-lsp)
-- Tutorials
-  - [First Project](https://useshape.org/docs/tutorials/first-project)
-  - [Clone and Commit](https://useshape.org/docs/tutorials/clone-and-commit)
-  - [Refactor with AI](https://useshape.org/docs/tutorials/refactor-with-ai)
-- Reference
-  - [Keyboard Shortcuts](https://useshape.org/docs/reference/keyboard-shortcuts)
-- Help
-  - [Getting started](https://useshape.org/docs/help/getting-started)
-  - [FAQ](https://useshape.org/docs/help/faq)
-  - [Troubleshooting](https://useshape.org/docs/help/troubleshooting)
-  - [Contact support](https://useshape.org/docs/help/contact-support)
-  - [Error codes](https://useshape.org/docs/help/errors)
-    - [1000 Auth required](https://useshape.org/docs/help/errors/1000)
-    - [1001 Offline](https://useshape.org/docs/help/errors/1001)
-    - [1002 Session expired](https://useshape.org/docs/help/errors/1002)
-    - [1003 Sign-in failed](https://useshape.org/docs/help/errors/1003)
-    - [2000 AI provider failure](https://useshape.org/docs/help/errors/2000)
-    - [2001 Usage or credits](https://useshape.org/docs/help/errors/2001)
-    - [2002 Network timeout](https://useshape.org/docs/help/errors/2002)
-    - [2003 Payment required](https://useshape.org/docs/help/errors/2003)
-    - [2100 Rate limited](https://useshape.org/docs/help/errors/2100)
-    - [3000 Official build required](https://useshape.org/docs/help/errors/3000)
-    - [4000 Workspace or file access](https://useshape.org/docs/help/errors/4000)
-    - [4100 Git failed](https://useshape.org/docs/help/errors/4100)
-    - [4200 Language server](https://useshape.org/docs/help/errors/4200)
-    - [4300 Index or search](https://useshape.org/docs/help/errors/4300)
-    - [4400 Terminal](https://useshape.org/docs/help/errors/4400)
-    - [4500 Update failed](https://useshape.org/docs/help/errors/4500)
-    - [9000 Unknown error](https://useshape.org/docs/help/errors/9000)
-- For contributors
-  - [Overview](https://useshape.org/docs/developing/overview)
-  - [Local development](https://useshape.org/docs/developing/local-development)
-  - [Architecture](https://useshape.org/docs/developing/architecture)
-  - [Tauri commands and IPC](https://useshape.org/docs/developing/tauri-ipc)
-  - [Agent tools](https://useshape.org/docs/developing/agent-tools)
-  - [Language servers](https://useshape.org/docs/developing/language-servers)
-  - [Indexing and search](https://useshape.org/docs/developing/indexing-and-search)
-  - [Client trust and usage](https://useshape.org/docs/developing/client-trust)
+# Installation
 
-## Contributing
+### Download
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for ways you can contribute.
+The fastest way to get started is the Windows installer:
 
-## Licensing
+```text
+https://useshape.org/download
+```
+
+Sign in, open a folder, and start a chat.
+
+### Build from source
+
+Install Node.js 18+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/), then:
+
+```bash
+cd shape
+npm install
+npm run tauri:dev
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) and the [local development guide](https://useshape.org/docs/developing/local-development).
+
+# In the box
+
+Shape gives you the pieces of a modern coding environment and lets the agent drive them.
+
+- **Agent chat** — Code, Ask, Plan, and Review. Tools for files, grep, terminal, Git, plugins, and image/SVG generation. When the agent needs a real decision, it can show numbered click-through questions instead of a wall of prose.
+- **Workbench** — Editor, files, source control, Git graph, pull requests, and terminal docked next to chat.
+- **Browser** — A workspace Browser tab with URL bar, back/forward, and design inspect on local sites.
+- **Design runtime** — The `runtime/` bundle (React + Tailwind in the page) powers live HTML/design previews.
+
+Want to go deeper? Read the [user docs](https://useshape.org/docs/introduction/quick-start) or the [developer reference](https://useshape.org/docs/developing/overview).
+
+# Stack
+
+- [TypeScript](https://www.typescriptlang.org/)
+- [Next.js](https://nextjs.org/) (App Router)
+- [Tauri 2](https://v2.tauri.app/) + [Rust](https://www.rust-lang.org/)
+- [React](https://react.dev/)
+- [PostgreSQL](https://www.postgresql.org/) on the cloud side for accounts and usage
+
+# Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Code you submit is licensed under [BUSL-1.1](./LICENSE), same as the rest of the repo.
+
+```bash
+npm run test          # Vitest (builds runtime first)
+npm run test:rust     # Cargo
+npm run test:all      # Both
+```
+
+# License
 
 Shape is licensed under the [Business Source License 1.1](./LICENSE) (BUSL-1.1).
 

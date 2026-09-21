@@ -41,7 +41,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
         <SettingSection
             id="settings-ai-workflows"
             title="Workflows"
-            description="Slash commands and trigger phrases load a prompt and can run pre-approved plugin tools."
+            description="Type / in chat (same picker as @) to run a slash command, or use a trigger phrase. Each workflow loads a prompt and can pre-approve plugin tools."
             action={
                 <Button
                     size="sm"
@@ -220,7 +220,7 @@ function WorkflowDialog({
                         {existing.some((x) => x.id === draft.id) ? "Edit workflow" : "New workflow"}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                       A preconfigured workflow that you can trigger.
+                        Type / in the composer to pick this workflow, or mention its trigger phrase in a message.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="flex flex-col gap-3 px-1 pb-2">

@@ -64,12 +64,16 @@ type AgentTerminalEvent = {
  * Subscribe to live output for one command. `enabled` avoids piling up
  * listeners for historical (already finished) transcript rows.
  */
-export function useAgentTerminalStream(commandId: string | undefined, enabled: boolean): StreamState {
+export function useAgentTerminalStream(
+    commandId: string | undefined,
+    enabled: boolean,
+    sessionIdHint?: number,
+): StreamState {
     const [state, setState] = useState<StreamState>({
         phase: "idle",
         output: "",
         exitCode: null,
-        sessionId: null,
+        sessionId: sessionIdHint ?? null,
         cancelled: false,
         waitingForInput: false,
     });
@@ -78,7 +82,7 @@ export function useAgentTerminalStream(commandId: string | undefined, enabled: b
     useEffect(() => {
         if (!commandId || !enabled) return;
         let disposed = false;
-        const unlistenPromise = listen<AgentTerminalEvent>("agent-terminal-stream", (event) => {
+        const unlistenStream = listen<AgentTerminalEvent>("agent-terminal-stream", (event) => {
             const payload = event.payload;
             if (disposed || !payload || payload.commandId !== commandId) return;
             if (payload.kind === "start") {
@@ -125,11 +129,29 @@ export function useAgentTerminalStream(commandId: string | undefined, enabled: b
                 }));
             }
         });
+        const unlistenPty = listen<{ id?: number }>("pty-exit", (event) => {
+            if (disposed) return;
+            const sid = event.payload?.id;
+            if (sid == null) return;
+            setState((prev) => {
+                const match = prev.sessionId === sid || sessionIdHint === sid;
+                if (!match) return prev;
+                if (prev.phase === "finished") return prev;
+                return {
+                    ...prev,
+                    phase: "finished",
+                    exitCode: prev.exitCode ?? -1,
+                    cancelled: true,
+                    waitingForInput: false,
+                };
+            });
+        });
         return () => {
             disposed = true;
-            void unlistenPromise.then((unlisten) => unlisten()).catch(() => { /* ignore */ });
+            void unlistenStream.then((unlisten) => unlisten()).catch(() => { /* ignore */ });
+            void unlistenPty.then((unlisten) => unlisten()).catch(() => { /* ignore */ });
         };
-    }, [commandId, enabled]);
+    }, [commandId, enabled, sessionIdHint]);
 
     return state;
 }
@@ -167,7 +189,7 @@ export function LiveTerminalOutput({
             ref={scrollRef}
             onScroll={onScroll}
             style={{ maxHeight }}
-            className="my-1 overflow-y-auto custom-scrollbar font-mono text-[12px] leading-[1.55] text-text-secondary"
+            className="my-1 overflow-y-auto custom-scrollbar font-mono text-sm leading-[1.55] text-text-secondary"
         >
             {lines.map((line, i) => {
                 const warn = /\[warn\]|\bwarn(ing)?:/i.test(line);
@@ -230,13 +252,13 @@ function TerminalCommandMenu({ command }: { command: string }) {
                                 updateSettingSection("ai", { autoRunMode: opt.value });
                                 void commands.updateTurnPolicy({ autoRunMode: opt.value });
                             }}
-                            className={cn("flex flex-col items-start gap-0.5 py-2", selected && "bg-panel-hover")}
+                            className={cn("flex flex-col items-start py-2")}
                         >
                             <span className="flex w-full items-center gap-2 text-sm text-text-primary">
                                 <span className="flex-1">{opt.label}</span>
                                 {selected ? <Icon icon={RiCheckLine} /> : null}
                             </span>
-                            <span className="text-xs text-text-muted leading-snug">{opt.description}</span>
+                            <span className="text-text-muted">{opt.description}</span>
                         </DropdownMenuItem>
                     );
                 })}
@@ -292,11 +314,6 @@ function TerminalCommandRow({
                     canExpand && "cursor-pointer",
                 )}
             >
-                {isRunning ? (
-                    <span className="t-spin-check shrink-0" data-state="spin">
-                        <span className="t-spin-check__ring" />
-                    </span>
-                ) : null}
                 <span>
                     {statusLabel}
                     {summary ? (
@@ -320,7 +337,7 @@ function TerminalCommandRow({
                 ) : null}
             </button>
             <Collapse open={expanded && canExpand}>
-                <div className="relative mt-1 mb-1 rounded-lg border border-border-subtle bg-transparent px-3 py-2">
+                <div className="relative mt-2 mb-1 squircle-2xl border border-border-subtle bg-transparent px-1.5 py-2">
                     <div className="absolute right-2 top-2 z-[1]">
                         <TerminalCommandMenu command={command} />
                     </div>
@@ -447,7 +464,7 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
             || chunkStatus === "background"
             || Boolean(block.isGenerating)
         );
-    const stream = useAgentTerminalStream(block.commandId, couldBeLive);
+    const stream = useAgentTerminalStream(block.commandId, couldBeLive, block.sessionId);
 
     // Approval resolution flips the card before any stream/chunk update lands.
     useEffect(() => {

@@ -187,6 +187,7 @@ pub async fn send_chat_message(
             timestamp: now_f64(),
             stats: None,
             model: Some(model_to_use.clone()),
+            feedback: None,
         });
     }
 
@@ -519,6 +520,10 @@ pub async fn send_chat_message(
         messages::build_messages_json(&final_system_prompt, &api_history, &model_to_use);
 
     let mcp_tools = mcp_state.tools_as_openai_schema().unwrap_or_default();
+    let mcp_tokens: u64 = mcp_tools
+        .iter()
+        .map(|t| (t.to_string().chars().count() / 4) as u64)
+        .sum();
     let tools = schema::tools_for_mode_family_and_memory(
         &mode_to_use,
         family,
@@ -529,7 +534,7 @@ pub async fn send_chat_message(
     let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());
     let conversation_json =
         serde_json::to_string(&messages::build_api_history(&history_snapshot)).unwrap_or_default();
-    let breakdown = build_context_breakdown(
+    let mut breakdown = build_context_breakdown(
         prompts::SYSTEM_MD,
         family_prompt,
         &merged_rules,
@@ -540,7 +545,15 @@ pub async fn send_chat_message(
         summarized.as_deref(),
         &model_to_use,
     );
-    let proxy_base = proxy_base.with_context_breakdown(Some(breakdown));
+    if mcp_tokens > 0 {
+        let tools_tokens = breakdown
+            .get("tools")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        breakdown["mcpTools"] = json!(mcp_tokens);
+        breakdown["tools"] = json!(tools_tokens.saturating_sub(mcp_tokens));
+    }
+    let proxy_base = proxy_base.with_context_breakdown(Some(breakdown.clone()));
 
     let project_path = current_proj_path.clone().unwrap_or_default();
     if !project_path.is_empty() && index_state.should_background_index(&project_path) {
@@ -697,8 +710,10 @@ pub async fn send_chat_message(
             reasoning_effort: Some(effort_norm.clone()),
             mode: Some(mode_to_use.clone()),
             latency_ms: None,
+            context_breakdown: Some(breakdown.clone()),
         }),
         model: Some(model_to_use.clone()),
+        feedback: None,
     };
 
     let still_current = {
@@ -741,6 +756,7 @@ pub async fn send_chat_message(
                     "usedAuto": used_auto,
                     "reasoningEffort": &effort_norm,
                     "mode": &mode_to_use,
+                    "contextBreakdown": breakdown,
                 },
                 "model": model_to_use,
                 "turnId": &turn_id,
@@ -823,6 +839,7 @@ pub async fn send_chat_message(
                     "usedAuto": used_auto,
                     "reasoningEffort": &effort_norm,
                     "mode": &mode_to_use,
+                    "contextBreakdown": breakdown,
                 },
                 "model": model_to_use,
                 "turnId": &turn_id,

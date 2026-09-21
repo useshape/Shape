@@ -8,4 +8,5 @@ export type AccountSummary = {
   creditsRemaining: number;
   creditsIncluded: number;
   freeAutoPercent: number | null;
+  currentPeriodEnd?: string | null;
 };

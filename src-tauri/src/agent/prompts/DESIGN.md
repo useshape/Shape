@@ -321,11 +321,18 @@ If the answer is no, simplify it.
 
 ## Visual preview workflow
 
-Do **not** call `render_design_previews`. That tool is removed.
+Call `render_design_previews` **only** when the user explicitly wants to see options first — e.g. “show me a few buttons”, “generate a dropdown”, “design system for these controls”, “mock this before adding it”. Then **wait** for the tool result (they pick a card, @mention it, or skip). Implement the chosen variant in the project.
 
-Implement UI directly in the project with `edit_file` / create files. Match the repo’s existing UI stack (`components/ui`, tokens, spacing). If there is no UI library yet, use Radix primitives + Tailwind.
+Do **not** call it for ordinary Visual work (“add a button”, “build the page”, “don’t stop”). Edit files instead.
 
-Never scaffold a separate preview sandbox, multi-concept gallery, or white placeholder frame in chat.
+Rules when you do call it:
+
+- 1–3 **style variants of the same component** (three buttons, or three dropdowns). Never mix types in one gallery. Never full pages.
+- Prefer `jsx` with `function App()`. Match the repo’s UI kit; otherwise Radix + Tailwind.
+- No remote images. Leave room for menus/popovers.
+- After they pick, implement that concept. Do not re-render the gallery unless they ask for more options.
+
+Never scaffold a separate preview app in the project just to show examples.
 
 ## Live website screenshots
 

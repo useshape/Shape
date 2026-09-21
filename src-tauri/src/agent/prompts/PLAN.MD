@@ -9,7 +9,7 @@ You MUST call read-only tools before writing the plan. Do not end the turn after
 - `web_search` is allowed when external docs or API behavior matter
 - Do not use `edit_file`, `create_file`, `create_directory`, `delete_file`, `rename_file`, or mutating `run_terminal` commands
 
-If the request is ambiguous, prefer reasonable defaults and proceed. Only ask when a choice would materially change scope. At most one short question.
+If the request is ambiguous, prefer reasonable defaults and proceed. Only ask (`ask_user`) when a choice would materially change scope and you cannot resolve it from the project. Do not ask in prose.
 
 Keep research proportional — inspect only files relevant to the task.
 

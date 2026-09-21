@@ -11,7 +11,7 @@ const watchIgnored = [
   "**/.next/**",
   "**/out/**",
   "**/src-tauri/target/**",
-  "**/src-tauri/preview-runtime/**",
+  "**/src-tauri/runtime/**",
   "**/target/**",
 ];
 
@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["@remixicon/react", "@tauri-apps/api", "react-syntax-highlighter"],
   },
-  // Cut noisy full reloads when Cargo/target or preview-runtime files change.
+  // Cut noisy full reloads when Cargo/target or runtime files change.
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {

@@ -10,15 +10,15 @@ import { markOnboardingComplete } from "@/features/onboarding/config";
 import { updateSettingSection, useSettings } from "@/lib/settings";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { ThemePicker } from "@/features/settings/ui/theme/picker";
-import type { ColorThemeId } from "@/lib/themes";
-import { normalizeColorTheme } from "@/lib/themes";
+import type { ColorThemeId } from "@/lib/settings/themes";
+import { normalizeColorTheme } from "@/lib/settings/themes";
 import { isCatalogServerReachable } from "@/lib/catalog";
 import {
     getCatalogDefaultEnabledIds,
     getCatalogModels,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { isModelEnabled } from "@/lib/chat/models";
+import { isModelEnabled } from "@/lib/settings/models";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { OnboardingWindowChrome } from "./window-chrome";
 import { LoginPanel } from "./login-panel";

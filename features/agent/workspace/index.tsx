@@ -282,7 +282,7 @@ export function AgentWorkspace({
                 </div>
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <div className="min-h-0 flex-1 overflow-hidden">
+                <div className="relative min-h-0 flex-1 overflow-hidden">
                     {active?.kind === "changes" ? (
                         <ChangesView projectPath={projectPath} />
                     ) : active?.kind === "graph" ? (
@@ -295,8 +295,6 @@ export function AgentWorkspace({
                         />
                     ) : active?.kind === "prs" ? (
                         <PullRequestsPanel pane="full" />
-                    ) : active?.kind === "browser" ? (
-                        <WorkspacePreview />
                     ) : active?.kind === "plan" && (active.path || active.markdown) ? (
                         <PlanTabView path={active.path || ""} markdown={active.markdown} />
                     ) : active?.kind === "file" && active.path ? (
@@ -308,6 +306,15 @@ export function AgentWorkspace({
                     ) : active?.kind === "diff" && active.diff ? (
                         <SingleFileDiffEditor tab={active.diff} />
                     ) : null}
+                    <div
+                        className={
+                            active?.kind === "browser"
+                                ? "h-full"
+                                : "pointer-events-none invisible absolute inset-0 h-full"
+                        }
+                    >
+                        <WorkspacePreview />
+                    </div>
                 </div>
             </div>
         </aside>

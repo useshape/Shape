@@ -385,7 +385,7 @@ export function seedPreviewFromDevUrl(devUrl: string | null | undefined) {
 /** Prefill URL bar; do not auto-navigate (avoids Edge/WebView error page on open). */
 export function ensurePreviewLoaded() {
     if (state.urlBar) return;
-    setState({ urlBar: DEFAULT_URL });
+    setState({ urlBar: "http://localhost:3000" });
 }
 
 export function openPreviewPanel(url?: string) {

@@ -17,13 +17,13 @@ import {
     ActionItem,
     GitStageGroup,
     groupWorkflowRows,
+    coalesceConsecutiveSameFileEdits,
     isRenderableWorkflowBlock,
     parseGitStagePath,
     GeneratedMediaStep,
 } from "./workflow";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
-import { ShapeLogo } from "@/components/ui/shape-logo";
 import { Favicon } from "@/components/ui/favicon";
 import { isShapePluginMeta, humanizePluginActionName } from "@/lib/plugins/logos";
 import { parseWebSearchHits, WebSearchBlock } from "./search";
@@ -558,15 +558,14 @@ function PluginCallStep({ block }: { block: Chunk }) {
 
     if (status === "pending") {
         const subtitle = truncated || "Waiting for approval";
+        const native = isShapePluginMeta(toolkit, block.pluginSlug);
         return (
             <div className="my-1 flex items-center gap-3 squircle-xl bg-surface-3 px-3 py-2.5">
-                <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden squircle-xl bg-surface-2">
-                    {isShapePluginMeta(toolkit, block.pluginSlug) ? (
-                        <ShapeLogo size={ICON_SIZE_MD} />
-                    ) : (
+                {native ? null : (
+                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden squircle-xl bg-surface-2">
                         <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={22} />
-                    )}
-                </span>
+                    </span>
+                )}
                 <div className="min-w-0 flex-1">
                     <div className="truncate text-md font-medium text-text-primary">{label}</div>
                     <div className="truncate text-xs font-medium text-text-muted">{subtitle}</div>
@@ -609,9 +608,7 @@ function PluginCallStep({ block }: { block: Chunk }) {
                 : label;
     return (
         <div className="flex items-center gap-1.5 py-0.5 chat-text font-regular font-sans text-text-primary/80 min-w-0">
-            {isShapePluginMeta(toolkit, block.pluginSlug) ? (
-                <ShapeLogo size={12} />
-            ) : (
+            {isShapePluginMeta(toolkit, block.pluginSlug) ? null : (
                 <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={14} className="rounded-sm" />
             )}
             <span className="truncate">
@@ -734,7 +731,7 @@ function StepRow({ block }: { block: Chunk }) {
             <ActionLine
                 action={block.isGenerating ? "Inspecting" : "Inspected"}
                 detail={detail}
-                extra={<ChromeBrowserIcon size={14} branded />}
+                icon={<ChromeBrowserIcon size={14} branded />}
             />
         );
     }
@@ -906,9 +903,10 @@ export function TurnWorkflowSummary({
 
     if (visible.length === 0) return <>{children}</>;
 
-    const stats = computeTurnStats(visible);
+    const coalesced = coalesceConsecutiveSameFileEdits(visible);
+    const stats = computeTurnStats(coalesced);
     const rows = groupWorkflowRows(
-        visible.filter(
+        coalesced.filter(
             (b) =>
                 !((b.type === "terminal_command" || b.type === "edit_pending" || b.type === "plugin_call")
                     && b.commandStatus === "pending"),

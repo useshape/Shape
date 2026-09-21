@@ -14,7 +14,7 @@ import {
 } from "@/lib/catalog/store";
 import { RiWebhookFill } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
-import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, type ModelInfo } from "@/lib/chat/models";
+import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, type ModelInfo } from "@/lib/settings/models";
 import { useShapeAuth } from "@/lib/cloud/store";
 import {
     type AutoRunModeSetting,

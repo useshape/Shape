@@ -1,3 +1,4 @@
+pub mod ipc;
 pub mod device_id;
 pub mod desktop_notification;
 pub mod open;

@@ -138,7 +138,11 @@ export function buildReactSandboxHtml(
 </html>`;
 }
 
-export function buildBodyPreviewHtml(bodyHtml: string, projectCss = ""): string {
+export function buildBodyPreviewHtml(
+    bodyHtml: string,
+    projectCss = "",
+    options?: { tailwindSrc?: string },
+): string {
     const sanitized = projectCss
         .split("\n")
         .filter((line) => {
@@ -157,6 +161,10 @@ export function buildBodyPreviewHtml(bodyHtml: string, projectCss = ""): string 
 ${sanitized}
 </style>`
         : "";
+    const tailwindSrc = options?.tailwindSrc ?? PREVIEW_TAILWIND_FILENAME;
+    const tailwindSrcAttr = tailwindSrc
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;");
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -164,7 +172,7 @@ ${sanitized}
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="data:," />
   <title>shape-preview-doc</title>
-  <script src="${PREVIEW_TAILWIND_FILENAME}"></script>
+  <script src="${tailwindSrcAttr}"></script>
   ${themeBlock}
 </head>
 <body>

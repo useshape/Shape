@@ -26,7 +26,7 @@ import {
     groupChatMessages,
 } from "./chat-session-utils";
 import { getSettings } from "@/lib/settings";
-import { getVisibleModels, resolveChatModels } from "@/lib/chat/models";
+import { getVisibleModels, resolveChatModels } from "@/lib/settings/models";
 import { getCatalogModels } from "@/lib/catalog/store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
@@ -137,7 +137,7 @@ export function useChatSession() {
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
     const [openChatTabs, setOpenChatTabs] = React.useState<ChatTab[]>([
         { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-        { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+        { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
     ]);
     const [activeChatTabId, setActiveChatTabId] = React.useState<string>(NEW_CHAT_TAB_ID);
     const [selectedModel, setSelectedModel] = React.useState("auto");
@@ -205,7 +205,7 @@ export function useChatSession() {
             if (persisted) {
                 const tabs = [...persisted.tabs];
                 if (!tabs.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
-                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "Watch page density", models: ["auto"] });
+                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] });
                 }
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
                     tabs.unshift({ id: NEW_CHAT_TAB_ID, title: "New Chat" });
@@ -227,7 +227,7 @@ export function useChatSession() {
                         if (!cancelled) {
                             setOpenChatTabs([
                                 { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                                { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+                                { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
                             ]);
                             setActiveChatTabId(NEW_CHAT_TAB_ID);
                         }
@@ -242,7 +242,7 @@ export function useChatSession() {
                         });
                         setOpenChatTabs((prev) => {
                             if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) return prev;
-                            return [...prev, { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] }];
+                            return [...prev, { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] }];
                         });
                         setActiveChatTabId(DEMO_CHAT_TAB_ID);
                     }
@@ -250,7 +250,7 @@ export function useChatSession() {
             } else {
                 setOpenChatTabs([
                     { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                    { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+                    { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
                 ]);
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
             }
@@ -899,6 +899,18 @@ export function useChatSession() {
                 project_path ?? null,
                 selectionContextRef.current,
             );
+            try {
+                const { mentionRanges } = await import("@/lib/chat/mentions");
+                const { trySelectPendingDesignConcept } = await import("@/lib/agent-preview/store");
+                for (const range of mentionRanges(userMsg)) {
+                    if (range.mention.kind === "design") {
+                        const id = range.mention.id || range.mention.path || range.mention.label;
+                        if (id) await trySelectPendingDesignConcept(id);
+                    }
+                }
+            } catch {
+                /* pick already resolved or none pending */
+            }
             const projectRules = isWorkspaceTrusted(project_path)
                 ? await loadProjectRules(project_path ?? null)
                 : "";
@@ -1159,6 +1171,39 @@ export function useChatSession() {
         [refreshHistory],
     );
 
+    const handleForkChat = React.useCallback(
+        async (msgIdx: number) => {
+            try {
+                const res = await commands.forkConversation(msgIdx);
+                const history = await commands.getChatHistory();
+                setMessages(history);
+                setConversationId(res.id);
+                setCurrentConversationId(res.id);
+                setChatTitle(res.title);
+                setViewingConversation(res.id);
+                syncOpenTabs(res.id, res.title);
+                await refreshHistory(true);
+            } catch (err) {
+                console.error("Failed to fork chat:", err);
+            }
+        },
+        [refreshHistory, setMessages, setConversationId, setCurrentConversationId, setChatTitle, setViewingConversation, syncOpenTabs],
+    );
+
+    const handleMessageFeedback = React.useCallback(
+        async (msgIdx: number, value: "up" | "down" | null) => {
+            setMessages((prev) =>
+                prev.map((m, i) => (i === msgIdx ? { ...m, feedback: value || undefined } : m)),
+            );
+            try {
+                await commands.setMessageFeedback(msgIdx, value);
+            } catch (err) {
+                console.error("Failed to save feedback:", err);
+            }
+        },
+        [setMessages],
+    );
+
     React.useEffect(() => {
         const ai = getSettings().ai;
         const keyed = resolveChatModels(getCatalogModels(), {
@@ -1293,7 +1338,7 @@ export function useChatSession() {
         if (remaining.length === 0) {
             setOpenChatTabs([
                 { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+                { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
             ]);
             setActiveChatTabId(NEW_CHAT_TAB_ID);
             setMessages([]);
@@ -1408,12 +1453,12 @@ export function useChatSession() {
                 setOpenChatTabs((prev) => {
                     if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
                         return prev.map((t) =>
-                            t.id === DEMO_CHAT_TAB_ID ? { ...t, title: "Demo", models: ["auto"] } : t,
+                            t.id === DEMO_CHAT_TAB_ID ? { ...t, title: "API Gateway throttle", models: ["auto"] } : t,
                         );
                     }
                     return [
                         ...prev.filter((t) => t.id !== NEW_CHAT_TAB_ID),
-                        { id: DEMO_CHAT_TAB_ID, title: "Demo", models: ["auto"] },
+                        { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
                     ];
                 });
                 setActiveChatTabId(DEMO_CHAT_TAB_ID);
@@ -1505,6 +1550,8 @@ export function useChatSession() {
         handleSelectChatTab,
         handleCloseChatTab,
         handleLoadConversation,
+        handleFork: handleForkChat,
+        handleFeedback: handleMessageFeedback,
         handleViewAllHistory,
         handleRedo,
         handleRestore,

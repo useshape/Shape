@@ -202,3 +202,70 @@ pub fn resolve_edit_approval(
     Ok(())
 }
 
+/// Record the user's click-through answers for a pending `ask_user` tool call.
+#[tauri::command]
+pub fn answer_ask_user(
+    id: String,
+    answers: String,
+    skipped: Option<bool>,
+    state: tauri::State<'_, AgentState>,
+) -> Result<(), AppError> {
+    if !state.pending_asks.lock()?.contains_key(&id) {
+        return Err(AppError::Message(
+            "Question set not found or already answered".to_string(),
+        ));
+    }
+    let payload = if skipped.unwrap_or(false) {
+        "__skipped__".to_string()
+    } else {
+        answers
+    };
+    state.ask_answers.lock()?.insert(id, payload);
+    Ok(())
+}
+
+/// Record the chosen concept for a pending `render_design_previews` gallery.
+#[tauri::command]
+pub fn select_design_preview(
+    id: String,
+    concept_id: Option<String>,
+    skipped: Option<bool>,
+    tweaks: Option<String>,
+    state: tauri::State<'_, AgentState>,
+) -> Result<(), AppError> {
+    let pending = state.pending_design_picks.lock()?;
+    let Some(pick) = pending.get(&id) else {
+        return Err(AppError::Message(
+            "Design preview not found or already chosen".to_string(),
+        ));
+    };
+    let payload = if skipped.unwrap_or(false) {
+        "__skipped__".to_string()
+    } else {
+        let cid = concept_id.unwrap_or_default();
+        let trimmed = cid.trim().to_string();
+        if trimmed.is_empty() {
+            return Err(AppError::Message("Pick a concept id.".to_string()));
+        }
+        let known = pick
+            .concepts
+            .iter()
+            .any(|c| c.id.eq_ignore_ascii_case(&trimmed) || c.name.eq_ignore_ascii_case(&trimmed));
+        if !known {
+            return Err(AppError::Message(
+                "That concept is not in this preview set.".to_string(),
+            ));
+        }
+        let mut obj = serde_json::json!({ "id": trimmed });
+        if let Some(raw) = tweaks {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                obj["tweaks"] = v;
+            }
+        }
+        obj.to_string()
+    };
+    drop(pending);
+    state.design_pick_answers.lock()?.insert(id, payload);
+    Ok(())
+}
+

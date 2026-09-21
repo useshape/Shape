@@ -48,6 +48,31 @@ describe("parseMessageContent", () => {
         expect(cat?.catStartLine).toBe(1);
         expect(cat?.catEndLine).toBe(244);
     });
+
+    it("parses click-through ask_user questions", () => {
+        const payload = JSON.stringify({
+            questions: [
+                {
+                    id: "q1",
+                    prompt: "What visual concept direction fits \"shape\" best?",
+                    options: [
+                        { id: "geo", label: "Abstract geometric shape", recommended: true },
+                        { id: "morph", label: "Morphing/transforming form" },
+                    ],
+                },
+            ],
+            answers: null,
+        });
+        const chunks = parseMessageContent(
+            `<questions id="ask-1" status="pending">\n${payload}\n</questions>`,
+        );
+        const q = chunks.find((c) => c.type === "question");
+        expect(q?.commandId).toBe("ask-1");
+        expect(q?.commandStatus).toBe("pending");
+        expect(q?.questions?.[0]?.prompt).toContain("visual concept");
+        expect(q?.questions?.[0]?.options[0]?.recommended).toBe(true);
+    });
+
     it("dedupes edit_pending chunks for the same id, keeping applied over pending", () => {
         const text = [
             '<edit_pending id="e1" file="src/a.ts" status="pending"><original>a</original><replacement>b</replacement></edit_pending>',

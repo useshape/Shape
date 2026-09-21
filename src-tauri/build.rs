@@ -1,7 +1,7 @@
 use std::env;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../preview-runtime/entry.ts");
+    println!("cargo:rerun-if-changed=../runtime/entry.ts");
     println!("cargo:rerun-if-changed=../scripts/build/preview.mjs");
     // Do not watch the generated bundle — beforeDevCommand writes it on every
     // `tauri dev` start and that would restart the native app in a loop.

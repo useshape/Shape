@@ -56,6 +56,43 @@ export function setDesignPreviewViewing(id: string, viewingId: string) {
     emit();
 }
 
+export type PendingDesignPick = {
+    pickId: string;
+    conceptIds: string[];
+};
+
+let pendingDesignPick: PendingDesignPick | null = null;
+
+export function setPendingDesignPick(next: PendingDesignPick | null) {
+    pendingDesignPick = next;
+    emit();
+}
+
+export function getPendingDesignPick(): PendingDesignPick | null {
+    return pendingDesignPick;
+}
+
+export async function trySelectPendingDesignConcept(
+    conceptId: string,
+    options?: { skipped?: boolean; tweaks?: Record<string, number> },
+): Promise<boolean> {
+    const pending = pendingDesignPick;
+    if (!pending) return false;
+    const id = conceptId.trim();
+    try {
+        const { commands } = await import("@/lib/backend/commands");
+        await commands.selectDesignPreview(
+            pending.pickId,
+            options?.skipped ? undefined : id,
+            options?.skipped ?? false,
+            options?.tweaks ? JSON.stringify(options.tweaks) : undefined,
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export function removeDesignPreviewSession(id: string) {
     if (!sessions.delete(id)) return;
     emit();

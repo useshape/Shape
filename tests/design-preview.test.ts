@@ -17,7 +17,7 @@ import {
 } from "@/lib/agent-preview/sandbox";
 
 const runtimeBundle = readFileSync(
-    join(process.cwd(), "src-tauri", "preview-runtime", "bundle.js"),
+    join(process.cwd(), "src-tauri", "runtime", "bundle.js"),
     "utf8",
 );
 
@@ -141,6 +141,32 @@ describe("parseMessageContent design_previews", () => {
             height: 360,
         });
     });
+
+    it("parses a carousel of up to three examples with pick status", () => {
+        const text = `
+<design_previews id="dp-1" status="pending" selected="">
+<design_preview id="a" name="Soft" style="ghost" path="/tmp/a.html" width="640" height="360" kind="html"/>
+<design_preview id="b" name="Solid" style="filled" path="/tmp/b.html" width="640" height="360" kind="html"/>
+<design_preview id="c" name="Outline" style="ring" path="/tmp/c.html" width="640" height="360" kind="html"/>
+</design_previews>`;
+        const chunks = parseMessageContent(text);
+        const block = chunks.find((c) => c.type === "design_previews");
+        expect(block?.commandId).toBe("dp-1");
+        expect(block?.commandStatus).toBe("pending");
+        expect(block?.designPreviews).toHaveLength(3);
+    });
+
+    it("parses React source stored in the chat instead of a temp file", () => {
+        const text = `
+<design_previews id="dp-2" status="pending" selected="">
+<design_preview id="solid" name="Solid" style="filled" width="640" height="360" kind="react">function App() { return &lt;button&gt;Go&lt;/button&gt;; }</design_preview>
+</design_previews>`;
+        const chunks = parseMessageContent(text);
+        const block = chunks.find((c) => c.type === "design_previews");
+        expect(block?.designPreviews?.[0]?.source).toContain("function App");
+        expect(block?.designPreviews?.[0]?.source).toContain("<button>");
+        expect(block?.designPreviews?.[0]?.kind).toBe("react");
+    });
 });
 
 describe("preview runtime bundle", () => {
@@ -148,7 +174,7 @@ describe("preview runtime bundle", () => {
         expect(runtimeBundle).toContain("ShapePreviewRuntime");
         expect(runtimeBundle).toContain("mountPreview");
         const tailwindBundle = readFileSync(
-            join(process.cwd(), "src-tauri", "preview-runtime", "tailwind-browser.js"),
+            join(process.cwd(), "src-tauri", "runtime", "tailwind-browser.js"),
             "utf8",
         );
         expect(tailwindBundle.length).toBeGreaterThan(100_000);

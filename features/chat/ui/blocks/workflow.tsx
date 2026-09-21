@@ -31,8 +31,6 @@ export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
     "think", "thought", "run", "tool_result", "edit", "edit_pending", "terminal_command", "git_operation",
     "plugin_call",
-    "generated_svg",
-    "generated_image",
     "subagent",
     "subagent_ref",
 ]);
@@ -157,6 +155,37 @@ type WorkflowRow =
     | { kind: "write_group"; paths: string[]; count: number }
     | { kind: "list_group"; count: number };
 
+function sameFilePath(a?: string, b?: string): boolean {
+    if (!a || !b) return false;
+    return a.replace(/\\/g, "/").toLowerCase() === b.replace(/\\/g, "/").toLowerCase();
+}
+
+function isCoalescableFileEdit(block: Chunk): boolean {
+    if (!block.file) return false;
+    if (block.type === "edit") return true;
+    return block.type === "edit_pending" && block.commandStatus === "applied";
+}
+
+/** Consecutive edits to the same file become one row; later patch updates original→latest (the +/-). */
+export function coalesceConsecutiveSameFileEdits(blocks: Chunk[]): Chunk[] {
+    const out: Chunk[] = [];
+    for (const block of blocks) {
+        const prev = out[out.length - 1];
+        if (prev && isCoalescableFileEdit(prev) && isCoalescableFileEdit(block) && sameFilePath(prev.file, block.file)) {
+            out[out.length - 1] = {
+                ...prev,
+                type: "edit",
+                replacement: block.replacement,
+                isGenerating: block.isGenerating,
+                commandStatus: block.commandStatus,
+            };
+            continue;
+        }
+        out.push(block);
+    }
+    return out;
+}
+
 export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
     const rows: WorkflowRow[] = [];
     let stagePaths: string[] = [];
@@ -211,7 +240,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         flushLists();
     };
 
-    for (const block of blocks) {
+    for (const block of coalesceConsecutiveSameFileEdits(blocks)) {
         if (block.type === "git_operation" && block.gitOp === "stage") {
             flushReads();
             flushSearches();
@@ -273,20 +302,20 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
             || block.type === "mkdir"
             || block.type === "delete_file"
             || block.type === "rename_file"
-            || block.type === "edit"
-            || block.type === "edit_pending"
         ) {
             flushStages();
             flushReads();
             flushSearches();
             flushWeb();
             flushLists();
-            const path =
-                block.type === "edit" || block.type === "edit_pending"
-                    ? (block.file || "")
-                    : (block.content || "");
+            const path = block.content || "";
             if (path) writePaths.push(path);
             writeCount += 1;
+            continue;
+        }
+        if (isCoalescableFileEdit(block)) {
+            flushAll();
+            rows.push({ kind: "block", block });
             continue;
         }
         if (block.type === "ls") {
@@ -1316,6 +1345,14 @@ export function ActionItem({
                     (config.expandable || config.onClick || isEdit) && "cursor-pointer hover:opacity-80",
                 )}
             >
+                {"faviconUrl" in config && config.faviconUrl ? (
+                    <Favicon url={String(config.faviconUrl)} size={14} />
+                ) : null}
+
+                {"chromiumIcon" in config && config.chromiumIcon ? (
+                    <ChromeBrowserIcon size={14} branded />
+                ) : null}
+
                 <span className="chat-text font-medium text-text-primary/80">
                     {isEdit && editResolved ? "Applied" : config.label}
                     {config.query ? (
@@ -1331,14 +1368,6 @@ export function ActionItem({
                         </>
                     ) : null}
                 </span>
-
-                {"faviconUrl" in config && config.faviconUrl ? (
-                    <Favicon url={String(config.faviconUrl)} size={14} />
-                ) : null}
-
-                {"chromiumIcon" in config && config.chromiumIcon ? (
-                    <ChromeBrowserIcon size={14} branded />
-                ) : null}
 
                 {"resultUrls" in config && Array.isArray(config.resultUrls) && config.resultUrls.length > 0 ? (
                     <span className="inline-flex items-center -space-x-1 shrink-0">

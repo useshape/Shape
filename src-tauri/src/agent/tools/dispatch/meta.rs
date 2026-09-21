@@ -4,14 +4,16 @@ use serde_json::{json, Value};
 use tauri::Emitter;
 use base64::Engine;
 
-use crate::agent::commands::{logging, streaming};
+use crate::agent::commands::streaming;
+use crate::agent::models::{DesignPickConcept, PendingAsk, PendingDesignPick};
 use crate::agent::tools::page_shot;
-use crate::commands::design_sandbox;
 use crate::commands::preview_render;
 
 use super::common::{
-    blocked_outcome, clip, error_outcome, escape_todo_content, escape_xml_attr, escape_xml_text,
-    get_str, is_read_only_mode,
+    blocked_outcome, cleanup_pending_ask, cleanup_pending_design_pick, clip, error_outcome,
+    escape_todo_content, escape_xml_attr, escape_xml_preview_source, escape_xml_text, get_str,
+    is_read_only_mode,
+    wait_for_ask_answer, wait_for_design_pick,
 };
 use super::{SideEffect, ToolCtx, ToolOutcome};
 
@@ -288,28 +290,20 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
         _ => {
             return error_outcome(
                 "render_design_previews",
-                "concepts must be a non-empty array with exactly 1 component preview.",
+                "concepts must be a non-empty array of 1–3 component previews.",
             );
         }
     };
 
-    if concepts.len() > 1 {
+    if concepts.len() > 3 {
         return error_outcome(
             "render_design_previews",
-            "Only one component preview at a time. Do not send multiple concepts.",
+            "At most 3 component examples. Split into another call only if the user asks for more after picking.",
         );
     }
 
-    let session_id = ctx.agent_state.ensure_design_sandbox_session();
-    let use_project_tokens = true;
+    let pick_id = format!("dp-{}", uuid::Uuid::new_v4());
 
-    let mut ui = String::from(r#"<design_previews selected="">"#);
-    let mut rendered = 0usize;
-    let total = 1usize;
-    logging::debug(
-        "design_preview",
-        "Rendering component preview",
-    );
     streaming::emit_chat_status(
         ctx.app_handle,
         json!({
@@ -319,9 +313,12 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
         }),
     );
 
-    for (_idx, concept) in concepts.iter().take(1).enumerate() {
+    let mut inner = String::new();
+    let mut catalog: Vec<DesignPickConcept> = Vec::new();
+    let mut rendered = 0usize;
+
+    for concept in concepts.iter().take(3) {
         if ctx.cancel.is_cancelled() {
-            logging::debug("design_preview", "Preview rendering cancelled by user");
             break;
         }
         let id = concept
@@ -349,36 +346,15 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty());
-        let preview_source;
-        match (jsx, html) {
-            (Some(jsx), _) => {
-                preview_source = design_sandbox::build_react_sandbox_html(
-                    jsx,
-                    if ctx.project_path.is_empty() {
-                        None
-                    } else {
-                        Some(ctx.project_path)
-                    },
-                    use_project_tokens,
-                );
-            }
-            (_, Some(html)) => {
-                preview_source = preview_render::wrap_preview_html_public(
-                    html,
-                    if ctx.project_path.is_empty() {
-                        None
-                    } else {
-                        Some(ctx.project_path)
-                    },
-                    use_project_tokens,
-                );
-            }
+        let (kind, source) = match (jsx, html) {
+            (Some(jsx), _) => ("react", jsx),
+            (_, Some(html)) => ("html", html),
             _ => continue,
         };
         if id.is_empty() {
             continue;
         }
-                        let width = concept
+        let width = concept
             .get("width")
             .and_then(|v| v.as_u64())
             .unwrap_or(640)
@@ -389,37 +365,23 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
             .unwrap_or(360)
             .clamp(200, 640) as u32;
 
-        // Live HTML iframes — no PNG capture. WebView2 iframe + html-to-image was
-        // unreliable (asset protocol / ready timeouts). Self-contained HTML with
-        // inlined scripts loads via convertFileSrc in the chat gallery.
-        match design_sandbox::write_live_preview_document(&session_id, id, &preview_source) {
-            Ok(html_path) => {
-                rendered += 1;
-                ui.push_str(&format!(
-                    r#"<design_preview id="{}" name="{}" style="{}" path="{}" width="{}" height="{}" kind="html"/>"#,
-                    escape_xml_attr(id),
-                    escape_xml_attr(name),
-                    escape_xml_attr(style),
-                    escape_xml_attr(&html_path.to_string_lossy()),
-                    width,
-                    height,
-                ));
-            }
-            Err(e) => {
-                logging::warn(
-                    "design_preview",
-                    &format!("Preview failed for {id}: {e}"),
-                );
-            }
-        }
+        rendered += 1;
+        inner.push_str(&format!(
+            r#"<design_preview id="{}" name="{}" style="{}" width="{}" height="{}" kind="{}">{}</design_preview>"#,
+            escape_xml_attr(id),
+            escape_xml_attr(name),
+            escape_xml_attr(style),
+            width,
+            height,
+            kind,
+            escape_xml_preview_source(source),
+        ));
+        catalog.push(DesignPickConcept {
+            id: id.to_string(),
+            name: name.to_string(),
+            style: style.to_string(),
+        });
     }
-
-    ui.push_str("</design_previews>");
-
-    logging::debug(
-        "design_preview",
-        &format!("Finished rendering {rendered}/{total} design preview(s)"),
-    );
 
     if rendered == 0 {
         if ctx.cancel.is_cancelled() {
@@ -435,13 +397,93 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
         );
     }
 
-    ToolOutcome {
-        tool_result: format!(
-            "Prepared a live component preview in chat (session {session_id}). Full-width card; the sandbox centers the component with padding so menus are not clipped. Call finish NOW with a short note. Do not call more tools unless the user asks for a change."
+    if let Ok(mut guard) = ctx.agent_state.design_preview.lock() {
+        guard.gate_active = true;
+    }
+    if let Ok(mut pendings) = ctx.agent_state.pending_design_picks.lock() {
+        pendings.insert(
+            pick_id.clone(),
+            PendingDesignPick {
+                id: pick_id.clone(),
+                concepts: catalog.clone(),
+            },
+        );
+    }
+
+    let pending_ui = design_previews_ui(&pick_id, "pending", "", &inner);
+    ctx.emit_ui_token(&pending_ui);
+    streaming::emit_chat_status(
+        ctx.app_handle,
+        json!({ "phase": "approval", "label": "Waiting for you to pick a design" }),
+    );
+    let _ = ctx.app_handle.emit("agent-design-pick-pending", json!({ "id": pick_id }));
+
+    let answer = wait_for_design_pick(&pick_id, ctx).await;
+    cleanup_pending_design_pick(&pick_id, ctx);
+    if let Ok(mut guard) = ctx.agent_state.design_preview.lock() {
+        guard.gate_active = false;
+    }
+
+    let (status, selected, result) = match answer {
+        None => (
+            "cancelled".to_string(),
+            String::new(),
+            "The user stopped before picking a preview. Continue with a reasonable default and do not show the same gallery again.".to_string(),
         ),
-        ui_chunk: format!("\n{ui}\n"),
+        Some(payload) if payload == "__skipped__" => {
+            (
+                "skipped".to_string(),
+                String::new(),
+                "The user skipped these previews. Do not treat any variant as chosen. Continue only if they already asked you to implement; otherwise wait for a pick or a later @mention.".to_string(),
+            )
+        }
+        Some(payload) => {
+            let parsed: Value = serde_json::from_str(&payload).unwrap_or(json!({}));
+            let concept_id = parsed
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| payload.trim().to_string());
+            let hit = catalog.iter().find(|c| c.id == concept_id);
+            let name = hit.map(|c| c.name.as_str()).unwrap_or(concept_id.as_str());
+            let style = hit.map(|c| c.style.as_str()).unwrap_or("");
+            let tweaks = parsed.get("tweaks").cloned().unwrap_or(json!({}));
+            let tweak_note = if tweaks.is_null() || tweaks == json!({}) {
+                String::new()
+            } else {
+                format!(
+                    " The user tweaked live CSS: {}.",
+                    serde_json::to_string(&tweaks).unwrap_or_default()
+                )
+            };
+            (
+                "selected".to_string(),
+                concept_id.clone(),
+                format!(
+                    "The user picked concept `{concept_id}` (`{name}` — {style}). Implement THIS variant in the project files. Do not re-render previews unless they ask for more options.{tweak_note}"
+                ),
+            )
+        }
+    };
+
+    let ui = design_previews_ui(&pick_id, &status, &selected, &inner);
+    ctx.emit_ui_token(&ui);
+    ToolOutcome {
+        tool_result: result,
+        ui_chunk: ui,
         side_effect: None,
     }
+}
+
+fn design_previews_ui(id: &str, status: &str, selected: &str, inner: &str) -> String {
+    format!(
+        "\n<design_previews id=\"{}\" status=\"{}\" selected=\"{}\">{}</design_previews>\n",
+        escape_xml_attr(id),
+        escape_xml_attr(status),
+        escape_xml_attr(selected),
+        inner
+    )
 }
 
 
@@ -553,6 +595,145 @@ pub(super) async fn tool_inspect_runtime(args: &Value, ctx: &ToolCtx<'_>) -> Too
         tool_result: clip(&format!("Runtime kind: {}\n{report}", kind.label()), 8000),
         ui_chunk: ui,
         side_effect: None,
+    }
+}
+
+fn questions_ui(id: &str, status: &str, questions: &Value, answers: Option<&Value>) -> String {
+    let payload = json!({
+        "questions": questions,
+        "answers": answers,
+    });
+    let body = payload.to_string().replace("</questions>", "</questions\u{200B}>");
+    format!(
+        "\n<questions id=\"{}\" status=\"{}\">\n{}\n</questions>\n",
+        escape_xml_attr(id),
+        escape_xml_attr(status),
+        body
+    )
+}
+
+fn normalize_questions(raw: &Value) -> Result<Value, String> {
+    let arr = raw.as_array().ok_or_else(|| "questions must be an array".to_string())?;
+    if arr.is_empty() || arr.len() > 6 {
+        return Err("Ask 1–6 questions at a time.".to_string());
+    }
+    let mut out = Vec::new();
+    for (i, q) in arr.iter().enumerate() {
+        let prompt = q
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| format!("Question {} needs a prompt.", i + 1))?;
+        let options = q
+            .get("options")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| format!("Question {} needs options.", i + 1))?;
+        if options.len() < 2 || options.len() > 8 {
+            return Err(format!("Question {} must have 2–8 options.", i + 1));
+        }
+        let id = q
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("q{}", i + 1));
+        let mut opts = Vec::new();
+        for (j, opt) in options.iter().enumerate() {
+            let label = opt
+                .get("label")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| format!("Question {} option {} needs a label.", i + 1, j + 1))?;
+            let oid = opt
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("{}", j + 1));
+            opts.push(json!({
+                "id": oid,
+                "label": label,
+                "recommended": opt.get("recommended").and_then(|v| v.as_bool()).unwrap_or(false),
+            }));
+        }
+        out.push(json!({
+            "id": id,
+            "prompt": prompt,
+            "allowMultiple": q.get("allow_multiple").and_then(|v| v.as_bool()).unwrap_or(false),
+            "options": opts,
+        }));
+    }
+    Ok(Value::Array(out))
+}
+
+pub(super) async fn tool_ask_user(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let questions = match args.get("questions") {
+        Some(v) => match normalize_questions(v) {
+            Ok(q) => q,
+            Err(e) => return error_outcome("ask_user", &e),
+        },
+        None => return error_outcome("ask_user", "questions is required."),
+    };
+
+    let ask_id = format!("ask-{}", uuid::Uuid::new_v4());
+    let pending = PendingAsk {
+        id: ask_id.clone(),
+        questions_json: questions.to_string(),
+    };
+    if let Ok(mut pendings) = ctx.agent_state.pending_asks.lock() {
+        pendings.insert(ask_id.clone(), pending);
+    }
+
+    let pending_ui = questions_ui(&ask_id, "pending", &questions, None);
+    ctx.emit_ui_token(&pending_ui);
+    streaming::emit_chat_status(
+        ctx.app_handle,
+        json!({ "phase": "approval", "label": "Waiting for your answers" }),
+    );
+    let _ = ctx.app_handle.emit(
+        "agent-ask-pending",
+        json!({ "id": ask_id }),
+    );
+
+    let answer = wait_for_ask_answer(&ask_id, ctx).await;
+    cleanup_pending_ask(&ask_id, ctx);
+
+    match answer {
+        None => {
+            let ui = questions_ui(&ask_id, "cancelled", &questions, None);
+            ctx.emit_ui_token(&ui);
+            ToolOutcome {
+                tool_result: "The user skipped these questions or stopped the turn. Continue with a reasonable default and do not ask the same questions again.".to_string(),
+                ui_chunk: ui,
+                side_effect: None,
+            }
+        }
+        Some(payload) if payload == "__skipped__" => {
+            let ui = questions_ui(&ask_id, "skipped", &questions, None);
+            ctx.emit_ui_token(&ui);
+            ToolOutcome {
+                tool_result: "The user skipped these questions. Continue with a reasonable default and do not ask the same questions again.".to_string(),
+                ui_chunk: ui,
+                side_effect: None,
+            }
+        }
+        Some(payload) => {
+            let answers: Value = serde_json::from_str(&payload).unwrap_or(json!({}));
+            let ui = questions_ui(&ask_id, "answered", &questions, Some(&answers));
+            ctx.emit_ui_token(&ui);
+            ToolOutcome {
+                tool_result: format!(
+                    "The user answered:\n{}",
+                    serde_json::to_string_pretty(&answers).unwrap_or(payload)
+                ),
+                ui_chunk: ui,
+                side_effect: None,
+            }
+        }
     }
 }
 
