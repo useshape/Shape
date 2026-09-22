@@ -1,12 +1,14 @@
-import { RiArrowGoBackLine, RiClipboardLine, RiFolder5Fill, RiGitForkLine, RiMoreLine, RiMusic2Line, RiRefreshLine, RiThumbDownLine, RiThumbUpLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiArrowGoBackLine, RiClipboardLine, RiFolder5Fill, RiGitForkLine, RiMoreLine, RiMusic2Line, RiRefreshLine, RiThumbDownLine, RiThumbUpLine } from "@remixicon/react";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import {
@@ -38,7 +40,7 @@ import { GeneratingIndicator } from "../blocks/generating";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 import { parseUserAttachments } from "../../lib/user-attachments";
 import type { ParsedUserAttachment } from "../../lib/user-attachments";
-import { ContextWindowMenu } from "./context-window";
+import { ContextWindowMenu, hasContextWindowData } from "./context-window";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -280,6 +282,9 @@ function ChatMessageItemInner({
 }: ChatMessageItemProps) {
     const [expanded, setExpanded] = React.useState(false);
     const [forkOpen, setForkOpen] = React.useState(false);
+    const [menuOpen, setMenuOpen] = React.useState(false);
+    const [advanced, setAdvanced] = React.useState(false);
+    const [contextVeil, setContextVeil] = React.useState(true);
     const bodyRef = React.useRef<HTMLDivElement>(null);
 
     const getCopyText = () => {
@@ -432,6 +437,7 @@ function ChatMessageItemInner({
     const renderContent = forked?.rest ?? content;
 
     return (
+        <>
         <ContextMenu>
         <ContextMenuTrigger asChild>
         <div
@@ -475,11 +481,6 @@ function ChatMessageItemInner({
             </div>
             {!isGenerating && (
                 <div className="flex items-center gap-0.5 select-none">
-                    <Tooltip content="Redo" side="bottom">
-                        <Button variant="ghost" size="icon" onClick={() => onRedo?.(index)}>
-                            <Icon icon={RiRefreshLine} />
-                        </Button>
-                    </Tooltip>
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
                             <Icon icon={RiClipboardLine} />
@@ -507,23 +508,42 @@ function ChatMessageItemInner({
                                     <Icon icon={RiThumbDownLine} />
                                 </Button>
                             </Tooltip>
-                            <Tooltip content="Fork chat" side="bottom">
-                                <Button variant="ghost" size="icon" onClick={() => setForkOpen(true)}>
-                                    <Icon icon={RiGitForkLine} />
-                                </Button>
-                            </Tooltip>
                         </>
                     ) : null}
                     {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
                     {role === "assistant" ? (
-                    <DropdownMenu>
+                    <DropdownMenu
+                    open={menuOpen}
+                    onOpenChange={(open) => {
+                        setMenuOpen(open);
+                        if (!open) {
+                            setAdvanced(false);
+                            setContextVeil(true);
+                        }
+                    }}
+                    >
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
                                 <Icon icon={RiMoreLine} />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-72">
-                            <div className="flex flex-col gap-2 p-1 chat-text">
+                        <DropdownMenuContent align="start" className="w-72 overflow-hidden p-0">
+                            {typeof index === "number" ? (
+                                <>
+                                    <DropdownMenuItem
+                                        className="text-md font-medium"
+                                        onClick={() => onRedo?.(index)}
+                                    >
+                                        Regenerate
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-md font-medium" onClick={() => setForkOpen(true)}>
+                                        Fork chat
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            ) : null}
+                            <div className="relative overflow-hidden">
+                                <div className="flex flex-col gap-2 p-1 chat-text">
                                 {formatMessageModelLabel(model, stats) ? (
                                     <DetailRow label="Model" value={formatMessageModelLabel(model, stats)} />
                                 ) : null}
@@ -557,11 +577,45 @@ function ChatMessageItemInner({
                                         }
                                     />
                                 ) : null}
-                                <ContextWindowMenu
-                                    breakdown={stats?.contextBreakdown}
-                                    inputTokens={stats?.inputTokens}
-                                    outputTokens={stats?.outputTokens}
-                                />
+                                </div>
+                                {hasContextWindowData(stats?.contextBreakdown, stats?.inputTokens, stats?.outputTokens) ? (
+                                    <>
+                                        <div
+                                            className="grid transition-[grid-template-rows] duration-500 ease-out"
+                                            style={{ gridTemplateRows: advanced ? "1fr" : "0fr" }}
+                                            onTransitionEnd={(e) => {
+                                                if (e.propertyName !== "grid-template-rows") return;
+                                                if (advanced) setContextVeil(false);
+                                            }}
+                                        >
+                                            <div className="min-h-0 px-2 pt-1 pb-1">
+                                                <ContextWindowMenu
+                                                    breakdown={stats?.contextBreakdown}
+                                                    inputTokens={stats?.inputTokens}
+                                                    outputTokens={stats?.outputTokens}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div
+                                            className={cn(
+                                                "pointer-events-none absolute inset-x-0 z-[1] h-30 bg-linear-to-t from-surface-4 to-transparent transition-opacity delay-200",
+                                                advanced ? "bottom-0" : "bottom-0",
+                                                contextVeil ? "opacity-100" : "opacity-0",
+                                            )}
+                                            aria-hidden
+                                        />
+                                        {!advanced ? (
+                                            <button
+                                                type="button"
+                                                className="relative z-10 flex w-35 mx-auto bg-panel-hover backdrop-blur-2xl squircle-2xl px-1.5 py-1 items-center justify-center gap-1 text-md font-medium text-text-secondary hover:text-text-primary"
+                                                onClick={() => setAdvanced(true)}
+                                            >
+                                                Advanced
+                                                <Icon icon={RiArrowDownSLine} size={ICON_SIZE_MD} />
+                                            </button>
+                                        ) : null}
+                                    </>
+                                ) : null}
                             </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -587,7 +641,7 @@ function ChatMessageItemInner({
                 <AlertDialogHeader>
                     <AlertDialogTitle>Fork this chat?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        A new chat starts from this message and keeps everything above it. The original chat is unchanged.
+                        A new chat starts from this message. Earlier turns stay as context for the AI but are not shown in the thread. The original chat is unchanged.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -603,14 +657,15 @@ function ChatMessageItemInner({
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+        </>
     );
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
     return (
         <div className="flex items-start justify-between gap-4 px-1">
-            <span className="shrink-0 text-text-muted">{label}</span>
-            <span className="min-w-0 truncate text-right font-medium text-text-primary">{value}</span>
+            <span className="shrink-0 text-text-primary">{label}</span>
+            <span className="min-w-0 truncate text-right font-medium text-text-muted">{value}</span>
         </div>
     );
 }

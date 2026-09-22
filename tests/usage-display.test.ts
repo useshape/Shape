@@ -35,16 +35,16 @@ describe("usage-display", () => {
         );
     });
 
-    it("formats auto usage lines as response %, not tokens or account %", () => {
+    it("formats auto usage lines as token counts, not a client-side pool percent", () => {
         expect(
             formatMessageUsageLine(
                 { usedAuto: true, autoPercent: 42, tokens: 1200 },
                 "openrouter/auto",
             ),
-        ).toBe("1% used");
+        ).toBe("1,200");
         expect(
             formatMessageUsageLine({ usedAuto: true, tokens: 100_000 }, "auto"),
-        ).toBe("2% used");
+        ).toBe("100,000");
         expect(formatMessageUsageLine({ usedAuto: true }, "auto")).toBe("");
     });
 
@@ -68,7 +68,7 @@ describe("usage-display", () => {
                 "auto",
             ),
         ).toEqual([
-            { label: "Usage", value: "2% used" },
+            { label: "Tokens", value: "100,000" },
             { label: "Input", value: "80,000" },
             { label: "Output", value: "20,000" },
         ]);

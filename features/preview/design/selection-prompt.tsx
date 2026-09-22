@@ -5,7 +5,7 @@ import { RiArrowUpLine, RiSparkling2Line } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { formatMentionToken } from "@/lib/chat/mentions";
-import type { DesignElementSnapshot } from "../bridge";
+import type { DesignElementSnapshot } from "./bridge";
 
 export function DesignSelectionPrompt({
     selected,

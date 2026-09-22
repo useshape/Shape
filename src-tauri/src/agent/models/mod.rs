@@ -126,6 +126,9 @@ pub struct ChatMessage {
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feedback: Option<String>,
+    /// Kept in history for the model, omitted from the visible thread (fork prefix).
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -518,6 +521,7 @@ impl AgentState {
             stats: None,
             model: None,
             feedback: None,
+            hidden: false,
         });
         history
     }

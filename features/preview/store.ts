@@ -58,7 +58,8 @@ function setState(patch: Partial<PreviewState>) {
 }
 
 /** True for loopback hosts only (localhost / 127.0.0.1 / ::1 / 0.0.0.0). */
-export function isLocalPreviewUrl(raw: string): boolean {
+export function isLocalPreviewUrl(raw: string | null | undefined): boolean {
+    if (!raw?.trim()) return false;
     try {
         const u = new URL(normalizePreviewUrl(raw));
         if (u.protocol !== "http:" && u.protocol !== "https:") return false;

@@ -1280,16 +1280,6 @@ fn openrouter_effort(user_effort: Option<&str>) -> &'static str {
     }
 }
 
-/// Credit / auto-pool multiplier. Max ≥ Ultra ≥ High ≥ Fast; never undercharge.
-pub fn effort_billing_multiplier(user_effort: Option<&str>) -> f64 {
-    match user_effort.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
-        Some("max") => 3.0,
-        Some("ultra") => 2.5,
-        Some("high") | Some("medium") => 1.5,
-        _ => 1.0,
-    }
-}
-
 /// OpenRouter reasoning config so thinking-capable models stream into the
 /// `reasoning` channel (Shape `<think>` UI) instead of dumping plans into content.
 fn reasoning_config_for_model(model: &str, user_effort: Option<&str>) -> Option<Value> {

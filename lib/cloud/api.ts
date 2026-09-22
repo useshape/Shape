@@ -160,26 +160,6 @@ export async function checkUsage(token: string, model: string) {
   return promise;
 }
 
-/**
- * @deprecated Client-reported usage is rejected by the server (410). Prefer server proxy metering.
- */
-export async function recordUsage(
-  token: string,
-  model: string,
-  inputTokens: number,
-  outputTokens: number,
-  idempotencyKey?: string,
-) {
-  return shapeApiFetch<{ success: boolean; creditsCharged: number; creditsRemaining: number }>(
-    "/usage",
-    {
-      method: "POST",
-      token,
-      body: JSON.stringify({ model, inputTokens, outputTokens, idempotencyKey }),
-    },
-  );
-}
-
 export async function exchangeOAuthCode(
   code: string,
   redirectUri: string,

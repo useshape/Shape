@@ -14,7 +14,7 @@ import {
 } from "@/lib/catalog/store";
 import { RiWebhookFill } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
-import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, type ModelInfo } from "@/lib/settings/models";
+import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
 import { useShapeAuth } from "@/lib/cloud/store";
 import {
     type AutoRunModeSetting,
@@ -32,8 +32,6 @@ import {
     MAX_CONTEXT_PRESETS,
 } from "../shared/controls";
 import { WorkflowsEditor } from "./workflows";
-
-const FEATURED_COUNT = 4;
 
 function RulesEditor({ value }: { value: string }) {
     const [draft, setDraft] = React.useState(value);
@@ -181,10 +179,23 @@ export function AiSettingsPanel({
     const [indexing, setIndexing] = React.useState(false);
     const [indexPhase, setIndexPhase] = React.useState<string | undefined>();
 
-    const enabledModels = a.enabledModels;
-    const visibleModels = getVisibleModels(allModels, enabledModels);
     const defaultIds = getCatalogDefaultEnabledIds();
-    const featuredIds = new Set(defaultIds.slice(0, FEATURED_COUNT));
+    const enabledModels = sanitizeEnabledModels(
+        a.enabledModels,
+        allModels.map((m) => m.id),
+        defaultIds,
+    );
+    const visibleModels = getVisibleModels(allModels, enabledModels);
+    const featuredIds = React.useMemo(() => {
+        const ids: string[] = [];
+        const seen = new Set<string>();
+        for (const m of allModels) {
+            if (seen.has(m.provider)) continue;
+            seen.add(m.provider);
+            ids.push(m.id);
+        }
+        return new Set(ids);
+    }, [allModels]);
     const displayedModels = showAllModels
         ? allModels
         : allModels.filter((m) => featuredIds.has(m.id) || m.id === "auto");
@@ -246,6 +257,8 @@ export function AiSettingsPanel({
         } else {
             next = current.filter((id) => id !== modelId);
         }
+        const ids = allModels.map((m) => m.id);
+        if (ids.length > 0 && ids.every((id) => next.includes(id))) next = [];
         setEnabledModels(next);
     };
 

@@ -41,53 +41,10 @@ export const FALLBACK_CATALOG: ShapeCatalog = {
       releaseDate: "Rolling",
       minTier: "free",
     },
-    {
-      id: "openai/gpt-4o-mini",
-      name: "GPT-4o mini",
-      description: "Fast everyday chat and coding.",
-      provider: "OpenAI",
-      inputCost: 0.15,
-      cachedInputCost: 0.075,
-      outputCost: 0.6,
-      contextWindow: "128K",
-      releaseDate: "2024-07",
-      tier: "fast",
-      minTier: "free",
-      viaApi: true,
-    },
-    {
-      id: "openai/gpt-4o",
-      name: "GPT-4o",
-      description: "Flagship with vision.",
-      provider: "OpenAI",
-      inputCost: 2.5,
-      cachedInputCost: 1.25,
-      outputCost: 10,
-      contextWindow: "128K",
-      releaseDate: "2024-05",
-      tier: "flagship",
-      minTier: "free",
-      viaApi: true,
-    },
-    {
-      id: "anthropic/claude-sonnet-4.6",
-      name: "Claude Sonnet 4.6",
-      description: "Coding and agents.",
-      provider: "Anthropic",
-      inputCost: 3,
-      cachedInputCost: 0.3,
-      outputCost: 15,
-      contextWindow: "200K",
-      releaseDate: "2025",
-      tier: "balanced",
-      minTier: "free",
-      viaApi: true,
-    },
   ],
-  providerOrder: ["Auto", "OpenAI", "Anthropic"],
-  freeTierModelIds: ["auto", "openrouter/auto", "openai/gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-sonnet-4.6"],
-  defaultEnabledModelIds: ["auto", "openai/gpt-4o-mini", "openai/gpt-4o"],
-  allowedModelIds: ["auto", "openai/gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-sonnet-4.6"],
+  providerOrder: ["Auto"],
+  freeTierModelIds: ["auto", "openrouter/auto"],
+  defaultEnabledModelIds: ["auto"],
 };
 
 let cached: ShapeCatalog | null = null;
@@ -104,7 +61,10 @@ export async function fetchCatalog(token?: string | null): Promise<ShapeCatalog>
     const headers: HeadersInit = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const res = await fetch(`${SHAPE_API_BASE}/api/catalog`, { headers });
+    const res = await fetch(`${SHAPE_API_BASE}/api/catalog`, {
+      headers,
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) return cached ?? FALLBACK_CATALOG;
     const data = (await res.json()) as ShapeCatalog;
     cached = data;
@@ -135,7 +95,7 @@ export function isModelAllowedInCatalog(catalog: ShapeCatalog, modelId: string):
   if (catalog.allowedModelIds) {
     return catalog.allowedModelIds.includes(normalized);
   }
-  return catalog.freeTierModelIds.includes(normalized);
+  return true;
 }
 
 export function catalogModelsAsModelInfo(catalog: ShapeCatalog) {

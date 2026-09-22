@@ -81,11 +81,31 @@ export function resolveChatModels(
     if (opts.signedIn) {
         for (const model of catalog) {
             if (model.id === "auto" || model.id === "openrouter/auto") continue;
-            if (!model.viaApi) add(model);
+            add(model);
         }
     }
 
     return [...byId.values()];
+}
+
+function isAutoId(id: string): boolean {
+    return id === "auto" || id === "openrouter/auto";
+}
+
+/** Drop catalog ids that no longer exist. Empty means “all models”. */
+export function sanitizeEnabledModels(
+    enabled: string[],
+    catalogIds: string[],
+    _defaults: string[] = [],
+): string[] {
+    if (enabled.length === 0) return [];
+    const known = new Set(catalogIds);
+    const kept = enabled.filter((id) => isAutoId(id) || known.has(id));
+    const keptReal = kept.filter((id) => !isAutoId(id));
+    if (keptReal.length === 0) return [];
+    const catalogReal = catalogIds.filter((id) => !isAutoId(id));
+    if (catalogReal.length > 0 && catalogReal.every((id) => keptReal.includes(id))) return [];
+    return kept;
 }
 
 export function getModelsByProvider(models: ModelInfo[]): Record<string, ModelInfo[]> {
@@ -104,6 +124,6 @@ export function isModelEnabled(modelId: string, enabledModels: string[]): boolea
 
 export function getVisibleModels(allModels: ModelInfo[], enabledModels: string[]): ModelInfo[] {
     return allModels.filter(
-        (m) => m.id === "auto" || isApiModel(m) || isModelEnabled(m.id, enabledModels),
+        (m) => m.id === "auto" || isModelEnabled(m.id, enabledModels),
     );
 }

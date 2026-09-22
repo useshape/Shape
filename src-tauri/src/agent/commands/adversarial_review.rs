@@ -6,7 +6,7 @@ use crate::core::error::AppError;
 
 const REVIEW_CRITIC_MD: &str = include_str!("../prompts/REVIEW_CRITIC.md");
 const REVIEW_SYNTHESIS_MD: &str = include_str!("../prompts/REVIEW_SYNTHESIS.md");
-const CRITIC_MODEL: &str = crate::agent::model_router::MODEL_FAST;
+const CRITIC_MODEL: &str = "auto";
 
 /// Only after a *large* write: several files or a bulky edit payload.
 /// Sidebar nits, copy tweaks, and single-file polish must not trigger this.

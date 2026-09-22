@@ -288,7 +288,7 @@ async fn synthesize_from_tool_context(
         config.client,
         config.api_key,
         &prompt,
-        model_router::MODEL_FAST,
+        "auto",
         SYNTHESIS_MAX_TOKENS,
         &proxy_ctx,
     )
@@ -329,7 +329,7 @@ async fn force_text_response(
         empty_tools,
         config.app_handle,
         config.cancel.clone(),
-        config.model,
+        config.proxy_model,
         &config.proxy_ctx,
     )
     .await
@@ -368,6 +368,8 @@ pub struct AgentTurnConfig<'a> {
     pub api_messages: &'a mut Vec<Value>,
     pub tools: &'a [Value],
     pub model: &'a str,
+    /// Model id sent to Shape Cloud (Auto stays `auto`; website resolves billing).
+    pub proxy_model: &'a str,
     pub mode: &'a str,
     pub project_path: &'a str,
     pub app_handle: &'a tauri::AppHandle,
@@ -463,7 +465,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             config.tools,
             config.app_handle,
             config.cancel.clone(),
-            config.model,
+            config.proxy_model,
             &config.proxy_ctx,
         )
         .await
@@ -1259,6 +1261,14 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
         upsert_tagged_block(accumulated, chunk, "<todos", "</todos>");
         return;
     }
+    if chunk.contains("<generated_svg") {
+        upsert_tagged_block(accumulated, chunk, "<generated_svg", "</generated_svg>");
+        return;
+    }
+    if chunk.contains("<generated_image") {
+        upsert_tagged_block(accumulated, chunk, "<generated_image", "</generated_image>");
+        return;
+    }
     let tag = if chunk.contains("<terminal_command") {
         ("<terminal_command", "</terminal_command>")
     } else if chunk.contains("<edit_pending") {
@@ -1300,6 +1310,8 @@ fn upsert_tagged_block(accumulated: &mut String, chunk: &str, start_tag: &str, e
             accumulated.replace_range(block_start..block_end, chunk.trim());
             return;
         }
+        accumulated.replace_range(block_start.., chunk.trim());
+        return;
     }
     accumulated.push_str(chunk);
 }

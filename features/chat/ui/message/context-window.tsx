@@ -36,6 +36,17 @@ function asNumber(v: unknown): number {
     return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
+export function hasContextWindowData(
+    breakdown?: ContextBreakdown | null,
+    inputTokens?: number,
+    outputTokens?: number,
+): boolean {
+    const raw = breakdown ?? {};
+    const billed = asNumber(inputTokens) + asNumber(outputTokens);
+    if (billed > 0) return true;
+    return SEGMENTS.some((seg) => asNumber(raw[seg.key]) > 0);
+}
+
 export function ContextWindowMenu({
     breakdown,
     inputTokens,
@@ -71,16 +82,16 @@ export function ContextWindowMenu({
     const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
     return (
-        <div className="flex flex-col gap-2.5 p-1.5">
-            <div className="flex items-baseline justify-between gap-3 px-1">
-                <span className="text-sm font-medium text-text-primary">Context window</span>
-                <span className="text-xs tabular-nums text-text-muted">
+        <div className="flex flex-col gap-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+                <span className="text-md font-medium text-text-primary">Context</span>
+                <span className="text-md font-medium text-text-muted">
                     {formatTokens(used)}
                     {limit > 0 ? ` / ${formatTokens(limit)}` : ""}
                     {limit > 0 ? ` (${pct}%)` : ""}
                 </span>
             </div>
-            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-panel-hover">
+            <div className="flex h-2 w-full overflow-hidden rounded-[2px] bg-panel-hover">
                 {rows.map((seg) => (
                     <div
                         key={String(seg.key)}
@@ -92,10 +103,10 @@ export function ContextWindowMenu({
             </div>
             <div className="flex flex-col gap-1">
                 {rows.map((seg) => (
-                    <div key={String(seg.key)} className="flex items-center gap-2 px-1 text-xs">
-                        <span className={cn("size-1.5 shrink-0 rounded-full", seg.color)} />
-                        <span className="min-w-0 flex-1 truncate text-text-secondary">{seg.label}</span>
-                        <span className="tabular-nums text-text-muted">
+                    <div key={String(seg.key)} className="flex items-center gap-2 text-sm">
+                        <span className={cn("size-3 shrink-0 squircle-2xl", seg.color)} />
+                        <span className="min-w-0 text-md! text-text-primary">{seg.label}</span>
+                        <span className="text-md font-medium text-text-muted">
                             {formatTokens(seg.tokens)}
                             {listed > 0 ? ` · ${Math.round((seg.tokens / listed) * 100)}%` : ""}
                         </span>

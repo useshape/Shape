@@ -1,13 +1,12 @@
 ﻿//! Git Manager AI helpers (PR/issue/release summaries, CI + change explainers).
 use super::streaming;
-use crate::agent::model_router;
 use crate::agent::prompts;
 use crate::app_state::AppState;
 use crate::commands::git;
 use crate::core::error::AppError;
 use reqwest::Client;
 
-const MODEL_TITLE_GEN: &str = model_router::MODEL_FAST;
+const MODEL_TITLE_GEN: &str = "auto";
 
 fn require_shape_token(access_token: Option<String>) -> Result<String, AppError> {
     access_token

@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use super::logging;
 use super::streaming::{self, ProxyContext};
 use super::super::models::ChatMessage;
-use crate::agent::model_router::{self, MODEL_IMAGE_CAPTION};
+use crate::agent::model_router::{self};
 use crate::core::error::AppError;
 use reqwest::Client;
 use std::collections::HashMap;
@@ -118,7 +118,7 @@ async fn describe_urls(
         client,
         api_key,
         vec![json!({ "role": "user", "content": parts })],
-        MODEL_IMAGE_CAPTION,
+        "auto",
         CAPTION_MAX_TOKENS,
         &caption_ctx,
         cancel,
@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn captions_text_only_models() {
         assert!(should_caption(model_router::MODEL_FAST, true));
-        assert!(!should_caption(MODEL_IMAGE_CAPTION, true));
+        assert!(!should_caption(model_router::MODEL_IMAGE_CAPTION, true));
         assert!(!should_caption("anthropic/claude-sonnet-4", true));
         assert!(!should_caption("openai/gpt-5.4", true));
         assert!(!should_caption("google/gemini-3.1-pro-preview", true));

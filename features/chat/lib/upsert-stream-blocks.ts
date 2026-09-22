@@ -95,5 +95,25 @@ export function upsertTaggedBlockInContent(content: string, chunk: string): stri
     }
   }
 
+  for (const tag of ["generated_svg", "generated_image"] as const) {
+    const open = `<${tag}`;
+    const close = `</${tag}>`;
+    const start = chunk.indexOf(open);
+    const endRel = chunk.indexOf(close);
+    if (start < 0 || endRel < 0) continue;
+    const block = chunk.slice(start, endRel + close.length);
+    const existing = content.lastIndexOf(open);
+    if (existing < 0) continue;
+    const existingClose = content.indexOf(close, existing);
+    const existingEnd = existingClose >= 0 ? existingClose + close.length : content.length;
+    return (
+      content.slice(0, existing) +
+      block +
+      content.slice(existingEnd) +
+      chunk.slice(0, start) +
+      chunk.slice(endRel + close.length)
+    );
+  }
+
   return content + chunk;
 }

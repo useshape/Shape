@@ -63,6 +63,22 @@ export async function refreshShapeCatalog(token?: string | null): Promise<ShapeC
   try {
     const catalog = await fetchCatalog(token);
     setState({ catalog, loading: false });
+    try {
+      const { getSettings, updateSettingSection } = await import("@/lib/settings");
+      const { sanitizeEnabledModels } = await import("@/lib/settings/models");
+      const ids = catalog.models.map((m) => m.id);
+      const current = getSettings().ai.enabledModels;
+      const next = sanitizeEnabledModels(
+        current,
+        ids,
+        catalog.defaultEnabledModelIds ?? ["auto"],
+      );
+      if (next.length !== current.length || next.some((id, i) => id !== current[i])) {
+        updateSettingSection("ai", { enabledModels: next });
+      }
+    } catch {
+      /* settings hydrate is best-effort */
+    }
     return catalog;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load catalog";

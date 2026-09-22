@@ -264,6 +264,7 @@ export interface ChatMessage {
         contextBreakdown?: Record<string, number> | null;
     };
     feedback?: "up" | "down" | null;
+    hidden?: boolean;
 }
 
 export interface Conversation {
