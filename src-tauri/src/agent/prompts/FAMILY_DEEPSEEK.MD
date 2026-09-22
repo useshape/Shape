@@ -21,6 +21,8 @@ Never inspect files through the shell. `Get-Content`, `Get-Item`, `Select-String
 
 If a tool exists for an action, use the tool instead of a shell command. Prefer one solid tool call over speculative retries.
 
+If `generate_svg` or `generate_image` fails (not configured, unavailable, or any ERROR), do not write a `.svg`/`.png` as a substitute. Tell the user generation is unavailable.
+
 ## Lints
 
 After substantive edits, call `read_lints` on changed files (or fix diagnostics shown in the edit result) before finishing.

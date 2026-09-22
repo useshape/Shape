@@ -41,8 +41,9 @@ import { slashCommandRanges } from "@/lib/chat/workflows";
 import { resolveChatUsageDisplay } from "@/lib/chat/usage-display";
 import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
 import { UsageRing } from "./usage";
-import { getVisibleModels, isApiModel, resolveChatModels, type ModelInfo } from "@/lib/settings/models";
+import { getVisibleModels, isApiModel, resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
 import {
+    getCatalogDefaultEnabledIds,
     getCatalogModels,
     getCatalogProviderOrder,
     isCatalogModelAllowed,
@@ -86,6 +87,8 @@ type ChatInputProps = {
     onRemoveQueuedMessage?: (id: string) => void;
     /** Tighter chrome for empty-chat centered layout */
     variant?: "default" | "empty";
+    /** Force compact chrome (embedded chat) without relying on settings. */
+    density?: "compact" | "auto";
 };
 
 export type ReasoningEffort = "low" | "high" | "ultra" | "max";
@@ -608,17 +611,20 @@ export function ChatInput({
     onEditQueuedMessage,
     onRemoveQueuedMessage,
     variant = "default",
+    density = "auto",
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
-    const compact = Boolean(settings.ai.compactComposer) && variant !== "empty";
+    const compact =
+        density === "compact" ||
+        (Boolean(settings.ai.compactComposer) && variant !== "empty");
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
     const allModels = resolveChatModels(getCatalogModels(), {
         openaiKey: Boolean(settings.ai.openaiApiKey.trim()),
         openRouterKey: Boolean(settings.ai.openRouterApiKey.trim()),
         signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
-    });
+    }).filter((m) => m.id === "auto" || isCatalogModelAllowed(m.id));
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const mentionOverlayRef = React.useRef<HTMLDivElement>(null);
     const composerBoxRef = React.useRef<HTMLDivElement>(null);
@@ -804,7 +810,12 @@ export function ChatInput({
     }, [addUploadedFiles]);
 
     const [modelQuery, setModelQuery] = React.useState("");
-    const MODELS = getVisibleModels(allModels, settings.ai.enabledModels);
+    const enabled = sanitizeEnabledModels(
+        settings.ai.enabledModels,
+        allModels.map((m) => m.id),
+        getCatalogDefaultEnabledIds(),
+    );
+    const MODELS = getVisibleModels(allModels, enabled);
     const autoModel = allModels.find((m) => m.id === "auto") ?? {
         id: "auto",
         name: "Auto",

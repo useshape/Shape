@@ -14,7 +14,6 @@ import type { ColorThemeId } from "@/lib/settings/themes";
 import { normalizeColorTheme } from "@/lib/settings/themes";
 import { isCatalogServerReachable } from "@/lib/catalog";
 import {
-    getCatalogDefaultEnabledIds,
     getCatalogModels,
     useShapeCatalog,
 } from "@/lib/catalog/store";
@@ -80,9 +79,7 @@ export default function Onboarding({
         normalizeColorTheme(settings.appearance.colorTheme),
     );
     const [enabledModels, setEnabledModels] = useState<string[]>(() =>
-        settings.ai.enabledModels.length > 0
-            ? [...settings.ai.enabledModels]
-            : getCatalogDefaultEnabledIds(),
+        settings.ai.enabledModels.length > 0 ? [...settings.ai.enabledModels] : [],
     );
     const [keybindPreset, setKeybindPreset] = useState<KeybindingPresetId>(() => {
         const active = getActiveKeybindingPreset();

@@ -8,12 +8,11 @@
 /// customization): OpenAI-trained models prefer apply_patch; Anthropic/DeepSeek
 /// prefer SEARCH/REPLACE string edits.
 
-/// Fast included model used for Auto and auxiliary work (titles, explore, etc.).
+/** Fast included model used for Auto and auxiliary work (titles, explore, etc.). */
 pub const MODEL_FAST: &str = "deepseek/deepseek-v4-flash";
 
-/// Cheap vision pass that *describes* images for [`MODEL_FAST`]. Never used as the
-/// Auto agent itself — Gemini Flash was burning as much as DeepSeek just to
-/// look at screenshots inside a full coding turn.
+/// Cheap vision pass that *describes* images for [`MODEL_FAST`]. The website
+/// picks this slug when `X-Shape-Feature: caption` — do not send it from the client.
 pub const MODEL_IMAGE_CAPTION: &str = "google/gemini-2.5-flash-lite";
 
 /// Same slug as [`MODEL_IMAGE_CAPTION`]. Kept so older call sites still compile.
@@ -48,12 +47,22 @@ impl ModelFamily {
     }
 }
 
-/// Resolve a user-facing model id to the OpenRouter model slug we actually call.
+/// Resolve a user-facing model id to the slug used for *local* harness behavior
+/// (tool families, image captioning). Cloud billing still receives [`proxy_model_id`].
 pub fn normalize_model(model: &str) -> String {
     match model.trim() {
-        // Shape Auto = our cheap default, not OpenRouter Auto Router.
         "auto" | "openrouter/auto" => MODEL_FAST.to_string(),
         other => other.to_string(),
+    }
+}
+
+/// Id sent to Shape Cloud. Auto is never remapped here — the website chooses
+/// the backend so forks cannot substitute a cheaper or more expensive model.
+pub fn proxy_model_id(selected: &str) -> String {
+    if is_auto_selection(selected) {
+        "auto".to_string()
+    } else {
+        selected.trim().to_string()
     }
 }
 
@@ -188,6 +197,12 @@ mod tests {
             MODEL_FAST
         );
         assert_eq!(normalize_model_with_images("auto", false), MODEL_FAST);
+        assert_eq!(proxy_model_id("auto"), "auto");
+        assert_eq!(proxy_model_id("openrouter/auto"), "auto");
+        assert_eq!(
+            proxy_model_id("anthropic/claude-sonnet-4.6"),
+            "anthropic/claude-sonnet-4.6"
+        );
     }
 
     #[test]

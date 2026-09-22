@@ -26,8 +26,8 @@ import {
     groupChatMessages,
 } from "./chat-session-utils";
 import { getSettings } from "@/lib/settings";
-import { getVisibleModels, resolveChatModels } from "@/lib/settings/models";
-import { getCatalogModels } from "@/lib/catalog/store";
+import { getVisibleModels, resolveChatModels, sanitizeEnabledModels } from "@/lib/settings/models";
+import { getCatalogDefaultEnabledIds, getCatalogModels, isCatalogModelAllowed, useShapeCatalog } from "@/lib/catalog/store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
@@ -141,6 +141,9 @@ export function useChatSession() {
     ]);
     const [activeChatTabId, setActiveChatTabId] = React.useState<string>(NEW_CHAT_TAB_ID);
     const [selectedModel, setSelectedModel] = React.useState("auto");
+    const selectedModelRef = React.useRef(selectedModel);
+    selectedModelRef.current = selectedModel;
+    const appliedDefaultModelRef = React.useRef(false);
     const [selectedMode, setSelectedMode] = React.useState("Code");
     const [reasoningEffort, setReasoningEffort] = React.useState<"low" | "high" | "ultra" | "max">("low");
     const [fastMode, setFastMode] = React.useState(true);
@@ -191,6 +194,7 @@ export function useChatSession() {
 
     const { project_path } = useProjectState();
     const shapeAuth = useShapeAuth();
+    const { catalog } = useShapeCatalog();
     const [tabsReady, setTabsReady] = React.useState(false);
 
     // Restore open chat tabs per repo so switching projects keeps your session strip.
@@ -1210,14 +1214,27 @@ export function useChatSession() {
             openaiKey: false,
             openRouterKey: false,
             signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
-        });
-        const visible = getVisibleModels(keyed, ai.enabledModels);
+        }).filter((m) => m.id === "auto" || isCatalogModelAllowed(m.id));
+        const enabled = sanitizeEnabledModels(
+            ai.enabledModels,
+            keyed.map((m) => m.id),
+            getCatalogDefaultEnabledIds(),
+        );
+        const visible = getVisibleModels(keyed, enabled);
+        const current = selectedModelRef.current;
+        if (!appliedDefaultModelRef.current && visible.some((m) => m.id === ai.defaultModel)) {
+            appliedDefaultModelRef.current = true;
+            setSelectedModel(ai.defaultModel);
+            return;
+        }
+        appliedDefaultModelRef.current = true;
+        if (visible.some((m) => m.id === current)) return;
         if (visible.some((m) => m.id === ai.defaultModel)) {
             setSelectedModel(ai.defaultModel);
         } else if (visible.length > 0) {
-            setSelectedModel(visible[0].id);
+            setSelectedModel(visible[0]!.id);
         }
-    }, []);
+    }, [catalog, shapeAuth.loggedIn, shapeAuth.offline]);
 
     React.useEffect(() => {
         let disposed = false;

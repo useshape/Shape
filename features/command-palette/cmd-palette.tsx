@@ -1301,6 +1301,7 @@ function getAppCommands(): EditorAction[] {
         {
             id: "app.file.newNext",
             label: "File: Create Next.js Project",
+            shortcut: "",
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "next" } }),
@@ -1309,6 +1310,7 @@ function getAppCommands(): EditorAction[] {
         {
             id: "app.file.newVite",
             label: "File: Create Vite Project",
+            shortcut: "",
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "vite" } }),
@@ -1317,6 +1319,7 @@ function getAppCommands(): EditorAction[] {
         {
             id: "app.file.newAstro",
             label: "File: Create Astro Project",
+            shortcut: "",
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "astro" } }),
@@ -1325,6 +1328,7 @@ function getAppCommands(): EditorAction[] {
         {
             id: "app.file.newRemix",
             label: "File: Create Remix Project",
+            shortcut: "",
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "remix" } }),

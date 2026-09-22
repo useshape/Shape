@@ -74,6 +74,7 @@ export function syncProposedEditsFromMessages(history: ChatMessage[], convId: st
 
 export function groupChatMessages(messages: ChatMessage[]) {
     return messages.reduce((groups, msg, msgIdx) => {
+        if (msg.hidden) return groups;
         if (msg.role === "user" || groups.length === 0) {
             groups.push([{ msg, msgIdx }]);
         } else {

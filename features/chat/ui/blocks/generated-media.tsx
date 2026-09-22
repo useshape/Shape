@@ -7,7 +7,6 @@ export function GeneratedMediaCard({
     kind,
     src,
     prompt,
-    credits,
     loading,
 }: {
     kind: "svg" | "image";
@@ -17,7 +16,7 @@ export function GeneratedMediaCard({
     loading?: boolean;
 }) {
     const url = (src || "").trim();
-    const [ready, setReady] = useState(false);
+    const [ready, setReady] = useState(() => url.startsWith("data:"));
     const showShimmer = loading || (!!url && !ready);
 
     if (!url && !loading) {
@@ -49,14 +48,6 @@ export function GeneratedMediaCard({
                     />
                 ) : null}
             </div>
-            {prompt || credits ? (
-                <div className="flex items-start justify-between gap-2 px-3 py-2">
-                    <p className="min-w-0 truncate text-xs text-text-secondary">{prompt}</p>
-                    {credits ? (
-                        <span className="shrink-0 text-xs tabular-nums text-text-muted">{credits}</span>
-                    ) : null}
-                </div>
-            ) : null}
         </div>
     );
 }

@@ -2,16 +2,6 @@ use serde_json::{json, Value};
 
 use super::dispatch::{ToolCtx, ToolOutcome};
 
-fn xml_attr(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .chars()
-        .take(180)
-        .collect()
-}
-
 pub async fn tool_generate_svg(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     generate_media("svg", args, ctx).await
 }
@@ -38,10 +28,7 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
     } else {
         "generated_image"
     };
-    ctx.emit_ui_token(&format!(
-        "<{tag} prompt=\"{}\">",
-        xml_attr(prompt)
-    ));
+    ctx.emit_ui_token(&format!("<{tag}>"));
 
     match super::plugins::plugin_request(
         "POST",
@@ -73,13 +60,18 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
                 .unwrap_or(0.0);
             ctx.emit_ui_token(&format!("{url}</{tag}>\n"));
             let label = if kind == "svg" { "SVG" } else { "image" };
+            let url_note = if url.starts_with("data:") {
+                String::new()
+            } else {
+                format!("\nurl: {url}")
+            };
             let result = format!(
-                "Generated an {label} (tool call, billed {:.2} Shape credits). Preview is in the chat UI. Do not dump binary/markup unless they asked. Only write it into the project with `save_media` if they asked to save or use it as a file.\nurl: {url}",
+                "Generated an {label} (tool call, billed {:.2} Shape credits). Preview is in the chat UI. Do not dump binary/markup unless they asked. Only write it into the project with `save_media` if they asked to save or use it as a file.{url_note}",
                 credits
             );
             ToolOutcome {
                 tool_result: result,
-                ui_chunk: String::new(),
+                ui_chunk: format!("\n<{tag} credits=\"{credits:.2}\">{url}</{tag}>\n"),
                 side_effect: None,
             }
         }
@@ -100,7 +92,7 @@ fn fail(kind: &str, message: &str, already_streamed_card: bool) -> ToolOutcome {
     let extra = if configured {
         String::new()
     } else {
-        " Do not retry generate_svg or generate_image. Do not write an SVG or image file into the project unless the user explicitly asked for a file. Briefly tell them generation is unavailable."
+        " Generation is unavailable. Tell the user that. Do not retry generate_svg or generate_image. Do not create, edit, or write any .svg/.png/.jpg as a substitute. Asking to generate media is not asking for a project file."
             .to_string()
     };
     let ui = if already_streamed_card {

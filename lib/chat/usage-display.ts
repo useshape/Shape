@@ -1,9 +1,6 @@
 import type { ShapeAuthState } from "@/lib/cloud/types";
 import type { LastTurnUsage } from "@/lib/chat/last-turn-usage";
 
-/** Matches website Auto monthly pool — used only for turn-delta % display. */
-export const AUTO_MONTHLY_TOKEN_POOL = 5_000_000;
-
 export type MessageUsageStats = {
     timeMs?: number;
     cost?: number;
@@ -45,13 +42,6 @@ export function formatMessageModelLabel(
     return formatModelLabel(model);
 }
 
-function turnPercentOfPool(amount: number, pool: number): number {
-    if (pool <= 0 || amount <= 0) return 0;
-    const raw = (amount / pool) * 100;
-    if (raw > 0 && raw < 1) return Math.max(1, Math.round(raw));
-    return Math.min(100, Math.round(raw));
-}
-
 /** Per-message usage for the details popover — one joined line (tests / legacy). */
 export function formatMessageUsageLine(
     stats: MessageUsageStats | undefined,
@@ -77,8 +67,8 @@ export function formatMessageUsageRows(
 
     if (usedAuto && tokens > 0) {
         rows.push({
-            label: "Usage",
-            value: `${turnPercentOfPool(tokens, AUTO_MONTHLY_TOKEN_POOL)}% used`,
+            label: "Tokens",
+            value: tokens.toLocaleString(),
         });
     } else if (!usedAuto && credits > 0) {
         rows.push({ label: "Credits", value: credits.toFixed(2) });

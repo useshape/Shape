@@ -351,6 +351,9 @@ pub fn fork_conversation(
     }
     let end = message_index.min(history.len().saturating_sub(1));
     let mut sliced = history[..=end].to_vec();
+    for (i, msg) in sliced.iter_mut().enumerate() {
+        msg.hidden = i < end;
+    }
     let attr_title = source_title.replace('&', "&amp;").replace('"', "&quot;");
     let banner = format!(
         "<forked_from id=\"{}\" title=\"{}\" />\n",
@@ -358,6 +361,7 @@ pub fn fork_conversation(
         attr_title
     );
     if let Some(msg) = sliced.get_mut(end) {
+        msg.hidden = false;
         if msg.role == "assistant" && !msg.content.contains("<forked_from") {
             msg.content = format!("{}{}", banner, msg.content);
         }

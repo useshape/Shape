@@ -9,8 +9,7 @@ use super::messages;
 use super::run_turn;
 use super::streaming;
 use super::titles::{
-    estimate_cost_per_token, estimate_credits_charged, maybe_regenerate_title,
-    sanitize_generated_title, text_for_title, title_from_message,
+    maybe_regenerate_title, sanitize_generated_title, text_for_title, title_from_message,
 };
 use crate::agent::tools::schema;
 use crate::agent::model_router;
@@ -26,8 +25,8 @@ use tauri::{Emitter, Manager};
 
 use history::now_f64;
 
-const MODEL_DEFAULT: &str = "anthropic/claude-sonnet-4.6";
-const MODEL_TITLE_GEN: &str = model_router::MODEL_FAST;
+const MODEL_DEFAULT: &str = "auto";
+const MODEL_TITLE_GEN: &str = "auto";
 
 #[tauri::command]
 pub async fn send_chat_message(
@@ -71,6 +70,8 @@ pub async fn send_chat_message(
     let client = Client::new();
     let current_proj_path = app_state.0.lock()?.project_path.clone();
     let selected_auto = model_router::is_auto_selection(&raw_model);
+    let model_to_use = model_router::normalize_model(&raw_model);
+    let proxy_model = model_router::proxy_model_id(&raw_model);
     let history_has_images = state
         .history
         .lock()
@@ -82,10 +83,8 @@ pub async fn send_chat_message(
         .unwrap_or(false);
     let has_images = model_router::content_has_images(&message) || history_has_images;
     let mode_to_use = mode.unwrap_or_else(|| "Ask".to_string());
-    // Auto stays on DeepSeek. Vision-capable picks (Claude/GPT/Gemini/Grok) keep
-    // the pixels. Text-only models get a cheap caption instead of swapping the
-    // whole turn onto Gemini Flash.
-    let model_to_use = model_router::normalize_model(&raw_model);
+    // Auto stays on DeepSeek locally. The website maps `auto` for billing.
+    // Vision-capable picks keep pixels; text-only models get a caption pass.
     let effort_raw = reasoning_effort
         .as_deref()
         .map(str::trim)
@@ -99,7 +98,6 @@ pub async fn send_chat_message(
         _ => "low",
     }
     .to_string();
-    let effort_mult = streaming::effort_billing_multiplier(Some(&effort_norm));
     let tier_norm = service_tier
         .as_deref()
         .map(str::trim)
@@ -188,6 +186,7 @@ pub async fn send_chat_message(
             stats: None,
             model: Some(model_to_use.clone()),
             feedback: None,
+            hidden: false,
         });
     }
 
@@ -584,6 +583,7 @@ pub async fn send_chat_message(
         api_messages: &mut api_messages,
         tools: &tools,
         model: &model_to_use,
+        proxy_model: &proxy_model,
         mode: &mode_to_use,
         project_path: &project_path,
         app_handle: &app_handle,
@@ -678,22 +678,10 @@ pub async fn send_chat_message(
     }
 
     let (total_input_tokens, total_output_tokens) = state.turn_meter_totals();
-    let billed_tokens_raw = total_input_tokens + total_output_tokens;
-    // Effort multiplier applies to billed tokens / credits so Ultra ≥ High ≥ Fast.
-    let billed_tokens = ((billed_tokens_raw as f64) * effort_mult).ceil() as usize;
-    let billed_input = ((total_input_tokens as f64) * effort_mult).ceil() as usize;
-    let billed_output = ((total_output_tokens as f64) * effort_mult).ceil() as usize;
+    let billed_tokens = total_input_tokens + total_output_tokens;
     let duration_ms = start_time.elapsed().as_millis() as f64;
-    let cost_per_token = estimate_cost_per_token(&model_to_use);
-    let estimated_cost = (billed_tokens as f64) * cost_per_token;
 
     let used_auto = selected_auto;
-    let credits_charged = if used_auto {
-        None
-    } else {
-        let base = estimate_credits_charged(total_input_tokens, total_output_tokens);
-        Some(((base * effort_mult) * 100.0).round() / 100.0)
-    };
 
     let assistant_message = ChatMessage {
         role: "assistant".to_string(),
@@ -701,11 +689,11 @@ pub async fn send_chat_message(
         timestamp: now_f64(),
         stats: Some(crate::agent::models::MessageStats {
             time_ms: duration_ms,
-            cost: estimated_cost,
+            cost: 0.0,
             tokens: billed_tokens,
-            input_tokens: billed_input,
-            output_tokens: billed_output,
-            credits_charged,
+            input_tokens: total_input_tokens,
+            output_tokens: total_output_tokens,
+            credits_charged: None,
             used_auto: Some(used_auto),
             reasoning_effort: Some(effort_norm.clone()),
             mode: Some(mode_to_use.clone()),
@@ -714,6 +702,7 @@ pub async fn send_chat_message(
         }),
         model: Some(model_to_use.clone()),
         feedback: None,
+        hidden: false,
     };
 
     let still_current = {
@@ -748,11 +737,11 @@ pub async fn send_chat_message(
             json!({
                 "stats": {
                     "timeMs": duration_ms,
-                    "cost": estimated_cost,
+                    "cost": 0.0,
                     "tokens": billed_tokens,
                     "inputTokens": total_input_tokens,
                     "outputTokens": total_output_tokens,
-                    "creditsCharged": credits_charged,
+                    "creditsCharged": null,
                     "usedAuto": used_auto,
                     "reasoningEffort": &effort_norm,
                     "mode": &mode_to_use,
@@ -831,11 +820,11 @@ pub async fn send_chat_message(
             json!({
                 "stats": {
                     "timeMs": duration_ms,
-                    "cost": estimated_cost,
+                    "cost": 0.0,
                     "tokens": billed_tokens,
                     "inputTokens": total_input_tokens,
                     "outputTokens": total_output_tokens,
-                    "creditsCharged": credits_charged,
+                    "creditsCharged": null,
                     "usedAuto": used_auto,
                     "reasoningEffort": &effort_norm,
                     "mode": &mode_to_use,

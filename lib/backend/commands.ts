@@ -763,7 +763,7 @@ export const commands = {
         }),
     forkConversation: (messageIndex: number) =>
         invokeCommand<{ id: string; title: string }>("fork_conversation", {
-            message_index: messageIndex,
+            messageIndex,
         }),
     setMessageFeedback: (index: number, feedback?: "up" | "down" | null) =>
         invokeCommand<void>("set_message_feedback", {

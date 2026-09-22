@@ -409,6 +409,11 @@ async function applyToken(token: string | null, allowRefresh = true) {
       accessToken: token,
     });
     void identifyTelemetryUser(account.id, { tier: account.tier });
+    void Promise.all([import("@/lib/settings"), import("@/lib/telemetry")]).then(
+      ([{ getSettings }, { applyTelemetryPreference }]) => {
+        applyTelemetryPreference(getSettings().privacy.telemetryEnabled);
+      },
+    );
     if (account.tier !== prevTier || !cached) {
       void refreshShapeCatalog(token).catch(() => undefined);
     }

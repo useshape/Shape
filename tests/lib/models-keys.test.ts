@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveChatModels, type ModelInfo } from "@/lib/settings/models";
+import { resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
 
 function model(partial: Partial<ModelInfo> & Pick<ModelInfo, "id" | "name" | "provider">): ModelInfo {
     return {
@@ -40,12 +40,33 @@ describe("resolveChatModels", () => {
         expect(ids).not.toContain("anthropic/claude-sonnet-4.6");
     });
 
-    it("signed in keeps Shape-hosted models", () => {
+    it("signed in keeps Shape-hosted models including viaApi rows", () => {
         const ids = resolveChatModels(list, {
             openaiKey: false,
             openRouterKey: false,
             signedIn: true,
         }).map((m) => m.id);
-        expect(ids).toEqual(["auto", "anthropic/claude-opus-5"]);
+        expect(ids).toEqual(["auto", "openai/gpt-4o", "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-5"]);
+    });
+});
+
+describe("sanitizeEnabledModels", () => {
+    it("clears stale ids so the picker shows the full catalog", () => {
+        expect(
+            sanitizeEnabledModels(
+                ["auto", "openai/gpt-4o-mini", "openai/gpt-4o"],
+                ["auto", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5"],
+                ["auto"],
+            ),
+        ).toEqual([]);
+    });
+
+    it("treats a full catalog selection as all models", () => {
+        expect(
+            sanitizeEnabledModels(
+                ["auto", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5"],
+                ["auto", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5"],
+            ),
+        ).toEqual([]);
     });
 });

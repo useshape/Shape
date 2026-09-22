@@ -66,10 +66,13 @@ function previewSrcDoc(item: DesignPreviewItem): string | null {
     return buildBodyPreviewHtml(source, "", { tailwindSrc: urls.tailwindSrc });
 }
 
-function resolveSrc(path: string): string {
+function resolveSrc(path: string): string | undefined {
+    if (!path) return undefined;
     if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("asset:")) {
         return path;
     }
+    // Temp sandbox HTML is not durable; do not hit the asset protocol for missing files.
+    if (path.includes("shape-design-sandbox")) return undefined;
     return convertFileSrc(path);
 }
 

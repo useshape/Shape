@@ -1262,14 +1262,14 @@ body[data-resizing] .xterm {
 .imsg-typing {
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
-  padding: 0.2rem 0.28rem;
-  min-height: 1.35rem;
+  gap: 0.3rem;
+  padding: 0.12rem 0.18rem;
+  min-height: 1.1rem;
 }
 
 .imsg-typing span {
-  width: 0.52rem;
-  height: 0.52rem;
+  width: 0.42rem;
+  height: 0.42rem;
   border-radius: 999px;
   background: var(--color-text-muted);
   animation: imsg-dot 1.2s ease-in-out infinite;
@@ -1501,6 +1501,43 @@ body[data-resizing] .xterm {
   color: transparent;
   -webkit-text-fill-color: transparent;
   animation: git-generate-shimmer 1.6s linear infinite;
+}
+
+@keyframes status-wipe-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.35;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+@keyframes status-wipe-out {
+  from {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+  to {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0;
+  }
+}
+
+.status-wipe-in {
+  animation: status-wipe-in 420ms var(--ease-out, ease-out) both;
+}
+
+.status-wipe-out {
+  animation: status-wipe-out 420ms var(--ease-out, ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-wipe-in,
+  .status-wipe-out {
+    animation: none;
+  }
 }
 
 /* ── Pixel grid loader (LoadingState) ── */

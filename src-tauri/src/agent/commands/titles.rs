@@ -1,13 +1,12 @@
 //! Chat title generation helpers.
 use super::streaming;
-use crate::agent::model_router;
 use crate::agent::models::AgentState;
 use regex::Regex;
 use reqwest::Client;
 use std::sync::OnceLock;
 use tauri::Emitter;
 
-const MODEL_TITLE_GEN: &str = model_router::MODEL_FAST;
+const MODEL_TITLE_GEN: &str = "auto";
 
 fn attachment_block_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -53,34 +52,6 @@ pub(crate) fn text_for_title(message: &str) -> String {
         stripped = stripped.chars().take(800).collect();
     }
     stripped
-}
-
-pub(crate) fn estimate_credits_charged(input_tokens: usize, output_tokens: usize) -> f64 {
-    const INPUT_COST_PER_M: f64 = 3.0;
-    const OUTPUT_COST_PER_M: f64 = 15.0;
-    const PROVIDER_COST_PER_CREDIT: f64 = 0.02;
-    const MIN_CHARGE_USD: f64 = 0.005;
-
-    let cost = (input_tokens as f64 / 1_000_000.0) * INPUT_COST_PER_M
-        + (output_tokens as f64 / 1_000_000.0) * OUTPUT_COST_PER_M;
-    if cost < MIN_CHARGE_USD {
-        return 0.0;
-    }
-    let credits = cost / PROVIDER_COST_PER_CREDIT;
-    (credits * 100.0).round() / 100.0
-}
-
-pub(crate) fn estimate_cost_per_token(model: &str) -> f64 {
-    let m = model.to_ascii_lowercase();
-    if m.contains("opus") || m.contains("gpt-5.6-sol") || m.contains("gpt-5.5") {
-        0.000015
-    } else if m.contains("gpt-5") && !m.contains("nano") && !m.contains("mini") {
-        0.000012
-    } else if m.contains("sonnet") || m.contains("grok") || m.contains("gemini") {
-        0.000003
-    } else {
-        0.0000006
-    }
 }
 
 fn capitalize_word(word: &str) -> String {

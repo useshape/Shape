@@ -439,20 +439,15 @@ export function GeneratedMediaStep({ block }: { block: Chunk }) {
     const src = (block.content || "").trim();
     const isSvg = block.type === "generated_svg";
     const labelNoun = isSvg ? "SVG" : "image";
-    const prompt = block.mediaPrompt || block.query || labelNoun;
-    const credits = block.mediaCredits;
     if (!src && !block.isGenerating) return null;
     if (block.isGenerating && !src) {
-        return <GitActionChip label={`Generating ${labelNoun}`} detail={prompt} />;
+        return <GitActionChip label={`Generating ${labelNoun}`} />;
     }
     return (
-        <GitActionChip label={`Generated ${labelNoun}`} detail={prompt}>
+        <GitActionChip label={`Generated ${labelNoun}`}>
             <div className="flex flex-col gap-2 p-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={prompt} className="max-h-56 w-full object-contain rounded-lg bg-surface-2" />
-                {credits ? (
-                    <div className="px-1 text-xs text-text-muted tabular-nums">{credits} credits</div>
-                ) : null}
+                <img src={src} alt={labelNoun} className="max-h-56 w-full object-contain rounded-lg bg-surface-2" />
             </div>
         </GitActionChip>
     );
@@ -815,7 +810,6 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 label: block.isGenerating
                     ? `Generating ${block.type === "generated_svg" ? "SVG" : "image"}`
                     : `Generated ${block.type === "generated_svg" ? "SVG" : "image"}`,
-                query: block.mediaPrompt || block.query,
                 expandable: true,
                 content: block.content,
             };

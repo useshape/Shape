@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde_json::{json, Value};
 
 fn strip_urls(text: &str) -> String {
@@ -55,7 +57,10 @@ pub(crate) async fn plugin_request(
     let base = crate::core::website_url::shape_website_base();
     let url = format!("{}{}", base.trim_end_matches('/'), path);
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let mut req = match method {
         "POST" => client.post(&url),
         _ => client.get(&url),

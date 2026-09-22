@@ -768,7 +768,7 @@ fn plugin_run() -> Value {
 fn generate_svg() -> Value {
     tool(
         "generate_svg",
-        "Generate a vector SVG via the svg tool (not a chat model). Use for icons, logos, and illustrations the user asked to create as SVG. Preview appears in chat at the tool call. If this tool errors as not configured or unavailable, do not retry generate_image, and do not write an SVG file into the project unless they explicitly asked to create a file.",
+        "Generate a vector SVG via the svg tool (not a chat model). Use for icons, logos, and illustrations. Preview appears in chat at the tool call. Asking to generate an SVG is not a request to write a project file. If this tool errors as not configured or unavailable, tell the user generation is unavailable; do not retry generate_image; do not write an SVG with create_file or edit.",
         json!({
             "type": "object",
             "properties": {
@@ -783,7 +783,7 @@ fn generate_svg() -> Value {
 fn generate_image() -> Value {
     tool(
         "generate_image",
-        "Generate a raster image (PNG) via the image tool (not a chat model). Cheap quality suitable for mock assets, photos, and UI pictures. Preview appears in chat at the tool call. If this tool errors as not configured or unavailable, do not retry generate_svg, and do not write an image file into the project unless they explicitly asked to create a file.",
+        "Generate a raster image (PNG) via the image tool (not a chat model). Cheap quality suitable for mock assets, photos, and UI pictures. Preview appears in chat at the tool call. Asking to generate an image is not a request to write a project file. If this tool errors as not configured or unavailable, tell the user generation is unavailable; do not retry generate_svg; do not write an image with create_file or edit.",
         json!({
             "type": "object",
             "properties": {

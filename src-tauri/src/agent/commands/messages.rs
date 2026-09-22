@@ -381,6 +381,7 @@ pub fn apply_summary(history: &[ChatMessage], summary: Option<&str>) -> Vec<Chat
         stats: None,
         model: None,
         feedback: None,
+        hidden: false,
     });
     let start = history.len().saturating_sub(KEEP_RECENT_MESSAGES);
     out.extend_from_slice(&history[start..]);
@@ -457,6 +458,7 @@ mod tests {
                 stats: None,
                 model: None,
                 feedback: None,
+                hidden: false,
             })
             .collect();
         let trimmed = trim_middle_history(&history, 50_000);
@@ -481,6 +483,7 @@ mod tests {
             stats: None,
             model: None,
             feedback: None,
+            hidden: false,
         }
     }
 

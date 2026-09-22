@@ -243,6 +243,7 @@ mod tests {
             stats: None,
             model: None,
             feedback: None,
+            hidden: false,
         }
     }
 
