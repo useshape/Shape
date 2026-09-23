@@ -1,38 +1,25 @@
-<p align="center">
-  <a href="https://useshape.org">
-    <img src="./public/logos/logo.svg" width="72" alt="Shape logo" />
-  </a>
-</p>
+![Shape logo](./public/logos/logo.svg)
 
-<h2 align="center">The desktop IDE for agentic software</h2>
+## The desktop IDE for agentic software
 
-<p align="center">
-  <a href="https://useshape.org"><img src="https://img.shields.io/badge/Website-useshape.org-181818" alt="Website" /></a>
-  ·
-  <a href="https://useshape.org/docs/introduction/quick-start">Documentation</a>
-  ·
-  <a href="https://useshape.org/download">Download</a>
-</p>
+![](https://api.iconify.design/lucide:globe.svg?color=%233B82F6) [Website](https://useshape.org) · ![](https://api.iconify.design/lucide:book-open.svg?color=%233B82F6) [Documentation](https://useshape.org/docs/introduction/quick-start) · ![](https://api.iconify.design/lucide:download.svg?color=%233B82F6) [Download](https://useshape.org/download) · ![](https://api.iconify.design/simple-icons:discord.svg?color=%233B82F6) [Discord](https://discord.gg/MMCEDVZKYf)
 
-# Why Shape
+Shape brings your code, terminal, Git, chat, and browser together in one desktop app. An AI built into Shape can work directly in your project, understanding your code, making changes, running commands, and asking for your input when needed.
 
-Shape is a signed-in desktop IDE: chat, editor, Git, terminal, and a real in-app browser in one window. The agent reads the repo, edits files, runs commands, and can pause on click-through questions when it actually needs a decision.
-
-You ship the app like the rest of your stack — locally, with tests, and with a native Windows build.
+![Shape](./public/hero.png)
 
 # Installation
 
 ### Download
 
-The fastest way to get started is the Windows installer:
+The easiest way to get started is the [Installer](https://useshape.org/download).
 
-```text
-https://useshape.org/download
-```
+For specific versions and previous releases, see:
+[Releases](https://github.com/useshape/Shape/releases)
 
-Sign in, open a folder, and start a chat.
+---
 
-### Build from source
+### Build from source 
 
 Install Node.js 18+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/), then:
 
@@ -46,32 +33,34 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) and the [local development guide](https
 
 # In the box
 
-Shape gives you the pieces of a modern coding environment and lets the agent drive them.
+Shape brings your coding environment into one workspace and gives the agent access to the tools it needs to work on your project.
 
-- **Agent chat** — Code, Ask, Plan, and Review. Tools for files, grep, terminal, Git, plugins, and image/SVG generation. When the agent needs a real decision, it can show numbered click-through questions instead of a wall of prose.
-- **Workbench** — Editor, files, source control, Git graph, pull requests, and terminal docked next to chat.
-- **Browser** — A workspace Browser tab with URL bar, back/forward, and design inspect on local sites.
-- **Design runtime** — The `runtime/` bundle (React + Tailwind in the page) powers live HTML/design previews.
+* **Agent**: Work with your code, files, terminal, Git, and more through chat.
+* **Workbench**: Editor, files, Git, terminal, and other tools in one workspace.
+* **Browser**: Browse and inspect local sites without leaving Shape.
+* **Design runtime**: Preview and work with HTML and React interfaces live.
 
-Want to go deeper? Read the [user docs](https://useshape.org/docs/introduction/quick-start) or the [developer reference](https://useshape.org/docs/developing/overview).
+For more, see the [user docs](https://useshape.org/docs/introduction/quick-start) or [developer reference](https://useshape.org/docs/developing/overview).
 
 # Stack
 
-- [TypeScript](https://www.typescriptlang.org/)
-- [Next.js](https://nextjs.org/) (App Router)
-- [Tauri 2](https://v2.tauri.app/) + [Rust](https://www.rust-lang.org/)
-- [React](https://react.dev/)
-- [PostgreSQL](https://www.postgresql.org/) on the cloud side for accounts and usage
+* [TypeScript](https://www.typescriptlang.org/)
+* [React](https://react.dev/)
+* [Next.js](https://nextjs.org/) (App Router)
+* [Tauri 2](https://v2.tauri.app/) + [Rust](https://www.rust-lang.org/)
+
 
 # Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). Code you submit is licensed under [BUSL-1.1](./LICENSE), same as the rest of the repo.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Code you submit is licensed under [BUSL-1.1](./LICENSE).
 
 ```bash
-npm run test          # Vitest (builds runtime first)
+npm run test          # Vitest
 npm run test:rust     # Cargo
 npm run test:all      # Both
 ```
+
+
 
 # License
 
