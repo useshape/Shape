@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowLeftLine, RiArrowRightLine, RiExternalLinkLine, RiPaletteLine, RiRefreshLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -24,15 +23,34 @@ import {
     inferPreviewUrlFromPerformance,
     endPreviewStackNav,
     usePreviewStore,
+    watchPreviewFrame,
 } from "../store";
 
-export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: boolean }) {
-    const { history, index, urlBar, iframeSrc, reloadKey, error, loading } = usePreviewStore();
+export default function PreviewPanel({
+    hideToolbar = false,
+    design,
+    onDesignChange,
+}: {
+    hideToolbar?: boolean;
+    /** Controlled design mode (used when the browser view hosts this panel). */
+    design?: boolean;
+    onDesignChange?: (on: boolean) => void;
+}) {
+    const { history, index, urlBar, iframeSrc, reloadKey, loading } = usePreviewStore();
     const inputRef = useRef<HTMLInputElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const { project_path } = useProjectState();
     const [webProject, setWebProject] = useState<boolean | null>(null);
-    const [designOn, setDesignOn] = useState(false);
+    const [designLocal, setDesignLocal] = useState(false);
+    const designOn = design ?? designLocal;
+    const setDesignOn = useCallback(
+        (next: boolean | ((prev: boolean) => boolean)) => {
+            const value = typeof next === "function" ? next(designOn) : next;
+            setDesignLocal(value);
+            onDesignChange?.(value);
+        },
+        [designOn, onDesignChange],
+    );
     const canBack = index > 0;
     const canForward = index >= 0 && index < history.length - 1;
     const currentUrl = getPreviewCurrentUrl();
@@ -45,6 +63,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
         if (last && !getPreviewCurrentUrl()) {
             void navigatePreview(last);
         }
+        return watchPreviewFrame();
     }, []);
 
     useEffect(() => {
@@ -67,7 +86,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                 : "Design mode";
     useEffect(() => {
         if (!designReady && designOn) setDesignOn(false);
-    }, [designReady, designOn]);
+    }, [designReady, designOn, setDesignOn]);
 
     // Track cross-origin iframe document loads via Resource Timing when we can't read location.
     useEffect(() => {
@@ -188,7 +207,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                             previewBack();
                         }}
                     >
-                        <Icon icon={RiArrowLeftLine} />
+                        <Icon icon={"arrow-left"} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Forward">
@@ -203,7 +222,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                             previewForward();
                         }}
                     >
-                        <Icon icon={RiArrowRightLine} />
+                        <Icon icon={"arrow-right"} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Reload">
@@ -218,7 +237,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                             previewReload();
                         }}
                     >
-                        <Icon icon={RiRefreshLine} />
+                        <Icon icon={"refresh"} />
                     </Button>
                 </Tooltip>
 
@@ -265,7 +284,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                             onClick={() => setDesignOn((v) => !v)}
                             aria-label={designTooltip}
                         >
-                            <Icon icon={RiPaletteLine} />
+                            <Icon icon={"palette"} />
                         </Button>
                     </span>
                 </Tooltip>
@@ -278,28 +297,13 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                         disabled={!currentUrl && !urlBar.trim()}
                         onClick={openExternal}
                     >
-                        <Icon icon={RiExternalLinkLine} />
+                        <Icon icon={"square-forward"} />
                     </Button>
                 </Tooltip>
             </div>
             )}
 
-            {error ? (
-                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border-subtle bg-surface-1 px-3 py-2 text-xs text-text-secondary">
-                    <p className="min-w-0 flex-1 leading-relaxed">{error}</p>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 shrink-0 px-2 text-xs"
-                        onClick={openExternal}
-                    >
-                        Open externally
-                    </Button>
-                </div>
-            ) : null}
-
-            <div className="relative min-h-0 flex-1 bg-editor">
+            <div className="relative min-h-0 flex-1 bg-panel">
                 {iframeSrc ? (
                     <iframe
                         key={`${iframeSrc}::${reloadKey}`}
@@ -312,16 +316,7 @@ export default function PreviewPanel({ hideToolbar = false }: { hideToolbar?: bo
                         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
                         referrerPolicy="no-referrer"
                     />
-                ) : (
-                    <iframe
-                        title="Browser"
-                        className="h-full w-full border-0 bg-editor"
-                        srcDoc={`<!doctype html><html><head><meta charset="utf-8"><style>
-body{margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,sans-serif;background:#191919;color:#9a9a9a}
-p{margin:8px 0 0;font-size:13px}
-</style></head><body><p>Browser</p><p>Enter a URL above and press Enter.</p></body></html>`}
-                    />
-                )}
+                ) : null}
                 {loading ? (
                     <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 animate-pulse bg-accent" />
                 ) : null}

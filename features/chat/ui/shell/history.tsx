@@ -1,6 +1,5 @@
 "use client";
 
-import { RiDeleteBinLine, RiHistoryLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -85,8 +84,9 @@ export function ChatHistoryMenu({
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return conversations;
-        return conversations.filter((conv) => conv.title.toLowerCase().includes(q));
+        const live = conversations.filter((conv) => !conv.archived);
+        if (!q) return live;
+        return live.filter((conv) => conv.title.toLowerCase().includes(q));
     }, [conversations, query]);
 
     const handleSelect = useCallback(
@@ -122,7 +122,7 @@ export function ChatHistoryMenu({
             </Button>
         ) : (
             <SidebarPanelActionButton aria-label={tooltip}>
-                <Icon icon={RiHistoryLine} size={ICON_SIZE_MD} />
+                <Icon icon={"history"} size={ICON_SIZE_MD} />
             </SidebarPanelActionButton>
         );
 
@@ -182,7 +182,7 @@ export function ChatHistoryMenu({
                                             void handleDelete(conversation.id);
                                         }}
                                     >
-                                        <Icon icon={RiDeleteBinLine} />
+                                        <Icon icon={"trash-bin-trash"} />
                                     </button>
                                 </DropdownMenuItem>
                             );

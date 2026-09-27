@@ -1,13 +1,11 @@
 "use client";
 
-import { RiAddLine, RiFolderLine, RiSearchLine, RiSortDesc } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
-import { Icon } from "@/components/ui/icon";
+import { ICON_SIZE_SM, Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { formatCompactAgo, getRepoName } from "@/lib/workspace/repo-history";
-import { ProjectKindGlyph } from "@/features/detection/ui/kind-glyph";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SearchInput } from "@/components/ui/search";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
@@ -150,6 +148,14 @@ function ChatRow({
         window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
     };
 
+    const archive = () => {
+        void commands
+            .setConversationArchived(id, true)
+            .then(() => window.dispatchEvent(new CustomEvent("shape-chat-refresh")))
+            .catch(() => {});
+        window.dispatchEvent(new CustomEvent("shape-chat-close-tab", { detail: { id } }));
+    };
+
     const startRename = () => {
         setDraft(title);
         setRenaming(true);
@@ -194,10 +200,7 @@ function ChatRow({
                             className="flex w-full flex-col gap-0.5 text-left"
                         >
                             <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
-                                <span className="flex min-w-0 items-center gap-1.5">
-                                    <ProjectKindGlyph path={path} className="size-3.5 shrink-0" />
-                                    <span className="min-w-0 truncate">{repo}</span>
-                                </span>
+                                <span className="min-w-0 truncate">{repo}</span>
                                 <span className="shrink-0 tabular-nums">{generating ? "now" : ago}</span>
                             </span>
                             <span className="block truncate text-sm text-text-primary">{title}</span>
@@ -223,14 +226,21 @@ function ChatRow({
                     )}
                 </div>
             </ContextMenuTrigger>
-            <ContextMenuContent className="min-w-44">
-                <ContextMenuItem onClick={openChat}>Open</ContextMenuItem>
-                <ContextMenuItem onClick={startRename}>Rename</ContextMenuItem>
+            <ContextMenuContent className="min-w-48">
+                <ContextMenuItem onClick={openChat}>
+                    <Icon icon="square-forward" size={ICON_SIZE_SM} />
+                    Open
+                </ContextMenuItem>
+                <ContextMenuItem onClick={startRename}>
+                    <Icon icon="pen" size={ICON_SIZE_SM} />
+                    Rename
+                </ContextMenuItem>
                 <ContextMenuItem
                     onClick={() => {
                         window.dispatchEvent(new CustomEvent("shape-chat-new"));
                     }}
                 >
+                    <Icon icon="add-circle" size={ICON_SIZE_SM} />
                     New Chat
                 </ContextMenuItem>
                 <ContextMenuSeparator />
@@ -239,6 +249,7 @@ function ChatRow({
                         void navigator.clipboard.writeText(title);
                     }}
                 >
+                    <Icon icon="copy" size={ICON_SIZE_SM} />
                     Copy Title
                 </ContextMenuItem>
                 {path ? (
@@ -247,11 +258,19 @@ function ChatRow({
                             void commands.revealPath(path).catch(() => {});
                         }}
                     >
+                        <Icon icon="folder-open" size={ICON_SIZE_SM} />
                         Reveal Folder
                     </ContextMenuItem>
                 ) : null}
                 <ContextMenuSeparator />
-                <ContextMenuItem onClick={remove}>Delete</ContextMenuItem>
+                <ContextMenuItem onClick={archive}>
+                    <Icon icon="inbox" size={ICON_SIZE_SM} />
+                    Archive
+                </ContextMenuItem>
+                <ContextMenuItem onClick={remove} className="text-error">
+                    <Icon icon="trash-bin-trash" size={ICON_SIZE_SM} />
+                    Delete
+                </ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>
     );
@@ -334,9 +353,10 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
 
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
+        const live = chats.filter((c) => !c.archived);
         const filtered = q
-            ? chats.filter((c) => (c.title || "Untitled").toLowerCase().includes(q))
-            : chats;
+            ? live.filter((c) => (c.title || "Untitled").toLowerCase().includes(q))
+            : live;
         const sorted = [...filtered];
         sorted.sort((a, b) => {
             if (sort === "name-asc") {
@@ -368,7 +388,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                 <span className="text-sm font-medium text-text-muted">Chats</span>
                 <div className="flex items-center">
                     <HeaderIconBtn label="Search" onClick={toggleSearch} active={searchOpen}>
-                        <Icon icon={RiSearchLine} />
+                        <Icon icon={"magnifier"} />
                     </HeaderIconBtn>
                     <DropdownMenu>
                         <Tooltip content="Sort" side="bottom" delayDuration={80}>
@@ -378,7 +398,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                                     aria-label="Sort"
                                     className="flex size-7 items-center justify-center rounded-md text-text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary data-[state=open]:bg-panel-hover data-[state=open]:text-text-primary"
                                 >
-                                    <Icon icon={RiSortDesc} />
+                                    <Icon icon={"sort-from-top-to-bottom"} />
                                 </button>
                             </DropdownMenuTrigger>
                         </Tooltip>
@@ -396,7 +416,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <HeaderIconBtn label="New chat" onClick={onNewChat}>
-                        <Icon icon={RiAddLine} />
+                        <Icon icon={"add-circle"} />
                     </HeaderIconBtn>
                 </div>
             </div>
@@ -441,7 +461,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         onClick={() => window.dispatchEvent(new Event("shape-new-project"))}
                         className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                     >
-                        <Icon icon={RiFolderLine} />
+                        <Icon icon={"folder"} />
                         New project
                     </button>
                 ) : visible.length === 0 ? (
@@ -450,7 +470,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         onClick={onNewChat}
                         className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                     >
-                        <Icon icon={RiAddLine} className="shrink-0" />
+                        <Icon icon={"add-circle"} className="shrink-0" />
                         <span>{query.trim() ? "No matching chats" : "New chat"}</span>
                     </button>
                 ) : (

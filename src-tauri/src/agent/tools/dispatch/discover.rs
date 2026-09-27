@@ -352,7 +352,7 @@ pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
     let arguments = args.get("arguments").cloned().unwrap_or(json!({}));
     let toolkit = toolkit_from_plugin_args(&slug, args);
     let label = humanize_plugin_slug(&slug);
-    let policy = ctx.agent_state.turn_policy();
+    let policy = ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref());
     if policy
         .plugin_disabled_actions
         .get(&toolkit)

@@ -215,7 +215,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         const body = (
             <div id="shape-settings" className="relative flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary select-none">
                 <Titlebar settings title={windowTitle} />
-                <main className="min-h-0 flex-1 overflow-hidden bg-background" data-tauri-drag-region>
+                <main className="min-h-0 flex-1 overflow-hidden bg-background">
                     {children}
                 </main>
                 <RequireShapeLogin />

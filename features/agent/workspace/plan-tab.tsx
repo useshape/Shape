@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { commands, useProjectState } from "@/lib/backend";
-import { MarkdownPreview } from "@/features/editor/ui/markdown/markdown";
+import { MarkdownLiveEditor } from "@/features/editor/ui/markdown/live-editor";
 import { PlanEditorHeader } from "@/features/editor/ui/main/ui/plan-editor-header";
 import { Button } from "@/components/ui/button";
 
@@ -12,10 +12,11 @@ function resolvePlanPath(filePath: string, projectPath: string | null): string {
     return `${projectPath.replace(/\\/g, "/")}/${filePath.replace(/\\/g, "/")}`.replace(/\/+/g, "/");
 }
 
-/** Cursor-style plan document: header + editable markdown, then Build. */
+/** Plan document: formatted markdown with a raw source switch, then Build. */
 export function PlanTabView({ path, markdown }: { path: string; markdown?: string }) {
     const { project_path } = useProjectState();
     const absPath = resolvePlanPath(path, project_path);
+    const [raw, setRaw] = useState(false);
     const [content, setContent] = useState(markdown?.trim() ? markdown : "");
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -48,26 +49,48 @@ export function PlanTabView({ path, markdown }: { path: string; markdown?: strin
         };
     }, [absPath, markdown, path]);
 
-    const persist = useCallback(
-        async (next: string) => {
-            setContent(next);
-            if (!absPath) return;
-            setSaving(true);
+    const saveTimer = useRef<number | null>(null);
+    const pending = useRef<string | null>(null);
+
+    const flush = useCallback(async () => {
+        const next = pending.current;
+        pending.current = null;
+        if (next === null || !absPath) return;
+        setSaving(true);
+        try {
             try {
-                try {
-                    await commands.createFile(absPath);
-                } catch {
-                    /* exists */
-                }
-                await commands.saveFile(absPath, next);
+                await commands.createFile(absPath);
             } catch {
-                /* keep local */
-            } finally {
-                setSaving(false);
+                /* exists */
             }
+            await commands.saveFile(absPath, next);
+        } catch {
+            /* keep local */
+        } finally {
+            setSaving(false);
+        }
+    }, [absPath]);
+
+    // Typing autosaves shortly after the last keystroke.
+    const persist = useCallback(
+        (next: string) => {
+            setContent(next);
+            pending.current = next;
+            if (saveTimer.current) window.clearTimeout(saveTimer.current);
+            saveTimer.current = window.setTimeout(() => {
+                saveTimer.current = null;
+                void flush();
+            }, 600);
         },
-        [absPath],
+        [flush],
     );
+
+    useEffect(() => {
+        return () => {
+            if (saveTimer.current) window.clearTimeout(saveTimer.current);
+            void flush();
+        };
+    }, [flush]);
 
     const saveToWorkspace = async () => {
         if (!project_path || !content.trim()) return;
@@ -109,20 +132,12 @@ export function PlanTabView({ path, markdown }: { path: string; markdown?: strin
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-editor">
-            <PlanEditorHeader path={absPath || path} />
+            <PlanEditorHeader path={absPath || path} raw={raw} onRawChange={setRaw} />
             <div className="min-h-0 flex-1 overflow-hidden">
-                <MarkdownPreview
-                    content={content}
-                    filePath={absPath || path}
-                    projectPath={project_path}
-                    onApplyContent={(next) => {
-                        void persist(next);
-                    }}
-                    className="border-l-0"
-                />
+                <MarkdownLiveEditor content={content} onChange={persist} raw={raw} />
             </div>
             <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border-subtle px-3 py-2">
-                <span className="text-xs text-text-muted">{saving ? "Saving…" : "Select text to edit"}</span>
+                <span className="text-xs text-text-muted">{saving ? "Saving…" : "Saved"}</span>
                 {project_path ? (
                     <Button variant="ghost" size="xs" onClick={() => void saveToWorkspace()}>
                         Save to workspace

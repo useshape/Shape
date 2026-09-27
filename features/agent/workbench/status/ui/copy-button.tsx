@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCheckLine, RiClipboardLine } from "@remixicon/react";
 import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -29,7 +28,7 @@ export function CopyButton({ text }: { text: string }) {
                     : "bg-panel-hover text-text-muted hover:text-text-primary hover:bg-panel-active",
             )}
         >
-            {copied ? <Icon icon={RiCheckLine} /> : <Icon icon={RiClipboardLine} />}
+            {copied ? <Icon icon={"check"} /> : <Icon icon={"clipboard"} />}
             {copied ? "Copied" : "Copy"}
         </button>
     );

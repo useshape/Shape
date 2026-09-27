@@ -1,10 +1,8 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiCheckboxCircleFill, RiCloseLine, RiErrorWarningFill, RiInformationFill } from "@remixicon/react";
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { notificationStore, useNotifications, type Notification } from "@/features/notifications";
 import { errorDocsUrl } from "@/lib/errors/catalog";
@@ -16,11 +14,11 @@ const TOAST_EXIT_MS = 220;
 export const TOAST_STACK_CLASS =
     "pointer-events-none fixed bottom-4 right-4 left-auto z-notification ml-auto w-[min(400px,calc(100vw-24px))] outline-none";
 
-const typeIcons: Record<Notification["type"], RemixiconComponentType> = {
-    info: RiInformationFill,
-    success: RiCheckboxCircleFill,
-    warning: RiErrorWarningFill,
-    error: RiErrorWarningFill,
+const typeIcons: Record<Notification["type"], SolarIconName> = {
+    info: "info-circle",
+    success: "check-circle",
+    warning: "danger-triangle",
+    error: "danger-triangle",
 };
 
 const typeVisual: Record<Notification["type"], string> = {
@@ -131,7 +129,7 @@ function ToastCard({
                     }}
                     aria-label="Dismiss notification"
                 >
-                    <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
+                    <Icon icon={"close"} size={ICON_SIZE_SM} />
                 </Button>
             </div>
             {autoHideMs ? (

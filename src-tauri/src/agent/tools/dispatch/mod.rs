@@ -6,6 +6,7 @@ mod discover;
 mod files;
 mod git;
 mod meta;
+mod persona;
 mod subagent;
 mod terminal;
 
@@ -106,11 +107,12 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
     }
 
     if is_read_only_mode(ctx.mode)
-        && (name.starts_with("mcp_")
+        && ((name.starts_with("mcp_") && name != "mcp_search")
             || name == "plugin_run"
             || name == "generate_svg"
             || name == "generate_image"
-            || name == "save_media")
+            || name == "save_media"
+            || name == "browse")
     {
         return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
     }
@@ -152,6 +154,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "create_directory" => files::tool_create_directory(&args, ctx),
         "create_file" => files::tool_create_file(&args, ctx).await,
         "save_media" => files::tool_save_media(&args, ctx).await,
+        "send_file" => files::tool_send_file(&args, ctx),
         "edit_file" => files::tool_edit_file(&args, ctx).await,
         "apply_patch" => files::tool_apply_patch(&args, ctx).await,
         "read_lints" => files::tool_read_lints(&args, ctx),
@@ -171,6 +174,10 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "spawn_subagent" => subagent::tool_spawn_subagent(&args, ctx).await,
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
+        "browse" => crate::agent::tools::browse::tool_browse(&args, ctx).await,
+        "design_review" => persona::tool_design_review(&args, ctx).await,
+        "mcp_search" => meta::tool_mcp_search(&args, ctx).await,
+        "mcp_call" => meta::tool_mcp_call_named(&args, ctx).await,
         "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
         "ask_user" => meta::tool_ask_user(&args, ctx).await,
         "generate_svg" => crate::agent::tools::generate::tool_generate_svg(&args, ctx).await,

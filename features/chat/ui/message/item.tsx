@@ -1,9 +1,7 @@
-import { RiArrowDownSLine, RiArrowGoBackLine, RiClipboardLine, RiFolder5Fill, RiGitForkLine, RiMoreLine, RiMusic2Line, RiRefreshLine, RiThumbDownLine, RiThumbUpLine } from "@remixicon/react";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
 import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
-import { FileIcon } from "@/components/ui/file-icon";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -40,6 +38,7 @@ import { GeneratingIndicator } from "../blocks/generating";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 import { parseUserAttachments } from "../../lib/user-attachments";
 import type { ParsedUserAttachment } from "../../lib/user-attachments";
+import { MessageAttachmentPill } from "../composer/attachments";
 import { ContextWindowMenu, hasContextWindowData } from "./context-window";
 import {
     AlertDialog,
@@ -100,29 +99,7 @@ type ChatMessageItemProps = {
 };
 
 function SentAttachmentPill({ att }: { att: ParsedUserAttachment }) {
-    return (
-        <span
-            className="inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-full border border-border pl-1 pr-2"
-            title={att.name}
-        >
-            <span className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface-3">
-                {att.kind === "image" && att.dataUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={att.dataUrl}
-                        alt=""
-                        className="size-full object-cover"
-                        draggable={false}
-                    />
-                ) : att.kind === "audio" ? (
-                    <Icon icon={RiMusic2Line} className="text-text-muted" />
-                ) : (
-                    <FileIcon name={att.name} className="size-3.5" />
-                )}
-            </span>
-            <span className="min-w-0 truncate text-sm text-text-primary">{att.name}</span>
-        </span>
-    );
+    return <MessageAttachmentPill kind={att.kind} name={att.name} />;
 }
 
 function MentionRichText({ text }: { text: string }) {
@@ -253,6 +230,20 @@ function selectNodeContents(el: HTMLElement | null) {
     const sel = window.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
+}
+
+function decodeXmlAttr(value: string): string {
+    return value
+        .replace(/&quot;/g, "\"")
+        .replace(/&lt;/g, "<")
+        .replace(/&amp;/g, "&");
+}
+
+function parseChatRenamed(content: string): { from: string; rest: string } | null {
+    const match = content.match(/^<chat_renamed\b([^>]*)\/>\s*/);
+    if (!match) return null;
+    const from = decodeXmlAttr(match[1]?.match(/\bfrom="([^"]*)"/)?.[1] ?? "the previous name");
+    return { from, rest: content.slice(match[0].length) };
 }
 
 function parseForkedFrom(content: string): { id: string; title: string; rest: string } | null {
@@ -388,7 +379,7 @@ function ChatMessageItemInner({
                             >
                                 <div ref={bodyRef} className="min-w-0 wrap-break-word select-text">
                                     {userParts.attachments.length > 0 && (
-                                        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
                                             {userParts.attachments.map((att, i) => (
                                                 <SentAttachmentPill key={`${att.name}-${i}`} att={att} />
                                             ))}
@@ -403,12 +394,12 @@ function ChatMessageItemInner({
                         <div className="flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
                             <Tooltip content="Copy Message" side="top">
                                 <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon icon={RiClipboardLine} />
+                                    <Icon icon={"clipboard"} />
                                 </button>
                             </Tooltip>
                             <Tooltip content="Restore to this checkpoint" side="top">
                                 <button onClick={() => onRestore?.(index)} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon icon={RiArrowGoBackLine} />
+                                    <Icon icon={"undo-left"} />
                                 </button>
                             </Tooltip>
                         </div>
@@ -433,8 +424,26 @@ function ChatMessageItemInner({
     }
 
     const showTypingOnly = Boolean(isGenerating && !content.trim());
-    const forked = role === "assistant" ? parseForkedFrom(content) : null;
-    const renderContent = forked?.rest ?? content;
+    let renderContent = content;
+    let forked: ReturnType<typeof parseForkedFrom> = null;
+    let renamed: ReturnType<typeof parseChatRenamed> = null;
+    if (role === "assistant") {
+        for (let i = 0; i < 2; i++) {
+            const nextFork = parseForkedFrom(renderContent);
+            if (nextFork) {
+                forked = nextFork;
+                renderContent = nextFork.rest;
+                continue;
+            }
+            const nextRenamed = parseChatRenamed(renderContent);
+            if (nextRenamed) {
+                renamed = nextRenamed;
+                renderContent = nextRenamed.rest;
+                continue;
+            }
+            break;
+        }
+    }
 
     return (
         <>
@@ -451,6 +460,13 @@ function ChatMessageItemInner({
                         <GeneratingIndicator label="Thinking" />
                     ) : (
                         <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
+                            {renamed ? (
+                                <div className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-text-muted">
+                                    <Icon icon={"pen"} className="size-3.5 shrink-0" />
+                                    <span>Renamed from</span>
+                                    <span className="min-w-0 truncate font-medium text-text-secondary">{renamed.from}</span>
+                                </div>
+                            ) : null}
                             {forked ? (
                                 <button
                                     type="button"
@@ -462,9 +478,9 @@ function ChatMessageItemInner({
                                         );
                                     }}
                                 >
-                                    <Icon icon={RiGitForkLine} className="size-3.5 shrink-0" />
+                                    <Icon icon={"git-fork"} className="size-3.5 shrink-0" />
                                     <span>Forked from</span>
-                                    <Icon icon={RiFolder5Fill} className="size-3.5 shrink-0 text-text-muted" />
+                                    <Icon icon={"folder"} className="size-3.5 shrink-0 text-text-muted" />
                                     <span className="min-w-0 truncate font-medium text-text-secondary">{forked.title}</span>
                                 </button>
                             ) : null}
@@ -483,7 +499,7 @@ function ChatMessageItemInner({
                 <div className="flex items-center gap-0.5 select-none">
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
-                            <Icon icon={RiClipboardLine} />
+                            <Icon icon={"clipboard"} />
                         </Button>
                     </Tooltip>
                     {role === "assistant" ? (
@@ -495,7 +511,7 @@ function ChatMessageItemInner({
                                     className={feedback === "up" ? "text-text-primary" : ""}
                                     onClick={() => onFeedback?.(index, feedback === "up" ? null : "up")}
                                 >
-                                    <Icon icon={RiThumbUpLine} />
+                                    <Icon icon={"like"} />
                                 </Button>
                             </Tooltip>
                             <Tooltip content="Bad response" side="bottom">
@@ -505,7 +521,7 @@ function ChatMessageItemInner({
                                     className={feedback === "down" ? "text-text-primary" : ""}
                                     onClick={() => onFeedback?.(index, feedback === "down" ? null : "down")}
                                 >
-                                    <Icon icon={RiThumbDownLine} />
+                                    <Icon icon={"dislike"} />
                                 </Button>
                             </Tooltip>
                         </>
@@ -524,7 +540,7 @@ function ChatMessageItemInner({
                     >
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
-                                <Icon icon={RiMoreLine} />
+                                <Icon icon={"menu-dots"} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-72 overflow-hidden p-0">
@@ -611,7 +627,7 @@ function ChatMessageItemInner({
                                                 onClick={() => setAdvanced(true)}
                                             >
                                                 Advanced
-                                                <Icon icon={RiArrowDownSLine} size={ICON_SIZE_MD} />
+                                                <Icon icon={"alt-arrow-down"} size={ICON_SIZE_MD} />
                                             </button>
                                         ) : null}
                                     </>

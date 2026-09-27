@@ -1,6 +1,5 @@
 "use client";
 
-import { RiAddLine } from "@remixicon/react";
 import { useState } from "react";
 import { IconButton } from "./field";
 
@@ -47,7 +46,7 @@ export function PanelSection({
                 {add ? (
                     <IconButton
                         label={`Add ${title}`}
-                        icon={RiAddLine}
+                        icon={"add-circle"}
                         onClick={() => {
                             if (!controlled) setOpenInternal(true);
                             onAdd?.();

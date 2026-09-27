@@ -1,8 +1,7 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowUpSLine, RiCheckboxBlankCircleLine, RiCheckboxCircleLine, RiCloseLine, RiExternalLinkLine, RiGitBranchLine, RiListCheck3 } from "@remixicon/react";
 import React from "react";
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { ICON_SIZE_MD, SolarIcon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
@@ -43,7 +42,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
           : displaySteps.filter((s) => s.status === "done").slice(-2);
 
     return (
-        <div className="my-1 w-full overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
+        <div className="my-1 w-full overflow-hidden squircle-2xl bg-surface-4">
             <button
                 type="button"
                 onClick={() => totalCount > 1 && setIsOpen((open) => !open)}
@@ -52,7 +51,9 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                     totalCount > 1 && "hover:bg-panel-hover/40 transition-colors cursor-pointer",
                 )}
             >
-                <Icon icon={RiListCheck3} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
+                <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
+                    <SolarIcon name="list-check" size={16} />
+                </span>
                 <span className="truncate text-sm font-medium text-text-primary">
                     {completedCount} of {totalCount} done
                 </span>
@@ -66,18 +67,18 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
             <Collapse open={visibleSteps.length > 0}>
                 <div className="flex flex-col gap-1.5 px-3 py-2.5">
                     {visibleSteps.map((step, i) => (
-                        <div key={`${step.label}-${i}`} className="flex items-start gap-2">
+                        <div key={`${step.label}-${i}`} className="flex items-center gap-2">
+                            <span className="flex size-4 shrink-0 items-center justify-center">
                             {step.status === "done" ? (
-                                <Icon icon={RiCheckboxCircleLine} className="text-success shrink-0 mt-0.5" size={ICON_SIZE_MD} />
+                                <SolarIcon name="check-circle" size={16} className="text-success" />
                             ) : step.status === "active" ? (
-                                <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0 mt-0.5">
-                                    <div className="w-2.5 h-2.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                                </div>
+                                <span className="size-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
                             ) : step.status === "cancelled" ? (
-                                <Icon icon={RiCloseLine} className="text-text-disabled shrink-0 mt-0.5" size={ICON_SIZE_MD} />
+                                <SolarIcon name="close" size={16} className="text-text-disabled" />
                             ) : (
-                                <span className="mt-0.5 size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
+                                <span className="size-3.5 rounded-full border-2 border-text-muted/45" />
                             )}
+                            </span>
                             <span className={cn(
                                 "text-sm leading-snug",
                                 step.status === "done" && "text-text-muted",
@@ -220,16 +221,16 @@ export function PlanSavedBlock({
                 onClick={() => setOpen((v) => !v)}
                 className="flex w-full items-center gap-2 p-2 text-left hover:bg-panel-hover/40 transition-colors"
             >
-                <Icon icon={RiGitBranchLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
+                <SolarIcon name="git-branch" className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-muted">
                     Plan ready
                 </span>
                 <span className="max-w-[45%] truncate text-sm text-text-secondary">
                     {displayTitle}
                 </span>
-                <Icon
-                    icon={open ? RiArrowUpSLine : RiArrowDownSLine}
-                    className="shrink-0 text-text-muted"
+                <SolarIcon
+                    name="alt-arrow-down"
+                    className={cn("shrink-0 text-text-muted transition-transform duration-200", open && "rotate-180")}
                     size={ICON_SIZE_MD}
                 />
             </button>
@@ -258,7 +259,7 @@ export function PlanSavedBlock({
                                 onClick={() => { void handleOpen(); }}
                                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-panel-hover transition-colors shrink-0"
                             >
-                                <Icon icon={RiExternalLinkLine} size={ICON_SIZE_MD} />
+                                <SolarIcon name="square-forward" size={ICON_SIZE_MD} />
                             </button>
                         </Tooltip>
                     </div>
@@ -267,11 +268,7 @@ export function PlanSavedBlock({
                         <ul className="flex flex-col gap-1.5 pt-1">
                             {todos.slice(0, 6).map((todo) => (
                                 <li key={todo} className="flex items-start gap-2">
-                                    <Icon
-                                        icon={RiCheckboxBlankCircleLine}
-                                        className="text-text-disabled shrink-0 mt-0.5"
-                                        size={ICON_SIZE_MD}
-                                    />
+                                    <span className="mt-1 size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
                                     <span className="text-sm text-text-primary leading-snug">{todo}</span>
                                 </li>
                             ))}

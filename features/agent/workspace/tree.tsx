@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowRightSLine, RiFileTextLine, RiFolderLine, RiFolderOpenLine } from "@remixicon/react";
 import { useCallback, useEffect, useState } from "react";
 import { commands, type FileEntry } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
@@ -68,11 +67,11 @@ function TreeNode({
                     style={{ paddingLeft: pad }}
                 >
                     <Icon
-                        icon={open ? RiArrowDownSLine : RiArrowRightSLine}
+                        icon={open ? "alt-arrow-down" : "alt-arrow-right"}
                         className="shrink-0 text-text-muted"
                     />
                     <Icon
-                        icon={open ? RiFolderOpenLine : RiFolderLine}
+                        icon={open ? "folder-open" : "folder"}
                         className="shrink-0 text-text-muted"
                     />
                     <span className="min-w-0 truncate">{entry.name}</span>
@@ -117,7 +116,7 @@ function TreeNode({
             )}
             style={{ paddingLeft: pad + 14 }}
         >
-            <Icon icon={RiFileTextLine} className="shrink-0 text-text-muted" />
+            <Icon icon={"file-text"} className="shrink-0 text-text-muted" />
             <span className="min-w-0 truncate">{entry.name}</span>
         </button>
             </ContextMenuTrigger>

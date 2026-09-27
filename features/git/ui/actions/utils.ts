@@ -1,5 +1,4 @@
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiCheckboxBlankCircleLine, RiCheckboxCircleFill, RiCloseCircleFill, RiRefreshLine, RiStopFill } from "@remixicon/react";
+import type { SolarIconName } from "@/components/ui/icon";
 import { commands } from "@/lib/backend";
 
 export function formatRelative(iso?: string | null): string {
@@ -50,7 +49,7 @@ export function statusLabel(status?: string | null, conclusion?: string | null):
 }
 
 export type StatusIconDef = {
-    icon: RemixiconComponentType;
+    icon: SolarIconName;
     spin?: boolean;
 };
 
@@ -60,24 +59,24 @@ export function statusIcon(
 ): StatusIconDef {
     const s = (conclusion || status || "").toLowerCase();
     if (["success", "completed", "passed"].includes(s)) {
-        return { icon: RiCheckboxCircleFill };
+        return { icon: "check-circle" };
     }
     if (["failure", "failed", "error", "timed_out"].includes(s)) {
-        return { icon: RiCloseCircleFill };
+        return { icon: "close-circle" };
     }
     if (["cancelled", "canceled", "skipped", "neutral", "closed"].includes(s)) {
-        return { icon: RiStopFill };
+        return { icon: "stop" };
     }
     if (["open"].includes(s)) {
-        return { icon: RiCheckboxBlankCircleLine };
+        return { icon: "record" };
     }
     if (["in_progress", "pending", "waiting", "requested"].includes(s)) {
-        return { icon: RiRefreshLine, spin: true };
+        return { icon: "refresh", spin: true };
     }
     if (["queued"].includes(s)) {
-        return { icon: RiCheckboxBlankCircleLine };
+        return { icon: "record" };
     }
-    return { icon: RiCheckboxBlankCircleLine };
+    return { icon: "record" };
 }
 
 export function actorAvatarUrl(actor?: {

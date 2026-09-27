@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCloseLine } from "@remixicon/react";
 import React from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
@@ -93,7 +92,7 @@ export function MediaLightbox({
                     onClick={onClose}
                     aria-label="Close"
                 >
-                    <Icon icon={RiCloseLine} />
+                    <Icon icon={"close"} />
                 </button>
 
                 {showHtml ? (

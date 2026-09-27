@@ -1,4 +1,3 @@
-import { RiGitBranchLine, RiGitCommitLine, RiPriceTag3Line } from "@remixicon/react";
 import { Icon, ICON_SIZE_SM, ICON_SIZE_XS } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -26,7 +25,7 @@ function RefPillVisual({
     className?: string;
 }) {
     const raw = refInfo.label.replace(/^tag:\s*/i, "");
-    const icon = refInfo.isTag ? RiPriceTag3Line : refInfo.isHead ? RiGitCommitLine : RiGitBranchLine;
+    const icon = refInfo.isTag ? "tag" : refInfo.isHead ? "git-commit" : "git-branch";
     return (
         <span
             className={cn(

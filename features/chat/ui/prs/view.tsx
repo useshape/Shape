@@ -1,17 +1,5 @@
 "use client";
 
-import {
-    RiArrowDownSLine,
-    RiArrowLeftLine,
-    RiChat3Line,
-    RiCheckLine,
-    RiExternalLinkLine,
-    RiFilter3Line,
-    RiGitPullRequestLine,
-    RiMoreLine,
-    RiRefreshLine,
-    RiSortDesc,
-} from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -358,7 +346,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                         onClick={() => selectPr(null)}
                         className="mt-0.5 flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                     >
-                        <Icon icon={RiArrowLeftLine} />
+                        <Icon icon={"arrow-left"} />
                     </button>
                     ) : null}
                     <div className="min-w-0 flex-1">
@@ -374,7 +362,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                             <DropdownMenuTrigger asChild>
                                 <Button variant="secondary" size="xs" className="gap-1" disabled={checkingOut}>
                                     Check out
-                                    <Icon icon={RiArrowDownSLine} />
+                                    <Icon icon={"alt-arrow-down"} />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-44">
@@ -390,12 +378,12 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                     aria-label="More"
                                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 >
-                                    <Icon icon={RiMoreLine} />
+                                    <Icon icon={"menu-dots"} />
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-52">
                                 <DropdownMenuItem onClick={() => void load()}>
-                                    <Icon icon={RiRefreshLine} />
+                                    <Icon icon={"refresh"} />
                                     Refresh
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -405,7 +393,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                         )
                                     }
                                 >
-                                    <Icon icon={RiChat3Line} />
+                                    <Icon icon={"chat-round-line"} />
                                     Ask a question
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -431,7 +419,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                     <DropdownMenuItem
                                         onClick={() => void commands.openUrlExternal(selected.url!)}
                                     >
-                                        <Icon icon={RiExternalLinkLine} />
+                                        <Icon icon={"square-forward"} />
                                         Open on GitHub
                                     </DropdownMenuItem>
                                 ) : null}
@@ -580,7 +568,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                             aria-label="Sort"
                             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                         >
-                            <Icon icon={RiSortDesc} />
+                            <Icon icon={"sort-from-top-to-bottom"} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-36">
@@ -595,13 +583,13 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                             aria-label="Filters"
                             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                         >
-                            <Icon icon={RiFilter3Line} />
+                            <Icon icon={"filter"} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-32">
                         {(["open", "closed", "all"] as const).map((value) => (
                             <DropdownMenuItem key={value} onClick={() => setState(value)}>
-                                {state === value ? <Icon icon={RiCheckLine} /> : <span className="size-4" />}
+                                {state === value ? <Icon icon={"check"} /> : <span className="size-4" />}
                                 <span className="capitalize">{value}</span>
                             </DropdownMenuItem>
                         ))}
@@ -613,7 +601,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                     onClick={() => void load()}
                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={RiRefreshLine} />
+                    <Icon icon={"refresh"} />
                 </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -642,7 +630,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                         className="flex w-full gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-panel-hover"
                                     >
                                         <Icon
-                                            icon={RiGitPullRequestLine}
+                                            icon={"git-pull-request"}
                                             className={cn(
                                                 "mt-0.5 shrink-0",
                                                 item.status === "open" ? "text-success" : "text-text-muted",
@@ -682,7 +670,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                             </span>
                                         </span>
                                         {item.ci === "success" ? (
-                                            <Icon icon={RiCheckLine} className="mt-0.5 shrink-0 text-success" />
+                                            <Icon icon={"check"} className="mt-0.5 shrink-0 text-success" />
                                         ) : item.ci === "failure" ? (
                                             <span className="mt-1 size-2 shrink-0 rounded-full bg-error" />
                                         ) : item.ci === "pending" ? (

@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { RiCommandLine } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
@@ -58,6 +57,9 @@ export function MentionChipIcon({ mention }: { mention: ChatMention }) {
     if (mention.kind === "browser") {
         return <Favicon url={mention.path || label} size={12} />;
     }
+    if (mention.kind === "element") {
+        return <Icon icon="target" className="text-accent-text" size={12} />;
+    }
     const token = mention.kind === "design" ? designTokenById(mention.id || mention.path) : undefined;
     if (token) {
         return <Icon icon={token.icon} className="text-accent-text" size={12} />;
@@ -76,5 +78,5 @@ export function WorkflowChipIcon({ workflow }: { workflow?: AgentWorkflow }) {
             />
         );
     }
-    return <Icon icon={RiCommandLine} className="text-accent-text" size={12} />;
+    return <Icon icon={"command"} className="text-accent-text" size={12} />;
 }

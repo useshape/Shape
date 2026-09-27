@@ -59,8 +59,6 @@ export function ContextWindowMenu({
     const raw = breakdown ?? {};
     const limit = asNumber(raw.contextLimit) || 0;
     const estimated = asNumber(raw.estimatedTotal);
-    const billed = asNumber(inputTokens);
-    const used = billed > 0 ? billed : estimated;
     const rows = SEGMENTS.map((seg) => ({
         ...seg,
         tokens: asNumber(raw[seg.key]),
@@ -77,16 +75,17 @@ export function ContextWindowMenu({
 
     if (rows.length === 0) return null;
 
-    const listed = rows.reduce((s, r) => s + r.tokens, 0);
-    const barTotal = Math.max(used, listed, 1);
-    const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+    const listed = rows.reduce((sum, row) => sum + row.tokens, 0);
+    const windowUsed = estimated > 0 ? estimated : listed;
+    const pct = limit > 0 ? Math.min(100, Math.round((windowUsed / limit) * 100)) : 0;
+    const barDenom = limit > 0 ? limit : Math.max(windowUsed, 1);
 
     return (
         <div className="flex flex-col gap-2.5">
             <div className="flex items-baseline justify-between gap-3">
                 <span className="text-md font-medium text-text-primary">Context</span>
                 <span className="text-md font-medium text-text-muted">
-                    {formatTokens(used)}
+                    {formatTokens(windowUsed)}
                     {limit > 0 ? ` / ${formatTokens(limit)}` : ""}
                     {limit > 0 ? ` (${pct}%)` : ""}
                 </span>
@@ -96,7 +95,7 @@ export function ContextWindowMenu({
                     <div
                         key={String(seg.key)}
                         className={cn(seg.color, "h-full min-w-px")}
-                        style={{ width: `${Math.max(1, (seg.tokens / barTotal) * 100)}%` }}
+                        style={{ width: `${Math.max(0.8, (seg.tokens / barDenom) * 100)}%` }}
                         title={`${seg.label}: ${seg.tokens.toLocaleString()}`}
                     />
                 ))}

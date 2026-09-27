@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowLeftLine, RiCloseLine } from "@remixicon/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
@@ -41,7 +40,7 @@ export function HostedSidebarBack({
         };
     }, [collapsed]);
 
-    const icon = closeIcon ? RiCloseLine : RiArrowLeftLine;
+    const icon = closeIcon ? "close" : "arrow-left";
 
     if (slot && !collapsed) {
         return createPortal(

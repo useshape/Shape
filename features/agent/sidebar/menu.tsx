@@ -1,13 +1,13 @@
 "use client";
 
-import { RiGithubFill, RiLoginBoxLine, RiLogoutBoxLine, RiUploadCloud2Fill } from "@remixicon/react";
 import { useCallback, useState, type ReactNode } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { logoutGitHub, loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
-import { SHAPE_API_BASE } from "@/lib/cloud/api";
+import { SHAPE_API_BASE, dashboardUrl } from "@/lib/cloud/api";
+import { commands } from "@/lib/backend/commands";
 import { notify } from "@/features/notifications";
 import {
     DropdownMenu,
@@ -114,6 +114,17 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                     </div>
                 </div>
 
+                {shapeAuth.loggedIn && !shapeAuth.offline && shapeAuth.tier === "free" ? (
+                    <button
+                        type="button"
+                        className="mx-1 mt-1 flex w-[calc(100%-0.5rem)] flex-col gap-0.5 rounded-lg bg-surface-2 px-2.5 py-2 text-left hover:bg-panel-hover"
+                        onClick={() => void commands.openUrlExternal(`${dashboardUrl()}/settings/billing`)}
+                    >
+                        <span className="text-sm font-medium text-text-primary">Get Plus</span>
+                        <span className="text-xs text-text-muted">Higher limits for this account</span>
+                    </button>
+                ) : null}
+
                 <DropdownMenuSeparator />
 
                 <DropdownMenuItem onClick={() => void openSettingsWindow()}>
@@ -126,13 +137,13 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer" onClick={() => void checkForUpdates()}>
-                    <Icon icon={RiUploadCloud2Fill} size={ICON_SIZE_SM} />
+                    <Icon icon={"cloud-upload"} size={ICON_SIZE_SM} />
                     Check for updates
                 </DropdownMenuItem>
 
                 <DropdownMenuSub>
                     <DropdownMenuSubTrigger className="cursor-pointer">
-                        <Icon icon={RiGithubFill} size={ICON_SIZE_SM} />
+                        <Icon icon={"code-square"} size={ICON_SIZE_SM} />
                         GitHub
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-56">
@@ -155,7 +166,7 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                                     className="cursor-pointer"
                                     onClick={() => void handleGitHubLogout()}
                                 >
-                                    <Icon icon={RiLogoutBoxLine} size={ICON_SIZE_SM} />
+                                    <Icon icon={"logout"} size={ICON_SIZE_SM} />
                                     Log out
                                 </DropdownMenuItem>
                             </>
@@ -164,7 +175,7 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                                 className="cursor-pointer"
                                 onClick={() => void loginGitHub()}
                             >
-                                <Icon icon={RiLoginBoxLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"login"} size={ICON_SIZE_SM} />
                                 Log in
                             </DropdownMenuItem>
                         )}
@@ -175,12 +186,12 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                         className="cursor-pointer text-danger hover:text-danger hover:bg-danger/10"
                         onClick={() => void logoutShape()}
                     >
-                        <Icon icon={RiLogoutBoxLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"logout"} size={ICON_SIZE_SM} />
                         Sign out
                     </DropdownMenuItem>
                 ) : (
                     <DropdownMenuItem onClick={() => requestShapeLogin()}>
-                        <Icon icon={RiLoginBoxLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"login"} size={ICON_SIZE_SM} />
                         Sign in
                     </DropdownMenuItem>
                 )}

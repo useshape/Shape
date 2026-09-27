@@ -1,6 +1,5 @@
 "use client";
 
-import { RiMoreLine, RiSearchLine } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +35,7 @@ export function ChatMoreMenu() {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-text-muted hover:text-text-primary">
-                    <Icon icon={RiMoreLine} />
+                    <Icon icon={"menu-dots"} />
                 </Button>
             </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -53,7 +52,7 @@ export function ChatMoreMenu() {
                         );
                     }}
                 >
-                    <Icon icon={RiSearchLine} className="text-text-secondary" />
+                    <Icon icon={"magnifier"} className="text-text-secondary" />
                     Search history…
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

@@ -138,6 +138,15 @@ pub struct Conversation {
     pub history: Vec<ChatMessage>,
     pub project_path: String,
     pub timestamp: f64,
+    /// Set when the user renames the chat. Auto titles leave it alone.
+    #[serde(default)]
+    pub title_locked: bool,
+    /// User turns recorded when the title was last accepted.
+    #[serde(default)]
+    pub title_anchor_turns: u32,
+    /// Hidden from the sidebar; still opens from the command palette.
+    #[serde(default)]
+    pub archived: bool,
 }
 
 /// Click-through questions the agent is waiting on (`ask_user`).
@@ -204,10 +213,16 @@ pub struct TurnCheckpoint {
 pub struct AgentState {
     pub history: Mutex<Vec<ChatMessage>>,
     pub title: Mutex<Option<String>>,
+    /// User renamed this chat. Automatic titles must not replace it.
+    pub title_locked: AtomicBool,
+    /// User-message count when the title was last chosen. Retitle waits for ten more.
+    pub title_anchor_turns: Mutex<u32>,
     pub current_project: Mutex<Option<String>>,
     pub conversations: Mutex<HashMap<String, Vec<Conversation>>>,
     pub current_conversation_id: Mutex<Option<String>>,
     pub cancellation_token: Mutex<CancellationToken>,
+    /// Per-conversation cancel tokens so Stop only ends the chat you are looking at.
+    pub cancel_tokens: Mutex<HashMap<String, CancellationToken>>,
     /// In-flight agent terminal session ids for stop/cancel (supports concurrent background jobs).
     pub active_terminals: Mutex<std::collections::HashSet<u32>>,
     /// Terminal commands awaiting user approval.
@@ -229,12 +244,14 @@ pub struct AgentState {
     pub design_pick_answers: Mutex<HashMap<String, String>>,
     /// Execution policy for the active turn (auto-run mode, edit approval).
     pub turn_policy: Mutex<TurnPolicy>,
-    /// Accumulates input/output tokens for the active user turn.
-    pub turn_meter: Mutex<(usize, usize)>,
+    /// Per-conversation policy so a second chat does not change the first turn's approvals.
+    pub turn_policies: Mutex<HashMap<String, TurnPolicy>>,
+    /// Input/output tokens per in-flight turn id.
+    pub turn_meter: Mutex<HashMap<String, (usize, usize)>>,
     /// Compressed summary of older chat turns when history grows long.
     pub history_summary: Mutex<Option<String>>,
-    /// Partial assistant turn while generation is in flight.
-    pub in_flight: Mutex<Option<InFlightTurn>>,
+    /// Partial assistant turns keyed by conversation id. Several chats can run at once.
+    pub in_flight: Mutex<HashMap<String, InFlightTurn>>,
     /// Debounce timestamp for persisting in-flight partial content.
     pub in_flight_last_save: Mutex<f64>,
     /// Design-mode preview gate and temporary React sandbox session.
@@ -261,10 +278,13 @@ impl AgentState {
         Self {
             history: Mutex::new(Vec::new()),
             title: Mutex::new(None),
+            title_locked: AtomicBool::new(false),
+            title_anchor_turns: Mutex::new(0),
             current_project: Mutex::new(None),
             conversations: Mutex::new(HashMap::new()),
             current_conversation_id: Mutex::new(None),
             cancellation_token: Mutex::new(CancellationToken::new()),
+            cancel_tokens: Mutex::new(HashMap::new()),
             active_terminals: Mutex::new(std::collections::HashSet::new()),
             pending_commands: Mutex::new(HashMap::new()),
             command_decisions: Mutex::new(HashMap::new()),
@@ -275,9 +295,10 @@ impl AgentState {
             pending_design_picks: Mutex::new(HashMap::new()),
             design_pick_answers: Mutex::new(HashMap::new()),
             turn_policy: Mutex::new(TurnPolicy::default()),
-            turn_meter: Mutex::new((0, 0)),
+            turn_policies: Mutex::new(HashMap::new()),
+            turn_meter: Mutex::new(HashMap::new()),
             history_summary: Mutex::new(None),
-            in_flight: Mutex::new(None),
+            in_flight: Mutex::new(HashMap::new()),
             in_flight_last_save: Mutex::new(0.0),
             design_preview: Mutex::new(DesignPreviewState::default()),
             file_checkpoints: Mutex::new(Vec::new()),
@@ -319,25 +340,64 @@ impl AgentState {
         )
     }
 
-    /// Atomically claim the in-flight slot. Returns false if a turn is already running.
+    /// Claim this conversation's in-flight slot. Another chat may already be running.
     pub fn try_begin_in_flight(&self, turn_id: String, conversation_id: Option<String>) -> bool {
+        let Some(key) = conversation_id.clone().filter(|s| !s.is_empty()) else {
+            return false;
+        };
         let Ok(mut guard) = self.in_flight.lock() else {
             return false;
         };
-        if guard.is_some() {
+        if guard.contains_key(&key) {
             return false;
         }
-        *guard = Some(InFlightTurn {
-            turn_id,
-            conversation_id,
-            partial_content: String::new(),
-            started_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs_f64())
-                .unwrap_or(0.0),
-            activity_label: None,
-        });
+        guard.insert(
+            key.clone(),
+            InFlightTurn {
+                turn_id,
+                conversation_id: Some(key),
+                partial_content: String::new(),
+                started_at: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs_f64())
+                    .unwrap_or(0.0),
+                activity_label: None,
+            },
+        );
         true
+    }
+
+    pub fn any_in_flight(&self) -> bool {
+        self.in_flight
+            .lock()
+            .map(|g| !g.is_empty())
+            .unwrap_or(false)
+    }
+
+    pub fn in_flight_contains_turn(&self, turn_id: &str) -> bool {
+        self.in_flight
+            .lock()
+            .map(|g| g.values().any(|f| f.turn_id == turn_id))
+            .unwrap_or(false)
+    }
+
+    /// Fresh cancel token for one conversation. Stop cancels only that chat.
+    pub fn begin_cancel_token(&self, conversation_id: &str) -> CancellationToken {
+        let token = CancellationToken::new();
+        if let Ok(mut map) = self.cancel_tokens.lock() {
+            map.insert(conversation_id.to_string(), token.clone());
+        }
+        if let Ok(mut current) = self.cancellation_token.lock() {
+            *current = token.clone();
+        }
+        token
+    }
+
+    pub fn conversation_cancel_token(&self, conversation_id: &str) -> Option<CancellationToken> {
+        self.cancel_tokens
+            .lock()
+            .ok()
+            .and_then(|m| m.get(conversation_id).cloned())
     }
 
     #[allow(dead_code)]
@@ -346,20 +406,53 @@ impl AgentState {
     }
 
     pub fn set_in_flight_activity_label(&self, label: Option<&str>) {
+        let current = self
+            .current_conversation_id
+            .lock()
+            .ok()
+            .and_then(|g| g.clone());
         if let Ok(mut guard) = self.in_flight.lock() {
-            if let Some(in_flight) = guard.as_mut() {
-                in_flight.activity_label = label.map(|s| s.to_string());
+            let target = current.or_else(|| {
+                if guard.len() == 1 {
+                    guard.keys().next().cloned()
+                } else {
+                    None
+                }
+            });
+            if let Some(key) = target {
+                if let Some(in_flight) = guard.get_mut(&key) {
+                    in_flight.activity_label = label.map(|s| s.to_string());
+                }
             }
         }
     }
 
-    pub fn append_in_flight(&self, chunk: &str, activity_label: Option<&str>, project_path: Option<&str>) {
+    pub fn append_in_flight(
+        &self,
+        chunk: &str,
+        activity_label: Option<&str>,
+        project_path: Option<&str>,
+        conversation_id: Option<&str>,
+    ) {
         let (should_save, owner_conv_id, title_snapshot, partial_snapshot) = {
             let mut guard = match self.in_flight.lock() {
                 Ok(g) => g,
                 Err(_) => return,
             };
-            let Some(in_flight) = guard.as_mut() else {
+            let key = conversation_id
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    if guard.len() == 1 {
+                        guard.keys().next().cloned()
+                    } else {
+                        None
+                    }
+                });
+            let Some(key) = key else {
+                return;
+            };
+            let Some(in_flight) = guard.get_mut(&key) else {
                 return;
             };
             in_flight.partial_content.push_str(chunk);
@@ -415,7 +508,17 @@ impl AgentState {
                 }
                 if !hist.is_empty() {
                     hist = Self::merge_partial_into_history(hist, &partial_snapshot, None);
-                    let title = title_snapshot.unwrap_or_else(|| "Untitled".to_string());
+                    let stored_title = {
+                        let convs = self.conversations.lock().ok();
+                        convs
+                            .as_ref()
+                            .and_then(|map| map.get(path))
+                            .and_then(|list| list.iter().find(|c| c.id == conv_id))
+                            .map(|c| c.title.clone())
+                    };
+                    let title = stored_title
+                        .or(title_snapshot)
+                        .unwrap_or_else(|| "Untitled".to_string());
                     let _ = crate::agent::commands::history::upsert_conversation_snapshot(
                         self,
                         path,
@@ -436,16 +539,19 @@ impl AgentState {
 
     #[allow(dead_code)]
     pub fn clear_in_flight(&self) {
-        if let Ok(mut guard) = self.in_flight.lock() {
-            *guard = None;
+        let current = self
+            .current_conversation_id
+            .lock()
+            .ok()
+            .and_then(|g| g.clone());
+        if let (Some(id), Ok(mut guard)) = (current, self.in_flight.lock()) {
+            guard.remove(&id);
         }
     }
 
     pub fn clear_in_flight_if(&self, turn_id: &str) {
         if let Ok(mut guard) = self.in_flight.lock() {
-            if guard.as_ref().map(|f| f.turn_id.as_str()) == Some(turn_id) {
-                *guard = None;
-            }
+            guard.retain(|_, flight| flight.turn_id != turn_id);
         }
     }
 
@@ -458,7 +564,12 @@ impl AgentState {
     }
 
     pub fn in_flight_snapshot(&self) -> Option<InFlightTurn> {
-        self.in_flight.lock().ok().and_then(|g| g.clone())
+        let current = self
+            .current_conversation_id
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())?;
+        self.in_flight.lock().ok().and_then(|g| g.get(&current).cloned())
     }
 
     pub fn history_for_persistence(&self) -> Result<Vec<ChatMessage>, crate::core::error::AppError> {
@@ -481,17 +592,17 @@ impl AgentState {
         history: Vec<ChatMessage>,
         conversation_id: Option<&str>,
     ) -> Vec<ChatMessage> {
-        let Some(in_flight) = self.in_flight_snapshot() else {
+        let Some(viewing) = conversation_id else {
             return history;
         };
-        // Never merge a background turn into a different conversation's history.
-        if let (Some(owner), Some(viewing)) = (in_flight.conversation_id.as_deref(), conversation_id) {
-            if owner != viewing {
-                return history;
-            }
-        } else if in_flight.conversation_id.is_some() && conversation_id.is_none() {
+        let Some(in_flight) = self
+            .in_flight
+            .lock()
+            .ok()
+            .and_then(|g| g.get(viewing).cloned())
+        else {
             return history;
-        }
+        };
         Self::merge_partial_into_history(history, &in_flight.partial_content, Some(in_flight.started_at))
     }
 
@@ -545,23 +656,28 @@ impl AgentState {
         }
     }
 
-    pub fn reset_turn_meter(&self) {
+    pub fn reset_turn_meter(&self, turn_id: &str) {
         if let Ok(mut meter) = self.turn_meter.lock() {
-            *meter = (0, 0);
+            meter.insert(turn_id.to_string(), (0, 0));
         }
     }
 
-    pub fn record_turn_usage(&self, input_tokens: usize, output_tokens: usize) {
+    pub fn record_turn_usage(&self, turn_id: Option<&str>, input_tokens: usize, output_tokens: usize) {
+        let Some(id) = turn_id.filter(|s| !s.is_empty()) else {
+            return;
+        };
         if let Ok(mut meter) = self.turn_meter.lock() {
-            meter.0 += input_tokens;
-            meter.1 += output_tokens;
+            let entry = meter.entry(id.to_string()).or_insert((0, 0));
+            entry.0 += input_tokens;
+            entry.1 += output_tokens;
         }
     }
 
-    pub fn turn_meter_totals(&self) -> (usize, usize) {
+    pub fn turn_meter_totals(&self, turn_id: &str) -> (usize, usize) {
         self.turn_meter
             .lock()
-            .map(|m| *m)
+            .ok()
+            .and_then(|m| m.get(turn_id).copied())
             .unwrap_or((0, 0))
     }
 
@@ -705,6 +821,48 @@ impl AgentState {
             .lock()
             .map(|g| g.clone())
             .unwrap_or_default()
+    }
+
+    pub fn set_turn_policy_for(&self, conversation_id: &str, policy: TurnPolicy) {
+        if let Ok(mut map) = self.turn_policies.lock() {
+            map.insert(conversation_id.to_string(), policy.clone());
+        }
+        self.set_turn_policy(policy);
+    }
+
+    pub fn reset_title_meta(&self) {
+        self.title_locked.store(false, Ordering::Relaxed);
+        if let Ok(mut anchor) = self.title_anchor_turns.lock() {
+            *anchor = 0;
+        }
+    }
+
+    pub fn title_meta(&self) -> (bool, u32) {
+        let locked = self.title_locked.load(Ordering::Relaxed);
+        let anchor = self
+            .title_anchor_turns
+            .lock()
+            .map(|g| *g)
+            .unwrap_or(0);
+        (locked, anchor)
+    }
+
+    pub fn set_title_meta(&self, locked: bool, anchor: u32) {
+        self.title_locked.store(locked, Ordering::Relaxed);
+        if let Ok(mut guard) = self.title_anchor_turns.lock() {
+            *guard = anchor;
+        }
+    }
+
+    pub fn turn_policy_for(&self, conversation_id: Option<&str>) -> TurnPolicy {
+        if let Some(id) = conversation_id.filter(|s| !s.is_empty()) {
+            if let Ok(map) = self.turn_policies.lock() {
+                if let Some(policy) = map.get(id) {
+                    return policy.clone();
+                }
+            }
+        }
+        self.turn_policy()
     }
 
     /// Clear approval bookkeeping from a previous turn so stale decisions can

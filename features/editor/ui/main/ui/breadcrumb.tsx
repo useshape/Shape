@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowRightSLine } from "@remixicon/react";
 import React, { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
@@ -466,7 +465,7 @@ export function Breadcrumbs({ path, projectPath, isDiff, isImage, className }: B
                                 <span className="truncate max-w-[250px] px-1.5">{part}</span>
                             )}
                         </div>
-                        <Icon icon={RiArrowRightSLine} className="text-text-muted shrink-0" />
+                        <Icon icon={"alt-arrow-right"} className="text-text-muted shrink-0" />
                     </React.Fragment>
                 );
             })}
@@ -494,7 +493,7 @@ export function Breadcrumbs({ path, projectPath, isDiff, isImage, className }: B
 
             {symbolChain.map((sym, index) => (
                 <React.Fragment key={`sy-wrap-${sym.id}`}>
-                    <Icon icon={RiArrowRightSLine} className="text-text-muted shrink-0" />
+                    <Icon icon={"alt-arrow-right"} className="text-text-muted shrink-0" />
                     <BreadcrumbOutlineItem
                         part={sym.name}
                         kind={sym.kind}

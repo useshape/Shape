@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownLine, RiArrowUpLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Combobox, type ComboboxItem } from "@/components/ui/combobox";
@@ -52,7 +51,7 @@ export function Sorting({
                     accessibleDisabled={false}
                     onClick={() => onSortDirectionChange(!isAscending)}
                 >
-                    <Icon icon={isAscending ? RiArrowUpLine : RiArrowDownLine} size={ICON_SIZE_SM} />
+                    <Icon icon={isAscending ? "arrow-up" : "arrow-down"} size={ICON_SIZE_SM} />
                 </Button>
             </Tooltip>
         </ButtonGroup>

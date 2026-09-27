@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowUpSLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Icon } from "@/components/ui/icon";
@@ -147,7 +146,7 @@ export function DesignPreviewCarousel({
                         onClick={() => go(-1)}
                         aria-label="Previous concept"
                     >
-                        <Icon icon={RiArrowUpSLine} />
+                        <Icon icon={"alt-arrow-up"} />
                     </Button>
                     <p className="min-w-0 max-w-[200px] truncate text-center text-xs text-text-secondary">
                         {item.name}
@@ -160,7 +159,7 @@ export function DesignPreviewCarousel({
                         onClick={() => go(1)}
                         aria-label="Next concept"
                     >
-                        <Icon icon={RiArrowDownSLine} />
+                        <Icon icon={"alt-arrow-down"} />
                     </Button>
                 </div>
 

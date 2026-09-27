@@ -1,7 +1,6 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import { Icon } from "@/components/ui/icon";
+import { type SolarIconName,  Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 export function ToolBtn({
@@ -36,6 +35,6 @@ export function ToolBtn({
     );
 }
 
-export function WsIcon({ icon }: { icon: RemixiconComponentType }) {
+export function WsIcon({ icon }: { icon: SolarIconName }) {
     return <Icon icon={icon} />;
 }

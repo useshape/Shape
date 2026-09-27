@@ -337,19 +337,19 @@ pub async fn probe_preview_url(url: String) -> Result<bool, AppError> {
     // and Windows `localhost` often tries `[::1]` which is not listening.
     let mut candidates = Vec::new();
     let lower = host.to_ascii_lowercase();
-    if lower == "localhost" || lower == "0.0.0.0" || lower == "::1" || lower == "[::1]" {
-        candidates.push(format!("127.0.0.1:{port}"));
-        candidates.push(format!("localhost:{port}"));
-    } else if lower == "127.0.0.1" {
+    let local = matches!(lower.as_str(), "localhost" | "0.0.0.0" | "::1" | "[::1]" | "127.0.0.1");
+    if local {
         candidates.push(format!("127.0.0.1:{port}"));
         candidates.push(format!("localhost:{port}"));
     } else {
         candidates.push(format!("{host}:{port}"));
     }
+    // Remote hosts need DNS + a real round trip; loopback answers instantly.
+    let timeout = std::time::Duration::from_millis(if local { 400 } else { 4000 });
     log::info!("[preview] probe_preview_url {}", url);
     for addr in candidates {
         let connect = TcpStream::connect(&addr);
-        match tokio::time::timeout(std::time::Duration::from_millis(400), connect).await {
+        match tokio::time::timeout(timeout, connect).await {
             Ok(Ok(_stream)) => {
                 log::info!("[preview] probe_preview_url OK {}", addr);
                 return Ok(true);

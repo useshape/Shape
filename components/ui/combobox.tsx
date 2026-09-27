@@ -1,6 +1,6 @@
+import type { SolarIconName } from "@/components/ui/icon";
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
 import { useMemo, useState } from "react";
 import { Button, type ButtonCategory, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
 import {
@@ -59,7 +59,7 @@ export function Combobox({
     multiple?: boolean;
     toggleText?: string;
     headerText?: string;
-    icon?: RemixiconComponentType;
+    icon?: SolarIconName;
     noCaret?: boolean;
     category?: ButtonCategory;
     variant?: ButtonVariant;

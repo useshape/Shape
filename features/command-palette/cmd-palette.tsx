@@ -1,11 +1,11 @@
 "use client";
 
-import { RiDeleteBinLine } from "@remixicon/react";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Icon } from "@/components/ui/icon";
+import { ICON_SIZE_SM, Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
+import { FrameworkMark } from "@/features/chat/ui/shell/brand-marks";
 import { SearchInput } from "@/components/ui/search";
 
 import { getShortcutForLabel } from "@/lib/ui/shortcuts";
@@ -30,6 +30,8 @@ interface EditorAction {
     shortcut: string;
     /** Optional file name used with FileIcon (e.g. `python.py`). */
     icon?: string;
+    /** Brand mark for scaffold rows. */
+    iconNode?: React.ReactNode;
     /** Optional section header when browsing (Recent Agents, etc.). */
     section?: string;
     /** Right-side muted meta (path, relative time) — preferred over shortcut badges for browse rows. */
@@ -40,6 +42,10 @@ interface EditorAction {
     /** Reddit-style nested subagent under a parent agent row. */
     reply?: boolean;
     model?: string;
+    /** Archived chats: still openable, drawn greyed out. */
+    muted?: boolean;
+    /** Toggle archive for chat rows. */
+    archive?: () => void;
 }
 
 type PaletteFilter = "all" | "files";
@@ -264,7 +270,11 @@ export function CommandPalette() {
             ]).then(([convs, sub]) => {
                 const live = sub.getSubagents();
                 const actions: EditorAction[] = [];
-                for (const conv of convs.slice(0, 12)) {
+                const ordered = [
+                    ...convs.filter((c) => !c.archived).slice(0, 12),
+                    ...convs.filter((c) => c.archived).slice(0, 8),
+                ];
+                for (const conv of ordered) {
                     const project = projectNameFromPath(conv.project_path);
                     const rel = formatRelativeAgo(conv.timestamp);
                     const lastModel = [...(conv.history || [])]
@@ -274,9 +284,22 @@ export function CommandPalette() {
                         id: `agent:${conv.id}`,
                         label: conv.title || "Untitled",
                         shortcut: "",
-                        meta: [project, rel].filter(Boolean).join(" "),
+                        meta: [conv.archived ? "Archived" : "", project, rel].filter(Boolean).join(" · "),
                         section: "Recent Agents",
                         model: lastModel || "auto",
+                        muted: Boolean(conv.archived),
+                        archive: () => {
+                            void commands.setConversationArchived(conv.id, !conv.archived).then(() => {
+                                setAgentActions((prev) =>
+                                    prev.map((a) =>
+                                        a.id === `agent:${conv.id}`
+                                            ? { ...a, muted: !conv.archived, meta: [!conv.archived ? "Archived" : "", project, rel].filter(Boolean).join(" · ") }
+                                            : a,
+                                    ),
+                                );
+                                window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
+                            });
+                        },
                         run: () => openAgentConversation(conv.id, conv.project_path),
                         delete: (e: React.MouseEvent) => {
                             e.stopPropagation();
@@ -658,6 +681,7 @@ export function CommandPalette() {
                                             idx === selectedIndex
                                                 ? "bg-panel-hover text-text-primary"
                                                 : "text-text-secondary hover:bg-panel-hover",
+                                            action.muted && "text-text-disabled [&_img]:opacity-50 [&_svg]:opacity-50",
                                         )}
                                         onMouseEnter={() => setSelectedIndex(idx)}
                                         onClick={() => runAction(action)}
@@ -677,7 +701,11 @@ export function CommandPalette() {
                                                     {providerIcon(action.model || "auto", 14)}
                                                 </span>
                                             ) : null}
-                                            {!browse && action.icon ? (
+                                            {!browse && action.iconNode ? (
+                                                <span className="flex size-4 shrink-0 items-center justify-center">
+                                                    {action.iconNode}
+                                                </span>
+                                            ) : !browse && action.icon ? (
                                                 <FileIcon name={action.icon} className="h-4 w-4 shrink-0 opacity-70" />
                                             ) : null}
                                             <span className="min-w-0 truncate text-sm">{action.label}</span>
@@ -697,7 +725,7 @@ export function CommandPalette() {
                                                     className="ml-2 shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-error/10 hover:text-error"
                                                     title="Delete"
                                                 >
-                                                    <Icon icon={RiDeleteBinLine} />
+                                                    <Icon icon={"trash-bin-trash"} />
                                                 </button>
                                             ) : null}
                                         </div>
@@ -715,15 +743,21 @@ export function CommandPalette() {
                                                 Copy Path
                                             </ContextMenuItem>
                                         ) : null}
+                                        {action.archive || action.delete ? <ContextMenuSeparator /> : null}
+                                        {action.archive ? (
+                                            <ContextMenuItem onClick={() => action.archive?.()}>
+                                                <Icon icon="inbox" size={ICON_SIZE_SM} />
+                                                {action.muted ? "Unarchive" : "Archive"}
+                                            </ContextMenuItem>
+                                        ) : null}
                                         {action.delete ? (
-                                            <>
-                                                <ContextMenuSeparator />
-                                                <ContextMenuItem
-                                                    onClick={(e) => action.delete?.(e as unknown as React.MouseEvent)}
-                                                >
-                                                    Delete
-                                                </ContextMenuItem>
-                                            </>
+                                            <ContextMenuItem
+                                                className="text-error"
+                                                onClick={(e) => action.delete?.(e as unknown as React.MouseEvent)}
+                                            >
+                                                <Icon icon="trash-bin-trash" size={ICON_SIZE_SM} />
+                                                Delete
+                                            </ContextMenuItem>
                                         ) : null}
                                     </ContextMenuContent>
                                     </ContextMenu>
@@ -1302,6 +1336,7 @@ function getAppCommands(): EditorAction[] {
             id: "app.file.newNext",
             label: "File: Create Next.js Project",
             shortcut: "",
+            iconNode: <FrameworkMark slug="nextdotjs" color="000000" invert size={16} />,
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "next" } }),
@@ -1311,6 +1346,7 @@ function getAppCommands(): EditorAction[] {
             id: "app.file.newVite",
             label: "File: Create Vite Project",
             shortcut: "",
+            iconNode: <FrameworkMark slug="vite" color="646CFF" size={16} />,
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "vite" } }),
@@ -1320,6 +1356,7 @@ function getAppCommands(): EditorAction[] {
             id: "app.file.newAstro",
             label: "File: Create Astro Project",
             shortcut: "",
+            iconNode: <FrameworkMark slug="astro" color="FF5D01" size={16} />,
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "astro" } }),
@@ -1329,6 +1366,7 @@ function getAppCommands(): EditorAction[] {
             id: "app.file.newRemix",
             label: "File: Create Remix Project",
             shortcut: "",
+            iconNode: <FrameworkMark slug="remix" color="FFFFFF" size={16} />,
             run: () =>
                 window.dispatchEvent(
                     new CustomEvent("shape-scaffold-project", { detail: { kind: "remix" } }),

@@ -12,7 +12,6 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { RiWebhookFill } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
 import { useShapeAuth } from "@/lib/cloud/store";
@@ -81,7 +80,7 @@ function ModelRow({
                 <div className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
                     <span className="min-w-0 truncate">{model.name}</span>
                     {isApiModel(model) ? (
-                        <Icon icon={RiWebhookFill} className="shrink-0 text-text-muted" />
+                        <Icon icon={"bolt"} className="shrink-0 text-text-muted" />
                     ) : null}
                 </div>
                 <div className="text-sm text-text-muted">
@@ -155,8 +154,10 @@ function applyIndexStatus(
 
 export function AiSettingsPanel({
     settings,
+    page,
 }: {
     settings: ShapeSettings;
+    page: "models" | "rules" | "workflows" | "context";
 }) {
     const a = settings.ai;
     const auth = useShapeAuth();
@@ -288,6 +289,8 @@ export function AiSettingsPanel({
 
     return (
         <>
+            {page === "models" ? (
+                <>
             <SettingSection id="settings-ai-models" title="Models">
                 {displayedModels.map((model) => (
                     <ModelRow
@@ -366,16 +369,10 @@ export function AiSettingsPanel({
                     />
                 </SettingRow>
             </SettingSection>
+                </>
+            ) : null}
 
-            <SettingSection title="Composer">
-                <SettingRow title="Compact input">
-                    <SettingSwitch
-                        checked={a.compactComposer}
-                        onChange={(on) => updateSettingSection("ai", { compactComposer: on })}
-                    />
-                </SettingRow>
-            </SettingSection>
-
+            {page === "context" ? (
             <SettingSection id="settings-ai-context" title="Context">
                 <SettingRow title="Max context lines per file">
                     <SettingNumberSelect
@@ -415,8 +412,10 @@ export function AiSettingsPanel({
                     </div>
                 </div>
             </SettingSection>
+            ) : null}
 
-            <RulesEditor value={a.customRules} />
+            {page === "rules" ? <RulesEditor value={a.customRules} /> : null}
+            {page === "context" ? (
             <SettingSection id="settings-ai-review" title="Review">
                 <SettingRow
                     title="Adversarial review"
@@ -430,7 +429,8 @@ export function AiSettingsPanel({
                     />
                 </SettingRow>
             </SettingSection>
-            <WorkflowsEditor value={a.workflows ?? []} />
+            ) : null}
+            {page === "workflows" ? <WorkflowsEditor value={a.workflows ?? []} /> : null}
         </>
     );
 }

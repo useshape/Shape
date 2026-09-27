@@ -1,14 +1,5 @@
 "use client";
 
-import {
-    RiAlignCenter,
-    RiAlignJustify,
-    RiAlignLeft,
-    RiAlignRight,
-    RiCloseLine,
-    RiEqualizer2Line,
-    RiTextWrap,
-} from "@remixicon/react";
 import { useRef, useState, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,7 +111,7 @@ export function FormatMenu({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    icon={RiEqualizer2Line}
+                    icon={"tuning"}
                     aria-label="Formatting"
                     title="Formatting"
                     onPointerDown={measure}
@@ -136,7 +127,7 @@ export function FormatMenu({
             >
                 <div className="flex h-9 items-center border-b border-border px-2">
                     <span className="min-w-0 flex-1 px-1 text-sm font-medium text-text-primary">Formatting</span>
-                    <IconButton label="Close" icon={RiCloseLine} onClick={() => setOpen(false)} />
+                    <IconButton label="Close" icon={"close"} onClick={() => setOpen(false)} />
                 </div>
                 <div className="space-y-2 p-3">
                     <div
@@ -160,10 +151,10 @@ export function FormatMenu({
                             value={css(style, "text-align", "left")}
                             onChange={(value) => setStyle("text-align", value)}
                             items={[
-                                { value: "left", icon: RiAlignLeft, title: "Align left" },
-                                { value: "center", icon: RiAlignCenter, title: "Align center" },
-                                { value: "right", icon: RiAlignRight, title: "Align right" },
-                                { value: "justify", icon: RiAlignJustify, title: "Justify" },
+                                { value: "left", icon: "align-left", title: "Align left" },
+                                { value: "center", icon: "align-horizontal-center", title: "Align center" },
+                                { value: "right", icon: "align-right", title: "Align right" },
+                                { value: "justify", icon: "align-horizontal-spacing", title: "Justify" },
                             ]}
                         />
                     </Row>
@@ -181,7 +172,7 @@ export function FormatMenu({
                     </Row>
                     <Row label="Wrap">
                         <SelectField
-                            icon={RiTextWrap}
+                            icon={"text-square"}
                             value={wrap === "pre-wrap" ? "pre-wrap" : wrap === "nowrap" ? "nowrap" : wrap === "balance" ? "balance" : "normal"}
                             options={[
                                 ["normal", "Normal"],

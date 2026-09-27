@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { commands } from "@/lib/backend";
 import type { ChatMessage } from "@/lib/backend/types";
 import { setChatGenerating } from "./generating-chats";
+import { isDemoChatPinned } from "./demo-chat";
 import { NEW_CHAT_TAB_ID } from "../ui/shell/tabs";
 import { upsertTaggedBlockInContent } from "./upsert-stream-blocks";
 
@@ -136,10 +137,11 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
     const [sendError, setSendError] = React.useState<string | null>(null);
     const [contextSummarized, setContextSummarized] = React.useState(false);
     const viewingIdRef = React.useRef<string | null>(null);
-    const liveTurnRef = React.useRef<LiveTurn | null>(null);
+    const liveTurnsRef = React.useRef<Map<string, LiveTurn>>(new Map());
     const messagesRef = React.useRef<ChatMessage[]>(messages);
     const turnIdRef = React.useRef<string | null>(null);
-    const ignoreStreamRef = React.useRef(false);
+    const ignoredIdsRef = React.useRef<Set<string>>(new Set());
+    const PENDING_KEY = "__pending__";
 
     React.useEffect(() => {
         messagesRef.current = messages;
@@ -149,17 +151,13 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         turnIdRef.current = turnId;
     }, [turnId]);
 
-    const viewingLive = React.useCallback(() => {
-        const live = liveTurnRef.current;
-        if (!live) return false;
-        if (!live.conversationId) return viewingIdRef.current == null;
-        return viewingIdRef.current === live.conversationId;
+    const liveForView = React.useCallback(() => {
+        const id = viewingIdRef.current;
+        if (id) return liveTurnsRef.current.get(id) ?? null;
+        return liveTurnsRef.current.get(PENDING_KEY) ?? null;
     }, []);
 
-    const applyLiveToView = React.useCallback(() => {
-        const live = liveTurnRef.current;
-        if (!live) return;
-        viewingIdRef.current = live.conversationId;
+    const applyLive = React.useCallback((live: LiveTurn) => {
         turnIdRef.current = live.turnId;
         setMessages(live.messages);
         setIsLoading(true);
@@ -170,65 +168,77 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
 
     const setViewingConversation = React.useCallback((id: string | null) => {
         viewingIdRef.current = id;
-        if (viewingLive()) applyLiveToView();
-    }, [applyLiveToView, viewingLive]);
+        const live = id
+            ? liveTurnsRef.current.get(id) ?? null
+            : liveTurnsRef.current.get(PENDING_KEY) ?? null;
+        if (live) {
+            applyLive(live);
+            return;
+        }
+        turnIdRef.current = null;
+        setIsLoading(false);
+        setTurnId(null);
+        setActivityLabel(null);
+        setTurnPhase("idle");
+    }, [applyLive]);
 
     const resumeLiveConversation = React.useCallback((id: string | null) => {
-        const live = liveTurnRef.current;
+        if (!id) return false;
+        const live = liveTurnsRef.current.get(id);
         if (!live) return false;
-        if (live.conversationId !== id) return false;
-        applyLiveToView();
+        viewingIdRef.current = id;
+        applyLive(live);
         return true;
-    }, [applyLiveToView]);
+    }, [applyLive]);
 
     const syncFromBackend = React.useCallback(async () => {
+        if (isDemoChatPinned()) return;
         try {
             const [history, gen, convId] = await Promise.all([
                 commands.getChatHistory(),
                 commands.getChatGenerationState(),
                 commands.getCurrentConversationId().catch(() => null),
             ]);
+            if (isDemoChatPinned()) return;
             viewingIdRef.current = convId ?? null;
 
-            if (gen.isGenerating && !ignoreStreamRef.current) {
-                const liveId = gen.conversationId ?? null;
-                if (!liveTurnRef.current) {
-                    liveTurnRef.current = {
-                        conversationId: liveId,
-                        turnId: gen.turnId ?? null,
-                        messages: history,
-                        activityLabel: gen.activityLabel ?? "Thinking",
-                        turnPhase: "thinking",
-                    };
-                } else {
-                    liveTurnRef.current.turnId = gen.turnId ?? liveTurnRef.current.turnId;
-                    liveTurnRef.current.conversationId =
-                        liveId ?? liveTurnRef.current.conversationId;
-                    if (gen.activityLabel) liveTurnRef.current.activityLabel = gen.activityLabel;
-                }
-                turnIdRef.current = liveTurnRef.current.turnId;
-                if (viewingLive()) {
-                    applyLiveToView();
-                    return;
-                }
+            if (gen.isGenerating && gen.conversationId && !ignoredIdsRef.current.has(gen.conversationId)) {
+                const liveId = gen.conversationId;
+                const existing = liveTurnsRef.current.get(liveId);
+                liveTurnsRef.current.set(liveId, {
+                    conversationId: liveId,
+                    turnId: gen.turnId ?? existing?.turnId ?? null,
+                    messages: viewingIdRef.current === liveId ? history : (existing?.messages ?? history),
+                    activityLabel: gen.activityLabel ?? existing?.activityLabel ?? "Thinking",
+                    turnPhase: existing?.turnPhase ?? "thinking",
+                });
+            }
+
+            const shown = liveForView();
+            if (shown) {
+                applyLive(shown);
+                return;
             }
 
             setMessages(history);
             setIsLoading(false);
-            if (!liveTurnRef.current) {
-                turnIdRef.current = null;
-                setTurnId(null);
-                setActivityLabel(null);
-                setTurnPhase("idle");
-            }
+            turnIdRef.current = null;
+            setTurnId(null);
+            setActivityLabel(null);
+            setTurnPhase("idle");
         } catch (err) {
             console.error("Failed to sync chat stream:", err);
         }
-    }, [applyLiveToView, viewingLive]);
+    }, [applyLive, liveForView]);
 
     const stopLiveTurn = React.useCallback(() => {
-        ignoreStreamRef.current = true;
-        liveTurnRef.current = null;
+        const id = viewingIdRef.current;
+        if (id) {
+            ignoredIdsRef.current.add(id);
+            liveTurnsRef.current.delete(id);
+        } else {
+            liveTurnsRef.current.delete(PENDING_KEY);
+        }
         turnIdRef.current = null;
         setIsLoading(false);
         setActivityLabel(null);
@@ -243,14 +253,15 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             { role: "user" as const, content: userMsg, timestamp: optimisticTs },
             { role: "assistant" as const, content: "", timestamp: optimisticTs + 0.001 },
         ];
-        liveTurnRef.current = {
-            conversationId: liveTurnRef.current?.conversationId ?? viewingIdRef.current,
-            turnId: liveTurnRef.current?.turnId ?? null,
+        const key = viewingIdRef.current || PENDING_KEY;
+        ignoredIdsRef.current.delete(key);
+        liveTurnsRef.current.set(key, {
+            conversationId: viewingIdRef.current,
+            turnId: null,
             messages: next,
             activityLabel: "Thinking",
             turnPhase: "thinking",
-        };
-        ignoreStreamRef.current = false;
+        });
         setMessages(next);
         setIsLoading(true);
         setTurnPhase("thinking");
@@ -267,22 +278,27 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             });
         };
 
-        const acceptsStream = (payload?: { turnId?: string; conversationId?: string }) => {
-            const live = liveTurnRef.current;
-            if (!payload) return true;
-            if (payload.turnId && live?.turnId && payload.turnId !== live.turnId) return false;
-            if (payload.conversationId && live?.conversationId && payload.conversationId !== live.conversationId) {
-                return false;
+        const resolveLiveKey = (conversationId?: string | null) => {
+            if (conversationId && liveTurnsRef.current.has(conversationId)) return conversationId;
+            const viewing = viewingIdRef.current;
+            if (viewing && liveTurnsRef.current.has(viewing)) return viewing;
+            if (liveTurnsRef.current.has(PENDING_KEY)) return PENDING_KEY;
+            if (liveTurnsRef.current.size === 1) {
+                return liveTurnsRef.current.keys().next().value ?? null;
             }
-            return true;
+            return conversationId || null;
         };
 
-        const patchLive = (update: (live: LiveTurn) => void) => {
-            if (ignoreStreamRef.current) return;
-            const live = liveTurnRef.current;
+        const patchLive = (conversationId: string | null | undefined, update: (live: LiveTurn) => void) => {
+            const key = resolveLiveKey(conversationId);
+            if (!key || ignoredIdsRef.current.has(key)) return;
+            const live = liveTurnsRef.current.get(key);
             if (!live) return;
             update(live);
-            if (viewingLive()) {
+            const shown =
+                (viewingIdRef.current && viewingIdRef.current === live.conversationId) ||
+                (!viewingIdRef.current && key === PENDING_KEY);
+            if (shown) {
                 setMessages(live.messages);
                 setIsLoading(true);
                 setActivityLabel(live.activityLabel);
@@ -305,9 +321,11 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 if (convId) {
                     setChatGenerating(convId, true);
                     setChatGenerating(NEW_CHAT_TAB_ID, false);
+                    ignoredIdsRef.current.delete(convId);
                 }
-                ignoreStreamRef.current = false;
-                let snapshot = messagesRef.current;
+                const pending = liveTurnsRef.current.get(PENDING_KEY);
+                const existing = (convId && liveTurnsRef.current.get(convId)) || pending;
+                let snapshot = existing?.messages ?? messagesRef.current;
                 if (startedModel) {
                     const latest = snapshot[snapshot.length - 1];
                     if (latest?.role === "assistant") {
@@ -324,17 +342,19 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                         ];
                     }
                 }
-                liveTurnRef.current = {
+                const key = convId || PENDING_KEY;
+                liveTurnsRef.current.delete(PENDING_KEY);
+                liveTurnsRef.current.set(key, {
                     conversationId: convId,
                     turnId: tid,
                     messages: snapshot,
                     activityLabel: "Thinking",
                     turnPhase: "thinking",
-                };
-                turnIdRef.current = tid;
+                });
                 const stayOnThisTurn = !viewingIdRef.current || viewingIdRef.current === convId;
                 if (stayOnThisTurn) {
                     viewingIdRef.current = convId;
+                    turnIdRef.current = tid;
                     setIsLoading(true);
                     setSendError(null);
                     setTurnId(tid);
@@ -353,19 +373,29 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     const chunk =
                         typeof raw === "string" ? raw : typeof raw?.chunk === "string" ? raw.chunk : "";
                     if (!chunk) return;
-                    if (ignoreStreamRef.current) return;
                     const meta = typeof raw === "string" ? undefined : raw;
-                    if (!acceptsStream(meta)) return;
-                    if (!liveTurnRef.current) {
-                        liveTurnRef.current = {
-                            conversationId: meta?.conversationId ?? viewingIdRef.current,
-                            turnId: meta?.turnId ?? turnIdRef.current,
-                            messages: messagesRef.current,
-                            activityLabel: "Thinking",
-                            turnPhase: "thinking",
-                        };
+                    const convId = meta?.conversationId ?? viewingIdRef.current;
+                    if (convId && ignoredIdsRef.current.has(convId)) return;
+                    const key = convId || PENDING_KEY;
+                    if (!liveTurnsRef.current.has(key)) {
+                        const pending = liveTurnsRef.current.get(PENDING_KEY);
+                        if (pending && key !== PENDING_KEY) {
+                            liveTurnsRef.current.delete(PENDING_KEY);
+                            pending.conversationId = convId;
+                            pending.turnId = meta?.turnId ?? pending.turnId;
+                            liveTurnsRef.current.set(key, pending);
+                        } else {
+                            liveTurnsRef.current.set(key, {
+                                conversationId: convId,
+                                turnId: meta?.turnId ?? null,
+                                messages: viewingIdRef.current === convId ? messagesRef.current : [],
+                                activityLabel: "Thinking",
+                                turnPhase: "thinking",
+                            });
+                        }
                     }
-                    patchLive((live) => {
+                    patchLive(convId, (live) => {
+                        if (meta?.turnId) live.turnId = meta.turnId;
                         live.messages = appendAssistantChunk(live.messages, chunk);
                     });
                 },
@@ -394,7 +424,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 turnId?: string;
                 content?: string;
             }>("chat_complete", (event) => {
-                const { stats, model, error, conversationId, turnId: completeTurnId, content } =
+                const { stats, model, error, conversationId, content } =
                     event.payload ?? {};
                 if (!error && stats) {
                     void import("@/lib/chat/last-turn-usage").then(({ setLastTurnUsage }) => {
@@ -405,15 +435,16 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                         });
                     });
                 }
-                const forLive = acceptsStream({
-                    conversationId,
-                    turnId: completeTurnId,
-                });
                 if (conversationId) {
                     setChatGenerating(conversationId, false);
+                    ignoredIdsRef.current.delete(conversationId);
+                    liveTurnsRef.current.delete(conversationId);
+                } else {
+                    liveTurnsRef.current.delete(PENDING_KEY);
                 }
                 setChatGenerating(NEW_CHAT_TAB_ID, false);
-                if (!forLive) {
+                const shown = !!conversationId && viewingIdRef.current === conversationId;
+                if (!shown) {
                     if (!error) {
                         void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
                             showDesktopNotification("generationComplete", "Shape", "Generation finished"),
@@ -421,34 +452,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     }
                     return;
                 }
-                const shown = viewingLive();
-                liveTurnRef.current = null;
                 turnIdRef.current = null;
-                if (!shown) {
-                    if (error === "Cancelled") {
-                        setIsLoading(false);
-                        setActivityLabel(null);
-                        setTurnPhase("cancelled");
-                        setTurnId(null);
-                        void (async () => {
-                            try {
-                                const history = await commands.getChatHistory();
-                                if (ignoreStreamRef.current || !liveTurnRef.current) {
-                                    setMessages(history);
-                                    setIsLoading(false);
-                                    setActivityLabel(null);
-                                }
-                            } catch {
-                                /* ignore */
-                            }
-                        })();
-                    } else if (!error) {
-                        void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
-                            showDesktopNotification("generationComplete", "Shape", "Generation finished"),
-                        );
-                    }
-                    return;
-                }
                 setIsLoading(false);
                 setActivityLabel(null);
                 setTurnPhase(
@@ -468,7 +472,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     void (async () => {
                         try {
                             const history = await commands.getChatHistory();
-                            if (ignoreStreamRef.current || !liveTurnRef.current) {
+                            if (!viewingIdRef.current || viewingIdRef.current === conversationId) {
                                 setMessages(history);
                                 setIsLoading(false);
                                 setActivityLabel(null);
@@ -527,7 +531,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             }>("agent-command-pending", (event) => {
                 const cmd = event.payload?.command?.trim() || "Command";
                 const reason = event.payload?.reason?.trim();
-                patchLive((live) => {
+                patchLive(undefined, (live) => {
                     live.turnPhase = "awaiting_approval";
                     live.activityLabel = "Waiting for approval";
                 });
@@ -547,7 +551,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             }>("agent-edit-pending", (event) => {
                 const file = event.payload?.file?.trim() || "file";
                 const reason = event.payload?.reason?.trim();
-                patchLive((live) => {
+                patchLive(undefined, (live) => {
                     live.turnPhase = "awaiting_approval";
                     live.activityLabel = "Waiting for edit approval";
                 });
@@ -561,7 +565,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
 
         register(
             listen<{ id?: string }>("agent-ask-pending", () => {
-                patchLive((live) => {
+                patchLive(undefined, (live) => {
                     live.turnPhase = "awaiting_approval";
                     live.activityLabel = "Waiting for your answers";
                 });
@@ -571,7 +575,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         // Clear sticky approval labels once the user resolves the gate.
         register(
             listen<{ id?: string; approved?: boolean }>("agent-command-resolved", () => {
-                patchLive((live) => {
+                patchLive(undefined, (live) => {
                     live.turnPhase = "running_command";
                     live.activityLabel = "Running command";
                 });
@@ -579,7 +583,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         );
         register(
             listen<{ id?: string; approved?: boolean }>("agent-edit-resolved", () => {
-                patchLive((live) => {
+                patchLive(undefined, (live) => {
                     live.turnPhase = "editing";
                     live.activityLabel = "Editing file";
                 });
@@ -604,7 +608,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     nextLabel = label.trim();
                 }
                 if (!nextPhase && !nextLabel) return;
-                patchLive((live) => {
+                patchLive(undefined, (live) => {
                     if (nextPhase) live.turnPhase = nextPhase;
                     if (nextLabel) live.activityLabel = nextLabel;
                 });
@@ -614,14 +618,10 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         register(
             listen<{ conversationId?: string }>("chat_context_summarized", (event) => {
                 const convId = event.payload?.conversationId ?? null;
-                const live = liveTurnRef.current;
-                if (convId && live?.conversationId && live.conversationId !== convId) {
-                    return;
-                }
-                patchLive((liveTurn) => {
+                patchLive(convId, (liveTurn) => {
                     liveTurn.activityLabel = "Summarizing context";
                 });
-                if (viewingLive()) setContextSummarized(true);
+                if (!convId || viewingIdRef.current === convId) setContextSummarized(true);
             }),
         );
 

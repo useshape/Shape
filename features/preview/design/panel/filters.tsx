@@ -1,12 +1,5 @@
 "use client";
 
-import {
-    RiContrastDropLine,
-    RiEyeLine,
-    RiEyeOffLine,
-    RiFilterLine,
-    RiSubtractLine,
-} from "@remixicon/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -54,7 +47,7 @@ export function FilterStack({
                 return (
                     <div key={`${property}-${index}-${item.type}`} className="flex h-6 items-stretch gap-1">
                         <SelectField
-                            icon={RiFilterLine}
+                            icon={"filter"}
                             value={item.type}
                             options={[...FILTER_OPTIONS]}
                             onChange={(type) => {
@@ -64,7 +57,7 @@ export function FilterStack({
                             }}
                         />
                         <Field
-                            icon={RiContrastDropLine}
+                            icon={"sun"}
                             value={item.amount}
                             property={property}
                             mapValue={(amount) =>
@@ -79,7 +72,7 @@ export function FilterStack({
                         />
                         <IconButton
                             label={hidden ? "Show filter" : "Hide filter"}
-                            icon={hidden ? RiEyeOffLine : RiEyeLine}
+                            icon={hidden ? "eye-closed" : "eye"}
                             active={!hidden}
                             onClick={() => {
                                 const next = items.slice();
@@ -94,7 +87,7 @@ export function FilterStack({
                         />
                         <IconButton
                             label="Remove filter"
-                            icon={RiSubtractLine}
+                            icon={"minus-circle"}
                             onClick={() => write(items.filter((_, currentIndex) => currentIndex !== index))}
                         />
                     </div>

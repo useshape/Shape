@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCheckLine, RiCloseLine } from "@remixicon/react";
 import React, { useMemo } from "react";
 import { diffLines } from "diff";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
@@ -50,7 +49,23 @@ export function PendingEditsPanel({
         [edits],
     );
 
-    if (edits.length === 0) return null;
+    if (edits.length === 0) {
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                    >
+                        Edited files
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-72 p-1">
+                    <div className="px-2 py-2 text-sm text-text-muted">No edited files</div>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    }
 
     const addTotal = withStats.reduce((s, e) => s + e.add, 0);
 
@@ -124,7 +139,7 @@ export function PendingEditsPanel({
                                             onAccept(edit.id);
                                         }}
                                     >
-                                        <Icon icon={RiCheckLine} size={ICON_SIZE_SM} />
+                                        <Icon icon={"check"} size={ICON_SIZE_SM} />
                                     </span>
                                 </Tooltip>
                             ) : null}
@@ -138,7 +153,7 @@ export function PendingEditsPanel({
                                             onReject(edit.id);
                                         }}
                                     >
-                                        <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
+                                        <Icon icon={"close"} size={ICON_SIZE_SM} />
                                     </span>
                                 </Tooltip>
                             ) : null}

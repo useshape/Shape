@@ -19,6 +19,7 @@ export type PreviewState = {
 };
 
 const DEFAULT_URL = "";
+const UNREACHABLE_ERROR = "This site can't be reached.";
 
 let state: PreviewState = {
     history: [],
@@ -191,7 +192,7 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
         url = normalizePreviewUrl(raw);
     } catch {
         setState({
-            error: "ERR_INVALID_URL",
+            error: "Enter a valid http or https URL.",
             iframeSrc: null,
             loading: false,
         });
@@ -209,59 +210,70 @@ export async function navigatePreview(raw: string, opts?: { replace?: boolean })
 
     setState({ loading: true, urlBar: url });
 
-    if (isLocalPreviewUrl(url)) {
-        const reachable = await probePreviewReachable(url);
-        if (!reachable) {
-            setState({
-                loading: false,
-                error: "ERR_CONNECTION_REFUSED",
-                urlBar: url,
-                history: state.history,
-                index: state.index,
-            });
-            return;
-        }
+    if (!(await probePreviewReachable(url))) {
+        setState({
+            loading: false,
+            iframeSrc: null,
+            error: UNREACHABLE_ERROR,
+            urlBar: url,
+        });
+        return;
     }
 
     commitNavigation(url, { replace: opts?.replace, reload: false });
 }
 
-export function previewBack() {
-    if (state.index <= 0) return;
-    const index = state.index - 1;
+/** Move within the history stack; the frame is only shown once the target answers. */
+async function stackNavigate(index: number) {
     const url = state.history[index]!;
+    setState({ index, urlBar: url, loading: true, error: null });
+    const reachable = await probePreviewReachable(url);
+    if (state.index !== index) return;
+    if (!reachable) {
+        setState({ loading: false, iframeSrc: null, error: UNREACHABLE_ERROR });
+        return;
+    }
     applyingStackNav = true;
     stackNavTarget = url;
-    setState({
-        index,
-        iframeSrc: url,
-        urlBar: url,
-        loading: false,
-        error: null,
-    });
+    setState({ iframeSrc: url, loading: false, error: null });
     window.setTimeout(() => {
         applyingStackNav = false;
         stackNavTarget = null;
     }, 400);
 }
 
+export function previewBack() {
+    if (state.index <= 0) return;
+    void stackNavigate(state.index - 1);
+}
+
 export function previewForward() {
     if (state.index < 0 || state.index >= state.history.length - 1) return;
-    const index = state.index + 1;
-    const url = state.history[index]!;
-    applyingStackNav = true;
-    stackNavTarget = url;
-    setState({
-        index,
-        iframeSrc: url,
-        urlBar: url,
-        loading: false,
-        error: null,
-    });
-    window.setTimeout(() => {
-        applyingStackNav = false;
-        stackNavTarget = null;
-    }, 400);
+    void stackNavigate(state.index + 1);
+}
+
+/**
+ * While a frame is shown, keep checking that its server still answers. The
+ * moment it stops, drop the frame so WebView2 never renders its own error page.
+ */
+export function watchPreviewFrame(intervalMs = 3000): () => void {
+    let cancelled = false;
+    let checking = false;
+    const tick = async () => {
+        if (cancelled || checking) return;
+        const url = state.iframeSrc;
+        if (!url || document.hidden) return;
+        checking = true;
+        const reachable = await probePreviewReachable(url);
+        checking = false;
+        if (cancelled || state.iframeSrc !== url || reachable) return;
+        setState({ iframeSrc: null, loading: false, error: UNREACHABLE_ERROR });
+    };
+    const timer = window.setInterval(() => void tick(), intervalMs);
+    return () => {
+        cancelled = true;
+        window.clearInterval(timer);
+    };
 }
 
 export function endPreviewStackNav() {
@@ -324,7 +336,7 @@ export function previewReload() {
             setState({
                 loading: false,
                 iframeSrc: null,
-                error: "ERR_CONNECTION_REFUSED",
+                error: UNREACHABLE_ERROR,
             });
             return;
         }

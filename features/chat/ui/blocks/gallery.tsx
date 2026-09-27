@@ -3,14 +3,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import {
-    RiArrowLeftSLine,
-    RiArrowRightSLine,
-    RiCheckLine,
-    RiCollapseDiagonalLine,
-    RiExpandDiagonalLine,
-    RiSpace,
-} from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
@@ -240,7 +232,7 @@ export function DesignPreviewGallery({
                             disabled={index === 0}
                             onClick={() => setIndex((i) => Math.max(0, i - 1))}
                         >
-                            <Icon icon={RiArrowLeftSLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"alt-arrow-left"} size={ICON_SIZE_SM} />
                         </button>
                         <button
                             type="button"
@@ -249,7 +241,7 @@ export function DesignPreviewGallery({
                             disabled={index >= items.length - 1}
                             onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
                         >
-                            <Icon icon={RiArrowRightSLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"alt-arrow-right"} size={ICON_SIZE_SM} />
                         </button>
                         <div className="pointer-events-none absolute inset-x-0 bottom-2 z-1 flex justify-center gap-1">
                             {items.map((p, i) => (
@@ -273,7 +265,7 @@ export function DesignPreviewGallery({
                                 className="flex size-7 items-center justify-center rounded-full text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 onClick={() => setOpen(true)}
                             >
-                                <Icon icon={RiExpandDiagonalLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"maximize"} size={ICON_SIZE_SM} />
                             </button>
                         </Tooltip>
                         {pending ? (
@@ -284,7 +276,7 @@ export function DesignPreviewGallery({
                                     className="flex size-7 items-center justify-center rounded-full text-text-muted hover:bg-panel-hover hover:text-text-primary disabled:opacity-40"
                                     onClick={() => choose(item.id)}
                                 >
-                                    <Icon icon={RiCheckLine} size={ICON_SIZE_SM} />
+                                    <Icon icon={"check"} size={ICON_SIZE_SM} />
                                 </button>
                             </Tooltip>
                         ) : null}
@@ -315,7 +307,7 @@ export function DesignPreviewGallery({
                                                   disabled={index === 0}
                                                   onClick={() => setIndex((i) => Math.max(0, i - 1))}
                                               >
-                                                  <Icon icon={RiArrowLeftSLine} size={ICON_SIZE_SM} />
+                                                  <Icon icon={"alt-arrow-left"} size={ICON_SIZE_SM} />
                                               </button>
                                               <button
                                                   type="button"
@@ -323,7 +315,7 @@ export function DesignPreviewGallery({
                                                   disabled={index >= items.length - 1}
                                                   onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
                                               >
-                                                  <Icon icon={RiArrowRightSLine} size={ICON_SIZE_SM} />
+                                                  <Icon icon={"alt-arrow-right"} size={ICON_SIZE_SM} />
                                               </button>
                                           </>
                                       ) : null}
@@ -335,7 +327,7 @@ export function DesignPreviewGallery({
                                                   className="rounded-md p-1.5 text-text-muted hover:bg-panel-hover hover:text-text-primary disabled:opacity-30"
                                                   onClick={() => choose(item.id)}
                                               >
-                                                  <Icon icon={RiCheckLine} size={ICON_SIZE_SM} />
+                                                  <Icon icon={"check"} size={ICON_SIZE_SM} />
                                               </button>
                                           </Tooltip>
                                       ) : null}
@@ -345,7 +337,7 @@ export function DesignPreviewGallery({
                                           onClick={() => setOpen(false)}
                                           className="rounded-md p-1.5 text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                       >
-                                          <Icon icon={RiCollapseDiagonalLine} size={ICON_SIZE_SM} />
+                                          <Icon icon={"minimize"} size={ICON_SIZE_SM} />
                                       </button>
                                   </div>
                               </div>
@@ -364,7 +356,7 @@ export function DesignPreviewGallery({
                                               onClick={() => setTweakTab("padding")}
                                               label="Padding"
                                           >
-                                              <Icon icon={RiSpace} size={ICON_SIZE_SM} />
+                                              <Icon icon={"text-square"} size={ICON_SIZE_SM} />
                                           </TabBtn>
                                           <TabBtn
                                               active={tweakTab === "gap"}

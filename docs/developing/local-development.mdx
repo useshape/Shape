@@ -24,7 +24,7 @@ npm run tauri:dev
 | `npm run tauri:dev` | `NEXT_PUBLIC_SHAPE_WEBSITE_URL` from `.env`, else `http://localhost:3000` |
 | `npm run tauri:build` / GitHub release | Always `https://www.useshape.org` (`.env` ignored) |
 
-Copy `.env.example` → `.env` to change the dev target.
+Copy `.env.example` to `.env` to change the dev target.
 
 The website that hosts Shape Cloud is a separate product. You only need its public URL — not the website source — to develop the desktop app.
 
@@ -41,7 +41,7 @@ The website that hosts Shape Cloud is a separate product. You only need its publ
 
 ## Cloud AI while developing
 
-Official release builds can use Shape Cloud AI. Local and fork builds can still run the IDE; Cloud AI may return [error 3000](/docs/help/errors/3000) until you use an official installer from [download](/download).
+Official release builds can use Shape Cloud AI. A local build can still edit files. Cloud AI stays off until you use an official installer from [download](/download). See [Troubleshooting](/docs/help/troubleshooting).
 
 ## Related
 

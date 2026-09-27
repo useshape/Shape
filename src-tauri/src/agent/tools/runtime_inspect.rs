@@ -301,7 +301,7 @@ async fn spawn_and_inspect(target_url: &str) -> Result<String, String> {
     Ok(format!("Spawned Chromium DevTools (headless).\n{report}"))
 }
 
-fn find_chromium() -> Option<String> {
+pub(crate) fn find_chromium() -> Option<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     #[cfg(windows)]
     {
@@ -355,14 +355,14 @@ fn find_chromium() -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
-fn free_port() -> Option<u16> {
+pub(crate) fn free_port() -> Option<u16> {
     TcpListener::bind("127.0.0.1:0")
         .ok()
         .and_then(|l| l.local_addr().ok())
         .map(|a| a.port())
 }
 
-async fn fetch_page_ws(port: u16) -> Result<String, String> {
+pub(crate) async fn fetch_page_ws(port: u16) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_millis(800))
         .build()

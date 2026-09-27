@@ -273,6 +273,52 @@ export interface Conversation {
     history: ChatMessage[];
     project_path: string;
     timestamp: number;
+    /** Hidden from the sidebar; still opens from the command palette. */
+    archived?: boolean;
+}
+
+export interface BrowserTab {
+    id: string;
+    url: string;
+    title: string;
+    loading: boolean;
+    canBack: boolean;
+    canForward: boolean;
+    error: string | null;
+    favicon: string | null;
+}
+
+export interface BrowserTabsPayload {
+    tabs: BrowserTab[];
+    activeId: string | null;
+}
+
+export interface BrowserHistoryEntry {
+    url: string;
+    title: string;
+    visits: number;
+    last: number;
+}
+
+/** Coordinates are percentages of the page; modifiers use the CDP bitmask (Alt 1, Ctrl 2, Meta 4, Shift 8). */
+export type BrowserInputEvent =
+    | { kind: "move"; x: number; y: number; modifiers?: number }
+    | { kind: "down" | "up" | "click"; x: number; y: number; button?: "left" | "right" | "middle"; clicks?: number; modifiers?: number }
+    | { kind: "wheel"; x: number; y: number; dx: number; dy: number; modifiers?: number }
+    | { kind: "text"; text: string }
+    | { kind: "key"; type: "keyDown" | "keyUp"; key: string; code: string; modifiers?: number };
+
+export interface BrowserPickedElement {
+    tag: string;
+    label: string;
+    selector: string;
+    rect: { x: number; y: number; w: number; h: number };
+    text?: string;
+    html?: string;
+    styles?: Record<string, string>;
+    size?: { w: number; h: number };
+    url?: string;
+    title?: string;
 }
 
 export interface IndexStatus {

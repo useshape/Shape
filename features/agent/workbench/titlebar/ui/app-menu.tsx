@@ -1,6 +1,5 @@
 "use client";
 
-import { RiMenuLine, RiMoreLine } from "@remixicon/react";
 import {
     Menubar,
     MenubarMenu,
@@ -138,7 +137,7 @@ export function TitlebarMenuToggle({
                 onClick={() => onOpenChange(!open)}
                 className={cn(titlebarIconButtonClass, open && "bg-panel-hover text-text-primary")}
             >
-                <Icon icon={RiMenuLine} />
+                <Icon icon={"hamburger-menu"} />
             </button>
         </Tooltip>
     );
@@ -188,7 +187,7 @@ export function TitlebarMenubar({
             {overflow.length > 0 && (
                 <MenubarMenu>
                     <MenubarTrigger>
-                        <Icon icon={RiMoreLine} />
+                        <Icon icon={"menu-dots"} />
                     </MenubarTrigger>
                     <MenubarPortal>
                         <MenubarContent alignOffset={-5}>

@@ -1,6 +1,5 @@
 "use client";
 
-import { RiSearchLine } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/search";
@@ -48,7 +47,7 @@ export function TitlebarSearch() {
                 aria-label={placeholder}
                 onClick={() => setExpanded(true)}
             >
-                <Icon icon={RiSearchLine} size={ICON_SIZE_SM} className="text-input-placeholder" />
+                <Icon icon={"magnifier"} size={ICON_SIZE_SM} className="text-input-placeholder" />
             </button>
         );
     }

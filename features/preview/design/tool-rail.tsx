@@ -1,26 +1,6 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import {
-    RiAddLine,
-    RiApps2Line,
-    RiBox3Line,
-    RiCheckboxCircleLine,
-    RiDatabase2Line,
-    RiFileTextLine,
-    RiImageLine,
-    RiLineChartLine,
-    RiListCheck3,
-    RiNodeTree,
-    RiPaletteLine,
-    RiPriceTag3Line,
-    RiQuestionLine,
-    RiSearchLine,
-    RiSettings3Line,
-    RiShoppingBag3Line,
-    RiUserLine,
-} from "@remixicon/react";
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { type SolarIconName,  Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +11,7 @@ function RailBtn({
     active,
 }: {
     label: string;
-    icon: RemixiconComponentType;
+    icon: SolarIconName;
     active?: boolean;
 }) {
     return (
@@ -52,27 +32,27 @@ function RailBtn({
     );
 }
 
-const TOP_TOOLS: { label: string; icon: RemixiconComponentType; active?: boolean }[] = [
-    { label: "Add", icon: RiAddLine },
-    { label: "Pages", icon: RiFileTextLine },
-    { label: "Sections", icon: RiListCheck3, active: true },
-    { label: "Theme", icon: RiBox3Line },
-    { label: "Apps", icon: RiApps2Line },
-    { label: "Media", icon: RiImageLine },
-    { label: "Metaobjects", icon: RiDatabase2Line },
-    { label: "Navigation", icon: RiNodeTree },
-    { label: "Customers", icon: RiUserLine },
-    { label: "Products", icon: RiShoppingBag3Line },
-    { label: "Discounts", icon: RiPriceTag3Line },
-    { label: "Analytics", icon: RiLineChartLine },
+const TOP_TOOLS: { label: string; icon: SolarIconName; active?: boolean }[] = [
+    { label: "Add", icon: "add-circle" },
+    { label: "Pages", icon: "file-text" },
+    { label: "Sections", icon: "list-check", active: true },
+    { label: "Theme", icon: "box" },
+    { label: "Apps", icon: "widget" },
+    { label: "Media", icon: "gallery" },
+    { label: "Metaobjects", icon: "database" },
+    { label: "Navigation", icon: "list" },
+    { label: "Customers", icon: "user" },
+    { label: "Products", icon: "bag" },
+    { label: "Discounts", icon: "tag" },
+    { label: "Analytics", icon: "chart" },
 ];
 
-const BOTTOM_TOOLS: { label: string; icon: RemixiconComponentType }[] = [
-    { label: "Settings", icon: RiSettings3Line },
-    { label: "Help", icon: RiQuestionLine },
-    { label: "Theme check", icon: RiCheckboxCircleLine },
-    { label: "Search", icon: RiSearchLine },
-    { label: "Themes", icon: RiPaletteLine },
+const BOTTOM_TOOLS: { label: string; icon: SolarIconName }[] = [
+    { label: "Settings", icon: "settings" },
+    { label: "Help", icon: "question-circle" },
+    { label: "Theme check", icon: "check-circle" },
+    { label: "Search", icon: "magnifier" },
+    { label: "Themes", icon: "palette" },
 ];
 
 export function DesignToolRail() {

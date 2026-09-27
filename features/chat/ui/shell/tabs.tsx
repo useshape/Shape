@@ -1,6 +1,5 @@
 "use client";
 
-import { RiAddLine, RiCloseLine } from "@remixicon/react";
 import { useCallback } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -157,7 +156,7 @@ function SortableChatTab({
                             )}
                         >
                             <span className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}>
-                                <Icon icon={RiCloseLine} />
+                                <Icon icon={"close"} />
                             </span>
                         </button>
                     ) : null}
@@ -270,7 +269,7 @@ export function ChatTabBar({
                     className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "ml-0.5 shrink-0 self-center")}
                     aria-label="New chat"
                 >
-                    <Icon icon={RiAddLine} />
+                    <Icon icon={"add-circle"} />
                 </button>
             }
         >

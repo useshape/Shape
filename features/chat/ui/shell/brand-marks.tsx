@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCursorAiFill, RiFolder3Fill } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 
 function SimpleMark({
@@ -26,10 +25,28 @@ function SimpleMark({
     );
 }
 
+export function FrameworkMark({
+    slug,
+    color,
+    invert,
+    size = 16,
+}: {
+    slug: string;
+    color: string;
+    invert?: boolean;
+    size?: number;
+}) {
+    return (
+        <span className={invert ? "inline-flex dark:invert" : "inline-flex"}>
+            <SimpleMark slug={slug} color={color} size={size} />
+        </span>
+    );
+}
+
 export function CursorMark({ size = 16 }: { size?: number }) {
     return (
         <Icon
-            icon={RiCursorAiFill}
+            icon={"cursor"}
             size={size}
             className="shrink-0 text-white"
             style={{ color: "#FFFFFF" }}
@@ -77,7 +94,7 @@ export function ZedMark({ size = 16 }: { size?: number }) {
 export function ExplorerMark({ size = 16 }: { size?: number }) {
     return (
         <Icon
-            icon={RiFolder3Fill}
+            icon={"folder"}
             className="shrink-0"
             style={{ width: size, height: size, color: "#E8A317" }}
         />

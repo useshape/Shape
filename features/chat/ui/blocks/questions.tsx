@@ -1,13 +1,7 @@
 "use client";
 
-import {
-    RiArrowLeftSLine,
-    RiArrowRightSLine,
-    RiAttachment2,
-    RiCloseLine,
-} from "@remixicon/react";
 import React, { useEffect, useMemo, useState } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend/commands";
@@ -131,7 +125,7 @@ export function QuestionsCard({
 
     if (answered && recap) {
         return (
-            <div className="my-2 overflow-hidden rounded-xl bg-surface-3 px-3 py-2.5">
+            <div className="my-2 overflow-hidden rounded-xl bg-surface-3 p-3">
                 <div className="flex flex-col gap-3">
                     {recap.map((row) => (
                         <div key={row.prompt} className="min-w-0">
@@ -164,7 +158,7 @@ export function QuestionsCard({
                             setIndex((i) => Math.max(0, i - 1));
                         }}
                     >
-                        <Icon icon={RiArrowLeftSLine} size={ICON_SIZE_SM} />
+                        <SolarIcon name="alt-arrow-left" size={ICON_SIZE_SM} />
                     </Button>
                     <span className="min-w-[2.5rem] text-center text-xs tabular-nums">
                         {index + 1}/{total}
@@ -181,7 +175,7 @@ export function QuestionsCard({
                             setIndex((i) => Math.min(questions.length - 1, i + 1));
                         }}
                     >
-                        <Icon icon={RiArrowRightSLine} size={ICON_SIZE_SM} />
+                        <SolarIcon name="alt-arrow-right" size={ICON_SIZE_SM} />
                     </Button>
                 </div>
                 <Button
@@ -193,7 +187,7 @@ export function QuestionsCard({
                     disabled={!pending || submitting}
                     onClick={() => void submit(picked, true)}
                 >
-                    <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
+                    <SolarIcon name="close" size={ICON_SIZE_SM} />
                 </Button>
             </div>
 
@@ -255,7 +249,7 @@ export function QuestionsCard({
                         onClick={() => setCustomOpen(true)}
                         className="flex items-center gap-2 text-[13px] text-text-secondary hover:text-text-primary"
                     >
-                        <Icon icon={RiAttachment2} size={ICON_SIZE_SM} className="text-text-muted" />
+                        <SolarIcon name="paperclip" size={ICON_SIZE_SM} className="text-text-muted" />
                         Something else
                     </button>
                 )}

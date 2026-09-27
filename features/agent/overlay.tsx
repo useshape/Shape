@@ -4,10 +4,12 @@ import { Suspense, useEffect } from "react";
 import { FilterProvider } from "@/features/git/ui/manager/filter-context";
 import { SettingsView } from "@/features/settings/ui/settings";
 import { GitManager } from "@/features/git/ui";
+import { PullRequestsPanel } from "@/features/chat/ui/prs/view";
 
 export type AgentOverlay =
     | { type: "settings"; category?: string; section?: string }
     | { type: "git"; section?: string }
+    | { type: "prs" }
     | null;
 
 /**
@@ -53,6 +55,14 @@ export function AgentOverlayView({
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [onClose]);
+
+    if (overlay.type === "prs") {
+        return (
+            <div className="h-full min-h-0 w-full overflow-hidden bg-panel">
+                <PullRequestsPanel pane="full" />
+            </div>
+        );
+    }
 
     if (overlay.type === "settings") {
         return (

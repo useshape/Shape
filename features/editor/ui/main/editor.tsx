@@ -10,7 +10,8 @@ import { getFileExtension, isImageExtension, isFontExtension } from "../../lib/i
 
 // UI Components
 import { Breadcrumbs } from "./ui/breadcrumb";
-import { PlanEditorHeader } from "./ui/plan-editor-header";
+import { MarkdownViewSwitch, PlanEditorHeader } from "./ui/plan-editor-header";
+import { MarkdownLiveEditor } from "../markdown/live-editor";
 import { ErrorView } from "./ui/error";
 import { ImageView } from "./ui/image";
 import { FontView } from "./ui/font";
@@ -27,7 +28,7 @@ import { isPlanFilePath } from "@/lib/plan/file";
 
 // Main file viewer component handling various file types (text, image, markdown)
 export default function FileViewer({ path, group: _group = "left" }: { path: string; group?: EditorGroupId }) {
-    const { getViewMode } = useEditorView();
+    const { getViewMode, setViewMode } = useEditorView();
     // getFileExtension handles diff: prefixes and display-name suffixes like " (abc1234)"
     const ext = useMemo(() => getFileExtension(path), [path]);
     const isSvg = ext === "svg";
@@ -36,7 +37,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
     const isRasterImage = isImage && !isSvg;
     const isMarkdown = /\.(md|mdx|markdown)$/i.test(path);
     const isPlanFile = isPlanFilePath(path);
-    const defaultMode = isImage || isFont ? "preview" : "raw";
+    const defaultMode = isImage || isFont || isMarkdown ? "preview" : "raw";
     const mode = getViewMode(path, defaultMode);
     const showImagePreview = isImage && (mode === "preview" || mode === "split");
     const showFontPreview = isFont && (mode === "preview" || mode === "split");
@@ -466,10 +467,20 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         return (
             <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
                 {isPlanFile ? (
-                    <PlanEditorHeader path={path} />
+                    <PlanEditorHeader
+                        path={path}
+                        raw={mode === "raw"}
+                        onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
+                    />
                 ) : (
                     <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
                         <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
+                        {isMarkdown ? (
+                            <MarkdownViewSwitch
+                                raw={mode === "raw"}
+                                onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
+                            />
+                        ) : null}
                     </div>
                 )}
                 <div className="flex-1 w-full min-h-0 overflow-hidden relative">
@@ -510,20 +521,22 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         return (
             <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
                 {isPlanFile ? (
-                    <PlanEditorHeader path={path} />
+                    <PlanEditorHeader
+                        path={path}
+                        raw={false}
+                        onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
+                    />
                 ) : (
-                    <div className="flex w-full items-center justify-between pr-2">
+                    <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
                         <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
+                        <MarkdownViewSwitch
+                            raw={false}
+                            onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
+                        />
                     </div>
                 )}
-                <div className="flex-1 w-full min-h-0 overflow-hidden relative border-t border-border-subtle/20">
-                    <MarkdownPreview
-                        ref={previewRef}
-                        content={content}
-                        filePath={path}
-                        projectPath={project_path}
-                        onApplyContent={(next) => void applyMarkdownContent(next)}
-                    />
+                <div className="flex-1 w-full min-h-0 overflow-hidden relative">
+                    <MarkdownLiveEditor content={content} onChange={(next) => void applyMarkdownContent(next)} />
                 </div>
             </div>
         );

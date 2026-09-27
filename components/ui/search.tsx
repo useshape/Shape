@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCloseLine, RiLoader4Line, RiMenuSearchLine} from "@remixicon/react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Icon, ICON_SIZE_SM, ICON_SIZE_MD } from "@/components/ui/icon";
@@ -79,7 +78,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                 )}
             >
                 <Icon
-                    icon={RiMenuSearchLine}
+                    icon={"magnifier"}
                     size={ICON_SIZE_MD}
                     className="pointer-events-none absolute left-2.5 z-10 pr-0.5 text-input-placeholder!"
                 />
@@ -113,7 +112,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                 <div className="absolute right-1 z-10 flex h-full items-center">
                     {isLoading ? (
                         <Icon
-                            icon={RiLoader4Line}
+                            icon={"refresh"}
                             size={ICON_SIZE_SM}
                             className="mr-1.5 animate-spin text-input-placeholder"
                         />
@@ -132,7 +131,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                                 innerRef.current?.focus();
                             }}
                         >
-                            <Icon icon={RiCloseLine} size={ICON_SIZE_MD} />
+                            <Icon icon={"close"} size={ICON_SIZE_MD} />
                         </Button>
                     ) : null}
                 </div>

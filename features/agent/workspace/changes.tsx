@@ -1,10 +1,8 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiArrowUpLine, RiErrorWarningLine, RiExternalLinkLine, RiEyeLine, RiGitMergeLine, RiMoreLine, RiDeleteBin6Fill, RiGitPullRequestFill, RiGithubFill, RiGitBranchLine } from "@remixicon/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
 import { discoverGitRepos, pickDefaultRepo } from "@/lib/git/repos";
@@ -172,11 +170,11 @@ const FileRow = memo(function FileRow({
                 <ContextMenuItem onClick={() => onOpenFile(file)}>Open file</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => onToggleStage(file)} className="gap-1.5">
-                    <Icon icon={RiGitPullRequestFill} size={ICON_SIZE_SM}/>
+                    <Icon icon={"git-pull-request"} size={ICON_SIZE_SM}/>
                     {file.staged ? "Unstage" : "Stage"}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => onDiscard(file)} className="text-error gap-1.5">
-                    <Icon icon={RiDeleteBin6Fill} size={ICON_SIZE_SM}/>
+                    <Icon icon={"trash-bin-trash"} size={ICON_SIZE_SM}/>
                     Discard changes
                 </ContextMenuItem>
             </ContextMenuContent>
@@ -471,10 +469,10 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
             ? "color-mix(in srgb, var(--color-warn) 22%, transparent)"
             : "color-mix(in srgb, var(--color-success) 22%, transparent)";
 
-    const tabs: { id: PanelTab; label: string; icon?: RemixiconComponentType }[] = [
+    const tabs: { id: PanelTab; label: string; icon?: SolarIconName }[] = [
         { id: "changes", label: `Changes${files.length ? ` ${files.length}` : ""}` },
         { id: "checks", label: "Checks" },
-        { id: "review", label: "Review", icon: RiEyeLine },
+        { id: "review", label: "Review", icon: "eye" },
     ];
 
     return (
@@ -503,7 +501,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                         className="flex size-6 items-center justify-center rounded-md hover:opacity-90"
                         style={{ color: toneFg }}
                     >
-                        <Icon icon={RiExternalLinkLine} size={ICON_SIZE_SM}/>
+                        <Icon icon={"square-forward"} size={ICON_SIZE_SM}/>
                     </button>
                 ) : null}
                 <span
@@ -511,7 +509,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                     style={{ color: toneFg }}
                 >
                     <Icon
-                        icon={statusTone === "warn" ? RiErrorWarningLine : RiArrowUpLine}
+                        icon={statusTone === "warn" ? "danger-triangle" : "arrow-up"}
                     />
                     {statusLabel}
                     {totals.plus > 0 || totals.minus > 0 ? (
@@ -533,7 +531,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                             color: toneFg,
                         }}
                     >
-                        <Icon icon={RiGitMergeLine} size={ICON_SIZE_SM}/>
+                        <Icon icon={"git-pull-request"} size={ICON_SIZE_SM}/>
                         Merge
                     </button>
                 ) : (
@@ -547,7 +545,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                             color: toneFg,
                         }}
                     >
-                        <Icon icon={RiGitMergeLine} size={ICON_SIZE_SM}/>
+                        <Icon icon={"git-pull-request"} size={ICON_SIZE_SM}/>
                         Commit & Push
                     </button>
                 )}
@@ -558,14 +556,14 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-md font-medium leading-snug">
                             <span>Committing to</span>
-                            <Icon icon={RiGithubFill} size={ICON_SIZE_SM} className="text-text-primary" />
+                            <Icon icon={"code-square"} size={ICON_SIZE_SM} className="text-text-primary" />
                             <span className="text-text-primary">
                                 {ownerRepo
                                     ? `${ownerRepo.owner}/${ownerRepo.repo}`
                                     : fileName(projectPath)}
                             </span>
                             <span>on branch</span>
-                            <Icon icon={RiGitBranchLine} size={ICON_SIZE_SM} className="text-text-primary" />
+                            <Icon icon={"git-branch"} size={ICON_SIZE_SM} className="text-text-primary" />
                             <span className="text-text-primary">{branch ?? "HEAD"}</span>
                             <span>
                                 with{" "}
@@ -647,7 +645,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover"
                             aria-label="More"
                         >
-                            <Icon icon={RiMoreLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"menu-dots"} size={ICON_SIZE_SM} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">

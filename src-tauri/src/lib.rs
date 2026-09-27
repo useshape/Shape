@@ -1,5 +1,6 @@
 mod agent;
 mod app_state;
+mod browser;
 pub(crate) mod commands;
 mod core;
 mod domain;
@@ -55,8 +56,14 @@ pub fn run() {
 
     // Windows/Linux spawn a new process for shape:// URLs — single-instance
     // must be registered before deep-link so argv is forwarded to this instance.
+    // `--fresh-window` skips the plugin so Window → New Window is its own process
+    // (its own agent state). Deep links still land in the original instance.
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
+        let fresh_window = std::env::args().any(|arg| arg == "--fresh-window");
+        if fresh_window {
+            // Second process: do not register the singleton plugin.
+        } else {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             for arg in &argv {
                 if arg.contains("shape://") {
@@ -66,6 +73,7 @@ pub fn run() {
             }
             focus_shape_windows(app);
         }));
+        }
     }
 
     builder
@@ -101,11 +109,17 @@ pub fn run() {
 
             #[cfg(windows)]
             crate::core::windows_notifications::init();
+            crate::core::mic::allow_microphone(app.handle());
 
             // Initialize menu
             commands::ipc::shortcuts::setup_menu(app.handle())?;
             app.on_menu_event(|app, event| {
-                commands::ipc::shortcuts::handle_menu_event(app, &event.id().0);
+                let id = event.id().0.as_str();
+                if id.starts_with("shape-browser-") {
+                    browser::surface::on_menu(app, id);
+                    return;
+                }
+                commands::ipc::shortcuts::handle_menu_event(app, id);
             });
 
             // Window initialization can be handled in Tauri config or here
@@ -293,7 +307,39 @@ pub fn run() {
             agent::commands::conversation::fork_conversation,
             agent::commands::conversation::set_message_feedback,
             agent::commands::conversation::delete_conversation,
+            agent::commands::conversation::rename_conversation,
             agent::commands::approvals::stop_chat_message,
+            agent::tools::browse::agent_browse_stop,
+            agent::tools::browse::agent_browse_pointer,
+            agent::commands::conversation::set_conversation_archived,
+            // browser tab
+            browser::browser_tabs,
+            browser::browser_open_tab,
+            browser::browser_close_tab,
+            browser::browser_activate_tab,
+            browser::browser_navigate,
+            browser::browser_back,
+            browser::browser_forward,
+            browser::browser_reload,
+            browser::browser_input,
+            browser::browser_pick,
+            browser::browser_screenshot,
+            browser::browser_clear,
+            browser::browser_history,
+            browser::browser_shutdown,
+            browser::surface::browser_surface_open,
+            browser::surface::browser_surface_close,
+            browser::surface::browser_surface_activate,
+            browser::surface::browser_surface_navigate,
+            browser::surface::browser_surface_back,
+            browser::surface::browser_surface_forward,
+            browser::surface::browser_surface_reload,
+            browser::surface::browser_surface_bounds,
+            browser::surface::browser_surface_hide,
+            browser::surface::browser_surface_pick,
+            core::mic::dictation_start,
+            core::mic::dictation_stop,
+            core::mic::dictation_push,
             agent::commands::conversation::get_chat_title,
             agent::commands::conversation::get_current_conversation_id,
             agent::commands::conversation::get_conversations,
@@ -345,6 +391,12 @@ pub fn run() {
             commands::ipc::history::get_file_history_command,
             commands::ipc::history::restore_history_version_command,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                browser::shutdown();
+                agent::tools::browse::stop_session();
+            }
+        });
 }

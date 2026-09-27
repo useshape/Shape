@@ -1,15 +1,298 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import type { RemixiconComponentType } from "@remixicon/react";
+import {
+    RiAddLine,
+    RiAlertLine,
+    RiLayoutBottomLine,
+    RiAlignCenter,
+    RiAlignJustify,
+    RiAlignLeft,
+    RiAlignRight,
+    RiAlignTop,
+    RiAlignVertically,
+    RiLayoutGridLine,
+    RiArrowDownLine,
+    RiArrowDownSLine,
+    RiArrowGoBackLine,
+    RiArrowGoForwardLine,
+    RiArrowLeftLine,
+    RiArrowLeftRightLine,
+    RiArrowLeftSLine,
+    RiArrowRightLine,
+    RiArrowRightSLine,
+    RiArrowUpDownLine,
+    RiArrowUpLine,
+    RiArrowUpSLine,
+    RiAttachment2,
+    RiBold,
+    RiBookmarkLine,
+    RiBugLine,
+    RiCalendarLine,
+    RiMessage3Fill,
+    RiCheckboxBlankCircleLine,
+    RiCheckboxBlankLine,
+    RiCheckboxCircleFill,
+    RiCheckboxLine,
+    RiCheckLine,
+    RiClipboardLine,
+    RiCloseCircleFill,
+    RiCloseLine,
+    RiCloudLine,
+    RiCloudOffLine,
+    RiGithubFill,
+    RiCodeLine,
+    RiCollapseDiagonalLine,
+    RiCommandLine,
+    RiWindow2Fill,
+    RiCornerDownLeftFill,
+    RiCpuLine,
+    RiCursorAiFill,
+    RiDatabase2Line,
+    RiDeleteBin6Fill,
+    RiDownloadLine,
+    RiEqualizerLine,
+    RiExpandDiagonalLine,
+    RiExternalLinkLine,
+    RiEyeLine,
+    RiEyeOffLine,
+    RiFileAddLine,
+    RiFileCopyLine,
+    RiFileDownloadLine,
+    RiFileLine,
+    RiFileTextLine,
+    RiFilter3Line,
+    RiFilterLine,
+    RiFlashlightLine,
+    RiWebhookFill,
+    RiFlowChart,
+    RiCrosshair2Line,
+    RiFolderAddLine,
+    RiFolder5Fill,
+    RiFolderOpenLine,
+    RiGitBranchLine,
+    RiGitCommitLine,
+    RiGitForkLine,
+    RiGitPullRequestLine,
+    RiChromeFill,
+    RiGlobalLine,
+    RiGroupLine,
+    RiHashtag,
+    RiHistoryLine,
+    RiScreenshotFill,
+    RiInboxLine,
+    RiSubtractLine,
+    RiInformationLine,
+    RiItalic,
+    RiKeyboardLine,
+    RiLightbulbLine,
+    RiLineChartLine,
+    RiLink,
+    RiLinkUnlink,
+    RiListCheck,
+    RiListCheck3,
+    RiListOrdered,
+    RiLoginBoxLine,
+    RiLogoutBoxLine,
+    RiMailLine,
+    RiMenuLine,
+    RiMicLine,
+    RiMoreLine,
+    RiNotification3Fill,
+    RiPaletteLine,
+    RiPencilLine,
+    RiDonutChartFill,
+    RiPlayFill,
+    RiPlugLine,
+    RiPriceTag3Line,
+    RiPulseLine,
+    RiQuestionLine,
+    RiRefreshLine,
+    RiResetRightLine,
+    RiSearchLine,
+    RiSettings3Line,
+    RiShieldCheckLine,
+    RiShieldLine,
+    RiShoppingBag3Line,
+    RiLayoutColumnLine,
+    RiSmartphoneLine,
+    RiSortDesc,
+    RiSoundModuleLine,
+    RiShapeFill,
+    RiSparkling2Fill,
+    RiShadowLine,
+    RiStarLine,
+    RiStickyNoteLine,
+    RiStopCircleLine,
+    RiStopFill,
+    RiStrikethrough,
+    RiUnderline,
+    RiSunLine,
+    RiTabletLine,
+    RiTerminalBoxLine,
+    RiTextSpacing,
+    RiThumbDownLine,
+    RiThumbUpLine,
+    RiTimeLine,
+    RiUploadCloud2Fill,
+    RiUploadLine,
+    RiUserAddLine,
+    RiUserLine,
+    type RemixiconComponentType,
+} from "@remixicon/react";
 import { cn } from "@/lib/utils";
+import type { SolarIconName } from "@/lib/icons/solar";
+
+export type { SolarIconName };
 
 /** Matches `--icon-md`. Call sites should omit `size` unless they must scale (avatar, favicon). */
 export const ICON_SIZE_MD = 17;
 export const ICON_SIZE_SM = 14;
 export const ICON_SIZE_XS = 12;
 
-/** Smaller glyphs need a heavier stroke so they stay readable. */
+const REMIX: Record<SolarIconName, RemixiconComponentType> = {
+    lightbulb: RiLightbulbLine,
+    magnifier: RiSearchLine,
+    "folder-open": RiFolderOpenLine,
+    folder: RiFolder5Fill,
+    "file-text": RiFileTextLine,
+    file: RiFileLine,
+    pen: RiPencilLine,
+    chrome: RiChromeFill,
+    global: RiGlobalLine,
+    "alt-arrow-right": RiArrowRightSLine,
+    "alt-arrow-down": RiArrowDownSLine,
+    "alt-arrow-left": RiArrowLeftSLine,
+    "alt-arrow-up": RiArrowUpSLine,
+    programming: RiTerminalBoxLine,
+    code: RiCodeLine,
+    soundwave: RiSoundModuleLine,
+    microphone: RiMicLine,
+    "stop-circle": RiStopCircleLine,
+    gallery: RiScreenshotFill,
+    paperclip: RiAttachment2,
+    "close-circle": RiCloseCircleFill,
+    close: RiCloseLine,
+    check: RiCheckLine,
+    "check-circle": RiCheckboxCircleFill,
+    "danger-triangle": RiAlertLine,
+    "clock-circle": RiTimeLine,
+    "plug-circle": RiPlugLine,
+    monitor: RiWindow2Fill,
+    copy: RiFileCopyLine,
+    "list-check": RiListCheck3,
+    "document-text": RiFileTextLine,
+    user: RiUserLine,
+    refresh: RiRefreshLine,
+    link: RiLink,
+    bolt: RiWebhookFill,
+    "cpu-bolt": RiCpuLine,
+    "magic-stick": RiSparkling2Fill,
+    "stars-minimalistic": RiShapeFill,
+    widget: RiLayoutGridLine,
+    eye: RiEyeLine,
+    "trash-bin-trash": RiDeleteBin6Fill,
+    play: RiPlayFill,
+    "download-minimalistic": RiDownloadLine,
+    settings: RiSettings3Line,
+    letter: RiMailLine,
+    "menu-dots": RiMoreLine,
+    "add-circle": RiAddLine,
+    sort: RiFilter3Line,
+    "chat-round-line": RiMessage3Fill,
+    notes: RiStickyNoteLine,
+    "document-add": RiFileAddLine,
+    "file-download": RiFileDownloadLine,
+    inbox: RiInboxLine,
+    "users-group-rounded": RiGroupLine,
+    calendar: RiCalendarLine,
+    hashtag: RiHashtag,
+    "shield-check": RiShieldCheckLine,
+    bookmark: RiBookmarkLine,
+    "git-branch": RiGitBranchLine,
+    "git-commit": RiGitCommitLine,
+    "git-diff": RiGitCommitLine,
+    "git-pull-request": RiGitPullRequestLine,
+    command: RiCommandLine,
+    "file-terminal": RiTerminalBoxLine,
+    "square-forward": RiExternalLinkLine,
+    "arrow-to-down-left": RiCornerDownLeftFill,
+    "align-bottom": RiLayoutBottomLine,
+    "align-horizontal-center": RiAlignCenter,
+    "align-horizontal-spacing": RiAlignJustify,
+    "align-left": RiAlignLeft,
+    "align-right": RiAlignRight,
+    "align-top": RiAlignTop,
+    "align-vertical-center": RiAlignVertically,
+    "arrow-down": RiArrowDownLine,
+    "undo-left": RiArrowGoBackLine,
+    "undo-right": RiArrowGoForwardLine,
+    "arrow-left": RiArrowLeftLine,
+    "arrow-right": RiArrowRightLine,
+    "sort-vertical": RiArrowUpDownLine,
+    "arrow-up": RiArrowUpLine,
+    "text-bold": RiBold,
+    "text-underline": RiUnderline,
+    box: RiCheckboxBlankLine,
+    palette: RiPaletteLine,
+    bug: RiBugLine,
+    record: RiCheckboxBlankCircleLine,
+    stop: RiStopFill,
+    "check-square": RiCheckboxLine,
+    clipboard: RiClipboardLine,
+    cloud: RiCloudLine,
+    "cloud-cross": RiCloudOffLine,
+    "code-square": RiGithubFill,
+    minimize: RiCollapseDiagonalLine,
+    sun: RiSunLine,
+    target: RiCrosshair2Line,
+    cursor: RiCursorAiFill,
+    database: RiDatabase2Line,
+    "pie-chart": RiDonutChartFill,
+    tuning: RiEqualizerLine,
+    maximize: RiExpandDiagonalLine,
+    "eye-closed": RiEyeOffLine,
+    filter: RiFilterLine,
+    flashlight: RiFlashlightLine,
+    routing: RiFlowChart,
+    "add-folder": RiFolderAddLine,
+    "text-field": RiTextSpacing,
+    "git-fork": RiGitForkLine,
+    history: RiHistoryLine,
+    "info-circle": RiInformationLine,
+    "text-italic": RiItalic,
+    keyboard: RiKeyboardLine,
+    "sidebar-code": RiLayoutColumnLine,
+    chart: RiLineChartLine,
+    "unlink-minimalistic": RiLinkUnlink,
+    checklist: RiListCheck,
+    list: RiListOrdered,
+    login: RiLoginBoxLine,
+    logout: RiLogoutBoxLine,
+    "hamburger-menu": RiMenuLine,
+    bell: RiNotification3Fill,
+    tag: RiPriceTag3Line,
+    pulse: RiPulseLine,
+    "question-circle": RiQuestionLine,
+    restart: RiResetRightLine,
+    "round-transfer-horizontal": RiArrowLeftRightLine,
+    layers: RiShadowLine,
+    shield: RiShieldLine,
+    bag: RiShoppingBag3Line,
+    smartphone: RiSmartphoneLine,
+    "sort-from-top-to-bottom": RiSortDesc,
+    "text-square": RiTextSpacing,
+    star: RiStarLine,
+    "text-cross": RiStrikethrough,
+    "minus-circle": RiSubtractLine,
+    tablet: RiTabletLine,
+    dislike: RiThumbDownLine,
+    like: RiThumbUpLine,
+    "cloud-upload": RiUploadCloud2Fill,
+    "upload-minimalistic": RiUploadLine,
+    "user-plus": RiUserAddLine,
+};
+
 function strokeForSize(size: number) {
     if (size <= 12) return 0.7;
     if (size <= 14) return 0.5;
@@ -18,28 +301,55 @@ function strokeForSize(size: number) {
     return 1.25;
 }
 
-/**
- * App chrome around a Remix glyph. Pass the real component from `@remixicon/react`
- * (`RiCloseLine`, `RiSideBarLine`, …) — not a website slug or string name.
- */
-export function Icon({
-    icon: Glyph,
+function RemixGlyph({
+    name,
     className,
-    size = ICON_SIZE_MD,
+    size,
     style,
 }: {
-    icon: RemixiconComponentType;
+    name: SolarIconName;
     className?: string;
-    size?: number;
+    size: number;
     style?: CSSProperties;
 }) {
+    const Glyph = REMIX[name] ?? RiQuestionLine;
     return (
         <Glyph
             size={size}
             strokeWidth={strokeForSize(size)}
-            className={cn("shape-icon shrink-0 rounded-xl", className)}
+            className={cn("shape-icon shrink-0 rounded-2xl", className)}
             style={{ ...style, ["--icon-size" as string]: `${size}px` }}
             aria-hidden
         />
     );
+}
+
+/** Remix glyph. `icon` is the app's icon name. */
+export function Icon({
+    icon,
+    className,
+    size = ICON_SIZE_MD,
+    style,
+}: {
+    icon: SolarIconName;
+    className?: string;
+    size?: number;
+    style?: CSSProperties;
+}) {
+    return <RemixGlyph name={icon} className={className} size={size} style={style} />;
+}
+
+/** Same Remix set, addressed by name. */
+export function SolarIcon({
+    name,
+    className,
+    size = ICON_SIZE_MD,
+    style,
+}: {
+    name: SolarIconName;
+    className?: string;
+    size?: number;
+    style?: CSSProperties;
+}) {
+    return <RemixGlyph name={name} className={className} size={size} style={style} />;
 }

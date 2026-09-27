@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine, RiPulseLine, RiRefreshLine } from "@remixicon/react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -48,7 +47,7 @@ export function Header({
                         aria-pressed={live}
                     >
                         <Icon
-                            icon={RiPulseLine}
+                            icon={"pulse"}
                             size={ICON_SIZE_SM}
                             className={live ? "text-success" : "text-text-muted"}
                         />
@@ -60,7 +59,7 @@ export function Header({
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-7 gap-1 px-2">
                             {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ?? "All runs"}
-                            <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40">
@@ -86,7 +85,7 @@ export function Header({
                     disabled={loadingRuns}
                     aria-label="Refresh"
                 >
-                    <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                    <Icon icon={"refresh"} size={ICON_SIZE_SM} />
                 </Button>
             </Tooltip>
         </GitChromeActions>

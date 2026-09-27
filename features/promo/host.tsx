@@ -1,13 +1,13 @@
 "use client";
 
-import { RiCloseLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
 import { useProjectState } from "@/lib/backend";
 import { isWebProject } from "@/features/detection/lib/lib";
 import catalog from "@/content/promo-cards.json";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import {
     loadSeenPromoIds,
     markPromoSeen,
@@ -25,30 +25,40 @@ function currentPage(pathname: string | null): string {
     return "chat";
 }
 
-function runAction(card: PromoCardDef) {
+function runAction(card: PromoCardDef, navigate: (href: string) => void) {
     const action = card.action;
     if (action.kind === "try" && action.event) {
         window.dispatchEvent(new Event(action.event));
         return;
     }
-    if (action.href) {
-        window.dispatchEvent(
-            new CustomEvent("shape-navigate", { detail: { href: action.href } }),
-        );
+    if (!action.href) return;
+    if (action.href.startsWith("http://") || action.href.startsWith("https://")) {
+        window.open(action.href, "_blank", "noopener,noreferrer");
+        return;
     }
+    navigate(action.href);
 }
 
 export function PromoCardHost() {
     const pathname = usePathname();
+    const router = useRouter();
     const { project_path } = useProjectState();
     const [web, setWeb] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [seen, setSeen] = useState<string[]>([]);
     const [dismissed, setDismissed] = useState<string | null>(null);
 
+    const [remoteCards, setRemoteCards] = useState<PromoCardDef[] | null>(null);
+
     useEffect(() => {
         setMounted(true);
         setSeen(loadSeenPromoIds());
+        void fetch(`${SHAPE_API_BASE}/api/promos`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data: { cards?: PromoCardDef[] } | null) => {
+                if (data?.cards?.length) setRemoteCards(data.cards);
+            })
+            .catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -66,7 +76,7 @@ export function PromoCardHost() {
     }, [project_path]);
 
     const page = currentPage(pathname);
-    const cards = (catalog as PromoCardsFile).cards ?? [];
+    const cards = remoteCards ?? (catalog as PromoCardsFile).cards ?? [];
 
     const card = useMemo(() => {
         if (!mounted) return null;
@@ -116,7 +126,7 @@ export function PromoCardHost() {
                         size="icon"
                         className="absolute text-text-foreground right-2.5 top-2.5"
                     >
-                        <Icon icon={RiCloseLine} />
+                        <Icon icon={"close"} />
                     </Button>
                 </div>
                 <div className="p-3">
@@ -130,7 +140,7 @@ export function PromoCardHost() {
                         size="lg"
                         className="w-full"
                         onClick={() => {
-                            if (card.action.kind === "try") runAction(card);
+                            runAction(card, (href) => router.push(href));
                             close();
                         }}
                     >

@@ -253,7 +253,6 @@ export default function Chat({
             onEditQueuedMessage={session.handleEditQueuedMessage}
             onRemoveQueuedMessage={session.handleRemoveQueuedMessage}
             variant={embedded || !isEmpty ? "default" : "empty"}
-            density={embedded ? "compact" : "auto"}
         />
     );
 

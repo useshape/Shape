@@ -46,6 +46,7 @@ pub fn get_chat_history(
 
         state.history.lock()?.clear();
         state.title.lock()?.take();
+        state.reset_title_meta();
         *state.history_summary.lock()? = None;
         *state.current_conversation_id.lock()? = None;
         *current_project_lock = proj_path;
@@ -109,6 +110,7 @@ pub fn get_conversations(
 pub fn clear_chat_history(state: tauri::State<'_, AgentState>) -> Result<(), AppError> {
     state.history.lock()?.clear();
     state.title.lock()?.take();
+    state.reset_title_meta();
     *state.history_summary.lock()? = None;
     *state.current_conversation_id.lock()? = None;
     state.clear_design_preview_state();
@@ -137,8 +139,10 @@ pub async fn restore_checkpoint(
             .or_else(|| state.current_conversation_id.lock().ok().and_then(|g| g.clone()));
         if turn_id.is_some() {
             logging::info("chat", "Restore/redo cancelling in-flight generation");
-            if let Ok(token) = state.cancellation_token.lock() {
-                token.cancel();
+            if let Some(id) = conv_id.as_deref() {
+                if let Some(token) = state.conversation_cancel_token(id) {
+                    token.cancel();
+                }
             }
             state.clear_in_flight();
             turn_id.zip(conv_id)
@@ -230,6 +234,7 @@ pub fn new_chat(
 
     state.history.lock()?.clear();
     state.title.lock()?.take();
+    state.reset_title_meta();
     *state.history_summary.lock()? = None;
     *state.current_conversation_id.lock()? = None;
     state.clear_design_preview_state();
@@ -277,12 +282,89 @@ pub fn load_conversation(
     *state.current_project.lock()? = Some(load_proj);
     let mut history = conv.history;
     history::collapse_duplicate_assistants(&mut history);
+    let user_turns = history.iter().filter(|m| m.role == "user").count() as u32;
     *state.history.lock()? = history;
     *state.title.lock()? = Some(conv.title);
+    let anchor = if conv.title_anchor_turns == 0 {
+        user_turns
+    } else {
+        conv.title_anchor_turns
+    };
+    state.set_title_meta(conv.title_locked, anchor);
     *state.current_conversation_id.lock()? = Some(id.clone());
     state.clear_design_preview_state();
     state.replace_file_checkpoints(checkpoints::load_checkpoints(&id));
 
+    Ok(())
+}
+
+#[tauri::command]
+pub fn rename_conversation(
+    id: String,
+    title: String,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let title = title.trim().to_string();
+    if title.is_empty() {
+        return Err(AppError::Message("Title cannot be empty".to_string()));
+    }
+    let proj_path = app_state
+        .0
+        .lock()?
+        .project_path
+        .clone()
+        .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
+        .unwrap_or_default();
+    let current = state.current_conversation_id.lock()?.clone();
+    if current.as_deref() == Some(id.as_str()) {
+        *state.title.lock()? = Some(title.clone());
+        let anchor = state.title_anchor_turns.lock().map(|g| *g).unwrap_or(0);
+        state.set_title_meta(true, anchor);
+        if !proj_path.is_empty() {
+            let _ = history::save_current_conversation(&state, &proj_path);
+        }
+        return Ok(());
+    }
+    let mut convs = state.conversations.lock()?;
+    if !convs.contains_key(&proj_path) {
+        convs.insert(proj_path.clone(), history::load_conversations(&proj_path));
+    }
+    if let Some(list) = convs.get_mut(&proj_path) {
+        if let Some(conv) = list.iter_mut().find(|c| c.id == id) {
+            conv.title = title;
+            conv.title_locked = true;
+            conv.timestamp = history::now_f64();
+        }
+        history::save_conversations(&proj_path, list);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_conversation_archived(
+    id: String,
+    archived: bool,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let proj_path = app_state
+        .0
+        .lock()?
+        .project_path
+        .clone()
+        .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
+        .unwrap_or_default();
+    let mut convs = state.conversations.lock()?;
+    if !convs.contains_key(&proj_path) {
+        convs.insert(proj_path.clone(), history::load_conversations(&proj_path));
+    }
+    if let Some(list) = convs.get_mut(&proj_path) {
+        if let Some(conv) = list.iter_mut().find(|c| c.id == id) {
+            conv.archived = archived;
+        }
+        history::save_conversations(&proj_path, list);
+    }
     Ok(())
 }
 
@@ -299,7 +381,7 @@ pub fn delete_conversation(
     }
     if let Some(list) = convs.get_mut(&proj_path) {
         list.retain(|c| c.id != id);
-        history::save_conversations(&proj_path, list);
+        history::save_conversations_removing(&proj_path, list, &id);
     }
     checkpoints::delete_checkpoints(&id);
     for j in journals::list_open_turn_journals()

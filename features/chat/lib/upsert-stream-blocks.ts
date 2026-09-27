@@ -95,7 +95,7 @@ export function upsertTaggedBlockInContent(content: string, chunk: string): stri
     }
   }
 
-  for (const tag of ["generated_svg", "generated_image"] as const) {
+  for (const tag of ["browse_session", "generated_svg", "generated_image"] as const) {
     const open = `<${tag}`;
     const close = `</${tag}>`;
     const start = chunk.indexOf(open);

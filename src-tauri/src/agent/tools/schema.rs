@@ -58,9 +58,12 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         update_todos(),
         screenshot_page(),
         inspect_runtime(),
+        browse(),
+        design_review(),
         generate_svg(),
         generate_image(),
         save_media(),
+        send_file(),
         ask_user(),
         finish(),
     ]);
@@ -80,6 +83,7 @@ fn ask_tools() -> Vec<Value> {
         plugin_search(),
         plugin_tools(),
         read_lints(),
+        send_file(),
         spawn_subagent(),
         ask_user(),
         finish(),
@@ -133,6 +137,22 @@ pub fn tools_for_mode_family_and_memory(
     if chat_memory_enabled {
         insert_before_finish(&mut tools, list_chats());
         insert_before_finish(&mut tools, read_chat());
+    }
+    tools
+}
+
+/// One tool list for the whole conversation. Mode, git status, and MCP servers
+/// must not add or remove tools: that invalidates the cached prefix.
+pub fn stable_tools(family: ModelFamily) -> Vec<Value> {
+    let mut tools = all_tools_for_family(family);
+    for tool in [
+        list_chats(),
+        read_chat(),
+        render_design_previews(),
+        mcp_search(),
+        mcp_call(),
+    ] {
+        insert_before_finish(&mut tools, tool);
     }
     tools
 }
@@ -249,7 +269,7 @@ fn grep() -> Value {
 fn web_search() -> Value {
     tool(
         "web_search",
-        "Search the public web for documentation, APIs, or recent information. Use when the answer requires up-to-date or external knowledge.",
+        "Search the public web. When the user wants something on a site, search first and then browse open the exact result URL. Do not make the browser hunt through menus for a page search can name.",
         json!({
             "type": "object",
             "properties": {
@@ -708,7 +728,7 @@ fn render_design_previews() -> Value {
 fn plugin_list() -> Value {
     tool(
         "plugin_list",
-        "List first-party plugins (Slack, GitHub, Linear, Notion, etc.) and whether the user has connected them. Call this before plugin_tools or plugin_run.",
+        "List connected Composio plugins (Slack, GitHub, Linear, Notion, Gmail, Jira, Google Drive, and the rest of the catalog) and whether the user has connected them. Call this before plugin_tools or plugin_run.",
         json!({
             "type": "object",
             "properties": {},
@@ -795,6 +815,22 @@ fn generate_image() -> Value {
     )
 }
 
+fn send_file() -> Value {
+    tool(
+        "send_file",
+        "Hand the user a project file as a download card in chat. Use when they ask you to send, share, or give them a file. Does not write or change the project. Do not paste the file contents into the reply.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project file to send, e.g. public/hero.png or notes/brief.pdf."},
+                "title": {"type": "string", "description": "Short title on the card. Defaults to the filename."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn save_media() -> Value {
     tool(
         "save_media",
@@ -846,6 +882,92 @@ Needs a running local preview or debug port. Pass `path` (e.g. /stats) or `url` 
                 "path": {"type": "string", "description": "Route on the local preview, e.g. /stats or /dashboard."},
                 "url": {"type": "string", "description": "Full local URL (http://localhost:5173/stats). Loopback only."}
             },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn mcp_search() -> Value {
+    tool(
+        "mcp_search",
+        "Find tools on connected MCP servers. Returns names, descriptions, and argument schemas. Call this before mcp_call. Individual MCP tools are not listed up front, so this catalog can change without breaking the session.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Words to match against tool name or description. Empty lists a short catalog."},
+                "limit": {"type": "integer", "description": "Max tools to return (default 6, max 8)."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn mcp_call() -> Value {
+    tool(
+        "mcp_call",
+        "Run one MCP tool by the qualified name from mcp_search. Pass that tool's arguments as `arguments`.",
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Qualified tool name from mcp_search."},
+                "arguments": {"type": "object", "description": "Arguments for that tool.", "additionalProperties": true}
+            },
+            "required": ["name"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn browse() -> Value {
+    tool(
+        "browse",
+        "Drive the page shown in the chat. Pair with web_search: open the URL search found instead of clicking through the site. open and act return element ids, and links include href — open that href instead of clicking the link. act is for buttons, menus, and fields. If the site fails to load, Shape shows its own error — do not click it.",
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "open, act, observe, click, type, scroll, script, devtools, shot, or stop. open and act already list element ids."},
+                "url": {"type": "string", "description": "Page to open. Required for action open."},
+                "target": {"type": "number", "description": "Element id from observe. Required for action act."},
+                "method": {"type": "string", "description": "For act: click or type. Defaults to click."},
+                "x": {"type": "number", "description": "Horizontal position, 0 (left) to 100 (right). Only for action click."},
+                "y": {"type": "number", "description": "Vertical position, 0 (top) to 100 (bottom). Only for action click."},
+                "text": {"type": "string", "description": "Text to insert. Required for action type."},
+                "dy": {"type": "number", "description": "Scroll delta in pixels. Positive scrolls down."},
+                "script": {"type": "string", "description": "JavaScript evaluated in the page. Required for action script."}
+            },
+            "required": ["action"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn design_review() -> Value {
+    tool(
+        "design_review",
+        "Send several persona agents through a live site at the same time, each in its own isolated browser session, and get back how the experience landed for them — the browser version of the adversarial review. Use it when the user asks for UX, UI, conversion, or marketing feedback on a running site, or in design mode after a redesign. Personas must be accurate, specific people with a real reason to be there (e.g. a parent buying a specific stroller on a budget, a CTO evaluating the pricing page), not generic 'users'. Results show as cards with a screenshot and a browser view; do not paste the transcripts back into the chat — summarize the shared findings and fix the top issues.",
+        json!({
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Site to test, usually the local dev server."},
+                "personas": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Short handle, e.g. Maya, budget parent."},
+                            "profile": {"type": "string", "description": "Who they are: role, context, device habits, patience, what they compare against."},
+                            "goal": {"type": "string", "description": "The one concrete thing they came to do on this site."}
+                        },
+                        "required": ["name", "profile", "goal"],
+                        "additionalProperties": false
+                    }
+                },
+                "steps": {"type": "number", "description": "Moves each persona may make, 3–10. Default 6."}
+            },
+            "required": ["url", "personas"],
             "additionalProperties": false
         }),
     )
@@ -954,6 +1076,18 @@ mod tests {
         let c = tool_names(&code);
         assert!(v.contains(&"render_design_previews".to_string()));
         assert!(!c.contains(&"render_design_previews".to_string()));
+    }
+
+    #[test]
+    fn stable_tools_ignore_mode() {
+        let code = tool_names(&stable_tools(ModelFamily::OpenAi));
+        assert!(code.contains(&"apply_patch".to_string()));
+        assert!(code.contains(&"read_file".to_string()));
+        assert!(code.contains(&"mcp_search".to_string()));
+        assert!(code.contains(&"mcp_call".to_string()));
+        assert!(code.contains(&"list_chats".to_string()));
+        assert!(code.contains(&"render_design_previews".to_string()));
+        assert_eq!(code, tool_names(&stable_tools(ModelFamily::OpenAi)));
     }
 
     #[test]

@@ -1,16 +1,16 @@
 "use client";
 
-import { RiCheckLine, RiClipboardLine } from "@remixicon/react";
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
 import { ChatLinkChip } from "./link-chip";
+import { Button } from "@/components/ui/button";
 
 function CodeBlock({ language, code, ...rest }: { language: string; code: string; [k: string]: unknown }) {
     const [copied, setCopied] = useState(false);
@@ -23,17 +23,17 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
     };
 
     return (
-        <div className="my-1 overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
-            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+        <div className="my-1 overflow-hidden squircle-2xl bg-surface-3">
+            <div className="flex items-center justify-between gap-2 pl-3 pr-2 py-1.5">
                 <span className="text-sm font-medium text-text-muted">{language}</span>
-                <button
-                    type="button"
+                <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={copy}
                     aria-label={copied ? "Copied" : "Copy code"}
-                    className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={copied ? RiCheckLine : RiClipboardLine} />
-                </button>
+                    <Icon icon={copied ? "check" : "clipboard"} size={ICON_SIZE_MD} />
+                </Button>
             </div>
             <SyntaxHighlighter
                     style={getShapeSyntaxTheme()}
@@ -60,7 +60,9 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             if (codeContent === "undefined") return null;
 
             if (match) {
-                return <CodeBlock language={match[1]!} code={codeContent} {...rest} />;
+                const language = match[1]!;
+                if (language === "chart" || language === "insight" || language === "stats" || language === "filter-table" || language === "records") return null;
+                return <CodeBlock language={language} code={codeContent} {...rest} />;
             }
 
             const isBlock = codeContent.includes("\n");
@@ -88,13 +90,13 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
                 const name = (children as string).split(/[\\/]/).pop() || (children as string);
                 return (
                     <span
-                        className="mx-0.5 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-subtle bg-panel px-2 py-0.5 align-middle font-sans chat-text text-text-primary transition-colors hover:bg-panel-hover"
+                        className="mx-0.5 inline-flex cursor-pointer items-center gap-1.5 squircle-lg  bg-panel-hover px-2 py-0.5 align-middle font-sans chat-text text-text-primary transition-colors hover:bg-panel-hover"
                         title={children as string}
                         onClick={() => {
                             void openProjectFile(children as string, name);
                         }}
                     >
-                        <FileIcon name={name} className="h-3.5 w-3.5" />
+                        <FileIcon name={name} className="h-4 w-4" />
                         {name}
                     </span>
                 );
@@ -102,7 +104,7 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
 
             return (
                 <code
-                    className="rounded border border-border-subtle bg-panel px-1.5 py-0.5 font-mono chat-text text-accent-text"
+                    className="squircle-lg bg-panel-hover px-1.5 py-0.5 font-mono chat-text text-accent-text"
                     {...rest}
                 >
                     {children}
@@ -142,12 +144,12 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             <ChatLinkChip href={href}>{children}</ChatLinkChip>
         ),
         blockquote: ({ children }: { children?: React.ReactNode }) => (
-            <blockquote className="my-1 rounded-r border-l-2 border-accent/50 bg-panel/30 py-0.5 pl-3 font-sans chat-text font-normal italic text-text-muted">
+            <blockquote className="rounded-r border-l-2 border-base/50 bg-panel/30 pl-3 font-sans chat-text font-normal italic text-text-muted">
                 {children}
             </blockquote>
         ),
         table: ({ children }: { children?: React.ReactNode }) => (
-            <div className="my-2 overflow-x-auto rounded-xl border border-border-subtle">
+            <div className="my-2 overflow-x-auto squircle-2xl bg-surface-3">
                 <table className="w-full min-w-50 border-collapse text-left">{children}</table>
             </div>
         ),
@@ -155,10 +157,10 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             <thead className="bg-surface-3">{children}</thead>
         ),
         th: ({ children }: { children?: React.ReactNode }) => (
-            <th className="border-b border-border-subtle px-2.5 py-1.5 font-sans chat-text font-medium text-text-primary">{children}</th>
+            <th className="px-2.5 py-1.5 font-sans chat-text font-medium text-text-primary">{children}</th>
         ),
         td: ({ children }: { children?: React.ReactNode }) => (
-            <td className="border-b border-border-subtle px-2.5 py-1.5 font-sans chat-text text-text-secondary">{children}</td>
+            <td className="my-2 px-2.5 py-1.5 font-sans chat-text text-text-secondary">{children}</td>
         ),
         input: (props: React.InputHTMLAttributes<HTMLInputElement>) => {
             if (props.type !== "checkbox") return <input {...props} />;

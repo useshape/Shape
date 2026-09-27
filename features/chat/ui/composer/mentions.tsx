@@ -1,10 +1,8 @@
 ﻿"use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiArrowLeftLine, RiArrowRightSLine, RiChat3Line, RiCodeLine, RiCommandLine, RiFileLine, RiFolderLine, RiGitBranchLine, RiGlobalLine, RiPaletteLine, RiPuzzle2Line, RiSearchLine, RiTerminalBoxLine, RiApps2Line } from "@remixicon/react";
 import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
 import { SearchInput } from "@/components/ui/search";
@@ -24,18 +22,18 @@ type CategoryId = "files" | "code" | "docs" | "terminals" | "chats" | "branch" |
 const CATEGORIES: {
     id: Exclude<CategoryId, null>;
     label: string;
-    icon: RemixiconComponentType;
+    icon: SolarIconName;
 }[] = [
-    { id: "files", label: "Files & Folders", icon: RiFolderLine },
-    { id: "code", label: "Code", icon: RiCodeLine },
-    { id: "docs", label: "Docs", icon: RiFileLine },
-    { id: "branch", label: "Git", icon: RiGitBranchLine },
-    { id: "chats", label: "Past Chats", icon: RiChat3Line },
-    { id: "plugins", label: "Plugins", icon: RiApps2Line },
-    { id: "mcp", label: "MCP Servers", icon: RiPuzzle2Line },
-    { id: "terminals", label: "Terminals", icon: RiTerminalBoxLine },
-    { id: "browser", label: "Browser", icon: RiGlobalLine },
-    { id: "design", label: "Design", icon: RiPaletteLine },
+    { id: "files", label: "Files & Folders", icon: "folder" },
+    { id: "code", label: "Code", icon: "code" },
+    { id: "docs", label: "Docs", icon: "file" },
+    { id: "branch", label: "Git", icon: "git-branch" },
+    { id: "chats", label: "Past Chats", icon: "chat-round-line" },
+    { id: "plugins", label: "Plugins", icon: "widget" },
+    { id: "mcp", label: "MCP Servers", icon: "widget" },
+    { id: "terminals", label: "Terminals", icon: "programming" },
+    { id: "browser", label: "Browser", icon: "global" },
+    { id: "design", label: "Design", icon: "palette" },
 ];
 
 function pathDir(path: string): string {
@@ -431,7 +429,7 @@ export function MentionPicker({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setActiveCategory(null)}
                 >
-                    <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
+                    <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
                     {CATEGORIES.find((c) => c.id === activeCategory)?.label ?? "Back"}
                 </button>
             ) : null}
@@ -465,7 +463,7 @@ export function MentionPicker({
                                         className="rounded-sm"
                                     />
                                 ) : (
-                                    <Icon icon={RiCommandLine} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
+                                    <Icon icon={"command"} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
                                 )}
                                 <span className="min-w-0 flex-1 truncate font-medium">{workflowSlashToken(w)}</span>
                                 <span className="ml-auto max-w-[50%] truncate text-sm text-text-muted">{w.name}</span>
@@ -511,24 +509,24 @@ export function MentionPicker({
                             <Icon
                                 icon={
                                     item.kind === "codebase"
-                                        ? RiSearchLine
+                                        ? "magnifier"
                                         : item.kind === "selection"
-                                          ? RiCodeLine
+                                          ? "code"
                                           : item.kind === "design"
-                                            ? (designTokenById(item.id || item.path)?.icon ?? RiPaletteLine)
+                                            ? (designTokenById(item.id || item.path)?.icon ?? "palette")
                                             : item.kind === "chat"
-                                              ? RiChat3Line
+                                              ? "chat-round-line"
                                               : item.kind === "terminal"
-                                                ? RiTerminalBoxLine
+                                                ? "programming"
                                                 : item.kind === "branch"
-                                                  ? RiGitBranchLine
+                                                  ? "git-branch"
                                                   : item.kind === "browser"
-                                                    ? RiGlobalLine
+                                                    ? "global"
                                                     : item.kind === "mcp"
-                                                      ? RiPuzzle2Line
-                                                      : item.kind === "plugin"
-                                                        ? RiApps2Line
-                                                        : RiFileLine
+                                                      ? "widget"
+                                                      : item.kind === "element"
+                                                        ? "target"
+                                                        : "file"
                                 }
                                 className="shrink-0 text-text-muted"
                                 size={ICON_SIZE_SM}
@@ -560,7 +558,7 @@ export function MentionPicker({
                             >
                                 <Icon icon={cat.icon} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
                                 <span className="flex-1 font-medium">{cat.label}</span>
-                                <Icon icon={RiArrowRightSLine} className="text-text-muted" size={ICON_SIZE_SM} />
+                                <Icon icon={"alt-arrow-right"} className="text-text-muted" size={ICON_SIZE_SM} />
                             </button>
                         ))}
                     </>

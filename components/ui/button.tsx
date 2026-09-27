@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiLoader4Line } from "@remixicon/react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Arc } from "loading-dev";
+import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 export type ButtonVariant =
@@ -83,13 +82,7 @@ export function ButtonSpinner({
 }
 
 function LoadingGlyph({ size }: { size: ButtonSize }) {
-    return (
-        <Icon
-            icon={RiLoader4Line}
-            size={size === "lg" ? 18 : ICON_SIZE_SM}
-            className="animate-spin"
-        />
-    );
+    return <Arc size={size === "lg" ? 18 : 14} />;
 }
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -100,7 +93,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
     loading?: boolean;
     selected?: boolean;
     block?: boolean;
-    icon?: RemixiconComponentType;
+    icon?: SolarIconName;
     count?: number;
     countSrText?: string;
     label?: boolean;
