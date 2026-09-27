@@ -1,4 +1,4 @@
-![Shape logo](./public/logos/logo.svg)
+<img src="./public/logos/logo.svg" alt="Shape logo" width="68" />
 
 ## The desktop IDE for agentic software
 
@@ -44,10 +44,11 @@ For more, see the [user docs](https://useshape.org/docs/introduction/quick-start
 
 # Stack
 
-* [TypeScript](https://www.typescriptlang.org/)
-* [React](https://react.dev/)
-* [Next.js](https://nextjs.org/) (App Router)
-* [Tauri 2](https://v2.tauri.app/) + [Rust](https://www.rust-lang.org/)
+* <img src="https://cdn.simpleicons.org/typescript/3178C6" width="16" height="16" /> [TypeScript](https://www.typescriptlang.org/)
+* <img src="https://cdn.simpleicons.org/react/61DAFB" width="16" height="16" /> [React](https://react.dev/)
+* <img src="https://cdn.simpleicons.org/nextdotjs/000000" width="16" height="16" /> [Next.js](https://nextjs.org/) (App Router)
+* <img src="https://cdn.simpleicons.org/tauri/FFC131" width="16" height="16" /> [Tauri 2](https://v2.tauri.app/) + <img src="https://cdn.simpleicons.org/rust/DEA584" width="16" height="16" /> [Rust](https://www.rust-lang.org/)
+
 
 
 # Contributing
