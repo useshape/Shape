@@ -1,6 +1,5 @@
 "use client";
 
-import { RiBold, RiCloseLine, RiCodeLine, RiItalic, RiListCheck, RiListOrdered, RiStrikethrough } from "@remixicon/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -89,6 +88,7 @@ export function MarkdownToolbar({
     onRectChange,
 }: MarkdownToolbarProps) {
     const panelRef = useRef<HTMLDivElement>(null);
+    const holdRef = useRef(false);
     const [position, setPosition] = useState({ top: 0, left: 0 });
     const [liveRect, setLiveRect] = useState(selection.rect);
     const { rewrite, loading, loggedIn } = useTextRewrite();
@@ -99,8 +99,10 @@ export function MarkdownToolbar({
 
     useEffect(() => {
         const sync = () => {
+            const menuOpen = Boolean(document.querySelector("[role='menu'], [data-radix-popper-content-wrapper]"));
             const next = readLiveSelectionRect();
             if (!next) {
+                if (holdRef.current || menuOpen) return;
                 onClose();
                 return;
             }
@@ -149,7 +151,16 @@ export function MarkdownToolbar({
             ref={panelRef}
             className="fixed z-710 flex items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-3 px-1 py-1 shadow-xl"
             style={{ top: position.top, left: position.left }}
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onMouseDown={(e) => {
+                holdRef.current = true;
+                e.preventDefault();
+                e.stopPropagation();
+            }}
+            onMouseUp={() => {
+                window.setTimeout(() => {
+                    holdRef.current = false;
+                }, 250);
+            }}
             onClick={(e) => e.stopPropagation()}
         >
             <Tooltip content={loggedIn ? "AI rewrite" : "Sign in to use AI"}>
@@ -200,29 +211,29 @@ export function MarkdownToolbar({
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Bold" onClick={() => onFormat("bold")}>
-                <Icon icon={RiBold} />
+                <Icon icon={"text-bold"} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Italic" onClick={() => onFormat("italic")}>
-                <Icon icon={RiItalic} />
+                <Icon icon={"text-italic"} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Strikethrough" onClick={() => onFormat("strike")}>
-                <Icon icon={RiStrikethrough} />
+                <Icon icon={"text-cross"} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Inline code" onClick={() => onFormat("code")}>
-                <Icon icon={RiCodeLine} />
+                <Icon icon={"code"} />
             </Button>
 
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Bullet list" onClick={() => onList(false)}>
-                <Icon icon={RiListCheck} />
+                <Icon icon={"checklist"} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Numbered list" onClick={() => onList(true)}>
-                <Icon icon={RiListOrdered} />
+                <Icon icon={"list"} />
             </Button>
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 ml-0.5" title="Close" onClick={onClose}>
-                <Icon icon={RiCloseLine} />
+                <Icon icon={"close"} />
             </Button>
         </div>
     );

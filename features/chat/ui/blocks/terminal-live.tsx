@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiInformationLine, RiMoreLine, RiTerminalBoxLine } from "@remixicon/react";
 /**
  * Live terminal command UI for the chat transcript.
  *
@@ -238,7 +237,7 @@ function TerminalCommandMenu({ command }: { command: string }) {
                     aria-label="Command options"
                     className="rounded p-1 text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={RiMoreLine} />
+                    <Icon icon={"menu-dots"} />
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-76">
@@ -256,7 +255,7 @@ function TerminalCommandMenu({ command }: { command: string }) {
                         >
                             <span className="flex w-full items-center gap-2 text-sm text-text-primary">
                                 <span className="flex-1">{opt.label}</span>
-                                {selected ? <Icon icon={RiCheckLine} /> : null}
+                                {selected ? <Icon icon={"check"} /> : null}
                             </span>
                             <span className="text-text-muted">{opt.description}</span>
                         </DropdownMenuItem>
@@ -328,7 +327,7 @@ function TerminalCommandRow({
                 ) : null}
                 {canExpand ? (
                     <Icon
-                        icon={RiArrowRightSLine}
+                        icon={"alt-arrow-right"}
                         className={cn(
                             "shrink-0 text-text-disabled transition-transform duration-200",
                             expanded && "rotate-90",
@@ -369,7 +368,7 @@ function AutoRunModePicker({ disabled }: { disabled?: boolean }) {
                 >
                     {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
                         ?? "Ask every time"}
-                    <Icon icon={RiArrowDownSLine} className="opacity-70" />
+                    <Icon icon={"alt-arrow-down"} className="opacity-70" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64">
@@ -388,7 +387,7 @@ function AutoRunModePicker({ disabled }: { disabled?: boolean }) {
                                 <span className="text-sm text-text-primary">{opt.label}</span>
                                 <span className="text-xs text-text-muted leading-snug">{opt.description}</span>
                             </span>
-                            {selected ? <Icon icon={RiCheckLine} className="mt-0.5 shrink-0" /> : null}
+                            {selected ? <Icon icon={"check"} className="mt-0.5 shrink-0" /> : null}
                         </DropdownMenuItem>
                     );
                 })}
@@ -417,13 +416,13 @@ export function CommandApprovalCard({
 }) {
     return (
         <ApprovalCard
-            icon={<Icon icon={RiTerminalBoxLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />}
+            icon={<Icon icon={"programming"} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />}
             title={
                 <span className="inline-flex min-w-0 items-center gap-1.5">
                     <span>Run command</span>
                     {reason ? (
                         <Tooltip content={reason} side="top">
-                            <Icon icon={RiInformationLine} className="shrink-0 text-text-disabled" size={ICON_SIZE_SM} />
+                            <Icon icon={"info-circle"} className="shrink-0 text-text-disabled" size={ICON_SIZE_SM} />
                         </Tooltip>
                     ) : null}
                 </span>

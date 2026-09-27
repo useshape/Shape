@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowRightSLine, RiGithubFill, RiTerminalBoxLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -140,7 +139,7 @@ export function JobsPanel({
                                     onClick={() => onToggleJob(job.id)}
                                 >
                                     <Icon
-                                        icon={RiArrowRightSLine}
+                                        icon={"alt-arrow-right"}
                                         className={cn(
                                             "mt-0.5 shrink-0 text-text-muted transition-transform duration-200 ease-[var(--ease-out)]",
                                             open && "rotate-90",
@@ -193,7 +192,7 @@ export function JobsPanel({
                                             className="gap-1"
                                             onClick={() => onViewLogs(job.id)}
                                         >
-                                            <Icon icon={RiTerminalBoxLine} />
+                                            <Icon icon={"programming"} />
                                             View logs
                                         </Button>
                                         {job.html_url ? (
@@ -203,7 +202,7 @@ export function JobsPanel({
                                                 className="gap-1"
                                                 onClick={() => onOpenUrl(job.html_url)}
                                             >
-                                                <Icon icon={RiGithubFill} />
+                                                <Icon icon={"code-square"} />
                                                 GitHub
                                             </Button>
                                         ) : null}

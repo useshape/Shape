@@ -1,6 +1,5 @@
 "use client";
 
-import { RiFolderLine, RiGithubFill, RiTerminalBoxLine } from "@remixicon/react";
 import * as React from "react";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import { commands } from "@/lib/backend";
@@ -36,14 +35,14 @@ export function WelcomeOpenDialog({
             id: entry.path,
             label: getRepoName(entry.path),
             description: entry.path,
-            icon: RiFolderLine,
+            icon: "folder" as const,
         }));
         return [
             ...recent,
             {
                 id: "__browse__",
                 label: "Browse...",
-                icon: RiFolderLine,
+                icon: "folder" as const,
             },
         ];
     }, [recentFolders]);
@@ -126,7 +125,7 @@ export function WelcomeCloneDialog({
         {
             id: "__github__",
             label: "Clone from GitHub",
-            icon: RiGithubFill,
+            icon: "code-square",
             hint: "remote sources",
         },
     ];
@@ -145,7 +144,7 @@ export function WelcomeCloneDialog({
                 id: parent,
                 label: getRepoName(parent) || parent,
                 description: parent,
-                icon: RiFolderLine,
+                icon: "folder" as const,
             };
         });
         // Dedupe parents
@@ -157,7 +156,7 @@ export function WelcomeCloneDialog({
         });
         return [
             ...unique,
-            { id: "__browse__", label: "Browse...", icon: RiFolderLine },
+            { id: "__browse__", label: "Browse...", icon: "folder" as const },
         ];
     }, [recentFolders]);
 
@@ -255,7 +254,7 @@ export function WelcomeSshDialog({
         {
             id: "__add__",
             label: "+ Add new host...",
-            icon: RiTerminalBoxLine,
+            icon: "programming",
         },
     ];
 

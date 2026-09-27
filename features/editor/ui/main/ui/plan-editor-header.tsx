@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowRightSLine, RiFileTextLine } from "@remixicon/react";
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -15,7 +14,46 @@ function modKeyLabel(): string {
     return /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
 }
 
-export function PlanEditorHeader({ path }: { path: string }) {
+export function MarkdownViewSwitch({
+    raw,
+    onRawChange,
+}: {
+    raw: boolean;
+    onRawChange: (raw: boolean) => void;
+}) {
+    return (
+        <div className="flex items-center rounded-md bg-surface-1 p-0.5">
+            <Button
+                type="button"
+                variant={raw ? "ghost" : "secondary"}
+                size="xs"
+                className="h-6 px-2 font-normal"
+                onClick={() => onRawChange(false)}
+            >
+                Preview
+            </Button>
+            <Button
+                type="button"
+                variant={raw ? "secondary" : "ghost"}
+                size="xs"
+                className="h-6 px-2 font-normal"
+                onClick={() => onRawChange(true)}
+            >
+                Raw
+            </Button>
+        </div>
+    );
+}
+
+export function PlanEditorHeader({
+    path,
+    raw = false,
+    onRawChange,
+}: {
+    path: string;
+    raw?: boolean;
+    onRawChange?: (raw: boolean) => void;
+}) {
     const { isLoading } = useChatStreamOptional();
     const [checking, setChecking] = React.useState(false);
     const fileName = path.split(/[\\/]/).pop() || "plan.md";
@@ -52,11 +90,12 @@ export function PlanEditorHeader({ path }: { path: string }) {
         <div className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-border-subtle bg-editor px-3 min-h-[36px]">
             <div className="flex min-w-0 items-center gap-1.5 text-sm">
                 <span className="shrink-0 text-text-muted">Plans</span>
-                <Icon icon={RiArrowRightSLine} className="shrink-0 text-text-disabled" />
-                <Icon icon={RiFileTextLine} className="shrink-0 text-text-muted" />
+                <Icon icon={"alt-arrow-right"} className="shrink-0 text-text-disabled" />
+                <Icon icon={"file-text"} className="shrink-0 text-text-muted" />
                 <span className="truncate font-mono text-text-secondary">{fileName}</span>
             </div>
             <div className="flex min-w-0 items-center gap-2">
+                {onRawChange ? <MarkdownViewSwitch raw={raw} onRawChange={onRawChange} /> : null}
                 <Button
                     type="button"
                     disabled={isLoading || checking}

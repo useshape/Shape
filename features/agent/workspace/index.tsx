@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjectState } from "@/lib/backend";
 import { EditorViewProvider, EditorSplitProvider } from "@/core/providers/editor";
 import { WorkspaceTabs } from "./tabs";
@@ -33,27 +33,38 @@ export function AgentWorkspace({
 }) {
     const { active_file } = useProjectState();
     const [tabs, setTabs] = useState<WorkspaceTab[]>(DEFAULT_TABS);
-    const [activeId, setActiveId] = useState("changes");
-    const [nav, setNav] = useState<string[]>(["changes"]);
-    const [navIndex, setNavIndex] = useState(0);
+    const [activeId, setActiveId] = useState("graph");
+
+    // Tab mutations read the latest list synchronously so a new tab and its
+    // active id always agree (state updaters run twice in dev and must be pure).
+    const tabsRef = useRef(tabs);
+    const activeIdRef = useRef(activeId);
+    const onExpandRef = useRef(onExpand);
+    useEffect(() => {
+        onExpandRef.current = onExpand;
+    }, [onExpand]);
 
     const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
 
+    const commitTabs = useCallback((next: WorkspaceTab[], activate: string) => {
+        tabsRef.current = next;
+        activeIdRef.current = activate;
+        setTabs(next);
+        setActiveId(activate);
+    }, []);
+
     const select = useCallback((id: string) => {
+        activeIdRef.current = id;
         setActiveId(id);
-        setNav((prev) => {
-            const last = prev[navIndex];
-            if (last === id) return prev;
-            const next = prev.slice(0, navIndex + 1);
-            next.push(id);
-            setNavIndex(next.length - 1);
-            return next;
-        });
-    }, [navIndex]);
+    }, []);
+
+    const reorder = useCallback((next: WorkspaceTab[]) => {
+        tabsRef.current = next;
+        setTabs(next);
+    }, []);
 
     const addTab = useCallback((kind: TabKind, opts?: { expand?: boolean }) => {
         if (kind === "plan" || kind === "file" || kind === "diff" || kind === "agents") return;
-        const expand = Boolean(opts?.expand);
         const title =
             kind === "files"
                 ? "Files"
@@ -64,102 +75,93 @@ export function AgentWorkspace({
                     : kind === "browser"
                       ? "Browser"
                       : "Changes";
-        const tabId = kind;
-        setTabs((prev) => {
-            const existing = prev.find((t) => t.kind === kind);
-            if (existing) {
-                setActiveId(existing.id);
-                return prev;
-            }
-            setActiveId(tabId);
-            return [...prev, { id: tabId, kind, title }];
-        });
-        if (expand) onExpand();
-    }, [onExpand]);
+        const prev = tabsRef.current;
+        const existing = prev.find((t) => t.kind === kind);
+        if (existing) commitTabs(prev, existing.id);
+        else commitTabs([...prev, { id: kind, kind, title }], kind);
+        if (opts?.expand) onExpandRef.current();
+    }, [commitTabs]);
 
     const openFile = useCallback(
         (path: string) => {
-            onExpand();
-            const name = path.split(/[\\/]/).pop() || path;
-            setTabs((prev) => {
-                const existing = prev.find((t) => t.kind === "file" && t.path === path);
-                if (existing) {
-                    setActiveId(existing.id);
-                    return prev;
-                }
-                const tab: WorkspaceTab = {
-                    id: uid("file"),
-                    kind: "file",
-                    title: name,
-                    path,
-                };
-                setActiveId(tab.id);
-                return [...prev, tab];
-            });
+            onExpandRef.current();
+            const prev = tabsRef.current;
+            const existing = prev.find((t) => t.kind === "file" && t.path === path);
+            if (existing) {
+                commitTabs(prev, existing.id);
+                return;
+            }
+            const tab: WorkspaceTab = {
+                id: uid("file"),
+                kind: "file",
+                title: path.split(/[\\/]/).pop() || path,
+                path,
+            };
+            commitTabs([...prev, tab], tab.id);
         },
-        [onExpand],
+        [commitTabs],
     );
 
     const openDiff = useCallback(
         (info: FileDiffTabInfo) => {
-            onExpand();
-            const name = info.path.split(/[\\/]/).pop() || info.path;
-            setTabs((prev) => {
-                const existing = prev.find((t) => t.kind === "diff" && t.id === info.id);
-                if (existing) {
-                    setActiveId(existing.id);
-                    return prev.map((t) => (t.id === existing.id ? { ...t, diff: info } : t));
-                }
-                const tab: WorkspaceTab = {
-                    id: info.id,
-                    kind: "diff",
-                    title: name,
-                    path: info.path,
-                    diff: info,
-                };
-                setActiveId(tab.id);
-                return [...prev, tab];
-            });
+            onExpandRef.current();
+            const prev = tabsRef.current;
+            const existing = prev.find((t) => t.kind === "diff" && t.id === info.id);
+            if (existing) {
+                commitTabs(
+                    prev.map((t) => (t.id === existing.id ? { ...t, diff: info } : t)),
+                    existing.id,
+                );
+                return;
+            }
+            const tab: WorkspaceTab = {
+                id: info.id,
+                kind: "diff",
+                title: info.path.split(/[\\/]/).pop() || info.path,
+                path: info.path,
+                diff: info,
+            };
+            commitTabs([...prev, tab], tab.id);
         },
-        [onExpand],
+        [commitTabs],
     );
 
     const openPlan = useCallback(
         (path: string, title: string, markdown?: string) => {
-            onExpand();
-            setTabs((prev) => {
-                const existing = prev.find((t) => t.kind === "plan" && t.path === path);
-                if (existing) {
-                    setActiveId(existing.id);
-                    return prev.map((t) =>
+            onExpandRef.current();
+            const prev = tabsRef.current;
+            const existing = prev.find((t) => t.kind === "plan" && t.path === path);
+            if (existing) {
+                commitTabs(
+                    prev.map((t) =>
                         t.id === existing.id ? { ...t, markdown: markdown ?? t.markdown } : t,
-                    );
-                }
-                const tab: WorkspaceTab = {
-                    id: uid("plan"),
-                    kind: "plan",
-                    title: title || "Plan",
-                    path,
-                    markdown,
-                };
-                setActiveId(tab.id);
-                return [...prev, tab];
-            });
+                    ),
+                    existing.id,
+                );
+                return;
+            }
+            const tab: WorkspaceTab = {
+                id: uid("plan"),
+                kind: "plan",
+                title: title || "Plan",
+                path,
+                markdown,
+            };
+            commitTabs([...prev, tab], tab.id);
         },
-        [onExpand],
+        [commitTabs],
     );
 
     const closeTab = useCallback((id: string) => {
-        setTabs((prev) => {
-            const next = prev.filter((t) => t.id !== id);
-            if (next.length === 0) {
-                setActiveId("changes");
-                return DEFAULT_TABS;
-            }
-            if (id === activeId) setActiveId(next[next.length - 1]!.id);
-            return next;
-        });
-    }, [activeId]);
+        const prev = tabsRef.current;
+        const next = prev.filter((t) => t.id !== id);
+        if (next.length === 0) {
+            commitTabs(DEFAULT_TABS, "graph");
+            return;
+        }
+        const current = activeIdRef.current;
+        commitTabs(next, id === current ? next[next.length - 1]!.id : current);
+    }, [commitTabs]);
 
     useEffect(() => {
         const onTab = (e: Event) => {
@@ -168,21 +170,15 @@ export function AgentWorkspace({
             if (tabId === "preview" || tabId === "browser") {
                 addTab("browser", { expand: true });
             }
-            if (tabId === "changes" || tabId === "source") {
-                addTab("changes", { expand: true });
-            }
             if (tabId === "graph" || tabId === "git") {
                 addTab("graph", { expand: true });
             }
             if (tabId === "prs" || tabId === "pulls" || tabId === "pull-requests") {
-                addTab("prs", { expand: true });
+                window.dispatchEvent(new Event("shape-open-pull-requests"));
             }
             if (tabId === "files" || tabId === "explorer") {
                 addTab("files", { expand: true });
             }
-        };
-        const onOpenPrs = () => {
-            addTab("prs", { expand: true });
         };
         const onOpenPlan = (e: Event) => {
             const detail = (e as CustomEvent<{ path?: string; title?: string; markdown?: string }>).detail;
@@ -208,19 +204,19 @@ export function AgentWorkspace({
             openDiff(tab);
         };
         window.addEventListener("shape-set-active-tab", onTab as EventListener);
-        window.addEventListener("shape-open-pull-requests", onOpenPrs);
         window.addEventListener("shape-open-workspace-plan", onOpenPlan as EventListener);
         window.addEventListener("shape-open-workspace-file", onOpenFile as EventListener);
         window.addEventListener("shape-open-file-diff", onOpenDiff as EventListener);
         return () => {
             window.removeEventListener("shape-set-active-tab", onTab as EventListener);
-            window.removeEventListener("shape-open-pull-requests", onOpenPrs);
             window.removeEventListener("shape-open-workspace-plan", onOpenPlan as EventListener);
             window.removeEventListener("shape-open-workspace-file", onOpenFile as EventListener);
             window.removeEventListener("shape-open-file-diff", onOpenDiff as EventListener);
         };
-    }, [addTab, onExpand, openDiff, openFile, openPlan]);
+    }, [addTab, openDiff, openFile, openPlan]);
 
+    // Only react to the backend changing the active file, never to re-renders,
+    // otherwise a freshly opened plan gets replaced by the previous file.
     useEffect(() => {
         if (!active_file) return;
         if (isBrowserTab(active_file)) {
@@ -252,7 +248,7 @@ export function AgentWorkspace({
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [addTab, onExpand]);
+    }, [addTab]);
 
     if (!expanded) {
         return null;
@@ -270,7 +266,7 @@ export function AgentWorkspace({
                         activeId={activeId}
                         onSelect={select}
                         onClose={closeTab}
-                        onReorder={setTabs}
+                        onReorder={reorder}
                         fade
                         onNew={(kind) => {
                             addTab(kind, { expand: true });

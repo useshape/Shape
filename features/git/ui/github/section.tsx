@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowLeftLine, RiExternalLinkLine, RiGitPullRequestLine, RiRefreshLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -222,7 +221,7 @@ function SimpleDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
                         </Button>
                     </div>
                     <GitDetailSkeleton />
@@ -242,7 +241,7 @@ function SimpleDetailPane({
                                 onClick={onBack}
                                 aria-label="Back to list"
                             >
-                                <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
                             </Button>
                             <ItemStatusIcon status={detail?.status} />
                             <div className="min-w-0 flex-1">
@@ -267,7 +266,7 @@ function SimpleDetailPane({
                                         if (detail.url) void commands.openUrlExternal(detail.url);
                                     }}
                                 >
-                                    <Icon icon={RiExternalLinkLine} size={ICON_SIZE_SM} />
+                                    <Icon icon={"square-forward"} size={ICON_SIZE_SM} />
                                     Open on GitHub
                                 </Button>
                             ) : null}
@@ -513,7 +512,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                             </span>
                                             {item.url ? (
                                                 <Icon
-                                                    icon={RiExternalLinkLine}
+                                                    icon={"square-forward"}
                                                     size={ICON_SIZE_SM}
                                                     className="shrink-0 text-text-muted"
                                                 />
@@ -557,7 +556,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                 className="h-7 gap-1 px-2 capitalize"
                             >
                                 {issueState}
-                                <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -585,7 +584,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                             onClick={() => setCreatePrOpen(true)}
                             aria-label="Create pull request"
                         >
-                            <Icon icon={RiGitPullRequestLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"git-pull-request"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -607,7 +606,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                         onClick={() => void load()}
                         aria-label="Refresh"
                     >
-                        <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"refresh"} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
             </GitChromeActions>

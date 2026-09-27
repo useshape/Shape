@@ -38,7 +38,7 @@ pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
         return outcome;
     }
 
-    let policy = ctx.agent_state.turn_policy();
+    let policy = ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref());
     let safety = security::commands::apply_auto_run_mode(
         security::commands::check_command_safety(&command),
         &command,

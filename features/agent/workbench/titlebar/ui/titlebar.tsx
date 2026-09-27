@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowLeftSLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Icon } from "@/components/ui/icon";
@@ -113,7 +112,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
                                 onClick={onBack}
                                 className="-ml-2 -mt-0.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded text-text-muted transition-colors hover:bg-panel-hover hover:text-text-primary"
                             >
-                                <Icon icon={RiArrowLeftSLine} />
+                                <Icon icon={"alt-arrow-left"} />
                             </button>
                         )}
                         <span>{title}</span>

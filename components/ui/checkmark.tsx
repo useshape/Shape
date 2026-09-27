@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCheckLine, RiSubtractLine } from "@remixicon/react";
 import * as React from "react";
 import { Icon } from "./icon";
 
@@ -53,12 +52,12 @@ export const Checkmark = React.forwardRef<HTMLDivElement, CheckmarkProps>(
             >
                 {checked === true && (
                     <div className="flex items-center justify-center">
-                        <Icon icon={RiCheckLine}   />
+                        <Icon icon={"check"}   />
                     </div>
                 )}
                 {checked === "indeterminate" && (
                     <div className="flex items-center justify-center">
-                        <Icon icon={RiSubtractLine}  />
+                        <Icon icon={"minus-circle"}  />
                     </div>
                 )}
             </div>

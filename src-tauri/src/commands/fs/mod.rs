@@ -569,6 +569,37 @@ pub async fn reveal_path(path: String) -> Result<(), AppError> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn windows_gui_exe(name: &str) -> String {
+    let exe_name = match name {
+        "cursor" => "Cursor.exe",
+        "code" => "Code.exe",
+        "zed" => "Zed.exe",
+        _ => return name.to_string(),
+    };
+    let output = Command::new("where").arg(name).output();
+    let Ok(output) = output else {
+        return name.to_string();
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    for line in text.lines() {
+        let path = PathBuf::from(line.trim());
+        if path.extension().and_then(|ext| ext.to_str()) == Some("exe") && path.is_file() {
+            return path.to_string_lossy().to_string();
+        }
+        let mut dir = path.parent();
+        for _ in 0..5 {
+            let Some(folder) = dir else { break };
+            let candidate = folder.join(exe_name);
+            if candidate.is_file() {
+                return candidate.to_string_lossy().to_string();
+            }
+            dir = folder.parent();
+        }
+    }
+    name.to_string()
+}
+
 pub async fn open_in_app(app: String, path: String) -> Result<(), AppError> {
     tokio::task::spawn_blocking(move || {
         let key = app.to_lowercase();
@@ -617,21 +648,31 @@ pub async fn open_in_app(app: String, path: String) -> Result<(), AppError> {
 
         #[cfg(windows)]
         {
-            // `code` / `cursor` are `.cmd` shims. CREATE_NO_WINDOW on the bare
-            // name fails; `cmd /C start` finds PATHEXT shims and GUI apps.
+            // `start` opens a console. Launch the GUI exe directly when we can find it.
+            let resolved = windows_gui_exe(exe);
+            let mut cmd = if resolved.to_ascii_lowercase().ends_with(".exe") {
+                let mut gui = Command::new(&resolved);
+                gui.arg(&path);
+                gui
+            } else {
+                let mut shim = Command::new("cmd");
+                shim.args(["/C", exe, &path]);
+                shim
+            };
             const CREATE_NO_WINDOW: u32 = 0x08000000;
-            let mut cmd = Command::new("cmd");
-            cmd.args(["/C", "start", "", exe, &path]);
             cmd.creation_flags(CREATE_NO_WINDOW);
             cmd.spawn().map_err(|e| AppError::Io(e))?;
             return Ok::<(), AppError>(());
         }
 
-        Command::new(exe)
-            .arg(&path)
-            .spawn()
-            .map_err(|e| AppError::Io(e))?;
-        Ok::<(), AppError>(())
+        #[cfg(not(any(target_os = "macos", windows)))]
+        {
+            Command::new(exe)
+                .arg(&path)
+                .spawn()
+                .map_err(|e| AppError::Io(e))?;
+            Ok::<(), AppError>(())
+        }
     })
     .await
     .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))??;

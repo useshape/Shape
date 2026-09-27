@@ -1,14 +1,5 @@
 "use client";
 
-import {
-    RiAddLine,
-    RiArrowGoBackLine,
-    RiArrowLeftLine,
-    RiArrowRightLine,
-    RiCloseLine,
-    RiEditBoxLine,
-    RiRefreshLine,
-} from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -149,7 +140,7 @@ export function DesignToolbar({
                                             onCloseTab(tab.id);
                                         }}
                                     >
-                                        <Icon icon={RiCloseLine} size={12} />
+                                        <Icon icon={"close"} size={12} />
                                     </button>
                                 ) : null}
                             </div>
@@ -165,7 +156,7 @@ export function DesignToolbar({
                             data-no-drag
                             onClick={onNewTab}
                         >
-                            <Icon icon={RiAddLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"add-circle"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                 </div>
@@ -179,7 +170,7 @@ export function DesignToolbar({
                         disabled={!canBack}
                         onClick={onBack}
                     >
-                        <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Forward">
@@ -190,12 +181,12 @@ export function DesignToolbar({
                         disabled={!canForward}
                         onClick={onForward}
                     >
-                        <Icon icon={RiArrowRightLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"arrow-right"} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Reload">
                     <Button variant="ghost" size="icon" aria-label="Reload" onClick={onReload}>
-                        <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"refresh"} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
                 <form
@@ -217,7 +208,7 @@ export function DesignToolbar({
                 </form>
                 <Tooltip content="Undo">
                     <Button variant="ghost" size="icon" aria-label="Undo" onClick={onUndo}>
-                        <Icon icon={RiArrowGoBackLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"undo-left"} size={ICON_SIZE_SM} />
                     </Button>
                 </Tooltip>
                 <Button
@@ -226,7 +217,7 @@ export function DesignToolbar({
                     className={cn("gap-1.5", designOn && "bg-panel-active")}
                     onClick={() => onModeChange(designOn ? "normal" : "select")}
                 >
-                    <Icon icon={RiEditBoxLine} size={ICON_SIZE_SM} />
+                    <Icon icon={"pen"} size={ICON_SIZE_SM} />
                     Design Mode
                 </Button>
             </div>

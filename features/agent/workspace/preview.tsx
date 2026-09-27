@@ -1,7 +1,7 @@
 "use client";
 
-import PreviewPanel from "@/features/preview/ui/preview-panel";
+import { BrowserView } from "./browser";
 
 export function WorkspacePreview() {
-    return <PreviewPanel />;
+    return <BrowserView />;
 }

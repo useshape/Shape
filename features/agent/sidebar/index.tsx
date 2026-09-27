@@ -1,8 +1,6 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiChromeFill, RiEqualizer3Fill, RiGithubFill, RiGitPullRequestLine, RiMessage3Fill, RiSearchLine } from "@remixicon/react";
-import { Icon } from "@/components/ui/icon";
+import { type SolarIconName,  Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
@@ -10,7 +8,7 @@ import { ChatList } from "./chats";
 import { AccountRow } from "./account";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
+import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT, AGENT_SIDEBAR_HISTORY_SLOT } from "../chrome";
 import type { AgentOverlay } from "../overlay";
 
 export const AGENT_SIDEBAR_NAV_SLOT = "shape-agent-sidebar-nav";
@@ -23,7 +21,7 @@ function NavItem({
     active,
 }: {
     label: string;
-    icon: RemixiconComponentType;
+    icon: SolarIconName;
     onClick: () => void;
     collapsed?: boolean;
     active?: boolean;
@@ -74,6 +72,7 @@ function NavItem({
 export function AgentSidebar({
     onSearch,
     expanded,
+    open = true,
     overlay,
     onBrowser,
     showBrowser,
@@ -81,6 +80,8 @@ export function AgentSidebar({
 }: {
     onSearch: () => void;
     expanded: boolean;
+    /** False slides the whole sidebar shut; the toggle lives in the top bar meanwhile. */
+    open?: boolean;
     overlay: AgentOverlay;
     onBrowser?: () => void;
     showBrowser?: boolean;
@@ -89,13 +90,13 @@ export function AgentSidebar({
     const github = useGitHubAuth();
     const showHostedNav = Boolean(overlay);
 
-    const items = [
+    const items: { label: string; icon: SolarIconName; onClick: () => void }[] = [
         ...(showBrowser && onBrowser
-            ? [{ label: "Browser", icon: RiChromeFill, onClick: onBrowser }]
+            ? [{ label: "Browser", icon: "global" as const, onClick: onBrowser }]
             : []),
         {
             label: "Customize",
-            icon: RiEqualizer3Fill,
+            icon: "settings" as const,
             onClick: () => void openSettingsWindow(),
         },
     ];
@@ -107,12 +108,21 @@ export function AgentSidebar({
 
     return (
         <aside
+            aria-hidden={!open}
             className={cn(
                 "relative z-20 flex h-full shrink-0 flex-col overflow-hidden border-r border-border-secondary bg-sidebar text-text-primary",
-                "transition-[width] duration-[var(--transition-base)] ease-[var(--ease-out)]",
-                expanded ? "w-76" : "w-12",
+                "transition-[width,border-color] duration-[var(--transition-base)] ease-[var(--ease-out)]",
+                !open ? "w-0 border-r-transparent" : expanded ? "w-76" : "w-12",
             )}
         >
+            <div
+                className={cn(
+                    "flex h-full min-h-0 shrink-0 flex-col",
+                    expanded ? "w-76" : "w-12",
+                    "transition-[opacity,transform] duration-[var(--transition-base)] ease-[var(--ease-out)]",
+                    !open && "pointer-events-none -translate-x-3 opacity-0",
+                )}
+            >
             {showHostedNav ? (
                 <>
                     <div
@@ -121,21 +131,23 @@ export function AgentSidebar({
                             expanded ? "justify-between px-2" : "justify-center px-1.5",
                         )}
                     >
-                        <SidebarToggleBtn
-                            open={expanded}
-                            collapsed={!expanded}
-                            onToggle={() => {
-                                if (onToggleSidebar) {
-                                    onToggleSidebar();
-                                    return;
-                                }
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-layout-toggle", {
-                                        detail: { id: "primary-sidebar" },
-                                    }),
-                                );
-                            }}
-                        />
+                        <div className="flex min-w-0 items-center gap-1">
+                            <SidebarToggleBtn
+                                open={expanded}
+                                collapsed={!expanded}
+                                onToggle={() => {
+                                    if (onToggleSidebar) {
+                                        onToggleSidebar();
+                                        return;
+                                    }
+                                    window.dispatchEvent(
+                                        new CustomEvent("shape-layout-toggle", {
+                                            detail: { id: "primary-sidebar" },
+                                        }),
+                                    );
+                                }}
+                            />
+                        </div>
                         {expanded ? (
                             <div id={AGENT_SIDEBAR_BACK_SLOT} className="flex items-center" />
                         ) : null}
@@ -154,34 +166,39 @@ export function AgentSidebar({
                             expanded ? "justify-between px-2" : "justify-center px-1.5",
                         )}
                     >
-                        <SidebarToggleBtn
-                            open={expanded}
-                            collapsed={!expanded}
-                            onToggle={() => {
-                                if (onToggleSidebar) {
-                                    onToggleSidebar();
-                                    return;
-                                }
-                                window.dispatchEvent(
-                                    new CustomEvent("shape-layout-toggle", {
-                                        detail: { id: "primary-sidebar" },
-                                    }),
-                                );
-                            }}
-                        />
+                        <div className="flex min-w-0 items-center gap-1">
+                            <SidebarToggleBtn
+                                open={expanded}
+                                collapsed={!expanded}
+                                onToggle={() => {
+                                    if (onToggleSidebar) {
+                                        onToggleSidebar();
+                                        return;
+                                    }
+                                    window.dispatchEvent(
+                                        new CustomEvent("shape-layout-toggle", {
+                                            detail: { id: "primary-sidebar" },
+                                        }),
+                                    );
+                                }}
+                            />
+                        </div>
                         {expanded ? (
-                            <Tooltip content="Search" side="bottom" delayDuration={80}>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label="Search"
-                                    onClick={onSearch}
-                                    className="size-7 shrink-0 text-text-secondary hover:text-text-primary"
-                                >
-                                    <Icon icon={RiSearchLine} />
-                                </Button>
-                            </Tooltip>
+                            <div className="flex items-center gap-0.5">
+                                <div id={AGENT_SIDEBAR_HISTORY_SLOT} className="flex items-center" />
+                                <Tooltip content="Search" side="bottom" delayDuration={80}>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Search"
+                                        onClick={onSearch}
+                                        className="size-7 shrink-0 text-text-secondary hover:text-text-primary"
+                                    >
+                                        <Icon icon={"magnifier"} />
+                                    </Button>
+                                </Tooltip>
+                            </div>
                         ) : null}
                     </div>
                     <nav
@@ -198,13 +215,13 @@ export function AgentSidebar({
                                 onClick={newChat}
                                 className="flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left"
                             >
-                                <Icon icon={RiMessage3Fill} className="shrink-0 text-text-muted" />
+                                <Icon icon={"chat-round-line"} className="shrink-0 text-text-muted" />
                                 <span className="min-w-0 flex-1 truncate">New Chat</span>
                             </Button>
                         ) : (
                             <>
-                                <NavItem label="New Chat" icon={RiMessage3Fill} onClick={newChat} collapsed />
-                                <NavItem label="Search" icon={RiSearchLine} onClick={onSearch} collapsed />
+                                <NavItem label="New Chat" icon={"chat-round-line"} onClick={newChat} collapsed />
+                                <NavItem label="Search" icon={"magnifier"} onClick={onSearch} collapsed />
                             </>
                         )}
                         {items.map((item) => (
@@ -248,7 +265,7 @@ export function AgentSidebar({
                                 variant="ghost"
                                 size="md"
                             >
-                                <Icon icon={RiGithubFill} />
+                                <Icon icon={"code-square"} />
                                 Connect GitHub
                             </Button>
                         ) : null}
@@ -263,7 +280,7 @@ export function AgentSidebar({
                                 className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 aria-label="Pull requests"
                             >
-                                <Icon icon={RiGitPullRequestLine} />
+                                <Icon icon={"git-pull-request"} />
                             </button>
                         </Tooltip>
                         <Tooltip content="Settings" side="right" delayDuration={80}>
@@ -273,11 +290,12 @@ export function AgentSidebar({
                                 className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 aria-label="Settings"
                             >
-                                <Icon icon={RiEqualizer3Fill} />
+                                <Icon icon={"settings"} />
                             </button>
                         </Tooltip>
                     </div>
                 )}
+            </div>
             </div>
         </aside>
     );

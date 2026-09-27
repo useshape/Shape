@@ -1,7 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine } from "@remixicon/react";
-import type { RemixiconComponentType } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type SolarIconName,  Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -32,7 +30,7 @@ export function Field({
     mapValue = (next) => next,
 }: {
     label?: string;
-    icon?: RemixiconComponentType;
+    icon?: SolarIconName;
     value?: string;
     property: string;
     onPreview: (styles: Styles) => void;
@@ -165,7 +163,7 @@ export function SelectField({
     icon,
 }: {
     label?: string;
-    icon?: RemixiconComponentType;
+    icon?: SolarIconName;
     value: string;
     options: Array<string | readonly [string, string]>;
     onChange: (value: string) => void;
@@ -204,7 +202,7 @@ export function SelectField({
                         {Array.isArray(display) ? display[1] : display || value || "Auto"}
                     </span>
                     <Icon
-                        icon={RiArrowDownSLine}
+                        icon={"alt-arrow-down"}
                         size={ICON_SIZE_SM}
                         className="mr-1.5 shrink-0 text-text-muted"
                     />
@@ -234,7 +232,7 @@ export function IconButton({
     label: string;
     active?: boolean;
     onClick?: () => void;
-    icon: RemixiconComponentType;
+    icon: SolarIconName;
 }) {
     return (
         <Button
@@ -255,7 +253,7 @@ export function Segment({
     value,
     onChange,
 }: {
-    items: Array<{ value: string; label?: string; icon?: RemixiconComponentType; title: string }>;
+    items: Array<{ value: string; label?: string; icon?: SolarIconName; title: string }>;
     value: string;
     onChange: (value: string) => void;
 }) {

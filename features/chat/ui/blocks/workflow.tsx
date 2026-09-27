@@ -1,11 +1,9 @@
 "use client";
 
-import { RiArrowDownSLine, RiArrowRightSLine, RiArrowUpSLine, RiGitBranchLine, RiPencilLine, RiRefreshLine, RiSearchLine, RiSparkling2Line, RiTerminalBoxLine } from "@remixicon/react";
 import React, { useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type SolarIconName } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
-import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { diffLines } from "diff";
@@ -33,6 +31,7 @@ export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "plugin_call",
     "subagent",
     "subagent_ref",
+    "browse_session",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -153,7 +152,8 @@ type WorkflowRow =
     | { kind: "search_group"; queries: string[]; count: number }
     | { kind: "web_trail"; blocks: Chunk[] }
     | { kind: "write_group"; paths: string[]; count: number }
-    | { kind: "list_group"; count: number };
+    | { kind: "list_group"; count: number }
+    | { kind: "subagent_group"; blocks: Chunk[] };
 
 function sameFilePath(a?: string, b?: string): boolean {
     if (!a || !b) return false;
@@ -166,19 +166,95 @@ function isCoalescableFileEdit(block: Chunk): boolean {
     return block.type === "edit_pending" && block.commandStatus === "applied";
 }
 
+function mutationPath(block: Chunk): string | undefined {
+    if (isCoalescableFileEdit(block)) return block.file;
+    if (
+        block.type === "create_file"
+        || block.type === "mkdir"
+        || block.type === "delete_file"
+        || block.type === "rename_file"
+    ) {
+        return block.file || block.content;
+    }
+    return undefined;
+}
+
 /** Consecutive edits to the same file become one row; later patch updates original→latest (the +/-). */
+function isThinkChunk(block: Chunk): boolean {
+    return block.type === "think" || block.type === "thought";
+}
+
+function taskText(value?: string): string {
+    return (value || "").replace(/\s+/g, " ").trim();
+}
+
+/** Same kind of step, back to back. A different step in between keeps both. */
+function sameRepeatedTask(a: Chunk, b: Chunk): boolean {
+    if (isThinkChunk(a) && isThinkChunk(b)) return true;
+    if (a.type !== b.type) return false;
+    switch (a.type) {
+        case "grep":
+        case "search":
+        case "search_result":
+            return taskText(a.query || a.content) === taskText(b.query || b.content);
+        case "run":
+        case "terminal_command":
+            return taskText(a.command) !== "" && taskText(a.command) === taskText(b.command);
+        case "tool_result":
+            return taskText(a.content) !== "" && taskText(a.content).slice(0, 80) === taskText(b.content).slice(0, 80);
+        case "ls":
+        case "status":
+            return taskText(a.content) === taskText(b.content);
+        default:
+            return false;
+    }
+}
+
+function mergeRepeatedTask(a: Chunk, b: Chunk): Chunk {
+    if (isThinkChunk(a) || isThinkChunk(b)) {
+        const parts = [a.content, b.content].map((part) => (part || "").trim()).filter(Boolean);
+        return {
+            ...a,
+            type: "thought",
+            content: parts.join("\n\n"),
+            isGenerating: Boolean(a.isGenerating || b.isGenerating),
+        };
+    }
+    return { ...b, isGenerating: Boolean(a.isGenerating || b.isGenerating) };
+}
+
+/** think, think, think becomes one thought. think, edit, think stays three steps. */
+export function coalesceConsecutiveSameTasks(blocks: Chunk[]): Chunk[] {
+    const out: Chunk[] = [];
+    for (const block of blocks) {
+        const prev = out[out.length - 1];
+        if (prev && sameRepeatedTask(prev, block)) {
+            out[out.length - 1] = mergeRepeatedTask(prev, block);
+            continue;
+        }
+        out.push(block);
+    }
+    return out;
+}
+
 export function coalesceConsecutiveSameFileEdits(blocks: Chunk[]): Chunk[] {
     const out: Chunk[] = [];
     for (const block of blocks) {
         const prev = out[out.length - 1];
-        if (prev && isCoalescableFileEdit(prev) && isCoalescableFileEdit(block) && sameFilePath(prev.file, block.file)) {
-            out[out.length - 1] = {
-                ...prev,
-                type: "edit",
-                replacement: block.replacement,
-                isGenerating: block.isGenerating,
-                commandStatus: block.commandStatus,
-            };
+        const prevPath = prev ? mutationPath(prev) : undefined;
+        const nextPath = mutationPath(block);
+        if (prev && prevPath && nextPath && sameFilePath(prevPath, nextPath)) {
+            if (isCoalescableFileEdit(prev) && isCoalescableFileEdit(block)) {
+                out[out.length - 1] = {
+                    ...prev,
+                    type: "edit",
+                    replacement: block.replacement,
+                    isGenerating: block.isGenerating,
+                    commandStatus: block.commandStatus,
+                };
+            } else {
+                out[out.length - 1] = block;
+            }
             continue;
         }
         out.push(block);
@@ -195,6 +271,7 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
     let writePaths: string[] = [];
     let writeCount = 0;
     let listCount = 0;
+    let subagents: Chunk[] = [];
 
     const flushStages = () => {
         if (stagePaths.length === 0) return;
@@ -231,6 +308,12 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         rows.push({ kind: "list_group", count: listCount });
         listCount = 0;
     };
+    const flushSubs = () => {
+        if (subagents.length === 0) return;
+        if (subagents.length === 1) rows.push({ kind: "block", block: subagents[0] });
+        else rows.push({ kind: "subagent_group", blocks: [...subagents] });
+        subagents = [];
+    };
     const flushAll = () => {
         flushStages();
         flushReads();
@@ -238,9 +321,21 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
         flushWeb();
         flushWrites();
         flushLists();
+        flushSubs();
     };
 
-    for (const block of coalesceConsecutiveSameFileEdits(blocks)) {
+    for (const block of coalesceConsecutiveSameTasks(coalesceConsecutiveSameFileEdits(blocks))) {
+        if (block.type === "subagent" || block.type === "subagent_ref") {
+            flushStages();
+            flushReads();
+            flushSearches();
+            flushWeb();
+            flushWrites();
+            flushLists();
+            subagents.push(block);
+            continue;
+        }
+        flushSubs();
         if (block.type === "git_operation" && block.gitOp === "stage") {
             flushReads();
             flushSearches();
@@ -297,22 +392,6 @@ export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
             continue;
         }
 
-        if (
-            block.type === "create_file"
-            || block.type === "mkdir"
-            || block.type === "delete_file"
-            || block.type === "rename_file"
-        ) {
-            flushStages();
-            flushReads();
-            flushSearches();
-            flushWeb();
-            flushLists();
-            const path = block.content || "";
-            if (path) writePaths.push(path);
-            writeCount += 1;
-            continue;
-        }
         if (isCoalescableFileEdit(block)) {
             flushAll();
             rows.push({ kind: "block", block });
@@ -414,7 +493,7 @@ function GitActionChip({
                 </span>
             ) : null}
             {children ? (
-                <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-50" />
+                <Icon icon={"alt-arrow-down"} className="shrink-0 opacity-50" />
             ) : null}
         </button>
     );
@@ -706,7 +785,7 @@ export function ReadGroup({
         </div>
     );
 }
-function computeGroupHeader(visible: Chunk[]) {
+function computeGroupHeader(visible: Chunk[]): { icon: SolarIconName; label: string } {
     const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
     const hasExplore = visible.some((b) =>
         ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit", "inspect_runtime"].includes(b.type),
@@ -716,12 +795,12 @@ function computeGroupHeader(visible: Chunk[]) {
     );
     const hasCommand = visible.some((b) => b.type === "terminal_command" || b.type === "run");
 
-    if (hasEdit && hasExplore) return { icon: RiPencilLine, label: "Explored and edited" };
-    if (hasEdit) return { icon: RiPencilLine, label: "Edited files" };
-    if (hasCommand && !hasExplore) return { icon: RiTerminalBoxLine, label: "Ran commands" };
-    if (hasExplore) return { icon: RiSearchLine, label: "Explored codebase" };
-    if (hasThink) return { icon: RiSparkling2Line, label: "Thought" };
-    return { icon: RiSparkling2Line, label: "Worked" };
+    if (hasEdit && hasExplore) return { icon: "pen", label: "Explored and edited" };
+    if (hasEdit) return { icon: "pen", label: "Edited files" };
+    if (hasCommand && !hasExplore) return { icon: "programming", label: "Ran commands" };
+    if (hasExplore) return { icon: "magnifier", label: "Explored codebase" };
+    if (hasThink) return { icon: "magic-stick", label: "Thought" };
+    return { icon: "magic-stick", label: "Worked" };
 }
 
 export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
@@ -765,6 +844,12 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 resultUrls: hits.slice(0, 5),
             };
         }
+        case "browse_session":
+            return {
+                label: inFlight ? "Opening" : "Opened",
+                query: block.visitTitle || block.visitUrl || "page",
+                expandable: false,
+            };
         case "web_visit":
             return {
                 label: block.isGenerating ? "Visiting" : "Visited",
@@ -968,7 +1053,7 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                     op !== "diff" &&
                     Boolean(block.content && block.content.length > 80),
                 content: block.content,
-                icon: status === "running" ? RiRefreshLine : RiGitBranchLine,
+                icon: status === "running" ? "refresh" : "git-branch",
                 gitStatusLines: statusLines.length > 0 ? statusLines : undefined,
                 gitLogLines: logLines.length > 0 ? logLines : undefined,
                 gitBranchLines: branchLines.length > 0 ? branchLines : undefined,
@@ -981,6 +1066,7 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
 }
 
 export function isRenderableWorkflowBlock(block: Chunk, isActive?: boolean) {
+    if (block.type === "browse_session") return true;
     if (block.type === "status") return false;
     if (block.type === "tool_result") return true;
     if ((block.type === "think" || block.type === "thought") && !block.content?.trim() && !isActive) return false;
@@ -1112,6 +1198,16 @@ export function AgentWorkflow({
                         />
                     );
                 }
+                if (row.kind === "subagent_group") {
+                    return (
+                        <div key={`subs-${i}`} className="flex flex-col">
+                            <ActionLine action="Spawning subagents in parallel" />
+                            {row.blocks.map((block, index) => (
+                                <ActionItem key={block.file || index} block={block} isFileEditResolved={isFileEditResolved} />
+                            ))}
+                        </div>
+                    );
+                }
                 return (
                     <ActionItem
                         key={i}
@@ -1142,7 +1238,7 @@ export function AgentWorkflow({
                     {header.label}
                 </span>
                 <Icon
-                    icon={showRows ? RiArrowUpSLine : RiArrowDownSLine}
+                    icon={showRows ? "alt-arrow-up" : "alt-arrow-down"}
                     className="text-text-muted shrink-0"
                 />
             </button>
@@ -1344,7 +1440,7 @@ export function ActionItem({
                 ) : null}
 
                 {"chromiumIcon" in config && config.chromiumIcon ? (
-                    <ChromeBrowserIcon size={14} branded />
+                    <Icon icon="chrome" size={14} className="text-text-muted" />
                 ) : null}
 
                 <span className="chat-text font-medium text-text-primary/80">
@@ -1387,7 +1483,7 @@ export function ActionItem({
 
                 {config.expandable && (
                     <Icon
-                        icon={RiArrowRightSLine}
+                        icon={"alt-arrow-right"}
                         className={cn(
                             "text-text-disabled transition-transform duration-200 shrink-0",
                             expanded && "rotate-90",

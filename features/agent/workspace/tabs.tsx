@@ -1,6 +1,5 @@
 "use client";
 
-import { RiAddLine, RiCloseLine } from "@remixicon/react";
 import { useCallback, useMemo } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -107,7 +106,7 @@ function SortableWorkspaceTab({
                             )}
                         >
                             <span className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}>
-                                <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"close"} size={ICON_SIZE_SM} />
                             </span>
                         </button>
                     ) : null}
@@ -202,7 +201,7 @@ export function WorkspaceTabs({
                     className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
                     aria-label="New tab"
                 >
-                    <Icon icon={RiAddLine} size={ICON_SIZE_MD} />
+                    <Icon icon={"add-circle"} size={ICON_SIZE_MD} />
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -215,15 +214,13 @@ export function WorkspaceTabs({
                     <span className="flex-1">Files</span>
                     <span className="text-2xs text-text-muted">Ctrl+G</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onNew("changes")}>
-                    <Icon icon={iconFor("changes")} size={ICON_SIZE_MD} />
-                    <span className="flex-1">Changes</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("graph")}>
                     <Icon icon={iconFor("graph")} size={ICON_SIZE_MD} />
                     <span className="flex-1">Graph</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onNew("prs")}>
+                <DropdownMenuItem
+                    onClick={() => window.dispatchEvent(new Event("shape-open-pull-requests"))}
+                >
                     <Icon icon={iconFor("prs")} size={ICON_SIZE_MD} />
                     <span className="flex-1">Pull requests</span>
                 </DropdownMenuItem>

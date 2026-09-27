@@ -82,27 +82,56 @@ const cssHighlight = HighlightStyle.define([
     { tag: t.invalid, color: "var(--error)" },
 ]);
 
+/** VS Code Dark+ token colors. The light theme keeps the semantic CSS palette. */
+const darkHighlight = HighlightStyle.define([
+    { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: "#6A9955", fontStyle: "italic" },
+    { tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.definitionKeyword, t.operatorKeyword, t.modifier], color: "#569CD6" },
+    { tag: [t.string, t.special(t.string), t.character, t.attributeValue], color: "#CE9178" },
+    { tag: [t.regexp, t.escape], color: "#D7BA7D" },
+    { tag: [t.number, t.integer, t.float], color: "#B5CEA8" },
+    { tag: [t.bool, t.atom, t.self], color: "#569CD6" },
+    { tag: t.null, color: "#569CD6" },
+    { tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.function(t.variableName)), t.labelName], color: "#DCDCAA" },
+    { tag: [t.typeName, t.className, t.namespace, t.typeOperator], color: "#4EC9B0" },
+    { tag: [t.propertyName, t.definition(t.propertyName), t.attributeName], color: "#9CDCFE" },
+    { tag: [t.variableName, t.definition(t.variableName), t.local(t.variableName), t.special(t.variableName)], color: "#9CDCFE" },
+    { tag: [t.operator, t.compareOperator, t.logicOperator, t.arithmeticOperator, t.punctuation, t.bracket, t.paren, t.squareBracket, t.brace, t.separator, t.angleBracket], color: "#D4D4D4" },
+    { tag: t.tagName, color: "#569CD6" },
+    { tag: [t.heading, t.heading1, t.heading2], color: "#569CD6", fontWeight: "600" },
+    { tag: [t.link, t.url], color: "#569CD6" },
+    { tag: t.emphasis, fontStyle: "italic", color: "#D4D4D4" },
+    { tag: t.strong, fontWeight: "700", color: "#D4D4D4" },
+    { tag: t.strikethrough, textDecoration: "line-through", color: "#D4D4D4" },
+    { tag: t.quote, color: "#CE9178" },
+    { tag: t.monospace, color: "#D4D4D4" },
+    { tag: [t.meta, t.processingInstruction], color: "#6A9955" },
+    { tag: t.invalid, color: "#F44747" },
+]);
+
+const CODE_FONT = 'Consolas, "Cascadia Mono", "Cascadia Code", ui-monospace, monospace';
+
 function chromeTheme(dark: boolean) {
     return EditorView.theme(
         {
             "&": {
                 height: "100%",
-                fontSize: "var(--editor-font-size, 13px)",
+                fontSize: "var(--editor-font-size, 14px)",
                 backgroundColor: "var(--panel)",
-                color: "var(--text-primary)",
+                color: dark ? "#D4D4D4" : "var(--text-primary)",
             },
             ".cm-scroller": {
-                fontFamily:
-                    "var(--editor-font-family, var(--font-mono)), ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+                fontFamily: dark
+                    ? CODE_FONT
+                    : "var(--editor-font-family, var(--font-mono)), ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
                 fontFeatureSettings: '"liga" 0, "calt" 0',
-                lineHeight: "1.55",
+                lineHeight: dark ? "1.35" : "1.55",
                 overflow: "auto",
                 backgroundColor: "var(--panel)",
-                color: "var(--text-primary)",
+                color: dark ? "#D4D4D4" : "var(--text-primary)",
             },
             ".cm-content": {
-                caretColor: "var(--text-primary)",
-                color: "var(--text-primary)",
+                caretColor: dark ? "#AEAFAD" : "var(--text-primary)",
+                color: dark ? "#D4D4D4" : "var(--text-primary)",
                 padding: "12px 0 48px",
                 minHeight: "100%",
                 fontFamily: "inherit",
@@ -124,12 +153,13 @@ function chromeTheme(dark: boolean) {
             },
             ".cm-cursor, .cm-dropCursor": {
                 borderLeftWidth: "2px",
-                borderLeftColor: "var(--text-primary)",
+                borderLeftColor: dark ? "#AEAFAD" : "var(--text-primary)",
             },
             "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
                 {
-                    backgroundColor:
-                        "color-mix(in srgb, var(--color-accent) 28%, transparent) !important",
+                    backgroundColor: dark
+                        ? "#264F78 !important"
+                        : "color-mix(in srgb, var(--color-accent) 28%, transparent) !important",
                 },
             ".cm-selectionMatch": {
                 backgroundColor:
@@ -142,7 +172,8 @@ function chromeTheme(dark: boolean) {
             },
             ".cm-gutters": {
                 backgroundColor: "var(--panel)",
-                color: "var(--text-disabled)",
+                color: dark ? "#858585" : "var(--text-disabled)",
+                fontFamily: dark ? CODE_FONT : "inherit",
                 border: "none",
                 borderRight: "1px solid transparent",
                 minWidth: "3.25rem",
@@ -153,7 +184,7 @@ function chromeTheme(dark: boolean) {
             },
             ".cm-gutterElement": {
                 padding: "0 10px 0 8px",
-                fontSize: "12px",
+                fontSize: dark ? "13px" : "12px",
                 fontVariantNumeric: "tabular-nums",
             },
             ".cm-activeLineGutter": {
@@ -271,7 +302,7 @@ export function shapeEditorChrome(): Extension[] {
     const light = isLightTheme();
     return [
         chromeTheme(!light),
-        syntaxHighlighting(cssHighlight, { fallback: true }),
+        syntaxHighlighting(light ? cssHighlight : darkHighlight, { fallback: true }),
         EditorView.contentAttributes.of({
             spellcheck: "false",
             autocorrect: "off",

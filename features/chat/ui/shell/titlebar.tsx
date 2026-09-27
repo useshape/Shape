@@ -1,6 +1,5 @@
 "use client";
 
-import { RiLayoutBottomLine } from "@remixicon/react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
@@ -8,10 +7,10 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
-import { ProjectKindGlyph } from "@/features/detection/ui/kind-glyph";
-import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
+import { AGENT_CHROME_ACTIONS_SLOT, AGENT_SIDEBAR_HISTORY_SLOT } from "@/features/agent/chrome";
 import { ChatHistoryMenu } from "./history";
 import { OpenInMenu } from "./open-in";
+import { CommitMenu } from "@/features/agent/workspace/commit-menu";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -61,6 +60,7 @@ export function ChatTitlebar({
     const { project_path } = useProjectState();
     const repo = project_path ? getRepoName(project_path) : null;
     const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
+    const [historySlot, setHistorySlot] = useState<HTMLElement | null>(null);
     const [terminalOpen, setTerminalOpen] = useState(false);
     useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
     const subagents = chatSubagents(conversationId, extractedSubagents);
@@ -69,6 +69,8 @@ export function ChatTitlebar({
         const find = () => {
             const el = document.getElementById(AGENT_CHROME_ACTIONS_SLOT);
             setActionsSlot(el && el.isConnected ? el : null);
+            const history = document.getElementById(AGENT_SIDEBAR_HISTORY_SLOT);
+            setHistorySlot(history && history.isConnected ? history : null);
         };
         find();
         const timer = window.setInterval(find, 200);
@@ -104,6 +106,7 @@ export function ChatTitlebar({
     const actions = (
         <div className="flex items-center gap-2">
             <OpenInMenu />
+            {project_path ? <CommitMenu projectPath={project_path} /> : null}
             <Tooltip content={terminalOpen ? "Hide terminal" : "Show terminal"}>
                 <button
                     type="button"
@@ -113,7 +116,7 @@ export function ChatTitlebar({
                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary data-[active=true]:text-text-primary"
                     data-active={terminalOpen}
                 >
-                    <Icon icon={RiLayoutBottomLine} />
+                    <Icon icon={"align-bottom"} />
                 </button>
             </Tooltip>
         </div>
@@ -166,18 +169,9 @@ export function ChatTitlebar({
 
     return (
         <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden">
-            <div className="shrink-0 pr-1">
-                <ChatHistoryMenu
-                    activeConversationId={conversationId}
-                    onSelectConversation={(id) => onSelect(id)}
-                    projectPath={project_path}
-                    align="start"
-                />
-            </div>
             <Breadcrumb className="w-auto min-w-0 max-w-full overflow-hidden" aria-label="Project">
                 {repo ? (
                     <BreadcrumbItem onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}>
-                        <ProjectKindGlyph path={project_path} className="size-5" />
                         {repo}
                     </BreadcrumbItem>
                 ) : null}
@@ -190,6 +184,17 @@ export function ChatTitlebar({
             </Breadcrumb>
             <div className="h-full min-w-4 flex-1" />
             {actionsSlot && actionsSlot.isConnected ? createPortal(actions, actionsSlot) : null}
+            {historySlot && historySlot.isConnected
+                ? createPortal(
+                    <ChatHistoryMenu
+                        activeConversationId={conversationId}
+                        onSelectConversation={(id) => onSelect(id)}
+                        projectPath={project_path}
+                        align="end"
+                    />,
+                    historySlot,
+                )
+                : null}
         </div>
     );
 }

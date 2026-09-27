@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine } from "@remixicon/react";
 import React, { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -35,7 +34,7 @@ export function SettingSection({
     return (
         <div
             id={id}
-            className="mb-8 last:mb-0 scroll-mt-3 [content-visibility:auto] [contain-intrinsic-size:auto_280px]"
+            className="mb-8 last:mb-0 scroll-mt-3"
         >
             <div className="mb-2.5 flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -111,7 +110,7 @@ export function SettingSelect<T extends string>({
                     className={cn("min-w-[200px] justify-between gap-2 bg-panel-hover!", className)}
                 >
                     <span className="truncate">{label}</span>
-                    <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
+                    <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[180px]">
@@ -301,7 +300,7 @@ export function SettingMultiSelect({
                     className={cn("min-w-[200px] max-w-[280px] justify-between gap-2 bg-panel-hover!", className)}
                 >
                     <span className="truncate">{summary}</span>
-                    <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
+                    <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[200px]">

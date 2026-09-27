@@ -4,6 +4,7 @@ import { hostnameOf } from "@/lib/ui/favicon";
 import { lookupMentionToken, registerMentionToken } from "@/lib/chat/mention-registry";
 import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { DESIGN_TOKEN_MENTIONS, designTokenById } from "@/lib/chat/design-mentions";
+import { elementMentionBlock, lookupElementMention } from "@/lib/chat/element-mentions";
 
 export type MentionKind =
     | "file"
@@ -17,7 +18,8 @@ export type MentionKind =
     | "branch"
     | "browser"
     | "mcp"
-    | "plugin";
+    | "plugin"
+    | "element";
 
 export type ChatMention = {
     kind: MentionKind;
@@ -37,7 +39,7 @@ export function resolveBrowserMentionPath(path: string | undefined): string | nu
 
 /** Explicit typed tokens + bare paths / design names (no spaces). */
 const MENTION_PATTERN =
-    /@(?:(file|folder|design|docs|terminal|chat|branch|browser|mcp|plugin):([^\s]+)|(codebase|selection)\b|((?:[\w.-]+\/)*[\w.-]+\/?))/g;
+    /@(?:(file|folder|design|docs|terminal|chat|branch|browser|mcp|plugin|element):([^\s]+)|(codebase|selection)\b|((?:[\w.-]+\/)*[\w.-]+\/?))/g;
 
 function normalizeDesignKey(value: string): string {
     return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -101,6 +103,11 @@ export function mentionDisplayLabel(mention: ChatMention): string {
     if (mention.kind === "plugin") {
         return mention.label || mention.id || mention.path || "Plugin";
     }
+    if (mention.kind === "element") {
+        if (mention.label?.startsWith("<")) return mention.label;
+        const tag = (mention.id || mention.path || "element").replace(/^element:/, "").replace(/-\d+$/, "");
+        return `<${tag}>`;
+    }
     if (mention.kind === "file" || mention.kind === "folder" || mention.kind === "docs") {
         if (mention.label && !mention.label.includes("/")) return mention.label;
         if (mention.path) return pathBasename(mention.path);
@@ -143,6 +150,8 @@ export function formatMentionToken(mention: ChatMention): string {
         token = `@mcp:${slugifyMentionLabel(mention.id || mention.label || "server")}`;
     } else if (mention.kind === "plugin") {
         token = `@plugin:${slugifyMentionLabel(mention.id || mention.path || mention.label || "plugin")}`;
+    } else if (mention.kind === "element") {
+        token = `@${(mention.id || "element:element").replace(/^@/, "")}`;
     } else {
         token = `@${mention.kind}:${mention.path ?? mention.label}`;
     }
@@ -189,6 +198,7 @@ function labelForTypedMention(kind: MentionKind, path: string): string {
     if (kind === "branch") return unslugMentionLabel(path);
     if (kind === "mcp") return unslugMentionLabel(path);
     if (kind === "plugin") return unslugMentionLabel(path);
+    if (kind === "element") return `<${path.replace(/-\d+$/, "")}>`;
     return path;
 }
 
@@ -236,7 +246,7 @@ export function parseMentionTokens(text: string): ChatMention[] {
             mentions.push({
                 kind,
                 path,
-                id: kind === "chat" || kind === "plugin" ? path : undefined,
+                id: kind === "chat" || kind === "plugin" ? path : kind === "element" ? `element:${path}` : undefined,
                 label: labelForTypedMention(kind, path),
             });
             continue;
@@ -448,6 +458,13 @@ async function readMentionContext(
 
     if (mention.kind === "selection") {
         return null;
+    }
+
+    if (mention.kind === "element") {
+        const key = mention.id || `element:${mention.path || ""}`;
+        const el = lookupElementMention(key);
+        if (el) return elementMentionBlock(key, el);
+        return `<mention_context type="element" selector="${escapeXmlAttr(mention.path || "")}">The user referenced the page element ${escapeXmlAttr(mentionDisplayLabel(mention))}${mention.path ? ` (${escapeXmlAttr(mention.path)})` : ""} from the Browser tab.</mention_context>`;
     }
 
     if (mention.kind === "design") {

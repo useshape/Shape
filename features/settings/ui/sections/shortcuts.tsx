@@ -1,6 +1,5 @@
 "use client";
 
-import { RiDeleteBinLine, RiDownloadLine, RiPencilLine, RiUploadLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -287,7 +286,7 @@ export function KeyboardShortcutsView() {
 
     return (
         <div className="relative h-full min-h-0 bg-panel">
-            <div className="absolute inset-0 overflow-y-auto overscroll-contain scroll-auto px-6 pt-8 pb-6 lg:px-8 no-scrollbar">
+            <div className="absolute inset-0 overflow-y-auto px-6 pt-8 pb-6 lg:px-8">
                 <div className="mx-auto w-full max-w-5xl">
                     <h1 className="text-2xl font-medium text-text-primary">Shortcuts</h1>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -300,7 +299,7 @@ export function KeyboardShortcutsView() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button type="button" variant="outline" size="md" className="gap-1.5 bg-panel-hover">
-                                    <Icon icon={RiDownloadLine} />
+                                    <Icon icon={"download-minimalistic"} />
                                     Import
                                 </Button>
                             </DropdownMenuTrigger>
@@ -323,7 +322,7 @@ export function KeyboardShortcutsView() {
                             className="gap-1.5 bg-panel-hover"
                             onClick={() => void onExportJson()}
                         >
-                            <Icon icon={RiUploadLine} />
+                            <Icon icon={"upload-minimalistic"} />
                             Export
                         </Button>
                         <Button
@@ -367,7 +366,7 @@ export function KeyboardShortcutsView() {
                                                 className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                                 onClick={() => setRecording(b)}
                                             >
-                                                <Icon icon={RiPencilLine} />
+                                                <Icon icon={"pen"} />
                                             </button>
                                             <button
                                                 type="button"
@@ -378,7 +377,7 @@ export function KeyboardShortcutsView() {
                                                     reload();
                                                 }}
                                             >
-                                                <Icon icon={RiDeleteBinLine} />
+                                                <Icon icon={"trash-bin-trash"} />
                                             </button>
                                         </div>
                                     </div>

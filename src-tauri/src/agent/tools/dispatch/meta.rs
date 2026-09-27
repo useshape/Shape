@@ -17,6 +17,35 @@ use super::common::{
 };
 use super::{SideEffect, ToolCtx, ToolOutcome};
 
+pub(super) async fn tool_mcp_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let Some(mcp_state) = ctx.mcp_state else {
+        return error_outcome("mcp_search", "MCP is not configured.");
+    };
+    let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(6) as usize;
+    match mcp_state.search_catalog(query, limit) {
+        Ok(text) => ToolOutcome {
+            tool_result: text.clone(),
+            ui_chunk: format!(
+                "\n<tool_result>\n[mcp_search]\n{}\n</tool_result>\n",
+                escape_xml_text(&clip(&text, 1500))
+            ),
+            side_effect: None,
+        },
+        Err(e) => error_outcome("mcp_search", &e),
+    }
+}
+
+pub(super) async fn tool_mcp_call_named(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let name = match get_str(args, "name") {
+        Ok(name) => name,
+        Err(e) => return error_outcome("mcp_call", &e),
+    };
+    let arguments = args.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    let args_json = serde_json::to_string(&arguments).unwrap_or_else(|_| "{}".into());
+    tool_mcp_call(&name, &args_json, ctx).await
+}
+
 pub(super) async fn tool_mcp_call(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let Some(mcp_state) = ctx.mcp_state else {
         return error_outcome(name, "MCP is not configured.");

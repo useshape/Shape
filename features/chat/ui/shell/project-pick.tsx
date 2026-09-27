@@ -1,6 +1,5 @@
 "use client";
 
-import { RiFolderAddLine, RiFolderLine } from "@remixicon/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import { commands } from "@/lib/backend";
@@ -10,6 +9,7 @@ import { getRepoName, loadRepoHistory } from "@/lib/workspace/repo-history";
 import {
     AzureDevOpsMark,
     BitbucketMark,
+    FrameworkMark,
     GitHubMark,
     GitLabMark,
     GitUrlMark,
@@ -28,11 +28,20 @@ export const DESIGN_SCAFFOLDS: Array<{
     { id: "remix", label: "Create Remix project", description: "Remix + TypeScript" },
 ];
 
+const SCAFFOLD_MARK: Record<ScaffoldKind, ReactNode> = {
+    next: <FrameworkMark slug="nextdotjs" color="000000" invert />,
+    vite: <FrameworkMark slug="vite" color="646CFF" />,
+    astro: <FrameworkMark slug="astro" color="FF5D01" />,
+    remix: <FrameworkMark slug="remix" color="FFFFFF" />,
+};
+
 const SCAFFOLD_ITEMS: QuickPickItem[] = DESIGN_SCAFFOLDS.map((item) => ({
     id: `scaffold:${item.id}`,
     label: item.label,
     description: item.description,
-    icon: RiFolderAddLine,
+    iconNode: (
+        <span className="flex size-4 items-center justify-center">{SCAFFOLD_MARK[item.id]}</span>
+    ),
 }));
 
 type CloneKind = "git" | "github" | "gitlab" | "bitbucket" | "azure";
@@ -164,6 +173,10 @@ export function ProjectQuickPick({
         await scaffoldDesignProject(kind);
     };
 
+    const mark = (node: ReactNode): ReactNode => (
+        <span className="flex size-4 items-center justify-center">{node}</span>
+    );
+
     const projectItems: QuickPickItem[] = useMemo(() => {
         const q = query.trim().toLowerCase();
         const rows = recents
@@ -177,23 +190,48 @@ export function ProjectQuickPick({
                 id: r.path,
                 label: getRepoName(r.path),
                 description: r.path,
-                icon: RiFolderLine,
+                icon: "folder" as const,
                 hint: i < 9 ? `Ctrl+${i + 1}` : undefined,
             }));
         const extras: QuickPickItem[] = [
-            { id: "__browse__", label: "Open folder", description: "Browse a folder on disk", icon: RiFolderLine },
+            { id: "__browse__", label: "Open folder", description: "Browse a folder on disk", icon: "folder" },
             ...SCAFFOLD_ITEMS,
-            { id: "__sources__", label: "Clone from Git…", icon: RiFolderLine, description: "GitHub, GitLab, URL" },
+            {
+                id: "git",
+                label: "Git URL",
+                description: "Clone from a remote URL",
+                iconNode: mark(<GitUrlMark />),
+            },
+            {
+                id: "github",
+                label: "GitHub repository",
+                description: "Clone GitHub owner/repo",
+                iconNode: mark(<GitHubMark />),
+            },
+            {
+                id: "gitlab",
+                label: "GitLab repository",
+                description: "Clone group/project",
+                iconNode: mark(<GitLabMark />),
+            },
+            {
+                id: "bitbucket",
+                label: "Bitbucket repository",
+                description: "Clone workspace/repo",
+                iconNode: mark(<BitbucketMark />),
+            },
+            {
+                id: "azure",
+                label: "Azure DevOps repository",
+                description: "Clone org/project/repo",
+                iconNode: mark(<AzureDevOpsMark />),
+            },
         ];
         return [...rows, ...extras.filter((item) => matchesQuery(item, q))];
     }, [query, recents]);
 
-    const mark = (node: ReactNode): ReactNode => (
-        <span className="flex size-4 items-center justify-center">{node}</span>
-    );
-
     const sourceItems: QuickPickItem[] = [
-        { id: "local", label: "Open folder", description: "Browse a folder on disk", icon: RiFolderLine },
+        { id: "local", label: "Open folder", description: "Browse a folder on disk", icon: "folder" },
         ...SCAFFOLD_ITEMS,
         {
             id: "git",
@@ -324,9 +362,10 @@ export function ProjectQuickPick({
             onQueryChange={setQuery}
             items={projectItems}
             onSelect={(item) => {
-                if (item.id === "__sources__") {
+                if (item.id === "git" || item.id === "github" || item.id === "gitlab" || item.id === "bitbucket" || item.id === "azure") {
                     setQuery("");
-                    setStep("sources");
+                    setCloneKind(item.id);
+                    setStep("clone");
                     return;
                 }
                 if (handleScaffoldOrLocal(item.id)) return;
@@ -343,7 +382,7 @@ export function ProjectQuickPickHost() {
 
     useEffect(() => {
         const onNew = () => {
-            setInitialStep("sources");
+            setInitialStep("projects");
             setOpen(true);
         };
         const onPick = () => {

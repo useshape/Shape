@@ -1,6 +1,5 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
 import { Button, type ButtonCategory, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -10,14 +9,14 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 
 export type DisclosureItem = {
     text: string;
     href?: string;
     action?: (item: DisclosureItem) => void;
     variant?: "danger";
-    icon?: RemixiconComponentType;
+    icon?: SolarIconName;
 };
 
 export type DisclosureGroup = {
@@ -44,7 +43,7 @@ export function DisclosureDropdown({
 }: {
     items: Array<DisclosureItem | DisclosureGroup>;
     toggleText?: string;
-    icon?: RemixiconComponentType;
+    icon?: SolarIconName;
     category?: ButtonCategory;
     variant?: ButtonVariant;
     size?: ButtonSize;

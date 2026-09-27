@@ -53,13 +53,76 @@ pub fn load_conversations(proj_path: &str) -> Vec<Conversation> {
 }
 
 pub fn save_conversations(proj_path: &str, convs: &[Conversation]) {
+    save_conversations_inner(proj_path, convs, &[]);
+}
+
+/// Write the project chat file, merging with whatever another window already saved.
+/// `removed` ids are deleted even if they still exist on disk.
+pub fn save_conversations_removing(proj_path: &str, convs: &[Conversation], removed: &str) {
+    save_conversations_inner(proj_path, convs, &[removed]);
+}
+
+fn save_conversations_inner(proj_path: &str, convs: &[Conversation], removed: &[&str]) {
     let file_path = get_chat_history_path(proj_path);
-    if let Ok(content) = serde_json::to_string(convs) {
-        let _ = std::fs::write(&file_path, content);
-        logging::debug("history", &format!("Saved {} conversations", convs.len()));
-    } else {
-        logging::error("history", "Failed to serialize conversations");
+    let mut lock_path = file_path.clone();
+    lock_path.set_extension("lock");
+    let started = std::time::Instant::now();
+    loop {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(_lock) => {
+                let merged = merge_with_disk(proj_path, convs, removed);
+                if let Ok(content) = serde_json::to_string(&merged) {
+                    let _ = std::fs::write(&file_path, content);
+                    logging::debug("history", &format!("Saved {} conversations", merged.len()));
+                } else {
+                    logging::error("history", "Failed to serialize conversations");
+                }
+                let _ = std::fs::remove_file(&lock_path);
+                return;
+            }
+            Err(_) if started.elapsed() < std::time::Duration::from_secs(2) => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(_) => {
+                let _ = std::fs::remove_file(&lock_path);
+            }
+        }
     }
+}
+
+fn histories_compatible_prefix(a: &[crate::agent::models::ChatMessage], b: &[crate::agent::models::ChatMessage]) -> bool {
+    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    short.iter().zip(long.iter()).all(|(left, right)| {
+        left.role == right.role && left.content == right.content
+    })
+}
+
+fn merge_with_disk(proj_path: &str, incoming: &[Conversation], removed: &[&str]) -> Vec<Conversation> {
+    let mut merged = load_conversations(proj_path);
+    for id in removed {
+        merged.retain(|c| c.id != *id);
+    }
+    for conv in incoming {
+        if removed.iter().any(|id| *id == conv.id) {
+            continue;
+        }
+        if let Some(existing) = merged.iter_mut().find(|c| c.id == conv.id) {
+            if histories_compatible_prefix(&conv.history, &existing.history) {
+                if conv.history.len() >= existing.history.len() {
+                    *existing = conv.clone();
+                }
+            } else if conv.timestamp >= existing.timestamp {
+                *existing = conv.clone();
+            }
+        } else {
+            merged.push(conv.clone());
+        }
+    }
+    merged
 }
 
 /// Locate a conversation by id, optionally preferring a project file first.
@@ -125,14 +188,21 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
         existing.history = history;
         existing.title = title;
         existing.timestamp = now_f64();
+        let (locked, anchor) = state.title_meta();
+        existing.title_locked = locked;
+        existing.title_anchor_turns = anchor;
         collapse_duplicate_assistants(&mut existing.history);
     } else {
+        let (locked, anchor) = state.title_meta();
         list.push(Conversation {
             id,
             title,
             history,
             project_path: proj_path.to_string(),
             timestamp: now_f64(),
+            title_locked: locked,
+            title_anchor_turns: anchor,
+            archived: false,
         });
         if let Some(last) = list.last_mut() {
             collapse_duplicate_assistants(&mut last.history);
@@ -170,6 +240,9 @@ pub fn upsert_conversation_snapshot(
             history,
             project_path: proj_path.to_string(),
             timestamp: now_f64(),
+            title_locked: false,
+            title_anchor_turns: 0,
+            archived: false,
         });
         if let Some(last) = list.last_mut() {
             collapse_duplicate_assistants(&mut last.history);

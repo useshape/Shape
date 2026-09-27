@@ -1,9 +1,8 @@
 "use client";
 
-import { RiArrowRightSLine, RiCheckLine, RiCloseLine, RiPencilLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { ICON_SIZE_MD, ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { diffLines } from "diff";
 import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
@@ -18,21 +17,21 @@ import {
     GitStageGroup,
     groupWorkflowRows,
     coalesceConsecutiveSameFileEdits,
+    coalesceConsecutiveSameTasks,
     isRenderableWorkflowBlock,
     parseGitStagePath,
     GeneratedMediaStep,
 } from "./workflow";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { PluginLogo } from "@/components/ui/plugin-logo";
 import { Favicon } from "@/components/ui/favicon";
-import { isShapePluginMeta, humanizePluginActionName } from "@/lib/plugins/logos";
-import { parseWebSearchHits, WebSearchBlock } from "./search";
+import { humanizePluginActionName } from "@/lib/plugins/logos";
+import { PluginActivityCard } from "./plugin-card";
+import { parseWebSearchHits, WebSearchBlock, WebSearchTrail } from "./search";
 import { ActionLine } from "./action-line";
 import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
-import { ChromeBrowserIcon } from "@/components/ui/chrome-browser-icon";
+import { BrowseChatCard } from "./browse-frame";
 import { openSubagent, upsertSubagent } from "@/features/agent/subagents/store";
-import { Button } from "@/components/ui/button";
 
 function formatDuration(ms?: number): string {
     if (!ms || ms < 1000) return "1s";
@@ -70,9 +69,78 @@ function groupDetail(names: string[]): string | null {
     return `${unique[0]} and more`;
 }
 
-function lineRangeLabel(start?: number, end?: number): string | null {
-    if (!start || !end) return null;
-    return start === end ? `L${start}` : `L${start}-${end}`;
+function modelChipLabel(model?: string): string {
+    const bare = (model || "").split("/").pop()?.trim() || "";
+    if (!bare || bare === "auto") return bare === "auto" ? "Auto" : "";
+    return bare.replace(/[-_]/g, " ");
+}
+
+function openSpawnedAgent(block: Chunk) {
+    const name = block.query || "agent";
+    const id = block.file || name;
+    upsertSubagent({
+        id,
+        title: name,
+        agent: name,
+        model: block.command,
+        activity: "Working…",
+        task: block.type === "subagent_ref" ? block.content : undefined,
+        transcript: block.type === "subagent" ? block.content : undefined,
+        status: (block.commandStatus as "running" | "done" | "error" | "pending") || "running",
+    });
+    openSubagent(id);
+}
+
+function SubagentRow({ block }: { block: Chunk }) {
+    const name = block.query || "agent";
+    const task = (block.type === "subagent_ref" ? block.content : "")?.trim();
+    const model = modelChipLabel(block.command);
+    return (
+        <button
+            type="button"
+            onClick={() => openSpawnedAgent(block)}
+            className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left chat-text text-text-secondary hover:text-text-primary"
+        >
+            <span className="shrink-0 text-text-muted">Spawned</span>
+            <span className="flex size-4 shrink-0 items-center justify-center">
+                {providerIcon(block.command || "auto", 14)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-text-primary">{task || name}</span>
+            {model ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-4 px-2 py-0.5 text-xs text-text-secondary">
+                    {providerIcon(block.command || "auto", 12)}
+                    {model}
+                </span>
+            ) : null}
+        </button>
+    );
+}
+
+function SubagentSpawnGroup({ blocks }: { blocks: Chunk[] }) {
+    const [open, setOpen] = useState(true);
+    return (
+        <div className="shape-row-in py-0.5">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="flex w-fit max-w-full items-center gap-2 text-left chat-text text-text-secondary hover:text-text-primary"
+            >
+                <span>Spawning subagents in parallel</span>
+                <SolarIcon
+                    name="alt-arrow-down"
+                    size={ICON_SIZE_SM}
+                    className={cn("text-text-muted transition-transform duration-200", open && "rotate-180")}
+                />
+            </button>
+            {open ? (
+                <div className="mt-0.5 flex flex-col">
+                    {blocks.map((block, index) => (
+                        <SubagentRow key={`${block.type}-${block.file || block.query}-${index}`} block={block} />
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
 }
 
 function editDelta(block: Chunk): { add: number; del: number } {
@@ -246,21 +314,17 @@ function ThoughtStep({
                     onClick={() => expandable && setOpen((v) => !v)}
                     className={cn(
                         "flex items-center gap-1 wf-summary-text transition-colors",
-                        expandable
-                            ? "hover:text-text-primary cursor-pointer"
-                            : "cursor-default",
+                        expandable ? "hover:text-text-primary cursor-pointer" : "cursor-default",
                     )}
                 >
                     <span>
                         <ThoughtHeading content={trimmed} isActive={false} />
                     </span>
                     {expandable ? (
-                        <Icon
-                            icon={RiArrowRightSLine}
-                            className={cn(
-                                "opacity-0 transition-transform duration-200",
-                                open && "rotate-90 opacity-50",
-                            )}
+                        <SolarIcon
+                            name="alt-arrow-right"
+                            size={ICON_SIZE_SM}
+                            className={cn("opacity-0 transition-transform duration-200", open && "rotate-90 opacity-50")}
                         />
                     ) : null}
                 </button>
@@ -427,7 +491,7 @@ function EditApprovalRow({ block }: { block: Chunk }) {
 
     return (
         <ApprovalCard
-            icon={<Icon icon={RiPencilLine} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />}
+            icon={<SolarIcon name="pen" className="text-text-muted" size={ICON_SIZE_MD} />}
             title={
                 <button
                     type="button"
@@ -440,12 +504,10 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                         <span className="text-success">+{add}</span>
                         <span className="text-error">-{del}</span>
                     </span>
-                    <Icon
-                        icon={RiArrowRightSLine}
-                        className={cn(
-                            "shrink-0 opacity-50 transition-transform duration-200",
-                            diffOpen && "rotate-90",
-                        )}
+                    <SolarIcon
+                        name="alt-arrow-right"
+                        size={ICON_SIZE_SM}
+                        className={cn("opacity-50 transition-transform duration-200", diffOpen && "rotate-90")}
                     />
                 </button>
             }
@@ -473,7 +535,7 @@ function StepRowAppliedEdit({ block }: { block: Chunk }) {
     const hasDiff = add > 0 || del > 0;
     const file = block.file || "";
     return (
-        <div className="py-0.5">
+        <div className="shape-row-in py-0.5">
             <button
                 type="button"
                 onClick={() => hasDiff && setDiffOpen((v) => !v)}
@@ -487,9 +549,10 @@ function StepRowAppliedEdit({ block }: { block: Chunk }) {
                 </span>
                 <LineDelta add={add} del={del} />
                 {hasDiff ? (
-                    <Icon
-                        icon={RiArrowRightSLine}
-                        className={cn("opacity-50 transition-transform duration-200 shrink-0", diffOpen && "rotate-90")}
+                    <SolarIcon
+                        name="alt-arrow-right"
+                        size={ICON_SIZE_SM}
+                        className={cn("opacity-50 transition-transform duration-200", diffOpen && "rotate-90")}
                     />
                 ) : null}
             </button>
@@ -512,13 +575,6 @@ function PluginCallStep({ block }: { block: Chunk }) {
     const status = localStatus ?? block.commandStatus ?? "ok";
     const toolkit = block.pluginToolkit || "plugins";
     const label = humanizePluginActionName(block.pluginSlug || "", block.pluginLabel) || "Plugin";
-    const detail = (block.content || "")
-        .replace(/^(Awaiting approval|Rejected|Cancelled)\s*[·:]?\s*/i, "")
-        .replace(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-    const truncated =
-        detail.length > 72 ? `${detail.slice(0, 69).trimEnd()}…` : detail;
 
     useEffect(() => {
         if (status !== "pending" || !block.commandId) return;
@@ -556,76 +612,60 @@ function PluginCallStep({ block }: { block: Chunk }) {
             .finally(() => setIsProcessing(false));
     }, [block.commandId, isProcessing]);
 
-    if (status === "pending") {
-        const subtitle = truncated || "Waiting for approval";
-        const native = isShapePluginMeta(toolkit, block.pluginSlug);
-        return (
-            <div className="my-1 flex items-center gap-3 squircle-xl bg-surface-3 px-3 py-2.5">
-                {native ? null : (
-                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden squircle-xl bg-surface-2">
-                        <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={22} />
-                    </span>
-                )}
-                <div className="min-w-0 flex-1">
-                    <div className="truncate text-md font-medium text-text-primary">{label}</div>
-                    <div className="truncate text-xs font-medium text-text-muted">{subtitle}</div>
-                </div>
-                <div className="flex shrink-0 items-center gap-0.5 border border-border-secondary squircle-2xl px-1 divide-x divide-border-secondary">
-                    <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="rounded-none hover:bg-transparent"
-                        aria-label="Reject"
-                        disabled={isProcessing}
-                        onClick={handleReject}
-                    >
-                        <Icon icon={RiCloseLine} size={ICON_SIZE_MD} />
-                    </Button>
-                    <Button
-                        type="button"
-                        aria-label="Allow"
-                        size="icon"
-                        variant="ghost"
-                        className="rounded-none hover:bg-transparent"
-                        disabled={isProcessing}
-                        onClick={handleAccept}
-                    >
-                        <Icon icon={RiCheckLine} size={ICON_SIZE_MD} />
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
-    const verb =
-        status === "rejected"
-            ? "Rejected"
-            : status === "cancelled"
-              ? "Cancelled"
-              : status === "error"
-                ? "Failed"
-                : label;
     return (
-        <div className="flex items-center gap-1.5 py-0.5 chat-text font-regular font-sans text-text-primary/80 min-w-0">
-            {isShapePluginMeta(toolkit, block.pluginSlug) ? null : (
-                <PluginLogo toolkit={toolkit} name={toolkit} slug={block.pluginSlug} size={14} className="rounded-sm" />
-            )}
-            <span className="truncate">
-                {verb}
-                {status === "ok" || status === "error" ? null : (
-                    <>
-                        {" "}
-                        <span className="text-text-secondary">{label}</span>
-                    </>
-                )}
-            </span>
-        </div>
+        <PluginActivityCard
+            toolkit={toolkit}
+            slug={block.pluginSlug}
+            label={label}
+            body={block.content || ""}
+            status={status}
+            pending={status === "pending"}
+            busy={isProcessing}
+            onAllow={handleAccept}
+            onReject={handleReject}
+        />
     );
 }
 
 function StepRow({ block }: { block: Chunk }) {
     const [diffOpen, setDiffOpen] = useState(false);
+
+    if (block.type === "browse_session") {
+        let image = "";
+        let x: number | undefined;
+        let y: number | undefined;
+        let consoleLines: string[] | undefined;
+        try {
+            const parsed = JSON.parse(block.content || "") as {
+                image?: string;
+                x?: number;
+                y?: number;
+                console?: string[];
+            };
+            image = parsed.image || "";
+            x = parsed.x;
+            y = parsed.y;
+            consoleLines = parsed.console;
+        } catch {
+            image = "";
+        }
+        return (
+            <div className="shape-row-in py-0.5">
+                <div className="mt-1.5">
+                    <BrowseChatCard
+                        url={block.visitUrl}
+                        title={block.visitTitle}
+                        status={block.commandStatus}
+                        image={image}
+                        x={x}
+                        y={y}
+                        consoleLines={consoleLines}
+                        followLive={Boolean(block.isGenerating) || !image.trim()}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     if (block.type === "think" || block.type === "thought") {
         return <ThoughtStep content={block.content || ""} isActive={block.isGenerating} />;
@@ -677,32 +717,7 @@ function StepRow({ block }: { block: Chunk }) {
     }
 
     if (block.type === "subagent" || block.type === "subagent_ref") {
-        const name = block.query || "agent";
-        const id = block.file || name;
-        return (
-            <button
-                type="button"
-                className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80 hover:text-text-primary"
-                onClick={() => {
-                    upsertSubagent({
-                        id,
-                        title: name,
-                        agent: name,
-                        model: block.command,
-                        activity: "Working…",
-                        task: block.type === "subagent_ref" ? block.content : undefined,
-                        transcript: block.type === "subagent" ? block.content : undefined,
-                        status: (block.commandStatus as "running" | "done" | "error" | "pending") || "running",
-                    });
-                    openSubagent(id);
-                }}
-            >
-                {providerIcon(block.command || "auto", 14)}
-                <span>
-                    Spawned <span className="text-text-secondary">{name}</span>
-                </span>
-            </button>
-        );
+        return <SubagentRow block={block} />;
     }
 
     if (block.type === "grep") {
@@ -731,7 +746,6 @@ function StepRow({ block }: { block: Chunk }) {
             <ActionLine
                 action={block.isGenerating ? "Inspecting" : "Inspected"}
                 detail={detail}
-                icon={<ChromeBrowserIcon size={14} branded />}
             />
         );
     }
@@ -774,7 +788,7 @@ function StepRow({ block }: { block: Chunk }) {
         const { add, del } = editDelta(block);
         const hasDiff = add > 0 || del > 0;
         return (
-            <div className="py-0.5">
+            <div className="shape-row-in py-0.5">
                 <button
                     type="button"
                     onClick={() => hasDiff && setDiffOpen((v) => !v)}
@@ -788,9 +802,10 @@ function StepRow({ block }: { block: Chunk }) {
                     </span>
                     <LineDelta add={add} del={del} />
                     {hasDiff ? (
-                        <Icon
-                            icon={RiArrowRightSLine}
-                            className={cn("opacity-0 transition-transform duration-200 shrink-0", diffOpen && "rotate-90 opacity-50")}
+                        <SolarIcon
+                            name="alt-arrow-right"
+                            size={ICON_SIZE_SM}
+                            className={cn("opacity-50 transition-transform duration-200", diffOpen && "rotate-90")}
                         />
                     ) : null}
                 </button>
@@ -903,7 +918,7 @@ export function TurnWorkflowSummary({
 
     if (visible.length === 0) return <>{children}</>;
 
-    const coalesced = coalesceConsecutiveSameFileEdits(visible);
+    const coalesced = coalesceConsecutiveSameTasks(coalesceConsecutiveSameFileEdits(visible));
     const stats = computeTurnStats(coalesced);
     const rows = groupWorkflowRows(
         coalesced.filter(
@@ -912,7 +927,7 @@ export function TurnWorkflowSummary({
                     && b.commandStatus === "pending"),
         ),
     );
-    const thoughtBlocks = visible.filter((b) => b.type === "think" || b.type === "thought");
+    const thoughtBlocks = coalesced.filter((b) => b.type === "think" || b.type === "thought");
     const leadThought = thoughtBlocks[0];
     const showLintFooter = stats.lintClean && stats.lintChecks > 0;
     const lintShownInSteps = visible.some((b) => {
@@ -946,29 +961,31 @@ export function TurnWorkflowSummary({
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex w-full max-w-full items-center gap-2 py-0.5 chat-text font-medium text-text-muted hover:text-text-primary transition-colors"
+                className="flex w-fit max-w-full items-center gap-2 py-0.5 chat-text font-medium text-text-muted hover:text-text-primary transition-colors"
             >
-                <span className="wf-summary-text min-w-0 flex-1 text-left">
+                <span className="wf-summary-text min-w-0 text-left">
                     Worked for{" "}
                     <span className="wf-summary-text-strong">{workedLabel}</span>
                 </span>
-                <Icon
-                    icon={RiArrowRightSLine}
-                    className={cn("shrink-0 opacity-50 transition-transform duration-200", open && "rotate-90")}
+                <SolarIcon
+                    name="alt-arrow-right"
+                    size={ICON_SIZE_SM}
+                    className={cn("opacity-50 transition-transform duration-200", open && "rotate-90")}
                 />
             </button>
             ) : null}
 
             <Collapse open={showHeader ? open : true}>
-                <div className="mt-0.5 flex flex-col gap-0.5">
+                <div className="flex flex-col">
                     {leadThought?.content?.trim() ? (
                         <ThoughtStep content={leadThought.content} isActive={leadThought.isGenerating} />
                     ) : null}
-
-                    <div className="relative ml-0.5 flex flex-col gap-0.5 pl-0">
                             {(() => {
                                 let skippedLeadThought = false;
                                 return rows.map((row, i) => {
+                                    if (row.kind === "subagent_group") {
+                                        return <SubagentSpawnGroup key={`subs-${i}`} blocks={row.blocks} />;
+                                    }
                                     if (row.kind === "git_stage_group") {
                                         return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
                                     }
@@ -986,11 +1003,7 @@ export function TurnWorkflowSummary({
                                             <GroupActionLabel
                                                 key={`searches-${i}`}
                                                 action="Searched"
-                                                detail={
-                                                    row.count > 1
-                                                        ? `${row.count} times`
-                                                        : groupDetail(row.queries)
-                                                }
+                                                detail={row.count > 1 ? `${row.count} times` : groupDetail(row.queries)}
                                             />
                                         );
                                     }
@@ -1013,32 +1026,10 @@ export function TurnWorkflowSummary({
                                         );
                                     }
                                     if (row.kind === "web_trail") {
-                                        const queries = row.blocks
-                                            .map((b) => (b.query || "").trim())
-                                            .filter(Boolean);
-                                        const results = row.blocks.flatMap((b) => {
-                                            if (b.type === "web_visit") {
-                                                return [{
-                                                    title: b.visitTitle || b.visitHost || "Visited",
-                                                    url: b.visitUrl || "",
-                                                    snippet: b.visitHost ? `Visited ${b.visitHost}` : "",
-                                                }];
-                                            }
-                                            return parseWebSearchHits(b.content || "");
-                                        });
-                                        const seen = new Set<string>();
-                                        const unique = results.filter((hit) => {
-                                            const key = hit.url || hit.title;
-                                            if (!key || seen.has(key)) return false;
-                                            seen.add(key);
-                                            return true;
-                                        });
                                         return (
-                                            <WebSearchBlock
+                                            <WebSearchTrail
                                                 key={`web-${i}`}
-                                                query={queries[queries.length - 1]}
-                                                searches={queries.length}
-                                                results={unique}
+                                                blocks={row.blocks}
                                                 isActive={row.blocks.some((b) => b.isGenerating)}
                                             />
                                         );
@@ -1063,7 +1054,6 @@ export function TurnWorkflowSummary({
                             {showLintFooter && !lintShownInSteps ? (
                                 <div className="py-0.5 chat-text font-medium text-text-muted">No linter errors</div>
                             ) : null}
-                    </div>
                 </div>
             </Collapse>
 

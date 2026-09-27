@@ -42,5 +42,12 @@ describe("upsertTaggedBlockInContent", () => {
 
   it("appends plain text chunks unchanged", () => {
     expect(upsertTaggedBlockInContent("a", "b")).toBe("ab");
+
+    const first = '<browse_session id="live" status="controlling" url="https://a.test" title="A"></browse_session>';
+    const second = '<browse_session id="live" status="controlling" url="https://b.test" title="B"></browse_session>';
+    const replaced = upsertTaggedBlockInContent(`Hello\n${first}\n`, `\n${second}\n`);
+    expect(replaced.match(/<browse_session/g)).toHaveLength(1);
+    expect(replaced).toContain("https://b.test");
+    expect(replaced).not.toContain("https://a.test");
   });
 });

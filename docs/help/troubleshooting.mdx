@@ -1,34 +1,25 @@
 ---
 title: Troubleshooting
-description: Fix common install, sign-in, and AI issues.
-order: 3
+description: When install, sign-in, or the preview fails.
+order: 4
 ---
 
-## Shape will not open on Windows
+## The app will not open
 
-Use Windows 10 or 11 (64-bit). Download again from [Download](/download) or [GitHub releases](https://github.com/useshape/Shape/releases).
+It needs Windows 10 or 11, 64-bit. Download the installer again from [useshape.org/download](https://useshape.org/download).
 
-## Sign-in fails in the desktop app
+## Sign-in never finishes
 
-1. Finish sign-in in the browser when prompted.
-2. Sign out and sign in again from the avatar menu.
+Finish the step in the browser, then return to the app. If it still fails, sign out and sign in again.
 
-See [Accounts](/docs/introduction/accounts).
+## Chat says usage is not allowed
 
-## AI says usage is not allowed
+Check the plan and remaining credits on [Billing](/dashboard/settings/billing). Free includes Auto only.
 
-Check your plan and credits on [Billing](/dashboard/settings/billing). Free tier cannot use all paid models.
+## The preview cannot reach localhost
 
-## Browser cannot reach localhost
+Start the dev server, then open that URL in the [browser](/docs/agent/browser).
 
-Start the app from **Scripts** or the terminal first. Enter the URL shown in the terminal (often `http://localhost:3000`) in the [Browser](/docs/editor/visual-design) tab. If design **Apply** fails, confirm a project folder is open and the preview is a local page Shape can map to source.
+## GitHub data is missing
 
-## Git Manager shows no pull requests
-
-[Sign in with GitHub](/docs/git/github-sign-in) and open a folder whose remote is on github.com.
-
-## Related
-
-- [Install](/docs/introduction/install)
-- [FAQ](/docs/help/faq)
-- [Contact support](/docs/help/contact-support)
+[Sign in with GitHub](/docs/git/github) and open a folder whose remote is on github.com.

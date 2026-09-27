@@ -1,22 +1,8 @@
 "use client";
 
-import {
-    RiArrowDownSLine,
-    RiArrowRightSLine,
-    RiBox3Line,
-    RiBrushLine,
-    RiCodeLine,
-    RiColorFilterLine,
-    RiEyeOffLine,
-    RiFileLine,
-    RiImageLine,
-    RiLink,
-    RiShapesLine,
-    RiText,
-} from "@remixicon/react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD, ICON_SIZE_SM, type SolarIconName } from "@/components/ui/icon";
 import { ScrollArea } from "@/components/ui/scroll";
 import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
@@ -35,12 +21,12 @@ import {
 type PanelTab = "layers" | "pages" | "library";
 
 function kindIcon(kind: ReturnType<typeof layerKind>) {
-    if (kind === "text") return RiText;
-    if (kind === "link") return RiLink;
-    if (kind === "image") return RiImageLine;
-    if (kind === "vector") return RiShapesLine;
-    if (kind === "button") return RiBox3Line;
-    return RiBox3Line;
+    if (kind === "text") return "text-field";
+    if (kind === "link") return "link";
+    if (kind === "image") return "gallery";
+    if (kind === "vector") return "widget";
+    if (kind === "button") return "box";
+    return "box";
 }
 
 function kindClass(kind: ReturnType<typeof layerKind>) {
@@ -74,7 +60,7 @@ function Section({
             >
                 <span className="min-w-0 flex-1">{title}</span>
                 {count != null ? <span className="text-xs text-text-muted">{count}</span> : null}
-                <Icon icon={open ? RiArrowDownSLine : RiArrowRightSLine} size={ICON_SIZE_MD} className="text-text-muted" />
+                <Icon icon={open ? "alt-arrow-down" : "alt-arrow-right"} size={ICON_SIZE_MD} className="text-text-muted" />
             </button>
             {open ? <div className="pb-2">{children}</div> : null}
         </div>
@@ -231,7 +217,7 @@ export function DesignLeftPanel({
                                         }}
                                     >
                                         {hasChildren ? (
-                                            <Icon icon={isCollapsed ? RiArrowRightSLine : RiArrowDownSLine} size={ICON_SIZE_SM} />
+                                            <Icon icon={isCollapsed ? "alt-arrow-right" : "alt-arrow-down"} size={ICON_SIZE_SM} />
                                         ) : null}
                                     </span>
                                     <Icon
@@ -264,7 +250,7 @@ export function DesignLeftPanel({
                                             {title}
                                         </button>
                                     )}
-                                    {layer.hidden ? <Icon icon={RiEyeOffLine} size={12} /> : null}
+                                    {layer.hidden ? <Icon icon={"eye-closed"} size={12} /> : null}
                                 </div>
                             );
                         })}
@@ -290,7 +276,7 @@ export function DesignLeftPanel({
                                     activePage === page.path && "bg-panel-active text-text-primary",
                                 )}
                             >
-                                <Icon icon={RiFileLine} size={ICON_SIZE_SM} className="text-text-muted" />
+                                <Icon icon={"file"} size={ICON_SIZE_SM} className="text-text-muted" />
                                 <span className="min-w-0 flex-1 truncate">{page.label}</span>
                                 <span className="max-w-20 truncate text-2xs text-text-muted">{page.path}</span>
                             </button>
@@ -314,7 +300,7 @@ export function DesignLeftPanel({
                                 onClick={() => onPageChange(page.path)}
                                 className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                             >
-                                <Icon icon={RiFileLine} size={ICON_SIZE_SM} className="text-accent" />
+                                <Icon icon={"file"} size={ICON_SIZE_SM} className="text-accent" />
                                 <span className="min-w-0 flex-1 truncate">{page.label}</span>
                             </button>
                         ))}
@@ -335,7 +321,7 @@ export function DesignLeftPanel({
                                         onClick={() => onOpenPath?.(item.path)}
                                         className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                                     >
-                                        <Icon icon={RiBox3Line} size={ICON_SIZE_SM} className="text-accent" />
+                                        <Icon icon={"box"} size={ICON_SIZE_SM} className="text-accent" />
                                         <span className="min-w-0 flex-1 truncate">{item.name.replace(/\.(tsx|jsx)$/i, "")}</span>
                                     </button>
                                 ))}
@@ -348,13 +334,13 @@ export function DesignLeftPanel({
                         onToggle={() => setOpenGroups((c) => ({ ...c, Styles: !c.Styles }))}
                     >
                         {[
-                            ["Text", tokens.text, RiText],
-                            ["Link", tokens.link, RiLink],
-                            ["Color", tokens.color, RiColorFilterLine],
+                            ["Text", tokens.text, "text-field"],
+                            ["Link", tokens.link, "link"],
+                            ["Color", tokens.color, "palette"],
                         ].map(([label, list, icon]) => (
                             <div key={String(label)}>
                                 <p className="flex items-center gap-2 px-3 py-1 text-xs font-medium text-text-muted">
-                                    <Icon icon={icon as typeof RiText} size={ICON_SIZE_SM} />
+                                    <Icon icon={icon as SolarIconName} size={ICON_SIZE_SM} />
                                     {String(label)}
                                 </p>
                                 {(list as ThemeToken[]).slice(0, 24).filter((token) => filtered(token.name, token.value)).map((token) => (
@@ -369,7 +355,7 @@ export function DesignLeftPanel({
                                                 style={{ background: token.value }}
                                             />
                                         ) : (
-                                            <Icon icon={RiBrushLine} size={ICON_SIZE_SM} className="text-text-muted" />
+                                            <Icon icon={"palette"} size={ICON_SIZE_SM} className="text-text-muted" />
                                         )}
                                         <span className="min-w-0 flex-1 truncate">{token.name}</span>
                                     </div>
@@ -381,7 +367,7 @@ export function DesignLeftPanel({
                                         onClick={() => onOpenPath?.(item.path)}
                                         className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                                     >
-                                        <Icon icon={RiFileLine} size={ICON_SIZE_SM} />
+                                        <Icon icon={"file"} size={ICON_SIZE_SM} />
                                         <span className="min-w-0 flex-1 truncate">{item.name}</span>
                                     </button>
                                 ))}
@@ -401,7 +387,7 @@ export function DesignLeftPanel({
                                 onClick={() => onOpenPath?.(item.path)}
                                 className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                             >
-                                <Icon icon={RiShapesLine} size={ICON_SIZE_SM} className="text-success" />
+                                <Icon icon={"widget"} size={ICON_SIZE_SM} className="text-success" />
                                 <span className="min-w-0 flex-1 truncate">{item.name}</span>
                             </button>
                         ))}
@@ -419,7 +405,7 @@ export function DesignLeftPanel({
                                 onClick={() => onOpenPath?.(item.path)}
                                 className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                             >
-                                <Icon icon={RiCodeLine} size={ICON_SIZE_SM} className="text-text-muted" />
+                                <Icon icon={"code"} size={ICON_SIZE_SM} className="text-text-muted" />
                                 <span className="min-w-0 flex-1 truncate">{item.name}</span>
                             </button>
                         ))}

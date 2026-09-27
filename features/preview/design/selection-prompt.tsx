@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RiArrowUpLine, RiSparkling2Line } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { formatMentionToken } from "@/lib/chat/mentions";
@@ -72,7 +71,7 @@ export function DesignSelectionPrompt({
                 className="absolute z-30 flex size-7 items-center justify-center rounded-full border border-border bg-panel text-text-secondary shadow-md hover:text-text-primary"
                 style={{ left: iconLeft, top: iconTop }}
             >
-                <Icon icon={RiSparkling2Line} size={ICON_SIZE_SM} />
+                <Icon icon={"magic-stick"} size={ICON_SIZE_SM} />
             </button>
             {open ? (
                 <form
@@ -109,7 +108,7 @@ export function DesignSelectionPrompt({
                         aria-label="Send"
                         className="size-8 shrink-0"
                     >
-                        <Icon icon={RiArrowUpLine} size={ICON_SIZE_SM} />
+                        <Icon icon={"arrow-up"} size={ICON_SIZE_SM} />
                     </Button>
                 </form>
             ) : null}

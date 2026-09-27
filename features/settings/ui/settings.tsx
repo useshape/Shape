@@ -35,6 +35,7 @@ import {
     MAX_CONTEXT_PRESETS,
 } from "./shared/controls";
 import { AiSettingsPanel } from "./sections/ai";
+import { MicrophoneSettings } from "./sections/microphone";
 import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
@@ -43,7 +44,7 @@ import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import { ThemePicker } from "./theme/picker";
 import { normalizeColorTheme } from "@/lib/settings/themes";
-import { SETTINGS_NAV, SETTINGS_PAGE_LEAF_IDS, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
+import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
 import { KeyboardShortcutsView } from "./sections/shortcuts";
 import { PluginsSettingsView } from "./sections/plugins";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
@@ -275,10 +276,12 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
 
 function AiSettings({
     settings,
+    page,
 }: {
     settings: ShapeSettings;
+    page: "models" | "rules" | "workflows" | "context";
 }) {
-    return <AiSettingsPanel settings={settings} />;
+    return <AiSettingsPanel settings={settings} page={page} />;
 }
 
 function LintSettings({ settings }: { settings: ShapeSettings }) {
@@ -571,20 +574,12 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
     );
 }
 
-function PrivacySettings({ settings }: { settings: ShapeSettings }) {
+function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "notifications" | "privacy" }) {
     const p = settings.privacy;
-    const n = settings.notifications;
     const websiteBase = SHAPE_API_BASE;
-    return (
-        <>
-            <SettingSection title="Startup">
-                <SettingRow title="Show welcome page on startup">
-                    <SettingSwitch
-                        checked={p.showWelcomeOnStartup}
-                        onChange={(v) => updateSettingSection("privacy", { showWelcomeOnStartup: v })}
-                    />
-                </SettingRow>
-            </SettingSection>
+    if (part === "notifications") {
+        const n = settings.notifications;
+        return (
             <SettingSection id="settings-notifications" title="Notifications">
                 <SettingRow title="Desktop notifications">
                     <SettingSwitch
@@ -611,6 +606,18 @@ function PrivacySettings({ settings }: { settings: ShapeSettings }) {
                         checked={n.onApprovalRequired}
                         disabled={!n.desktopEnabled}
                         onChange={(v) => updateSettingSection("notifications", { onApprovalRequired: v })}
+                    />
+                </SettingRow>
+            </SettingSection>
+        );
+    }
+    return (
+        <>
+            <SettingSection title="Startup">
+                <SettingRow title="Show welcome page on startup">
+                    <SettingSwitch
+                        checked={p.showWelcomeOnStartup}
+                        onChange={(v) => updateSettingSection("privacy", { showWelcomeOnStartup: v })}
                     />
                 </SettingRow>
             </SettingSection>
@@ -811,24 +818,6 @@ function ToolsSettings({ settings }: { settings: ShapeSettings }) {
     );
 }
 
-function AdvancedSettings({ settings }: { settings: ShapeSettings }) {
-    return (
-        <>
-            <SettingSection id="settings-appearance" title="Appearance">
-                <SettingRow title="Theme">
-                    <ThemePicker
-                        value={normalizeColorTheme(settings.appearance.colorTheme)}
-                        onChange={(id) => updateSettingSection("appearance", { colorTheme: id })}
-                    />
-                </SettingRow>
-            </SettingSection>
-            <DeveloperSettings settings={settings} />
-            <UpdatesSettings settings={settings} />
-            <PrivacySettings settings={settings} />
-        </>
-    );
-}
-
 export function SettingsView({
     navPortalTarget,
     sidebarExpanded = true,
@@ -851,8 +840,6 @@ export function SettingsView({
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
         () => new Set(SETTINGS_NAV.map((g) => g.id)),
     );
-    const scrollingToRef = React.useRef<string | null>(null);
-    const settingsScrollRef = React.useRef<HTMLDivElement>(null);
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "plugins") return "settings-ai-plugins";
@@ -888,32 +875,14 @@ export function SettingsView({
         }
     }, []);
 
-    const scrollToTarget = useCallback((targetId: string) => {
-        const root = settingsScrollRef.current;
-        const el = document.getElementById(targetId);
-        if (!root || !el) return;
-        scrollingToRef.current = targetId;
-        const nextTop = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop - 12;
-        root.scrollTo({ top: nextTop, behavior: "auto" });
-        const leaf = allSettingsLeaves().find((l) => l.targetId === targetId);
-        if (leaf) setActiveLeafId(leaf.id);
-        window.setTimeout(() => {
-            if (scrollingToRef.current === targetId) scrollingToRef.current = null;
-        }, 250);
-    }, []);
-
     const applyNavigation = useCallback(
         (category?: string | null, section?: string | null) => {
             const target = resolveTargetFromDeepLink(category, section);
             if (!target) return;
             const leaf = allSettingsLeaves().find((l) => l.targetId === target);
-            if (leaf && SETTINGS_PAGE_LEAF_IDS.has(leaf.id)) {
-                setActiveLeafId(leaf.id);
-                return;
-            }
-            window.setTimeout(() => scrollToTarget(target), 80);
+            if (leaf) setActiveLeafId(leaf.id);
         },
-        [resolveTargetFromDeepLink, scrollToTarget],
+        [resolveTargetFromDeepLink],
     );
 
     useEffect(() => {
@@ -983,11 +952,7 @@ export function SettingsView({
             router.push(leaf.href);
             return;
         }
-        if (leaf.targetId) {
-            setActiveLeafId(leaf.id);
-            if (SETTINGS_PAGE_LEAF_IDS.has(leaf.id)) return;
-            window.setTimeout(() => scrollToTarget(leaf.targetId!), 40);
-        }
+        setActiveLeafId(leaf.id);
     };
 
     return (
@@ -1000,7 +965,7 @@ export function SettingsView({
             {(() => {
                 const collapsed = Boolean(navPortalTarget) && !sidebarExpanded;
                 const nav = (
-                    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden" data-tauri-drag-region>
+                    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
                         {onBack ? (
                             <HostedSidebarBack
                                 label="Chat"
@@ -1018,7 +983,7 @@ export function SettingsView({
                                         className="w-full"
                                     />
                                 </div>
-                                <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+                                <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
                                     {filteredNav.map((group) => {
                                         const open = expandedGroups.has(group.id) || !!query.trim();
                                         return (
@@ -1063,31 +1028,41 @@ export function SettingsView({
                     </aside>
                 );
             })()}
-            <section className="relative min-h-0 min-w-0 flex-1 bg-panel" data-no-drag>
+            <section className="relative min-h-0 min-w-0 flex-1 bg-panel">
                 {activeLeafId === "keyboard-shortcuts" ? (
-                    <div id="settings-keyboard-shortcuts" className="absolute inset-0 flex min-h-0 flex-col">
+                    <div className="absolute inset-0 min-h-0">
                         <KeyboardShortcutsView />
                     </div>
                 ) : activeLeafId === "plugins" ? (
-                    <div id="settings-ai-plugins" className="absolute inset-0 flex min-h-0 flex-col">
+                    <div className="absolute inset-0 min-h-0">
                         <PluginsSettingsView />
                     </div>
                 ) : (
-                    <div
-                        ref={settingsScrollRef}
-                        className={cn(
-                            "absolute inset-0 overflow-y-scroll overscroll-contain [scrollbar-gutter:stable] custom-scrollbar px-6 pb-8 lg:px-8",
-                            navPortalTarget ? "pt-3" : "pt-8",
-                        )}
-                        data-no-drag
-                    >
-                        <div className="mx-auto w-full max-w-5xl space-y-2">
-                            <AccountSettingsPanel />
-                            <AiSettings settings={settings} />
-                            <EditorSettings settings={settings} />
-                            <TerminalSettings settings={settings} />
-                            <GitSettings settings={settings} />
-                            <AdvancedSettings settings={settings} />
+                    <div className="absolute inset-0 overflow-y-auto px-6 py-6 lg:px-8">
+                        <div className="mx-auto w-full max-w-5xl">
+                            {activeLeafId === "account-profile" ? <AccountSettingsPanel /> : null}
+                            {activeLeafId === "ai-models" ? <AiSettings settings={settings} page="models" /> : null}
+                            {activeLeafId === "ai-rules" ? <AiSettings settings={settings} page="rules" /> : null}
+                            {activeLeafId === "ai-workflows" ? <AiSettings settings={settings} page="workflows" /> : null}
+                            {activeLeafId === "ai-context" ? <AiSettings settings={settings} page="context" /> : null}
+                            {activeLeafId === "editor-font" ? <EditorSettings settings={settings} /> : null}
+                            {activeLeafId === "appearance" ? (
+                                <SettingSection id="settings-appearance" title="Appearance">
+                                    <SettingRow title="Theme">
+                                        <ThemePicker
+                                            value={normalizeColorTheme(settings.appearance.colorTheme)}
+                                            onChange={(id) => updateSettingSection("appearance", { colorTheme: id })}
+                                        />
+                                    </SettingRow>
+                                </SettingSection>
+                            ) : null}
+                            {activeLeafId === "terminal" ? <TerminalSettings settings={settings} /> : null}
+                            {activeLeafId === "microphone" ? <MicrophoneSettings /> : null}
+                            {activeLeafId === "git" ? <GitSettings settings={settings} /> : null}
+                            {activeLeafId === "updates" ? <UpdatesSettings settings={settings} /> : null}
+                            {activeLeafId === "notifications" ? <PrivacySettings settings={settings} part="notifications" /> : null}
+                            {activeLeafId === "privacy" ? <PrivacySettings settings={settings} part="privacy" /> : null}
+                            {activeLeafId === "developer" ? <DeveloperSettings settings={settings} /> : null}
                         </div>
                     </div>
                 )}

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { RiLoader4Line } from "@remixicon/react";
 import * as SwitchPrimitives from "@radix-ui/react-switch";
 import { Icon, ICON_SIZE_XS } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -55,7 +54,7 @@ export const Switch = React.forwardRef<
                 )}
             >
                 {loading ? (
-                    <Icon icon={RiLoader4Line} size={ICON_SIZE_XS} className="animate-spin text-text-muted" />
+                    <Icon icon={"refresh"} size={ICON_SIZE_XS} className="animate-spin text-text-muted" />
                 ) : null}
             </SwitchPrimitives.Thumb>
         </SwitchPrimitives.Root>

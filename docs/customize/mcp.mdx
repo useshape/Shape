@@ -1,0 +1,20 @@
+---
+title: MCP
+description: Local tool servers.
+order: 2
+---
+
+Local tool servers are configured in `mcp.json`. Configure MCP opens that file.
+
+```json
+{
+  "mcpServers": {
+    "example": {
+      "command": "npx",
+      "args": ["-y", "some-mcp-server"]
+    }
+  }
+}
+```
+
+Use `url` instead of `command` for an HTTP server.

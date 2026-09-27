@@ -43,6 +43,7 @@ import {
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { commands } from "@/lib/backend";
 import { languageForPath } from "./lang";
+import { SHAPE_CLIP_CODE, rememberShapeClip } from "@/features/chat/lib/shape-clip";
 import { shapeEditorChrome } from "./theme";
 import {
     ContextMenu,
@@ -148,6 +149,20 @@ export function CodeMirrorEditor({
                     void commands.markFileDirty(pathRef.current, dirty);
                 }),
                 EditorView.domEventHandlers({
+                    dragstart(event, view) {
+                        const sel = view.state.selection.main;
+                        if (sel.empty) return false;
+                        const text = view.state.sliceDoc(sel.from, sel.to);
+                        if (!text) return false;
+                        const path = pathRef.current;
+                        event.dataTransfer?.setData(
+                            SHAPE_CLIP_CODE,
+                            JSON.stringify({ path, text }),
+                        );
+                        event.dataTransfer?.setData("text/plain", text);
+                        rememberShapeClip({ kind: "code", text, label: path });
+                        return false;
+                    },
                     keydown(e) {
                         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
                             e.preventDefault();

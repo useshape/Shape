@@ -1,6 +1,5 @@
 "use client";
 
-import { RiLayoutRight2Line, RiLayoutLeft2Line, RiSparkling2Fill } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -15,18 +14,21 @@ export const AGENT_CHROME_ACTIONS_SLOT = "shape-agent-chrome-actions";
 export const AGENT_SIDEBAR_BACK_SLOT = "shape-agent-sidebar-back";
 export const AGENT_SIDEBAR_HISTORY_SLOT = "shape-agent-sidebar-history";
 
-function GetPlusButton() {
+export function GetPlusButton({ className }: { className?: string }) {
     const auth = useShapeAuth();
     if (!auth.loggedIn || auth.offline || auth.tier !== "free") return null;
     return (
         <button
             type="button"
-            className="mr-1 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[#3a3148] px-2.5 text-sm font-medium text-[#c084fc] transition-colors hover:bg-[#463a58] hover:text-[#d8b4fe]"
+            className={cn(
+                "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[#3a3148] px-2.5 text-sm font-medium text-[#c084fc] transition-colors hover:bg-[#463a58] hover:text-[#d8b4fe]",
+                className,
+            )}
             onClick={() =>
                 void commands.openUrlExternal(`${dashboardUrl()}/settings/billing`)
             }
         >
-            <Icon icon={RiSparkling2Fill} />
+            <Icon icon={"magic-stick"} />
             Get Plus
         </button>
     );
@@ -72,17 +74,24 @@ export function AgentChrome({
     canToggleRight = true,
     showRightToggle = true,
     padWindowControls = false,
+    sidebarOpen = true,
+    onToggleSidebar,
 }: {
     rightOpen: boolean;
     onToggleRight: () => void;
     canToggleRight?: boolean;
     showRightToggle?: boolean;
     padWindowControls?: boolean;
+    sidebarOpen?: boolean;
+    onToggleSidebar?: () => void;
 }) {
     return (
         <div className="relative z-10 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent" data-tauri-drag-region>
-            {/* Title/tabs content — no data-no-drag so empty chrome stays draggable.
-                Interactive children opt out via data-no-drag / button CSS rules. */}
+            {!sidebarOpen && onToggleSidebar ? (
+                <div className="relative z-10 flex shrink-0 items-center pl-1" data-no-drag>
+                    <SidebarToggleBtn open={false} onToggle={onToggleSidebar} />
+                </div>
+            ) : null}
             <div
                 id={AGENT_TABS_SLOT}
                 className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-2"
@@ -90,7 +99,6 @@ export function AgentChrome({
 
             <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
                 <div id={AGENT_CHROME_ACTIONS_SLOT} className="flex items-center gap-0.5" />
-                <GetPlusButton />
                 {showRightToggle ? (
                     <Btn
                         label={rightOpen ? "Hide panel" : "Show panel"}
@@ -98,7 +106,7 @@ export function AgentChrome({
                         active={rightOpen}
                         onClick={onToggleRight}
                     >
-                        <Icon icon={RiLayoutRight2Line} />
+                        <Icon icon={"sidebar-code"} />
                     </Btn>
                 ) : null}
                 {padWindowControls ? <WindowControlsSpacer /> : null}
@@ -125,7 +133,7 @@ export function SidebarToggleBtn({
                     onClick={onToggle}
                     className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={RiLayoutLeft2Line} />
+                    <Icon icon={"sidebar-code"} />
                 </button>
             </Tooltip>
         );
@@ -137,7 +145,7 @@ export function SidebarToggleBtn({
             onClick={onToggle}
             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
         >
-            <Icon icon={RiLayoutLeft2Line} />
+            <Icon icon={"sidebar-code"} />
         </button>
     );
 }

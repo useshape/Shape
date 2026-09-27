@@ -1,20 +1,17 @@
 "use client";
 
-import { RiCloseLine, RiImageLine, RiMusic2Line } from "@remixicon/react";
 import React from "react";
-import { Icon } from "@/components/ui/icon";
+import { ICON_SIZE_SM, SolarIcon, type SolarIconName } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
-import { MorphMenu } from "@/components/ui/morph-menu";
-
 const IMAGE_EXTENSIONS = new Set([
     "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif", "avif", "heic", "heif",
 ]);
 
 const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "ogg", "flac", "aac", "wma"]);
 
-export type AttachmentKind = "image" | "audio" | "file";
+export type AttachmentKind = "image" | "audio" | "file" | "terminal" | "code";
 
 export type ComposerAttachment = {
     id: string;
@@ -27,6 +24,8 @@ export type ComposerAttachment = {
     mimeType: string;
     size: number;
     error?: string;
+    /** Normalized 0–1 bar heights for an audio waveform. */
+    peaks?: number[];
 };
 
 function getFileExtension(name: string): string {
@@ -45,6 +44,8 @@ export function isAudioFile(file: File): boolean {
 }
 
 export function attachmentKind(file: File): AttachmentKind {
+    if (file.type === "text/x-shape-terminal") return "terminal";
+    if (file.type === "text/x-shape-code") return "code";
     if (isImageFile(file)) return "image";
     if (isAudioFile(file)) return "audio";
     return "file";
@@ -98,7 +99,7 @@ function readAsDataUrl(file: File): Promise<string> {
     });
 }
 
-export function createPendingAttachment(file: File): ComposerAttachment {
+export function createPendingAttachment(file: File, peaks?: number[]): ComposerAttachment {
     return {
         id: newId(),
         file,
@@ -107,7 +108,37 @@ export function createPendingAttachment(file: File): ComposerAttachment {
         status: "processing",
         mimeType: file.type || "application/octet-stream",
         size: file.size,
+        peaks,
     };
+}
+
+export function formatAttachmentSize(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    if (bytes < 1024) return `${Math.round(bytes)} B`;
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    const mb = bytes / (1024 * 1024);
+    return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
+}
+
+export function Waveform({
+    peaks,
+    className,
+}: {
+    peaks: number[];
+    className?: string;
+}) {
+    const bars = peaks.length ? peaks : [0.35, 0.6, 0.4, 0.8, 0.5, 0.7, 0.45, 0.3, 0.55];
+    return (
+        <span className={cn("flex h-6 items-center gap-0.5", className)} aria-hidden>
+            {bars.map((peak, index) => (
+                <span
+                    key={index}
+                    className="w-0.5 rounded-full bg-text-secondary"
+                    style={{ height: `${Math.max(15, Math.round(peak * 100))}%` }}
+                />
+            ))}
+        </span>
+    );
 }
 
 export async function processAttachment(att: ComposerAttachment): Promise<ComposerAttachment> {
@@ -164,14 +195,96 @@ function useObjectUrl(file: File | null, dataUrl?: string): string | null {
     return url;
 }
 
+const KIND_ICON: Record<Exclude<AttachmentKind, "file">, SolarIconName> = {
+    image: "gallery",
+    audio: "soundwave",
+    terminal: "programming",
+    code: "code",
+};
+
 function KindIcon({ kind, name }: { kind: AttachmentKind; name: string }) {
-    if (kind === "audio") {
-        return <Icon icon={RiMusic2Line} className="text-text-muted" />;
-    }
-    if (kind === "file") {
-        return <FileIcon name={name} className="size-4" />;
-    }
-    return <Icon icon={RiImageLine} className="text-text-muted" />;
+    if (kind === "file") return <FileIcon name={name} className="size-3.5" />;
+    return <SolarIcon name={KIND_ICON[kind]} size={ICON_SIZE_SM} className="text-text-muted" />;
+}
+
+function RemoveButton({ name, onRemove }: { name: string; onRemove: () => void }) {
+    return (
+        <Tooltip content={`Remove ${name}`} side="top">
+            <button
+                type="button"
+                aria-label={`Remove ${name}`}
+                onClick={onRemove}
+                className="absolute -right-1.5 -top-1.5 z-10 flex size-5 items-center justify-center rounded-full bg-surface-1 text-text-secondary opacity-0 shadow-sm hover:text-text-primary group-hover:opacity-100"
+            >
+                <SolarIcon name="close" size={ICON_SIZE_SM} />
+            </button>
+        </Tooltip>
+    );
+}
+
+function fileMark(kind: AttachmentKind, name: string): string | null {
+    if (kind !== "audio") return null;
+    const ext = getFileExtension(name);
+    return (ext || "audio").slice(0, 4).toUpperCase();
+}
+
+/** Composer tile. Photos show the picture; everything else is a small card with a mark and the name. */
+export function ComposerFileTile({
+    kind,
+    name,
+    src,
+    busy,
+    failed,
+}: {
+    kind: AttachmentKind;
+    name: string;
+    src?: string | null;
+    busy?: boolean;
+    failed?: boolean;
+}) {
+    const mark = fileMark(kind, name);
+    return (
+        <div
+            className={cn(
+                "relative h-16 w-28 overflow-hidden rounded-xl bg-surface-3",
+                failed && "ring-1 ring-error",
+            )}
+            title={name}
+        >
+            {kind === "image" && src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt="" className="size-full object-cover" draggable={false} />
+            ) : (
+                <div className="flex h-full flex-col justify-between p-2">
+                    <span className="flex h-4 items-center text-2xs font-medium uppercase tracking-wide text-text-muted">
+                        {busy ? (
+                            <span className="size-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                        ) : mark ? (
+                            mark
+                        ) : (
+                            <KindIcon kind={kind} name={name} />
+                        )}
+                    </span>
+                    <span className={cn("truncate text-xs text-text-primary", failed && "text-error")}>
+                        {failed ? "Failed" : name}
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** Sent-message chip: icon, name, nothing else. */
+export function MessageAttachmentPill({ kind, name }: { kind: AttachmentKind; name: string }) {
+    return (
+        <span
+            className="inline-flex h-7 max-w-52 items-center gap-1.5 rounded-full border border-border-subtle bg-surface-3 px-2 text-xs text-text-primary"
+            title={name}
+        >
+            <KindIcon kind={kind} name={name} />
+            <span className="min-w-0 truncate">{name}</span>
+        </span>
+    );
 }
 
 function AttachmentPill({
@@ -187,56 +300,16 @@ function AttachmentPill({
     );
     const busy = attachment.status === "processing";
     const failed = attachment.status === "error";
-
     return (
-        <div
-            className={cn(
-                "group/attach relative inline-flex h-9 max-w-[220px] items-center gap-1.5 squircle-2xl bg-panel-hover px-2",
-                "animate-in fade-in zoom-in-95 duration-200",
-                failed && "border-error/40",
-            )}
-        >
-            <div className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface-3">
-                {busy ? (
-                    <span className="absolute inset-0 flex items-center justify-center" aria-hidden>
-                        <span className="size-3.5 animate-spin rounded-full border-[1.5px] border-accent border-t-transparent" />
-                    </span>
-                ) : attachment.kind === "image" && preview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={preview}
-                        alt=""
-                        className="size-full object-cover animate-in fade-in duration-200"
-                        draggable={false}
-                    />
-                ) : (
-                    <KindIcon kind={attachment.kind} name={attachment.name} />
-                )}
-            </div>
-            <span
-                className={cn(
-                    "min-w-0 truncate text-sm text-text-primary",
-                    failed && "text-error",
-                    busy && "text-text-muted",
-                )}
-                title={attachment.error || attachment.name}
-            >
-                {busy ? "Processing…" : attachment.name}
-            </span>
-            <Tooltip content={`Remove ${attachment.name}`} side="top">
-                <button
-                    type="button"
-                    aria-label={`Remove ${attachment.name}`}
-                    onClick={onRemove}
-                    className={cn(
-                        "ml-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-text-muted",
-                        "opacity-0 transition-opacity group-hover/attach:opacity-100 focus-visible:opacity-100",
-                        "hover:bg-panel-hover hover:text-text-primary",
-                    )}
-                >
-                    <Icon icon={RiCloseLine} />
-                </button>
-            </Tooltip>
+        <div className="group relative shrink-0">
+            <ComposerFileTile
+                kind={attachment.kind}
+                name={attachment.name}
+                src={preview}
+                busy={busy}
+                failed={failed}
+            />
+            <RemoveButton name={attachment.name} onRemove={onRemove} />
         </div>
     );
 }
@@ -251,7 +324,7 @@ export function ComposerAttachments({
     if (attachments.length === 0) return null;
 
     return (
-        <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+        <div className="flex flex-wrap gap-3 overflow-visible px-3 pt-3">
             {attachments.map((att) => (
                 <AttachmentPill
                     key={att.id}
@@ -260,48 +333,5 @@ export function ComposerAttachments({
                 />
             ))}
         </div>
-    );
-}
-
-/** Compact-mode media pill — same morph pattern as Changes above the composer. */
-export function ComposerAttachmentsStrip({
-    attachments,
-    onRemove,
-}: {
-    attachments: ComposerAttachment[];
-    onRemove: (id: string) => void;
-}) {
-    if (attachments.length === 0) return null;
-
-    const openH = Math.min(220, 48 + attachments.length * 36);
-    const busy = attachments.some((a) => a.status === "processing");
-
-    return (
-        <MorphMenu
-            variant="morph"
-            aria-label="Attachments"
-            openWidth={280}
-            openHeight={openH}
-            closedHeight={32}
-            trigger={
-                <>
-                    <span>Media</span>
-                    <span className="tabular-nums text-text-muted">
-                        {busy ? "…" : attachments.length}
-                    </span>
-                </>
-            }
-        >
-            <div className="flex flex-col gap-1 p-2">
-                {attachments.map((att) => (
-                    <div key={att.id} className="flex items-center gap-1">
-                        <AttachmentPill
-                            attachment={att}
-                            onRemove={() => onRemove(att.id)}
-                        />
-                    </div>
-                ))}
-            </div>
-        </MorphMenu>
     );
 }

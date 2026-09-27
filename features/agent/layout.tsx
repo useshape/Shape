@@ -18,7 +18,6 @@ import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-co
 const MIN_WORKSPACE = 360;
 const MIN_CHAT = 380;
 const SIDEBAR_EXPANDED = 304;
-const SIDEBAR_COLLAPSED = 48;
 const MAX_WORKSPACE_RATIO = 0.72;
 const MAX_WORKSPACE_PX = 1200;
 const SPLASH_KEY = "shape-agent-splash-seen";
@@ -120,7 +119,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
 
     const clampWorkspace = useCallback(
         (x: number, winW = typeof window === "undefined" ? 1280 : window.innerWidth) => {
-            const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED;
+            const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : 0;
             const maxByChat = Math.max(0, winW - sidebar - MIN_CHAT);
             const maxByRatio = Math.min(MAX_WORKSPACE_PX, Math.floor(winW * MAX_WORKSPACE_RATIO));
             const max = Math.min(maxByChat, maxByRatio);
@@ -255,8 +254,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             }
         };
         const onPrs = () => {
-            setOverlay(null);
-            persistWorkspace(true);
+            setOverlay({ type: "prs" });
+            setSidebarOpen(true);
         };
         window.addEventListener("shape-set-active-tab", onTab as EventListener);
         window.addEventListener("shape-layout-toggle", onToggle as EventListener);
@@ -391,7 +390,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             ) : null}
 
             <AgentSidebar
-                expanded={sidebarOpen}
+                expanded
+                open={sidebarOpen}
                 overlay={overlay}
                 onToggleSidebar={toggleSidebar}
                 showBrowser={Boolean(project_path)}
@@ -413,6 +413,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                         canToggleRight={Boolean(project_path) && !overlayOpen}
                         showRightToggle={!overlayOpen}
                         padWindowControls={!rightExpanded}
+                        sidebarOpen={sidebarOpen}
+                        onToggleSidebar={toggleSidebar}
                     />
                     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                             {overlay ? (

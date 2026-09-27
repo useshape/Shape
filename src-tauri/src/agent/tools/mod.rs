@@ -1,3 +1,4 @@
+pub mod browse;
 pub mod dispatch;
 pub mod files;
 pub mod page_shot;

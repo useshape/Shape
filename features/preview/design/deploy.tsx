@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RiArrowRightSLine, RiCheckLine, RiCloudLine, RiErrorWarningLine } from "@remixicon/react";
 import {
     AlertDialog,
     AlertDialogBody,
@@ -44,7 +43,7 @@ function Changes({
                 </span>
             </div>
             <div className="flex items-center gap-1 px-2 py-1.5">
-                <Icon icon={RiArrowRightSLine} size={ICON_SIZE_MD} className="text-text-secondary!" />
+                <Icon icon={"alt-arrow-right"} size={ICON_SIZE_MD} className="text-text-secondary!" />
                 <span className="text-sm text-text-secondary">{count} changes</span>
             </div>
             <div className="divide-y divide-border border-t border-border">
@@ -108,7 +107,7 @@ export function DesignDeploy({
                         <>
                             <Changes title={`${name} · ${branch}`} count={18} badge="New" />
                             <div className="flex items-center gap-1 text-md text-text-muted">
-                                <Icon icon={RiErrorWarningLine} size={ICON_SIZE_MD} />
+                                <Icon icon={"danger-triangle"} size={ICON_SIZE_MD} />
                                 Errors and issues
                             </div>
                         </>
@@ -122,7 +121,7 @@ export function DesignDeploy({
                                 <p className="truncate text-sm text-text-primary">{productionHost}</p>
                                 <p className="text-2xs text-text-muted">Live</p>
                             </div>
-                            <Icon icon={RiCheckLine} size={ICON_SIZE_MD} className="text-success" />
+                            <Icon icon={"check"} size={ICON_SIZE_MD} className="text-success" />
                         </div>
                     ) : null}
                 </AlertDialogBody>

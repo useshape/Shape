@@ -544,6 +544,15 @@
     transform 220ms var(--morph-ease);
 }
 
+@keyframes t-wave-bar {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+.t-wave-bar {
+  transform-origin: center;
+  animation: t-wave-bar 0.9s ease-in-out infinite;
+}
+
 @keyframes t-spin-check-spin {
   to {
     transform: rotate(360deg);
@@ -557,10 +566,6 @@
   overflow: hidden;
   pointer-events: none;
 }
-.t-composer-hint--compact {
-  display: flex;
-  align-items: center;
-}
 .t-composer-hint__text {
   display: block;
   color: var(--text-muted);
@@ -573,9 +578,6 @@
   transition:
     opacity var(--hint-swap) var(--hint-ease),
     transform var(--hint-swap) var(--hint-ease);
-}
-.t-composer-hint--compact .t-composer-hint__text {
-  line-height: 1.75rem;
 }
 .t-composer-hint__text[data-phase="in"] {
   opacity: 1;

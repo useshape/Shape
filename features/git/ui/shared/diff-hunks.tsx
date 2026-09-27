@@ -1,6 +1,5 @@
 "use client";
 
-import { RiAddLine, RiArrowGoBackLine, RiSubtractLine } from "@remixicon/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 // Monaco removed — unused in agent window; keep a permissive stand-in for leftover hunk helpers.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,7 +177,7 @@ export function DiffHunkToolbar({
             title="Stage hunk (Ctrl+Y)"
             onClick={() => void run("stage")}
           >
-            <Icon icon={RiAddLine} /> Stage
+            <Icon icon={"add-circle"} /> Stage
           </Button>
           <Button
             type="button"
@@ -187,7 +186,7 @@ export function DiffHunkToolbar({
             title="Restore hunk"
             onClick={() => void run("restore")}
           >
-            <Icon icon={RiArrowGoBackLine} /> Restore
+            <Icon icon={"undo-left"} /> Restore
           </Button>
         </>
       )}
@@ -200,7 +199,7 @@ export function DiffHunkToolbar({
           title="Unstage hunk (Ctrl+Shift+Y)"
           onClick={() => void run("unstage")}
         >
-          <Icon icon={RiSubtractLine} /> Unstage
+          <Icon icon={"minus-circle"} /> Unstage
         </Button>
       )}
     </div>

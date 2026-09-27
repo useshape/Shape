@@ -1,4 +1,3 @@
-import { RiClipboardLine, RiExternalLinkLine, RiGitMergeLine } from "@remixicon/react";
 import React, { useState, useCallback, useRef, useMemo } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import {
@@ -220,7 +219,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     </Tooltip>
                                 )
                             )}
-                            {isMerge && <Icon icon={RiGitMergeLine} size={ICON_SIZE_SM} className="text-text-primary shrink-0 opacity-80" />}
+                            {isMerge && <Icon icon={"git-pull-request"} size={ICON_SIZE_SM} className="text-text-primary shrink-0 opacity-80" />}
                             {isManager ? (
                                 <span
                                     className={cn(
@@ -292,14 +291,14 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                                 className="flex items-center gap-1.5 cursor-pointer hover:text-text-primary transition-colors py-0.5"
                                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard.writeText(log.hash); notify.success("Copied", "Commit hash copied to clipboard"); }}
                                             >
-                                                <Icon icon={RiClipboardLine} size={ICON_SIZE_SM} />
+                                                <Icon icon={"clipboard"} size={ICON_SIZE_SM} />
                                                 <span className="text-sm font-medium select-text">{log.hash.slice(0, 7)}</span>
                                             </div>
                                             <div
                                                 className="flex items-center gap-1.5 cursor-pointer hover:text-text-primary transition-colors py-0.5"
                                                 onClick={handleOpenGitHub}
                                             >
-                                                <Icon icon={RiExternalLinkLine} size={ICON_SIZE_SM} />
+                                                <Icon icon={"square-forward"} size={ICON_SIZE_SM} />
                                                 <span className="text-sm">Open in GitHub</span>
                                             </div>
                                         </div>

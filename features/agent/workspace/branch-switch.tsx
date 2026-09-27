@@ -1,8 +1,7 @@
 "use client";
 
-import { RiCheckLine, RiGitBranchLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/search";
 import {
     DropdownMenu,
@@ -76,7 +75,7 @@ export function WorkspaceBranchSwitch() {
                     disabled={!repoPath}
                     className="inline-flex max-w-40 items-center gap-1 rounded-md px-1.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled"
                 >
-                    <Icon icon={RiGitBranchLine} className="shrink-0" size={ICON_SIZE_SM} />
+                    <SolarIcon name="git-branch" className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
                     <span className="truncate">{branch ?? "Branch"}</span>
                 </button>
             </DropdownMenuTrigger>
@@ -96,7 +95,7 @@ export function WorkspaceBranchSwitch() {
                         {filtered.map((b) => (
                             <DropdownMenuItem key={b} onClick={() => switchTo(b)} className="gap-2">
                                 <span className="min-w-0 flex-1 truncate">{b}</span>
-                                {branch === b ? <Icon icon={RiCheckLine} className="shrink-0" /> : null}
+                                {branch === b ? <SolarIcon name="check" size={ICON_SIZE_SM} className="shrink-0" /> : null}
                             </DropdownMenuItem>
                         ))}
                     </div>

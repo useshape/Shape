@@ -1,5 +1,6 @@
 "use client";
 
+import { Eclipse } from "loading-dev";
 import { cn } from "@/lib/utils";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { formatMessageModelLabel, isAutoModelId } from "@/lib/chat/usage-display";
@@ -30,10 +31,8 @@ export function UserMessageCard({
 /** Three-dot typing indicator (iMessage style). */
 export function TypingDots({ className }: { className?: string }) {
     return (
-        <span className={cn("imsg-typing", className)} aria-label="Typing">
-            <span />
-            <span />
-            <span />
+        <span className={className} role="status" aria-label="Typing">
+            <Eclipse size={14} className="text-text-muted" />
         </span>
     );
 }
@@ -41,11 +40,7 @@ export function TypingDots({ className }: { className?: string }) {
 /** Compact working dots for sidebar / chat tabs. */
 export function WorkingDots({ className }: { className?: string }) {
     return (
-        <span className={cn("imsg-typing imsg-typing-sm", className)} aria-hidden>
-            <span />
-            <span />
-            <span />
-        </span>
+        <Eclipse size={12} className={cn("text-text-muted", className)} aria-hidden />
     );
 }
 

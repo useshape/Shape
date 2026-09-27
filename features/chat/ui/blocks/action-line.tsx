@@ -29,7 +29,7 @@ export function ActionLine({
             title={title}
             onClick={onClick}
             className={cn(
-                "flex w-fit max-w-full items-center gap-1.5 py-0.5 text-left chat-text font-medium text-text-primary/80",
+                "shape-row-in flex w-fit max-w-full items-center gap-1.5 py-0.5 text-left chat-text font-medium text-text-primary/80",
                 interactive && "cursor-pointer hover:text-text-primary transition-colors",
                 className,
             )}

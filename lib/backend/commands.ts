@@ -1,5 +1,5 @@
 ﻿import { invoke } from "@tauri-apps/api/core";
-import { ActivityTotals, ChatGenerationState, ChatMessage, CodebaseSearchHit, ContentSearchResult, Conversation, EslintLintResult, FileEntry, FileInfo, FileSearchResult, GitActivityPoint, GitFileParams, GitRepoInfo, GitHubAuthLoginResult, GitHubAuthStatus, GitLogEntry, GitSyncStatus, GitStashEntry, BlameLine, HistoryEntry, IndexStatus, McpServerConfig, McpStatusEntry, McpToolInfo, PackageInfo, OutlineResponse, ProjectState, ProjectStatsSnapshot, ReplaceResult, SearchOptions, TestDiscoveryResult, TestRunSummaryResult, ContentMatch } from "@/lib/backend/types";
+import { ActivityTotals, BrowserHistoryEntry, BrowserInputEvent, BrowserPickedElement, BrowserTab, BrowserTabsPayload, ChatGenerationState, ChatMessage, CodebaseSearchHit, ContentSearchResult, Conversation, EslintLintResult, FileEntry, FileInfo, FileSearchResult, GitActivityPoint, GitFileParams, GitRepoInfo, GitHubAuthLoginResult, GitHubAuthStatus, GitLogEntry, GitSyncStatus, GitStashEntry, BlameLine, HistoryEntry, IndexStatus, McpServerConfig, McpStatusEntry, McpToolInfo, PackageInfo, OutlineResponse, ProjectState, ProjectStatsSnapshot, ReplaceResult, SearchOptions, TestDiscoveryResult, TestRunSummaryResult, ContentMatch } from "@/lib/backend/types";
 
 type InvokeLogger = (command: string, durationMs: number) => void;
 
@@ -116,6 +116,50 @@ export const commands = {
     getRustDeps: (projectPath: string) => invokeCommand<[string, string][]>("get_rust_deps", { projectPath }),
     getProjectState: () => invokeCommand<ProjectState>("get_project_state"),
     openUrlExternal: (url: string) => invokeCommand("open_url_external", { url }),
+    agentBrowseStop: () => invokeCommand<void>("agent_browse_stop"),
+    agentBrowsePointer: (kind: "click" | "move", x: number, y: number) =>
+        invokeCommand<void>("agent_browse_pointer", { kind, x, y }),
+    browserTabs: () => invokeCommand<BrowserTabsPayload>("browser_tabs"),
+    browserOpenTab: (url?: string, activate = true) =>
+        invokeCommand<BrowserTab>("browser_open_tab", { url: url ?? null, activate }),
+    browserCloseTab: (id: string) => invokeCommand<void>("browser_close_tab", { id }),
+    browserActivateTab: (id: string) => invokeCommand<void>("browser_activate_tab", { id }),
+    browserNavigate: (id: string, url: string) =>
+        invokeCommand<void>("browser_navigate", { id, url }),
+    browserBack: (id: string) => invokeCommand<void>("browser_back", { id }),
+    browserForward: (id: string) => invokeCommand<void>("browser_forward", { id }),
+    browserReload: (id: string, hard = false) =>
+        invokeCommand<void>("browser_reload", { id, hard }),
+    browserInput: (id: string, event: BrowserInputEvent) =>
+        invokeCommand<void>("browser_input", { id, event }),
+    browserPick: (id: string, x: number, y: number, commit = false) =>
+        invokeCommand<BrowserPickedElement | null>("browser_pick", { id, x, y, commit }),
+    browserScreenshot: (id: string) => invokeCommand<string>("browser_screenshot", { id }),
+    browserClear: (kind: "history" | "cookies" | "cache") =>
+        invokeCommand<void>("browser_clear", { kind }),
+    browserHistory: (query?: string, limit?: number) =>
+        invokeCommand<BrowserHistoryEntry[]>("browser_history", {
+            query: query ?? null,
+            limit: limit ?? null,
+        }),
+    browserSurfaceOpen: (url?: string) =>
+        invokeCommand<{ id: string; url: string; title: string; canBack: boolean; canForward: boolean }>(
+            "browser_surface_open",
+            { url: url ?? null },
+        ),
+    browserSurfaceClose: (id: string) => invokeCommand<void>("browser_surface_close", { id }),
+    browserSurfaceActivate: (id: string) => invokeCommand<void>("browser_surface_activate", { id }),
+    browserSurfaceNavigate: (id: string, url: string) =>
+        invokeCommand<void>("browser_surface_navigate", { id, url }),
+    browserSurfaceBack: (id: string) => invokeCommand<void>("browser_surface_back", { id }),
+    browserSurfaceForward: (id: string) => invokeCommand<void>("browser_surface_forward", { id }),
+    browserSurfaceReload: (id: string, hard = false) =>
+        invokeCommand<void>("browser_surface_reload", { id, hard }),
+    browserSurfaceBounds: (x: number, y: number, w: number, h: number, shown: boolean) =>
+        invokeCommand<void>("browser_surface_bounds", { x, y, w, h, shown }),
+    browserSurfaceHide: () => invokeCommand<void>("browser_surface_hide"),
+    browserSurfacePick: (id: string, on: boolean) =>
+        invokeCommand<void>("browser_surface_pick", { id, on }),
     showDesktopNotification: (title: string, body: string) =>
         invokeCommand<void>("show_desktop_notification", { title, body }),
     newWindow: () => invokeCommand("spawn_new_window"),
@@ -623,6 +667,10 @@ export const commands = {
     loadConversation: (id: string, projectPath?: string | null) =>
         invokeCommand<void>("load_conversation", { id, projectPath: projectPath ?? null }),
     deleteConversation: (id: string) => invokeCommand<void>("delete_conversation", { id }),
+    setConversationArchived: (id: string, archived: boolean) =>
+        invokeCommand<void>("set_conversation_archived", { id, archived }),
+    renameConversation: (id: string, title: string) =>
+        invokeCommand<void>("rename_conversation", { id, title }),
     applyFileEdit: (path: string, original: string, replacement: string) =>
         invokeCommand<void>("apply_file_edit", { path, original, replacement }),
     generateCommitMessage: (accessToken?: string, repoPath?: string | null) =>
@@ -876,4 +924,7 @@ export const commands = {
             delta,
             projectPath: projectPath ?? null,
         }),
+    dictationStart: () => invokeCommand<void>("dictation_start"),
+    dictationStop: () => invokeCommand<void>("dictation_stop"),
+    dictationPush: (wav: number[]) => invokeCommand<void>("dictation_push", { wav }),
 };

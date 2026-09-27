@@ -15,7 +15,7 @@ use crate::core::error::AppError;
 pub const MAX_TOOL_LOOPS: usize = 50;
 /// Code/Review: Cursor-scale room for long builds. Soft Continue-style stop only
 /// after this many tool rounds — not a short “task too big” wall.
-pub const MAX_TOOL_LOOPS_CODE: usize = 200;
+pub const MAX_TOOL_LOOPS_CODE: usize = 800;
 pub const MAX_TOOL_LOOPS_VISUAL: usize = 25;
 
 pub fn max_loops_for_mode(mode: &str) -> usize {
@@ -61,20 +61,18 @@ or answer in plain prose. You may still read a specific file you need — avoid 
 fn readonly_nudge_after(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
         "visual" | "design" => 8,
-        "ask" | "plan" => 20,
-        _ => 30, // code / agent / review
+        "ask" | "plan" => 12,
+        _ => 3, // code / agent / review — a small edit should not tour the repo
     }
 }
 
-/// Hard-stop after extended read-only thrash. Must stay below the mode's max loops,
-/// otherwise the turn dies on the loop cap first and the model never sees this message.
-/// Kept high for Code so long explore→build turns behave like Cursor (minutes–hour),
-/// while still cutting pure search loops that never write.
+/// Hard-stop a read-only loop. Code mode stops early so a small edit
+/// cannot spend the turn searching.
 fn readonly_hard_stop_after(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
         "visual" | "design" => 16,
-        "ask" | "plan" => 40,
-        _ => 120,
+        "ask" | "plan" => 24,
+        _ => 8,
     }
 }
 
@@ -256,7 +254,7 @@ fn has_written_summary(finished_signal: &Option<String>) -> bool {
 fn record_usage(config: &AgentTurnConfig<'_>, input_tokens: usize, output_tokens: usize) {
     config
         .agent_state
-        .record_turn_usage(input_tokens, output_tokens);
+        .record_turn_usage(config.proxy_ctx.turn_id.as_deref(), input_tokens, output_tokens);
 }
 
 fn collect_tool_context(api_messages: &[Value]) -> String {
@@ -763,6 +761,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 if let Some(SideEffect::PageScreenshot { tag }) = &tool_outcome.side_effect {
                     let tag = tag.clone();
                     page_shots.push(tag.clone());
+                    drop_prior_page_shots(config.api_messages);
                     inject_page_screenshot(&mut config, &tag).await;
                 }
             }
@@ -1065,6 +1064,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         finished_signal = Some(summary.unwrap_or_default());
                     }
                     SideEffect::PageScreenshot { tag } => {
+                        drop_prior_page_shots(config.api_messages);
                         inject_page_screenshot(&mut config, &tag).await;
                         page_shots.push(tag);
                     }
@@ -1189,6 +1189,28 @@ fn push_tool_result(api_messages: &mut Vec<Value>, id: &str, name: &str, content
     }));
 }
 
+/// Keep only the latest page or file image in the live turn. Each JPEG is tens of
+/// thousands of input tokens, and the next action only needs the current frame.
+fn drop_prior_page_shots(api_messages: &mut Vec<Value>) {
+    api_messages.retain(|msg| !is_injected_page_shot(msg));
+}
+
+fn is_injected_page_shot(msg: &Value) -> bool {
+    if msg.get("role").and_then(|role| role.as_str()) != Some("user") {
+        return false;
+    }
+    const MARKER: &str = "screenshot_page captured";
+    match msg.get("content") {
+        Some(Value::String(text)) => text.contains(MARKER),
+        Some(Value::Array(parts)) => parts.iter().any(|part| {
+            part.get("text")
+                .and_then(|text| text.as_str())
+                .is_some_and(|text| text.contains(MARKER))
+        }),
+        _ => false,
+    }
+}
+
 async fn inject_page_screenshot(config: &mut AgentTurnConfig<'_>, tag: &str) {
     if model_router::model_accepts_images(config.model) {
         super::messages::push_page_screenshot_followup(config.api_messages, tag, config.model);
@@ -1242,7 +1264,12 @@ fn track_stream_chunk(config: &AgentTurnConfig<'_>, chunk: &str, activity_label:
     };
     config
         .agent_state
-        .append_in_flight(chunk, activity_label, proj);
+        .append_in_flight(
+            chunk,
+            activity_label,
+            proj,
+            config.proxy_ctx.conversation_id.as_deref(),
+        );
 }
 
 fn resolve_abs(path: &str, project_path: &str) -> String {
@@ -1257,6 +1284,10 @@ fn resolve_abs(path: &str, project_path: &str) -> String {
 }
 
 fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
+    if chunk.contains("<browse_session") {
+        upsert_tagged_block(accumulated, chunk, "<browse_session", "</browse_session>");
+        return;
+    }
     if chunk.contains("<todos") {
         upsert_tagged_block(accumulated, chunk, "<todos", "</todos>");
         return;

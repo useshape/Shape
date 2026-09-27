@@ -8,7 +8,7 @@ const ATTACHMENT_SIZE_RE = /\bsize="(\d+)"/;
 
 export type ParsedUserAttachment = {
     name: string;
-    kind: "image" | "file" | "audio";
+    kind: "image" | "file" | "audio" | "terminal" | "code";
     mimeType: string;
     size: number;
     /** Present for images (and inlined assets) — used for thumbs / restore. */
@@ -46,7 +46,9 @@ export function parseUserAttachments(content: string): {
             const dataUrl = trimmed.startsWith("data:") ? trimmed : undefined;
 
             let kind: ParsedUserAttachment["kind"] = "file";
-            if (tag === "image" || mimeType.startsWith("image/")) kind = "image";
+            if (mimeType === "text/x-shape-terminal") kind = "terminal";
+            else if (mimeType === "text/x-shape-code") kind = "code";
+            else if (tag === "image" || mimeType.startsWith("image/")) kind = "image";
             else if (mimeType.startsWith("audio/") || tag === "file" && /audio/i.test(mimeType)) {
                 kind = "audio";
             }
@@ -87,7 +89,12 @@ export async function attachmentsToComposer(
             id: newId(),
             file,
             name: att.name,
-            kind: att.kind === "audio" ? "audio" : att.kind === "image" ? "image" : "file",
+            kind:
+                att.kind === "audio" ? "audio"
+                : att.kind === "image" ? "image"
+                : att.kind === "terminal" ? "terminal"
+                : att.kind === "code" ? "code"
+                : "file",
             status: "ready",
             dataUrl: att.kind === "image" ? att.dataUrl : undefined,
             mimeType: att.mimeType,

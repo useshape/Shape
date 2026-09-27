@@ -16,13 +16,32 @@ import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
 import { DesignPreviewGallery } from '../blocks/gallery';
 import { GeneratedMediaCard } from '../blocks/generated-media';
+import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
-import { AgentScreen } from '../blocks/agent-screen';
+import { PersonaReviewPanel } from '../blocks/persona-review';
+import { BrowseChatCard } from '../blocks/browse-frame';
 import { QuestionsCard, parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
 
 function hostnameFromUrl(url: string): string {
     return hostnameOf(url);
+}
+
+function parseCardJson<T>(raw: string | undefined): T | null {
+    const text = (raw || "").trim();
+    if (!text) return null;
+    try {
+        return JSON.parse(text) as T;
+    } catch {
+        return null;
+    }
+}
+
+function decodeXml(value: string): string {
+    return value
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, "<")
+        .replace(/&amp;/g, "&");
 }
 
 const TERMINAL_STATUS_RANK: Record<string, number> = {
@@ -99,7 +118,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image' | 'browse_session' | 'chart' | 'insight_card';
     content?: string;
     file?: string;
     query?: string;
@@ -364,6 +383,21 @@ function unescapeXml(s: string): string {
         };
     };
 
+    const parsePersonaReviewBlock = (block: string): Chunk => {
+        const open = block.match(/^<persona_review\b[^>]*>/i)?.[0] || "";
+        const inner = block
+            .replace(/^<persona_review[^>]*>\s*/i, "")
+            .replace(/\s*<\/persona_review>$/i, "")
+            .trim();
+        return {
+            type: "persona_review",
+            content: inner,
+            commandId: open.match(/\bid="([^"]*)"/)?.[1],
+            commandStatus: open.match(/\bstatus="([^"]*)"/)?.[1],
+            visitUrl: open.match(/\burl="([^"]*)"/)?.[1],
+        };
+    };
+
     const parseQuestionBlock = (block: string): Chunk => {
         const id = block.match(/\bid="([^"]*)"/)?.[1];
         const status = block.match(/\bstatus="([^"]*)"/)?.[1];
@@ -397,6 +431,17 @@ function unescapeXml(s: string): string {
         };
     };
 
+    const parseSentFileBlock = (tagFull: string, content: string): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type: "sent_file",
+            file: decodeXml(get("name")) || "File",
+            query: get("type") || "application/octet-stream",
+            mediaPrompt: decodeXml(get("title")) || undefined,
+            content: content.trim(),
+        };
+    };
+
     const parseGeneratedMediaBlock = (
         type: "generated_svg" | "generated_image",
         tagFull: string,
@@ -410,6 +455,19 @@ function unescapeXml(s: string): string {
             mediaPrompt: get("prompt") || undefined,
             mediaCredits: get("credits") || undefined,
             query: get("prompt") || undefined,
+            isGenerating,
+        };
+    };
+
+    const parseRichCard = (type: string, tagFull: string, content: string, isGenerating: boolean): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type: type as Chunk["type"],
+            content,
+            visitUrl: decodeXml(get("url")) || undefined,
+            visitTitle: decodeXml(get("title")) || undefined,
+            commandId: get("id") || undefined,
+            commandStatus: get("status") || undefined,
             isGenerating,
         };
     };
@@ -448,6 +506,7 @@ function unescapeXml(s: string): string {
             { type: 'edit_pending', start: '<edit_pending', end: '</edit_pending>' },
             { type: 'design_previews', start: '<design_previews', end: '</design_previews>' },
             { type: 'review_debate', start: '<review_debate', end: '</review_debate>' },
+            { type: 'persona_review', start: '<persona_review', end: '</persona_review>' },
             { type: 'questions', start: '<questions', end: '</questions>' },
             { type: 'question', start: '<question', end: '</question>' },
             { type: 'inspect_runtime', start: '<inspect_runtime', end: '</inspect_runtime>' },
@@ -468,6 +527,9 @@ function unescapeXml(s: string): string {
             { type: 'generated_svg', start: '<recraft_svg', end: '</recraft_svg>' },
             { type: 'generated_image', start: '<generated_image', end: '</generated_image>' },
             { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
+            { type: 'browse_session', start: '<browse_session', end: '</browse_session>' },
+            { type: 'chart', start: '<chart', end: '</chart>' },
+            { type: 'insight_card', start: '<insight_card', end: '</insight_card>' },
             { type: 'ls', start: '<ls', end: '</ls>' },
             { type: 'cat', start: '<cat', end: '</cat>' },
             { type: 'run', start: '<run', end: '</run>' },
@@ -504,7 +566,8 @@ function unescapeXml(s: string): string {
             { type: 'tool_result', start: '<content', end: '</content>' },
             { type: 'tool_result', start: '<analysis', end: '</analysis>' },
             { type: 'tool_result', start: '<file_content', end: '</file_content>' },
-            { type: 'attached_image', start: '<attached_image', end: '</attached_image>' }
+            { type: 'attached_image', start: '<attached_image', end: '</attached_image>' },
+            { type: 'sent_file', start: '<sent_file', end: '</sent_file>' },
         ];
 
         let firstMatch: { type: string, index: number, startTag: string, endTag: string } | null = null;
@@ -581,6 +644,9 @@ function unescapeXml(s: string): string {
                 });
             } else if (firstMatch.type === 'git_operation') {
                 chunks.push(parseGitOperationBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'browse_session') {
+                const tagFull = text.slice(firstMatch.index, gtIndex === -1 ? text.length : gtIndex + 1);
+                chunks.push(parseRichCard(firstMatch.type, tagFull, content, false));
             } else if (firstMatch.type === 'cat') {
                 chunks.push(parseCatBlock(tagFull, content, false));
             } else if (firstMatch.type === 'subagent_ref') {
@@ -591,6 +657,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parseDesignPreviewsBlock(tagFull));
             } else if (firstMatch.type === 'review_debate') {
                 chunks.push(parseReviewDebateBlock(tagFull));
+            } else if (firstMatch.type === 'persona_review') {
+                chunks.push(parsePersonaReviewBlock(tagFull));
             } else if (firstMatch.type === 'question' || firstMatch.type === 'questions') {
                 chunks.push(parseQuestionBlock(tagFull));
             } else if (firstMatch.type === 'run') {
@@ -610,6 +678,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
                 chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, false));
+            } else if (firstMatch.type === 'sent_file') {
+                chunks.push(parseSentFileBlock(tagFull, content));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -670,6 +740,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parseDesignPreviewsBlock(text.slice(firstMatch.index)));
             } else if (firstMatch.type === 'review_debate') {
                 chunks.push(parseReviewDebateBlock(text.slice(firstMatch.index)));
+            } else if (firstMatch.type === 'persona_review') {
+                chunks.push(parsePersonaReviewBlock(text.slice(firstMatch.index)));
             } else if (firstMatch.type === 'question' || firstMatch.type === 'questions') {
                 chunks.push(parseQuestionBlock(text.slice(firstMatch.index)));
             } else if (firstMatch.type === 'run') {
@@ -694,12 +766,18 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'inspect_runtime') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, true));
+            } else if (firstMatch.type === 'browse_session') {
+                const tagFull = text.slice(firstMatch.index, gtIndex === -1 ? text.length : gtIndex + 1);
+                chunks.push(parseRichCard(firstMatch.type, tagFull, content, true));
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
             } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, true));
+            } else if (firstMatch.type === 'sent_file') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseSentFileBlock(tagFull, content));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -759,6 +837,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parseDesignPreviewsBlock(fullBlock));
             } else if (firstMatch.type === 'review_debate') {
                 chunks.push(parseReviewDebateBlock(fullBlock));
+            } else if (firstMatch.type === 'persona_review') {
+                chunks.push(parsePersonaReviewBlock(fullBlock));
             } else if (firstMatch.type === 'question' || firstMatch.type === 'questions') {
                 chunks.push(parseQuestionBlock(fullBlock));
             } else if (firstMatch.type === 'run') {
@@ -783,12 +863,18 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'inspect_runtime') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'browse_session') {
+                const tagFull = text.slice(firstMatch.index, gtIndex === -1 ? text.length : gtIndex + 1);
+                chunks.push(parseRichCard(firstMatch.type, tagFull, content, false));
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, false));
+            } else if (firstMatch.type === 'sent_file') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseSentFileBlock(tagFull, content));
             } else {
                 chunks.push({
                     type: firstMatch.type as Chunk['type'],
@@ -870,23 +956,12 @@ export function extractWebSearchResults(content: string): WebSearchResultItem[] 
 }
 
 /**
- * A message is rendered as a chronological sequence of segments: prose text,
- * runs of consecutive tool actions, plans, images. Tool runs stay in one
- * Working accordion; only substantial prose splits the thread.
+ * A message is a chronological sequence of segments. A sentence between
+ * tool runs splits the rail, so the line stops and starts again around it.
  */
 type Segment =
     | { kind: 'workflow'; blocks: Chunk[] }
     | { kind: 'chunk'; chunk: Chunk };
-
-/** Short "now let me…" notes belong in Working, not as their own bubbles. */
-function isWorkflowFillerProse(text: string): boolean {
-    const t = text.trim();
-    if (!t) return true;
-    if (t.length < 140) return true;
-    const sentences = t.split(/[.!?](?:\s+|$)/).filter((s) => s.trim().length > 24);
-    if (sentences.length < 2 && t.length < 220) return true;
-    return false;
-}
 
 function buildSegments(chunks: Chunk[]): Segment[] {
     const segments: Segment[] = [];
@@ -900,10 +975,7 @@ function buildSegments(chunks: Chunk[]): Segment[] {
             }
             continue;
         }
-        if (chunk.type === 'text' && isWorkflowFillerProse(chunk.content || '')) {
-            const prev = segments[segments.length - 1];
-            if (prev?.kind === 'workflow') continue;
-        }
+        if (chunk.type === 'text' && !(chunk.content || '').trim()) continue;
         segments.push({ kind: 'chunk', chunk });
     }
     return segments;
@@ -935,20 +1007,30 @@ export function MessageRenderer({
         syncSubagentsFromChunks(chunks, Boolean(isGenerating));
     }, [chunks, isGenerating, skipSubagentSync]);
 
-    const contentChunks = useMemo(() => mergeAdjacentTextChunks(chunks), [chunks]);
+    const contentChunks = useMemo(() => {
+        const merged = mergeAdjacentTextChunks(chunks);
+        // A running persona review is superseded by the final block with the same id.
+        return merged.filter(
+            (c, i) =>
+                c.type !== 'persona_review'
+                || !merged.some((o, j) => j > i && o.type === 'persona_review' && o.commandId === c.commandId),
+        );
+    }, [chunks]);
+    const browsing = contentChunks.some((c) => c.type === "browse_session");
 
     // Chronological segments so mid-turn prose sits between tool groups (Cursor-style).
     const segments = useMemo(
         () =>
             buildSegments(
                 contentChunks.filter((c) => {
+                    if (browsing && (c.type === "think" || c.type === "thought")) return false;
                     if (WORKFLOW_CHUNK_TYPES.has(c.type)) {
                         return isRenderableWorkflowBlock(c, isGenerating);
                     }
                     return true;
                 }),
             ),
-        [contentChunks, isGenerating],
+        [contentChunks, isGenerating, browsing],
     );
 
     const workflowSegments = segments.filter((s): s is Extract<Segment, { kind: "workflow" }> => s.kind === "workflow");
@@ -956,6 +1038,14 @@ export function MessageRenderer({
     const lastWorkflowIndex = (() => {
         for (let i = segments.length - 1; i >= 0; i--) {
             if (segments[i]?.kind === "workflow") return i;
+        }
+        return -1;
+    })();
+
+    const lastBrowseIndex = (() => {
+        for (let i = segments.length - 1; i >= 0; i--) {
+            const segment = segments[i];
+            if (segment?.kind === "chunk" && segment.chunk.type === "browse_session") return i;
         }
         return -1;
     })();
@@ -1015,7 +1105,6 @@ export function MessageRenderer({
                     isActive={!!isGenerating && isLastWf}
                     durationMs={isFirst ? durationMs : undefined}
                     activityLabel={isLastWf ? activityLabel : null}
-                    showHeader
                 />
             );
         }
@@ -1085,14 +1174,55 @@ export function MessageRenderer({
                 />
             );
         }
+        if (chunk.type === 'chart' || chunk.type === 'insight_card') return null;
+        if (chunk.type === 'browse_session') {
+            if (index !== lastBrowseIndex) return null;
+            let image = "";
+            let x: number | undefined;
+            let y: number | undefined;
+            let consoleLines: string[] | undefined;
+            const parsed = parseCardJson<{ image?: string; x?: number; y?: number; console?: string[] }>(chunk.content);
+            if (parsed) {
+                image = parsed.image || "";
+                x = parsed.x;
+                y = parsed.y;
+                consoleLines = parsed.console;
+            }
+            return (
+                <BrowseChatCard
+                    key={`browse-${index}`}
+                    url={chunk.visitUrl}
+                    title={chunk.visitTitle}
+                    status={chunk.commandStatus}
+                    image={image}
+                    x={x}
+                    y={y}
+                    consoleLines={consoleLines}
+                    followLive={index === lastBrowseIndex}
+                />
+            );
+        }
+        if (chunk.type === 'sent_file') {
+            return (
+                <SentFileCard
+                    key={`file-${index}`}
+                    name={chunk.file || "File"}
+                    title={chunk.mediaPrompt}
+                    mime={chunk.query || ""}
+                    src={chunk.content || ""}
+                />
+            );
+        }
         if (chunk.type === 'attached_image') {
             const src = chunk.content?.trim() || "";
             if (!src) return null;
             return (
-                <AgentScreen
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
                     key={`image-${index}`}
                     src={src}
-                    title={chunk.file || "Agent's screen"}
+                    alt={chunk.file || ""}
+                    className="my-2 max-h-80 max-w-[420px] rounded-xl border border-border-subtle object-contain"
                 />
             );
         }
@@ -1125,6 +1255,17 @@ export function MessageRenderer({
                     key={`review-debate-${index}`}
                     content={chunk.content || ''}
                     model={chunk.reviewModel}
+                />
+            );
+        }
+        if (chunk.type === 'persona_review') {
+            return (
+                <PersonaReviewPanel
+                    key={`persona-review-${chunk.commandId || index}`}
+                    reviewId={chunk.commandId}
+                    url={chunk.visitUrl}
+                    status={chunk.commandStatus}
+                    content={chunk.content || ''}
                 />
             );
         }

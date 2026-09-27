@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowRightSLine, RiCheckLine, RiCheckboxBlankCircleLine } from "@remixicon/react";
 import * as React from "react";
 import { Icon } from "./icon";
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
@@ -10,7 +9,7 @@ import { cn } from "@/lib/utils";
 const itemClasses =
     "group relative flex cursor-default select-none items-center gap-3 rounded-lg px-1.5 py-1 text-sm outline-none focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]";
 const containerClasses =
-    "shape-popover-content z-dropdown overflow-hidden squircle-xl border border-border bg-surface-4 p-1 text-text-primary shadow-md";
+    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border bg-surface-4 p-1 text-text-primary shadow-md";
 const shortcutClasses = "ml-auto shrink-0 pr-2 text-sm text-text-muted group-focus:text-text-primary";
 
 const ContextMenu = ContextMenuPrimitive.Root;
@@ -49,7 +48,7 @@ const ContextMenuSubTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={RiArrowRightSLine} className="ml-auto" />
+        <Icon icon={"alt-arrow-right"} className="ml-auto" />
     </ContextMenuPrimitive.SubTrigger>
 ));
 ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
@@ -113,7 +112,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <ContextMenuPrimitive.ItemIndicator>
-                <Icon icon={RiCheckLine}  />
+                <Icon icon={"check"}  />
             </ContextMenuPrimitive.ItemIndicator>
         </span>
         {children}
@@ -128,7 +127,7 @@ const ContextMenuRadioItem = React.forwardRef<
     <ContextMenuPrimitive.RadioItem ref={ref} className={cn(itemClasses, "pr-1", className)} {...props}>
         <span className="flex w-4 shrink-0 items-center justify-center">
             <ContextMenuPrimitive.ItemIndicator>
-                <Icon icon={RiCheckboxBlankCircleLine} className="size-[8px]" />
+                <Icon icon={"record"} className="size-[8px]" />
             </ContextMenuPrimitive.ItemIndicator>
         </span>
         {children}

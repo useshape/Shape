@@ -1,6 +1,5 @@
 "use client";
 
-import { RiDownloadLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -535,7 +534,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                 disabled={art.expired || downloadingArtifactId === art.id}
                 onClick={() => void downloadArtifact(art)}
             >
-                <Icon icon={RiDownloadLine} />
+                <Icon icon={"download-minimalistic"} />
                 {downloadingArtifactId === art.id ? "Saving…" : "Download"}
             </Button>
         </li>

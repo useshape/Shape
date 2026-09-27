@@ -1,14 +1,4 @@
-import type { RemixiconComponentType } from "@remixicon/react";
-import {
-    RiChromeFill,
-    RiFileTextLine,
-    RiFolderLine,
-    RiGitBranchFill,
-    RiGitBranchLine,
-    RiGitPullRequestLine,
-    RiGitRepositoryCommitsLine,
-    RiUserFollowLine,
-} from "@remixicon/react";
+import type { SolarIconName } from "@/components/ui/icon";
 
 export type TabKind = "changes" | "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs" | "browser";
 
@@ -35,31 +25,30 @@ export function uid(prefix: string) {
 }
 
 export const DEFAULT_TABS: WorkspaceTab[] = [
-    { id: "changes", kind: "changes", title: "Changes" },
     { id: "graph", kind: "graph", title: "Graph" },
     { id: "files", kind: "files", title: "Files" },
     { id: "browser", kind: "browser", title: "Browser" },
 ];
 
-export function iconFor(kind: TabKind): RemixiconComponentType {
+export function iconFor(kind: TabKind): SolarIconName {
     switch (kind) {
         case "changes":
-            return RiGitRepositoryCommitsLine;
+            return "git-commit";
         case "graph":
-            return RiGitBranchFill;
+            return "git-branch";
         case "agents":
-            return RiUserFollowLine;
+            return "user-plus";
         case "plan":
-            return RiGitBranchLine;
+            return "git-branch";
         case "diff":
-            return RiGitPullRequestLine;
+            return "git-pull-request";
         case "files":
-            return RiFolderLine;
+            return "folder";
         case "prs":
-            return RiGitPullRequestLine;
+            return "git-pull-request";
         case "browser":
-            return RiChromeFill;
+            return "global";
         default:
-            return RiFileTextLine;
+            return "file-text";
     }
 }

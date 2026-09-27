@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { commands, Conversation, useProjectState } from "@/lib/backend";
 import { useChatStream } from "./chat-stream-store";
 import { NEW_CHAT_TAB_ID, DEMO_CHAT_TAB_ID, isEphemeralChatTabId, type ChatTab } from "../ui/shell/tabs";
+import { isDemoChatPinned, setDemoChatPinned } from "./demo-chat";
 import { openChatHistoryMenu } from "../ui/shell/history";
 import { parseMessageContent, type Chunk } from "../ui/md/renderer";
 import {
@@ -82,9 +83,9 @@ function writePersistedChatTabs(
         const persistable = tabs.filter(
             (t) => !isEphemeralChatTabId(t.id) || t.id === NEW_CHAT_TAB_ID || t.id === DEMO_CHAT_TAB_ID,
         );
-        const nextActive = isEphemeralChatTabId(activeId) && activeId !== NEW_CHAT_TAB_ID
-            ? (persistable[0]?.id ?? NEW_CHAT_TAB_ID)
-            : activeId;
+        const nextActive = persistable.some((tab) => tab.id === activeId)
+            ? activeId
+            : (persistable[0]?.id ?? NEW_CHAT_TAB_ID);
         localStorage.setItem(
             chatTabsStorageKey(projectPath),
             JSON.stringify({ tabs: persistable, activeId: nextActive }),
@@ -97,9 +98,9 @@ function writePersistedChatTabs(
 export function useChatSession() {
     const [uploadedFiles, setUploadedFiles] = React.useState<ComposerAttachment[]>([]);
 
-    const addUploadedFiles = React.useCallback((files: File[]) => {
+    const addUploadedFiles = React.useCallback((files: File[], peaks?: number[][]) => {
         if (files.length === 0) return;
-        const pending = files.map(createPendingAttachment);
+        const pending = files.map((file, index) => createPendingAttachment(file, peaks?.[index]));
         setUploadedFiles((prev) => [...prev, ...pending]);
         for (const att of pending) {
             void processAttachment(att).then((ready) => {
@@ -201,6 +202,8 @@ export function useChatSession() {
     React.useEffect(() => {
         let cancelled = false;
         setTabsReady(false);
+        const persistedNow = readPersistedChatTabs(project_path);
+        if (persistedNow?.activeId === DEMO_CHAT_TAB_ID) setDemoChatPinned(true);
         const key = chatTabsStorageKey(project_path);
         tabsHydratedForRef.current = key;
 
@@ -237,6 +240,7 @@ export function useChatSession() {
                         }
                     }
                 } else if (persisted.activeId === DEMO_CHAT_TAB_ID) {
+                    setDemoChatPinned(true);
                     // Demo is in-memory only — rebuild if the tab was persisted.
                     const { buildDemoChatMessages } = await import("./demo-chat");
                     if (!cancelled) {
@@ -579,6 +583,7 @@ export function useChatSession() {
 
     const refreshHistory = React.useCallback(
         async (reloadConversation = false) => {
+            if (activeChatTabIdRef.current === DEMO_CHAT_TAB_ID || isDemoChatPinned()) return;
             if (isLoadingRef.current && !reloadConversation) {
                 await syncFromBackend();
                 await refreshMetadata();
@@ -830,7 +835,7 @@ export function useChatSession() {
                             reader.readAsText(att.file);
                         });
 
-                        const maxChars = 20000;
+                        const maxChars = 80000;
                         const content =
                             text.length > maxChars
                                 ? text.slice(0, maxChars) + `\n... [truncated, ${text.length} chars total]`
@@ -1291,6 +1296,7 @@ export function useChatSession() {
     const handleNewChat = async () => {
         try {
             // Do not stop background generation; only the Stop button cancels.
+            setDemoChatPinned(false);
             setViewingConversation(null);
             await commands.newChat();
             void captureTelemetry("chat_new");
@@ -1328,9 +1334,11 @@ export function useChatSession() {
             return;
         }
         if (tabId === DEMO_CHAT_TAB_ID) {
+            setDemoChatPinned(true);
             window.dispatchEvent(new CustomEvent("shape-demo-chat"));
             return;
         }
+        setDemoChatPinned(false);
         if (resumeLiveConversation(tabId)) {
             setConversationId(tabId);
             setCurrentConversationId(tabId);
@@ -1409,6 +1417,7 @@ export function useChatSession() {
 
     const handleLoadConversation = React.useCallback(
         async (id: string, options?: { force?: boolean }) => {
+            if (id !== DEMO_CHAT_TAB_ID) setDemoChatPinned(false);
             const isSameConversation = id === conversationIdRef.current;
             const hasVisibleMessages = messagesRef.current.length > 0;
             if (resumeLiveConversation(id)) {
@@ -1456,9 +1465,28 @@ export function useChatSession() {
     }, [handleLoadConversation]);
 
     React.useEffect(() => {
+        const onRename = (e: Event) => {
+            const detail = (e as CustomEvent<{ id?: string; title?: string }>).detail;
+            const id = detail?.id?.trim();
+            const title = detail?.title?.trim();
+            if (!id || !title) return;
+            void commands.renameConversation(id, title).then(() => {
+                syncOpenTabs(id, title);
+                if (conversationIdRef.current === id) setChatTitle(title);
+                window.dispatchEvent(new CustomEvent("shape-chats-changed"));
+            }).catch((err) => {
+                console.error("Failed to rename chat:", err);
+            });
+        };
+        window.addEventListener("shape-chat-rename", onRename as EventListener);
+        return () => window.removeEventListener("shape-chat-rename", onRename as EventListener);
+    }, [syncOpenTabs]);
+
+    React.useEffect(() => {
         const onDemo = () => {
             void (async () => {
-                const { buildDemoChatMessages } = await import("./demo-chat");
+                const { buildDemoChatMessages, setDemoChatPinned: pinDemo } = await import("./demo-chat");
+                pinDemo(true);
                 const demo = buildDemoChatMessages();
                 setMessages(demo);
                 void import("@/features/agent/subagents/store").then(({ seedDemoSubagents }) => {

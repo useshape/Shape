@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RiArrowDownSLine, RiArrowLeftLine, RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
@@ -62,12 +61,30 @@ const CATEGORY_ORDER = [
 const POPULAR_TOOLKITS = [
     "github",
     "slack",
+    "gmail",
     "linear",
     "notion",
     "figma",
-    "vercel",
-    "stripe",
+    "jira",
+    "googledrive",
+];
+
+const INBOX_TOOLKITS = [
+    "gmail",
+    "outlook",
+    "slack",
     "discord",
+    "microsoft_teams",
+    "zoom",
+];
+
+const DATA_TOOLKITS = [
+    "googlesheets",
+    "airtable",
+    "notion",
+    "hubspot",
+    "salesforce",
+    "stripe",
 ];
 
 const SHIP_TOOLKITS = [
@@ -87,7 +104,49 @@ const COLLAB_TOOLKITS = [
     "notion",
     "zoom",
     "linear",
+    "asana",
+    "clickup",
+    "trello",
+    "todoist",
 ];
+
+/** Shown even when the server catalog is short. Connect still goes through Composio. */
+const EXTRA_PLUGINS: PluginRow[] = [
+    { id: "gmail", name: "Gmail", description: "Read, search, and send mail", category: "Chat", toolkit: "gmail", connected: false, logo: null },
+    { id: "outlook", name: "Outlook", description: "Mail and calendar from Microsoft", category: "Chat", toolkit: "outlook", connected: false, logo: null },
+    { id: "googlecalendar", name: "Google Calendar", description: "Events and availability", category: "Work", toolkit: "googlecalendar", connected: false, logo: null },
+    { id: "googledrive", name: "Google Drive", description: "Files and folders", category: "Docs", toolkit: "googledrive", connected: false, logo: null },
+    { id: "googledocs", name: "Google Docs", description: "Documents", category: "Docs", toolkit: "googledocs", connected: false, logo: null },
+    { id: "googlesheets", name: "Google Sheets", description: "Spreadsheets", category: "Data", toolkit: "googlesheets", connected: false, logo: null },
+    { id: "jira", name: "Jira", description: "Issues and projects", category: "Work", toolkit: "jira", connected: false, logo: null },
+    { id: "asana", name: "Asana", description: "Tasks and projects", category: "Work", toolkit: "asana", connected: false, logo: null },
+    { id: "trello", name: "Trello", description: "Boards and cards", category: "Work", toolkit: "trello", connected: false, logo: null },
+    { id: "clickup", name: "ClickUp", description: "Tasks and docs", category: "Work", toolkit: "clickup", connected: false, logo: null },
+    { id: "airtable", name: "Airtable", description: "Bases and records", category: "Data", toolkit: "airtable", connected: false, logo: null },
+    { id: "hubspot", name: "HubSpot", description: "Contacts and deals", category: "Business", toolkit: "hubspot", connected: false, logo: null },
+    { id: "salesforce", name: "Salesforce", description: "CRM records", category: "Business", toolkit: "salesforce", connected: false, logo: null },
+    { id: "dropbox", name: "Dropbox", description: "Files and sharing", category: "Docs", toolkit: "dropbox", connected: false, logo: null },
+    { id: "onedrive", name: "OneDrive", description: "Microsoft files", category: "Docs", toolkit: "onedrive", connected: false, logo: null },
+    { id: "calendly", name: "Calendly", description: "Scheduling", category: "Work", toolkit: "calendly", connected: false, logo: null },
+    { id: "todoist", name: "Todoist", description: "Tasks and projects", category: "Work", toolkit: "todoist", connected: false, logo: null },
+    { id: "miro", name: "Miro", description: "Boards", category: "Design", toolkit: "miro", connected: false, logo: null },
+    { id: "canva", name: "Canva", description: "Designs", category: "Design", toolkit: "canva", connected: false, logo: null },
+    { id: "loom", name: "Loom", description: "Videos", category: "Work", toolkit: "loom", connected: false, logo: null },
+    { id: "zendesk", name: "Zendesk", description: "Support tickets", category: "Support", toolkit: "zendesk", connected: false, logo: null },
+    { id: "intercom", name: "Intercom", description: "Conversations", category: "Support", toolkit: "intercom", connected: false, logo: null },
+    { id: "linkedin", name: "LinkedIn", description: "Posts and profiles", category: "Social", toolkit: "linkedin", connected: false, logo: null },
+    { id: "youtube", name: "YouTube", description: "Videos and channels", category: "Social", toolkit: "youtube", connected: false, logo: null },
+    { id: "confluence", name: "Confluence", description: "Pages and spaces", category: "Docs", toolkit: "confluence", connected: false, logo: null },
+    { id: "bitbucket", name: "Bitbucket", description: "Repos and pull requests", category: "Dev", toolkit: "bitbucket", connected: false, logo: null },
+];
+
+function mergeCatalog(remote: PluginRow[]): PluginRow[] {
+    const seen = new Set(remote.map((plugin) => plugin.toolkit.toLowerCase()));
+    return [
+        ...remote,
+        ...EXTRA_PLUGINS.filter((plugin) => !seen.has(plugin.toolkit.toLowerCase())),
+    ];
+}
 
 function PluginCardSkeleton() {
     return (
@@ -302,7 +361,7 @@ function PluginCarousel({
                         canPrev ? "opacity-100" : "pointer-events-none opacity-0",
                     )}
                 >
-                    <Icon icon={RiArrowLeftSLine} />
+                    <Icon icon={"alt-arrow-left"} />
                 </button>
                 <button
                     type="button"
@@ -314,7 +373,7 @@ function PluginCarousel({
                         canNext ? "opacity-100" : "pointer-events-none opacity-0",
                     )}
                 >
-                    <Icon icon={RiArrowRightSLine} />
+                    <Icon icon={"alt-arrow-right"} />
                 </button>
             </div>
         </section>
@@ -400,7 +459,7 @@ function PluginDetail({
                 size="md"
                 className="mb-10 squircle-2xl bg-surface-3"
             >
-                <Icon icon={RiArrowLeftLine} size={ICON_SIZE_SM} />
+                <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
                 Back
             </Button>
             <div className="flex items-start gap-4">
@@ -478,7 +537,7 @@ export function PluginsSettingsView() {
     const auth = useShapeAuth();
     const pluginsAvailable = auth.loggedIn && !auth.offline;
     const cached = peekPluginsCache();
-    const [plugins, setPlugins] = useState<PluginRow[]>(cached?.plugins ?? []);
+    const [plugins, setPlugins] = useState<PluginRow[]>(cached ? mergeCatalog(cached.plugins) : EXTRA_PLUGINS);
     const [configured, setConfigured] = useState(cached?.configured ?? true);
     const [loading, setLoading] = useState(!cached);
     const [busy, setBusy] = useState<string | null>(null);
@@ -494,7 +553,7 @@ export function PluginsSettingsView() {
             }
             try {
                 const data = await fetchPlugins({ force });
-                setPlugins(data.plugins);
+                setPlugins(mergeCatalog(data.plugins));
                 setConfigured(data.configured);
                 setBusy((current) => {
                     if (!current) return current;
@@ -559,6 +618,8 @@ export function PluginsSettingsView() {
     const browsing = category === "all" && !query.trim();
     const connected = useMemo(() => plugins.filter((p) => p.connected), [plugins]);
     const popular = useMemo(() => pickByToolkit(plugins, POPULAR_TOOLKITS), [plugins]);
+    const inbox = useMemo(() => pickByToolkit(plugins, INBOX_TOOLKITS), [plugins]);
+    const data = useMemo(() => pickByToolkit(plugins, DATA_TOOLKITS), [plugins]);
     const ship = useMemo(() => pickByToolkit(plugins, SHIP_TOOLKITS), [plugins]);
     const collab = useMemo(() => pickByToolkit(plugins, COLLAB_TOOLKITS), [plugins]);
 
@@ -594,7 +655,7 @@ export function PluginsSettingsView() {
 
     return (
         <div className="relative h-full min-h-0 bg-panel">
-            <div className="absolute inset-0 overflow-y-auto overscroll-contain scroll-auto px-6 pt-8 pb-8 no-scrollbar">
+            <div className="absolute inset-0 overflow-y-auto px-6 pt-8 pb-8">
                 {openPlugin ? (
                     <PluginDetail
                         plugin={openPlugin}
@@ -615,7 +676,7 @@ export function PluginsSettingsView() {
                                         className="bg-surface-3 squircle-2xl"
                                     >
                                         {categoryLabel}
-                                        <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
+                                        <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" className="min-w-40">
@@ -665,6 +726,16 @@ export function PluginsSettingsView() {
                                             <PluginCarousel
                                                 title="Popular"
                                                 plugins={popular}
+                                                onOpen={(p) => setOpenToolkit(p.toolkit)}
+                                            />
+                                            <PluginCarousel
+                                                title="Inbox"
+                                                plugins={inbox}
+                                                onOpen={(p) => setOpenToolkit(p.toolkit)}
+                                            />
+                                            <PluginCarousel
+                                                title="Data"
+                                                plugins={data}
                                                 onOpen={(p) => setOpenToolkit(p.toolkit)}
                                             />
                                             <PluginCarousel

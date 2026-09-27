@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCloudOffLine, RiCrosshair2Line, RiFilter3Line, RiFullscreenExitLine, RiRefreshLine, RiUploadLine } from "@remixicon/react";
 import React, { useState, useCallback, useEffect, useRef, useMemo, useDeferredValue } from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -682,7 +681,7 @@ export default function Graph({
                                 className="h-7 w-7"
                                 aria-label="Filter commits"
                             >
-                                <Icon icon={RiFilter3Line} size={ICON_SIZE_SM} />
+                                <Icon icon={"filter"} size={ICON_SIZE_SM} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-auto p-2">
@@ -740,7 +739,7 @@ export default function Graph({
                     </DropdownMenu>
                     <Tooltip content="Go to HEAD">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={jumpToHead} aria-label="Go to HEAD">
-                            <Icon icon={RiCrosshair2Line} size={ICON_SIZE_SM} />
+                            <Icon icon={"target"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fetch">
@@ -763,7 +762,7 @@ export default function Graph({
                             }}
                             aria-label="Fetch"
                         >
-                            <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"refresh"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
@@ -786,7 +785,7 @@ export default function Graph({
                             }}
                             aria-label="Pull"
                         >
-                            <Icon icon={RiCloudOffLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"cloud-cross"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
@@ -809,7 +808,7 @@ export default function Graph({
                             }}
                             aria-label="Push"
                         >
-                            <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     {expandedCommits.size > 0 ? (
@@ -822,7 +821,7 @@ export default function Graph({
                                 onClick={() => setExpandedCommits(new Set())}
                                 aria-label="Collapse all"
                             >
-                                <Icon icon={RiFullscreenExitLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"minimize"} size={ICON_SIZE_SM} />
                             </Button>
                         </Tooltip>
                     ) : null}
@@ -843,7 +842,7 @@ export default function Graph({
                     <>
                     <Tooltip content="Go to HEAD (H)">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
-                            <Icon icon={RiCrosshair2Line} size={ICON_SIZE_SM} />
+                            <Icon icon={"target"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fetch From All Remotes">
@@ -857,7 +856,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"refresh"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
@@ -871,7 +870,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={RiCloudOffLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"cloud-cross"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
@@ -885,12 +884,12 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={RiUploadLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Refresh Graph">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={() => void refresh()}>
-                            <Icon icon={RiRefreshLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"refresh"} size={ICON_SIZE_SM} />
                         </Button>
                     </Tooltip>
                     {!rich && project_path ? <GitManagerTrigger /> : null}

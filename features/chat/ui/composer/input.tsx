@@ -1,7 +1,7 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiArrowUpLine, RiBrushFill, RiCheckLine, RiSpyFill, RiMicLine, RiStopCircleLine, RiChat2Fill, RiCalendarFill, RiCommandLine } from "@remixicon/react";
 import React from "react";
+import { Arc } from "loading-dev";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
@@ -28,15 +28,25 @@ import {
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { MentionPicker } from "./mentions";
 import { PendingEditsPanel } from "./edits";
-import { ComposerContextBar, ComposerRuntimeSelect } from "./context-bar";
+import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
 import {
     ComposerTasksStrip,
     type ComposerTaskItem,
 } from "./activity";
 import { QueuedMessagesPanel, type QueuedMessage } from "./queue";
-import { ComposerAttachments, ComposerAttachmentsStrip, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
+import { ComposerAttachments, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
 import { mentionRanges, shortenMentionTokensInText } from "@/lib/chat/mentions";
+import {
+    SHAPE_CLIP_CODE,
+    codeAttachmentFile,
+    matchRememberedClip,
+    pasteIsLarge,
+    pastedTextFile,
+    terminalAttachmentFile,
+} from "@/features/chat/lib/shape-clip";
+import type { BrowserPickedElement } from "@/lib/backend/types";
+import { registerElementMention } from "@/lib/chat/element-mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
 import { resolveChatUsageDisplay } from "@/lib/chat/usage-display";
 import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
@@ -49,9 +59,11 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { useSettings, hasByokApiKeys } from "@/lib/settings";
+import { microphoneConstraints, microphoneErrorMessage, useSettings, hasByokApiKeys } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
+import { commands } from "@/lib/backend";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
 
 type ChatInputProps = {
@@ -65,7 +77,7 @@ type ChatInputProps = {
     onStopMessage: () => void;
     setWebSearch: (s: string) => void;
     setUploadedFiles: React.Dispatch<React.SetStateAction<ComposerAttachment[]>>;
-    addUploadedFiles: (files: File[]) => void;
+    addUploadedFiles: (files: File[], peaks?: number[][]) => void;
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     selectedModel: string;
     setSelectedModel: (m: string) => void;
@@ -87,8 +99,6 @@ type ChatInputProps = {
     onRemoveQueuedMessage?: (id: string) => void;
     /** Tighter chrome for empty-chat centered layout */
     variant?: "default" | "empty";
-    /** Force compact chrome (embedded chat) without relying on settings. */
-    density?: "compact" | "auto";
 };
 
 export type ReasoningEffort = "low" | "high" | "ultra" | "max";
@@ -205,7 +215,7 @@ const ModelItem = ({
                     {isApiModel(model) ? (
                         <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
                     ) : null}
-                    {isSelected && <Icon icon={RiCheckLine} className="text-text-primary font-bold" />}
+                    {isSelected && <Icon icon={"check"} className="text-text-primary font-bold" />}
                 </div>
             </DropdownMenuItem>
         </Tooltip>
@@ -272,11 +282,11 @@ function ComposerContextHighlight({ text }: { text: string }) {
 }
 
 const CHAT_MODES = [
-    { id: "Code", icon: RiCommandLine, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
-    { id: "Ask", icon: RiChat2Fill, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
-    { id: "Plan", icon: RiCalendarFill, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
-    { id: "Visual", icon: RiBrushFill, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
-    { id: "Review", icon: RiSpyFill, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
+    { id: "Code", icon: "command", color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
+    { id: "Ask", icon: "chat-round-line", color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
+    { id: "Plan", icon: "calendar", color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
+    { id: "Visual", icon: "palette", color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
+    { id: "Review", icon: "eye", color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
 ] as const;
 
 const COMPOSER_HINTS = [
@@ -400,13 +410,7 @@ function SwapText({
     );
 }
 
-function RotatingComposerHint({
-    paused,
-    compact = false,
-}: {
-    paused: boolean;
-    compact?: boolean;
-}) {
+function RotatingComposerHint({ paused }: { paused: boolean }) {
     const [index, setIndex] = React.useState(0);
     const [phase, setPhase] = React.useState<"in" | "out" | "enter">("in");
     const indexRef = React.useRef(0);
@@ -435,10 +439,7 @@ function RotatingComposerHint({
     }, [paused]);
 
     return (
-        <div
-            className={cn("t-composer-hint", compact && "t-composer-hint--compact")}
-            aria-hidden
-        >
+        <div className="t-composer-hint" aria-hidden>
             <span className="t-composer-hint__text text-[14.5px]!" data-phase={phase}>
                 {COMPOSER_HINTS[index]}
             </span>
@@ -447,12 +448,10 @@ function RotatingComposerHint({
 }
 
 function ModeMenu({
-    compactTrigger,
     selectedMode,
     setSelectedMode,
     disabled,
 }: {
-    compactTrigger?: boolean;
     selectedMode: string;
     setSelectedMode: (m: string) => void;
     disabled?: boolean;
@@ -468,7 +467,7 @@ function ModeMenu({
                     className={cn(
                         "font-medium text-[color:var(--mode-fg)] bg-[var(--mode-bg)] hover:bg-[var(--mode-bg)] hover:text-[color:var(--mode-fg)] hover:brightness-110",
                         "transition-[color,background-color,filter] duration-200 ease-[var(--ease-out)]",
-                        compactTrigger ? "h-7 gap-1 rounded-full px-1.5" : "h-8 px-2",
+                        "h-8 px-2",
                     )}
                     style={{
                         ["--mode-fg" as string]: selected.color,
@@ -507,60 +506,276 @@ function ModeMenu({
     );
 }
 
-function VoiceInputButton({
-    disabled,
-    onTranscript,
-}: {
-    disabled?: boolean;
-    onTranscript: (text: string) => void;
-}) {
-    const [listening, setListening] = React.useState(false);
-    const recRef = React.useRef<{ stop: () => void } | null>(null);
+type SpeechRec = {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    start: () => void;
+    stop: () => void;
+    onresult: ((event: SpeechResultEvent) => void) | null;
+    onerror: ((event: { error?: string }) => void) | null;
+    onend: (() => void) | null;
+};
 
-    const toggle = () => {
-        const w = window as typeof window & {
-            SpeechRecognition?: new () => {
-                continuous: boolean;
-                interimResults: boolean;
-                onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-                onend: (() => void) | null;
-                onerror: (() => void) | null;
-                start: () => void;
-                stop: () => void;
-            };
-            webkitSpeechRecognition?: new () => {
-                continuous: boolean;
-                interimResults: boolean;
-                onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-                onend: (() => void) | null;
-                onerror: (() => void) | null;
-                start: () => void;
-                stop: () => void;
-            };
-        };
-        const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-        if (!SR) {
-            notify.warn("Voice input isn't available in this window.");
+type SpeechResultEvent = {
+    resultIndex: number;
+    results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+};
+
+function speechRecognition(): (new () => SpeechRec) | null {
+    if (typeof window === "undefined") return null;
+    const host = window as Window & {
+        SpeechRecognition?: new () => SpeechRec;
+        webkitSpeechRecognition?: new () => SpeechRec;
+    };
+    return host.SpeechRecognition || host.webkitSpeechRecognition || null;
+}
+
+function WaveIcon() {
+    return (
+        <span className="flex h-3.5 items-center gap-0.5" aria-hidden>
+            {[0, 1, 2, 3].map((i) => (
+                <span
+                    key={i}
+                    className="t-wave-bar h-3.5 w-0.5 rounded-full bg-current"
+                    style={{ animationDelay: `${i * 0.12}s` }}
+                />
+            ))}
+        </span>
+    );
+}
+
+function wavPcm(samples: Float32Array, rate: number): number[] {
+    const dataSize = samples.length * 2;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    const write = (offset: number, text: string) => {
+        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    };
+    write(0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    write(8, "WAVE");
+    write(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true);
+    view.setUint32(28, rate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    write(36, "data");
+    view.setUint32(40, dataSize, true);
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++) {
+        const sample = Math.max(-1, Math.min(1, samples[i] ?? 0));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+        offset += 2;
+    }
+    return Array.from(new Uint8Array(buffer));
+}
+
+/** Records the page microphone and hands short clips to the system recognizer. */
+function startMicCapture(deviceId: string, onClip: (wav: number[]) => void): () => void {
+    let stopped = false;
+    let chunks: Float32Array[] = [];
+    let voiced = 0;
+    let quiet = 0;
+    const pending: Promise<void>[] = [];
+    let processor: ScriptProcessorNode | null = null;
+    let stream: MediaStream | null = null;
+    let ctx: AudioContext | null = null;
+
+    const flush = (rate: number) => {
+        if (voiced < rate * 0.3) {
+            chunks = [];
+            voiced = 0;
+            quiet = 0;
             return;
         }
+        const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const merged = new Float32Array(total);
+        let at = 0;
+        for (const chunk of chunks) {
+            merged.set(chunk, at);
+            at += chunk.length;
+        }
+        chunks = [];
+        voiced = 0;
+        quiet = 0;
+        pending.push(Promise.resolve(onClip(wavPcm(merged, rate))));
+    };
+
+    void navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints(deviceId) }).then((next) => {
+        if (stopped) {
+            next.getTracks().forEach((track) => track.stop());
+            return;
+        }
+        stream = next;
+        ctx = new AudioContext();
+        void ctx.resume();
+        const rate = ctx.sampleRate || 48000;
+        const source = ctx.createMediaStreamSource(next);
+        const mute = ctx.createGain();
+        mute.gain.value = 0;
+        processor = ctx.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (event) => {
+            if (stopped) return;
+            const input = event.inputBuffer.getChannelData(0);
+            let energy = 0;
+            for (let i = 0; i < input.length; i++) energy += (input[i] ?? 0) * (input[i] ?? 0);
+            const rms = Math.sqrt(energy / input.length);
+            if (rms > 0.02) {
+                chunks.push(new Float32Array(input));
+                voiced += input.length;
+                quiet = 0;
+            } else if (voiced > 0) {
+                quiet += input.length;
+                if (quiet > rate * 0.65) flush(rate);
+            }
+            if (voiced > rate * 6) flush(rate);
+        };
+        source.connect(processor);
+        processor.connect(mute);
+        mute.connect(ctx.destination);
+    }).catch((err) => {
+        notify.warn(microphoneErrorMessage(err));
+        onClip([]);
+    });
+
+    return () => {
+        stopped = true;
+        if (ctx) flush(ctx.sampleRate || 48000);
+        processor?.disconnect();
+        stream?.getTracks().forEach((track) => track.stop());
+        void ctx?.close();
+    };
+}
+
+/** Dictates into the composer. Interim text is replaced as the phrase settles. */
+function VoiceInputButton({
+    disabled,
+    value,
+    onChange,
+}: {
+    disabled?: boolean;
+    value: string;
+    onChange: (next: string) => void;
+}) {
+    const [listening, setListening] = React.useState(false);
+    const recRef = React.useRef<SpeechRec | null>(null);
+    const unlistenRef = React.useRef<UnlistenFn[]>([]);
+    const captureStop = React.useRef<(() => void) | null>(null);
+    const baseRef = React.useRef("");
+    const finalRef = React.useRef("");
+    const deviceId = useSettings().voice.deviceId;
+
+    const stopNative = () => {
+        captureStop.current?.();
+        captureStop.current = null;
+        unlistenRef.current.forEach((unlisten) => unlisten());
+        unlistenRef.current = [];
+        void commands.dictationStop().catch(() => undefined);
+    };
+
+    React.useEffect(() => {
+        return () => {
+            recRef.current?.stop();
+            stopNative();
+        };
+    }, []);
+
+    const write = (spoken: string) => {
+        const base = baseRef.current;
+        const gap = base && spoken && !/\s$/.test(base) ? " " : "";
+        onChange(base + gap + spoken);
+    };
+
+    const toggle = () => {
         if (listening) {
             recRef.current?.stop();
+            stopNative();
             setListening(false);
             return;
         }
-        const rec = new SR();
-        rec.continuous = false;
-        rec.interimResults = false;
-        rec.onresult = (e) => {
-            const text = Array.from(e.results)
-                .map((r) => r[0]?.transcript ?? "")
-                .join(" ")
-                .trim();
-            if (text) onTranscript(text);
+        baseRef.current = value;
+        finalRef.current = "";
+        void (async () => {
+            try {
+                const onText = await listen<string>("dictation-text", (event) => {
+                    const piece = event.payload.trim();
+                    if (!piece) return;
+                    if (piece.startsWith("ERR ")) {
+                        notify.warn(piece.slice(4));
+                        return;
+                    }
+                    finalRef.current = finalRef.current ? `${finalRef.current} ${piece}` : piece;
+                    write(finalRef.current);
+                });
+                const onError = await listen<string>("dictation-error", (event) => {
+                    notify.warn(event.payload || "Dictation couldn't start.");
+                    stopNative();
+                    setListening(false);
+                });
+                unlistenRef.current = [onText, onError];
+                await commands.dictationStart();
+                captureStop.current = startMicCapture(deviceId, (wav) => {
+                    if (wav.length < 64) {
+                        stopNative();
+                        setListening(false);
+                        return;
+                    }
+                    void commands.dictationPush(wav).catch(() => undefined);
+                });
+                setListening(true);
+                return;
+            } catch (err) {
+                stopNative();
+                const message = typeof err === "string" ? err : err instanceof Error ? err.message : "Dictation couldn't start.";
+                if (!/isn't available/i.test(message)) {
+                    notify.warn(message);
+                    return;
+                }
+            }
+            startWebSpeech();
+        })();
+    };
+
+    const startWebSpeech = () => {
+        const Ctor = speechRecognition();
+        if (!Ctor) {
+            notify.warn("Speech to text isn't available in this window.");
+            return;
+        }
+        const rec = new Ctor();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = navigator.language || "en-US";
+        baseRef.current = value;
+        finalRef.current = "";
+        rec.onresult = (event) => {
+            let interim = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const piece = event.results[i]?.[0]?.transcript ?? "";
+                if (event.results[i]?.isFinal) finalRef.current += piece;
+                else interim += piece;
+            }
+            write(finalRef.current + interim);
+        };
+        rec.onerror = (event) => {
+            if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+                notify.warn("Allow microphone access to dictate.");
+            } else if (event.error && event.error !== "aborted" && event.error !== "no-speech") {
+                notify.warn("Speech recognition isn't available in this window.");
+            }
+            setListening(false);
         };
         rec.onend = () => setListening(false);
-        rec.onerror = () => setListening(false);
-        rec.start();
+        try {
+            rec.start();
+        } catch {
+            notify.warn("Dictation couldn't start.");
+            return;
+        }
         recRef.current = rec;
         setListening(true);
     };
@@ -572,13 +787,13 @@ function VoiceInputButton({
             size="icon"
             disabled={disabled}
             onClick={toggle}
-            aria-label={listening ? "Stop listening" : "Voice input"}
+            aria-label={listening ? "Stop dictation" : "Dictate"}
             className={cn(
                 "size-8 shrink-0 text-text-muted hover:text-text-primary",
                 listening && "text-accent hover:text-accent",
             )}
         >
-            <Icon icon={listening ? RiStopCircleLine : RiMicLine} />
+            {listening ? <WaveIcon /> : <Icon icon={"microphone"} />}
         </Button>
     );
 }
@@ -611,13 +826,9 @@ export function ChatInput({
     onEditQueuedMessage,
     onRemoveQueuedMessage,
     variant = "default",
-    density = "auto",
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
-    const compact =
-        density === "compact" ||
-        (Boolean(settings.ai.compactComposer) && variant !== "empty");
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
     const allModels = resolveChatModels(getCatalogModels(), {
@@ -731,10 +942,8 @@ export function ChatInput({
         const textarea = textareaRef.current;
         if (!textarea) return;
         textarea.style.height = "auto";
-        const max = compact ? 28 : 200;
-        const newHeight = Math.min(Math.max(textarea.scrollHeight, compact ? 28 : 0), max);
-        textarea.style.height = `${newHeight}px`;
-    }, [inputValue, compact]);
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }, [inputValue]);
 
     React.useEffect(() => {
         const onFocusInput = () => textareaRef.current?.focus();
@@ -742,7 +951,7 @@ export function ChatInput({
         return () => window.removeEventListener("shape-chat-focus-input", onFocusInput);
     }, []);
 
-    // Handle paste events for images and files
+    // Files stay files. Huge text, terminal copies, and editor selections become attachments.
     const handlePaste = React.useCallback((e: React.ClipboardEvent) => {
         const items = e.clipboardData?.items;
         if (!items) return;
@@ -761,6 +970,33 @@ export function ChatInput({
         if (filesToAdd.length > 0) {
             e.preventDefault();
             addUploadedFiles(filesToAdd);
+            return;
+        }
+
+        const text = e.clipboardData.getData("text/plain");
+        if (!text) return;
+        const remembered = matchRememberedClip(text);
+        if (e.clipboardData.types.includes("application/x-shape-terminal") || remembered?.kind === "terminal") {
+            e.preventDefault();
+            addUploadedFiles([terminalAttachmentFile(text, remembered?.label)]);
+            return;
+        }
+        if (e.clipboardData.types.includes(SHAPE_CLIP_CODE) || remembered?.kind === "code") {
+            e.preventDefault();
+            const raw = e.clipboardData.getData(SHAPE_CLIP_CODE);
+            let path = remembered?.label || "selection.ts";
+            try {
+                const parsed = JSON.parse(raw) as { path?: string };
+                if (parsed?.path) path = parsed.path;
+            } catch {
+                /* plain text is enough */
+            }
+            addUploadedFiles([codeAttachmentFile(text, path)]);
+            return;
+        }
+        if (pasteIsLarge(text)) {
+            e.preventDefault();
+            addUploadedFiles([pastedTextFile(text)]);
         }
     }, [addUploadedFiles]);
 
@@ -772,6 +1008,18 @@ export function ChatInput({
         e.stopPropagation();
         dragDepth.current = 0;
         setDragOver(false);
+        const codePayload = e.dataTransfer.getData(SHAPE_CLIP_CODE);
+        if (codePayload) {
+            try {
+                const parsed = JSON.parse(codePayload) as { path?: string; text?: string };
+                if (parsed.text) {
+                    addUploadedFiles([codeAttachmentFile(parsed.text, parsed.path || "selection.ts")]);
+                    return;
+                }
+            } catch {
+                /* fall through to files */
+            }
+        }
         const files = Array.from(e.dataTransfer.files).filter(isAllowedFile);
         if (files.length > 0) {
             addUploadedFiles(files);
@@ -782,7 +1030,8 @@ export function ChatInput({
         e.preventDefault();
         e.stopPropagation();
         dragDepth.current += 1;
-        if (e.dataTransfer.types.includes("Files")) setDragOver(true);
+        const types = e.dataTransfer.types;
+        if (types.includes("Files") || types.includes(SHAPE_CLIP_CODE)) setDragOver(true);
     }, []);
 
     const handleDragLeave = React.useCallback((e: React.DragEvent) => {
@@ -796,6 +1045,31 @@ export function ChatInput({
         e.preventDefault();
         e.stopPropagation();
     }, []);
+
+    // Elements picked in the Browser tab become @element mentions at the caret.
+    React.useEffect(() => {
+        const onElement = (e: Event) => {
+            const detail = (e as CustomEvent<BrowserPickedElement>).detail;
+            if (!detail?.tag) return;
+            const token = registerElementMention(detail);
+            const textarea = textareaRef.current;
+            const val = inputValue;
+            const caret = textarea?.selectionStart ?? val.length;
+            const before = val.slice(0, caret);
+            const after = val.slice(caret);
+            const lead = before && !/\s$/.test(before) ? " " : "";
+            const trail = after && !/^\s/.test(after) ? " " : after ? "" : " ";
+            const next = `${before}${lead}${token}${trail}${after}`;
+            onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
+            const pos = before.length + lead.length + token.length + trail.length;
+            requestAnimationFrame(() => {
+                textarea?.focus();
+                textarea?.setSelectionRange(pos, pos);
+            });
+        };
+        window.addEventListener("shape-chat-attach-element", onElement as EventListener);
+        return () => window.removeEventListener("shape-chat-attach-element", onElement as EventListener);
+    }, [inputValue, onInputChange]);
 
     // Filter file uploads to only allowed types
     const handleFilteredFileUpload = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -830,11 +1104,9 @@ export function ChatInput({
     const modelInfo = MODELS.find((m) => m.id === selectedModel) || autoModel;
     const modelName =
         selectedModel === "auto" || modelInfo.name === "auto" ? "Auto" : modelInfo.name;
-    const modelTriggerLabel = compact
-        ? modelName
-        : [modelName, effortLabel(reasoningEffort), fastMode ? "Fast" : null]
-            .filter(Boolean)
-            .join(" ");
+    const modelTriggerLabel = [modelName, effortLabel(reasoningEffort), fastMode ? "Fast" : null]
+        .filter(Boolean)
+        .join(" ");
     const providerOrder = React.useMemo(() => {
         const seen = new Set<string>();
         const order: string[] = [];
@@ -919,8 +1191,7 @@ export function ChatInput({
     const inputPanel = (
                 <div
                     className={cn(
-                        "relative flex w-full flex-col border border-border-subtle bg-surface-4 transition-colors focus-within:border-border",
-                        compact ? "squircle-full h-12 px-0.5" : "squircle-3xl",
+                        "relative flex w-full flex-col border border-border-subtle bg-surface-4 transition-colors focus-within:border-border squircle-3xl",
                         dragOver && "border-border-subtle bg-surface-3/80",
                         needsSignIn && "cursor-default",
                     )}
@@ -949,74 +1220,28 @@ export function ChatInput({
                     boxRef={composerBoxRef}
                     caretIndex={mentionCaret}
                 />
-                <div
-                    className={cn(
-                        "flex min-h-0 overflow-hidden rounded-[inherit]",
-                        compact ? "flex-row items-center gap-0.5 px-1.5 py-1.5" : "flex-col",
-                    )}
-                >
-                {!compact ? (
-                    <ComposerAttachments
-                        attachments={uploadedFiles}
-                        onRemove={(id) =>
-                            setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
-                        }
-                    />
-                ) : null}
+                <div className="flex min-h-0 flex-col overflow-hidden rounded-[inherit]">
+                <ComposerAttachments
+                    attachments={uploadedFiles}
+                    onRemove={(id) =>
+                        setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
+                    }
+                />
 
-                {compact ? (
-                    <div className="flex shrink-0 items-center gap-0.5">
-                        <input
-                            type="file"
-                            id="chat-media-upload"
-                            className="hidden"
-                            multiple
-                            accept={acceptString}
-                            onChange={handleFilteredFileUpload}
-                        />
-                        <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => document.getElementById("chat-media-upload")?.click()}
-                            className="size-8 ml-0.5 shrink-0 p-0 rounded-full text-text-muted hover:text-text-primary"
-                            aria-label="Attach file"
-                        >
-                            <Icon icon={RiAddLine} />
-                        </Button>
-                    </div>
-                ) : null}
-
-                <div className={cn("relative", compact ? "flex h-7 min-w-0 flex-1 items-center px-1.5" : "px-4 py-3")}>
+                <div className="relative px-4 py-3">
                     {!needsSignIn && !inputValue ? (
-                        <div
-                            className={cn(
-                                "pointer-events-none absolute z-0",
-                                compact ? "inset-0 flex items-center overflow-hidden" : "inset-x-4 inset-y-3",
-                            )}
-                        >
-                            <RotatingComposerHint paused={false} compact={compact} />
+                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0">
+                            <RotatingComposerHint paused={false} />
                         </div>
                     ) : needsSignIn && !inputValue ? (
-                        <div
-                            className={cn(
-                                "pointer-events-none absolute z-0 text-sm font-medium text-text-muted",
-                                compact
-                                    ? "inset-0 flex items-center"
-                                    : "inset-x-4 inset-y-3 leading-relaxed",
-                            )}
-                        >
+                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 text-sm font-medium leading-relaxed text-text-muted">
                             Sign in to use the chat
                         </div>
                     ) : null}
                     <div
                         ref={mentionOverlayRef}
                         aria-hidden
-                        className={cn(
-                            "pointer-events-none absolute z-0 overflow-y-auto whitespace-pre-wrap break-words text-sm font-medium text-text-primary no-scrollbar",
-                            compact
-                                ? "inset-0 leading-7"
-                                : "inset-x-4 inset-y-3 leading-relaxed",
-                        )}
+                        className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 overflow-y-auto whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-text-primary no-scrollbar"
                     >
                         {(() => {
                             const mentionRs = mentionRanges(inputValue);
@@ -1095,10 +1320,7 @@ export function ChatInput({
                                         : COMPOSER_HINTS[0]
                                 }
                                 rows={1}
-                                className={cn(
-                                    "relative z-[1] w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30 whitespace-pre-wrap break-words",
-                                    compact ? "h-7 min-h-7 max-h-7 p-0 leading-7" : "min-h-7 leading-relaxed",
-                                )}
+                                className="relative z-[1] min-h-7 w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium leading-relaxed text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30 whitespace-pre-wrap break-words"
                                 style={{ caretColor: "var(--text-primary)" }}
                             />
                         </ContextMenuTrigger>
@@ -1150,13 +1372,7 @@ export function ChatInput({
                     </ContextMenu>
                 </div>
 
-                <div
-                    className={cn(
-                        "flex items-center",
-                        compact ? "shrink-0 gap-0.5" : "justify-between px-2 pb-2 pt-0",
-                    )}
-                >
-                    {!compact ? (
+                <div className="flex items-center justify-between px-2 pb-2 pt-0">
                     <div className="flex min-w-0 items-center gap-0.5">
                         <input
                             type="file"
@@ -1172,23 +1388,15 @@ export function ChatInput({
                             className="size-8 shrink-0 p-0 text-text-muted hover:text-text-primary"
                             aria-label="Attach file"
                         >
-                            <Icon icon={RiAddLine} />
+                            <Icon icon={"add-circle"} />
                         </Button>
                         <ModeMenu
                             selectedMode={selectedMode}
                             setSelectedMode={setSelectedMode}
                         />
                     </div>
-                    ) : null}
 
                     <div className="flex shrink-0 items-center gap-0.5">
-                        {compact ? (
-                            <ModeMenu
-                                compactTrigger
-                                selectedMode={selectedMode}
-                                setSelectedMode={setSelectedMode}
-                            />
-                        ) : null}
                         <DropdownMenu
                             onOpenChange={(open) => {
                                 if (!open) setModelQuery("");
@@ -1198,30 +1406,19 @@ export function ChatInput({
                                 <Button
                                     variant="ghost"
                                     size="xs"
-                                    className={cn(
-                                        "h-8 font-normal text-text-foreground font-medium hover:text-text-primary",
-                                        compact ? "max-w-[132px] px-1.5" : "max-w-[260px] px-2",
-                                    )}
+                                    className="h-8 max-w-[260px] px-2 font-medium text-text-foreground hover:text-text-primary"
                                     aria-label={modelTriggerLabel}
                                 >
-                                    {compact ? (
-                                        <div className="flex min-w-0 max-w-[120px] items-center gap-1 text-sm">
-                                            {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
-                                            <span className="min-w-0 truncate">{modelName}</span>
-                                            <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-60" />
-                                        </div>
-                                    ) : (
-                                        <div className="flex min-w-0 items-center gap-1.5 text-sm">
-                                            {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
-                                            <span className="min-w-0 truncate">{modelName}</span>
-                                            {isApiModel(modelInfo) ? (
-                                                <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
-                                            ) : null}
-                                            <SwapText value={effortLabel(reasoningEffort)} />
-                                            <SwapText value={fastMode ? "Fast" : ""} />
-                                            <Icon icon={RiArrowDownSLine} className="shrink-0 opacity-60" />
-                                        </div>
-                                    )}
+                                    <div className="flex min-w-0 items-center gap-1.5 text-sm">
+                                        {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
+                                        <span className="min-w-0 truncate">{modelName}</span>
+                                        {isApiModel(modelInfo) ? (
+                                            <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
+                                        ) : null}
+                                        <SwapText value={effortLabel(reasoningEffort)} />
+                                        <SwapText value={fastMode ? "Fast" : ""} />
+                                        <Icon icon={"alt-arrow-down"} className="shrink-0 opacity-60" />
+                                    </div>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-[200px]">
@@ -1253,7 +1450,7 @@ export function ChatInput({
                                             >
                                                 <span className="flex-1 text-sm">{opt.label}</span>
                                                 {reasoningEffort === opt.id ? (
-                                                    <Icon icon={RiCheckLine} />
+                                                    <Icon icon={"check"} />
                                                 ) : null}
                                             </DropdownMenuItem>
                                         ))}
@@ -1329,17 +1526,11 @@ export function ChatInput({
                         </DropdownMenu>
 
                         <VoiceInputButton
-                            onTranscript={(text) => {
-                                const el = textareaRef.current;
-                                if (!el) return;
-                                const next = inputValue.trim() ? `${inputValue.trim()} ${text}` : text;
-                                const native = Object.getOwnPropertyDescriptor(
-                                    HTMLTextAreaElement.prototype,
-                                    "value",
-                                )?.set;
-                                native?.call(el, next);
-                                el.dispatchEvent(new Event("input", { bubbles: true }));
-                            }}
+                            disabled={needsSignIn}
+                            value={inputValue}
+                            onChange={(next) =>
+                                onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>)
+                            }
                         />
                         <button
                             type="button"
@@ -1373,26 +1564,11 @@ export function ChatInput({
                             }
                         >
                             {isLoading && !inputValue.trim() ? (
-                                <span
-                                    className="send-spiral relative inline-block size-4"
-                                    role="status"
-                                    aria-label="Generating"
-                                >
-                                    {Array.from({ length: 8 }, (_, index) => (
-                                        <span
-                                            key={index}
-                                            aria-hidden
-                                            className="send-spiral-dot absolute inline-block rounded-full bg-current"
-                                            style={
-                                                {
-                                                    "--spiral-i": index,
-                                                } as React.CSSProperties
-                                            }
-                                        />
-                                    ))}
+                                <span role="status" aria-label="Generating" className="text-white">
+                                    <Arc size={16} />
                                 </span>
                             ) : (
-                                <Icon icon={RiArrowUpLine} />
+                                <Icon icon={"arrow-up"} />
                             )}
                         </button>
                     </div>
@@ -1421,15 +1597,13 @@ export function ChatInput({
 
     const contextExtras = (
         <>
-            {pendingEdits.length > 0 && onAcceptAllEdits && onRejectAllEdits ? (
-                <PendingEditsPanel
-                    edits={pendingEdits}
-                    onAcceptAll={onAcceptAllEdits}
-                    onRejectAll={onRejectAllEdits}
-                    onAccept={onAcceptEdit}
-                    onReject={onRejectEdit}
-                />
-            ) : null}
+            <PendingEditsPanel
+                edits={pendingEdits}
+                onAcceptAll={onAcceptAllEdits ?? (() => {})}
+                onRejectAll={onRejectAllEdits ?? (() => {})}
+                onAccept={onAcceptEdit}
+                onReject={onRejectEdit}
+            />
             {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
                 <QueuedMessagesPanel
                     items={queuedMessages}
@@ -1449,45 +1623,18 @@ export function ChatInput({
             )}
         >
             <div className="relative z-10 overflow-visible">
-                {compact && uploadedFiles.length > 0 ? (
-                    <div className="mb-2">
-                        <ComposerAttachmentsStrip
-                            attachments={uploadedFiles}
-                            onRemove={(id) =>
-                                setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
-                            }
-                        />
-                    </div>
-                ) : null}
-                {compact ? (
-                    <>
-                        <div className="relative">
-                            {inputPanel}
-                        </div>
-                        <div className="relative flex min-w-0 items-center gap-2 px-2 pt-1.5">
+                <div className="relative flex flex-col">
+                    <div className="relative z-0 -mb-2.5 flex items-end mx-4 squircle-t-2xl! border border-b-0 border-border-subtle bg-surface-3 px-2 pt-1 pb-3.5">
+                        <div className="flex h-7 w-full min-w-0 items-center gap-1">
                             {contextExtras}
-                            <ComposerContextBar compact className="min-w-0 flex-1" />
-                            <div className="flex shrink-0 items-center gap-0.5">
-                                <ComposerRuntimeSelect compact />
+                            <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                                <WorkspaceBranchSwitch />
                                 {usageChip}
                             </div>
                         </div>
-                    </>
-                ) : (
-                    <div className="relative flex flex-col">
-                        <div className="relative z-0 -mb-2.5 flex items-end mx-4 squircle-t-2xl! border border-b-0 border-border-subtle bg-surface-3 px-2 pt-1 pb-3.5">
-                            <div className="flex h-7 w-full min-w-0 items-center gap-1">
-                                {contextExtras}
-                                <ComposerContextBar compact className="min-w-0 flex-1" />
-                                <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                                    <ComposerRuntimeSelect compact />
-                                    {usageChip}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="relative z-10">{inputPanel}</div>
                     </div>
-                )}
+                    <div className="relative z-10">{inputPanel}</div>
+                </div>
             </div>
             <MediaLightbox
                 open={!!mediaViewer}

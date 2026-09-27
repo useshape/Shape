@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { RiAddLine, RiArrowDownSLine, RiDeleteBinLine, RiPencilLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
@@ -56,7 +55,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
                         setOpen(true);
                     }}
                 >
-                    <Icon icon={RiAddLine} />
+                    <Icon icon={"add-circle"} />
                     New
                 </Button>
             }
@@ -89,7 +88,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
                                 setOpen(true);
                             }}
                         >
-                            <Icon icon={RiPencilLine} />
+                            <Icon icon={"pen"} />
                         </Button>
                         <Button
                             size="icon"
@@ -97,7 +96,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
                             aria-label="Delete workflow"
                             onClick={() => save(value.filter((x) => x.id !== w.id))}
                         >
-                            <Icon icon={RiDeleteBinLine} />
+                            <Icon icon={"trash-bin-trash"} />
                         </Button>
                     </div>
                 ))
@@ -276,7 +275,7 @@ function WorkflowDialog({
                                                 ? selectedToolNames.join(", ")
                                                 : "Select tools to auto-run"}
                                         </span>
-                                        <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
+                                        <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
@@ -359,7 +358,7 @@ function PluginPicker({
                             ) : null}
                             <span className="truncate">{selected?.name ?? "None"}</span>
                         </span>
-                        <Icon icon={RiArrowDownSLine} className="shrink-0 text-text-muted" />
+                        <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent

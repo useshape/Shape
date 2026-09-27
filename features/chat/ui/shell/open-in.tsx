@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine } from "@remixicon/react";
 import { useEffect } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -55,7 +54,7 @@ export function OpenInMenu() {
                     >
                         <CursorMark />
                         <span>Open</span>
-                        <Icon icon={RiArrowDownSLine} className="opacity-60" />
+                        <Icon icon={"alt-arrow-down"} className="opacity-60" />
                     </Button>
                 </DropdownMenuTrigger>
             </Tooltip>

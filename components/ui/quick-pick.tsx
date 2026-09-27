@@ -1,9 +1,8 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
 import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Icon } from "@/components/ui/icon";
+import { type SolarIconName,  Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
     SHAPE_MODAL_PANEL_CLASS,
@@ -16,7 +15,7 @@ export type QuickPickItem = {
     id: string;
     label: string;
     description?: string;
-    icon?: RemixiconComponentType;
+    icon?: SolarIconName;
     iconNode?: React.ReactNode;
     /** Right-side muted hint */
     hint?: string;

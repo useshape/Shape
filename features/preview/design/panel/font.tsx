@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowDownSLine } from "@remixicon/react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -98,7 +97,7 @@ export function FontField({
                     )}
                 >
                     <span className="min-w-0 flex-1 truncate text-left font-normal">{value}</span>
-                    <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} className="text-text-muted" />
+                    <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} className="text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -180,7 +179,7 @@ export function WeightField({
                     )}
                 >
                     <span className="min-w-0 flex-1 truncate text-left font-normal">{current}</span>
-                    <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} className="text-text-muted" />
+                    <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} className="text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent

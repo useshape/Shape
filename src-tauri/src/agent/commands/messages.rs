@@ -167,10 +167,11 @@ const CLEARED_TOOL_RESULT: &str = "[cleared to save context — re-call the tool
 const TRIMMED_TOOL_RESULT_SUFFIX: &str =
     "\n[middle omitted to save context — re-read only the specific lines you still need]";
 
-/// Soft budget (~15k tokens): trim old tool results to a short excerpt.
-const TOOL_RESULT_SOFT_BUDGET: usize = 60_000;
-/// Hard budget (~25k tokens): clear old tool results entirely.
-const TOOL_RESULT_CHAR_BUDGET: usize = 100_000;
+/// Soft budget (~6k tokens): trim old tool results to a short excerpt.
+/// Claude and Codex drop stale tool output early; carrying it is re-billed every loop.
+const TOOL_RESULT_SOFT_BUDGET: usize = 24_000;
+/// Hard budget (~12k tokens): clear old tool results entirely.
+const TOOL_RESULT_CHAR_BUDGET: usize = 48_000;
 /// Never touch results from the most recent tool rounds.
 const TOOL_RESULT_KEEP_ROUNDS: usize = 3;
 const TOOL_RESULT_TRIM_CHARS: usize = 600;
@@ -216,13 +217,35 @@ fn strip_think_blocks(content: &str) -> String {
 }
 
 fn strip_tool_markup_for_api(content: &str) -> String {
+    let mut content = content.to_string();
+    for (open, close, placeholder) in [
+        ("<attached_image", "</attached_image>", "[image]"),
+        ("<sent_file", "</sent_file>", "[file]"),
+        ("<browse_session", "</browse_session>", "[browser frame]"),
+        ("<insight_card", "</insight_card>", "[chart]"),
+        ("<chart", "</chart>", "[chart]"),
+        ("<filter_table", "</filter_table>", "[filter table]"),
+        ("<records_table", "</records_table>", "[records]"),
+        ("<stat_cards", "</stat_cards>", "[stats]"),
+    ] {
+        loop {
+            let Some(start) = content.find(open) else { break };
+            let Some(rel) = content[start..].find(close) else {
+                content.replace_range(start.., placeholder);
+                break;
+            };
+            let end = start + rel + close.len();
+            content.replace_range(start..end, placeholder);
+        }
+    }
     let tags = [
         "<cat>", "</cat>", "<ls>", "</ls>", "<edit>", "</edit>",
         "<status>", "</status>", "<tool_result>", "</tool_result>",
         "<search_result", "<inspect_runtime", "<terminal_command", "</terminal_command>",
+        "<chat_renamed", "<forked_from",
         "<questions", "</questions>", "<question", "</question>",
     ];
-    let mut out = strip_think_blocks(content);
+    let mut out = strip_think_blocks(&content);
     for tag in tags {
         while let Some(start) = out.find(tag) {
             if tag.starts_with('<') && !tag.ends_with('>') {
@@ -337,6 +360,37 @@ pub const HISTORY_CHAR_BUDGET: usize = 60_000;
 const API_HISTORY_SOFT_BUDGET: usize = 40_000;
 const KEEP_RECENT_MESSAGES: usize = 10;
 const MIDDLE_MESSAGE_MAX_CHARS: usize = 800;
+
+/// Attach per-turn state to the latest user message. Git status, diagnostics, mode
+/// instructions, and the repo map change every request. They must not live in the
+/// system prompt: that prefix is what prompt caching reuses (Claude Code, Codex).
+pub fn append_turn_context(api_messages: &mut [Value], context: &str) {
+    let context = context.trim();
+    if context.is_empty() {
+        return;
+    }
+    let note = format!(
+        "\n\n<turn_context>\n{context}\n</turn_context>\nThis block is environment state for this request only. It is not a new instruction."
+    );
+    let Some(msg) = api_messages.iter_mut().rev().find(|msg| {
+        msg.get("role").and_then(|role| role.as_str()) == Some("user")
+    }) else {
+        return;
+    };
+    let Some(obj) = msg.as_object_mut() else {
+        return;
+    };
+    match obj.get("content").cloned() {
+        Some(Value::String(text)) => {
+            obj.insert("content".into(), Value::String(format!("{text}{note}")));
+        }
+        Some(Value::Array(mut parts)) => {
+            parts.push(json!({ "type": "text", "text": note }));
+            obj.insert("content".into(), Value::Array(parts));
+        }
+        _ => {}
+    }
+}
 
 pub fn history_char_count(history: &[ChatMessage]) -> usize {
     history.iter().map(|m| m.content.len()).sum()

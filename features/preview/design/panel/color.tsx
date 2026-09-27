@@ -1,16 +1,5 @@
 "use client";
 
-import {
-    RiAddLine,
-    RiCloseLine,
-    RiContrast2Fill,
-    RiEyeLine,
-    RiEyeOffLine,
-    RiImageLine,
-    RiLinkUnlink,
-    RiSquareFill,
-    RiSubtractLine,
-} from "@remixicon/react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -296,7 +285,7 @@ export function ColorField({
                                 className="size-6"
                                 onClick={() => setOpen(false)}
                             >
-                                <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"close"} size={ICON_SIZE_SM} />
                             </Button>
                         </div>
                         <div
@@ -422,13 +411,13 @@ export function ColorField({
                 <span className="pr-2 text-xs font-medium text-text-muted">%</span>
             </div>
             {bound ? (
-                <IconButton label="Detach token" icon={RiLinkUnlink} onClick={detach} />
+                <IconButton label="Detach token" icon={"unlink-minimalistic"} onClick={detach} />
             ) : null}
             {compact ? null : (
             <>
             <IconButton
                 label="Toggle visibility"
-                icon={visible ? RiEyeLine : RiEyeOffLine}
+                icon={visible ? "eye" : "eye-closed"}
                 active={visible}
                 onClick={() => {
                     const next = visible ? "transparent" : cssColor(normalizedHex);
@@ -439,7 +428,7 @@ export function ColorField({
             />
             <IconButton
                 label="Remove"
-                icon={RiSubtractLine}
+                icon={"minus-circle"}
                 onClick={() => {
                     setVisible(false);
                     onPreview({ [property]: mapValue("transparent") });
@@ -527,7 +516,7 @@ function ImageFillField({
                 </Button>
                 <IconButton
                     label="Clear image"
-                    icon={RiSubtractLine}
+                    icon={"minus-circle"}
                     onClick={() =>
                         write({
                             "background-image": "none",
@@ -675,7 +664,7 @@ function GradientEditor({
                 />
                 <IconButton
                     label="Add stop"
-                    icon={RiAddLine}
+                    icon={"add-circle"}
                     onClick={() => {
                         const at = 50;
                         const stops = [...parsed.stops, { color: active.color, at }].sort((a, b) => a.at - b.at);
@@ -791,9 +780,9 @@ export function FillControls({
                     setImageIntent(true);
                 }}
                 items={[
-                    { value: "solid", icon: RiSquareFill, title: "Solid fill" },
-                    { value: "gradient", icon: RiContrast2Fill, title: "Gradient fill" },
-                    { value: "image", icon: RiImageLine, title: "Image fill" },
+                    { value: "solid", icon: "stop", title: "Solid fill" },
+                    { value: "gradient", icon: "sun", title: "Gradient fill" },
+                    { value: "image", icon: "gallery", title: "Image fill" },
                 ]}
             />
             {mode === "image" ? (

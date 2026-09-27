@@ -279,6 +279,7 @@ pub(crate) fn emit_stream_token(
             &chunk,
             None,
             proxy_ctx.project_path.as_deref(),
+            proxy_ctx.conversation_id.as_deref(),
         );
     }
     let _ = app_handle.emit(
@@ -506,17 +507,42 @@ pub async fn stream_chat(
                 "Cancelled".to_string(),
             )));
         }
-        shape_proxy_request(client, api_key, proxy_ctx)
-            .header("HTTP-Referer", "https://shape-ide.local")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                logging::warn("stream", &format!("Request failed (will retry): {}", e));
-                backoff::Error::transient(AppError::Network(e))
-            })
+        tokio::select! {
+            biased;
+            _ = token.cancelled() => {
+                Err(backoff::Error::Permanent(AppError::Message(
+                    "Cancelled".to_string(),
+                )))
+            }
+            result = shape_proxy_request(client, api_key, proxy_ctx)
+                .header("HTTP-Referer", "https://shape-ide.local")
+                .json(&body)
+                .send() => {
+                result.map_err(|e| {
+                    logging::warn("stream", &format!("Request failed (will retry): {}", e));
+                    backoff::Error::transient(AppError::Network(e))
+                })
+            }
+        }
     })
-    .await?;
+    .await;
+    let resp = match resp {
+        Ok(response) => response,
+        Err(AppError::Message(msg)) if msg == "Cancelled" || token.is_cancelled() => {
+            return Ok(StreamOutcome {
+                content: String::new(),
+                tool_calls: Vec::new(),
+                finish_reason: None,
+                token_count: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                had_reasoning: false,
+                reasoning: None,
+                reasoning_details: None,
+            });
+        }
+        Err(err) => return Err(err),
+    };
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -586,16 +612,34 @@ pub async fn stream_chat(
     let mut leaked_calls: Vec<ParsedLeakCall> = Vec::new();
     let mut announced_tool_name: Option<String> = None;
 
-    while let Some(chunk_result) = stream.next().await {
+    while let Some(chunk_result) = {
+        tokio::select! {
+            biased;
+            _ = token.cancelled() => {
+                logging::info("stream", "Cancelled by user during stream");
+                return Ok(StreamOutcome {
+                    content,
+                    tool_calls: Vec::new(),
+                    finish_reason,
+                    token_count,
+                    input_tokens,
+                    output_tokens,
+                    had_reasoning,
+                    reasoning: nonempty_string(reasoning_acc.clone()),
+                    reasoning_details: nonempty_details(&reasoning_details_acc),
+                });
+            }
+            next = stream.next() => next,
+        }
+    } {
             if token.is_cancelled() {
             logging::info("stream", "Cancelled by user during stream");
-            // Don't flush deferred mid-tool narration into the reply on cancel.
             if !defer_content_emit && !token_buffer.is_empty() {
                 emit_stream_token(app_handle, proxy_ctx, token_buffer);
             }
             return Ok(StreamOutcome {
                 content,
-                tool_calls: finalize_tool_calls(tool_call_buf),
+                tool_calls: Vec::new(),
                 finish_reason,
                 token_count,
                 input_tokens,
@@ -1064,6 +1108,28 @@ fn finalize_tool_calls(buf: Vec<ToolCallAccumulator>) -> Vec<ToolCall> {
         .collect()
 }
 
+fn completion_message_text(json: &Value) -> String {
+    let content = &json["choices"][0]["message"]["content"];
+    if let Some(text) = content.as_str() {
+        let trimmed = text.trim().trim_matches('"').trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    if let Some(parts) = content.as_array() {
+        let joined = parts
+            .iter()
+            .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let trimmed = joined.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    String::new()
+}
+
 /// Simple wrapper for non-streaming calls (title generation, commit messages, fast-apply).
 pub async fn complete_chat(
     client: &Client,
@@ -1095,11 +1161,16 @@ pub async fn complete_chat_cancellable(
 
     let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
 
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 30,
+        "max_tokens": if proxy_ctx.feature == "title" { 80 } else { 30 },
     });
+    // Title calls are a few words. Leaving reasoning on spends the whole budget
+    // before any title text is written, and the chat keeps the chopped placeholder.
+    if proxy_ctx.feature == "title" {
+        body["reasoning"] = json!({ "enabled": false, "exclude": true });
+    }
 
     let send_fut = shape_proxy_request(client, api_key, proxy_ctx)
         .json(&body)
@@ -1124,12 +1195,12 @@ pub async fn complete_chat_cancellable(
     }
 
     let json = completion_json(resp, &proxy_ctx.provider).await?;
-    let content = json["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("New Chat")
-        .trim()
-        .trim_matches('"')
-        .to_string();
+    let content = completion_message_text(&json);
+    if content.is_empty() {
+        return Err(AppError::Message(
+            "Completion returned no text.".to_string(),
+        ));
+    }
 
     logging::debug(
         "complete",

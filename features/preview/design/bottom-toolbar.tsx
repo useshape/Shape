@@ -1,19 +1,5 @@
 "use client";
 
-import {
-    RiScreenshotFill,
-    RiCodeBlock,
-    RiComputerLine,
-    RiCursorLine,
-    RiEditBoxLine,
-    RiMouseLine,
-    RiDonutChartFill,
-    RiLayoutGridLine,
-    RiSmartphoneLine,
-    RiTabletLine,
-    RiWindow2Fill,
-    RiShapeFill,
-} from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -21,7 +7,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_MD, ICON_SIZE_SM, type SolarIconName } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +22,7 @@ function Tool({
     onClick,
 }: {
     label: string;
-    icon: typeof RiCursorLine;
+    icon: SolarIconName;
     active?: boolean;
     disabled?: boolean;
     onClick?: () => void;
@@ -90,19 +76,19 @@ export function DesignBottomToolbar({
             <div className="flex items-center gap-0.5">
                 <Tool
                     label="Inspect"
-                    icon={RiEditBoxLine}
+                    icon={"pen"}
                     active={mode === "select"}
                     onClick={() => onModeChange("select")}
                 />
                 <Tool
                     label="Normal"
-                    icon={RiMouseLine}
+                    icon={"cursor"}
                     active={mode === "normal"}
                     onClick={() => onModeChange("normal")}
                 />
                 <Tool
                     label="Auto layout"
-                    icon={RiLayoutGridLine}
+                    icon={"widget"}
                     active={mode === "autolayout"}
                     onClick={() => onModeChange("autolayout")}
                 />
@@ -116,7 +102,7 @@ export function DesignBottomToolbar({
                             aria-label="Capture"
                             className="size-10 rounded-lg"
                         >
-                            <Icon icon={RiScreenshotFill} size={20} />
+                            <Icon icon={"gallery"} size={20} />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="center" className="min-w-36">
@@ -124,24 +110,24 @@ export function DesignBottomToolbar({
                             disabled={!canCaptureElement}
                             onClick={onCaptureElement}
                         >
-                            <Icon icon={RiShapeFill} size={ICON_SIZE_SM} />
+                            <Icon icon={"stars-minimalistic"} size={ICON_SIZE_SM} />
                             Element
                         </DropdownMenuItem>
                         <DropdownMenuItem disabled={!canCapture} onClick={onCaptureScreen}>
-                            <Icon icon={RiWindow2Fill} size={ICON_SIZE_SM} />
+                            <Icon icon={"monitor"} size={ICON_SIZE_SM} />
                             Screen
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <Tool
                     label="Open source"
-                    icon={RiCodeBlock}
+                    icon={"code-square"}
                     disabled={!canOpenCode}
                     onClick={onOpenCode}
                 />
                 <Tool
                     label="Rotate"
-                    icon={RiDonutChartFill}
+                    icon={"pie-chart"}
                     active={mode === "rotate"}
                     onClick={() => onModeChange("rotate")}
                 />
@@ -150,19 +136,19 @@ export function DesignBottomToolbar({
             <div className="flex rounded-lg bg-panel-hover p-0.5">
                 <Tool
                     label="Desktop"
-                    icon={RiComputerLine}
+                    icon={"monitor"}
                     active={viewport === "desktop"}
                     onClick={() => onViewportChange("desktop")}
                 />
                 <Tool
                     label="Tablet"
-                    icon={RiTabletLine}
+                    icon={"tablet"}
                     active={viewport === "tablet"}
                     onClick={() => onViewportChange("tablet")}
                 />
                 <Tool
                     label="Mobile"
-                    icon={RiSmartphoneLine}
+                    icon={"smartphone"}
                     active={viewport === "mobile"}
                     onClick={() => onViewportChange("mobile")}
                 />

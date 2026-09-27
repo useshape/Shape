@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RiArrowDownSLine, RiCodeLine, RiMoreLine } from "@remixicon/react";
 import { SettingSwitch } from "@/features/settings/ui/shared/controls";
 import { Button } from "@/components/ui/button";
 import {
@@ -126,12 +125,12 @@ export function DesignComponentOptions({
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" aria-label="Instance actions" className="size-7">
-                            <Icon icon={RiMoreLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"menu-dots"} size={ICON_SIZE_SM} />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-48">
                         <DropdownMenuItem disabled={!onOpenSource} onClick={onOpenSource}>
-                            <Icon icon={RiCodeLine} size={ICON_SIZE_SM} />
+                            <Icon icon={"code"} size={ICON_SIZE_SM} />
                             Go to main component
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -145,7 +144,7 @@ export function DesignComponentOptions({
                     disabled
                 >
                     <span className="truncate">{component.sourceLabel}</span>
-                    <Icon icon={RiArrowDownSLine} size={12} className="opacity-40" />
+                    <Icon icon={"alt-arrow-down"} size={12} className="opacity-40" />
                 </button>
             </Row>
             {variants.map((property) => (

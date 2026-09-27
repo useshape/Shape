@@ -1,6 +1,5 @@
 "use client";
 
-import { RiAddLine, RiArrowDownSLine, RiArrowUpSLine, RiCloseLine, RiDeleteBinLine, RiLayoutColumnLine } from "@remixicon/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import type { TerminalShellProfile } from "@/lib/backend/types";
@@ -9,6 +8,14 @@ import { Icon } from "@/components/ui/icon";
 import type { Terminal as XTermType } from "@xterm/xterm";
 import type { FitAddon as FitAddonType } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuShortcut,
+    ContextMenuTrigger,
+} from "@/components/ui/context";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -32,6 +39,7 @@ import {
     workbenchTabItemClass,
 } from "@/features/editor/ui/tabs/workbench-tab-styles";
 import { terminalSessionStore, type TerminalTab as SessionTab } from "@/features/terminal/session";
+import { rememberShapeClip } from "@/features/chat/lib/shape-clip";
 type TerminalShell = SessionTab["shell"];
 type TerminalGroupId = SessionTab["group"];
 type TerminalTab = SessionTab;
@@ -214,11 +222,49 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
                 },
             });
 
+            const publishSelection = () => {
+                const selected = term?.getSelection();
+                if (!selected) return;
+                rememberShapeClip({ kind: "terminal", text: selected, label: tab.title || "Terminal" });
+            };
             term.onSelectionChange(() => {
-                if (getSettings().terminal.copyOnSelect && term?.hasSelection()) {
-                    void navigator.clipboard.writeText(term.getSelection());
-                }
+                if (!term?.hasSelection()) return;
+                publishSelection();
             });
+            const copySelected = (selected: string) => {
+                rememberShapeClip({ kind: "terminal", text: selected, label: tab.title || "Terminal" });
+                const area = document.createElement("textarea");
+                area.value = selected;
+                area.setAttribute("readonly", "");
+                area.style.position = "fixed";
+                area.style.left = "-9999px";
+                document.body.appendChild(area);
+                area.select();
+                document.execCommand("copy");
+                area.remove();
+            };
+            const host = terminalRef.current;
+            const onCopy = (event: ClipboardEvent) => {
+                const selected = term?.getSelection();
+                if (!selected) return;
+                event.preventDefault();
+                event.clipboardData?.setData("text/plain", selected);
+                rememberShapeClip({ kind: "terminal", text: selected, label: tab.title || "Terminal" });
+            };
+            const onCopyKey = (event: KeyboardEvent) => {
+                if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "c" || event.shiftKey) return;
+                const selected = term?.hasSelection() ? term.getSelection() : "";
+                if (!selected) return;
+                event.preventDefault();
+                event.stopPropagation();
+                copySelected(selected);
+            };
+            host?.addEventListener("copy", onCopy);
+            host?.addEventListener("keydown", onCopyKey, true);
+            detachCopy = () => {
+                host?.removeEventListener("copy", onCopy);
+                host?.removeEventListener("keydown", onCopyKey, true);
+            };
 
             // Enabling windowsMode specifically for ConPTY buffer handling
             // @ts-expect-error - internal property
@@ -379,6 +425,7 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
         };
 
         init();
+        let detachCopy: (() => void) | undefined;
         let fitTimer: ReturnType<typeof setTimeout> | undefined;
         const scheduleFit = (immediate = false) => {
             if (isLayoutResizing()) return;
@@ -405,6 +452,7 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
 
         return () => {
             isMounted = false;
+            detachCopy?.();
             if (fitTimer) clearTimeout(fitTimer);
             resObs.disconnect();
             window.removeEventListener("shape-terminal-refit", onRefit);
@@ -441,7 +489,59 @@ function TerminalInstance({ tab, isActive }: { tab: TerminalTab, isActive: boole
         }
     }, [isActive]);
 
-    return <div className="h-full w-full overflow-hidden bg-panel p-3" ref={terminalRef} />;
+    const copySelection = () => {
+        const term = xtermRef.current;
+        const selected = term?.getSelection();
+        if (!term || !selected) return;
+        rememberShapeClip({ kind: "terminal", text: selected, label: tab.title || "Terminal" });
+        const area = document.createElement("textarea");
+        area.value = selected;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+        void navigator.clipboard.writeText(selected).catch(() => undefined);
+    };
+
+    const pasteClipboard = async () => {
+        const term = xtermRef.current;
+        if (!term) return;
+        let text = "";
+        try {
+            text = await navigator.clipboard.readText();
+        } catch {
+            text = "";
+        }
+        if (text) term.paste(text);
+    };
+
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
+                <div className="h-full w-full overflow-hidden bg-panel p-3" ref={terminalRef} />
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+                <ContextMenuItem onClick={copySelection}>
+                    Copy
+                    <ContextMenuShortcut>Ctrl+Shift+C</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => void pasteClipboard()}>
+                    Paste
+                    <ContextMenuShortcut>Ctrl+Shift+V</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => xtermRef.current?.selectAll()}>
+                    Select All
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => xtermRef.current?.clearSelection()}>
+                    Clear Selection
+                </ContextMenuItem>
+            </ContextMenuContent>
+        </ContextMenu>
+    );
 }
 
 export default function Terminal({
@@ -853,7 +953,7 @@ export default function Terminal({
                     className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                     title="Terminal profiles"
                 >
-                    <Icon icon={RiArrowDownSLine} />
+                    <Icon icon={"alt-arrow-down"} />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[220px]">
@@ -919,7 +1019,7 @@ export default function Terminal({
                             className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
                             aria-label={`Close ${tab.title}`}
                         >
-                            <Icon icon={RiCloseLine} />
+                            <Icon icon={"close"} />
                         </button>
                     </div>
                 );
@@ -949,7 +1049,7 @@ export default function Terminal({
                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                         onClick={() => addTab(resolveAvailableDefaultShell(), group)}
                     >
-                        <Icon icon={RiAddLine} />
+                        <Icon icon={"add-circle"} />
                     </Button>
                 </Tooltip>
                 {showShellMenu ? shellMenu : null}
@@ -962,7 +1062,7 @@ export default function Terminal({
                             onClick={() => onClose()}
                             aria-label="Close terminal"
                         >
-                            <Icon icon={RiCloseLine} />
+                            <Icon icon={"close"} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -1045,7 +1145,7 @@ export default function Terminal({
                                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={clearActiveTerminal}
                                     >
-                                        <Icon icon={RiDeleteBinLine} />
+                                        <Icon icon={"trash-bin-trash"} />
                                     </Button>
                                 </Tooltip>
                                 <Tooltip content="Split Terminal">
@@ -1055,7 +1155,7 @@ export default function Terminal({
                                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={() => splitTerminal()}
                                     >
-                                        <Icon icon={RiLayoutColumnLine} />
+                                        <Icon icon={"sidebar-code"} />
                                     </Button>
                                 </Tooltip>
                             </>
@@ -1067,7 +1167,7 @@ export default function Terminal({
                                 size="icon"
                                 className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                             >
-                                <Icon icon={RiArrowUpSLine} />
+                                <Icon icon={"alt-arrow-up"} />
                             </Button>
                         </Tooltip>
                         <Button
@@ -1076,7 +1176,7 @@ export default function Terminal({
                             size="icon"
                             className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                         >
-                            <Icon icon={RiCloseLine} />
+                            <Icon icon={"close"} />
                         </Button>
                     </div>
                 </div>

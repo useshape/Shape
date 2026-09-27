@@ -1,40 +1,5 @@
 "use client";
 
-import {
-    RiAlignCenter,
-    RiAlignJustify,
-    RiAlignLeft,
-    RiAlignRight,
-    RiAlignTop,
-    RiAlignBottom,
-    RiAlignVertically,
-    RiArrowDownLine,
-    RiArrowDownSLine,
-    RiArrowGoBackLine,
-    RiArrowGoForwardLine,
-    RiArrowRightLine,
-    RiArrowUpDownLine,
-    RiCheckboxBlankLine,
-    RiCheckboxLine,
-    RiCodeLine,
-    RiContrastDropLine,
-    RiDeleteBinLine,
-    RiExpandDiagonalLine,
-    RiExpandHeightLine,
-    RiExpandWidthLine,
-    RiEyeLine,
-    RiEyeOffLine,
-    RiFocusLine,
-    RiFontSize,
-    RiLayoutRowLine,
-    RiMoreLine,
-    RiResetRightLine,
-    RiShadowLine,
-    RiSpace,
-    RiSubtractLine,
-    RiTextSpacing,
-    RiTextWrap,
-} from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -184,8 +149,8 @@ export function DesignStylePanel({
         return (
             <aside className={cn("flex h-full min-w-0 flex-col bg-surface-3", className)}>
                 <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-2">
-                    <IconButton label="Undo" icon={RiArrowGoBackLine} onClick={onUndo} />
-                    <IconButton label="Redo" icon={RiArrowGoForwardLine} onClick={onRedo} />
+                    <IconButton label="Undo" icon={"undo-left"} onClick={onUndo} />
+                    <IconButton label="Redo" icon={"undo-right"} onClick={onRedo} />
                     <div className="ml-auto" />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -195,7 +160,7 @@ export function DesignStylePanel({
                                 className="px-2 text-sm font-semibold tabular-nums"
                             >
                                 {zoom}%
-                                <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="min-w-24">
@@ -208,7 +173,7 @@ export function DesignStylePanel({
                     </DropdownMenu>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" icon={RiMoreLine} aria-label="Canvas menu" />
+                            <Button variant="ghost" size="icon" icon={"menu-dots"} aria-label="Canvas menu" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <FrameSizeMenu device={device} onDeviceChange={onDeviceChange} />
@@ -233,8 +198,8 @@ export function DesignStylePanel({
             {chrome ? (
             <div className="shrink-0 px-3 pb-2.5 pt-2.5">
                 <div className="mb-1.5 flex h-6 items-center gap-0.5">
-                    <IconButton label="Undo" icon={RiArrowGoBackLine} onClick={onUndo} />
-                    <IconButton label="Redo" icon={RiArrowGoForwardLine} onClick={onRedo} />
+                    <IconButton label="Undo" icon={"undo-left"} onClick={onUndo} />
+                    <IconButton label="Redo" icon={"undo-right"} onClick={onRedo} />
                     <UserAvatar />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -244,7 +209,7 @@ export function DesignStylePanel({
                                 className="ml-auto px-2 text-sm font-semibold tabular-nums"
                             >
                                 {zoom}%
-                                <Icon icon={RiArrowDownSLine} size={ICON_SIZE_SM} />
+                                <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="min-w-24">
@@ -257,7 +222,7 @@ export function DesignStylePanel({
                     </DropdownMenu>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" icon={RiMoreLine} aria-label="Selection menu" />
+                            <Button variant="ghost" size="icon" icon={"menu-dots"} aria-label="Selection menu" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <FrameSizeMenu device={device} onDeviceChange={onDeviceChange} />
@@ -328,18 +293,18 @@ export function DesignStylePanel({
                                 onChange={(value) => setStyle("font-weight", value)}
                             />
                             <div className="flex gap-2">
-                                <Field icon={RiFontSize} value={style["font-size"]} property="font-size" onPreview={onPreview} onCommit={onCommit} />
-                                <Field icon={RiArrowUpDownLine} value={style["line-height"]} property="line-height" onPreview={onPreview} onCommit={onCommit} />
-                                <Field icon={RiTextSpacing} value={style["letter-spacing"]} property="letter-spacing" onPreview={onPreview} onCommit={onCommit} />
+                                <Field icon={"text-field"} value={style["font-size"]} property="font-size" onPreview={onPreview} onCommit={onCommit} />
+                                <Field icon={"sort-vertical"} value={style["line-height"]} property="line-height" onPreview={onPreview} onCommit={onCommit} />
+                                <Field icon={"text-field"} value={style["letter-spacing"]} property="letter-spacing" onPreview={onPreview} onCommit={onCommit} />
                             </div>
                             <div className="flex gap-1">
                                 <Segment
                                     value={style["text-align"] || "left"}
                                     onChange={(value) => setStyle("text-align", value)}
                                     items={[
-                                        { value: "left", icon: RiAlignLeft, title: "Align left" },
-                                        { value: "center", icon: RiAlignCenter, title: "Align center" },
-                                        { value: "right", icon: RiAlignRight, title: "Align right" },
+                                        { value: "left", icon: "align-left", title: "Align left" },
+                                        { value: "center", icon: "align-horizontal-center", title: "Align center" },
+                                        { value: "right", icon: "align-right", title: "Align right" },
                                     ]}
                                 />
                                 <Segment
@@ -363,9 +328,9 @@ export function DesignStylePanel({
                                         onCommit({ "align-items": align, "vertical-align": vertical });
                                     }}
                                     items={[
-                                        { value: "top", icon: RiAlignTop, title: "Align top" },
-                                        { value: "middle", icon: RiAlignVertically, title: "Align middle" },
-                                        { value: "bottom", icon: RiAlignBottom, title: "Align bottom" },
+                                        { value: "top", icon: "align-top", title: "Align top" },
+                                        { value: "middle", icon: "align-vertical-center", title: "Align middle" },
+                                        { value: "bottom", icon: "align-bottom", title: "Align bottom" },
                                     ]}
                                 />
                             </div>
@@ -374,13 +339,13 @@ export function DesignStylePanel({
                     <PanelSection
                         title="Layout"
                         action={
-                            <IconButton label="Fit view" icon={RiExpandDiagonalLine} />
+                            <IconButton label="Fit view" icon={"maximize"} />
                         }
                     >
                         <div className="flex h-6 items-stretch gap-2 mb-4">
                             <Field label="X" value={`${Math.round(element.rect.x)}`} property="left" onPreview={onPreview} onCommit={onCommit} />
                             <Field label="Y" value={`${Math.round(element.rect.y)}`} property="top" onPreview={onPreview} onCommit={onCommit} />
-                            <Field icon={RiResetRightLine} value="0deg" property="rotate" onPreview={onPreview} onCommit={onCommit} />
+                            <Field icon={"restart"} value="0deg" property="rotate" onPreview={onPreview} onCommit={onCommit} />
                         </div>
                         <div className="flex h-6 items-stretch gap-2">
                             <Field label="W" value={style.width} property="width" onPreview={onPreview} onCommit={onCommit} />
@@ -394,9 +359,9 @@ export function DesignStylePanel({
                             >
                                 {(
                                     [
-                                        ["center", RiFocusLine, "Center in parent"],
-                                        ["center-x", RiAlignCenter, "Center horizontally"],
-                                        ["center-y", RiAlignVertically, "Center vertically"],
+                                        ["center", "target", "Center in parent"],
+                                        ["center-x", "align-horizontal-center", "Center horizontally"],
+                                        ["center-y", "align-vertical-center", "Center vertically"],
                                     ] as const
                                 ).map(([alignment, icon, title], index) => (
                                     <button
@@ -432,7 +397,7 @@ export function DesignStylePanel({
                                     <span className="ml-auto">
                                         <IconButton
                                             label="Remove flex"
-                                            icon={RiSubtractLine}
+                                            icon={"minus-circle"}
                                             onClick={() => setStyle("display", "block")}
                                         />
                                     </span>
@@ -462,14 +427,14 @@ export function DesignStylePanel({
                                             }
                                             onChange={(value) => setStyle("flex-direction", value)}
                                             items={[
-                                                { value: "column", icon: RiArrowDownLine, title: "Column" },
-                                                { value: "row", icon: RiArrowRightLine, title: "Row" },
+                                                { value: "column", icon: "arrow-down", title: "Column" },
+                                                { value: "row", icon: "arrow-right", title: "Row" },
                                             ]}
                                         />
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            icon={RiTextWrap}
+                                            icon={"text-square"}
                                             aria-label="Wrap"
                                             selected={style["flex-wrap"] !== "nowrap"}
                                             onClick={() =>
@@ -480,7 +445,7 @@ export function DesignStylePanel({
                                             }
                                         />
                                         <Field
-                                            icon={RiSpace}
+                                            icon={"text-square"}
                                             value={style.gap}
                                             property="gap"
                                             onPreview={onPreview}
@@ -489,7 +454,7 @@ export function DesignStylePanel({
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            icon={RiAlignJustify}
+                                            icon={"align-horizontal-spacing"}
                                             aria-label="Space between"
                                             selected={style["justify-content"] === "space-between"}
                                             onClick={() =>
@@ -505,7 +470,7 @@ export function DesignStylePanel({
                                 </div>
                                 <div className="flex h-6 items-stretch gap-1">
                                     <Field
-                                        icon={RiExpandWidthLine}
+                                        icon={"maximize"}
                                         value={style["padding-left"] || style["padding-right"] || "0px"}
                                         property="padding-left"
                                         mapValue={(value) => value}
@@ -523,7 +488,7 @@ export function DesignStylePanel({
                                         }}
                                     />
                                     <Field
-                                        icon={RiExpandHeightLine}
+                                        icon={"maximize"}
                                         value={style["padding-top"] || style["padding-bottom"] || "0px"}
                                         property="padding-top"
                                         onPreview={(styles) => {
@@ -542,7 +507,7 @@ export function DesignStylePanel({
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        icon={RiExpandDiagonalLine}
+                                        icon={"maximize"}
                                         aria-label="Equal padding"
                                         onClick={() => {
                                             const next = style["padding-left"] || "0px";
@@ -564,7 +529,7 @@ export function DesignStylePanel({
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    icon={style.overflow === "hidden" ? RiCheckboxLine : RiCheckboxBlankLine}
+                                    icon={style.overflow === "hidden" ? "check-square" : "stop"}
                                     onClick={() =>
                                         setStyle(
                                             "overflow",
@@ -590,7 +555,7 @@ export function DesignStylePanel({
                         action={
                             <IconButton
                                 label="Toggle visibility"
-                                icon={Number.parseFloat(style.opacity) === 0 ? RiEyeOffLine : RiEyeLine}
+                                icon={Number.parseFloat(style.opacity) === 0 ? "eye-closed" : "eye"}
                                 active={Number.parseFloat(style.opacity || "1") > 0}
                                 onClick={() => {
                                     const current = Number.parseFloat(style.opacity);
@@ -602,7 +567,7 @@ export function DesignStylePanel({
                     >
                         <div className="flex items-stretch gap-1">
                             <Field
-                                icon={RiContrastDropLine}
+                                icon={"sun"}
                                 value={`${Math.round((Number.parseFloat(style.opacity) || 1) * 100)}`}
                                 property="opacity"
                                 suffix="%"
@@ -615,7 +580,7 @@ export function DesignStylePanel({
                                 onCommit={onCommit}
                             />
                             <SelectField
-                                icon={RiContrastDropLine}
+                                icon={"sun"}
                                 value={style["mix-blend-mode"] || "normal"}
                                 options={[
                                     ["normal", "Normal"],
@@ -657,8 +622,8 @@ export function DesignStylePanel({
                             {style["text-decoration-line"] === "underline" ? (
                                 <>
                                     <div className="flex gap-2">
-                                        <Field icon={RiSubtractLine} value="1px" property="text-decoration-thickness" onPreview={onPreview} onCommit={onCommit} />
-                                        <Field icon={RiArrowDownLine} value="auto" property="text-underline-offset" onPreview={onPreview} onCommit={onCommit} />
+                                        <Field icon={"minus-circle"} value="1px" property="text-decoration-thickness" onPreview={onPreview} onCommit={onCommit} />
+                                        <Field icon={"arrow-down"} value="auto" property="text-underline-offset" onPreview={onPreview} onCommit={onCommit} />
                                     </div>
                                     <ColorField
                                         value={style["text-decoration-color"] || style.color}
@@ -675,8 +640,8 @@ export function DesignStylePanel({
 
                     <PanelSection title="Stroke" add>
                         <div className="flex gap-2">
-                            <Field icon={RiSubtractLine} value={style["border-top-width"]} property="border-width" onPreview={onPreview} onCommit={onCommit} />
-                            <SelectField icon={RiLayoutRowLine} value={style["border-style"]} options={["none", "solid", "dashed", "dotted", "double"]} onChange={(value) => setStyle("border-style", value)} />
+                            <Field icon={"minus-circle"} value={style["border-top-width"]} property="border-width" onPreview={onPreview} onCommit={onCommit} />
+                            <SelectField icon={"align-horizontal-spacing"} value={style["border-style"]} options={["none", "solid", "dashed", "dotted", "double"]} onChange={(value) => setStyle("border-style", value)} />
                         </div>
                         <ColorField
                             value={style["border-color"]}
@@ -701,10 +666,10 @@ export function DesignStylePanel({
                                 <div className="flex h-8 items-stretch gap-1">
                                     <Field label="X" value={boxShadow?.x} property="box-shadow" mapValue={(value) => composeShadow("x", value)} onPreview={onPreview} onCommit={onCommit} />
                                     <Field label="Y" value={boxShadow?.y} property="box-shadow" mapValue={(value) => composeShadow("y", value)} onPreview={onPreview} onCommit={onCommit} />
-                                    <Field icon={RiShadowLine} value={boxShadow?.blur} property="box-shadow" mapValue={(value) => composeShadow("blur", value)} onPreview={onPreview} onCommit={onCommit} />
+                                    <Field icon={"layers"} value={boxShadow?.blur} property="box-shadow" mapValue={(value) => composeShadow("blur", value)} onPreview={onPreview} onCommit={onCommit} />
                                     <IconButton
                                         label="Remove shadow"
-                                        icon={RiSubtractLine}
+                                        icon={"minus-circle"}
                                         onClick={() => setStyle("box-shadow", "none")}
                                     />
                                 </div>
@@ -758,10 +723,10 @@ export function DesignStylePanel({
                             </span>
                         </div>
                         <div className="flex gap-2">
-                            <Button variant="secondary" size="xs" icon={RiCodeLine} className={cn(CONTROL, "flex-1")} onClick={onOpenSource} disabled={!source}>
+                            <Button variant="secondary" size="xs" icon={"code"} className={cn(CONTROL, "flex-1")} onClick={onOpenSource} disabled={!source}>
                                 Open source
                             </Button>
-                            <Button variant="ghost" size="icon" icon={RiDeleteBinLine} aria-label="Delete element" onClick={onDelete} />
+                            <Button variant="ghost" size="icon" icon={"trash-bin-trash"} aria-label="Delete element" onClick={onDelete} />
                         </div>
                     </PanelSection>
                 </div>

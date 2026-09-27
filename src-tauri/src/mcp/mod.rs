@@ -245,6 +245,7 @@ impl McpState {
         Ok(out)
     }
 
+    #[allow(dead_code)]
     pub fn tools_as_openai_schema(&self) -> Result<Vec<Value>, String> {
         let configs = self.configs.lock().map_err(|e| e.to_string())?;
         let disabled: HashMap<&str, &Vec<String>> = configs
@@ -271,6 +272,42 @@ impl McpState {
                 })
             })
             .collect())
+    }
+
+    /// Short catalog for `mcp_search`. Full schemas stay out of the cached tool prefix.
+    pub fn search_catalog(&self, query: &str, limit: usize) -> Result<String, String> {
+        let limit = limit.clamp(1, 8);
+        let q = query.trim().to_ascii_lowercase();
+        let mut tools = self.all_tools()?;
+        tools.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+        let hits: Vec<_> = tools
+            .into_iter()
+            .filter(|t| {
+                q.is_empty()
+                    || t.qualified_name.to_ascii_lowercase().contains(&q)
+                    || t.description.to_ascii_lowercase().contains(&q)
+                    || t.server_name.to_ascii_lowercase().contains(&q)
+            })
+            .take(limit)
+            .collect();
+        if hits.is_empty() {
+            return Ok("No connected MCP tools matched. Connect a server in Settings, or broaden the query.".into());
+        }
+        let mut out = String::new();
+        for tool in hits {
+            let schema = serde_json::to_string(&tool.input_schema).unwrap_or_else(|_| "{}".into());
+            let schema = if schema.chars().count() > 1_200 {
+                let head: String = schema.chars().take(1_200).collect();
+                format!("{head}…")
+            } else {
+                schema
+            };
+            out.push_str(&format!(
+                "name: {}\nserver: {}\n{}\nargs: {}\n---\n",
+                tool.qualified_name, tool.server_name, tool.description.trim(), schema
+            ));
+        }
+        Ok(out)
     }
 
     pub fn call_tool(&self, qualified_name: &str, args_json: &str) -> Result<String, String> {

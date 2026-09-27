@@ -34,6 +34,106 @@ pub fn list_files(path: &str, project_path: &str) -> Result<String, AppError> {
 /// which cost far more context than just handing over the file once.
 pub const DEFAULT_READ_LINES: usize = 1000;
 
+pub struct ImageRead {
+    pub name: String,
+    pub mime: String,
+    pub data_url: String,
+    pub bytes: usize,
+}
+
+/// Project images the user did not attach. None when the path is not an image.
+pub fn read_image_for_model(path: &str, project_path: &str) -> Option<ImageRead> {
+    let mime = image_mime(path)?;
+    let target = paths::validate_read_path(path, project_path).ok()?;
+    if !target.is_file() {
+        return None;
+    }
+    let bytes = fs::read(&target).ok()?;
+    if bytes.is_empty() || bytes.len() > 4_000_000 {
+        return None;
+    }
+    let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "image".into());
+    Some(ImageRead {
+        name,
+        mime: mime.to_string(),
+        data_url: format!("data:{mime};base64,{b64}"),
+        bytes: bytes.len(),
+    })
+}
+
+fn image_mime(path: &str) -> Option<&'static str> {
+    let lower = path.rsplit('.').next()?.to_ascii_lowercase();
+    match lower.as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        "svg" => Some("image/svg+xml"),
+        _ => None,
+    }
+}
+
+pub struct SentFile {
+    pub name: String,
+    pub mime: String,
+    pub data_url: String,
+    pub bytes: usize,
+}
+
+fn mime_for_name(name: &str) -> String {
+    image_mime(name)
+        .map(|m| m.to_string())
+        .unwrap_or_else(|| {
+            let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+            match ext.as_str() {
+                "txt" | "md" | "log" => "text/plain".into(),
+                "json" => "application/json".into(),
+                "pdf" => "application/pdf".into(),
+                "csv" => "text/csv".into(),
+                "html" | "htm" => "text/html".into(),
+                "js" | "mjs" | "cjs" | "ts" | "tsx" | "jsx" => "text/plain".into(),
+                "zip" => "application/zip".into(),
+                "mp3" => "audio/mpeg".into(),
+                "wav" => "audio/wav".into(),
+                "mp4" => "video/mp4".into(),
+                _ => "application/octet-stream".into(),
+            }
+        })
+}
+
+/// Bytes of a project file, capped, for handing the user a download in chat.
+pub fn read_file_for_send(path: &str, project_path: &str) -> Result<SentFile, AppError> {
+    let target = paths::validate_read_path(path, project_path)?;
+    if !target.is_file() {
+        return Err(AppError::Message(format!("File '{path}' does not exist")));
+    }
+    let bytes = fs::read(&target).map_err(AppError::Io)?;
+    if bytes.is_empty() {
+        return Err(AppError::Message(format!("File '{path}' is empty")));
+    }
+    if bytes.len() > 4_000_000 {
+        return Err(AppError::Message(
+            "File is over 4 MB. Point the user at the path instead of sending it.".into(),
+        ));
+    }
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "file".into());
+    let mime = mime_for_name(&name);
+    let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+    Ok(SentFile {
+        name,
+        mime: mime.clone(),
+        data_url: format!("data:{mime};base64,{b64}"),
+        bytes: bytes.len(),
+    })
+}
+
 /// Read a file's contents, validated against the project root and sensitive file checks.
 /// When no line range is given, returns at most [`DEFAULT_READ_LINES`] lines.
 pub fn read_file(path: &str, project_path: &str) -> Result<String, AppError> {

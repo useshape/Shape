@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCheckboxCircleFill, RiCloseCircleFill, RiErrorWarningFill, RiInformationLine, RiNotification3Fill } from "@remixicon/react";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +33,7 @@ export function NotificationsMenu() {
                     size="sm"
                     className="relative h-full px-2 shrink-0 text-text-muted hover:text-text-primary"
                 >
-                    <Icon icon={RiNotification3Fill} />
+                    <Icon icon={"bell"} />
                     {unreadCount > 0 && (
                         <span className="absolute top-1 right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-accent px-1 text-2xs font-medium text-accent-fg">
                             {Math.min(unreadCount, 99)}
@@ -59,12 +58,12 @@ export function NotificationsMenu() {
                                 <Icon
                                     icon={
                                         notification.type === "error"
-                                            ? RiCloseCircleFill
+                                            ? "close-circle"
                                             : notification.type === "warning"
-                                                ? RiErrorWarningFill
+                                                ? "danger-triangle"
                                                 : notification.type === "success"
-                                                    ? RiCheckboxCircleFill
-                                                    : RiInformationLine
+                                                    ? "check-circle"
+                                                    : "info-circle"
                                     }
                                     className={cn(
                                         "mt-0.5 shrink-0",

@@ -14,13 +14,16 @@ pub async fn stop_chat_message(
     state: tauri::State<'_, AgentState>,
     pty_state: tauri::State<'_, crate::commands::pty::PtyState>,
 ) -> Result<(), AppError> {
-    let already_cancelled = {
-        let token = state
-            .cancellation_token
-            .lock()
-            .map_err(|e| AppError::Poison(e.to_string()))?;
-        token.is_cancelled()
-    };
+    let current_id = state
+        .current_conversation_id
+        .lock()
+        .map_err(|e| AppError::Poison(e.to_string()))?
+        .clone();
+    let already_cancelled = current_id
+        .as_deref()
+        .and_then(|id| state.conversation_cancel_token(id))
+        .map(|token| token.is_cancelled())
+        .unwrap_or(false);
     let generating = state.generation_state().is_generating;
     if !generating {
         // Idle / launch remounts used to call stop and still abort captures +
@@ -33,13 +36,16 @@ pub async fn stop_chat_message(
     }
 
     logging::info("chat", "Stop requested by user");
+    let _ = crate::agent::tools::browse::finish_browse_markup(String::new()).await;
+    crate::agent::tools::browse::stop_session();
+    let _ = app.emit("agent-browse", serde_json::json!({"id": "live", "status": "stopped"}));
     // Cancel first so waiters observe Stop instead of a fake Reject (which
     // used to look like accepted edits were undone).
-    state
-        .cancellation_token
-        .lock()
-        .map_err(|e| AppError::Poison(e.to_string()))?
-        .cancel();
+    if let Some(id) = current_id.as_deref() {
+        if let Some(token) = state.conversation_cancel_token(id) {
+            token.cancel();
+        }
+    }
     state.dismiss_unresolved_approvals();
 
     // Unlock the UI immediately — title gen / long HTTP must not leave the
@@ -68,7 +74,12 @@ pub async fn stop_chat_message(
     };
     // Commit streamed assistant text into history *before* clearing in-flight.
     // Otherwise Stop + frontend history resync wipes the bubble the user saw.
-    if let Ok(merged) = state.history_for_persistence() {
+    if let Ok(mut merged) = state.history_for_persistence() {
+        if let Some(last) = merged.last_mut() {
+            if last.role == "assistant" && last.content.contains("<browse_session") {
+                last.content = crate::agent::tools::browse::seal_browse_markup(&last.content);
+            }
+        }
         if let Ok(mut hist) = state.history.lock() {
             *hist = merged;
         }

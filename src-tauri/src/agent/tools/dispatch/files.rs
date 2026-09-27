@@ -22,6 +22,10 @@ pub(super) fn tool_read_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let start = args.get("start_line").and_then(|v| v.as_u64()).map(|v| v as usize);
     let end = args.get("end_line").and_then(|v| v.as_u64()).map(|v| v as usize);
 
+    if let Some(image) = files::read_image_for_model(&path, ctx.project_path) {
+        return image_read_outcome(&path, image);
+    }
+
     let res = if let (Some(s), Some(e)) = (start, end) {
         files::read_file_range(&path, s, e, ctx.project_path)
     } else {
@@ -46,6 +50,19 @@ pub(super) fn tool_read_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             }
         }
         Err(e) => error_outcome("read_file", &e.to_string()),
+    }
+}
+
+fn image_read_outcome(path: &str, image: files::ImageRead) -> ToolOutcome {
+    let tag = crate::agent::tools::page_shot::attached_image_tag(&image.name, &image.mime, &image.data_url);
+    let kb = image.bytes / 1024;
+    ToolOutcome {
+        tool_result: format!(
+            "Image file {path} ({}, {kb} KB). The pixels are attached. Describe what you actually see. This file was in the project; the user did not have to attach it.",
+            image.mime
+        ),
+        ui_chunk: format!("\n{tag}\n"),
+        side_effect: Some(super::SideEffect::PageScreenshot { tag }),
     }
 }
 
@@ -113,7 +130,7 @@ pub(super) async fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
         .to_string();
 
     let mut approved_edit_id: Option<String> = None;
-    if ctx.agent_state.turn_policy().require_edit_approval {
+    if ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref()).require_edit_approval {
         // Refuse duplicates before asking for approval — same check create_file
         // itself performs on write.
         if security::paths::resolve_safe_path(&path, ctx.project_path)
@@ -167,6 +184,39 @@ pub(super) async fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
             }
         }
         Err(e) => error_outcome("create_file", &e.to_string()),
+    }
+}
+
+pub(super) fn tool_send_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let path = match get_str(args, "path") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("send_file", &e),
+    };
+    let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("").trim();
+    let file = match files::read_file_for_send(&path, ctx.project_path) {
+        Ok(file) => file,
+        Err(e) => return error_outcome("send_file", &e.to_string()),
+    };
+    let title_attr = if title.is_empty() {
+        String::new()
+    } else {
+        format!(" title=\"{}\"", escape_xml_attr(title))
+    };
+    let ui = format!(
+        "\n<sent_file name=\"{}\" type=\"{}\" size=\"{}\"{title_attr}>{}</sent_file>\n",
+        escape_xml_attr(&file.name),
+        escape_xml_attr(&file.mime),
+        file.bytes,
+        file.data_url
+    );
+    ctx.emit_ui_token(&ui);
+    ToolOutcome {
+        tool_result: format!(
+            "Sent {} to the user as a download card in chat. Do not paste the file contents.",
+            file.name
+        ),
+        ui_chunk: ui,
+        side_effect: None,
     }
 }
 
@@ -494,7 +544,7 @@ pub(super) async fn tool_edit_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutco
     };
 
     let mut approved_edit_id: Option<String> = None;
-    if ctx.agent_state.turn_policy().require_edit_approval {
+    if ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref()).require_edit_approval {
         match gate_edit_approval(&target, &resolved, ctx).await {
             Ok(id) => approved_edit_id = Some(id),
             Err(outcome) => return outcome,
@@ -735,7 +785,7 @@ pub(super) async fn tool_apply_patch(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
         };
 
         let mut approved_edit_id: Option<String> = None;
-        if ctx.agent_state.turn_policy().require_edit_approval {
+        if ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref()).require_edit_approval {
             match gate_edit_approval(&change.path, &resolved, ctx).await {
                 Ok(id) => approved_edit_id = Some(id),
                 Err(outcome) => return outcome,

@@ -1,27 +1,11 @@
 "use client";
 
-import { RiCornerDownLeftFill, RiTerminalBoxLine } from "@remixicon/react";
 import React, { type ReactNode } from "react";
+import { Arc } from "loading-dev";
 import { cn } from "@/lib/utils";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { ICON_SIZE_MD, ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { RiArrowRightLine } from "@remixicon/react";
-
-function ShortcutKeys({ keys }: { keys: string[] }) {
-    return (
-        <span className="ml-1.5 inline-flex items-center gap-0.5">
-            {keys.map((key) => (
-                <kbd
-                    key={key}
-                    className="inline-flex min-w-[1.1rem] items-center justify-center rounded px-1.5 py-px text-xs font-sans leading-none text-text-foreground"
-                >
-                    {key}
-                </kbd>
-            ))}
-        </span>
-    );
-}
 
 /** Shared chrome for edit / command / plugin approval cards. */
 export function ApprovalCard({
@@ -73,7 +57,7 @@ export function ApprovalCard({
         >
             <div className="flex items-center gap-2 px-3 py-2">
                 {isProcessing ? (
-                    <div className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
+                    <Arc size={12} className="shrink-0 text-text-muted" />
                 ) : (
                     icon
                 )}
@@ -89,7 +73,7 @@ export function ApprovalCard({
                     </Button>
                     <Button type="button" variant="default" size="sm" disabled={isProcessing} onClick={onAccept}>
                         {acceptLabel}
-                        <Icon icon={RiCornerDownLeftFill} size={ICON_SIZE_SM} />
+                        <SolarIcon name="arrow-to-down-left" size={ICON_SIZE_SM} />
                     </Button>
                 </div>
             </div>
@@ -124,7 +108,7 @@ export function ApprovalBar({
 }: ApprovalBarProps) {
     return (
         <ApprovalCard
-            icon={<Icon icon={RiTerminalBoxLine} className="shrink-0 text-text-muted" />}
+            icon={<SolarIcon name="programming" size={ICON_SIZE_MD} className="text-text-muted" />}
             title={label}
             isProcessing={isProcessing}
             onSkip={onReject}

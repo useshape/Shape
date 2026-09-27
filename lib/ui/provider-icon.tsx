@@ -1,5 +1,5 @@
-import { RiChatSmileAiFill } from "@remixicon/react";
 import React from "react";
+import { ShapeLogo } from "@/components/ui/shape-logo";
 
 type Provider = "shape" | "anthropic" | "openai" | "google" | "x-ai" | "deepseek";
 
@@ -13,7 +13,7 @@ function providerFromModelId(modelId: string): Provider {
     return "shape";
 }
 
-/** Shape / Auto model mark — Remix smile-AI, used everywhere via `providerIcon`. */
+/** Shape / Auto model mark — the Shape logo, used everywhere via `providerIcon`. */
 export function ShapeAutoIcon({
     size = 16,
     className,
@@ -21,17 +21,10 @@ export function ShapeAutoIcon({
     size?: number;
     className?: string;
 }) {
-    return (
-        <RiChatSmileAiFill
-            size={size}
-            className={className}
-            aria-hidden
-            style={{ flexShrink: 0, display: "block" }}
-        />
-    );
+    return <ShapeLogo size={size} className={className} />;
 }
 
-// Shape/Auto uses Remix AI mark; others are approximate brand marks.
+// Shape/Auto uses the logo; others are approximate brand marks.
 const ICONS: Record<Provider, (size: number) => React.ReactNode> = {
     shape: (size) => <ShapeAutoIcon size={size} />,
     anthropic: (size) => (

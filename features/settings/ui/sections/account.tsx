@@ -1,9 +1,8 @@
 "use client";
 
-import { RiExternalLinkLine } from "@remixicon/react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+import { Icon, ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
 import { SettingRow, SettingSection } from "../shared/controls";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import {
@@ -23,11 +22,13 @@ function tierLabel(tier: string) {
 
 function UsageBar({
     label,
+    icon,
     detail,
     percent,
     trailing,
 }: {
     label: string;
+    icon?: ReactNode;
     detail?: string;
     percent: number;
     trailing?: string;
@@ -36,7 +37,10 @@ function UsageBar({
     return (
         <div className="space-y-1.5">
             <div className="flex items-baseline gap-3 text-sm">
-                <span className="min-w-0 flex-1 truncate text-text-primary">{label}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-text-primary">
+                    {icon}
+                    <span className="truncate">{label}</span>
+                </span>
                 {detail ? (
                     <span className="shrink-0 text-text-muted">{detail}</span>
                 ) : null}
@@ -164,7 +168,7 @@ export function AccountSettingsPanel() {
                             onClick={() => openShapeBilling()}
                         >
                             Manage billing
-                            <Icon icon={RiExternalLinkLine} className="text-text-muted" />
+                            <Icon icon={"square-forward"} className="text-text-muted" />
                         </Button>
                     </div>
                 </div>
@@ -186,11 +190,13 @@ export function AccountSettingsPanel() {
                         </button>
                     </div>
                     <UsageBar
+                        icon={<SolarIcon name="magic-stick" size={ICON_SIZE_SM} className="text-text-muted" />}
                         label="Auto · monthly"
                         detail={resetLabel}
                         percent={freeAutoPercent}
                     />
                     <UsageBar
+                        icon={<SolarIcon name="stars-minimalistic" size={ICON_SIZE_SM} className="text-text-muted" />}
                         label="Premium credits"
                         detail={
                             auth.creditsIncluded > 0
@@ -226,7 +232,7 @@ export function AccountSettingsPanel() {
                         onClick={() => void commands.openUrlExternal(`${SHAPE_API_BASE}/dashboard`)}
                     >
                         Open
-                        <Icon icon={RiExternalLinkLine} className="text-text-muted" />
+                        <Icon icon={"square-forward"} className="text-text-muted" />
                     </Button>
                 </SettingRow>
                 <SettingRow title="Sign out">

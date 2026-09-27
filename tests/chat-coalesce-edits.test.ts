@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     coalesceConsecutiveSameFileEdits,
+    coalesceConsecutiveSameTasks,
     groupWorkflowRows,
 } from "@/features/chat/ui/blocks/workflow";
 import type { Chunk } from "@/features/chat/ui/md/renderer";
@@ -35,6 +36,50 @@ describe("coalesceConsecutiveSameFileEdits", () => {
             edit("src/b.ts", "x", "y"),
         ]);
         expect(out).toHaveLength(2);
+    });
+});
+
+describe("coalesceConsecutiveSameTasks", () => {
+    it("folds back-to-back thoughts into one", () => {
+        const out = coalesceConsecutiveSameTasks([
+            { type: "think", content: "first" },
+            { type: "thought", content: "second" },
+            { type: "think", content: "third" },
+        ]);
+        expect(out).toHaveLength(1);
+        expect(out[0]?.content).toContain("first");
+        expect(out[0]?.content).toContain("third");
+    });
+
+    it("keeps a different step between repeated thoughts", () => {
+        const out = coalesceConsecutiveSameTasks([
+            { type: "think", content: "before" },
+            edit("src/a.ts", "a", "b"),
+            { type: "think", content: "after" },
+        ]);
+        expect(out.map((c) => c.type)).toEqual(["think", "edit", "think"]);
+    });
+});
+
+describe("groupWorkflowRows file rows", () => {
+    it("keeps edits of different files as separate rows", () => {
+        const rows = groupWorkflowRows([
+            edit("src/a.ts", "a", "b"),
+            edit("src/b.ts", "x", "y"),
+            { type: "create_file", content: "src/c.ts" },
+        ]);
+        expect(rows.some((r) => r.kind === "write_group")).toBe(false);
+        expect(rows.filter((r) => r.kind === "block")).toHaveLength(3);
+    });
+
+    it("folds only consecutive creates of the same file", () => {
+        const rows = groupWorkflowRows([
+            { type: "create_file", content: "src/a.ts" },
+            { type: "create_file", content: "src/a.ts" },
+            { type: "create_file", content: "src/b.ts" },
+        ]);
+        const created = rows.filter((r) => r.kind === "block" && r.block.type === "create_file");
+        expect(created).toHaveLength(2);
     });
 });
 

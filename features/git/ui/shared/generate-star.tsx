@@ -1,6 +1,5 @@
 "use client";
 
-import { RiAiGenerate } from "@remixicon/react";
 import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -79,7 +78,7 @@ export function GenerateStarButton({
                 )}
             >
                 <Icon
-                    icon={RiAiGenerate}
+                    icon={"magic-stick"}
                     size={ICON_SIZE_MD}
                     className={cn(loading && "animate-pulse")}
                 />

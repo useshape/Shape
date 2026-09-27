@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Eclipse } from "loading-dev";
 import { cn } from "@/lib/utils";
 import { ShimmerText } from "@/components/ui/shimmer-text";
 
@@ -76,12 +77,8 @@ export function GeneratingIndicator({
     const idle = isGenericLabel(display);
 
     return (
-        <div className="flex items-center gap-2 py-1 text-sm text-text-muted">
-            <span className="imsg-typing" aria-hidden>
-                <span />
-                <span />
-                <span />
-            </span>
+        <div className="flex items-center gap-2 py-1 chat-text font-medium text-text-muted">
+            <Eclipse size={14} className="shrink-0 text-text-muted" />
             <span className="min-w-0 truncate">
                 {idle ? <RotatingIdleWord /> : <StatusWipe text={display} />}
             </span>

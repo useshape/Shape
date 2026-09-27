@@ -9,7 +9,8 @@ use super::messages;
 use super::run_turn;
 use super::streaming;
 use super::titles::{
-    maybe_regenerate_title, sanitize_generated_title, text_for_title, title_from_message,
+    apply_generated_title, maybe_regenerate_title, text_for_title,
+    title_from_message,
 };
 use crate::agent::tools::schema;
 use crate::agent::model_router;
@@ -213,10 +214,13 @@ pub async fn send_chat_message(
 
     let turn_id = uuid::Uuid::new_v4().to_string();
     let conversation_id = Some(owned_conversation_id.clone());
-    state.reset_turn_meter();
+    state.reset_turn_meter(&turn_id);
     // Stale approvals from an earlier turn must never resolve this turn's items.
-    state.clear_pending_approvals();
-    state.set_turn_policy(TurnPolicy {
+    // Leave them alone when another chat is still generating.
+    if !state.any_in_flight() {
+        state.clear_pending_approvals();
+    }
+    let turn_policy = TurnPolicy {
         auto_run_mode: AutoRunMode::from_setting(auto_run_mode.as_deref()),
         require_edit_approval: require_edit_approval.unwrap_or(false),
         protect_destructive_git: protect_destructive_git.unwrap_or(true),
@@ -239,7 +243,8 @@ pub async fn send_chat_message(
             .map(|s| s.trim().to_ascii_lowercase())
             .filter(|s| !s.is_empty())
             .collect(),
-    });
+    };
+    state.set_turn_policy_for(&owned_conversation_id, turn_policy);
     if !state.try_begin_in_flight(turn_id.clone(), Some(owned_conversation_id.clone())) {
         // Roll back the optimistic user message we just pushed.
         if let Ok(mut hist) = state.history.lock() {
@@ -252,7 +257,7 @@ pub async fn send_chat_message(
             }
         }
         return Err(AppError::Message(
-            "A generation is already in progress. Stop it or wait before sending another message."
+            "This chat is already generating. Stop it or wait before sending another message."
                 .to_string(),
         ));
     }
@@ -271,20 +276,20 @@ pub async fn send_chat_message(
         note: None,
     });
 
-    // Fresh cancel token for this turn (covers title gen + agent loop).
-    let cancel = {
-        let mut t = state
-            .cancellation_token
-            .lock()
-            .map_err(|e| AppError::Poison(e.to_string()))?;
-        *t = tokio_util::sync::CancellationToken::new();
-        t.clone()
-    };
+    // Fresh cancel token for this conversation. Other chats keep their own.
+    let cancel = state.begin_cancel_token(&owned_conversation_id);
 
     let needs_title = state.title.lock()?.is_none();
     let provisional_title = if needs_title {
         let provisional = title_from_message(&message);
         *state.title.lock()? = Some(provisional.clone());
+        let turns = state
+            .history
+            .lock()?
+            .iter()
+            .filter(|m| m.role == "user")
+            .count() as u32;
+        state.set_title_meta(false, turns.max(1));
         provisional
     } else {
         state
@@ -315,84 +320,33 @@ pub async fn send_chat_message(
         let _ = history::save_current_conversation(&state, path);
     }
 
-    let mut owned_title = provisional_title.clone();
+    let owned_title = provisional_title.clone();
 
+    // Placeholder is already on screen. Name the chat while the reply generates.
     if needs_title {
-        streaming::emit_chat_status(
-            &app_handle,
-            json!({ "phase": "title", "label": "Naming chat…" }),
-        );
-        logging::debug("chat", "Generating title before agent turn");
-        let title_source = text_for_title(&message);
-        let raw_title = streaming::complete_chat_cancellable(
-            &client,
-            &auth_token,
-            &format!(
-                "Write a short chat title (2-5 words) for a coding assistant conversation that starts with this message. Use nouns and verbs from the user's intent, not filler words like \"and\", \"tell\", or \"please\". Reply with only the title.\n\nUser message: {}",
-                title_source
-            ),
-            MODEL_TITLE_GEN,
-            &streaming::ProxyContext::new("title")
-                .with_provider(llm_provider.clone())
-                .with_turn(Some(turn_id.clone()), Some(owned_conversation_id.clone())),
-            Some(&cancel),
-        )
-        .await
-        .ok();
-        // Only Stop (cancel token) aborts — switching chats keeps the turn running.
-        if cancel.is_cancelled() {
-            state.clear_in_flight_if(&turn_id);
-            let _ = app_handle.emit(
-                "chat_complete",
-                json!({
-                    "model": model_to_use,
-                    "turnId": &turn_id,
-                    "conversationId": &owned_conversation_id,
-                    "error": "Cancelled",
-                }),
-            );
-            return Ok(String::new());
-        }
-        let title = raw_title
-            .map(|t| sanitize_generated_title(&t, &title_source))
-            .unwrap_or_else(|| title_from_message(&title_source));
-        owned_title = title.clone();
-        let still_viewing = state.current_conversation_id.lock()?.as_deref()
-            == Some(owned_conversation_id.as_str());
-        if still_viewing {
-            *state.title.lock()? = Some(title.clone());
-        } else if let Some(path) = &current_proj_path {
-            // Update the background conversation's title without touching the live chat.
-            let hist = {
-                let convs = state.conversations.lock()?;
-                convs
-                    .get(path)
-                    .and_then(|list| list.iter().find(|c| c.id == owned_conversation_id))
-                    .map(|c| c.history.clone())
-                    .unwrap_or_default()
-            };
-            if !hist.is_empty() {
-                let _ = history::upsert_conversation_snapshot(
-                    &state,
-                    path,
-                    &owned_conversation_id,
-                    &title,
-                    hist,
-                );
-            }
-        }
-        let _ = app_handle.emit(
-            "chat_title",
-            json!({
-                "title": &title,
-                "conversationId": &owned_conversation_id,
-            }),
-        );
-        if still_viewing {
-            if let Some(path) = &current_proj_path {
-                let _ = history::save_current_conversation(&state, path);
-            }
-        }
+        let app_for_title = app_handle.clone();
+        let client_for_title = client.clone();
+        let auth_for_title = auth_token.clone();
+        let turn_for_title = turn_id.clone();
+        let conv_for_title = owned_conversation_id.clone();
+        let source_for_title = text_for_title(&message);
+        let provider_for_title = llm_provider.clone();
+        let cancel_for_title = cancel.clone();
+        let project_for_title = current_proj_path.clone();
+        tauri::async_runtime::spawn(async move {
+            apply_generated_title(
+                app_for_title,
+                client_for_title,
+                auth_for_title,
+                turn_for_title,
+                conv_for_title,
+                source_for_title,
+                provider_for_title,
+                cancel_for_title,
+                project_for_title,
+            )
+            .await;
+        });
     }
 
     index_state.set_api_context(
@@ -430,9 +384,6 @@ pub async fn send_chat_message(
     if !merged_rules.is_empty() {
         prompt_parts.push(format!("\n<user_rules>\n{}\n</user_rules>", merged_rules));
     }
-    if !mode_prompt.is_empty() {
-        prompt_parts.push(mode_prompt.to_string());
-    }
     if matches!(
         mode_to_use.to_ascii_lowercase().as_str(),
         "visual" | "design"
@@ -440,11 +391,9 @@ pub async fn send_chat_message(
         // No design-options UI anymore — always start a sandbox session for optional previews.
         state.begin_design_turn(None, &message);
     }
-    let final_system_prompt = format!(
-        "{}\n\nCURRENT CONTEXT:\n{}",
-        prompt_parts.join("\n"),
-        context_string
-    );
+    // System prompt stays stable across turns so prompt caching can reuse it.
+    // Mode instructions and workspace context ride on the latest user message.
+    let final_system_prompt = prompt_parts.join("\n");
 
     let history_snapshot = {
         let mut snapshot = state.history.lock()?.clone();
@@ -517,18 +466,22 @@ pub async fn send_chat_message(
     }
     let mut api_messages =
         messages::build_messages_json(&final_system_prompt, &api_history, &model_to_use);
+    let mut turn_context = format!("Mode: {mode_to_use}");
+    if matches!(mode_to_use.to_ascii_lowercase().as_str(), "ask" | "plan") {
+        turn_context.push_str(
+            "\nThis turn is read-only. Do not call edit, shell, git commit, browse, or mcp_call. They are blocked.",
+        );
+    }
+    if !mode_prompt.is_empty() {
+        turn_context.push_str("\n\n");
+        turn_context.push_str(mode_prompt);
+    }
+    turn_context.push_str("\n\nCURRENT CONTEXT:\n");
+    turn_context.push_str(&context_string);
+    messages::append_turn_context(&mut api_messages, &turn_context);
 
-    let mcp_tools = mcp_state.tools_as_openai_schema().unwrap_or_default();
-    let mcp_tokens: u64 = mcp_tools
-        .iter()
-        .map(|t| (t.to_string().chars().count() / 4) as u64)
-        .sum();
-    let tools = schema::tools_for_mode_family_and_memory(
-        &mode_to_use,
-        family,
-        mcp_tools,
-        state.chat_memory_enabled(),
-    );
+    let tools = schema::stable_tools(family);
+    let mcp_tokens: u64 = 0;
 
     let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());
     let conversation_json =
@@ -616,7 +569,14 @@ pub async fn send_chat_message(
         }
     };
 
-    let mut final_full_response = turn_outcome.response_text;
+    let mut final_full_response =
+        crate::agent::tools::browse::finish_browse_markup(turn_outcome.response_text).await;
+    if final_full_response.contains("<browse_session") {
+        let _ = app_handle.emit(
+            "agent-browse",
+            json!({ "id": "live", "status": "stopped" }),
+        );
+    }
     let loop_count = turn_outcome.loop_count;
     let interrupt_error = turn_outcome.interrupt_error;
 
@@ -663,12 +623,7 @@ pub async fn send_chat_message(
             // Don't contend with an active agent turn.
             let busy = app_for_index
                 .try_state::<AgentState>()
-                .map(|s| {
-                    s.in_flight
-                        .lock()
-                        .map(|g| g.is_some())
-                        .unwrap_or(false)
-                })
+                .map(|s| s.any_in_flight())
                 .unwrap_or(false);
             if busy {
                 return;
@@ -677,13 +632,13 @@ pub async fn send_chat_message(
         });
     }
 
-    let (total_input_tokens, total_output_tokens) = state.turn_meter_totals();
+    let (total_input_tokens, total_output_tokens) = state.turn_meter_totals(&turn_id);
     let billed_tokens = total_input_tokens + total_output_tokens;
     let duration_ms = start_time.elapsed().as_millis() as f64;
 
     let used_auto = selected_auto;
 
-    let assistant_message = ChatMessage {
+    let mut assistant_message = ChatMessage {
         role: "assistant".to_string(),
         content: final_full_response.clone(),
         timestamp: now_f64(),
@@ -709,7 +664,7 @@ pub async fn send_chat_message(
         let current = state.current_conversation_id.lock()?.clone();
         current.as_deref() == Some(owned_conversation_id.as_str())
     };
-    let still_this_turn = state.in_flight_turn_id().as_deref() == Some(turn_id.as_str());
+    let still_this_turn = state.in_flight_contains_turn(&turn_id);
     let was_cancelled = cancel.is_cancelled();
 
     logging::info(
@@ -727,9 +682,19 @@ pub async fn send_chat_message(
 
     // Stopped / restored turns must not append — history may already be truncated.
     if still_current && still_this_turn && !was_cancelled {
+        assistant_message.content = maybe_regenerate_title(
+            &app_handle,
+            &state,
+            &client,
+            &auth_token,
+            &turn_id,
+            conversation_id.as_deref(),
+            &assistant_message.content,
+        )
+        .await;
         {
             let mut hist = state.history.lock()?;
-            history::replace_or_push_assistant(&mut hist, assistant_message);
+            history::replace_or_push_assistant(&mut hist, assistant_message.clone());
         }
 
         let _ = app_handle.emit(
@@ -751,19 +716,9 @@ pub async fn send_chat_message(
                 "turnId": &turn_id,
                 "conversationId": &owned_conversation_id,
                 "error": interrupt_error,
-                "content": final_full_response,
+                "content": assistant_message.content,
             }),
         );
-
-        maybe_regenerate_title(
-            &app_handle,
-            &state,
-            &client,
-            &auth_token,
-            &turn_id,
-            conversation_id.as_deref(),
-        )
-        .await;
 
         if let Some(path) = &current_proj_path {
             let _ = history::save_current_conversation(&state, path);
@@ -861,7 +816,11 @@ pub fn update_turn_policy(
     if let Some(v) = protect_destructive_git {
         policy.protect_destructive_git = v;
     }
-    state.set_turn_policy(policy);
+    if let Some(id) = state.current_conversation_id.lock().ok().and_then(|g| g.clone()) {
+        state.set_turn_policy_for(&id, policy);
+    } else {
+        state.set_turn_policy(policy);
+    }
     Ok(())
 }
 

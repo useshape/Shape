@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowGoBackLine, RiLayoutColumnLine } from "@remixicon/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
@@ -176,7 +175,7 @@ function LazyFileDiff({
                     aria-label="Restore"
                     title="Restore"
                 >
-                    <Icon icon={RiArrowGoBackLine} />
+                    <Icon icon={"undo-left"} />
                 </Button>
             </div>
 
@@ -330,7 +329,7 @@ export function MultiDiffEditor({
                     aria-label="Toggle split"
                     title={split ? "Unified" : "Side by side"}
                 >
-                    <Icon icon={RiLayoutColumnLine} />
+                    <Icon icon={"sidebar-code"} />
                 </Button>
                 <Button
                     type="button"

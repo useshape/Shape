@@ -1,9 +1,7 @@
 "use client";
 
-import type { RemixiconComponentType } from "@remixicon/react";
-import { RiDownloadLine, RiExternalLinkLine, RiFolderLine, RiGithubFill, RiTerminalBoxLine } from "@remixicon/react";
 import * as React from "react";
-import { Icon } from "@/components/ui/icon";
+import { type SolarIconName,  Icon } from "@/components/ui/icon";
 import {
     getRepoName,
     loadRepoHistory,
@@ -27,7 +25,7 @@ function ActionCard({
     onClick,
     external,
 }: {
-    icon: RemixiconComponentType;
+    icon: SolarIconName;
     label: string;
     onClick: () => void;
     external?: boolean;
@@ -45,7 +43,7 @@ function ActionCard({
         >
             {external ? (
                 <Icon
-                    icon={RiExternalLinkLine}
+                    icon={"square-forward"}
                     className="absolute right-3 top-3 opacity-40 group-hover:opacity-70"
                 />
             ) : null}
@@ -80,11 +78,11 @@ export function WelcomeScreen({
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 py-10 sm:px-14 md:px-16">
                 <div className="flex w-full max-w-2xl flex-col items-start gap-8">
                     <section className="grid w-full grid-cols-2 gap-2.5">
-                        <ActionCard icon={RiFolderLine} label="Open project" onClick={onPickFolder} />
-                        <ActionCard icon={RiDownloadLine} label="Clone repo" onClick={onClone} />
-                        <ActionCard icon={RiTerminalBoxLine} label="Connect via SSH" onClick={onSsh} />
+                        <ActionCard icon={"folder"} label="Open project" onClick={onPickFolder} />
+                        <ActionCard icon={"download-minimalistic"} label="Clone repo" onClick={onClone} />
+                        <ActionCard icon={"programming"} label="Connect via SSH" onClick={onSsh} />
                         <ActionCard
-                            icon={RiGithubFill}
+                            icon={"code-square"}
                             label="Connect GitHub"
                             onClick={onConnectGitHub}
                             external

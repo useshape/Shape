@@ -1,14 +1,5 @@
 "use client";
 
-import {
-    RiDonutChartFill,
-    RiLayoutGridLine,
-    RiEditBoxLine,
-    RiMouseLine,
-    RiScreenshotFill,
-    RiShapeFill,
-    RiWindow2Fill,
-} from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -16,7 +7,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type SolarIconName } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { DesignToolMode } from "./bottom-toolbar";
@@ -29,7 +20,7 @@ function RailBtn({
     onClick,
 }: {
     label: string;
-    icon: typeof RiEditBoxLine;
+    icon: SolarIconName;
     active?: boolean;
     disabled?: boolean;
     onClick?: () => void;
@@ -72,25 +63,25 @@ export function DesignRail({
             <div className="flex flex-col items-center gap-0.5">
                 <RailBtn
                     label="Inspect"
-                    icon={RiEditBoxLine}
+                    icon={"pen"}
                     active={mode === "select"}
                     onClick={() => onModeChange("select")}
                 />
                 <RailBtn
                     label="Normal"
-                    icon={RiMouseLine}
+                    icon={"cursor"}
                     active={mode === "normal"}
                     onClick={() => onModeChange("normal")}
                 />
                 <RailBtn
                     label="Auto layout"
-                    icon={RiLayoutGridLine}
+                    icon={"widget"}
                     active={mode === "autolayout"}
                     onClick={() => onModeChange("autolayout")}
                 />
                 <RailBtn
                     label="Rotate"
-                    icon={RiDonutChartFill}
+                    icon={"pie-chart"}
                     active={mode === "rotate"}
                     onClick={() => onModeChange("rotate")}
                 />
@@ -105,17 +96,17 @@ export function DesignRail({
                                 aria-label="Capture"
                                 className="size-9 rounded-md"
                             >
-                                <Icon icon={RiScreenshotFill} size={18} />
+                                <Icon icon={"gallery"} size={18} />
                             </Button>
                         </DropdownMenuTrigger>
                     </Tooltip>
                     <DropdownMenuContent side="right" align="start" className="min-w-36">
                         <DropdownMenuItem disabled={!canCaptureElement} onClick={onCaptureElement}>
-                            <Icon icon={RiShapeFill} size={16} />
+                            <Icon icon={"stars-minimalistic"} size={16} />
                             Element
                         </DropdownMenuItem>
                         <DropdownMenuItem disabled={!canCapture} onClick={onCaptureScreen}>
-                            <Icon icon={RiWindow2Fill} size={16} />
+                            <Icon icon={"monitor"} size={16} />
                             Screen
                         </DropdownMenuItem>
                     </DropdownMenuContent>

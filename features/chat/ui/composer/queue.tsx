@@ -1,6 +1,5 @@
 "use client";
 
-import { RiCloseLine, RiPencilLine } from "@remixicon/react";
 import React from "react";
 import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -57,7 +56,7 @@ export function QueuedMessagesPanel({
                                     className="rounded p-0.5 text-text-muted hover:text-text-primary"
                                     onClick={() => onEdit(item.id)}
                                 >
-                                    <Icon icon={RiPencilLine} size={ICON_SIZE_SM} />
+                                    <Icon icon={"pen"} size={ICON_SIZE_SM} />
                                 </button>
                             </Tooltip>
                             <Tooltip content="Remove">
@@ -66,7 +65,7 @@ export function QueuedMessagesPanel({
                                     className="rounded p-0.5 text-text-muted hover:text-error"
                                     onClick={() => onRemove(item.id)}
                                 >
-                                    <Icon icon={RiCloseLine} size={ICON_SIZE_SM} />
+                                    <Icon icon={"close"} size={ICON_SIZE_SM} />
                                 </button>
                             </Tooltip>
                         </div>

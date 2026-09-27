@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowRightSLine, RiCheckLine, RiCheckboxBlankCircleLine } from "@remixicon/react";
 import * as React from "react";
 import { Icon } from "./icon";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
@@ -135,7 +134,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={RiArrowRightSLine} className="ml-auto"  />
+        <Icon icon={"alt-arrow-right"} className="ml-auto"  />
     </DropdownMenuPrimitive.SubTrigger>
 ));
 DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayName;
@@ -244,7 +243,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <DropdownMenuPrimitive.ItemIndicator>
-                <Icon icon={RiCheckLine}   />
+                <Icon icon={"check"}   />
             </DropdownMenuPrimitive.ItemIndicator>
         </span>
         {children}
@@ -267,7 +266,7 @@ const DropdownMenuRadioItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <DropdownMenuPrimitive.ItemIndicator>
-                <Icon icon={RiCheckboxBlankCircleLine}  className="size-[8px]"  />
+                <Icon icon={"record"}  className="size-[8px]"  />
             </DropdownMenuPrimitive.ItemIndicator>
         </span>
         {children}
@@ -343,7 +342,7 @@ const DropdownMenuNestedTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={RiArrowRightSLine} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
+        <Icon icon={"alt-arrow-right"} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
     </DropdownMenuItem>
 ));
 DropdownMenuNestedTrigger.displayName = "DropdownMenuNestedTrigger";
@@ -484,7 +483,7 @@ const MenubarSubTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={RiArrowRightSLine} className="ml-auto"  />
+        <Icon icon={"alt-arrow-right"} className="ml-auto"  />
     </MenubarPrimitive.SubTrigger>
 ));
 MenubarSubTrigger.displayName = MenubarPrimitive.SubTrigger.displayName;
@@ -561,7 +560,7 @@ const MenubarCheckboxItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <MenubarPrimitive.ItemIndicator>
-                <Icon icon={RiCheckLine}   />
+                <Icon icon={"check"}   />
             </MenubarPrimitive.ItemIndicator>
         </span>
         {children}
@@ -584,7 +583,7 @@ const MenubarRadioItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <MenubarPrimitive.ItemIndicator>
-                <Icon icon={RiCheckboxBlankCircleLine}  className="size-[8px]"  />
+                <Icon icon={"record"}  className="size-[8px]"  />
             </MenubarPrimitive.ItemIndicator>
         </span>
         {children}
@@ -660,7 +659,7 @@ const MenubarNestedTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={RiArrowRightSLine} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
+        <Icon icon={"alt-arrow-right"} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
     </MenubarItem>
 ));
 MenubarNestedTrigger.displayName = "MenubarNestedTrigger";

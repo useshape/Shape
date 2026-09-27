@@ -1,6 +1,5 @@
 "use client";
 
-import { RiArrowGoBackLine, RiLayoutColumnLine } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
 import { DiffView } from "@/features/editor/ui/diff/diff-view";
@@ -172,7 +171,7 @@ export function SingleFileDiffEditor({ tab }: { tab: FileDiffTabInfo }) {
                     aria-label={split ? "Unified diff" : "Split diff"}
                     title={split ? "Unified" : "Split"}
                 >
-                    <Icon icon={RiLayoutColumnLine} />
+                    <Icon icon={"sidebar-code"} />
                 </button>
                 {!isCommit ? (
                     <>
@@ -190,7 +189,7 @@ export function SingleFileDiffEditor({ tab }: { tab: FileDiffTabInfo }) {
                             aria-label="Discard changes"
                             title="Discard"
                         >
-                            <Icon icon={RiArrowGoBackLine} />
+                            <Icon icon={"undo-left"} />
                         </button>
                     </>
                 ) : null}
