@@ -1,10 +1,19 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { ChevronUp20Regular } from "@fluentui/react-icons/headless/svg/chevron-up";
+import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { LayoutColumnTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-column-two";
+
+
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import type { TerminalShellProfile } from "@/lib/backend/types";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+
 import type { Terminal as XTermType } from "@xterm/xterm";
 import type { FitAddon as FitAddonType } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -953,7 +962,7 @@ export default function Terminal({
                     className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                     title="Terminal profiles"
                 >
-                    <Icon icon={"alt-arrow-down"} />
+                    <Icon icon={ChevronDown20Regular} />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[220px]">
@@ -1019,7 +1028,7 @@ export default function Terminal({
                             className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}
                             aria-label={`Close ${tab.title}`}
                         >
-                            <Icon icon={"close"} />
+                            <Icon icon={Dismiss20Regular} />
                         </button>
                     </div>
                 );
@@ -1049,7 +1058,7 @@ export default function Terminal({
                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                         onClick={() => addTab(resolveAvailableDefaultShell(), group)}
                     >
-                        <Icon icon={"add-circle"} />
+                        <Icon icon={Add20Regular} />
                     </Button>
                 </Tooltip>
                 {showShellMenu ? shellMenu : null}
@@ -1062,7 +1071,7 @@ export default function Terminal({
                             onClick={() => onClose()}
                             aria-label="Close terminal"
                         >
-                            <Icon icon={"close"} />
+                            <Icon icon={Dismiss20Regular} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -1145,7 +1154,7 @@ export default function Terminal({
                                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={clearActiveTerminal}
                                     >
-                                        <Icon icon={"trash-bin-trash"} />
+                                        <Icon icon={Delete20Filled} />
                                     </Button>
                                 </Tooltip>
                                 <Tooltip content="Split Terminal">
@@ -1155,7 +1164,7 @@ export default function Terminal({
                                         className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                                         onClick={() => splitTerminal()}
                                     >
-                                        <Icon icon={"sidebar-code"} />
+                                        <Icon icon={LayoutColumnTwo20Regular} />
                                     </Button>
                                 </Tooltip>
                             </>
@@ -1167,7 +1176,7 @@ export default function Terminal({
                                 size="icon"
                                 className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                             >
-                                <Icon icon={"alt-arrow-up"} />
+                                <Icon icon={ChevronUp20Regular} />
                             </Button>
                         </Tooltip>
                         <Button
@@ -1176,7 +1185,7 @@ export default function Terminal({
                             size="icon"
                             className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "h-7 w-7")}
                         >
-                            <Icon icon={"close"} />
+                            <Icon icon={Dismiss20Regular} />
                         </Button>
                     </div>
                 </div>

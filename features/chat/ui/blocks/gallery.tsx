@@ -1,11 +1,20 @@
 "use client";
 
+import { ArrowMaximize20Regular } from "@fluentui/react-icons/headless/svg/arrow-maximize";
+import { ArrowMinimize20Regular } from "@fluentui/react-icons/headless/svg/arrow-minimize";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronLeft20Regular } from "@fluentui/react-icons/headless/svg/chevron-left";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { TextFontSize20Regular } from "@fluentui/react-icons/headless/svg/text-font-size";
+
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { commands } from "@/lib/backend/commands";
 import {
@@ -232,7 +241,7 @@ export function DesignPreviewGallery({
                             disabled={index === 0}
                             onClick={() => setIndex((i) => Math.max(0, i - 1))}
                         >
-                            <Icon icon={"alt-arrow-left"} size={ICON_SIZE_SM} />
+                            <Icon icon={ChevronLeft20Regular} />
                         </button>
                         <button
                             type="button"
@@ -241,7 +250,7 @@ export function DesignPreviewGallery({
                             disabled={index >= items.length - 1}
                             onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
                         >
-                            <Icon icon={"alt-arrow-right"} size={ICON_SIZE_SM} />
+                            <Icon icon={ChevronRight20Regular} />
                         </button>
                         <div className="pointer-events-none absolute inset-x-0 bottom-2 z-1 flex justify-center gap-1">
                             {items.map((p, i) => (
@@ -265,7 +274,7 @@ export function DesignPreviewGallery({
                                 className="flex size-7 items-center justify-center rounded-full text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 onClick={() => setOpen(true)}
                             >
-                                <Icon icon={"maximize"} size={ICON_SIZE_SM} />
+                                <Icon icon={ArrowMaximize20Regular} />
                             </button>
                         </Tooltip>
                         {pending ? (
@@ -276,7 +285,7 @@ export function DesignPreviewGallery({
                                     className="flex size-7 items-center justify-center rounded-full text-text-muted hover:bg-panel-hover hover:text-text-primary disabled:opacity-40"
                                     onClick={() => choose(item.id)}
                                 >
-                                    <Icon icon={"check"} size={ICON_SIZE_SM} />
+                                    <Icon icon={Checkmark20Regular} />
                                 </button>
                             </Tooltip>
                         ) : null}
@@ -307,7 +316,7 @@ export function DesignPreviewGallery({
                                                   disabled={index === 0}
                                                   onClick={() => setIndex((i) => Math.max(0, i - 1))}
                                               >
-                                                  <Icon icon={"alt-arrow-left"} size={ICON_SIZE_SM} />
+                                                  <Icon icon={ChevronLeft20Regular} />
                                               </button>
                                               <button
                                                   type="button"
@@ -315,7 +324,7 @@ export function DesignPreviewGallery({
                                                   disabled={index >= items.length - 1}
                                                   onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
                                               >
-                                                  <Icon icon={"alt-arrow-right"} size={ICON_SIZE_SM} />
+                                                  <Icon icon={ChevronRight20Regular} />
                                               </button>
                                           </>
                                       ) : null}
@@ -327,7 +336,7 @@ export function DesignPreviewGallery({
                                                   className="rounded-md p-1.5 text-text-muted hover:bg-panel-hover hover:text-text-primary disabled:opacity-30"
                                                   onClick={() => choose(item.id)}
                                               >
-                                                  <Icon icon={"check"} size={ICON_SIZE_SM} />
+                                                  <Icon icon={Checkmark20Regular} />
                                               </button>
                                           </Tooltip>
                                       ) : null}
@@ -337,7 +346,7 @@ export function DesignPreviewGallery({
                                           onClick={() => setOpen(false)}
                                           className="rounded-md p-1.5 text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                       >
-                                          <Icon icon={"minimize"} size={ICON_SIZE_SM} />
+                                          <Icon icon={ArrowMinimize20Regular} />
                                       </button>
                                   </div>
                               </div>
@@ -356,7 +365,7 @@ export function DesignPreviewGallery({
                                               onClick={() => setTweakTab("padding")}
                                               label="Padding"
                                           >
-                                              <Icon icon={"text-square"} size={ICON_SIZE_SM} />
+                                              <Icon icon={TextFontSize20Regular} />
                                           </TabBtn>
                                           <TabBtn
                                               active={tweakTab === "gap"}

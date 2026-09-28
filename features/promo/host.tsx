@@ -1,9 +1,16 @@
 "use client";
 
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
+
+
+
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
+
+
 import { useProjectState } from "@/lib/backend";
 import { isWebProject } from "@/features/detection/lib/lib";
 import catalog from "@/content/promo-cards.json";
@@ -126,7 +133,7 @@ export function PromoCardHost() {
                         size="icon"
                         className="absolute text-text-foreground right-2.5 top-2.5"
                     >
-                        <Icon icon={"close"} />
+                        <Icon icon={Dismiss20Regular} />
                     </Button>
                 </div>
                 <div className="p-3">

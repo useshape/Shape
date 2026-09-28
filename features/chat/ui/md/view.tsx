@@ -1,12 +1,20 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+import { DataTrending20Regular } from "@fluentui/react-icons/headless/svg/data-trending";
+
+
+
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import { FileIcon } from "@/components/ui/file-icon";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
 import { ChatLinkChip } from "./link-chip";
@@ -32,7 +40,7 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
                     onClick={copy}
                     aria-label={copied ? "Copied" : "Copy code"}
                 >
-                    <Icon icon={copied ? "check" : "clipboard"} size={ICON_SIZE_MD} />
+                    <Icon icon={copied ? Checkmark20Regular : Clipboard20Regular} />
                 </Button>
             </div>
             <SyntaxHighlighter

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjectState } from "@/lib/backend";
 import { EditorViewProvider, EditorSplitProvider } from "@/core/providers/editor";
-import { WorkspaceTabs } from "./tabs";
 import { ChangesView } from "./changes";
 import { PlanTabView } from "./plan-tab";
 import { FileEditor } from "./editor";
@@ -11,16 +10,28 @@ import { FileTree } from "./tree";
 import { SingleFileDiffEditor, type FileDiffTabInfo } from "./file-diff";
 import Graph from "@/features/git/ui/graph/graph";
 import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
+import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { Tooltip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { PullRequestsPanel } from "@/features/chat/ui/prs/view";
 import { subscribePrUi, getPrUi } from "@/features/chat/ui/prs/store";
 import { WorkspacePreview } from "./preview";
 import { isBrowserTab } from "@/lib/window/browser-tab";
 import {
     DEFAULT_TABS,
+    iconFor,
     uid,
     type TabKind,
     type WorkspaceTab,
 } from "./model";
+
+const PANES: { kind: TabKind; label: string }[] = [
+    { kind: "files", label: "Files" },
+    { kind: "graph", label: "Graph" },
+    { kind: "browser", label: "Browser" },
+    { kind: "prs", label: "Pull requests" },
+];
 
 export function AgentWorkspace({
     projectPath,
@@ -51,16 +62,6 @@ export function AgentWorkspace({
         activeIdRef.current = activate;
         setTabs(next);
         setActiveId(activate);
-    }, []);
-
-    const select = useCallback((id: string) => {
-        activeIdRef.current = id;
-        setActiveId(id);
-    }, []);
-
-    const reorder = useCallback((next: WorkspaceTab[]) => {
-        tabsRef.current = next;
-        setTabs(next);
     }, []);
 
     const addTab = useCallback((kind: TabKind, opts?: { expand?: boolean }) => {
@@ -152,17 +153,6 @@ export function AgentWorkspace({
         [commitTabs],
     );
 
-    const closeTab = useCallback((id: string) => {
-        const prev = tabsRef.current;
-        const next = prev.filter((t) => t.id !== id);
-        if (next.length === 0) {
-            commitTabs(DEFAULT_TABS, "graph");
-            return;
-        }
-        const current = activeIdRef.current;
-        commitTabs(next, id === current ? next[next.length - 1]!.id : current);
-    }, [commitTabs]);
-
     useEffect(() => {
         const onTab = (e: Event) => {
             const tabId = (e as CustomEvent<string>).detail?.toLowerCase();
@@ -174,7 +164,7 @@ export function AgentWorkspace({
                 addTab("graph", { expand: true });
             }
             if (tabId === "prs" || tabId === "pulls" || tabId === "pull-requests") {
-                window.dispatchEvent(new Event("shape-open-pull-requests"));
+                addTab("prs", { expand: true });
             }
             if (tabId === "files" || tabId === "explorer") {
                 addTab("files", { expand: true });
@@ -256,26 +246,29 @@ export function AgentWorkspace({
 
     return (
         <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-panel">
-            <div
-                className="flex h-titlebar shrink-0 items-center overflow-hidden bg-panel"
-                data-tauri-drag-region
-            >
-                <div className="min-w-0 flex-1 overflow-hidden" data-no-drag>
-                    <WorkspaceTabs
-                        tabs={tabs}
-                        activeId={activeId}
-                        onSelect={select}
-                        onClose={closeTab}
-                        onReorder={reorder}
-                        fade
-                        onNew={(kind) => {
-                            addTab(kind, { expand: true });
-                        }}
-                    />
+            <div className="flex h-titlebar shrink-0 items-center gap-0.5 px-1.5" data-tauri-drag-region>
+                <div className="flex min-w-0 items-center gap-0.5" data-no-drag>
+                    {PANES.map((pane) => (
+                        <Tooltip key={pane.kind} content={pane.label} side="bottom" delayDuration={80}>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={pane.label}
+                                aria-pressed={active?.kind === pane.kind}
+                                onClick={() => addTab(pane.kind, { expand: true })}
+                                className={cn(
+                                    "size-7 shrink-0 text-text-muted hover:text-text-primary",
+                                    active?.kind === pane.kind && "bg-panel-hover text-text-primary",
+                                )}
+                            >
+                                <Icon icon={iconFor(pane.kind)} />
+                            </Button>
+                        </Tooltip>
+                    ))}
                 </div>
-                <div className="relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1" data-no-drag>
-                    <WindowControlsSpacer />
-                </div>
+                <div className="min-w-0 flex-1" />
+                <WindowControlsSpacer />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">

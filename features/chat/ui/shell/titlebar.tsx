@@ -1,14 +1,20 @@
 "use client";
 
+import { LayoutRowTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-row-two";
+import { People20Filled } from "@fluentui/react-icons/headless/svg/people";
+
+
+
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
+
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
-import { AGENT_CHROME_ACTIONS_SLOT, AGENT_SIDEBAR_HISTORY_SLOT } from "@/features/agent/chrome";
-import { ChatHistoryMenu } from "./history";
+import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
 import { OpenInMenu } from "./open-in";
 import { CommitMenu } from "@/features/agent/workspace/commit-menu";
 import {
@@ -25,6 +31,59 @@ import {
     type SubagentCard,
 } from "@/features/agent/subagents/store";
 import { cn } from "@/lib/utils";
+
+function isGenericChatTitle(title: string | null | undefined): boolean {
+    const value = (title || "").trim().toLowerCase();
+    return !value || value === "new chat" || value === "chat";
+}
+
+function latestRename(messages: { content?: string }[] | undefined): string | null {
+    if (!messages) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const match = messages[i]?.content?.match(/<rename_chat>([^<]+)<\/rename_chat>/i);
+        const title = match?.[1]?.trim();
+        if (title) return title;
+    }
+    return null;
+}
+
+function firstPromptTitle(messages: { role?: string; content?: string }[] | undefined): string | null {
+    const user = messages?.find((m) => m.role === "user")?.content || "";
+    const line = user
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!line) return null;
+    return line.length > 48 ? `${line.slice(0, 48).trimEnd()}…` : line;
+}
+
+export function resolveChatCrumbTitle(opts: {
+    chatTitle: string;
+    tabTitle?: string;
+    convTitle?: string;
+    messages?: { role?: string; content?: string }[];
+}): string {
+    const renamed = latestRename(opts.messages);
+    const picks = [opts.chatTitle, renamed, opts.convTitle, opts.tabTitle, firstPromptTitle(opts.messages)];
+    return picks.find((title) => !isGenericChatTitle(title))?.trim() || "New chat";
+}
+
+function shortModelName(model?: string): string {
+    const id = (model || "").trim();
+    if (!id || id === "auto" || id.endsWith("/auto")) return "Auto";
+    const leaf = id.split("/").pop() || id;
+    if (/\s/.test(leaf)) return leaf;
+    return leaf.replace(/[-_]+/g, " ");
+}
+
+function ModelMark({ model, pin = false }: { model?: string; pin?: boolean }) {
+    return (
+        <span className={cn("flex shrink-0 items-center gap-1 text-xs text-text-muted", pin && "ml-auto")}>
+            {providerIcon(model || "auto", 12)}
+            <span className="max-w-[7rem] truncate">{shortModelName(model)}</span>
+        </span>
+    );
+}
 
 function chatSubagents(parentId: string | null, extra: SubagentCard[]): SubagentCard[] {
     const live = getSubagents();
@@ -45,6 +104,7 @@ export function ChatTitlebar({
     conversationId,
     onSelect,
     subagentTitle,
+    subagentModel,
     onCloseSubagent,
     extractedSubagents = [],
 }: {
@@ -54,13 +114,13 @@ export function ChatTitlebar({
     timestamp?: number | null;
     onSelect: (id: string) => void;
     subagentTitle?: string | null;
+    subagentModel?: string | null;
     onCloseSubagent?: () => void;
     extractedSubagents?: SubagentCard[];
 }) {
     const { project_path } = useProjectState();
     const repo = project_path ? getRepoName(project_path) : null;
     const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
-    const [historySlot, setHistorySlot] = useState<HTMLElement | null>(null);
     const [terminalOpen, setTerminalOpen] = useState(false);
     useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
     const subagents = chatSubagents(conversationId, extractedSubagents);
@@ -69,8 +129,6 @@ export function ChatTitlebar({
         const find = () => {
             const el = document.getElementById(AGENT_CHROME_ACTIONS_SLOT);
             setActionsSlot(el && el.isConnected ? el : null);
-            const history = document.getElementById(AGENT_SIDEBAR_HISTORY_SLOT);
-            setHistorySlot(history && history.isConnected ? history : null);
         };
         find();
         const timer = window.setInterval(find, 200);
@@ -116,7 +174,7 @@ export function ChatTitlebar({
                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary data-[active=true]:text-text-primary"
                     data-active={terminalOpen}
                 >
-                    <Icon icon={"align-bottom"} />
+                    <Icon icon={LayoutRowTwo20Regular} />
                 </button>
             </Tooltip>
         </div>
@@ -150,8 +208,9 @@ export function ChatTitlebar({
                             onClick={() => openSubagent(card.id)}
                             className="gap-2"
                         >
-                            {providerIcon(card.model || "auto", 14)}
+                            <Icon icon={People20Filled} className="text-text-muted" />
                             <span className="min-w-0 flex-1 truncate">{card.title}</span>
+                            <ModelMark model={card.model} pin />
                         </DropdownMenuItem>
                     ))}
                 </DropdownMenuContent>
@@ -177,24 +236,17 @@ export function ChatTitlebar({
                 ) : null}
                 {chatCrumb}
                 {subagentTitle ? (
-                    <BreadcrumbItem current className="min-w-0 truncate">
-                        {subagentTitle}
+                    <BreadcrumbItem current className="min-w-0 max-w-[24rem]">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                            <Icon icon={People20Filled} className="shrink-0 text-text-muted" />
+                            <span className="min-w-0 truncate">{subagentTitle}</span>
+                            <ModelMark model={subagentModel || undefined} />
+                        </span>
                     </BreadcrumbItem>
                 ) : null}
             </Breadcrumb>
             <div className="h-full min-w-4 flex-1" />
             {actionsSlot && actionsSlot.isConnected ? createPortal(actions, actionsSlot) : null}
-            {historySlot && historySlot.isConnected
-                ? createPortal(
-                    <ChatHistoryMenu
-                        activeConversationId={conversationId}
-                        onSelectConversation={(id) => onSelect(id)}
-                        projectPath={project_path}
-                        align="end"
-                    />,
-                    historySlot,
-                )
-                : null}
         </div>
     );
 }

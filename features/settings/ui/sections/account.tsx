@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { FluentIcon, settingsIcons } from "../fluent-icons";
+
+
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
-import { SettingRow, SettingSection } from "../shared/controls";
+
+
+import { SettingRow, SettingSection, SettingCard } from "../shared/controls";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import {
     logoutShape,
@@ -14,53 +18,9 @@ import {
 import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend";
-import { cn } from "@/lib/utils";
 
 function tierLabel(tier: string) {
     return tier.charAt(0).toUpperCase() + tier.slice(1);
-}
-
-function UsageBar({
-    label,
-    icon,
-    detail,
-    percent,
-    trailing,
-}: {
-    label: string;
-    icon?: ReactNode;
-    detail?: string;
-    percent: number;
-    trailing?: string;
-}) {
-    const clamped = Math.max(0, Math.min(100, percent));
-    return (
-        <div className="space-y-1.5">
-            <div className="flex items-baseline gap-3 text-sm">
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-text-primary">
-                    {icon}
-                    <span className="truncate">{label}</span>
-                </span>
-                {detail ? (
-                    <span className="shrink-0 text-text-muted">{detail}</span>
-                ) : null}
-                {trailing ? (
-                    <span className="shrink-0 tabular-nums text-text-secondary">{trailing}</span>
-                ) : (
-                    <span className="shrink-0 tabular-nums text-text-secondary">{clamped}%</span>
-                )}
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-hover">
-                <div
-                    className={cn(
-                        "h-full rounded-full transition-all",
-                        clamped >= 90 ? "bg-warning" : "bg-accent",
-                    )}
-                    style={{ width: `${clamped}%` }}
-                />
-            </div>
-        </div>
-    );
 }
 
 export function AccountSettingsPanel() {
@@ -86,13 +46,16 @@ export function AccountSettingsPanel() {
         return (
             <div aria-busy aria-label="Loading account">
                 <SettingSection id="settings-account" title="Plan">
+                    <SettingCard>
                     <div className="px-3.5 py-4 space-y-3">
                         <Skeleton className="h-5 w-24 rounded-full" />
                         <Skeleton className="h-6 w-28" />
                         <Skeleton className="h-4 w-48" />
                     </div>
+                    </SettingCard>
                 </SettingSection>
                 <SettingSection title="Usage">
+                    <SettingCard>
                     <div className="px-3.5 py-4 space-y-4">
                         <div className="space-y-1.5">
                             <div className="flex justify-between">
@@ -109,8 +72,10 @@ export function AccountSettingsPanel() {
                             <Skeleton className="h-3 w-full rounded-xs" />
                         </div>
                     </div>
+                    </SettingCard>
                 </SettingSection>
                 <SettingSection title="Profile">
+                    <SettingCard>
                     <div className="space-y-0">
                         {Array.from({ length: 3 }, (_, i) => (
                             <div key={i} className="flex items-center justify-between gap-4 px-3.5 py-3.5">
@@ -119,6 +84,7 @@ export function AccountSettingsPanel() {
                             </div>
                         ))}
                     </div>
+                    </SettingCard>
                 </SettingSection>
             </div>
         );
@@ -127,7 +93,8 @@ export function AccountSettingsPanel() {
     if (!auth.loggedIn) {
         return (
             <SettingSection id="settings-account" title="Profile">
-                <div className="p-3 space-y-2">
+                <SettingCard>
+                <div className="px-3.5 py-3">
                     <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">
                             <div className="text-md font-regular text-text-primary">Not signed in</div>
@@ -141,6 +108,7 @@ export function AccountSettingsPanel() {
                         </Button>
                     </div>
                 </div>
+                </SettingCard>
             </SettingSection>
         );
     }
@@ -148,13 +116,11 @@ export function AccountSettingsPanel() {
     return (
         <>
             <SettingSection id="settings-account" title="Plan">
-                <div className="px-3.5 py-4 space-y-3">
+                <SettingCard>
+                <div className="px-3.5 py-3.5">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <span className="inline-flex items-center rounded-full bg-panel-hover px-2 py-0.5 text-xs font-medium text-text-secondary">
-                                Current plan
-                            </span>
-                            <div className="mt-2 text-base font-semibold text-text-primary">
+                            <div className="text-base font-medium text-text-primary">
                                 {tierLabel(auth.tier)}
                             </div>
                             <div className="text-sm text-text-muted mt-0.5 truncate">
@@ -162,62 +128,57 @@ export function AccountSettingsPanel() {
                             </div>
                         </div>
                         <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1.5 shrink-0"
+                            variant="secondary"
+                            size="md"
+                            className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10"
                             onClick={() => openShapeBilling()}
                         >
                             Manage billing
-                            <Icon icon={"square-forward"} className="text-text-muted" />
+                            <FluentIcon icon={settingsIcons.open} className="text-text-muted" />
                         </Button>
                     </div>
                 </div>
+                </SettingCard>
             </SettingSection>
 
-            <SettingSection title="Usage">
-                <div className="px-3.5 py-4 space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-text-primary">
-                            Plan usage limits
-                            <span className="text-text-muted"> · {tierLabel(auth.tier)}</span>
-                        </span>
-                        <button
-                            type="button"
-                            className="text-sm text-text-muted hover:text-text-primary"
-                            onClick={() => openShapeBilling()}
-                        >
-                            Manage
-                        </button>
-                    </div>
-                    <UsageBar
-                        icon={<SolarIcon name="magic-stick" size={ICON_SIZE_SM} className="text-text-muted" />}
-                        label="Auto · monthly"
-                        detail={resetLabel}
-                        percent={freeAutoPercent}
-                    />
-                    <UsageBar
-                        icon={<SolarIcon name="stars-minimalistic" size={ICON_SIZE_SM} className="text-text-muted" />}
-                        label="Premium credits"
-                        detail={
-                            auth.creditsIncluded > 0
-                                ? `${auth.creditsRemaining.toLocaleString()} left · ${resetLabel}`
+            <SettingSection title="Credits">
+                <SettingCard>
+                    <div className="px-3.5 py-3">
+                        <div className="text-sm font-medium text-text-primary">
+                            {auth.creditsIncluded > 0 ? `${Math.max(0, 100 - creditPercent)}% remaining` : "Premium credits"}
+                        </div>
+                        <div className="mt-0.5 text-xs text-text-muted">
+                            {auth.creditsIncluded > 0
+                                ? `${auth.creditsRemaining.toLocaleString()} left. ${resetLabel}.`
                                 : auth.tier === "free"
-                                  ? "Upgrade for premium models"
-                                  : `${auth.creditsRemaining.toLocaleString()} remaining · ${resetLabel}`
-                        }
-                        percent={auth.creditsIncluded > 0 ? creditPercent : 0}
-                        trailing={
-                            auth.creditsIncluded > 0 ? `${creditPercent}%` : undefined
-                        }
-                    />
-                </div>
+                                  ? "Upgrade for premium models."
+                                  : `${auth.creditsRemaining.toLocaleString()} remaining. ${resetLabel}.`}
+                        </div>
+                        <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                                className="h-full rounded-full bg-success"
+                                style={{ width: `${auth.creditsIncluded > 0 ? Math.max(0, 100 - creditPercent) : 0}%` }}
+                            />
+                        </div>
+                    </div>
+                </SettingCard>
+                <SettingCard>
+                    <div className="flex items-center justify-between gap-4 px-3.5 py-2.5">
+                        <div className="min-w-0">
+                            <div className="text-sm font-medium text-text-primary">Auto</div>
+                            <div className="mt-0.5 text-xs text-text-muted">{resetLabel}.</div>
+                        </div>
+                        <span className="text-sm text-text-muted">{freeAutoPercent}%</span>
+                    </div>
+                </SettingCard>
             </SettingSection>
 
             <SettingSection title="Profile">
                 <SettingRow title="Email" description={auth.email ?? undefined}>
                     <Button
                         variant="secondary"
-                        size="sm"
+                        size="md"
+                        className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10"
                         onClick={() => void refreshShapeAuth()}
                         disabled={auth.revalidating}
                     >
@@ -227,16 +188,16 @@ export function AccountSettingsPanel() {
                 <SettingRow title="Open dashboard">
                     <Button
                         variant="secondary"
-                        size="sm"
-                        className="gap-1.5"
+                        size="md"
+                        className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10"
                         onClick={() => void commands.openUrlExternal(`${SHAPE_API_BASE}/dashboard`)}
                     >
                         Open
-                        <Icon icon={"square-forward"} className="text-text-muted" />
+                        <FluentIcon icon={settingsIcons.open} className="text-text-muted" />
                     </Button>
                 </SettingRow>
                 <SettingRow title="Sign out">
-                    <Button variant="secondary" size="sm" onClick={() => void logoutShape()}>
+                    <Button variant="secondary" size="md" className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10" onClick={() => void logoutShape()}>
                         Sign out
                     </Button>
                 </SettingRow>

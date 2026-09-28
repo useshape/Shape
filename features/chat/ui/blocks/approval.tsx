@@ -1,9 +1,16 @@
 "use client";
 
+import { ArrowEnter20Filled } from "@fluentui/react-icons/headless/svg/arrow-enter";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
+
+
 import React, { type ReactNode } from "react";
 import { Arc } from "loading-dev";
 import { cn } from "@/lib/utils";
-import { ICON_SIZE_MD, ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -73,7 +80,7 @@ export function ApprovalCard({
                     </Button>
                     <Button type="button" variant="default" size="sm" disabled={isProcessing} onClick={onAccept}>
                         {acceptLabel}
-                        <SolarIcon name="arrow-to-down-left" size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowEnter20Filled} />
                     </Button>
                 </div>
             </div>
@@ -108,7 +115,7 @@ export function ApprovalBar({
 }: ApprovalBarProps) {
     return (
         <ApprovalCard
-            icon={<SolarIcon name="programming" size={ICON_SIZE_MD} className="text-text-muted" />}
+            icon={<Icon icon={WindowConsole20Regular} className="text-text-muted" />}
             title={label}
             isProcessing={isProcessing}
             onSkip={onReject}

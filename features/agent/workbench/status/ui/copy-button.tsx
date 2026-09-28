@@ -1,7 +1,12 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+
+
 import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 
 export function CopyButton({ text }: { text: string }) {
@@ -28,7 +33,7 @@ export function CopyButton({ text }: { text: string }) {
                     : "bg-panel-hover text-text-muted hover:text-text-primary hover:bg-panel-active",
             )}
         >
-            {copied ? <Icon icon={"check"} /> : <Icon icon={"clipboard"} />}
+            {copied ? <Icon icon={Checkmark20Regular} /> : <Icon icon={Clipboard20Regular} />}
             {copied ? "Copied" : "Copy"}
         </button>
     );

@@ -1,7 +1,17 @@
 "use client";
 
+import { ArrowMinimize20Regular } from "@fluentui/react-icons/headless/svg/arrow-minimize";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { ArrowUpload20Regular } from "@fluentui/react-icons/headless/svg/arrow-upload";
+import { CloudOff20Regular } from "@fluentui/react-icons/headless/svg/cloud-off";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { Filter20Regular } from "@fluentui/react-icons/headless/svg/filter";
+import { Target20Regular } from "@fluentui/react-icons/headless/svg/target";
+
+
 import React, { useState, useCallback, useEffect, useRef, useMemo, useDeferredValue } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -681,7 +691,7 @@ export default function Graph({
                                 className="h-7 w-7"
                                 aria-label="Filter commits"
                             >
-                                <Icon icon={"filter"} size={ICON_SIZE_SM} />
+                                <Icon icon={Filter20Regular} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-auto p-2">
@@ -739,7 +749,7 @@ export default function Graph({
                     </DropdownMenu>
                     <Tooltip content="Go to HEAD">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={jumpToHead} aria-label="Go to HEAD">
-                            <Icon icon={"target"} size={ICON_SIZE_SM} />
+                            <Icon icon={Target20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fetch">
@@ -762,7 +772,7 @@ export default function Graph({
                             }}
                             aria-label="Fetch"
                         >
-                            <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowSync20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
@@ -785,7 +795,7 @@ export default function Graph({
                             }}
                             aria-label="Pull"
                         >
-                            <Icon icon={"cloud-cross"} size={ICON_SIZE_SM} />
+                            <Icon icon={CloudOff20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
@@ -808,7 +818,7 @@ export default function Graph({
                             }}
                             aria-label="Push"
                         >
-                            <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowUpload20Regular} />
                         </Button>
                     </Tooltip>
                     {expandedCommits.size > 0 ? (
@@ -821,7 +831,7 @@ export default function Graph({
                                 onClick={() => setExpandedCommits(new Set())}
                                 aria-label="Collapse all"
                             >
-                                <Icon icon={"minimize"} size={ICON_SIZE_SM} />
+                                <Icon icon={ArrowMinimize20Regular} />
                             </Button>
                         </Tooltip>
                     ) : null}
@@ -842,7 +852,7 @@ export default function Graph({
                     <>
                     <Tooltip content="Go to HEAD (H)">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={jumpToHead}>
-                            <Icon icon={"target"} size={ICON_SIZE_SM} />
+                            <Icon icon={Target20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Fetch From All Remotes">
@@ -856,7 +866,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowSync20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
@@ -870,7 +880,7 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={"cloud-cross"} size={ICON_SIZE_SM} />
+                            <Icon icon={CloudOff20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
@@ -884,12 +894,12 @@ export default function Graph({
                             } catch (e) { notify.error("Git Error", String(e)); }
                             finally { stopLoading(); }
                         }}>
-                            <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowUpload20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Refresh Graph">
                         <Button variant="ghost" size="icon" className="text-text-primary hover:bg-panel-hover" onClick={() => void refresh()}>
-                            <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowSync20Regular} />
                         </Button>
                     </Tooltip>
                     {!rich && project_path ? <GitManagerTrigger /> : null}

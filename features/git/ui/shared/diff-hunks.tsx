@@ -1,5 +1,10 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ArrowUndo20Regular } from "@fluentui/react-icons/headless/svg/arrow-undo";
+import { Subtract20Regular } from "@fluentui/react-icons/headless/svg/subtract";
+
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 // Monaco removed — unused in agent window; keep a permissive stand-in for leftover hunk helpers.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -8,6 +13,7 @@ import { commands } from "@/lib/backend/commands";
 import type { GitHunk } from "@/lib/backend/types";
 import { notify } from "@/features/notifications";
 import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 
 export type DiffHunkMode = "staged" | "unstaged";
@@ -177,7 +183,7 @@ export function DiffHunkToolbar({
             title="Stage hunk (Ctrl+Y)"
             onClick={() => void run("stage")}
           >
-            <Icon icon={"add-circle"} /> Stage
+            <Icon icon={Add20Regular} /> Stage
           </Button>
           <Button
             type="button"
@@ -186,7 +192,7 @@ export function DiffHunkToolbar({
             title="Restore hunk"
             onClick={() => void run("restore")}
           >
-            <Icon icon={"undo-left"} /> Restore
+            <Icon icon={ArrowUndo20Regular} /> Restore
           </Button>
         </>
       )}
@@ -199,7 +205,7 @@ export function DiffHunkToolbar({
           title="Unstage hunk (Ctrl+Shift+Y)"
           onClick={() => void run("unstage")}
         >
-          <Icon icon={"minus-circle"} /> Unstage
+          <Icon icon={Subtract20Regular} /> Unstage
         </Button>
       )}
     </div>

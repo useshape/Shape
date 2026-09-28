@@ -1,5 +1,9 @@
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import React from 'react';
 import { Icon } from "@/components/ui/icon";
+
 import { cn } from '@/lib/utils';
 import { commands } from '@/lib/backend';
 import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
@@ -232,7 +236,7 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
                         disabled={!hasChanges || status === "applying" || status === "accepted"}
                     >
                         <span className="flex items-center gap-1">
-                            <Icon icon={"check"} />
+                            <Icon icon={Checkmark20Regular} />
                             Apply
                         </span>
                     </button>
@@ -242,7 +246,7 @@ export function InlineDiff({ file, original, replacement, isGenerating }: {
                         disabled={status === "applying" || status === "rejected"}
                     >
                         <span className="flex items-center gap-1">
-                            {status === "accepted" ? <Icon icon={"refresh"} /> : <Icon icon={"close"} />}
+                            {status === "accepted" ? <Icon icon={ArrowSync20Regular} /> : <Icon icon={Dismiss20Regular} />}
                             {status === "accepted" ? "Revert" : "Reject"}
                         </span>
                     </button>

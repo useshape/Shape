@@ -1,7 +1,16 @@
 "use client";
 
+import { Attach20Regular } from "@fluentui/react-icons/headless/svg/attach";
+import { ChevronLeft20Regular } from "@fluentui/react-icons/headless/svg/chevron-left";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+
+
+
 import React, { useEffect, useMemo, useState } from "react";
-import { ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend/commands";
@@ -158,7 +167,7 @@ export function QuestionsCard({
                             setIndex((i) => Math.max(0, i - 1));
                         }}
                     >
-                        <SolarIcon name="alt-arrow-left" size={ICON_SIZE_SM} />
+                        <Icon icon={ChevronLeft20Regular} />
                     </Button>
                     <span className="min-w-[2.5rem] text-center text-xs tabular-nums">
                         {index + 1}/{total}
@@ -175,7 +184,7 @@ export function QuestionsCard({
                             setIndex((i) => Math.min(questions.length - 1, i + 1));
                         }}
                     >
-                        <SolarIcon name="alt-arrow-right" size={ICON_SIZE_SM} />
+                        <Icon icon={ChevronRight20Regular} />
                     </Button>
                 </div>
                 <Button
@@ -187,7 +196,7 @@ export function QuestionsCard({
                     disabled={!pending || submitting}
                     onClick={() => void submit(picked, true)}
                 >
-                    <SolarIcon name="close" size={ICON_SIZE_SM} />
+                    <Icon icon={Dismiss20Regular} />
                 </Button>
             </div>
 
@@ -249,7 +258,7 @@ export function QuestionsCard({
                         onClick={() => setCustomOpen(true)}
                         className="flex items-center gap-2 text-[13px] text-text-secondary hover:text-text-primary"
                     >
-                        <SolarIcon name="paperclip" size={ICON_SIZE_SM} className="text-text-muted" />
+                        <Icon icon={Attach20Regular} className="text-text-muted" />
                         Something else
                     </button>
                 )}

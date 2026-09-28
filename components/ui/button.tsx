@@ -1,8 +1,13 @@
 "use client";
 
+
+
+
 import * as React from "react";
 import { Arc } from "loading-dev";
-import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
+
 import { cn } from "@/lib/utils";
 
 export type ButtonVariant =
@@ -93,7 +98,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
     loading?: boolean;
     selected?: boolean;
     block?: boolean;
-    icon?: SolarIconName;
+    icon?: IconGlyph;
     count?: number;
     countSrText?: string;
     label?: boolean;
@@ -168,7 +173,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         const face = aiBusy ? (
             <>
                 <span className="invisible inline-flex items-center justify-center gap-1.5">
-                    {icon ? <Icon icon={icon} size={ICON_SIZE_SM} /> : null}
+                    {icon ? <Icon icon={icon} /> : null}
                     {children}
                 </span>
                 <span className="absolute inset-0 flex items-center justify-center">
@@ -177,8 +182,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             </>
         ) : (
             <>
-                {spinnerLoading ? <LoadingGlyph size={size} /> : icon && !iconOnly ? <Icon icon={icon} size={ICON_SIZE_SM} /> : null}
-                {spinnerLoading && iconOnly ? null : iconOnly ? <Icon icon={icon!} size={ICON_SIZE_SM} /> : null}
+                {spinnerLoading ? <LoadingGlyph size={size} /> : icon && !iconOnly ? <Icon icon={icon} /> : null}
+                {spinnerLoading && iconOnly ? null : iconOnly ? <Icon icon={icon!} /> : null}
                 {children}
                 {count != null ? (
                     <span className="ml-0.5 tabular-nums text-xs text-current/80">

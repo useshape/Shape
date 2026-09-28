@@ -1,5 +1,10 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Circle20Regular } from "@fluentui/react-icons/headless/svg/circle";
+
+
 import * as React from "react";
 import { Icon } from "./icon";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
@@ -134,7 +139,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={"alt-arrow-right"} className="ml-auto"  />
+        <Icon icon={ChevronRight20Regular} className="ml-auto"  />
     </DropdownMenuPrimitive.SubTrigger>
 ));
 DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayName;
@@ -243,7 +248,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <DropdownMenuPrimitive.ItemIndicator>
-                <Icon icon={"check"}   />
+                <Icon icon={Checkmark20Regular}   />
             </DropdownMenuPrimitive.ItemIndicator>
         </span>
         {children}
@@ -266,7 +271,7 @@ const DropdownMenuRadioItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <DropdownMenuPrimitive.ItemIndicator>
-                <Icon icon={"record"}  className="size-[8px]"  />
+                <Icon icon={Circle20Regular}  className="size-[8px]"  />
             </DropdownMenuPrimitive.ItemIndicator>
         </span>
         {children}
@@ -342,7 +347,7 @@ const DropdownMenuNestedTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={"alt-arrow-right"} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
+        <Icon icon={ChevronRight20Regular} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
     </DropdownMenuItem>
 ));
 DropdownMenuNestedTrigger.displayName = "DropdownMenuNestedTrigger";
@@ -483,7 +488,7 @@ const MenubarSubTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={"alt-arrow-right"} className="ml-auto"  />
+        <Icon icon={ChevronRight20Regular} className="ml-auto"  />
     </MenubarPrimitive.SubTrigger>
 ));
 MenubarSubTrigger.displayName = MenubarPrimitive.SubTrigger.displayName;
@@ -560,7 +565,7 @@ const MenubarCheckboxItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <MenubarPrimitive.ItemIndicator>
-                <Icon icon={"check"}   />
+                <Icon icon={Checkmark20Regular}   />
             </MenubarPrimitive.ItemIndicator>
         </span>
         {children}
@@ -583,7 +588,7 @@ const MenubarRadioItem = React.forwardRef<
     >
         <span className="flex w-4 shrink-0 items-center justify-center">
             <MenubarPrimitive.ItemIndicator>
-                <Icon icon={"record"}  className="size-[8px]"  />
+                <Icon icon={Circle20Regular}  className="size-[8px]"  />
             </MenubarPrimitive.ItemIndicator>
         </span>
         {children}
@@ -659,7 +664,7 @@ const MenubarNestedTrigger = React.forwardRef<
         {...props}
     >
         {children}
-        <Icon icon={"alt-arrow-right"} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
+        <Icon icon={ChevronRight20Regular} className={cn("ml-auto transition-transform duration-200", isOpened && "rotate-90")}  />
     </MenubarItem>
 ));
 MenubarNestedTrigger.displayName = "MenubarNestedTrigger";

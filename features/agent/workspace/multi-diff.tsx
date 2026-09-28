@@ -1,8 +1,13 @@
 "use client";
 
+import { ArrowUndo20Regular } from "@fluentui/react-icons/headless/svg/arrow-undo";
+import { LayoutColumnTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-column-two";
+
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
 import { discoverGitRepos, pickDefaultRepo } from "@/lib/git/repos";
@@ -175,7 +180,7 @@ function LazyFileDiff({
                     aria-label="Restore"
                     title="Restore"
                 >
-                    <Icon icon={"undo-left"} />
+                    <Icon icon={ArrowUndo20Regular} />
                 </Button>
             </div>
 
@@ -329,7 +334,7 @@ export function MultiDiffEditor({
                     aria-label="Toggle split"
                     title={split ? "Unified" : "Side by side"}
                 >
-                    <Icon icon={"sidebar-code"} />
+                    <Icon icon={LayoutColumnTwo20Regular} />
                 </Button>
                 <Button
                     type="button"

@@ -1,6 +1,8 @@
 "use client";
 
-import { type SolarIconName,  Icon } from "@/components/ui/icon";
+
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 
 export function ToolBtn({
@@ -35,6 +37,6 @@ export function ToolBtn({
     );
 }
 
-export function WsIcon({ icon }: { icon: SolarIconName }) {
+export function WsIcon({ icon }: { icon: IconGlyph }) {
     return <Icon icon={icon} />;
 }

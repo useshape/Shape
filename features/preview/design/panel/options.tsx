@@ -1,5 +1,10 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+
+
 import { useEffect, useState } from "react";
 import { SettingSwitch } from "@/features/settings/ui/shared/controls";
 import { Button } from "@/components/ui/button";
@@ -9,7 +14,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Input } from "@/components/ui/input";
 import type { DesignComponentProperty, DesignElementSnapshot } from "../bridge";
 import { CONTROL, SelectField } from "./field";
@@ -125,12 +131,12 @@ export function DesignComponentOptions({
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" aria-label="Instance actions" className="size-7">
-                            <Icon icon={"menu-dots"} size={ICON_SIZE_SM} />
+                            <Icon icon={MoreHorizontal20Regular} />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-48">
                         <DropdownMenuItem disabled={!onOpenSource} onClick={onOpenSource}>
-                            <Icon icon={"code"} size={ICON_SIZE_SM} />
+                            <Icon icon={Code20Regular} />
                             Go to main component
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -144,7 +150,7 @@ export function DesignComponentOptions({
                     disabled
                 >
                     <span className="truncate">{component.sourceLabel}</span>
-                    <Icon icon={"alt-arrow-down"} size={12} className="opacity-40" />
+                    <Icon icon={ChevronDown20Regular} className="opacity-40" />
                 </button>
             </Row>
             {variants.map((property) => (

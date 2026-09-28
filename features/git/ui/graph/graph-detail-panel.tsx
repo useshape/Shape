@@ -1,7 +1,16 @@
 "use client";
 
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { Circle20Filled } from "@fluentui/react-icons/headless/svg/circle";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { LayoutColumnTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-column-two";
+import { LayoutRowTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-row-two";
+
+
 import { useEffect, useMemo, useState } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
@@ -37,16 +46,7 @@ function countDiffLines(original: string, modified: string): { added: number; re
 
 function AuthorAvatar({ log, size = 20 }: { log: GitLogEntry; size?: number }) {
     const url = resolveGithubAvatarUrl(log.author_email, log.author, size * 2);
-    if (!url) {
-        return (
-            <span
-                className="inline-flex shrink-0 items-center justify-center rounded-full bg-panel-hover text-[10px] font-medium text-text-muted"
-                style={{ width: size, height: size }}
-            >
-                {(log.author || "?").slice(0, 1).toUpperCase()}
-            </span>
-        );
-    }
+    if (!url) return null;
     return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -152,7 +152,7 @@ export function GraphDetailPanel({
     if (!selection || !log) {
         return (
             <div className="workbench-panel flex h-full flex-col items-center justify-center gap-2 border border-border-subtle bg-editor px-6 text-center text-sm text-text-muted">
-                <Icon icon={"git-commit"} size={ICON_SIZE_SM} className="text-text-muted" />
+                <Icon icon={Circle20Filled} className="text-text-muted" />
                 <p>Select a commit</p>
             </div>
         );
@@ -170,7 +170,7 @@ export function GraphDetailPanel({
                             className="shrink-0"
                             onClick={onClearFile}
                         >
-                            <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowLeft20Regular} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -196,7 +196,7 @@ export function GraphDetailPanel({
                                 className="shrink-0"
                                 onClick={() => setSideBySide((v) => !v)}
                             >
-                                <Icon icon={sideBySide ? "align-bottom" : "sidebar-code"} size={ICON_SIZE_SM} />
+                                <Icon icon={sideBySide ? LayoutRowTwo20Regular : LayoutColumnTwo20Regular} />
                             </Button>
                         </Tooltip>
                     </>
@@ -216,7 +216,7 @@ export function GraphDetailPanel({
                     className="shrink-0"
                     onClick={onClose}
                 >
-                    <Icon icon={"close"} size={ICON_SIZE_SM} />
+                    <Icon icon={Dismiss20Regular} />
                 </Button>
             </div>
 

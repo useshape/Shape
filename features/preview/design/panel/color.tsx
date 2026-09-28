@@ -1,5 +1,16 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
+import { EyeOff20Regular } from "@fluentui/react-icons/headless/svg/eye-off";
+import { LinkDismiss20Regular } from "@fluentui/react-icons/headless/svg/link-dismiss";
+import { Stop20Filled } from "@fluentui/react-icons/headless/svg/stop";
+import { Subtract20Regular } from "@fluentui/react-icons/headless/svg/subtract";
+import { WeatherSunny20Regular } from "@fluentui/react-icons/headless/svg/weather-sunny";
+
+
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +20,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { cssColorToHex, cssVarName, defaultCssGradient, parseCssGradient, serializeCssGradient, type CssGradient } from "../css";
@@ -285,7 +297,7 @@ export function ColorField({
                                 className="size-6"
                                 onClick={() => setOpen(false)}
                             >
-                                <Icon icon={"close"} size={ICON_SIZE_SM} />
+                                <Icon icon={Dismiss20Regular} />
                             </Button>
                         </div>
                         <div
@@ -411,13 +423,13 @@ export function ColorField({
                 <span className="pr-2 text-xs font-medium text-text-muted">%</span>
             </div>
             {bound ? (
-                <IconButton label="Detach token" icon={"unlink-minimalistic"} onClick={detach} />
+                <IconButton label="Detach token" icon={LinkDismiss20Regular} onClick={detach} />
             ) : null}
             {compact ? null : (
             <>
             <IconButton
                 label="Toggle visibility"
-                icon={visible ? "eye" : "eye-closed"}
+                icon={visible ? Eye20Regular : EyeOff20Regular}
                 active={visible}
                 onClick={() => {
                     const next = visible ? "transparent" : cssColor(normalizedHex);
@@ -428,7 +440,7 @@ export function ColorField({
             />
             <IconButton
                 label="Remove"
-                icon={"minus-circle"}
+                icon={Subtract20Regular}
                 onClick={() => {
                     setVisible(false);
                     onPreview({ [property]: mapValue("transparent") });
@@ -516,7 +528,7 @@ function ImageFillField({
                 </Button>
                 <IconButton
                     label="Clear image"
-                    icon={"minus-circle"}
+                    icon={Subtract20Regular}
                     onClick={() =>
                         write({
                             "background-image": "none",
@@ -664,7 +676,7 @@ function GradientEditor({
                 />
                 <IconButton
                     label="Add stop"
-                    icon={"add-circle"}
+                    icon={Add20Regular}
                     onClick={() => {
                         const at = 50;
                         const stops = [...parsed.stops, { color: active.color, at }].sort((a, b) => a.at - b.at);
@@ -780,9 +792,9 @@ export function FillControls({
                     setImageIntent(true);
                 }}
                 items={[
-                    { value: "solid", icon: "stop", title: "Solid fill" },
-                    { value: "gradient", icon: "sun", title: "Gradient fill" },
-                    { value: "image", icon: "gallery", title: "Image fill" },
+                    { value: "solid", icon: Stop20Filled, title: "Solid fill" },
+                    { value: "gradient", icon: WeatherSunny20Regular, title: "Gradient fill" },
+                    { value: "image", icon: Camera20Filled, title: "Image fill" },
                 ]}
             />
             {mode === "image" ? (

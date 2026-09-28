@@ -42,14 +42,7 @@ export function Avatar({
     size?: number;
     className?: string;
 }) {
-    if (!person?.login) {
-        return (
-            <span
-                className={cn("shrink-0 rounded-full bg-panel-hover", className)}
-                style={{ width: size, height: size }}
-            />
-        );
-    }
+    if (!person?.login) return null;
     const src =
         person.avatar_url || `https://github.com/${person.login}.png?size=${size * 2}`;
     return (

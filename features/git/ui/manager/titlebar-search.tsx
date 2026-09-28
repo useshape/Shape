@@ -1,7 +1,11 @@
 "use client";
 
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+
+
 import { useEffect, useRef, useState } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { SearchInput } from "@/components/ui/search";
 import { useFilter } from "./filter-context";
 import { titlebarIconButtonClass } from "@/features/agent/workbench/titlebar/ui/layout-controls";
@@ -47,7 +51,7 @@ export function TitlebarSearch() {
                 aria-label={placeholder}
                 onClick={() => setExpanded(true)}
             >
-                <Icon icon={"magnifier"} size={ICON_SIZE_SM} className="text-input-placeholder" />
+                <Icon icon={Search20Regular} className="text-input-placeholder" />
             </button>
         );
     }

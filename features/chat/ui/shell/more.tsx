@@ -1,6 +1,11 @@
 "use client";
 
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+
+
 import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -35,7 +40,7 @@ export function ChatMoreMenu() {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-text-muted hover:text-text-primary">
-                    <Icon icon={"menu-dots"} />
+                    <Icon icon={MoreHorizontal20Regular} />
                 </Button>
             </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -52,7 +57,7 @@ export function ChatMoreMenu() {
                         );
                     }}
                 >
-                    <Icon icon={"magnifier"} className="text-text-secondary" />
+                    <Icon icon={Search20Regular} className="text-text-secondary" />
                     Search history…
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

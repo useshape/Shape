@@ -1,7 +1,17 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { ArrowRight20Regular } from "@fluentui/react-icons/headless/svg/arrow-right";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { ArrowUndo20Regular } from "@fluentui/react-icons/headless/svg/arrow-undo";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+
+
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { previewUrlsEqual } from "../store";
@@ -140,7 +150,7 @@ export function DesignToolbar({
                                             onCloseTab(tab.id);
                                         }}
                                     >
-                                        <Icon icon={"close"} size={12} />
+                                        <Icon icon={Dismiss20Regular} />
                                     </button>
                                 ) : null}
                             </div>
@@ -156,7 +166,7 @@ export function DesignToolbar({
                             data-no-drag
                             onClick={onNewTab}
                         >
-                            <Icon icon={"add-circle"} size={ICON_SIZE_SM} />
+                            <Icon icon={Add20Regular} />
                         </Button>
                     </Tooltip>
                 </div>
@@ -170,7 +180,7 @@ export function DesignToolbar({
                         disabled={!canBack}
                         onClick={onBack}
                     >
-                        <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowLeft20Regular} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Forward">
@@ -181,12 +191,12 @@ export function DesignToolbar({
                         disabled={!canForward}
                         onClick={onForward}
                     >
-                        <Icon icon={"arrow-right"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowRight20Regular} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Reload">
                     <Button variant="ghost" size="icon" aria-label="Reload" onClick={onReload}>
-                        <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowSync20Regular} />
                     </Button>
                 </Tooltip>
                 <form
@@ -208,7 +218,7 @@ export function DesignToolbar({
                 </form>
                 <Tooltip content="Undo">
                     <Button variant="ghost" size="icon" aria-label="Undo" onClick={onUndo}>
-                        <Icon icon={"undo-left"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowUndo20Regular} />
                     </Button>
                 </Tooltip>
                 <Button
@@ -217,7 +227,7 @@ export function DesignToolbar({
                     className={cn("gap-1.5", designOn && "bg-panel-active")}
                     onClick={() => onModeChange(designOn ? "normal" : "select")}
                 >
-                    <Icon icon={"pen"} size={ICON_SIZE_SM} />
+                    <Icon icon={Edit20Regular} />
                     Design Mode
                 </Button>
             </div>

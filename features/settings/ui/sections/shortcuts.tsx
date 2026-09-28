@@ -1,7 +1,9 @@
 "use client";
 
+import { FluentIcon, settingsIcons } from "../fluent-icons";
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
 import { notify } from "@/features/notifications";
@@ -299,7 +301,7 @@ export function KeyboardShortcutsView() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button type="button" variant="outline" size="md" className="gap-1.5 bg-panel-hover">
-                                    <Icon icon={"download-minimalistic"} />
+                                    <FluentIcon icon={settingsIcons.download} />
                                     Import
                                 </Button>
                             </DropdownMenuTrigger>
@@ -322,7 +324,7 @@ export function KeyboardShortcutsView() {
                             className="gap-1.5 bg-panel-hover"
                             onClick={() => void onExportJson()}
                         >
-                            <Icon icon={"upload-minimalistic"} />
+                            <FluentIcon icon={settingsIcons.upload} />
                             Export
                         </Button>
                         <Button
@@ -366,7 +368,7 @@ export function KeyboardShortcutsView() {
                                                 className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                                 onClick={() => setRecording(b)}
                                             >
-                                                <Icon icon={"pen"} />
+                                                <FluentIcon icon={settingsIcons.edit} />
                                             </button>
                                             <button
                                                 type="button"
@@ -377,7 +379,7 @@ export function KeyboardShortcutsView() {
                                                     reload();
                                                 }}
                                             >
-                                                <Icon icon={"trash-bin-trash"} />
+                                                <FluentIcon icon={settingsIcons.delete} />
                                             </button>
                                         </div>
                                     </div>

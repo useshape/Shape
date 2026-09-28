@@ -1,5 +1,7 @@
 "use client";
 
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import { commands } from "@/lib/backend";
@@ -190,11 +192,11 @@ export function ProjectQuickPick({
                 id: r.path,
                 label: getRepoName(r.path),
                 description: r.path,
-                icon: "folder" as const,
+                icon: Folder20Filled,
                 hint: i < 9 ? `Ctrl+${i + 1}` : undefined,
             }));
         const extras: QuickPickItem[] = [
-            { id: "__browse__", label: "Open folder", description: "Browse a folder on disk", icon: "folder" },
+            { id: "__browse__", label: "Open folder", description: "Browse a folder on disk", icon: Folder20Filled },
             ...SCAFFOLD_ITEMS,
             {
                 id: "git",
@@ -231,7 +233,7 @@ export function ProjectQuickPick({
     }, [query, recents]);
 
     const sourceItems: QuickPickItem[] = [
-        { id: "local", label: "Open folder", description: "Browse a folder on disk", icon: "folder" },
+        { id: "local", label: "Open folder", description: "Browse a folder on disk", icon: Folder20Filled },
         ...SCAFFOLD_ITEMS,
         {
             id: "git",

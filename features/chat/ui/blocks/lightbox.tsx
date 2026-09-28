@@ -1,9 +1,13 @@
 "use client";
 
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+
+
 import React from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+
 import { SHAPE_OVERLAY_CLASS } from "@/lib/ui/modal-overlay";
 import type { DesignPreviewItem } from "./gallery";
 
@@ -92,7 +96,7 @@ export function MediaLightbox({
                     onClick={onClose}
                     aria-label="Close"
                 >
-                    <Icon icon={"close"} />
+                    <Icon icon={Dismiss20Regular} />
                 </button>
 
                 {showHtml ? (

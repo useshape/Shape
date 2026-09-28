@@ -1,5 +1,7 @@
-import type { SolarIconName } from "@/components/ui/icon";
 "use client";
+
+import type { IconGlyph } from "@/components/ui/icon";
+
 
 import { useMemo, useState } from "react";
 import { Button, type ButtonCategory, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
@@ -59,7 +61,7 @@ export function Combobox({
     multiple?: boolean;
     toggleText?: string;
     headerText?: string;
-    icon?: SolarIconName;
+    icon?: IconGlyph;
     noCaret?: boolean;
     category?: ButtonCategory;
     variant?: ButtonVariant;

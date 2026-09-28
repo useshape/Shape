@@ -1,6 +1,10 @@
 "use client";
 
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
+
+
+import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -78,8 +82,7 @@ export function GenerateStarButton({
                 )}
             >
                 <Icon
-                    icon={"magic-stick"}
-                    size={ICON_SIZE_MD}
+                    icon={Sparkle20Filled}
                     className={cn(loading && "animate-pulse")}
                 />
             </button>

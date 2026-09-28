@@ -22,7 +22,7 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
         "dragDropEnabled": false
       },
       {
@@ -31,9 +31,10 @@
         "url": "/onboarding/",
         "width": 900,
         "height": 600,
+        "maximizable": false,
         "resizable": false,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
         "center": true,
         "visible": false
       }

@@ -1,7 +1,11 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+
+
 import React from "react";
 import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { GeneratingIndicator } from "./generating";
 
@@ -17,7 +21,7 @@ export function ThinkingBlock({ content, isActive }: { content: string; isActive
                 className="flex items-center gap-2 py-1.5 text-sm text-text-muted hover:text-text-primary transition-colors group w-full text-left"
             >
                 <Icon
-                    icon={"alt-arrow-down"}
+                    icon={ChevronDown20Regular}
                     className={cn(
                         "text-text-muted transition-transform duration-[var(--transition-fast)]",
                         !isOpen && "-rotate-90"

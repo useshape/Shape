@@ -1,8 +1,37 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ArrowUp20Regular } from "@fluentui/react-icons/headless/svg/arrow-up";
+import { Calendar20Regular } from "@fluentui/react-icons/headless/svg/calendar";
+import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { CodeTextEdit20Filled, CodeTextEdit20Regular } from "@fluentui/react-icons/headless/svg/code-text-edit";
+import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
+import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
+import { ChatMultiple20Filled, ChatMultiple20Regular } from "@fluentui/react-icons/headless/svg/chat-multiple";
+import { Incognito24Filled, Incognito24Regular } from "@fluentui/react-icons/headless/svg/incognito";
+import { CalendarMultiple24Filled, CalendarMultiple24Regular } from "@fluentui/react-icons/headless/svg/calendar-multiple";
+import { ColorLine24Filled, ColorLine24Regular } from "@fluentui/react-icons/headless/svg/color-line";
+import { BugProhibited20Filled, BugProhibited20Regular } from "@fluentui/react-icons/headless/svg/bug-prohibited";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
+import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
+import { EyeOff20Regular } from "@fluentui/react-icons/headless/svg/eye-off";
+import { Folder20Regular } from "@fluentui/react-icons/headless/svg/folder";
+import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
+import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
+import { Mic20Regular } from "@fluentui/react-icons/headless/svg/mic";
+
+
+
+
 import React from "react";
 import { Arc } from "loading-dev";
 import { Icon } from "@/components/ui/icon";
+
+
+
 import { cn } from "@/lib/utils";
 import {
     DropdownMenu,
@@ -14,7 +43,6 @@ import {
     DropdownMenuSubTrigger,
     DropdownMenuSubContent,
 } from "@/components/ui/dropdown";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
@@ -36,7 +64,7 @@ import {
 import { QueuedMessagesPanel, type QueuedMessage } from "./queue";
 import { ComposerAttachments, isImageFile, isAudioFile, type ComposerAttachment } from "./attachments";
 import { MediaLightbox } from "../blocks/lightbox";
-import { mentionRanges, shortenMentionTokensInText } from "@/lib/chat/mentions";
+import { formatMentionToken, mentionRanges, shortenMentionTokensInText } from "@/lib/chat/mentions";
 import {
     SHAPE_CLIP_CODE,
     codeAttachmentFile,
@@ -48,9 +76,10 @@ import {
 import type { BrowserPickedElement } from "@/lib/backend/types";
 import { registerElementMention } from "@/lib/chat/element-mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
-import { resolveChatUsageDisplay } from "@/lib/chat/usage-display";
-import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
-import { UsageRing } from "./usage";
+import { isIncognitoChat, setIncognitoChat, subscribeIncognito } from "@/lib/chat/incognito";
+import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
+import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins/api";
+import { PluginLogo } from "@/components/ui/plugin-logo";
 import { getVisibleModels, isApiModel, resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
 import {
     getCatalogDefaultEnabledIds,
@@ -215,7 +244,7 @@ const ModelItem = ({
                     {isApiModel(model) ? (
                         <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
                     ) : null}
-                    {isSelected && <Icon icon={"check"} className="text-text-primary font-bold" />}
+                    {isSelected && <Icon icon={Checkmark20Regular} className="text-text-primary font-bold" />}
                 </div>
             </DropdownMenuItem>
         </Tooltip>
@@ -282,15 +311,15 @@ function ComposerContextHighlight({ text }: { text: string }) {
 }
 
 const CHAT_MODES = [
-    { id: "Code", icon: "command", color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
-    { id: "Ask", icon: "chat-round-line", color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
-    { id: "Plan", icon: "calendar", color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
-    { id: "Visual", icon: "palette", color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
-    { id: "Review", icon: "eye", color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
+    { id: "Code", icon: CodeTextEdit20Filled, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
+    { id: "Ask", icon: ChatMultiple20Filled, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
+    { id: "Plan", icon: CalendarMultiple24Filled, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
+    { id: "Visual", icon: ColorLine24Filled, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
+    { id: "Review", icon: BugProhibited20Filled, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
 ] as const;
 
 const COMPOSER_HINTS = [
-    "@ files, / for workflows",
+    "Ask Shape a task, @ for context",
     "Visual: ask to see a few button styles first",
     "Drop a screenshot to redesign",
     "Ask with @codebase before you build",
@@ -440,7 +469,7 @@ function RotatingComposerHint({ paused }: { paused: boolean }) {
 
     return (
         <div className="t-composer-hint" aria-hidden>
-            <span className="t-composer-hint__text text-[14.5px]!" data-phase={phase}>
+            <span className="text-sm text-text-muted" data-phase={phase}>
                 {COMPOSER_HINTS[index]}
             </span>
         </div>
@@ -464,19 +493,12 @@ function ModeMenu({
                     variant="ghost"
                     size="xs"
                     disabled={disabled}
-                    className={cn(
-                        "font-medium text-[color:var(--mode-fg)] bg-[var(--mode-bg)] hover:bg-[var(--mode-bg)] hover:text-[color:var(--mode-fg)] hover:brightness-110",
-                        "transition-[color,background-color,filter] duration-200 ease-[var(--ease-out)]",
-                        "h-8 px-2",
-                    )}
-                    style={{
-                        ["--mode-fg" as string]: selected.color,
-                        ["--mode-bg" as string]: selected.bg,
-                    }}
+                    className="h-8 bg-transparent px-2 font-medium hover:bg-transparent"
+                    style={{ color: selected.color }}
                     aria-label={selected.id}
                 >
-                    <div className="flex items-center gap-1.5 text-sm ">
-                        <Icon icon={selected.icon} style={{ color: selected.color }} />
+                    <div className="flex items-center gap-1.5 text-sm">
+                        <Icon icon={selected.icon} />
                         <SwapText value={selected.id} />
                     </div>
                 </Button>
@@ -545,6 +567,25 @@ function WaveIcon() {
     );
 }
 
+const DICTATION_RATE = 16000;
+
+function resampleLinear(samples: Float32Array, fromRate: number, toRate: number): Float32Array {
+    if (fromRate === toRate || samples.length === 0) return samples;
+    const outLen = Math.max(1, Math.round((samples.length * toRate) / fromRate));
+    const out = new Float32Array(outLen);
+    const step = fromRate / toRate;
+    for (let i = 0; i < outLen; i++) {
+        const pos = i * step;
+        const left = Math.floor(pos);
+        const right = Math.min(left + 1, samples.length - 1);
+        const frac = pos - left;
+        const a = samples[left] ?? 0;
+        const b = samples[right] ?? 0;
+        out[i] = a + (b - a) * frac;
+    }
+    return out;
+}
+
 function wavPcm(samples: Float32Array, rate: number): number[] {
     const dataSize = samples.length * 2;
     const buffer = new ArrayBuffer(44 + dataSize);
@@ -602,7 +643,8 @@ function startMicCapture(deviceId: string, onClip: (wav: number[]) => void): () 
         chunks = [];
         voiced = 0;
         quiet = 0;
-        pending.push(Promise.resolve(onClip(wavPcm(merged, rate))));
+        const speech = resampleLinear(merged, rate, DICTATION_RATE);
+        pending.push(Promise.resolve(onClip(wavPcm(speech, DICTATION_RATE))));
     };
 
     void navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints(deviceId) }).then((next) => {
@@ -793,7 +835,7 @@ function VoiceInputButton({
                 listening && "text-accent hover:text-accent",
             )}
         >
-            {listening ? <WaveIcon /> : <Icon icon={"microphone"} />}
+            {listening ? <WaveIcon /> : <Icon icon={Mic20Regular} />}
         </Button>
     );
 }
@@ -835,7 +877,7 @@ export function ChatInput({
         openaiKey: Boolean(settings.ai.openaiApiKey.trim()),
         openRouterKey: Boolean(settings.ai.openRouterApiKey.trim()),
         signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
-    }).filter((m) => m.id === "auto" || isCatalogModelAllowed(m.id));
+    });
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const mentionOverlayRef = React.useRef<HTMLDivElement>(null);
     const composerBoxRef = React.useRef<HTMLDivElement>(null);
@@ -914,6 +956,18 @@ export function ChatInput({
         requestAnimationFrame(() => textarea.focus());
     }, [inputValue, onInputChange]);
 
+    const appendToken = React.useCallback((token: string) => {
+        const textarea = textareaRef.current;
+        const val = inputValue;
+        const caret = textarea?.selectionStart ?? val.length;
+        const before = val.slice(0, caret);
+        const after = val.slice(caret);
+        const pad = before.length > 0 && !/\s$/.test(before) ? " " : "";
+        const next = `${before}${pad}${token} ${after.replace(/^\s/, "")}`;
+        onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
+        requestAnimationFrame(() => textarea?.focus());
+    }, [inputValue, onInputChange]);
+
     const insertSlash = React.useCallback((token: string) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
@@ -941,8 +995,8 @@ export function ChatInput({
     React.useEffect(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-        textarea.style.height = "auto";
-        textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+        textarea.style.height = "24px";
+        textarea.style.overflowY = "hidden";
     }, [inputValue]);
 
     React.useEffect(() => {
@@ -1134,16 +1188,11 @@ export function ChatInput({
     const needsSignIn =
         !shapeAuth.isLoading && !shapeAuth.loggedIn && !hasByokApiKeys(settings.ai);
 
-    const lastTurnUsage = React.useSyncExternalStore(
-        subscribeLastTurnUsage,
-        getLastTurnUsage,
-        getLastTurnUsage,
-    );
-
-    const usageDisplay = React.useMemo(
-        () => resolveChatUsageDisplay(selectedModel, shapeAuth, lastTurnUsage),
-        [selectedModel, shapeAuth, lastTurnUsage],
-    );
+    const [incognito, setIncognito] = React.useState(() => isIncognitoChat());
+    React.useEffect(() => subscribeIncognito(() => setIncognito(isIncognitoChat())), []);
+    const [plusPlugins, setPlusPlugins] = React.useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
+    const [skills, setSkills] = React.useState<Skill[]>(() => listSkills());
+    React.useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
 
     React.useEffect(() => {
         if (selectedModel === "auto") return;
@@ -1188,192 +1237,97 @@ export function ChatInput({
         };
     }, []);
 
-    const inputPanel = (
+    const hasContextStrip =
+        (pendingEdits?.length ?? 0) > 0 ||
+        queuedMessages.length > 0 ||
+        taskItems.length > 0;
+
+    const sendDisabled =
+        needsSignIn ||
+        uploadedFiles.some((a) => a.status === "processing") ||
+        (!isLoading && !inputValue.trim() && uploadedFiles.length === 0);
+
+    const sendActive =
+        (inputValue.trim() || isLoading || uploadedFiles.length > 0) &&
+        !uploadedFiles.some((a) => a.status === "processing");
+
+    return (
+        <div
+            className={cn(
+                "relative shrink-0 overflow-visible",
+                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-0",
+            )}
+        >
+            <div className="relative z-10 flex w-full flex-col gap-1.5">
+                {hasContextStrip ? (
+                    <div className="flex min-w-0 items-center gap-1 px-1">
+                        <PendingEditsPanel
+                            edits={pendingEdits}
+                            onAcceptAll={onAcceptAllEdits ?? (() => {})}
+                            onRejectAll={onRejectAllEdits ?? (() => {})}
+                            onAccept={onAcceptEdit}
+                            onReject={onRejectEdit}
+                        />
+                        {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
+                            <QueuedMessagesPanel
+                                items={queuedMessages}
+                                onEdit={onEditQueuedMessage}
+                                onRemove={onRemoveQueuedMessage}
+                            />
+                        ) : null}
+                        {taskItems.length > 0 ? <ComposerTasksStrip items={taskItems} /> : null}
+                    </div>
+                ) : null}
+
+                {incognito ? (
+                    <div className="flex items-center justify-center gap-2 px-2 text-sm" style={{ color: "var(--incognito-muted)" }}>
+                        <Icon icon={Incognito24Filled} className="mt-0.5 shrink-0" />
+                        <span>This chat won&apos;t appear in your history and will not be used to train models.</span>
+                    </div>
+                ) : null}
+
                 <div
+                    ref={composerBoxRef}
                     className={cn(
-                        "relative flex w-full flex-col border border-border-subtle bg-surface-4 transition-colors focus-within:border-border squircle-3xl",
-                        dragOver && "border-border-subtle bg-surface-3/80",
+                        "relative flex w-full flex-col border transition-colors rounded-full p-1.5",
+                        incognito
+                            ? "border-border bg-incognito"
+                            : "border-border-subtle/20 bg-surface-4",
+                        uploadedFiles.length > 0 && "rounded-[22px]",
+                        dragOver && !incognito && "bg-surface-3/80",
                         needsSignIn && "cursor-default",
                     )}
-                    ref={composerBoxRef}
                     onDrop={needsSignIn ? undefined : handleDrop}
                     onDragEnter={needsSignIn ? undefined : handleDragEnter}
                     onDragLeave={needsSignIn ? undefined : handleDragLeave}
                     onDragOver={needsSignIn ? undefined : handleDragOver}
                 >
-                {dragOver ? (
-                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-border-subtle bg-surface-3/95">
-                        <p className="text-sm font-medium text-text-primary">Drop files to attach</p>
-                    </div>
-                ) : null}
-                <MentionPicker
-                    open={mentionOpen || slashOpen}
-                    query={slashOpen ? slashQuery : mentionQuery}
-                    mode={slashOpen ? "slash" : "mention"}
-                    workflows={settings.ai.workflows ?? []}
-                    onPick={slashOpen ? insertSlash : insertMention}
-                    onClose={() => {
-                        setMentionOpen(false);
-                        setSlashOpen(false);
-                    }}
-                    anchorRef={textareaRef}
-                    boxRef={composerBoxRef}
-                    caretIndex={mentionCaret}
-                />
-                <div className="flex min-h-0 flex-col overflow-hidden rounded-[inherit]">
-                <ComposerAttachments
-                    attachments={uploadedFiles}
-                    onRemove={(id) =>
-                        setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
-                    }
-                />
-
-                <div className="relative px-4 py-3">
-                    {!needsSignIn && !inputValue ? (
-                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0">
-                            <RotatingComposerHint paused={false} />
-                        </div>
-                    ) : needsSignIn && !inputValue ? (
-                        <div className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 text-sm font-medium leading-relaxed text-text-muted">
-                            Sign in to use the chat
+                    {dragOver ? (
+                        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-border-subtle bg-surface-3/95">
+                            <p className="text-sm font-medium text-text-primary">Drop files to attach</p>
                         </div>
                     ) : null}
-                    <div
-                        ref={mentionOverlayRef}
-                        aria-hidden
-                        className="pointer-events-none absolute inset-x-4 inset-y-3 z-0 overflow-y-auto whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-text-primary no-scrollbar"
-                    >
-                        {(() => {
-                            const mentionRs = mentionRanges(inputValue);
-                            const slashRs = slashCommandRanges(inputValue, settings.ai.workflows ?? []);
-                            const ranges = [
-                                ...mentionRs.map((r) => ({ kind: "mention" as const, ...r })),
-                                ...slashRs.map((r) => ({ kind: "slash" as const, ...r })),
-                            ].sort((a, b) => a.start - b.start);
-                            const merged: typeof ranges = [];
-                            for (const r of ranges) {
-                                const prev = merged[merged.length - 1];
-                                if (prev && r.start < prev.end) continue;
-                                merged.push(r);
-                            }
-                            if (merged.length === 0) {
-                                return inputValue.endsWith("\n") ? `${inputValue}\n` : inputValue || "\u00a0";
-                            }
-                            const nodes: React.ReactNode[] = [];
-                            let cursor = 0;
-                            merged.forEach((range, i) => {
-                                if (range.start > cursor) {
-                                    nodes.push(inputValue.slice(cursor, range.start));
-                                }
-                                nodes.push(
-                                    <ComposerContextHighlight
-                                        key={`${range.kind}-${i}`}
-                                        text={inputValue.slice(range.start, range.end)}
-                                    />,
-                                );
-                                cursor = range.end;
-                            });
-                            if (cursor < inputValue.length) {
-                                nodes.push(inputValue.slice(cursor));
-                            }
-                            if (inputValue.endsWith("\n")) nodes.push("\n");
-                            return nodes;
-                        })()}
-                    </div>
-                    <ContextMenu>
-                        <ContextMenuTrigger asChild>
-                            <textarea
-                                ref={textareaRef}
-                                value={inputValue}
-                                onChange={handleInputChangeWithMentions}
-                                onKeyDown={onComposerKeyDown}
-                                onPaste={handlePaste}
-                                onSelect={(e) => {
-                                    if (!mentionOpen && !slashOpen) return;
-                                    const el = e.currentTarget;
-                                    const caret = el.selectionStart ?? 0;
-                                    const before = el.value.slice(0, caret);
-                                    const atMatch = before.match(/@([\w./:-]*)$/);
-                                    const slashMatch = before.match(/(?:^|\s)(\/[^\s]*)$/);
-                                    if (atMatch) {
-                                        setMentionCaret(caret - atMatch[0].length);
-                                        setMentionQuery(atMatch[1] ?? "");
-                                        setMentionOpen(true);
-                                        setSlashOpen(false);
-                                    } else if (slashMatch) {
-                                        setSlashQuery((slashMatch[1] ?? "/").replace(/^\//, ""));
-                                        setSlashOpen(true);
-                                        setMentionOpen(false);
-                                    } else {
-                                        setMentionOpen(false);
-                                        setSlashOpen(false);
-                                    }
-                                }}
-                                onScroll={(e) => {
-                                    const overlay = mentionOverlayRef.current;
-                                    if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
-                                }}
-                                placeholder=""
-                                aria-label={
-                                    needsSignIn
-                                        ? "Sign in to use the chat"
-                                        : COMPOSER_HINTS[0]
-                                }
-                                rows={1}
-                                className="relative z-[1] min-h-7 w-full resize-none overflow-y-auto border-none bg-transparent text-sm font-medium leading-relaxed text-transparent outline-none custom-scrollbar placeholder:text-text-muted selection:bg-accent/30 whitespace-pre-wrap break-words"
-                                style={{ caretColor: "var(--text-primary)" }}
-                            />
-                        </ContextMenuTrigger>
-                        <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
-                            <ContextMenuItem
-                                onClick={() => document.execCommand("cut")}
-                            >
-                                Cut
-                                <ContextMenuShortcut>Ctrl+X</ContextMenuShortcut>
-                            </ContextMenuItem>
-                            <ContextMenuItem onClick={() => document.execCommand("copy")}>
-                                Copy
-                                <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                                onClick={() => {
-                                    void navigator.clipboard.readText().then((text) => {
-                                        const el = textareaRef.current;
-                                        if (!el || needsSignIn) return;
-                                        const start = el.selectionStart;
-                                        const end = el.selectionEnd;
-                                        const next =
-                                            inputValue.slice(0, start) + text + inputValue.slice(end);
-                                        el.focus();
-                                        document.execCommand("insertText", false, text);
-                                        if (el.value === inputValue) {
-                                            el.value = next;
-                                            el.dispatchEvent(new Event("input", { bubbles: true }));
-                                        }
-                                    });
-                                }}
-                            >
-                                Paste
-                                <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
-                            </ContextMenuItem>
-                            <ContextMenuSeparator />
-                            <ContextMenuItem
-                                onClick={() => {
-                                    const el = textareaRef.current;
-                                    if (!el) return;
-                                    el.focus();
-                                    el.select();
-                                }}
-                            >
-                                Select All
-                                <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
-                            </ContextMenuItem>
-                        </ContextMenuContent>
-                    </ContextMenu>
-                </div>
-
-                <div className="flex items-center justify-between px-2 pb-2 pt-0">
-                    <div className="flex min-w-0 items-center gap-0.5">
+                    <MentionPicker
+                        open={mentionOpen || slashOpen}
+                        query={slashOpen ? slashQuery : mentionQuery}
+                        mode={slashOpen ? "slash" : "mention"}
+                        workflows={settings.ai.workflows ?? []}
+                        onPick={slashOpen ? insertSlash : insertMention}
+                        onClose={() => {
+                            setMentionOpen(false);
+                            setSlashOpen(false);
+                        }}
+                        anchorRef={textareaRef}
+                        boxRef={composerBoxRef}
+                        caretIndex={mentionCaret}
+                    />
+                    <ComposerAttachments
+                        attachments={uploadedFiles}
+                        onRemove={(id) =>
+                            setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
+                        }
+                    />
+                    <div className="relative flex h-11 min-h-11 items-center gap-1 pl-1.5 pr-1.5">
                         <input
                             type="file"
                             id="chat-media-upload"
@@ -1382,18 +1336,346 @@ export function ChatInput({
                             accept={acceptString}
                             onChange={handleFilteredFileUpload}
                         />
-                        <Button
-                            variant="ghost"
-                            onClick={() => document.getElementById("chat-media-upload")?.click()}
-                            className="size-8 shrink-0 p-0 text-text-muted hover:text-text-primary"
-                            aria-label="Attach file"
+                        <input
+                            type="file"
+                            id="chat-folder-upload"
+                            className="hidden"
+                            multiple
+                            {...{ webkitdirectory: "", directory: "" }}
+                            onChange={handleFilteredFileUpload}
+                        />
+                        <DropdownMenu
+                            onOpenChange={(open) => {
+                                if (!open) return;
+                                const cached = peekPluginsCache()?.plugins;
+                                if (cached) setPlusPlugins(cached);
+                                void fetchPlugins()
+                                    .then((data) => setPlusPlugins(data.plugins))
+                                    .catch(() => {
+                                        if (!cached) setPlusPlugins([]);
+                                    });
+                            }}
                         >
-                            <Icon icon={"add-circle"} />
-                        </Button>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    className={cn(
+                                        "size-9 shrink-0 p-0 mr-2",
+                                        incognito ? "text-[var(--incognito-muted)]" : "text-text-muted hover:text-text-primary",
+                                        "rounded-full bg-panel-hover hover:bg-panel-active",
+                                    )}
+                                    aria-label="Add"
+                                    disabled={needsSignIn}
+                                >
+                                    <Icon icon={Add20Regular} />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-56">
+                                <DropdownMenuItem
+                                    onClick={() => document.getElementById("chat-media-upload")?.click()}
+                                >
+                                    <Icon icon={Image20Regular} />
+                                    Upload photos & file
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => document.getElementById("chat-folder-upload")?.click()}
+                                >
+                                    <Icon icon={Folder20Regular} />
+                                    Attach folder
+                                </DropdownMenuItem>
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        <Icon icon={Grid20Regular} />
+                                        Plugins
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-56">
+                                        {plusPlugins.length === 0 ? (
+                                            <DropdownMenuItem disabled>No plugins</DropdownMenuItem>
+                                        ) : (
+                                            plusPlugins.map((plugin) => (
+                                                <DropdownMenuItem
+                                                    key={plugin.toolkit}
+                                                    onClick={() =>
+                                                        appendToken(
+                                                            formatMentionToken({
+                                                                kind: "plugin",
+                                                                id: plugin.toolkit,
+                                                                path: plugin.toolkit,
+                                                                label: plugin.name,
+                                                            }),
+                                                        )
+                                                    }
+                                                >
+                                                    <PluginLogo toolkit={plugin.toolkit} name={plugin.name} size={14} />
+                                                    <span className="min-w-0 flex-1 truncate">{plugin.name}</span>
+                                                </DropdownMenuItem>
+                                            ))
+                                        )}
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        <Icon icon={DocumentText20Regular} />
+                                        Skills
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-56">
+                                        {skills.length === 0 ? (
+                                            <DropdownMenuItem disabled>No skills yet</DropdownMenuItem>
+                                        ) : (
+                                            skills.map((skill) => (
+                                                <DropdownMenuItem
+                                                    key={skill.id}
+                                                    onClick={() =>
+                                                        appendToken(
+                                                            formatMentionToken({
+                                                                kind: "skill",
+                                                                id: skill.id,
+                                                                path: skill.id,
+                                                                label: skill.name,
+                                                            }),
+                                                        )
+                                                    }
+                                                >
+                                                    <Icon icon={DocumentText20Regular} />
+                                                    <span className="min-w-0 flex-1 truncate">{skill.name}</span>
+                                                </DropdownMenuItem>
+                                            ))
+                                        )}
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                                <DropdownMenuItem onClick={() => void setIncognitoChat(!incognito)}>
+                                    <Icon icon={EyeOff20Regular} />
+                                    Incognito
+                                    {incognito ? <Icon icon={Checkmark20Regular} className="ml-auto" /> : null}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <div className="relative h-6 min-w-0 flex-1">
+                        {!needsSignIn && !inputValue ? (
+                            <RotatingComposerHint paused={false} />
+                        ) : needsSignIn && !inputValue ? (
+                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center text-sm font-medium leading-6 text-text-muted">
+                                Sign in to use the chat
+                            </div>
+                        ) : null}
+                        <div
+                            ref={mentionOverlayRef}
+                            aria-hidden
+                            className={cn(
+                                "pointer-events-none absolute inset-0 z-0 flex items-center overflow-hidden whitespace-pre text-sm font-medium leading-6 no-scrollbar",
+                                incognito ? "text-[var(--incognito-fg)]" : "text-text-primary",
+                            )}
+                        >
+                            {(() => {
+                                const mentionRs = mentionRanges(inputValue);
+                                const slashRs = slashCommandRanges(inputValue, settings.ai.workflows ?? []);
+                                const ranges = [
+                                    ...mentionRs.map((r) => ({ kind: "mention" as const, ...r })),
+                                    ...slashRs.map((r) => ({ kind: "slash" as const, ...r })),
+                                ].sort((a, b) => a.start - b.start);
+                                const merged: typeof ranges = [];
+                                for (const r of ranges) {
+                                    const prev = merged[merged.length - 1];
+                                    if (prev && r.start < prev.end) continue;
+                                    merged.push(r);
+                                }
+                                if (merged.length === 0) {
+                                    return inputValue || "\u00a0";
+                                }
+                                const nodes: React.ReactNode[] = [];
+                                let cursor = 0;
+                                merged.forEach((range, i) => {
+                                    if (range.start > cursor) {
+                                        nodes.push(inputValue.slice(cursor, range.start));
+                                    }
+                                    nodes.push(
+                                        <ComposerContextHighlight
+                                            key={`${range.kind}-${i}`}
+                                            text={inputValue.slice(range.start, range.end)}
+                                        />,
+                                    );
+                                    cursor = range.end;
+                                });
+                                if (cursor < inputValue.length) {
+                                    nodes.push(inputValue.slice(cursor));
+                                }
+                                return nodes;
+                            })()}
+                        </div>
+                        <ContextMenu>
+                            <ContextMenuTrigger asChild>
+                                <textarea
+                                    ref={textareaRef}
+                                    value={inputValue}
+                                    onChange={handleInputChangeWithMentions}
+                                    onKeyDown={onComposerKeyDown}
+                                    onPaste={handlePaste}
+                                    onSelect={(e) => {
+                                        if (!mentionOpen && !slashOpen) return;
+                                        const el = e.currentTarget;
+                                        const caret = el.selectionStart ?? 0;
+                                        const before = el.value.slice(0, caret);
+                                        const atMatch = before.match(/@([\w./:-]*)$/);
+                                        const slashMatch = before.match(/(?:^|\s)(\/[^\s]*)$/);
+                                        if (atMatch) {
+                                            setMentionCaret(caret - atMatch[0].length);
+                                            setMentionQuery(atMatch[1] ?? "");
+                                            setMentionOpen(true);
+                                            setSlashOpen(false);
+                                        } else if (slashMatch) {
+                                            setSlashQuery((slashMatch[1] ?? "/").replace(/^\//, ""));
+                                            setSlashOpen(true);
+                                            setMentionOpen(false);
+                                        } else {
+                                            setMentionOpen(false);
+                                            setSlashOpen(false);
+                                        }
+                                    }}
+                                    onScroll={(e) => {
+                                        const overlay = mentionOverlayRef.current;
+                                        if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
+                                    }}
+                                    placeholder=""
+                                    aria-label={
+                                        needsSignIn
+                                            ? "Sign in to use the chat"
+                                            : COMPOSER_HINTS[0]
+                                    }
+                                    rows={1}
+                                    className="relative z-[1] h-6 min-h-6 w-full flex-1 resize-none overflow-hidden border-none bg-transparent text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-nowrap"
+                                    style={{ caretColor: incognito ? "var(--incognito-fg)" : "var(--text-primary)" }}
+                                />
+                            </ContextMenuTrigger>
+                            <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
+                                <ContextMenuItem onClick={() => document.execCommand("cut")}>
+                                    Cut
+                                    <ContextMenuShortcut>Ctrl+X</ContextMenuShortcut>
+                                </ContextMenuItem>
+                                <ContextMenuItem onClick={() => document.execCommand("copy")}>
+                                    Copy
+                                    <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    onClick={() => {
+                                        void navigator.clipboard.readText().then((text) => {
+                                            const el = textareaRef.current;
+                                            if (!el || needsSignIn) return;
+                                            const start = el.selectionStart;
+                                            const end = el.selectionEnd;
+                                            const next =
+                                                inputValue.slice(0, start) + text + inputValue.slice(end);
+                                            onInputChange({
+                                                target: { value: next },
+                                            } as React.ChangeEvent<HTMLTextAreaElement>);
+                                            requestAnimationFrame(() => {
+                                                el.focus();
+                                                const pos = start + text.length;
+                                                el.setSelectionRange(pos, pos);
+                                            });
+                                        });
+                                    }}
+                                >
+                                    Paste
+                                    <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                    onClick={() => {
+                                        const el = textareaRef.current;
+                                        if (!el) return;
+                                        el.focus();
+                                        el.select();
+                                    }}
+                                >
+                                    Select All
+                                    <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
+                                </ContextMenuItem>
+                            </ContextMenuContent>
+                        </ContextMenu>
+                        </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    className={cn(
+                                        "h-8 shrink-0 px-2 font-medium hover:bg-transparent",
+                                        incognito ? "text-[var(--incognito-fg)]" : "text-text-primary",
+                                    )}
+                                    aria-label="Fast"
+                                    disabled={needsSignIn}
+                                >
+                                    <span className="text-sm">{fastMode ? "Fast" : "Standard"}</span>
+                                    <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => setFastMode(true)}>
+                                    <span className="flex-1 text-sm">Fast</span>
+                                    {fastMode ? <Icon icon={Checkmark20Regular} /> : null}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFastMode(false)}>
+                                    <span className="flex-1 text-sm">Standard</span>
+                                    {!fastMode ? <Icon icon={Checkmark20Regular} /> : null}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <VoiceInputButton
+                            disabled={needsSignIn}
+                            value={inputValue}
+                            onChange={(next) =>
+                                onInputChange({
+                                    target: { value: next },
+                                } as React.ChangeEvent<HTMLTextAreaElement>)
+                            }
+                        />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (isLoading && inputValue.trim()) {
+                                    onSendMessage();
+                                } else if (isLoading) {
+                                    onStopMessage();
+                                } else {
+                                    onSendMessage();
+                                }
+                            }}
+                            disabled={sendDisabled}
+                            className={cn(
+                                "flex size-8 shrink-0 items-center justify-center rounded-full text-white transition-all disabled:opacity-40",
+                                !incognito && (sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted"),
+                            )}
+                            style={
+                                incognito
+                                    ? { background: sendActive ? "var(--incognito-send)" : "color-mix(in srgb, var(--incognito-send) 35%, transparent)" }
+                                    : undefined
+                            }
+                            aria-label={
+                                isLoading && inputValue.trim()
+                                    ? "Queue message"
+                                    : isLoading
+                                      ? "Stop"
+                                      : "Send"
+                            }
+                        >
+                            {isLoading && !inputValue.trim() ? (
+                                <span role="status" aria-label="Generating" className="text-white">
+                                    <Arc size={16} />
+                                </span>
+                            ) : (
+                                <Icon icon={ArrowUp20Regular} />
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 px-1">
+                    <div className="flex min-w-0 items-center gap-0.5">
                         <ModeMenu
                             selectedMode={selectedMode}
                             setSelectedMode={setSelectedMode}
+                            disabled={needsSignIn}
                         />
+                        <WorkspaceBranchSwitch />
                     </div>
 
                     <div className="flex shrink-0 items-center gap-0.5">
@@ -1406,7 +1688,7 @@ export function ChatInput({
                                 <Button
                                     variant="ghost"
                                     size="xs"
-                                    className="h-8 max-w-[260px] px-2 font-medium text-text-foreground hover:text-text-primary"
+                                    className="h-8 max-w-[260px] px-2 font-medium text-text-primary hover:text-text-primary"
                                     aria-label={modelTriggerLabel}
                                 >
                                     <div className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -1416,21 +1698,11 @@ export function ChatInput({
                                             <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
                                         ) : null}
                                         <SwapText value={effortLabel(reasoningEffort)} />
-                                        <SwapText value={fastMode ? "Fast" : ""} />
-                                        <Icon icon={"alt-arrow-down"} className="shrink-0 opacity-60" />
+                                        <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-[200px]">
-                                <div className="flex h-9 items-center justify-between gap-3 rounded-lg px-2.5">
-                                    <span className="text-sm text-text-primary">Fast</span>
-                                    <Switch
-                                        checked={fastMode}
-                                        onCheckedChange={(on) => setFastMode(on)}
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                </div>
-
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
                                         <span className="text-sm text-text-primary">Effort</span>
@@ -1450,7 +1722,7 @@ export function ChatInput({
                                             >
                                                 <span className="flex-1 text-sm">{opt.label}</span>
                                                 {reasoningEffort === opt.id ? (
-                                                    <Icon icon={"check"} />
+                                                    <Icon icon={Checkmark20Regular} />
                                                 ) : null}
                                             </DropdownMenuItem>
                                         ))}
@@ -1458,182 +1730,72 @@ export function ChatInput({
                                 </DropdownMenuSub>
 
                                 <DropdownMenuSub>
-                                <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
-                                    <span className="text-sm text-text-primary">Model</span>
-                                    <span className="min-w-0 truncate text-sm text-text-muted">
-                                        {selectedModel === "auto" ? "Auto" : modelInfo.name}
-                                    </span>
-                                </DropdownMenuSubTrigger>
-
-                                <DropdownMenuSubContent className="w-60">
-                                    <SearchInput
-                                        borderless
-                                        placeholder="Search models"
-                                        autoFocus
-                                        value={modelQuery}
-                                        onChange={(e) => setModelQuery(e.target.value)}
-                                        onKeyDown={(e) => e.stopPropagation()}
-                                        onKeyUp={(e) => e.stopPropagation()}
-                                        onPointerDown={(e) => e.stopPropagation()}
-                                    />
-
-                                    <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
-                                        {modelMatches(autoModel) ? (
-                                            <ModelItem
-                                                model={autoModel}
-                                                isSelected={selectedModel === "auto"}
-                                                onSelect={() => setSelectedModel("auto")}
-                                                effort={reasoningEffort}
-                                            />
-                                        ) : null}
-                                        {providerOrder.filter((p) => p !== "Auto").map((provider) => {
-                                            const providerModels = MODELS.filter(
-                                                (m) => m.provider === provider && modelMatches(m),
-                                            );
-                                            if (providerModels.length === 0) return null;
-                                            return (
-                                                <div key={provider}>
-                                                    <DropdownMenuLabel className="text-xs font-regular text-text-muted">
-                                                        {provider}
-                                                    </DropdownMenuLabel>
-                                                    {providerModels.map((m) => {
-                                                        const allowed = isCatalogModelAllowed(m.id) || isApiModel(m);
-                                                        return (
-                                                            <ModelItem
-                                                                key={m.id}
-                                                                model={m}
-                                                                isSelected={selectedModel === m.id}
-                                                                onSelect={setSelectedModel}
-                                                                effort={reasoningEffort}
-                                                                disabled={!allowed}
-                                                                disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
-                                                            />
-                                                        );
-                                                    })}
+                                    <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
+                                        <span className="text-sm text-text-primary">Model</span>
+                                        <span className="min-w-0 truncate text-sm text-text-muted">
+                                            {selectedModel === "auto" ? "Auto" : modelInfo.name}
+                                        </span>
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-60">
+                                        <SearchInput
+                                            borderless
+                                            placeholder="Search models"
+                                            autoFocus
+                                            value={modelQuery}
+                                            onChange={(e) => setModelQuery(e.target.value)}
+                                            onKeyDown={(e) => e.stopPropagation()}
+                                            onKeyUp={(e) => e.stopPropagation()}
+                                            onPointerDown={(e) => e.stopPropagation()}
+                                        />
+                                        <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
+                                            {modelMatches(autoModel) ? (
+                                                <ModelItem
+                                                    model={autoModel}
+                                                    isSelected={selectedModel === "auto"}
+                                                    onSelect={() => setSelectedModel("auto")}
+                                                    effort={reasoningEffort}
+                                                />
+                                            ) : null}
+                                            {providerOrder.filter((p) => p !== "Auto").map((provider) => {
+                                                const providerModels = MODELS.filter(
+                                                    (m) => m.provider === provider && modelMatches(m),
+                                                );
+                                                if (providerModels.length === 0) return null;
+                                                return (
+                                                    <div key={provider}>
+                                                        <DropdownMenuLabel className="text-xs font-regular text-text-muted">
+                                                            {provider}
+                                                        </DropdownMenuLabel>
+                                                        {providerModels.map((m) => {
+                                                            const allowed =
+                                                                Boolean(shapeAuth.loggedIn && !shapeAuth.offline) &&
+                                                                (isCatalogModelAllowed(m.id) || isApiModel(m));
+                                                            return (
+                                                                <ModelItem
+                                                                    key={m.id}
+                                                                    model={m}
+                                                                    isSelected={selectedModel === m.id}
+                                                                    onSelect={setSelectedModel}
+                                                                    effort={reasoningEffort}
+                                                                    disabled={!allowed}
+                                                                    disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
+                                                                />
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            })}
+                                            {!modelMatches(autoModel) && !MODELS.some(modelMatches) ? (
+                                                <div className="px-2.5 py-3 text-sm text-text-muted">
+                                                    No models match
                                                 </div>
-                                            );
-                                        })}
-                                        {!modelMatches(autoModel) &&
-                                        !MODELS.some(modelMatches) ? (
-                                            <div className="px-2.5 py-3 text-sm text-text-muted">
-                                                No models match
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                </DropdownMenuSubContent>
+                                            ) : null}
+                                        </div>
+                                    </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-
-                        <VoiceInputButton
-                            disabled={needsSignIn}
-                            value={inputValue}
-                            onChange={(next) =>
-                                onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>)
-                            }
-                        />
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (isLoading && inputValue.trim()) {
-                                    onSendMessage();
-                                } else if (isLoading) {
-                                    onStopMessage();
-                                } else {
-                                    onSendMessage();
-                                }
-                            }}
-                            disabled={
-                                needsSignIn ||
-                                uploadedFiles.some((a) => a.status === "processing") ||
-                                (!isLoading && !inputValue.trim() && uploadedFiles.length === 0)
-                            }
-                            className={cn(
-                                "flex size-8 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40",
-                                (inputValue.trim() || isLoading || uploadedFiles.length > 0) &&
-                                    !uploadedFiles.some((a) => a.status === "processing")
-                                    ? "bg-accent text-white hover:opacity-90"
-                                    : "bg-panel-hover text-text-muted",
-                            )}
-                            aria-label={
-                                isLoading && inputValue.trim()
-                                    ? "Queue message"
-                                    : isLoading
-                                      ? "Stop"
-                                      : "Send"
-                            }
-                        >
-                            {isLoading && !inputValue.trim() ? (
-                                <span role="status" aria-label="Generating" className="text-white">
-                                    <Arc size={16} />
-                                </span>
-                            ) : (
-                                <Icon icon={"arrow-up"} />
-                            )}
-                        </button>
                     </div>
-                </div>
-                </div>
-                </div>
-    );
-
-    const usageChip = (
-        <Tooltip content={usageDisplay.tooltip}>
-            <button
-                type="button"
-                className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1 text-sm text-text-muted hover:text-text-primary"
-                onClick={() =>
-                    void import("@/lib/window/open-settings").then(({ openSettingsWindow }) =>
-                        openSettingsWindow({ category: "account" }),
-                    )
-                }
-                aria-label={usageDisplay.tooltip}
-            >
-                <UsageRing percent={usageDisplay.percent} size={16} />
-                <span className="tabular-nums">{usageDisplay.percent}%</span>
-            </button>
-        </Tooltip>
-    );
-
-    const contextExtras = (
-        <>
-            <PendingEditsPanel
-                edits={pendingEdits}
-                onAcceptAll={onAcceptAllEdits ?? (() => {})}
-                onRejectAll={onRejectAllEdits ?? (() => {})}
-                onAccept={onAcceptEdit}
-                onReject={onRejectEdit}
-            />
-            {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
-                <QueuedMessagesPanel
-                    items={queuedMessages}
-                    onEdit={onEditQueuedMessage}
-                    onRemove={onRemoveQueuedMessage}
-                />
-            ) : null}
-            {taskItems.length > 0 ? <ComposerTasksStrip items={taskItems} /> : null}
-        </>
-    );
-
-    return (
-        <div
-            className={cn(
-                "relative shrink-0 overflow-visible",
-                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-0",
-            )}
-        >
-            <div className="relative z-10 overflow-visible">
-                <div className="relative flex flex-col">
-                    <div className="relative z-0 -mb-2.5 flex items-end mx-4 squircle-t-2xl! border border-b-0 border-border-subtle bg-surface-3 px-2 pt-1 pb-3.5">
-                        <div className="flex h-7 w-full min-w-0 items-center gap-1">
-                            {contextExtras}
-                            <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                                <WorkspaceBranchSwitch />
-                                {usageChip}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="relative z-10">{inputPanel}</div>
                 </div>
             </div>
             <MediaLightbox

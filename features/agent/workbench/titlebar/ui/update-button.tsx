@@ -1,5 +1,8 @@
 "use client";
 
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+
+
 import { useSyncExternalStore } from "react";
 import {
   getUpdateStatus,
@@ -11,6 +14,7 @@ import {
 } from "@/lib/window/updater";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+
 
 function labelFor(status: UpdateStatus): string | null {
   switch (status.kind) {
@@ -71,7 +75,7 @@ export function TitlebarUpdateButton() {
             dismissAvailableUpdate();
           }}
         >
-          <Icon icon={"close"} />
+          <Icon icon={Dismiss20Regular} />
         </button>
       ) : null}
     </div>

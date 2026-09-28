@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import { MarkdownLiveEditor } from "@/features/editor/ui/markdown/live-editor";
 import { PlanEditorHeader } from "@/features/editor/ui/main/ui/plan-editor-header";
-import { Button } from "@/components/ui/button";
+import { displayPlanName, parsePlanMarkdown } from "@/lib/plan/preview";
 
 function resolvePlanPath(filePath: string, projectPath: string | null): string {
     if (/^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith("/")) return filePath;
@@ -130,20 +130,24 @@ export function PlanTabView({ path, markdown }: { path: string; markdown?: strin
         );
     }
 
+    const parsed = parsePlanMarkdown(content);
+    const title = displayPlanName(parsed.title || path.split(/[\\/]/).pop() || "Plan");
+
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-editor">
-            <PlanEditorHeader path={absPath || path} raw={raw} onRawChange={setRaw} />
+            <PlanEditorHeader
+                path={absPath || path}
+                title={title}
+                raw={raw}
+                onRawChange={setRaw}
+                onSaveToWorkspace={project_path ? () => void saveToWorkspace() : undefined}
+            />
             <div className="min-h-0 flex-1 overflow-hidden">
                 <MarkdownLiveEditor content={content} onChange={persist} raw={raw} />
             </div>
-            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border-subtle px-3 py-2">
-                <span className="text-xs text-text-muted">{saving ? "Saving…" : "Saved"}</span>
-                {project_path ? (
-                    <Button variant="ghost" size="xs" onClick={() => void saveToWorkspace()}>
-                        Save to workspace
-                    </Button>
-                ) : null}
-            </div>
+            {saving ? (
+                <div className="shrink-0 px-3 py-1.5 text-xs text-text-muted">Saving…</div>
+            ) : null}
         </div>
     );
 }

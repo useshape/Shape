@@ -1,7 +1,22 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
+import { Calendar20Regular } from "@fluentui/react-icons/headless/svg/calendar";
+import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Flash20Filled } from "@fluentui/react-icons/headless/svg/flash";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { Mail20Regular } from "@fluentui/react-icons/headless/svg/mail";
+import { People20Regular } from "@fluentui/react-icons/headless/svg/people";
+import { Person20Regular } from "@fluentui/react-icons/headless/svg/person";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+
 import { useMemo, useState } from "react";
-import { ICON_SIZE_SM, SolarIcon, type SolarIconName } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { cn } from "@/lib/utils";
@@ -150,26 +165,26 @@ export function summarizePluginPayload(raw: string): {
 }
 
 /** Small mark beside the plugin logo: what this call is doing. */
-function taskIcon(slug: string | undefined, label: string): SolarIconName {
+function taskIcon(slug: string | undefined, label: string): IconGlyph {
     const text = `${slug || ""} ${label}`.toLowerCase();
-    if (/comment|reply|message|send|post|mail/.test(text)) return "letter";
-    if (/create|add|new|open/.test(text)) return "add-circle";
-    if (/list|search|find|get|fetch/.test(text)) return "magnifier";
-    if (/update|edit|patch/.test(text)) return "pen";
-    if (/delete|remove|close/.test(text)) return "trash-bin-trash";
-    if (/assign|user|member/.test(text)) return "user";
-    return "bolt";
+    if (/comment|reply|message|send|post|mail/.test(text)) return Mail20Regular;
+    if (/create|add|new|open/.test(text)) return Add20Regular;
+    if (/list|search|find|get|fetch/.test(text)) return Search20Regular;
+    if (/update|edit|patch/.test(text)) return Edit20Regular;
+    if (/delete|remove|close/.test(text)) return Delete20Filled;
+    if (/assign|user|member/.test(text)) return Person20Regular;
+    return Flash20Filled;
 }
 
-function factIcon(label: string): SolarIconName | null {
+function factIcon(label: string): IconGlyph | null {
     const text = label.toLowerCase();
-    if (/team|user|from|assignee|owner/.test(text)) return "users-group-rounded";
-    if (/priority|urgent/.test(text)) return "bolt";
-    if (/date|due|sent|when|time/.test(text)) return "calendar";
-    if (/channel|chat/.test(text)) return "chat-round-line";
-    if (/state|status/.test(text)) return "check-circle";
-    if (/repo|pull|pr|branch/.test(text)) return "git-pull-request";
-    if (/project/.test(text)) return "folder";
+    if (/team|user|from|assignee|owner/.test(text)) return People20Regular;
+    if (/priority|urgent/.test(text)) return Flash20Filled;
+    if (/date|due|sent|when|time/.test(text)) return Calendar20Regular;
+    if (/channel|chat/.test(text)) return Chat20Filled;
+    if (/state|status/.test(text)) return CheckmarkCircle20Filled;
+    if (/repo|pull|pr|branch/.test(text)) return BranchRequest20Regular;
+    if (/project/.test(text)) return Folder20Filled;
     return null;
 }
 
@@ -215,7 +230,7 @@ export function PluginActivityCard({
                 <span className="relative shrink-0">
                     <PluginLogo toolkit={toolkit} name={toolkitName} slug={slug} size={28} />
                     <span className="absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full bg-surface-1 text-text-secondary">
-                        <SolarIcon name={taskIcon(slug, label)} size={10} />
+                        <Icon icon={taskIcon(slug, label)} />
                     </span>
                 </span>
                 <button
@@ -233,7 +248,7 @@ export function PluginActivityCard({
                             const icon = factIcon(fact.label);
                             return (
                                 <span key={fact.label} className="inline-flex min-w-0 items-center gap-1">
-                                    {icon ? <SolarIcon name={icon} size={12} className="shrink-0" /> : null}
+                                    {icon ? <Icon icon={icon} className="shrink-0" /> : null}
                                     <span className="truncate">{fact.value}</span>
                                 </span>
                             );
@@ -263,9 +278,8 @@ export function PluginActivityCard({
                             <span>{attention} need attention</span>
                         ) : null}
                         {canExpand ? (
-                            <SolarIcon
-                                name="alt-arrow-down"
-                                size={ICON_SIZE_SM}
+                            <Icon
+                                icon={ChevronDown20Regular}
                                 className={cn("text-text-muted transition-transform duration-200", open && "rotate-180")}
                             />
                         ) : null}

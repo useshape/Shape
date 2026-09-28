@@ -1,5 +1,8 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+
+
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +11,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
 import { sidebarEdgeOffset } from "./edge";
@@ -97,7 +101,7 @@ export function FontField({
                     )}
                 >
                     <span className="min-w-0 flex-1 truncate text-left font-normal">{value}</span>
-                    <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} className="text-text-muted" />
+                    <Icon icon={ChevronDown20Regular} className="text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -179,7 +183,7 @@ export function WeightField({
                     )}
                 >
                     <span className="min-w-0 flex-1 truncate text-left font-normal">{current}</span>
-                    <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} className="text-text-muted" />
+                    <Icon icon={ChevronDown20Regular} className="text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent

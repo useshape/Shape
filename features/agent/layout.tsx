@@ -254,8 +254,9 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             }
         };
         const onPrs = () => {
-            setOverlay({ type: "prs" });
-            setSidebarOpen(true);
+            setOverlay(null);
+            persistWorkspace(true);
+            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "prs" }));
         };
         window.addEventListener("shape-set-active-tab", onTab as EventListener);
         window.addEventListener("shape-layout-toggle", onToggle as EventListener);
@@ -362,13 +363,13 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
-        <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-panel">
+        <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-sidebar">
             <DevRunHost />
             <ProjectQuickPickHost />
             {splash ? (
                 <div
                     className={cn(
-                        "pointer-events-none absolute inset-0 z-[100] flex items-center justify-center bg-background",
+                        "pointer-events-none absolute inset-0 z-[100] flex items-center justify-center bg-transparent",
                         "transition-opacity duration-300 ease-[var(--ease-out)]",
                         splashVisible ? "opacity-100" : "opacity-0",
                     )}
@@ -405,8 +406,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 }}
             />
 
-            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-panel">
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel rounded-xl border-l border-border">
+                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
                     <AgentChrome
                         rightOpen={rightExpanded}
                         onToggleRight={toggleWorkspace}
@@ -431,13 +432,13 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                     <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                                         <Chat
                                             key={project_path.replace(/\//g, "\\").toLowerCase()}
-                                            className="bg-panel"
+                                            className="bg-transparent"
                                         />
                                     </div>
                                     <TerminalDock />
                                 </>
                             ) : (
-                                <div className="h-full overflow-hidden bg-panel" data-tauri-drag-region>
+                                <div className="h-full overflow-hidden bg-transparent" data-tauri-drag-region>
                                     {children}
                                 </div>
                             )}

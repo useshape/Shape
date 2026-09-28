@@ -1,7 +1,12 @@
 "use client";
 
+import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
+import { History20Regular } from "@fluentui/react-icons/headless/svg/history";
+
+
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
 import {
@@ -122,7 +127,7 @@ export function ChatHistoryMenu({
             </Button>
         ) : (
             <SidebarPanelActionButton aria-label={tooltip}>
-                <Icon icon={"history"} size={ICON_SIZE_MD} />
+                <Icon icon={History20Regular} />
             </SidebarPanelActionButton>
         );
 
@@ -182,7 +187,7 @@ export function ChatHistoryMenu({
                                             void handleDelete(conversation.id);
                                         }}
                                     >
-                                        <Icon icon={"trash-bin-trash"} />
+                                        <Icon icon={Delete20Filled} />
                                     </button>
                                 </DropdownMenuItem>
                             );

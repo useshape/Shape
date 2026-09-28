@@ -1,8 +1,15 @@
 "use client";
 
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
+
+
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
 import { useBrowseFrame, type BrowseFrame } from "@/features/agent/browser/session";
@@ -186,7 +193,7 @@ export function BrowseChatCard({
                             void commands.stopChatMessage();
                         }}
                     >
-                        <SolarIcon name="close" size={ICON_SIZE_SM} />
+                        <Icon icon={Dismiss20Regular} />
                     </button>
                 ) : null}
                 {lines.length ? (
@@ -195,7 +202,7 @@ export function BrowseChatCard({
                         className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-1 rounded-md bg-surface-1/90 px-1.5 py-0.5 text-xs text-text-secondary"
                         onClick={() => setConsoleOpen((open) => !open)}
                     >
-                        <SolarIcon name="programming" size={ICON_SIZE_SM} />
+                        <Icon icon={WindowConsole20Regular} />
                         Console
                     </button>
                 ) : null}
@@ -219,7 +226,7 @@ export function AgentControlBar() {
             <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-subtle bg-surface-2 px-2">
                 <span className="min-w-0 flex-1 truncate text-xs text-text-primary">The agent is controlling this tab</span>
                 <Button type="button" variant="ghost" size="icon" aria-label="Stop agent control" onClick={() => setConfirm(true)}>
-                    <SolarIcon name="close" size={ICON_SIZE_SM} />
+                    <Icon icon={Dismiss20Regular} />
                 </Button>
             </div>
             <AlertDialog open={confirm} onOpenChange={setConfirm}>

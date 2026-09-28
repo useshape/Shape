@@ -1,14 +1,19 @@
 "use client";
 
+import { ArrowUndo20Regular } from "@fluentui/react-icons/headless/svg/arrow-undo";
+import { LayoutColumnTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-column-two";
+
+
 import { useEffect, useMemo, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
 import { DiffView } from "@/features/editor/ui/diff/diff-view";
 import { Icon } from "@/components/ui/icon";
+
 import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { diffLines } from "diff";
+import { countChangedLines } from "@/lib/ui/diff-count";
 
 export type FileDiffTabInfo = {
     id: string;
@@ -34,15 +39,7 @@ function fileName(path: string) {
 }
 
 function countDiff(original: string, current: string): { add: number; del: number } {
-    let add = 0;
-    let del = 0;
-    for (const part of diffLines(original || "", current || "")) {
-        const lines = part.value.split("\n").length - (part.value.endsWith("\n") ? 1 : 0);
-        const n = Math.max(lines, part.value ? 1 : 0);
-        if (part.added) add += n;
-        if (part.removed) del += n;
-    }
-    return { add, del };
+    return countChangedLines(original, current);
 }
 
 function statusBadge(status: string, original: string, current: string): string | null {
@@ -171,7 +168,7 @@ export function SingleFileDiffEditor({ tab }: { tab: FileDiffTabInfo }) {
                     aria-label={split ? "Unified diff" : "Split diff"}
                     title={split ? "Unified" : "Split"}
                 >
-                    <Icon icon={"sidebar-code"} />
+                    <Icon icon={LayoutColumnTwo20Regular} />
                 </button>
                 {!isCommit ? (
                     <>
@@ -189,7 +186,7 @@ export function SingleFileDiffEditor({ tab }: { tab: FileDiffTabInfo }) {
                             aria-label="Discard changes"
                             title="Discard"
                         >
-                            <Icon icon={"undo-left"} />
+                            <Icon icon={ArrowUndo20Regular} />
                         </button>
                     </>
                 ) : null}

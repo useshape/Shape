@@ -1,4 +1,12 @@
-import type { SolarIconName } from "@/components/ui/icon";
+import type { IconGlyph } from "@/components/ui/icon";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
+import { Circle20Filled } from "@fluentui/react-icons/headless/svg/circle";
+import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
+import { PersonAdd20Regular } from "@fluentui/react-icons/headless/svg/person-add";
+import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
 
 export type TabKind = "changes" | "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs" | "browser";
 
@@ -30,25 +38,25 @@ export const DEFAULT_TABS: WorkspaceTab[] = [
     { id: "browser", kind: "browser", title: "Browser" },
 ];
 
-export function iconFor(kind: TabKind): SolarIconName {
+export function iconFor(kind: TabKind): IconGlyph {
     switch (kind) {
         case "changes":
-            return "git-commit";
+            return Circle20Filled;
         case "graph":
-            return "git-branch";
+            return Branch20Regular;
         case "agents":
-            return "user-plus";
+            return PersonAdd20Regular;
         case "plan":
-            return "git-branch";
+            return TaskListSquareLtr20Regular;
         case "diff":
-            return "git-pull-request";
+            return BranchRequest20Regular;
         case "files":
-            return "folder";
+            return Folder20Filled;
         case "prs":
-            return "git-pull-request";
+            return BranchRequest20Regular;
         case "browser":
-            return "global";
+            return Globe20Regular;
         default:
-            return "file-text";
+            return DocumentText20Regular;
     }
 }

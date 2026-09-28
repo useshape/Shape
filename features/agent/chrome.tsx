@@ -1,7 +1,12 @@
 "use client";
 
+import { PanelLeft20Filled } from "@fluentui/react-icons/headless/svg/panel-left";
+import { PanelRight20Filled } from "@fluentui/react-icons/headless/svg/panel-right";
+import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
+
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useShapeAuth } from "@/lib/cloud/store";
@@ -28,7 +33,7 @@ export function GetPlusButton({ className }: { className?: string }) {
                 void commands.openUrlExternal(`${dashboardUrl()}/settings/billing`)
             }
         >
-            <Icon icon={"magic-stick"} />
+            <Icon icon={Sparkle20Filled} />
             Get Plus
         </button>
     );
@@ -106,7 +111,7 @@ export function AgentChrome({
                         active={rightOpen}
                         onClick={onToggleRight}
                     >
-                        <Icon icon={"sidebar-code"} />
+                        <Icon icon={PanelRight20Filled} />
                     </Btn>
                 ) : null}
                 {padWindowControls ? <WindowControlsSpacer /> : null}
@@ -133,7 +138,7 @@ export function SidebarToggleBtn({
                     onClick={onToggle}
                     className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={"sidebar-code"} />
+                    <Icon icon={PanelLeft20Filled} />
                 </button>
             </Tooltip>
         );
@@ -145,7 +150,7 @@ export function SidebarToggleBtn({
             onClick={onToggle}
             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
         >
-            <Icon icon={"sidebar-code"} />
+            <Icon icon={PanelLeft20Filled} />
         </button>
     );
 }

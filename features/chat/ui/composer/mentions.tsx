@@ -1,8 +1,27 @@
-﻿"use client";
+"use client";
+
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
+import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+import { Target20Regular } from "@fluentui/react-icons/headless/svg/target";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
+
 
 import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
+
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
 import { SearchInput } from "@/components/ui/search";
@@ -15,25 +34,27 @@ import { listDesignPreviewSessions, trySelectPendingDesignConcept } from "@/lib/
 import { hostnameOf } from "@/lib/ui/favicon";
 import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins/api";
+import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 
-type CategoryId = "files" | "code" | "docs" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "plugins" | "design" | null;
+type CategoryId = "files" | "code" | "docs" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "plugins" | "skills" | "design" | null;
 
 const CATEGORIES: {
     id: Exclude<CategoryId, null>;
     label: string;
-    icon: SolarIconName;
+    icon: IconGlyph;
 }[] = [
-    { id: "files", label: "Files & Folders", icon: "folder" },
-    { id: "code", label: "Code", icon: "code" },
-    { id: "docs", label: "Docs", icon: "file" },
-    { id: "branch", label: "Git", icon: "git-branch" },
-    { id: "chats", label: "Past Chats", icon: "chat-round-line" },
-    { id: "plugins", label: "Plugins", icon: "widget" },
-    { id: "mcp", label: "MCP Servers", icon: "widget" },
-    { id: "terminals", label: "Terminals", icon: "programming" },
-    { id: "browser", label: "Browser", icon: "global" },
-    { id: "design", label: "Design", icon: "palette" },
+    { id: "files", label: "Files & Folders", icon: Folder20Filled },
+    { id: "code", label: "Code", icon: Code20Regular },
+    { id: "docs", label: "Docs", icon: Document20Regular },
+    { id: "branch", label: "Git", icon: Branch20Regular },
+    { id: "chats", label: "Past Chats", icon: Chat20Filled },
+    { id: "plugins", label: "Plugins", icon: Grid20Regular },
+    { id: "skills", label: "Skills", icon: DocumentText20Regular },
+    { id: "mcp", label: "MCP Servers", icon: Grid20Regular },
+    { id: "terminals", label: "Terminals", icon: WindowConsole20Regular },
+    { id: "browser", label: "Browser", icon: Globe20Regular },
+    { id: "design", label: "Design", icon: Color20Regular },
 ];
 
 function pathDir(path: string): string {
@@ -71,6 +92,7 @@ export function MentionPicker({
     const [chats, setChats] = useState<{ id: string; title: string }[]>([]);
     const [mcpServers, setMcpServers] = useState<{ id: string; name: string }[]>([]);
     const [plugins, setPlugins] = useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
+    const [skills, setSkills] = useState<Skill[]>(() => listSkills());
     const [activeCategory, setActiveCategory] = useState<CategoryId>(null);
     const [highlight, setHighlight] = useState(0);
     const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
@@ -197,6 +219,8 @@ export function MentionPicker({
         };
     }, [open]);
 
+    useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
+
     const designItems: ChatMention[] = useMemo(() => {
         const tokens: ChatMention[] = DESIGN_TOKEN_MENTIONS.map((t) => ({
             kind: "design",
@@ -271,6 +295,16 @@ export function MentionPicker({
             ].filter((m) => !q || m.label.toLowerCase().includes(q));
         }
         if (activeCategory === "plugins") return pluginMentions;
+        if (activeCategory === "skills") {
+            return skills
+                .filter((skill) => !q || skill.name.toLowerCase().includes(q) || skill.id.includes(q))
+                .map((skill) => ({
+                    kind: "skill" as const,
+                    id: skill.id,
+                    path: skill.id,
+                    label: skill.name,
+                }));
+        }
         if (activeCategory === "chats") {
             return chats
                 .filter((c) => !q || c.title.toLowerCase().includes(q))
@@ -325,7 +359,7 @@ export function MentionPicker({
             return items;
         }
         return [];
-    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, q, filter]);
+    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, skills, q, filter]);
 
     const rootItems = useMemo(() => {
         if (activeCategory) return categoryItems;
@@ -429,7 +463,7 @@ export function MentionPicker({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setActiveCategory(null)}
                 >
-                    <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                    <Icon icon={ArrowLeft20Regular} />
                     {CATEGORIES.find((c) => c.id === activeCategory)?.label ?? "Back"}
                 </button>
             ) : null}
@@ -459,11 +493,11 @@ export function MentionPicker({
                                     <PluginLogo
                                         toolkit={w.pluginToolkit}
                                         name={w.name}
-                                        size={ICON_SIZE_SM}
+                                        size={14}
                                         className="rounded-sm"
                                     />
                                 ) : (
-                                    <Icon icon={"command"} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
+                                    <Icon icon={Code20Regular} className="shrink-0 text-text-muted" />
                                 )}
                                 <span className="min-w-0 flex-1 truncate font-medium">{workflowSlashToken(w)}</span>
                                 <span className="ml-auto max-w-[50%] truncate text-sm text-text-muted">{w.name}</span>
@@ -500,7 +534,7 @@ export function MentionPicker({
                             <PluginLogo
                                 toolkit={item.id || item.path || item.label}
                                 name={item.label}
-                                size={ICON_SIZE_SM}
+                                size={14}
                                 className="rounded-sm"
                             />
                         ) : item.kind === "browser" && item.path && item.path !== "current" ? (
@@ -509,27 +543,28 @@ export function MentionPicker({
                             <Icon
                                 icon={
                                     item.kind === "codebase"
-                                        ? "magnifier"
+                                        ? Search20Regular
                                         : item.kind === "selection"
-                                          ? "code"
+                                          ? Code20Regular
                                           : item.kind === "design"
-                                            ? (designTokenById(item.id || item.path)?.icon ?? "palette")
+                                            ? (designTokenById(item.id || item.path)?.icon ?? Color20Regular)
                                             : item.kind === "chat"
-                                              ? "chat-round-line"
+                                              ? Chat20Filled
                                               : item.kind === "terminal"
-                                                ? "programming"
+                                                ? WindowConsole20Regular
                                                 : item.kind === "branch"
-                                                  ? "git-branch"
+                                                  ? Branch20Regular
                                                   : item.kind === "browser"
-                                                    ? "global"
+                                                    ? Globe20Regular
                                                     : item.kind === "mcp"
-                                                      ? "widget"
+                                                      ? Grid20Regular
                                                       : item.kind === "element"
-                                                        ? "target"
-                                                        : "file"
+                                                        ? Target20Regular
+                                                        : item.kind === "skill"
+                                                          ? DocumentText20Regular
+                                                          : Document20Regular
                                 }
                                 className="shrink-0 text-text-muted"
-                                size={ICON_SIZE_SM}
                             />
                         )}
                         <span className="min-w-0 flex-1 truncate font-medium">
@@ -556,9 +591,9 @@ export function MentionPicker({
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => setActiveCategory(cat.id)}
                             >
-                                <Icon icon={cat.icon} className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
+                                <Icon icon={cat.icon} className="shrink-0 text-text-muted" />
                                 <span className="flex-1 font-medium">{cat.label}</span>
-                                <Icon icon={"alt-arrow-right"} className="text-text-muted" size={ICON_SIZE_SM} />
+                                <Icon icon={ChevronRight20Regular} className="text-text-muted" />
                             </button>
                         ))}
                     </>

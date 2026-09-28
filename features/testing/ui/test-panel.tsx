@@ -1,8 +1,20 @@
 "use client";
 
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { Bug20Regular } from "@fluentui/react-icons/headless/svg/bug";
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Circle20Regular } from "@fluentui/react-icons/headless/svg/circle";
+import { DismissCircle20Filled } from "@fluentui/react-icons/headless/svg/dismiss-circle";
+import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
+import { Play20Filled } from "@fluentui/react-icons/headless/svg/play";
+
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useProjectState } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -17,16 +29,16 @@ import type { TestCase, TestStatus } from "../types";
 function StatusIcon({ status }: { status: TestStatus }) {
     switch (status) {
         case "passed":
-            return <Icon icon={"check-circle"} className="text-success shrink-0" />;
+            return <Icon icon={CheckmarkCircle20Filled} className="text-success shrink-0" />;
         case "failed":
-            return <Icon icon={"close-circle"} className="text-error shrink-0" />;
+            return <Icon icon={DismissCircle20Filled} className="text-error shrink-0" />;
         case "running":
-            return <Icon icon={"refresh"} className="text-info shrink-0 animate-spin" />;
+            return <Icon icon={ArrowSync20Regular} className="text-info shrink-0 animate-spin" />;
         case "skipped":
         case "pending":
-            return <Icon icon={"record"} className="text-text-muted shrink-0" />;
+            return <Icon icon={Circle20Regular} className="text-text-muted shrink-0" />;
         default:
-            return <Icon icon={"record"} className="text-text-muted shrink-0" />;
+            return <Icon icon={Circle20Regular} className="text-text-muted shrink-0" />;
     }
 }
 
@@ -113,7 +125,7 @@ export default function TestPanel() {
                     disabled={!project_path || !hasFramework || running}
                     onClick={handleRunAll}
                 >
-                    <Icon icon={"play"} />
+                    <Icon icon={Play20Filled} />
                     Run All
                 </Button>
                 <Button
@@ -123,7 +135,7 @@ export default function TestPanel() {
                     disabled={!project_path || !hasFramework || running || !hasFailed}
                     onClick={handleRunFailed}
                 >
-                    <Icon icon={"bug"} />
+                    <Icon icon={Bug20Regular} />
                     Run Failed
                 </Button>
                 <div className="flex-1" />
@@ -161,10 +173,10 @@ export default function TestPanel() {
                                 onClick={() => toggleFile(suite.file)}
                             >
                                 <Icon
-                                    icon={expanded ? "alt-arrow-down" : "alt-arrow-right"}
+                                    icon={expanded ? ChevronDown20Regular : ChevronRight20Regular}
                                     className="text-text-muted shrink-0"
                                 />
-                                <Icon icon={"file-text"} className="text-text-muted shrink-0" />
+                                <Icon icon={DocumentText20Regular} className="text-text-muted shrink-0" />
                                 <span className="flex-1 truncate text-sm text-text-primary">{suite.name}</span>
                                 <span className="text-xs text-text-muted">
                                     {suite.passed}/{suite.tests.length}

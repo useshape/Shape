@@ -1,11 +1,17 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
+
+
 import React from "react";
-import { ICON_SIZE_MD, ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { Collapse } from "./collapse";
 import { hostnameOf } from "@/lib/ui/favicon";
+import { splitActionLabel } from "./action-line";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -93,7 +99,7 @@ function SiteMark({ url, brand, size = 14 }: { url?: string; brand?: Brand | nul
         );
     }
     if (url) return <Favicon url={url} size={size} />;
-    return <SolarIcon name="global" size={size} className="shrink-0 text-text-muted" />;
+    return <Icon icon={Globe20Regular} className="shrink-0 text-text-muted" />;
 }
 
 function SourceRow({ result }: { result: WebSearchResult }) {
@@ -104,14 +110,14 @@ function SourceRow({ result }: { result: WebSearchResult }) {
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-                "flex min-w-0 items-center gap-2 py-0.5",
-                result.url ? "hover:text-text-primary" : "pointer-events-none",
+                "group/line flex min-w-0 items-center gap-2 py-0.5",
+                result.url ? "" : "pointer-events-none",
             )}
         >
             <span className="flex size-4 shrink-0 items-center justify-center">
                 <SiteMark url={result.url} size={14} />
             </span>
-            <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+            <span className="min-w-0 flex-1 truncate text-sm text-text-secondary group-hover/line:text-text-primary">
                 {result.title || host || "Source"}
             </span>
             {host ? (
@@ -160,18 +166,20 @@ function SourceStack({ sources }: { sources: WebSearchResult[] }) {
 function SourcesBranch({ sources }: { sources: WebSearchResult[] }) {
     const [open, setOpen] = React.useState(true);
     return (
-        <div className="shape-row-in mt-1 pl-5">
+        <div className="mt-1 pl-5">
             <button
                 type="button"
                 onClick={() => setOpen((value) => !value)}
-                className="flex w-full items-center gap-2 text-left chat-text text-text-secondary hover:text-text-primary"
+                className="group/line flex w-fit max-w-full items-center gap-1.5 text-left chat-text text-text-muted"
             >
-                <span>Sources</span>
+                <span className="text-text-secondary group-hover/line:text-text-primary">Sources</span>
                 {open ? null : <SourceStack sources={sources} />}
-                <SolarIcon
-                    name="alt-arrow-down"
-                    size={ICON_SIZE_SM}
-                    className={cn("text-text-muted transition-transform duration-200", open && "rotate-180")}
+                <Icon
+                    icon={ChevronDown20Regular}
+                    className={cn(
+                        "text-text-muted opacity-50 transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                        open && "rotate-180",
+                    )}
                 />
             </button>
             <Collapse open={open}>
@@ -263,15 +271,17 @@ function TrailStepRow({ step }: { step: TrailStep }) {
         ? "Opened"
         : step.brand
             ? `Searched ${step.brand.label} for`
-            : "Searching for";
+            : "Searched";
+    const sentence = step.query ? `${verb} ${step.query}` : verb;
+    const parts = splitActionLabel(sentence);
     const icon = step.brand ? <SiteMark brand={step.brand} size={14} /> : null;
     return (
         <div className="py-0.5">
-            <div className="flex w-full min-w-0 items-center gap-1.5 chat-text text-text-secondary">
+            <div className="flex w-full min-w-0 items-center gap-1.5 chat-text text-text-muted">
                 {icon ? <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span> : null}
                 <span className="min-w-0 flex-1 truncate">
-                    {verb}
-                    {step.query ? <span className="text-text-primary"> {step.query}</span> : null}
+                    <span className="text-text-secondary">{parts.action}</span>
+                    {parts.detail ? <span className="text-text-muted"> {parts.detail}</span> : null}
                 </span>
                 {meta ? <span className="shrink-0 text-text-muted">{meta}</span> : null}
             </div>
@@ -304,8 +314,11 @@ export function WebSearchTrail({
     return (
         <div className="py-0.5">
             {grouped ? (
-                <div className="flex items-center gap-1.5 chat-text text-text-secondary">
-                    <span>Ran {searches} searches</span>
+                <div className="flex items-center gap-1.5 chat-text text-text-muted">
+                    <span>
+                        <span className="text-text-secondary">Ran</span>
+                        <span className="text-text-muted"> {searches} searches</span>
+                    </span>
                 </div>
             ) : null}
             {steps.map((step, index) => (
@@ -352,7 +365,7 @@ export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
                         className="rounded-md p-1 text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                         aria-label={`${results.length} web sources`}
                     >
-                        <SolarIcon name="global" size={ICON_SIZE_MD} />
+                        <Icon icon={Globe20Regular} />
                     </button>
                 </DropdownMenuTrigger>
             </Tooltip>

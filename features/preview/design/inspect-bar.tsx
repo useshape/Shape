@@ -1,8 +1,12 @@
 "use client";
 
+import { TextFontSize20Regular } from "@fluentui/react-icons/headless/svg/text-font-size";
+
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { commands } from "@/lib/backend";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
@@ -136,7 +140,7 @@ export function DesignInspectOverlay({
                     <IcoPath d="M4 20V10a6 6 0 0 1 6-6h10" />
                 </TabBtn>
                 <TabBtn active={tab === "padding"} onClick={() => setTab("padding")} label="Padding">
-                    <Icon icon={"text-square"} size={ICON_SIZE_SM} />
+                    <Icon icon={TextFontSize20Regular} />
                 </TabBtn>
                 <TabBtn active={tab === "gap"} onClick={() => setTab("gap")} label="Gap">
                     <IcoPath d="M8 6v12M16 6v12" />

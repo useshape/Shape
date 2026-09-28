@@ -123,7 +123,7 @@ export default function Main({ children }: { children: React.ReactNode }) {
 
     return (
         <div
-            className="relative flex min-h-0 flex-1 flex-row overflow-hidden bg-background text-md text-text-primary"
+            className="relative flex min-h-0 flex-1 flex-row overflow-hidden bg-transparent text-md text-text-primary"
             data-workbench-main
         >
             <div className="relative z-10 flex min-w-0 flex-1 overflow-hidden">

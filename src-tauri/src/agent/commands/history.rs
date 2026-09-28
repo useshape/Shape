@@ -161,6 +161,9 @@ pub fn find_conversation_by_id(id: &str, preferred_proj: Option<&str>) -> Option
 }
 
 pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<(), AppError> {
+    if state.incognito() {
+        return Ok(());
+    }
     let history = state.history_for_persistence()?;
     if history.is_empty() {
         return Ok(());

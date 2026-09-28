@@ -1,8 +1,13 @@
 "use client";
 
+import { ArrowUp20Regular } from "@fluentui/react-icons/headless/svg/arrow-up";
+import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
+
+
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { formatMentionToken } from "@/lib/chat/mentions";
 import type { DesignElementSnapshot } from "./bridge";
 
@@ -71,7 +76,7 @@ export function DesignSelectionPrompt({
                 className="absolute z-30 flex size-7 items-center justify-center rounded-full border border-border bg-panel text-text-secondary shadow-md hover:text-text-primary"
                 style={{ left: iconLeft, top: iconTop }}
             >
-                <Icon icon={"magic-stick"} size={ICON_SIZE_SM} />
+                <Icon icon={Sparkle20Filled} />
             </button>
             {open ? (
                 <form
@@ -108,7 +113,7 @@ export function DesignSelectionPrompt({
                         aria-label="Send"
                         className="size-8 shrink-0"
                     >
-                        <Icon icon={"arrow-up"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowUp20Regular} />
                     </Button>
                 </form>
             ) : null}

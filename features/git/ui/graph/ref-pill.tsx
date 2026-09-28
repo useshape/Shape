@@ -1,4 +1,8 @@
-import { Icon, ICON_SIZE_SM, ICON_SIZE_XS } from "@/components/ui/icon";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { Circle20Filled } from "@fluentui/react-icons/headless/svg/circle";
+import { Tag20Regular } from "@fluentui/react-icons/headless/svg/tag";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -25,7 +29,7 @@ function RefPillVisual({
     className?: string;
 }) {
     const raw = refInfo.label.replace(/^tag:\s*/i, "");
-    const icon = refInfo.isTag ? "tag" : refInfo.isHead ? "git-commit" : "git-branch";
+    const icon = refInfo.isTag ? Tag20Regular : refInfo.isHead ? Circle20Filled : Branch20Regular;
     return (
         <span
             className={cn(
@@ -41,7 +45,7 @@ function RefPillVisual({
                 className="flex h-full w-[16px] shrink-0 items-center justify-center"
                 style={{ backgroundColor: color }}
             >
-                <Icon icon={icon} size={ICON_SIZE_XS} className="text-[var(--graph-surface,var(--color-panel))]" />
+                <Icon icon={icon} className="text-[var(--graph-surface,var(--color-panel))]" />
             </span>
             <span
                 className={cn(

@@ -1,7 +1,15 @@
 "use client";
 
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+
+
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
 import {
@@ -114,7 +122,6 @@ function ItemStatusIcon({ status }: { status?: string }) {
     return (
         <Icon
             icon={icon.icon}
-            size={ICON_SIZE_SM}
             className={cn("shrink-0", statusTone(status), icon.spin && "animate-spin")}
         />
     );
@@ -221,7 +228,7 @@ function SimpleDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowLeft20Regular} />
                         </Button>
                     </div>
                     <GitDetailSkeleton />
@@ -241,7 +248,7 @@ function SimpleDetailPane({
                                 onClick={onBack}
                                 aria-label="Back to list"
                             >
-                                <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                                <Icon icon={ArrowLeft20Regular} />
                             </Button>
                             <ItemStatusIcon status={detail?.status} />
                             <div className="min-w-0 flex-1">
@@ -266,7 +273,7 @@ function SimpleDetailPane({
                                         if (detail.url) void commands.openUrlExternal(detail.url);
                                     }}
                                 >
-                                    <Icon icon={"square-forward"} size={ICON_SIZE_SM} />
+                                    <Icon icon={Open20Regular} />
                                     Open on GitHub
                                 </Button>
                             ) : null}
@@ -512,8 +519,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                             </span>
                                             {item.url ? (
                                                 <Icon
-                                                    icon={"square-forward"}
-                                                    size={ICON_SIZE_SM}
+                                                    icon={Open20Regular}
                                                     className="shrink-0 text-text-muted"
                                                 />
                                             ) : null}
@@ -556,7 +562,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                                 className="h-7 gap-1 px-2 capitalize"
                             >
                                 {issueState}
-                                <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} />
+                                <Icon icon={ChevronDown20Regular} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -584,7 +590,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                             onClick={() => setCreatePrOpen(true)}
                             aria-label="Create pull request"
                         >
-                            <Icon icon={"git-pull-request"} size={ICON_SIZE_SM} />
+                            <Icon icon={BranchRequest20Regular} />
                         </Button>
                     </Tooltip>
                 ) : null}
@@ -606,7 +612,7 @@ export function GitHubSection({ section }: { section: GitHubListSection }) {
                         onClick={() => void load()}
                         aria-label="Refresh"
                     >
-                        <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowSync20Regular} />
                     </Button>
                 </Tooltip>
             </GitChromeActions>

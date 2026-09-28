@@ -10,19 +10,20 @@
   --surface-0: #181818;
   --surface-1: #181818;
   --surface-2: #1b1b1b;
-  --surface-3: #181818;
-  --surface-4: #1d1d1d;
+  --surface-3: #202020;
+  --surface-4: #252525;
+  --settings-card: #2a2a2a;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
   --chrome: #1E1E1E;
-  --sidebar: #161616;
+  --sidebar: #2D2D2D;
   --editor: #191919;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #141414;
+  --panel: #1B1B1B;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.04);
@@ -35,19 +36,24 @@
   /* ── Text (neutral — no blue cast) ─────────────────────── */
   --text-primary: #f2f2f2;
   --text-secondary: #a3a3a3;
-  --text-muted: #737373;
-  --text-disabled: #525252;
+  --text-muted: #ffffff79;
+  --text-disabled: #ffffff2f;
   --text-active: #ffffff;
 
   /* ── Borders / stroke ──────────────────────────────────── */
-  --border: rgba(255, 255, 255, 0.034);
-  --border-subtle: rgba(255, 255, 255, 0.034);
-  --border-secondary: rgba(255, 255, 255, 0.068);
+  --border: rgba(255, 255, 255, 0.116);
+  --border-subtle: rgba(255, 255, 255, 0.062);
+  --border-secondary: rgba(255, 255, 255, 0.075);
   --stroke: 1px;
 
   /* ── Actions ───────────────────────────────────────────── */
   /* Deliberate brand accent (not an accidental indigo default) */
   --accent: #3946FF;
+  /* Private-window purple. Dark chrome; light theme overrides below. */
+  --incognito: #a200ff83;
+  --incognito-fg: #fae3ff;
+  --incognito-muted: #f6e4ffa6;
+  --incognito-send: #e787ff;
   --accent-hover: #4365FF;
   --action-label: #ffffff;
   --brand: var(--accent);
@@ -127,6 +133,8 @@
   --space-lg: 16px;
   --space-xl: 24px;
 
+  --icon-size: 19px;
+  --icon-stroke: 0.5px;
   --icon-sm: 14px;
   --icon-md: 16px;
   --icon-lg: 20px;
@@ -135,12 +143,15 @@
   --titlebar-height: 34px;
   --statusbar-height: 33px;
 
-  /* ── Typography (Inter) ── */
-  --font-ui: var(--font-inter), Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ── Typography ── */
+  --font-ui: "Geist Variable", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
+  --type-weight-normal: 500;
+  --type-weight-medium: 600;
+  --type-weight-semibold: 700;
+  --font-weight: var(--type-weight-normal);
+  --tracking: -0.001em;
+  --leading: 1.5;
 
   /* Font rendering: subpixel like VS Code, not grayscale antialiased */
   --font-smoothing: auto;
@@ -149,7 +160,7 @@
   --text-2xs: 12px;
   --text-xs: 13px;
   --text-sm: 14px;
-  --text-base: 15px;
+  --text-base: 14px;
   --text-md: 15.5px;
   --text-lg: 16px;
   --text-xl: 17px;
@@ -161,12 +172,12 @@
   --line-height-lg: 20px;
 
   --chat-text: var(--text-base);
-  --chat-text-lh: 1.45;
-  --conversation-text-font-size: var(--chat-text);
+  --chat-text-lh: var(--leading);
+  --conversation-text-font-size: var(--text-base);
   --conversation-tool-font-size: var(--text-base);
   --conversation-tray-font-size: var(--text-base);
-  --conversation-font-size: var(--chat-text);
-  --conversation-line-height: 1.4;
+  --conversation-font-size: var(--text-base);
+  --conversation-line-height: var(--leading);
   --conversation-block-gap: 10px;
   --conversation-list-item-gap: 6px;
 
@@ -232,11 +243,16 @@
 /* Soft light chrome — keeps accent; flips surfaces/text. */
 [data-theme="light"] {
   color-scheme: light;
+  --incognito: #f3e4f8;
+  --incognito-fg: #3b1248;
+  --incognito-muted: #6b3a78;
+  --incognito-send: #7d4698;
   --surface-0: #F9F9F9;
   --surface-1: #F9F9F9;
   --surface-2: #f3f3f3;
   --surface-3: #ffffff;
   --surface-4: #f3f3f3;
+  --settings-card: #f3f3f3;
   --chrome: #ffffff;
   --sidebar: #f4f4f4;
   --editor: #ffffff;
@@ -270,6 +286,8 @@
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-surface-4: var(--surface-4);
+  --color-settings-card: var(--settings-card);
+  --color-incognito: var(--incognito);
 
   --color-chrome: var(--chrome);
   --color-sidebar: var(--sidebar);
@@ -342,6 +360,9 @@
 
   --font-sans: var(--font-ui);
   --font-mono: var(--font-mono);
+  --font-weight-normal: var(--type-weight-normal);
+  --font-weight-medium: var(--type-weight-medium);
+  --font-weight-semibold: var(--type-weight-semibold);
 
   --font-size-2xs: var(--text-2xs);
   --font-size-xs: var(--text-xs);
@@ -614,7 +635,9 @@ html {
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
-  letter-spacing: -0.006em;
+  letter-spacing: var(--tracking);
+  font-weight: var(--font-weight);
+  line-height: var(--leading);
 }
 
 body {
@@ -622,13 +645,15 @@ body {
   color: var(--foreground);
   font-family: var(--font-ui);
   font-size: var(--text-base);
+  font-weight: var(--font-weight);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
   text-rendering: optimizeLegibility;
   font-synthesis: none;
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
-  letter-spacing: -0.006em;
 }
 
 /* Monaco editor surface — dark background, no default light border */
@@ -690,11 +715,23 @@ button:focus-visible,
 }
 
 .shape-icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  min-width: var(--icon-size);
+  min-height: var(--icon-size);
   color: inherit;
   fill: currentColor;
+  overflow: visible;
+}
+
+.shape-icon * {
+  fill: currentColor;
   stroke: currentColor;
-  stroke-linecap: round;
+  stroke-width: var(--icon-stroke);
   stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke fill;
 }
 
 /* ── Scrollbars: thin, no arrows, no layout gutter jump ─ */
@@ -1380,76 +1417,6 @@ body[data-resizing] .xterm {
   }
 }
 
-.wf-summary-text {
-  font-size: var(--chat-text);
-  line-height: var(--chat-text-lh);
-  color: var(--color-text-muted);
-}
-
-.wf-summary-text-strong {
-  color: var(--color-text-secondary);
-}
-.wf-step {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.15rem 0;
-  min-height: 1.4rem;
-  font-size: var(--chat-text);
-  line-height: var(--chat-text-lh);
-  color: var(--color-text-muted);
-}
-
-.wf-step-rail {
-  display: flex;
-  width: 1.125rem;
-  flex-shrink: 0;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 0.2rem;
-}
-
-.wf-step-dot {
-  z-index: 1;
-  display: flex;
-  height: 1rem;
-  width: 1rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-}
-
-.wf-step > :not(.wf-step-rail) {
-  min-width: 0;
-  flex: 1;
-  font-size: var(--chat-text);
-  line-height: var(--chat-text-lh);
-  color: var(--color-text-muted);
-  padding-top: 0;
-}
-
-.wf-step-line {
-  width: 1px;
-  flex: 1;
-  min-height: 0.5rem;
-  background: var(--color-border);
-}
-
-.wf-pill {
-  display: inline-flex;
-  max-width: 100%;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: 999px;
-  background: transparent;
-  padding: 0;
-  font-size: var(--chat-text);
-  line-height: var(--chat-text-lh);
-  color: var(--color-text-muted);
-}
-
 /* Streaming assistant text: soft top→bottom reveal while typing. */
 .chat-stream-fade-in {
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
@@ -1500,7 +1467,7 @@ body[data-resizing] .xterm {
   -webkit-background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: git-generate-shimmer 1.6s linear infinite;
+  animation: git-generate-shimmer 3.4s linear infinite;
 }
 
 @keyframes status-wipe-in {
@@ -1565,18 +1532,11 @@ body[data-resizing] .xterm {
 .chat-collapse {
   display: grid;
   grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-rows 280ms var(--ease-out),
-    opacity 220ms var(--ease-out);
+  transition: grid-template-rows 180ms var(--ease-out);
 }
 
 .chat-collapse[data-open="true"] {
   grid-template-rows: 1fr;
-  opacity: 1;
-  transition:
-    grid-template-rows 240ms var(--ease-out),
-    opacity 180ms var(--ease-out);
 }
 
 .chat-collapse > .chat-collapse-inner {
@@ -1718,22 +1678,6 @@ body[data-resizing] .xterm {
 
 .graph-diff-panel .monaco-editor .cursors-layer > .cursor {
   display: none !important;
-}
-
-/* New workflow rows settle down instead of popping in. */
-@keyframes shape-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.shape-row-in {
-  animation: shape-row-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* ── Tab appear (chat / editor / terminal) ───────────────── */

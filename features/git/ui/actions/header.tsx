@@ -1,6 +1,12 @@
 "use client";
 
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Pulse20Regular } from "@fluentui/react-icons/headless/svg/pulse";
+
+
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
@@ -47,8 +53,7 @@ export function Header({
                         aria-pressed={live}
                     >
                         <Icon
-                            icon={"pulse"}
-                            size={ICON_SIZE_SM}
+                            icon={Pulse20Regular}
                             className={live ? "text-success" : "text-text-muted"}
                         />
                     </Button>
@@ -59,7 +64,7 @@ export function Header({
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-7 gap-1 px-2">
                             {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ?? "All runs"}
-                            <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} />
+                            <Icon icon={ChevronDown20Regular} />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40">
@@ -85,7 +90,7 @@ export function Header({
                     disabled={loadingRuns}
                     aria-label="Refresh"
                 >
-                    <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                    <Icon icon={ArrowSync20Regular} />
                 </Button>
             </Tooltip>
         </GitChromeActions>

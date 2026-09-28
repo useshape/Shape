@@ -1,6 +1,12 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/tooltip";
+import { useShapeAuth } from "@/lib/cloud/store";
+import { useSettings } from "@/lib/settings";
+import { resolveChatUsageDisplay } from "@/lib/chat/usage-display";
+import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
 
 export function UsageRing({
     percent,
@@ -54,5 +60,30 @@ export function UsageRing({
                 )}
             />
         </svg>
+    );
+}
+
+export function ChatUsageButton({ compact = false }: { compact?: boolean }) {
+    const shapeAuth = useShapeAuth();
+    const settings = useSettings();
+    const lastTurnUsage = useSyncExternalStore(subscribeLastTurnUsage, getLastTurnUsage, getLastTurnUsage);
+    const usage = resolveChatUsageDisplay(settings.ai.defaultModel, shapeAuth, lastTurnUsage);
+
+    return (
+        <Tooltip content={usage.tooltip}>
+            <button
+                type="button"
+                className="flex h-7 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                onClick={() =>
+                    void import("@/lib/window/open-settings").then(({ openSettingsWindow }) =>
+                        openSettingsWindow({ category: "account" }),
+                    )
+                }
+                aria-label={usage.tooltip || "Usage"}
+            >
+                <UsageRing percent={usage.percent} size={16} />
+                {compact ? null : <span className="tabular-nums">{usage.percent}%</span>}
+            </button>
+        </Tooltip>
     );
 }

@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../lib/use-chat-session";
-import { ChatTitlebar } from "./shell/titlebar";
+import { ChatTitlebar, resolveChatCrumbTitle } from "./shell/titlebar";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
 import { ChatErrorDialog } from "./blocks/error";
@@ -182,17 +182,29 @@ export default function Chat({
         }));
     }, [session.messages, session.conversationId, session.activeChatTabId]);
 
+    const activeTab = session.openChatTabs.find((tab) => tab.id === session.activeChatTabId);
+    const conv = (session.recentConvs ?? []).find(
+        (item) => item.id === (session.conversationId ?? session.activeChatTabId),
+    );
+    const crumbTitle = resolveChatCrumbTitle({
+        chatTitle: session.chatTitle,
+        tabTitle: activeTab?.title,
+        convTitle: conv?.title,
+        messages: session.messages,
+    });
+
     const titlebar = (
         <ChatTitlebar
-            title={session.chatTitle}
+            title={crumbTitle}
             conversationId={session.conversationId ?? session.activeChatTabId}
             recentIds={(session.recentConvs ?? []).map((c) => c.id)}
             timestamp={
-                (session.recentConvs ?? []).find((c) => c.id === session.conversationId)?.timestamp
+                conv?.timestamp
                 ?? session.messages.at(-1)?.timestamp
                 ?? null
             }
             subagentTitle={activeSubagent?.title ?? null}
+            subagentModel={activeSubagent?.model ?? null}
             extractedSubagents={extractedSubagents}
             onCloseSubagent={() => closeSubagent()}
             onSelect={(id) => {
@@ -321,7 +333,7 @@ export default function Chat({
                                 </div>
                             </div>
                             <div
-                                className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-linear-to-b from-panel to-transparent transition-opacity duration-200"
+                                className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-linear-to-b from-panel/50 to-transparent transition-opacity duration-200"
                                 style={{ opacity: session.scrolledFromTop ? 1 : 0 }}
                                 aria-hidden
                             />

@@ -1,8 +1,14 @@
-﻿"use client";
+"use client";
+
+import { Alert20Regular } from "@fluentui/react-icons/headless/svg/alert";
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+
 import { detectDevCommand } from "@/features/detection/lib/lib";
 import {
     ensureBackgroundRun,
@@ -1228,7 +1234,7 @@ export function DesignStudio({
                             {canvasBusy ? <CanvasLoadBar /> : null}
                             {bootError ? (
                                 <div className="absolute inset-x-0 top-0.5 z-20 flex items-center gap-2 border-b border-border bg-surface-4 px-3 py-2 text-sm text-text-secondary">
-                                    <Icon icon={"danger-triangle"} className="text-warning" />
+                                    <Icon icon={Alert20Regular} className="text-warning" />
                                     <span className="min-w-0 flex-1 truncate">{bootError}</span>
                                     <Button variant="ghost" size="sm" onClick={() => void pickPackageJson()}>
                                         Choose package.json
@@ -1246,7 +1252,7 @@ export function DesignStudio({
                             ) : null}
                     {mappingError ? (
                         <div className="absolute left-1/2 top-3 z-30 flex max-w-[min(520px,80%)] -translate-x-1/2 items-center gap-2 rounded-lg border border-border-secondary bg-surface-4/95 px-3 py-2 text-sm text-text-secondary shadow-lg backdrop-blur">
-                            <Icon icon={"danger-triangle"} className="text-warning" />
+                            <Icon icon={Alert20Regular} className="text-warning" />
                             <span className="min-w-0 flex-1">{mappingError}</span>
                             <Button
                                 variant="ghost"
@@ -1254,7 +1260,7 @@ export function DesignStudio({
                                 aria-label="Dismiss"
                                 onClick={() => setMappingError(null)}
                             >
-                                <Icon icon={"close"} />
+                                <Icon icon={Dismiss20Regular} />
                             </Button>
                         </div>
                     ) : null}

@@ -1,5 +1,8 @@
 "use client";
 
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+
+
 import { Icon } from "./icon";
 import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
@@ -56,7 +59,7 @@ export function CollapsibleSection({
                 onClick={toggle}
             >
                 <div className="w-5 flex items-center justify-center transition-transform duration-100">
-                    <Icon icon={"alt-arrow-right"}
+                    <Icon icon={ChevronRight20Regular}
                         
                         className={cn("transition-transform duration-200 ease-[var(--ease-out)] text-text-muted", isOpen && "rotate-90 text-text-primary")}
                      />
