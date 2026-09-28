@@ -1,5 +1,12 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Info20Regular } from "@fluentui/react-icons/headless/svg/info";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
+
 /**
  * Live terminal command UI for the chat transcript.
  *
@@ -13,7 +20,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "@/lib/utils";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
@@ -25,7 +33,7 @@ import {
 import { commands } from "@/lib/backend/commands";
 import { useSettings, updateSettingSection, type AutoRunModeSetting } from "@/lib/settings";
 import type { Chunk } from "../md/renderer";
-import { Collapse } from "./collapse";
+import { ActionLine, splitActionLabel } from "./action-line";
 import { ApprovalCard } from "./approval";
 
 const OUTPUT_CAP = 16_000;
@@ -237,7 +245,7 @@ function TerminalCommandMenu({ command }: { command: string }) {
                     aria-label="Command options"
                     className="rounded p-1 text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={"menu-dots"} />
+                    <Icon icon={MoreHorizontal20Regular} />
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-76">
@@ -255,7 +263,7 @@ function TerminalCommandMenu({ command }: { command: string }) {
                         >
                             <span className="flex w-full items-center gap-2 text-sm text-text-primary">
                                 <span className="flex-1">{opt.label}</span>
-                                {selected ? <Icon icon={"check"} /> : null}
+                                {selected ? <Icon icon={Checkmark20Regular} /> : null}
                             </span>
                             <span className="text-text-muted">{opt.description}</span>
                         </DropdownMenuItem>
@@ -302,41 +310,23 @@ function TerminalCommandRow({
 
     if (!summary && !statusLabel) return null;
 
+    const lead = summary ? `${statusLabel} ${summary}` : statusLabel;
+    const parts = splitActionLabel(lead);
+
     return (
-        <div className="flex w-full flex-col py-0.5">
-            <button
-                type="button"
-                onClick={() => canExpand && setExpanded((v) => !v)}
-                className={cn(
-                    "flex w-fit max-w-full items-center gap-1.5 text-left chat-text",
-                    "text-text-primary/80 hover:text-text-primary transition-colors",
-                    canExpand && "cursor-pointer",
-                )}
-            >
-                <span>
-                    {statusLabel}
-                    {summary ? (
-                        <>
-                            {" "}
-                            <span className="text-text-secondary">{summary}</span>
-                        </>
-                    ) : null}
-                </span>
-                {failed && typeof exitCode === "number" ? (
+        <ActionLine
+            action={parts.action}
+            detail={parts.detail}
+            extra={
+                failed && typeof exitCode === "number" ? (
                     <span className="shrink-0 tabular-nums text-error">exit {exitCode}</span>
-                ) : null}
-                {canExpand ? (
-                    <Icon
-                        icon={"alt-arrow-right"}
-                        className={cn(
-                            "shrink-0 text-text-disabled transition-transform duration-200",
-                            expanded && "rotate-90",
-                        )}
-                    />
-                ) : null}
-            </button>
-            <Collapse open={expanded && canExpand}>
-                <div className="relative mt-2 mb-1 squircle-2xl border border-border-subtle bg-transparent px-1.5 py-2">
+                ) : null
+            }
+            open={canExpand ? expanded : undefined}
+            onOpenChange={canExpand ? setExpanded : undefined}
+        >
+            {canExpand ? (
+                <div className="relative mt-1 mb-1 squircle-2xl border border-border-subtle bg-transparent px-1.5 py-2">
                     <div className="absolute right-2 top-2 z-[1]">
                         <TerminalCommandMenu command={command} />
                     </div>
@@ -349,8 +339,8 @@ function TerminalCommandRow({
                         <div className="pr-8 pt-1 text-xs text-warning">{notice}</div>
                     ) : null}
                 </div>
-            </Collapse>
-        </div>
+            ) : null}
+        </ActionLine>
     );
 }
 
@@ -368,7 +358,7 @@ function AutoRunModePicker({ disabled }: { disabled?: boolean }) {
                 >
                     {AUTO_RUN_OPTIONS.find((o) => o.value === settings.ai.autoRunMode)?.label
                         ?? "Ask every time"}
-                    <Icon icon={"alt-arrow-down"} className="opacity-70" />
+                    <Icon icon={ChevronDown20Regular} className="opacity-70" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64">
@@ -387,7 +377,7 @@ function AutoRunModePicker({ disabled }: { disabled?: boolean }) {
                                 <span className="text-sm text-text-primary">{opt.label}</span>
                                 <span className="text-xs text-text-muted leading-snug">{opt.description}</span>
                             </span>
-                            {selected ? <Icon icon={"check"} className="mt-0.5 shrink-0" /> : null}
+                            {selected ? <Icon icon={Checkmark20Regular} className="mt-0.5 shrink-0" /> : null}
                         </DropdownMenuItem>
                     );
                 })}
@@ -416,13 +406,13 @@ export function CommandApprovalCard({
 }) {
     return (
         <ApprovalCard
-            icon={<Icon icon={"programming"} className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />}
+            icon={<Icon icon={WindowConsole20Regular} className="shrink-0 text-text-muted" />}
             title={
                 <span className="inline-flex min-w-0 items-center gap-1.5">
                     <span>Run command</span>
                     {reason ? (
                         <Tooltip content={reason} side="top">
-                            <Icon icon={"info-circle"} className="shrink-0 text-text-disabled" size={ICON_SIZE_SM} />
+                            <Icon icon={Info20Regular} className="shrink-0 text-text-disabled" />
                         </Tooltip>
                     ) : null}
                 </span>

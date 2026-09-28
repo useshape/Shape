@@ -25,6 +25,7 @@ import { DiffView } from "../diff/diff-view";
 
 import type { EditorGroupId } from "@/core/providers/editor";
 import { isPlanFilePath } from "@/lib/plan/file";
+import { parsePlanMarkdown } from "@/lib/plan/preview";
 
 // Main file viewer component handling various file types (text, image, markdown)
 export default function FileViewer({ path, group: _group = "left" }: { path: string; group?: EditorGroupId }) {
@@ -91,6 +92,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
     const { content, setContent, originalContent, error, loading } = useFileContent(
         path, skipTextContent, isDiff, savedContentRef, bufferVersionRef
     );
+    const planTitle = isPlanFile ? parsePlanMarkdown(content || "").title : "";
 
     useEffect(() => {
         const constructDiff = (origText: string, replText: string) => {
@@ -469,6 +471,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                 {isPlanFile ? (
                     <PlanEditorHeader
                         path={path}
+                        title={planTitle}
                         raw={mode === "raw"}
                         onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
                     />
@@ -523,6 +526,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                 {isPlanFile ? (
                     <PlanEditorHeader
                         path={path}
+                        title={planTitle}
                         raw={false}
                         onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
                     />

@@ -1,5 +1,18 @@
 "use client";
 
+import { GithubMark } from "@/components/ui/github-mark";
+import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
+import { Cursor20Filled } from "@fluentui/react-icons/headless/svg/cursor";
+import { DataPie20Filled } from "@fluentui/react-icons/headless/svg/data-pie";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
+import { Phone20Regular } from "@fluentui/react-icons/headless/svg/phone";
+import { Rhombus20Filled } from "@fluentui/react-icons/headless/svg/rhombus";
+import { Tablet20Regular } from "@fluentui/react-icons/headless/svg/tablet";
+import { Window20Filled } from "@fluentui/react-icons/headless/svg/window";
+
+
+
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -7,7 +20,9 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM, type SolarIconName } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +37,7 @@ function Tool({
     onClick,
 }: {
     label: string;
-    icon: SolarIconName;
+    icon: IconGlyph;
     active?: boolean;
     disabled?: boolean;
     onClick?: () => void;
@@ -42,7 +57,7 @@ function Tool({
                     active && "bg-panel-hover text-panel-fg hover:bg-panel-hover hover:text-panel-fg",
                 )}
             >
-                <Icon icon={icon} size={20} />
+                <Icon icon={icon} />
             </Button>
         </Tooltip>
     );
@@ -76,19 +91,19 @@ export function DesignBottomToolbar({
             <div className="flex items-center gap-0.5">
                 <Tool
                     label="Inspect"
-                    icon={"pen"}
+                    icon={Edit20Regular}
                     active={mode === "select"}
                     onClick={() => onModeChange("select")}
                 />
                 <Tool
                     label="Normal"
-                    icon={"cursor"}
+                    icon={Cursor20Filled}
                     active={mode === "normal"}
                     onClick={() => onModeChange("normal")}
                 />
                 <Tool
                     label="Auto layout"
-                    icon={"widget"}
+                    icon={Grid20Regular}
                     active={mode === "autolayout"}
                     onClick={() => onModeChange("autolayout")}
                 />
@@ -102,7 +117,7 @@ export function DesignBottomToolbar({
                             aria-label="Capture"
                             className="size-10 rounded-lg"
                         >
-                            <Icon icon={"gallery"} size={20} />
+                            <Icon icon={Camera20Filled} />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="center" className="min-w-36">
@@ -110,24 +125,24 @@ export function DesignBottomToolbar({
                             disabled={!canCaptureElement}
                             onClick={onCaptureElement}
                         >
-                            <Icon icon={"stars-minimalistic"} size={ICON_SIZE_SM} />
+                            <Icon icon={Rhombus20Filled} />
                             Element
                         </DropdownMenuItem>
                         <DropdownMenuItem disabled={!canCapture} onClick={onCaptureScreen}>
-                            <Icon icon={"monitor"} size={ICON_SIZE_SM} />
+                            <Icon icon={Window20Filled} />
                             Screen
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <Tool
                     label="Open source"
-                    icon={"code-square"}
+                    icon={GithubMark}
                     disabled={!canOpenCode}
                     onClick={onOpenCode}
                 />
                 <Tool
                     label="Rotate"
-                    icon={"pie-chart"}
+                    icon={DataPie20Filled}
                     active={mode === "rotate"}
                     onClick={() => onModeChange("rotate")}
                 />
@@ -136,19 +151,19 @@ export function DesignBottomToolbar({
             <div className="flex rounded-lg bg-panel-hover p-0.5">
                 <Tool
                     label="Desktop"
-                    icon={"monitor"}
+                    icon={Window20Filled}
                     active={viewport === "desktop"}
                     onClick={() => onViewportChange("desktop")}
                 />
                 <Tool
                     label="Tablet"
-                    icon={"tablet"}
+                    icon={Tablet20Regular}
                     active={viewport === "tablet"}
                     onClick={() => onViewportChange("tablet")}
                 />
                 <Tool
                     label="Mobile"
-                    icon={"smartphone"}
+                    icon={Phone20Regular}
                     active={viewport === "mobile"}
                     onClick={() => onViewportChange("mobile")}
                 />

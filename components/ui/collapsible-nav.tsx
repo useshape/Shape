@@ -22,7 +22,7 @@ export function CollapsibleNavGroup({
                 type="button"
                 onClick={onToggle}
                 aria-expanded={open}
-                className="flex h-8 w-full items-center gap-3 rounded-md px-1.5 text-left text-sm font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-primary"
+                className="flex h-8 w-full items-center gap-3 rounded-md px-1.5 text-left text-xs font-semibold text-text-muted hover:bg-panel-hover/40 hover:text-text-primary"
             >
                 <span className="min-w-0 truncate">{label}</span>
             </button>
@@ -60,7 +60,7 @@ export function NavLeafButton({
             onClick={onClick}
             disabled={disabled}
             className={cn(
-                "h-8 w-full justify-start gap-3 px-1.5! font-normal",
+                "h-9 w-full justify-start gap-1 px-1.5! font-medium",
                 active
                     ? "bg-panel-hover text-text-primary"
                     : "text-text-secondary hover:bg-panel-hover/60 hover:text-text-primary",

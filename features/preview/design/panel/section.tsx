@@ -1,5 +1,7 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+
 import { useState } from "react";
 import { IconButton } from "./field";
 
@@ -46,7 +48,7 @@ export function PanelSection({
                 {add ? (
                     <IconButton
                         label={`Add ${title}`}
-                        icon={"add-circle"}
+                        icon={Add20Regular}
                         onClick={() => {
                             if (!controlled) setOpenInternal(true);
                             onAdd?.();

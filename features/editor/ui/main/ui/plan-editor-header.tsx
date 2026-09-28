@@ -1,13 +1,25 @@
 "use client";
 
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
+
+
 import React from "react";
 import { Icon } from "@/components/ui/icon";
-import { cn } from "@/lib/utils";
+
 import { commands } from "@/lib/backend";
 import { useChatStreamOptional } from "@/features/chat/lib/chat-stream-store";
-import { humanizePlanTitle } from "@/lib/plan/preview";
+import { displayPlanName } from "@/lib/plan/preview";
 import { planSlugFromPath } from "@/lib/plan/file";
 import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 
 function modKeyLabel(): string {
     if (typeof navigator === "undefined") return "Ctrl";
@@ -47,17 +59,20 @@ export function MarkdownViewSwitch({
 
 export function PlanEditorHeader({
     path,
+    title: titleProp,
     raw = false,
     onRawChange,
+    onSaveToWorkspace,
 }: {
     path: string;
+    title?: string;
     raw?: boolean;
     onRawChange?: (raw: boolean) => void;
+    onSaveToWorkspace?: () => void;
 }) {
     const { isLoading } = useChatStreamOptional();
     const [checking, setChecking] = React.useState(false);
-    const fileName = path.split(/[\\/]/).pop() || "plan.md";
-    const title = humanizePlanTitle(planSlugFromPath(path));
+    const title = displayPlanName(titleProp || planSlugFromPath(path));
     const mod = modKeyLabel();
 
     const handleBuild = React.useCallback(async () => {
@@ -88,14 +103,11 @@ export function PlanEditorHeader({
 
     return (
         <div className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-border-subtle bg-editor px-3 min-h-[36px]">
-            <div className="flex min-w-0 items-center gap-1.5 text-sm">
-                <span className="shrink-0 text-text-muted">Plans</span>
-                <Icon icon={"alt-arrow-right"} className="shrink-0 text-text-disabled" />
-                <Icon icon={"file-text"} className="shrink-0 text-text-muted" />
-                <span className="truncate font-mono text-text-secondary">{fileName}</span>
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+                <Icon icon={TaskListSquareLtr20Regular} className="shrink-0 text-text-muted" />
+                <span className="truncate text-text-primary">{title}</span>
             </div>
-            <div className="flex min-w-0 items-center gap-2">
-                {onRawChange ? <MarkdownViewSwitch raw={raw} onRawChange={onRawChange} /> : null}
+            <div className="flex shrink-0 items-center gap-1">
                 <Button
                     type="button"
                     disabled={isLoading || checking}
@@ -109,6 +121,45 @@ export function PlanEditorHeader({
                         <kbd className="text-[10px]">↵</kbd>
                     </span>
                 </Button>
+                {onRawChange || onSaveToWorkspace ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-7 text-text-muted"
+                                aria-label="Plan options"
+                            >
+                                <Icon icon={MoreHorizontal20Regular} />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[160px]">
+                            {onRawChange ? (
+                                <>
+                                    <DropdownMenuCheckboxItem
+                                        checked={!raw}
+                                        onCheckedChange={() => onRawChange(false)}
+                                    >
+                                        Markdown
+                                    </DropdownMenuCheckboxItem>
+                                    <DropdownMenuCheckboxItem
+                                        checked={raw}
+                                        onCheckedChange={() => onRawChange(true)}
+                                    >
+                                        Raw
+                                    </DropdownMenuCheckboxItem>
+                                </>
+                            ) : null}
+                            {onRawChange && onSaveToWorkspace ? <DropdownMenuSeparator /> : null}
+                            {onSaveToWorkspace ? (
+                                <DropdownMenuItem onClick={onSaveToWorkspace}>
+                                    Save to workspace
+                                </DropdownMenuItem>
+                            ) : null}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
             </div>
         </div>
     );

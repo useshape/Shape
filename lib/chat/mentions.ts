@@ -5,6 +5,7 @@ import { lookupMentionToken, registerMentionToken } from "@/lib/chat/mention-reg
 import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { DESIGN_TOKEN_MENTIONS, designTokenById } from "@/lib/chat/design-mentions";
 import { elementMentionBlock, lookupElementMention } from "@/lib/chat/element-mentions";
+import { skillBySlug } from "@/lib/chat/skills";
 
 export type MentionKind =
     | "file"
@@ -19,6 +20,7 @@ export type MentionKind =
     | "browser"
     | "mcp"
     | "plugin"
+    | "skill"
     | "element";
 
 export type ChatMention = {
@@ -39,7 +41,7 @@ export function resolveBrowserMentionPath(path: string | undefined): string | nu
 
 /** Explicit typed tokens + bare paths / design names (no spaces). */
 const MENTION_PATTERN =
-    /@(?:(file|folder|design|docs|terminal|chat|branch|browser|mcp|plugin|element):([^\s]+)|(codebase|selection)\b|((?:[\w.-]+\/)*[\w.-]+\/?))/g;
+    /@(?:(file|folder|design|docs|terminal|chat|branch|browser|mcp|plugin|skill|element):([^\s]+)|(codebase|selection)\b|((?:[\w.-]+\/)*[\w.-]+\/?))/g;
 
 function normalizeDesignKey(value: string): string {
     return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -103,6 +105,9 @@ export function mentionDisplayLabel(mention: ChatMention): string {
     if (mention.kind === "plugin") {
         return mention.label || mention.id || mention.path || "Plugin";
     }
+    if (mention.kind === "skill") {
+        return mention.label || mention.id || mention.path || "Skill";
+    }
     if (mention.kind === "element") {
         if (mention.label?.startsWith("<")) return mention.label;
         const tag = (mention.id || mention.path || "element").replace(/^element:/, "").replace(/-\d+$/, "");
@@ -150,6 +155,8 @@ export function formatMentionToken(mention: ChatMention): string {
         token = `@mcp:${slugifyMentionLabel(mention.id || mention.label || "server")}`;
     } else if (mention.kind === "plugin") {
         token = `@plugin:${slugifyMentionLabel(mention.id || mention.path || mention.label || "plugin")}`;
+    } else if (mention.kind === "skill") {
+        token = `@skill:${slugifyMentionLabel(mention.id || mention.path || mention.label || "skill")}`;
     } else if (mention.kind === "element") {
         token = `@${(mention.id || "element:element").replace(/^@/, "")}`;
     } else {
@@ -198,6 +205,7 @@ function labelForTypedMention(kind: MentionKind, path: string): string {
     if (kind === "branch") return unslugMentionLabel(path);
     if (kind === "mcp") return unslugMentionLabel(path);
     if (kind === "plugin") return unslugMentionLabel(path);
+    if (kind === "skill") return unslugMentionLabel(path);
     if (kind === "element") return `<${path.replace(/-\d+$/, "")}>`;
     return path;
 }
@@ -246,7 +254,7 @@ export function parseMentionTokens(text: string): ChatMention[] {
             mentions.push({
                 kind,
                 path,
-                id: kind === "chat" || kind === "plugin" ? path : kind === "element" ? `element:${path}` : undefined,
+                id: kind === "chat" || kind === "plugin" || kind === "skill" ? path : kind === "element" ? `element:${path}` : undefined,
                 label: labelForTypedMention(kind, path),
             });
             continue;
@@ -451,6 +459,14 @@ async function readMentionContext(
     mention: ChatMention,
     projectPath: string | null,
 ): Promise<string | null> {
+    if (mention.kind === "skill") {
+        const skill = skillBySlug(mention.id || mention.path || mention.label);
+        if (!skill) {
+            return `<mention_context type="skill" id="${escapeXmlAttr(mention.path || mention.label)}">The user referenced a skill that is not installed.</mention_context>`;
+        }
+        return `<mention_context type="skill" id="${escapeXmlAttr(skill.id)}" name="${escapeXmlAttr(skill.name)}">Follow this skill for the rest of the turn.\n${skill.body}\n</mention_context>`;
+    }
+
     if (mention.kind === "codebase") {
         if (!projectPath) return null;
         return '<mention_context type="codebase">Search the codebase for files and symbols relevant to the user request.</mention_context>';

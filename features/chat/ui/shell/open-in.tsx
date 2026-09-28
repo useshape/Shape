@@ -1,7 +1,15 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Cursor20Filled } from "@fluentui/react-icons/headless/svg/cursor";
+
+
+
 import { useEffect } from "react";
 import { Icon } from "@/components/ui/icon";
+
+
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     DropdownMenu,
@@ -54,7 +62,7 @@ export function OpenInMenu() {
                     >
                         <CursorMark />
                         <span>Open</span>
-                        <Icon icon={"alt-arrow-down"} className="opacity-60" />
+                        <Icon icon={ChevronDown20Regular} className="opacity-60" />
                     </Button>
                 </DropdownMenuTrigger>
             </Tooltip>

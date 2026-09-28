@@ -1,12 +1,20 @@
 "use client";
 
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
+
+
+
 import React from "react";
-import { ICON_SIZE_MD, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
-import { humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan/preview";
-import { Tooltip } from "@/components/ui/tooltip";
+import { displayPlanName, parsePlanMarkdown, type PlanPreview } from "@/lib/plan/preview";
 import { Button } from "@/components/ui/button";
 import { Collapse } from "./collapse";
 import { ShimmerText } from "@/components/ui/shimmer-text";
@@ -52,7 +60,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                 )}
             >
                 <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
-                    <SolarIcon name="list-check" size={16} />
+                    <Icon icon={TaskListSquareLtr20Regular} />
                 </span>
                 <span className="truncate text-sm font-medium text-text-primary">
                     {completedCount} of {totalCount} done
@@ -70,11 +78,11 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                         <div key={`${step.label}-${i}`} className="flex items-center gap-2">
                             <span className="flex size-4 shrink-0 items-center justify-center">
                             {step.status === "done" ? (
-                                <SolarIcon name="check-circle" size={16} className="text-success" />
+                                <Icon icon={CheckmarkCircle20Filled} className="text-success" />
                             ) : step.status === "active" ? (
                                 <span className="size-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
                             ) : step.status === "cancelled" ? (
-                                <SolarIcon name="close" size={16} className="text-text-disabled" />
+                                <Icon icon={Dismiss20Regular} className="text-text-disabled" />
                             ) : (
                                 <span className="size-3.5 rounded-full border-2 border-text-muted/45" />
                             )}
@@ -114,7 +122,9 @@ export function PlanSavedBlock({
     const { isLoading } = useChatStream();
     const [missing, setMissing] = React.useState(false);
     const [checking, setChecking] = React.useState(false);
-    const [preview, setPreview] = React.useState<{ goal: string; todos: string[] } | null>(null);
+    const [preview, setPreview] = React.useState<PlanPreview | null>(() =>
+        markdown ? parsePlanMarkdown(markdown) : null,
+    );
     const [open, setOpen] = React.useState(true);
 
     const resolvePath = (filePath: string) => {
@@ -123,8 +133,7 @@ export function PlanSavedBlock({
         return `${project_path.replace(/\\/g, "/")}/${filePath.replace(/\\/g, "/")}`.replace(/\/+/g, "/");
     };
 
-    const fileName = path.split(/[\\/]/).pop() || "plan.md";
-    const displayTitle = humanizePlanTitle(title);
+    const displayTitle = displayPlanName(title, preview?.title);
     const absPath = resolvePath(path);
 
     React.useEffect(() => {
@@ -174,7 +183,7 @@ export function PlanSavedBlock({
             new CustomEvent("shape-open-workspace-plan", {
                 detail: {
                     path: absPath,
-                    title: displayTitle || fileName,
+                    title: displayTitle,
                     markdown,
                 },
             }),
@@ -214,68 +223,58 @@ export function PlanSavedBlock({
           ? "Building…"
           : "Build";
 
+    const todoCount = todos.length;
+
     return (
         <div className="my-1 w-full overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex w-full items-center gap-2 p-2 text-left hover:bg-panel-hover/40 transition-colors"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover/40"
             >
-                <SolarIcon name="git-branch" className="shrink-0 text-text-muted" size={ICON_SIZE_MD} />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-muted">
-                    Plan ready
-                </span>
-                <span className="max-w-[45%] truncate text-sm text-text-secondary">
+                <Icon icon={TaskListSquareLtr20Regular} className="shrink-0 text-text-muted" />
+                <span className="min-w-0 flex-1 truncate text-sm text-text-secondary">
                     {displayTitle}
                 </span>
-                <SolarIcon
-                    name="alt-arrow-down"
-                    className={cn("shrink-0 text-text-muted transition-transform duration-200", open && "rotate-180")}
-                    size={ICON_SIZE_MD}
+                <Icon
+                    icon={ChevronDown20Regular}
+                    className={cn(
+                        "shrink-0 text-text-muted transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                        open && "rotate-180",
+                    )}
                 />
             </button>
 
             <Collapse open={open}>
-                <div className="px-3 py-2.5 flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                            <h3 className="text-sm font-medium text-text-primary leading-snug">
-                                {displayTitle}
-                            </h3>
-                            {preview?.goal ? (
-                                <p className="mt-1 text-sm text-text-muted leading-relaxed">{preview.goal}</p>
-                            ) : null}
-                            <button
-                                type="button"
-                                onClick={() => { void handleOpen(); }}
-                                className="mt-1 text-sm text-accent-text hover:underline text-left w-fit"
-                            >
-                                {fileName}
-                            </button>
-                        </div>
-                        <Tooltip content="Open plan" side="top">
-                            <button
-                                type="button"
-                                onClick={() => { void handleOpen(); }}
-                                className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-panel-hover transition-colors shrink-0"
-                            >
-                                <SolarIcon name="square-forward" size={ICON_SIZE_MD} />
-                            </button>
-                        </Tooltip>
-                    </div>
+                <div className="flex flex-col gap-3 px-3 pb-3">
+                    {preview?.goal ? (
+                        <p className="text-sm text-text-primary leading-relaxed">{preview.goal}</p>
+                    ) : null}
+                    <button
+                        type="button"
+                        onClick={() => { void handleOpen(); }}
+                        className="w-fit text-left text-sm text-accent-text hover:underline"
+                    >
+                        Read detailed plan
+                    </button>
 
-                    {todos.length > 0 ? (
-                        <ul className="flex flex-col gap-1.5 pt-1">
-                            {todos.slice(0, 6).map((todo) => (
-                                <li key={todo} className="flex items-start gap-2">
-                                    <span className="mt-1 size-3.5 shrink-0 rounded-full border-2 border-text-muted/45" />
-                                    <span className="text-sm text-text-primary leading-snug">{todo}</span>
-                                </li>
-                            ))}
-                        </ul>
+                    {todoCount > 0 ? (
+                        <div className="rounded-xl bg-surface-1 px-3 py-2.5">
+                            <p className="text-sm text-text-muted">
+                                {todoCount} {todoCount === 1 ? "todo" : "todos"}
+                            </p>
+                            <ul className="mt-2 flex flex-col gap-2">
+                                {todos.map((todo) => (
+                                    <li key={todo} className="flex items-start gap-2">
+                                        <span className="mt-0.5 size-4 shrink-0 rounded-full border border-text-muted/45" />
+                                        <span className="text-sm text-text-primary leading-snug">{todo}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     ) : null}
 
-                    <div className="flex justify-end pt-1">
+                    <div className="flex justify-end">
                         <Button
                             disabled={isLoading || checking || missing}
                             onClick={() => { void handleBuild(); }}
@@ -285,7 +284,7 @@ export function PlanSavedBlock({
                         >
                             {buildLabel}
                             {!missing ? (
-                                <span className="inline-flex items-center gap-0.5 ml-1 opacity-80">
+                                <span className="ml-1 inline-flex items-center gap-0.5 opacity-80">
                                     <kbd className="text-[10px]">{mod}</kbd>
                                     <kbd className="text-[10px]">↵</kbd>
                                 </span>

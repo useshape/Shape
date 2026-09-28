@@ -1,8 +1,15 @@
 "use client";
 
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+
+
+
+
 import React, { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ICON_SIZE_SM, Icon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { Collapse } from "./collapse";
 import { BrowseStage } from "./browse-frame";
 import { usePersonaReview, type PersonaLive } from "@/features/agent/browser/personas";
@@ -98,13 +105,12 @@ function PersonaRow({ card, live }: { card: PersonaCard; live?: PersonaLive }) {
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex w-fit max-w-full min-w-0 items-center gap-2 py-0.5 text-left chat-text text-text-secondary hover:text-text-primary"
+                className="flex w-fit max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left chat-text font-normal text-text-primary"
             >
                 <span className="shrink-0 text-text-muted">{running ? "Reviewing" : "Reviewed"}</span>
-                <span className="min-w-0 truncate text-text-primary">{card.name}</span>
+                <span className="min-w-0 truncate">{card.name}</span>
                 <Icon
-                    icon="alt-arrow-right"
-                    size={ICON_SIZE_SM}
+                    icon={ChevronRight20Regular}
                     className={cn("shrink-0 text-text-muted transition-transform duration-200", open && "rotate-90")}
                 />
             </button>
@@ -154,13 +160,12 @@ export function PersonaReviewPanel({
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex w-fit max-w-full items-center gap-2 text-left chat-text text-text-secondary hover:text-text-primary"
+                className="flex w-fit max-w-full items-center gap-1.5 text-left chat-text font-normal text-text-primary"
             >
                 <span>Design review</span>
                 {host ? <span className="min-w-0 truncate text-text-muted">{host}</span> : null}
                 <Icon
-                    icon="alt-arrow-right"
-                    size={ICON_SIZE_SM}
+                    icon={ChevronRight20Regular}
                     className={cn("shrink-0 text-text-muted transition-transform duration-200", open && "rotate-90")}
                 />
             </button>

@@ -1,7 +1,12 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+
+
 import { useEffect, useMemo, useState } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { useProjectState } from "@/lib/backend";
 import {
@@ -86,12 +91,12 @@ export function ComposerRepoMenu({
                         }}
                         className="gap-2"
                     >
-                        <Icon icon={"folder"} size={ICON_SIZE_SM} className="shrink-0 text-text-primary!" />
+                        <Icon icon={Folder20Filled} className="shrink-0 text-text-primary!" />
                         <span className="min-w-0 flex-1 truncate text-sm text-text-primary!">
                             {getRepoName(r.path)}
                         </span>
                         {project_path === r.path ? (
-                            <Icon icon={"check"} className="shrink-0" size={ICON_SIZE_SM} />
+                            <Icon icon={Checkmark20Regular} className="shrink-0" />
                         ) : null}
                     </DropdownMenuItem>
                 ))}

@@ -1,5 +1,7 @@
 "use client";
 
+import { AlignTop20Regular } from "@fluentui/react-icons/headless/svg/align-top";
+
 import type { ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";

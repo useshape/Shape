@@ -1,8 +1,10 @@
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import Link from "next/link";
 import { Children, Fragment, isValidElement } from "react";
 import type { ComponentType, ReactNode, Ref } from "react";
 import { cn } from "@/lib/utils";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 
 /**
  * Figma source: Board UI → dashboard 1 breadcrumb (node 3731:3011).
@@ -52,7 +54,7 @@ export function Breadcrumb({
         {items.map((item, index) => (
           <Fragment key={item.key ?? index}>
             {index > 0 && (
-              <Icon icon={"alt-arrow-right"} size={ICON_SIZE_SM} />
+              <Icon icon={ChevronRight20Regular} />
             )}
             {item}
           </Fragment>

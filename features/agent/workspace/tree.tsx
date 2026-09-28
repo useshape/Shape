@@ -1,8 +1,16 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
+
+
 import { useCallback, useEffect, useState } from "react";
 import { commands, type FileEntry } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import {
     ContextMenu,
@@ -67,11 +75,11 @@ function TreeNode({
                     style={{ paddingLeft: pad }}
                 >
                     <Icon
-                        icon={open ? "alt-arrow-down" : "alt-arrow-right"}
+                        icon={open ? ChevronDown20Regular : ChevronRight20Regular}
                         className="shrink-0 text-text-muted"
                     />
                     <Icon
-                        icon={open ? "folder-open" : "folder"}
+                        icon={open ? FolderOpen20Regular : Folder20Filled}
                         className="shrink-0 text-text-muted"
                     />
                     <span className="min-w-0 truncate">{entry.name}</span>
@@ -116,7 +124,7 @@ function TreeNode({
             )}
             style={{ paddingLeft: pad + 14 }}
         >
-            <Icon icon={"file-text"} className="shrink-0 text-text-muted" />
+            <Icon icon={DocumentText20Regular} className="shrink-0 text-text-muted" />
             <span className="min-w-0 truncate">{entry.name}</span>
         </button>
             </ContextMenuTrigger>

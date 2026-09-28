@@ -1,9 +1,19 @@
 "use client";
 
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
+import { TextBold20Regular } from "@fluentui/react-icons/headless/svg/text-bold";
+import { TextItalic20Regular } from "@fluentui/react-icons/headless/svg/text-italic";
+import { TextNumberListLtr20Regular } from "@fluentui/react-icons/headless/svg/text-number-list-ltr";
+import { TextStrikethrough20Regular } from "@fluentui/react-icons/headless/svg/text-strikethrough";
+
+
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     DropdownMenu,
@@ -211,29 +221,29 @@ export function MarkdownToolbar({
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Bold" onClick={() => onFormat("bold")}>
-                <Icon icon={"text-bold"} />
+                <Icon icon={TextBold20Regular} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Italic" onClick={() => onFormat("italic")}>
-                <Icon icon={"text-italic"} />
+                <Icon icon={TextItalic20Regular} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Strikethrough" onClick={() => onFormat("strike")}>
-                <Icon icon={"text-cross"} />
+                <Icon icon={TextStrikethrough20Regular} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Inline code" onClick={() => onFormat("code")}>
-                <Icon icon={"code"} />
+                <Icon icon={Code20Regular} />
             </Button>
 
             <div className="w-px h-5 bg-border-subtle mx-0.5" />
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Bullet list" onClick={() => onList(false)}>
-                <Icon icon={"checklist"} />
+                <Icon icon={TaskListSquareLtr20Regular} />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Numbered list" onClick={() => onList(true)}>
-                <Icon icon={"list"} />
+                <Icon icon={TextNumberListLtr20Regular} />
             </Button>
 
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 ml-0.5" title="Close" onClick={onClose}>
-                <Icon icon={"close"} />
+                <Icon icon={Dismiss20Regular} />
             </Button>
         </div>
     );

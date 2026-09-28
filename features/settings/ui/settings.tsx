@@ -24,15 +24,16 @@ import { cn } from "@/lib/utils";
 import {
     SettingRow,
     SettingSection,
+    SettingCard,
     SettingSelect,
     SettingSwitch,
     SettingNumberSelect,
     FontFamilySelect,
+    ExcludePatternsSelect,
     TERMINAL_FONT_PRESETS,
     FONT_SIZE_PRESETS,
     SCROLLBACK_PRESETS,
     AUTO_FETCH_INTERVAL_PRESETS,
-    MAX_CONTEXT_PRESETS,
 } from "./shared/controls";
 import { AiSettingsPanel } from "./sections/ai";
 import { MicrophoneSettings } from "./sections/microphone";
@@ -41,12 +42,13 @@ import { applyTelemetryPreference } from "@/lib/telemetry";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
-import { CollapsibleNavGroup, NavLeafButton } from "@/components/ui/collapsible-nav";
 import { ThemePicker } from "./theme/picker";
 import { normalizeColorTheme } from "@/lib/settings/themes";
+import { FluentIcon } from "./fluent-icons";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
 import { KeyboardShortcutsView } from "./sections/shortcuts";
 import { PluginsSettingsView } from "./sections/plugins";
+import { SkillsSettings } from "./sections/skills";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import { useRouter } from "next/navigation";
 import { useShapeAuth } from "@/lib/cloud/store";
@@ -67,40 +69,30 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
     const f = settings.files;
     return (
         <>
-        <SettingSection id="settings-editor-font" title="Editor">
-            <SettingRow title="Compact Tab Bar">
+        <SettingSection id="settings-editor-font" title="Tabs">
+            <SettingRow title="Compact tab bar" description="Shorter tabs in the editor.">
                 <SettingSwitch
                     checked={e.compactTabs}
                     onChange={(v) => updateSettingSection("editor", { compactTabs: v })}
                 />
             </SettingRow>
-            <SettingRow title="Font Size">
+        </SettingSection>
+        <SettingSection title="Text">
+            <SettingCard>
+            <SettingRow title="Font size">
                 <SettingNumberSelect
                     value={e.fontSize}
                     options={FONT_SIZE_PRESETS}
                     onChange={(v) => updateSettingSection("editor", { fontSize: v })}
                 />
             </SettingRow>
-            <SettingRow title="Tab Size">
-                <SettingNumberSelect
-                    value={e.tabSize}
-                    options={[2, 4, 8]}
-                    onChange={(v) => updateSettingSection("editor", { tabSize: v })}
-                />
-            </SettingRow>
-            <SettingRow title="Insert Spaces">
+            <SettingRow title="Font ligatures">
                 <SettingSwitch
-                    checked={e.insertSpaces}
-                    onChange={(v) => updateSettingSection("editor", { insertSpaces: v })}
+                    checked={e.fontLigatures}
+                    onChange={(v) => updateSettingSection("editor", { fontLigatures: v })}
                 />
             </SettingRow>
-            <SettingRow title="Detect Indentation">
-                <SettingSwitch
-                    checked={e.detectIndentation}
-                    onChange={(v) => updateSettingSection("editor", { detectIndentation: v })}
-                />
-            </SettingRow>
-            <SettingRow title="Word Wrap">
+            <SettingRow title="Word wrap">
                 <SettingSelect
                     value={e.wordWrap}
                     options={[
@@ -113,7 +105,7 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
                     }
                 />
             </SettingRow>
-            <SettingRow title="Line Numbers">
+            <SettingRow title="Line numbers">
                 <SettingSelect
                     value={e.lineNumbers}
                     options={[
@@ -134,52 +126,110 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
                     onChange={(v) => updateSettingSection("editor", { minimap: v })}
                 />
             </SettingRow>
-            <SettingRow title="Font Ligatures">
-                <SettingSwitch
-                    checked={e.fontLigatures}
-                    onChange={(v) => updateSettingSection("editor", { fontLigatures: v })}
+            </SettingCard>
+        </SettingSection>
+        <SettingSection title="Indentation">
+            <SettingCard>
+            <SettingRow title="Tab size">
+                <SettingNumberSelect
+                    value={e.tabSize}
+                    options={[2, 4, 8]}
+                    onChange={(v) => updateSettingSection("editor", { tabSize: v })}
                 />
             </SettingRow>
-            <SettingRow title="Format On Save">
+            <SettingRow title="Insert spaces" description="Use spaces instead of tab characters.">
+                <SettingSwitch
+                    checked={e.insertSpaces}
+                    onChange={(v) => updateSettingSection("editor", { insertSpaces: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Detect indentation" description="Match the indent already used in the file.">
+                <SettingSwitch
+                    checked={e.detectIndentation}
+                    onChange={(v) => updateSettingSection("editor", { detectIndentation: v })}
+                />
+            </SettingRow>
+            </SettingCard>
+        </SettingSection>
+        <SettingSection title="Saving">
+            <SettingCard>
+            <SettingRow title="Format on save">
                 <SettingSwitch
                     checked={e.formatOnSave}
                     onChange={(v) => updateSettingSection("editor", { formatOnSave: v })}
                 />
             </SettingRow>
-            <SettingRow title="Auto Save">
+            <SettingRow title="Auto save">
                 <SettingSelect
                     value={e.autoSave}
                     options={[
                         { value: "off", label: "Off" },
-                        { value: "afterDelay", label: "After Delay" },
-                        { value: "onFocusChange", label: "On Focus Change" },
+                        { value: "afterDelay", label: "After delay" },
+                        { value: "onFocusChange", label: "On focus change" },
                     ]}
                     onChange={(v) =>
                         updateSettingSection("editor", { autoSave: v as ShapeSettings["editor"]["autoSave"] })
                     }
                 />
             </SettingRow>
-            <SettingRow title="Trim Trailing Whitespace">
+            <SettingRow title="Trim trailing whitespace">
                 <SettingSwitch
                     checked={e.trimTrailingWhitespace}
                     onChange={(v) => updateSettingSection("editor", { trimTrailingWhitespace: v })}
                 />
             </SettingRow>
-            <SettingRow title="Insert Final Newline">
+            <SettingRow title="Insert final newline">
                 <SettingSwitch
                     checked={e.insertFinalNewline}
                     onChange={(v) => updateSettingSection("editor", { insertFinalNewline: v })}
                 />
             </SettingRow>
-            <SettingRow title="Image Preview">
+            </SettingCard>
+        </SettingSection>
+        <SettingSection title="Caret">
+            <SettingCard>
+            <SettingRow title="Cursor style">
+                <SettingSelect
+                    value={e.cursorStyle}
+                    options={[
+                        { value: "line", label: "Line" },
+                        { value: "block", label: "Block" },
+                        { value: "underline", label: "Underline" },
+                    ]}
+                    onChange={(v) =>
+                        updateSettingSection("editor", { cursorStyle: v as ShapeSettings["editor"]["cursorStyle"] })
+                    }
+                />
+            </SettingRow>
+            <SettingRow title="Smooth scrolling">
+                <SettingSwitch
+                    checked={e.smoothScrolling}
+                    onChange={(v) => updateSettingSection("editor", { smoothScrolling: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Bracket colors">
+                <SettingSwitch
+                    checked={e.bracketPairColorization}
+                    onChange={(v) => updateSettingSection("editor", { bracketPairColorization: v })}
+                />
+            </SettingRow>
+            <SettingRow title="Indent guides">
+                <SettingSwitch
+                    checked={e.showIndentGuides}
+                    onChange={(v) => updateSettingSection("editor", { showIndentGuides: v })}
+                />
+            </SettingRow>
+            </SettingCard>
+        </SettingSection>
+        <SettingSection id="settings-files" title="Files">
+            <SettingCard>
+            <SettingRow title="Image preview">
                 <SettingSwitch
                     checked={e.imagePreview}
                     onChange={(v) => updateSettingSection("editor", { imagePreview: v })}
                 />
             </SettingRow>
-        </SettingSection>
-        <SettingSection id="settings-files" title="Files">
-            <SettingRow title="Default EOL">
+            <SettingRow title="Line endings">
                 <SettingSelect
                     value={f.defaultEol}
                     options={[
@@ -191,6 +241,13 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
                     }
                 />
             </SettingRow>
+            <SettingRow title="Exclude" description="Folders left out of search.">
+                <ExcludePatternsSelect
+                    value={f.exclude}
+                    onChange={(v) => updateSettingSection("files", { exclude: v })}
+                />
+            </SettingRow>
+            </SettingCard>
         </SettingSection>
         </>
     );
@@ -310,7 +367,8 @@ function LspSettings({ settings }: { settings: ShapeSettings }) {
     const lsp = settings.lsp;
     return (
         <>
-            <SettingSection id="settings-languages" title="Language Servers">
+            <SettingSection id="settings-languages" title="Language servers">
+                <SettingCard>
                 <SettingRow title="TypeScript / JavaScript">
                     <SettingSwitch checked={lsp.typescript} onChange={(v) => updateSettingSection("lsp", { typescript: v })} />
                 </SettingRow>
@@ -326,6 +384,7 @@ function LspSettings({ settings }: { settings: ShapeSettings }) {
                 <SettingRow title="Tailwind CSS">
                     <SettingSwitch checked={lsp.tailwindcss} onChange={(v) => updateSettingSection("lsp", { tailwindcss: v })} />
                 </SettingRow>
+                </SettingCard>
             </SettingSection>
             <SettingSection title="Editor Assistance">
                 <SettingRow title="Emmet">
@@ -400,6 +459,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
             </SettingSection>
 
             <SettingSection title="Packages" description={project_path ? `Using ${pm} for ${info?.name ?? "project"}` : undefined}>
+                <SettingCard>
                 {!project_path ? (
                     <div className="px-3.5 py-4 text-sm text-text-muted">Open a folder to view installed packages.</div>
                 ) : (
@@ -486,6 +546,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
                         </div>
                     </div>
                 )}
+                </SettingCard>
             </SettingSection>
         </>
     );
@@ -535,7 +596,8 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
 
     return (
         <SettingSection id="settings-updates" title="Updates">
-            <div className="flex items-center gap-3 p-3">
+            <SettingCard>
+            <div className="flex items-center gap-3 px-3.5 py-3">
                 <img
                     src={iconSrc}
                     alt=""
@@ -550,6 +612,7 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
                 </div>
                 <span className="shrink-0 text-sm tabular-nums text-text-muted">{version}</span>
             </div>
+            </SettingCard>
             <SettingRow title="Automatic updates">
                 <SettingSwitch
                     checked={u.autoUpdate}
@@ -581,7 +644,7 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
         const n = settings.notifications;
         return (
             <SettingSection id="settings-notifications" title="Notifications">
-                <SettingRow title="Desktop notifications">
+                <SettingRow title="Desktop notifications" description="Alerts while Shape is in the background.">
                     <SettingSwitch
                         checked={n.desktopEnabled}
                         onChange={(v) => {
@@ -594,20 +657,22 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Generation finished">
+                <SettingCard>
+                <SettingRow title="Generation finished" description="When a reply is ready.">
                     <SettingSwitch
                         checked={n.onGenerationComplete}
                         disabled={!n.desktopEnabled}
                         onChange={(v) => updateSettingSection("notifications", { onGenerationComplete: v })}
                     />
                 </SettingRow>
-                <SettingRow title="Approval required">
+                <SettingRow title="Approval required" description="When the agent is waiting on you.">
                     <SettingSwitch
                         checked={n.onApprovalRequired}
                         disabled={!n.desktopEnabled}
                         onChange={(v) => updateSettingSection("notifications", { onApprovalRequired: v })}
                     />
                 </SettingRow>
+                </SettingCard>
             </SettingSection>
         );
     }
@@ -665,7 +730,8 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
             </SettingSection>
             <FeedbackSection />
             <SettingSection title="Legal">
-                <div className="px-3.5 py-3 space-y-2 text-sm">
+                <SettingCard>
+                <div className="px-3.5 py-2 text-sm">
                     <button
                         type="button"
                         className="block text-text-muted hover:text-text-primary transition-colors"
@@ -681,6 +747,7 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
                         Privacy Policy
                     </button>
                 </div>
+                </SettingCard>
             </SettingSection>
         </>
     );
@@ -837,9 +904,6 @@ export function SettingsView({
     const [query, setQuery] = useState("");
     const [activeLeafId, setActiveLeafId] = useState("account-profile");
     const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
-    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-        () => new Set(SETTINGS_NAV.map((g) => g.id)),
-    );
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "plugins") return "settings-ai-plugins";
@@ -866,7 +930,7 @@ export function SettingsView({
             case "advanced":
             case "application":
                 return "settings-updates";
-            case "keyboard":
+            case "keyboard-shortcuts":
             case "keybindings":
             case "shortcuts":
                 return "settings-keyboard-shortcuts";
@@ -933,20 +997,6 @@ export function SettingsView({
         })).filter((group) => group.children.length > 0);
     }, [query]);
 
-    useEffect(() => {
-        if (!query.trim()) return;
-        setExpandedGroups(new Set(filteredNav.map((g) => g.id)));
-    }, [query, filteredNav]);
-
-    const toggleGroup = (groupId: string) => {
-        setExpandedGroups((prev) => {
-            const next = new Set(prev);
-            if (next.has(groupId)) next.delete(groupId);
-            else next.add(groupId);
-            return next;
-        });
-    };
-
     const onLeafClick = (leaf: SettingsNavLeaf) => {
         if (leaf.href) {
             router.push(leaf.href);
@@ -977,35 +1027,42 @@ export function SettingsView({
                             <>
                                 <div className="shrink-0 px-2 pb-2">
                                     <SearchInput
-                                        placeholder="Search settings"
+                                        placeholder="Search..."
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
                                         className="w-full"
                                     />
                                 </div>
-                                <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-                                    {filteredNav.map((group) => {
-                                        const open = expandedGroups.has(group.id) || !!query.trim();
-                                        return (
-                                            <CollapsibleNavGroup
-                                                key={group.id}
-                                                label={group.label}
-                                                open={open}
-                                                onToggle={() => toggleGroup(group.id)}
-                                            >
-                                                {group.children.map((leaf) => (
-                                                    <NavLeafButton
-                                                        key={leaf.id}
-                                                        active={activeLeafId === leaf.id}
-                                                        disabled={leaf.id === "plugins" && pluginsNavDisabled}
-                                                        onClick={() => onLeafClick(leaf)}
-                                                    >
-                                                        <span className="min-w-0 flex-1 truncate text-left">{leaf.label}</span>
-                                                    </NavLeafButton>
-                                                ))}
-                                            </CollapsibleNavGroup>
-                                        );
-                                    })}
+                                <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+                                    {filteredNav.map((group) => (
+                                        <div key={group.id}>
+                                            <div className="px-2 pb-1 text-xs text-text-muted">{group.label}</div>
+                                            <div className="space-y-0.5">
+                                                {group.children.map((leaf) => {
+                                                    const active = activeLeafId === leaf.id;
+                                                    const disabled = leaf.id === "plugins" && pluginsNavDisabled;
+                                                    return (
+                                                        <button
+                                                            key={leaf.id}
+                                                            type="button"
+                                                            disabled={disabled}
+                                                            onClick={() => onLeafClick(leaf)}
+                                                            className={cn(
+                                                                "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-sm",
+                                                                active
+                                                                    ? "bg-panel-hover text-text-primary"
+                                                                    : "text-text-secondary hover:bg-panel-hover/50 hover:text-text-primary",
+                                                                disabled && "pointer-events-none opacity-40",
+                                                            )}
+                                                        >
+                                                            <FluentIcon icon={leaf.icon} />
+                                                            <span className="min-w-0 flex-1 truncate">{leaf.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </nav>
                                 <div className="shrink-0 px-2 pb-2">
                                     <Button
@@ -1028,7 +1085,7 @@ export function SettingsView({
                     </aside>
                 );
             })()}
-            <section className="relative min-h-0 min-w-0 flex-1 bg-panel">
+            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
                 {activeLeafId === "keyboard-shortcuts" ? (
                     <div className="absolute inset-0 min-h-0">
                         <KeyboardShortcutsView />
@@ -1038,12 +1095,16 @@ export function SettingsView({
                         <PluginsSettingsView />
                     </div>
                 ) : (
-                    <div className="absolute inset-0 overflow-y-auto px-6 py-6 lg:px-8">
-                        <div className="mx-auto w-full max-w-5xl">
+                    <div className="absolute inset-0 overflow-y-auto px-8 py-8">
+                        <div className="mx-auto w-full max-w-2xl">
+                            <h1 className="mb-6 text-2xl font-medium text-text-primary">
+                                {allSettingsLeaves().find((leaf) => leaf.id === activeLeafId)?.label}
+                            </h1>
                             {activeLeafId === "account-profile" ? <AccountSettingsPanel /> : null}
                             {activeLeafId === "ai-models" ? <AiSettings settings={settings} page="models" /> : null}
                             {activeLeafId === "ai-rules" ? <AiSettings settings={settings} page="rules" /> : null}
                             {activeLeafId === "ai-workflows" ? <AiSettings settings={settings} page="workflows" /> : null}
+                            {activeLeafId === "ai-skills" ? <SkillsSettings /> : null}
                             {activeLeafId === "ai-context" ? <AiSettings settings={settings} page="context" /> : null}
                             {activeLeafId === "editor-font" ? <EditorSettings settings={settings} /> : null}
                             {activeLeafId === "appearance" ? (

@@ -1,5 +1,14 @@
 "use client";
 
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Options20Regular } from "@fluentui/react-icons/headless/svg/options";
+import { TextAlignCenter20Regular } from "@fluentui/react-icons/headless/svg/text-align-center";
+import { TextAlignJustify20Regular } from "@fluentui/react-icons/headless/svg/text-align-justify";
+import { TextAlignLeft20Regular } from "@fluentui/react-icons/headless/svg/text-align-left";
+import { TextAlignRight20Regular } from "@fluentui/react-icons/headless/svg/text-align-right";
+import { TextFontSize20Regular } from "@fluentui/react-icons/headless/svg/text-font-size";
+
+
 import { useRef, useState, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,7 +16,8 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { sidebarEdgeOffset } from "./edge";
 import { CONTROL, IconButton, Segment, SelectField } from "./field";
@@ -111,7 +121,7 @@ export function FormatMenu({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    icon={"tuning"}
+                    icon={Options20Regular}
                     aria-label="Formatting"
                     title="Formatting"
                     onPointerDown={measure}
@@ -127,7 +137,7 @@ export function FormatMenu({
             >
                 <div className="flex h-9 items-center border-b border-border px-2">
                     <span className="min-w-0 flex-1 px-1 text-sm font-medium text-text-primary">Formatting</span>
-                    <IconButton label="Close" icon={"close"} onClick={() => setOpen(false)} />
+                    <IconButton label="Close" icon={Dismiss20Regular} onClick={() => setOpen(false)} />
                 </div>
                 <div className="space-y-2 p-3">
                     <div
@@ -151,10 +161,10 @@ export function FormatMenu({
                             value={css(style, "text-align", "left")}
                             onChange={(value) => setStyle("text-align", value)}
                             items={[
-                                { value: "left", icon: "align-left", title: "Align left" },
-                                { value: "center", icon: "align-horizontal-center", title: "Align center" },
-                                { value: "right", icon: "align-right", title: "Align right" },
-                                { value: "justify", icon: "align-horizontal-spacing", title: "Justify" },
+                                { value: "left", icon: TextAlignLeft20Regular, title: "Align left" },
+                                { value: "center", icon: TextAlignCenter20Regular, title: "Align center" },
+                                { value: "right", icon: TextAlignRight20Regular, title: "Align right" },
+                                { value: "justify", icon: TextAlignJustify20Regular, title: "Justify" },
                             ]}
                         />
                     </Row>
@@ -172,7 +182,7 @@ export function FormatMenu({
                     </Row>
                     <Row label="Wrap">
                         <SelectField
-                            icon={"text-square"}
+                            icon={TextFontSize20Regular}
                             value={wrap === "pre-wrap" ? "pre-wrap" : wrap === "nowrap" ? "nowrap" : wrap === "balance" ? "balance" : "normal"}
                             options={[
                                 ["normal", "Normal"],

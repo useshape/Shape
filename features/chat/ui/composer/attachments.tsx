@@ -1,7 +1,18 @@
 "use client";
 
+import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { Options20Regular } from "@fluentui/react-icons/headless/svg/options";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
+
+
 import React from "react";
-import { ICON_SIZE_SM, SolarIcon, type SolarIconName } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
+
 import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -195,16 +206,17 @@ function useObjectUrl(file: File | null, dataUrl?: string): string | null {
     return url;
 }
 
-const KIND_ICON: Record<Exclude<AttachmentKind, "file">, SolarIconName> = {
-    image: "gallery",
-    audio: "soundwave",
-    terminal: "programming",
-    code: "code",
+const KIND_ICON: Record<Exclude<AttachmentKind, "file">, IconGlyph> = {
+    image: Camera20Filled,
+    audio: Options20Regular,
+    terminal: WindowConsole20Regular,
+    code: Code20Regular,
 };
 
 function KindIcon({ kind, name }: { kind: AttachmentKind; name: string }) {
     if (kind === "file") return <FileIcon name={name} className="size-3.5" />;
-    return <SolarIcon name={KIND_ICON[kind]} size={ICON_SIZE_SM} className="text-text-muted" />;
+    const Glyph = KIND_ICON[kind];
+    return <Icon icon={Glyph} className="text-text-muted" />;
 }
 
 function RemoveButton({ name, onRemove }: { name: string; onRemove: () => void }) {
@@ -216,7 +228,7 @@ function RemoveButton({ name, onRemove }: { name: string; onRemove: () => void }
                 onClick={onRemove}
                 className="absolute -right-1.5 -top-1.5 z-10 flex size-5 items-center justify-center rounded-full bg-surface-1 text-text-secondary opacity-0 shadow-sm hover:text-text-primary group-hover:opacity-100"
             >
-                <SolarIcon name="close" size={ICON_SIZE_SM} />
+                <Icon icon={Dismiss20Regular} />
             </button>
         </Tooltip>
     );
@@ -246,7 +258,7 @@ export function ComposerFileTile({
     return (
         <div
             className={cn(
-                "relative h-16 w-28 overflow-hidden rounded-xl bg-surface-3",
+                "relative h-16 w-28 overflow-hidden squircle-xl bg-surface-3",
                 failed && "ring-1 ring-error",
             )}
             title={name}

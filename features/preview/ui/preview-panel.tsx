@@ -1,8 +1,16 @@
 "use client";
 
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { ArrowRight20Regular } from "@fluentui/react-icons/headless/svg/arrow-right";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+
+
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { commands, useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
@@ -207,7 +215,7 @@ export default function PreviewPanel({
                             previewBack();
                         }}
                     >
-                        <Icon icon={"arrow-left"} />
+                        <Icon icon={ArrowLeft20Regular} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Forward">
@@ -222,7 +230,7 @@ export default function PreviewPanel({
                             previewForward();
                         }}
                     >
-                        <Icon icon={"arrow-right"} />
+                        <Icon icon={ArrowRight20Regular} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Reload">
@@ -237,7 +245,7 @@ export default function PreviewPanel({
                             previewReload();
                         }}
                     >
-                        <Icon icon={"refresh"} />
+                        <Icon icon={ArrowSync20Regular} />
                     </Button>
                 </Tooltip>
 
@@ -284,7 +292,7 @@ export default function PreviewPanel({
                             onClick={() => setDesignOn((v) => !v)}
                             aria-label={designTooltip}
                         >
-                            <Icon icon={"palette"} />
+                            <Icon icon={Color20Regular} />
                         </Button>
                     </span>
                 </Tooltip>
@@ -297,7 +305,7 @@ export default function PreviewPanel({
                         disabled={!currentUrl && !urlBar.trim()}
                         onClick={openExternal}
                     >
-                        <Icon icon={"square-forward"} />
+                        <Icon icon={Open20Regular} />
                     </Button>
                 </Tooltip>
             </div>

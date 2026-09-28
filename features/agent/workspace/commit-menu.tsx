@@ -1,5 +1,10 @@
 "use client";
 
+import { GithubMark } from "@/components/ui/github-mark";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { commands, type GitFileParams } from "@/lib/backend";
@@ -10,7 +15,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { FileIcon } from "@/components/ui/file-icon";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/features/notifications";
@@ -295,7 +301,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                     <span>Commit</span>
                     {totals.plus > 0 ? <span className="tabular-nums text-success">+{totals.plus}</span> : null}
                     {totals.minus > 0 ? <span className="tabular-nums text-error">−{totals.minus}</span> : null}
-                    <Icon icon="alt-arrow-down" size={ICON_SIZE_SM} className="opacity-60" />
+                    <Icon icon={ChevronDown20Regular} className="opacity-60" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[320px]">
@@ -343,7 +349,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                             disabled={files.length === 0 || busy || !title.trim()}
                             onClick={commitAll}
                         >
-                            <Icon icon="check" size={ICON_SIZE_SM} />
+                            <Icon icon={Checkmark20Regular} />
                             Commit
                         </Button>
                         <Button
@@ -354,7 +360,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                             disabled={busy}
                             onClick={() => setExtras((open) => !open)}
                         >
-                            <Icon icon="alt-arrow-down" size={ICON_SIZE_SM} />
+                            <Icon icon={ChevronDown20Regular} />
                         </Button>
                     </div>
                     {extras ? (
@@ -376,7 +382,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                 </div>
                 <DropdownMenuSeparator />
                 <div className="flex items-center gap-2 px-2 py-1 text-sm text-text-secondary">
-                    <Icon icon="alt-arrow-down" size={ICON_SIZE_SM} className="opacity-60" />
+                    <Icon icon={ChevronDown20Regular} className="opacity-60" />
                     <span className="flex-1">Changes</span>
                     {files.length > 0 ? (
                         <span className="rounded-full bg-accent px-1.5 text-xs text-white">{files.length}</span>
@@ -508,7 +514,7 @@ function PublishRepoDialog({
                                     setStep("repository");
                                 }}
                             >
-                                <Icon icon="code-square" size={16} />
+                                <Icon icon={GithubMark} />
                                 <span className="flex-1">GitHub</span>
                                 {githubUser ? null : <span className="text-xs text-warning">Setup required</span>}
                             </button>

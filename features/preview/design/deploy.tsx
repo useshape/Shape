@@ -1,5 +1,10 @@
 "use client";
 
+import { Alert20Regular } from "@fluentui/react-icons/headless/svg/alert";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+
+
 import { useEffect, useState } from "react";
 import {
     AlertDialog,
@@ -12,7 +17,8 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { useGitBranch } from "@/features/agent/workbench/hooks/use-git-branch";
 import { getRepoName } from "@/lib/workspace/repo-history";
 
@@ -43,7 +49,7 @@ function Changes({
                 </span>
             </div>
             <div className="flex items-center gap-1 px-2 py-1.5">
-                <Icon icon={"alt-arrow-right"} size={ICON_SIZE_MD} className="text-text-secondary!" />
+                <Icon icon={ChevronRight20Regular} className="text-text-secondary!" />
                 <span className="text-sm text-text-secondary">{count} changes</span>
             </div>
             <div className="divide-y divide-border border-t border-border">
@@ -107,7 +113,7 @@ export function DesignDeploy({
                         <>
                             <Changes title={`${name} · ${branch}`} count={18} badge="New" />
                             <div className="flex items-center gap-1 text-md text-text-muted">
-                                <Icon icon={"danger-triangle"} size={ICON_SIZE_MD} />
+                                <Icon icon={Alert20Regular} />
                                 Errors and issues
                             </div>
                         </>
@@ -121,7 +127,7 @@ export function DesignDeploy({
                                 <p className="truncate text-sm text-text-primary">{productionHost}</p>
                                 <p className="text-2xs text-text-muted">Live</p>
                             </div>
-                            <Icon icon={"check"} size={ICON_SIZE_MD} className="text-success" />
+                            <Icon icon={Checkmark20Regular} className="text-success" />
                         </div>
                     ) : null}
                 </AlertDialogBody>

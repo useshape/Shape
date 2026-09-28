@@ -1,5 +1,11 @@
 "use client";
 
+import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
+import { EyeOff20Regular } from "@fluentui/react-icons/headless/svg/eye-off";
+import { Filter20Regular } from "@fluentui/react-icons/headless/svg/filter";
+import { Subtract20Regular } from "@fluentui/react-icons/headless/svg/subtract";
+import { WeatherSunny20Regular } from "@fluentui/react-icons/headless/svg/weather-sunny";
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -47,7 +53,7 @@ export function FilterStack({
                 return (
                     <div key={`${property}-${index}-${item.type}`} className="flex h-6 items-stretch gap-1">
                         <SelectField
-                            icon={"filter"}
+                            icon={Filter20Regular}
                             value={item.type}
                             options={[...FILTER_OPTIONS]}
                             onChange={(type) => {
@@ -57,7 +63,7 @@ export function FilterStack({
                             }}
                         />
                         <Field
-                            icon={"sun"}
+                            icon={WeatherSunny20Regular}
                             value={item.amount}
                             property={property}
                             mapValue={(amount) =>
@@ -72,7 +78,7 @@ export function FilterStack({
                         />
                         <IconButton
                             label={hidden ? "Show filter" : "Hide filter"}
-                            icon={hidden ? "eye-closed" : "eye"}
+                            icon={hidden ? EyeOff20Regular : Eye20Regular}
                             active={!hidden}
                             onClick={() => {
                                 const next = items.slice();
@@ -87,7 +93,7 @@ export function FilterStack({
                         />
                         <IconButton
                             label="Remove filter"
-                            icon={"minus-circle"}
+                            icon={Subtract20Regular}
                             onClick={() => write(items.filter((_, currentIndex) => currentIndex !== index))}
                         />
                     </div>

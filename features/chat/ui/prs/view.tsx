@@ -1,7 +1,23 @@
 "use client";
 
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { ArrowSortDown20Regular } from "@fluentui/react-icons/headless/svg/arrow-sort-down";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
+import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Filter20Regular } from "@fluentui/react-icons/headless/svg/filter";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { TextNumberListLtr20Regular } from "@fluentui/react-icons/headless/svg/text-number-list-ltr";
+
+
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+
+
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
 import { FileIcon } from "@/components/ui/file-icon";
@@ -346,7 +362,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                         onClick={() => selectPr(null)}
                         className="mt-0.5 flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                     >
-                        <Icon icon={"arrow-left"} />
+                        <Icon icon={ArrowLeft20Regular} />
                     </button>
                     ) : null}
                     <div className="min-w-0 flex-1">
@@ -362,7 +378,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                             <DropdownMenuTrigger asChild>
                                 <Button variant="secondary" size="xs" className="gap-1" disabled={checkingOut}>
                                     Check out
-                                    <Icon icon={"alt-arrow-down"} />
+                                    <Icon icon={ChevronDown20Regular} />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-44">
@@ -378,12 +394,12 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                     aria-label="More"
                                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 >
-                                    <Icon icon={"menu-dots"} />
+                                    <Icon icon={MoreHorizontal20Regular} />
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-52">
                                 <DropdownMenuItem onClick={() => void load()}>
-                                    <Icon icon={"refresh"} />
+                                    <Icon icon={ArrowSync20Regular} />
                                     Refresh
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -393,7 +409,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                         )
                                     }
                                 >
-                                    <Icon icon={"chat-round-line"} />
+                                    <Icon icon={Chat20Filled} />
                                     Ask a question
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -419,7 +435,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                     <DropdownMenuItem
                                         onClick={() => void commands.openUrlExternal(selected.url!)}
                                     >
-                                        <Icon icon={"square-forward"} />
+                                        <Icon icon={Open20Regular} />
                                         Open on GitHub
                                     </DropdownMenuItem>
                                 ) : null}
@@ -568,7 +584,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                             aria-label="Sort"
                             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                         >
-                            <Icon icon={"sort-from-top-to-bottom"} />
+                            <Icon icon={ArrowSortDown20Regular} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-36">
@@ -583,13 +599,13 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                             aria-label="Filters"
                             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                         >
-                            <Icon icon={"filter"} />
+                            <Icon icon={Filter20Regular} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-32">
                         {(["open", "closed", "all"] as const).map((value) => (
                             <DropdownMenuItem key={value} onClick={() => setState(value)}>
-                                {state === value ? <Icon icon={"check"} /> : <span className="size-4" />}
+                                {state === value ? <Icon icon={Checkmark20Regular} /> : <span className="size-4" />}
                                 <span className="capitalize">{value}</span>
                             </DropdownMenuItem>
                         ))}
@@ -601,7 +617,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                     onClick={() => void load()}
                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={"refresh"} />
+                    <Icon icon={ArrowSync20Regular} />
                 </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -630,7 +646,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                         className="flex w-full gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-panel-hover"
                                     >
                                         <Icon
-                                            icon={"git-pull-request"}
+                                            icon={BranchRequest20Regular}
                                             className={cn(
                                                 "mt-0.5 shrink-0",
                                                 item.status === "open" ? "text-success" : "text-text-muted",
@@ -670,7 +686,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                             </span>
                                         </span>
                                         {item.ci === "success" ? (
-                                            <Icon icon={"check"} className="mt-0.5 shrink-0 text-success" />
+                                            <Icon icon={Checkmark20Regular} className="mt-0.5 shrink-0 text-success" />
                                         ) : item.ci === "failure" ? (
                                             <span className="mt-1 size-2 shrink-0 rounded-full bg-error" />
                                         ) : item.ci === "pending" ? (

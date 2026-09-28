@@ -20,6 +20,7 @@ import { isMainTauriWindow, isTauriRuntime } from "@/lib/window/tauri-window";
 import { FilterProvider } from "@/features/git/ui/manager/filter-context";
 import { SuppressNativeTooltips } from "@/components/ui/suppress-native-tooltips";
 import { CommandPaletteBridge } from "@/features/agent/palette";
+import { cn } from "@/lib/utils";
 import Onboarding from "@/features/onboarding/ui/view";
 import { PromoCardHost } from "@/features/promo/host";
 import { DesignPreviewCaptureHost } from "@/features/chat/ui/design-capture";
@@ -252,6 +253,7 @@ function Content({ children }: { children: React.ReactNode }) {
     const [showOnboarding, setShowOnboarding] = React.useState(false);
     const auth = useShapeAuth();
     const needsLogin = !auth.loggedIn;
+    const showGate = (needsLogin && !auth.isLoading) || (!needsLogin && showOnboarding);
 
     React.useEffect(() => {
         const refresh = () => {
@@ -271,7 +273,12 @@ function Content({ children }: { children: React.ReactNode }) {
             id="shape-workbench"
             className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background select-none"
         >
-            <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col">
+            <div
+                className={cn(
+                    "relative z-10 flex min-h-0 w-full flex-1 flex-col",
+                    showGate && "invisible",
+                )}
+            >
                 <Main>{children}</Main>
                 <LoginPromptDialog />
                 <CheckpointRestoreDialog />

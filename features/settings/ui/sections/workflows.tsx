@@ -1,8 +1,10 @@
 "use client";
 
+import { FluentIcon, settingsIcons } from "../fluent-icons";
+
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,7 +28,7 @@ import { fetchPlugins, fetchPluginTools, peekPluginsCache, type PluginRow, type 
 import { newWorkflowId, workflowPluginTools, type AgentWorkflow } from "@/lib/chat/workflows";
 import { updateSettingSection } from "@/lib/settings";
 import { cn } from "@/lib/utils";
-import { SettingSection } from "../shared/controls";
+import { SettingActionRow, SettingCard, SettingSection } from "../shared/controls";
 
 export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
     const [open, setOpen] = React.useState(false);
@@ -40,36 +42,16 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
         <SettingSection
             id="settings-ai-workflows"
             title="Workflows"
-            description="Type / in chat (same picker as @) to run a slash command, or use a trigger phrase. Each workflow loads a prompt and can pre-approve plugin tools."
-            action={
-                <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                        setEditing({
-                            id: newWorkflowId(),
-                            name: "",
-                            trigger: "",
-                            prompt: "",
-                        });
-                        setOpen(true);
-                    }}
-                >
-                    <Icon icon={"add-circle"} />
-                    New
-                </Button>
-            }
+            description="Type / in chat to run one. Each workflow loads a prompt."
         >
-            {value.length === 0 ? (
-                <p className="px-4 py-3 text-sm text-text-muted">No workflows yet.</p>
-            ) : (
-                value.map((w) => (
-                    <div key={w.id} className="flex items-center gap-3 border-t border-border-subtle px-4 py-3 first:border-t-0">
+            <SettingCard>
+            {value.map((w) => (
+                    <div key={w.id} className="flex items-center gap-2.5 px-3.5 py-2.5">
                         <WorkflowPluginMark toolkit={w.pluginToolkit} />
                         <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-text-primary">{w.name || "Untitled"}</div>
-                            <div className="truncate text-sm text-text-muted">
-                                “{w.trigger}”
+                            <div className="truncate text-xs text-text-muted">
+                                {w.trigger}
                                 {w.pluginToolkit
                                     ? ` · ${w.pluginToolkit}${
                                           workflowPluginTools(w).length
@@ -82,25 +64,40 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
                         <Button
                             size="icon"
                             variant="ghost"
+                            className="size-7"
                             aria-label="Edit workflow"
                             onClick={() => {
                                 setEditing({ ...w });
                                 setOpen(true);
                             }}
                         >
-                            <Icon icon={"pen"} />
+                            <FluentIcon icon={settingsIcons.edit} />
                         </Button>
                         <Button
                             size="icon"
                             variant="ghost"
+                            className="size-7"
                             aria-label="Delete workflow"
                             onClick={() => save(value.filter((x) => x.id !== w.id))}
                         >
-                            <Icon icon={"trash-bin-trash"} />
+                            <FluentIcon icon={settingsIcons.delete} />
                         </Button>
                     </div>
-                ))
-            )}
+                ))}
+            <SettingActionRow
+                title="Add workflow"
+                icon={settingsIcons.add}
+                onClick={() => {
+                    setEditing({
+                        id: newWorkflowId(),
+                        name: "",
+                        trigger: "",
+                        prompt: "",
+                    });
+                    setOpen(true);
+                }}
+            />
+            </SettingCard>
 
             <WorkflowDialog
                 open={open}
@@ -126,7 +123,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
 function WorkflowPluginMark({ toolkit }: { toolkit?: string }) {
     const plugins = peekPluginsCache()?.plugins ?? [];
     const plugin = toolkit ? plugins.find((p) => p.toolkit === toolkit && p.connected) : undefined;
-    if (!plugin) return null;
+    if (!plugin) return <FluentIcon icon={settingsIcons.flowchart} className="shrink-0 text-text-muted" />;
     return (
         <PluginLogo
             toolkit={plugin.toolkit}
@@ -275,7 +272,7 @@ function WorkflowDialog({
                                                 ? selectedToolNames.join(", ")
                                                 : "Select tools to auto-run"}
                                         </span>
-                                        <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
+                                        <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
@@ -358,7 +355,7 @@ function PluginPicker({
                             ) : null}
                             <span className="truncate">{selected?.name ?? "None"}</span>
                         </span>
-                        <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
+                        <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent

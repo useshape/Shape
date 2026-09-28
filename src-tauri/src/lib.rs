@@ -122,9 +122,6 @@ pub fn run() {
                 commands::ipc::shortcuts::handle_menu_event(app, id);
             });
 
-            // Window initialization can be handled in Tauri config or here
-            // Removing manual acrylic effects as they interfere with transparent: false
-
             if cfg!(debug_assertions) {
                 let _ = app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -168,6 +165,7 @@ pub fn run() {
             commands::ipc::filesystem::save_color_to_history,
             commands::ipc::filesystem::get_color_history,
             commands::ipc::open::open_url_external,
+            commands::ipc::open::pin_to_taskbar,
             commands::desktop_notification::show_desktop_notification,
             commands::preview_render::capture_html_preview,
             commands::preview_render::capture_page_preview,
@@ -303,6 +301,8 @@ pub fn run() {
             agent::commands::conversation::get_chat_generation_state,
             agent::commands::conversation::clear_chat_history,
             agent::commands::conversation::new_chat,
+            agent::commands::conversation::set_chat_incognito,
+            agent::commands::conversation::get_chat_incognito,
             agent::commands::conversation::load_conversation,
             agent::commands::conversation::fork_conversation,
             agent::commands::conversation::set_message_feedback,

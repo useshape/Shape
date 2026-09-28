@@ -1,6 +1,13 @@
 "use client";
 
+import { Alert20Filled, Alert20Regular } from "@fluentui/react-icons/headless/svg/alert";
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { DismissCircle20Filled } from "@fluentui/react-icons/headless/svg/dismiss-circle";
+import { Info20Regular } from "@fluentui/react-icons/headless/svg/info";
+
+
 import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -33,7 +40,7 @@ export function NotificationsMenu() {
                     size="sm"
                     className="relative h-full px-2 shrink-0 text-text-muted hover:text-text-primary"
                 >
-                    <Icon icon={"bell"} />
+                    <Icon icon={Alert20Filled} />
                     {unreadCount > 0 && (
                         <span className="absolute top-1 right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-accent px-1 text-2xs font-medium text-accent-fg">
                             {Math.min(unreadCount, 99)}
@@ -58,12 +65,12 @@ export function NotificationsMenu() {
                                 <Icon
                                     icon={
                                         notification.type === "error"
-                                            ? "close-circle"
+                                            ? DismissCircle20Filled
                                             : notification.type === "warning"
-                                                ? "danger-triangle"
+                                                ? Alert20Regular
                                                 : notification.type === "success"
-                                                    ? "check-circle"
-                                                    : "info-circle"
+                                                    ? CheckmarkCircle20Filled
+                                                    : Info20Regular
                                     }
                                     className={cn(
                                         "mt-0.5 shrink-0",

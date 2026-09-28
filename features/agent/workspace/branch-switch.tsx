@@ -1,7 +1,14 @@
 "use client";
 
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+
+
+
 import { useEffect, useMemo, useState } from "react";
-import { ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { SearchInput } from "@/components/ui/search";
 import {
     DropdownMenu,
@@ -75,11 +82,11 @@ export function WorkspaceBranchSwitch() {
                     disabled={!repoPath}
                     className="inline-flex max-w-40 items-center gap-1 rounded-md px-1.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled"
                 >
-                    <SolarIcon name="git-branch" className="shrink-0 text-text-muted" size={ICON_SIZE_SM} />
+                    <Icon icon={Branch20Regular} className="shrink-0 text-text-muted" />
                     <span className="truncate">{branch ?? "Branch"}</span>
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 p-0">
+            <DropdownMenuContent align="start" className="w-64 p-0">
                 <SearchInput
                     borderless
                     stickyFade
@@ -95,7 +102,7 @@ export function WorkspaceBranchSwitch() {
                         {filtered.map((b) => (
                             <DropdownMenuItem key={b} onClick={() => switchTo(b)} className="gap-2">
                                 <span className="min-w-0 flex-1 truncate">{b}</span>
-                                {branch === b ? <SolarIcon name="check" size={ICON_SIZE_SM} className="shrink-0" /> : null}
+                                {branch === b ? <Icon icon={Checkmark20Regular} className="shrink-0" /> : null}
                             </DropdownMenuItem>
                         ))}
                     </div>

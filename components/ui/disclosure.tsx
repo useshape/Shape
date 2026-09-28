@@ -1,5 +1,6 @@
 "use client";
 
+
 import { Button, type ButtonCategory, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -9,14 +10,15 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 
 export type DisclosureItem = {
     text: string;
     href?: string;
     action?: (item: DisclosureItem) => void;
     variant?: "danger";
-    icon?: SolarIconName;
+    icon?: IconGlyph;
 };
 
 export type DisclosureGroup = {
@@ -43,7 +45,7 @@ export function DisclosureDropdown({
 }: {
     items: Array<DisclosureItem | DisclosureGroup>;
     toggleText?: string;
-    icon?: SolarIconName;
+    icon?: IconGlyph;
     category?: ButtonCategory;
     variant?: ButtonVariant;
     size?: ButtonSize;
@@ -89,7 +91,7 @@ export function DisclosureDropdown({
                                     item.action?.(item);
                                 }}
                             >
-                                {item.icon ? <Icon icon={item.icon} size={ICON_SIZE_SM} /> : null}
+                                {item.icon ? <Icon icon={item.icon} /> : null}
                                 {item.text}
                             </DropdownMenuItem>
                         ))}

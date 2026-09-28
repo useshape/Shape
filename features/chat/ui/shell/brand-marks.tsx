@@ -1,6 +1,11 @@
 "use client";
 
+import { Cursor20Filled } from "@fluentui/react-icons/headless/svg/cursor";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+
+
 import { Icon } from "@/components/ui/icon";
+
 
 function SimpleMark({
     slug,
@@ -46,8 +51,7 @@ export function FrameworkMark({
 export function CursorMark({ size = 16 }: { size?: number }) {
     return (
         <Icon
-            icon={"cursor"}
-            size={size}
+            icon={Cursor20Filled}
             className="shrink-0 text-white"
             style={{ color: "#FFFFFF" }}
         />
@@ -94,7 +98,7 @@ export function ZedMark({ size = 16 }: { size?: number }) {
 export function ExplorerMark({ size = 16 }: { size?: number }) {
     return (
         <Icon
-            icon={"folder"}
+            icon={Folder20Filled}
             className="shrink-0"
             style={{ width: size, height: size, color: "#E8A317" }}
         />

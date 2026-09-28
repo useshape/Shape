@@ -1,5 +1,9 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Subtract20Regular } from "@fluentui/react-icons/headless/svg/subtract";
+
+
 import * as React from "react";
 import { Icon } from "./icon";
 
@@ -52,12 +56,12 @@ export const Checkmark = React.forwardRef<HTMLDivElement, CheckmarkProps>(
             >
                 {checked === true && (
                     <div className="flex items-center justify-center">
-                        <Icon icon={"check"}   />
+                        <Icon icon={Checkmark20Regular}   />
                     </div>
                 )}
                 {checked === "indeterminate" && (
                     <div className="flex items-center justify-center">
-                        <Icon icon={"minus-circle"}  />
+                        <Icon icon={Subtract20Regular}  />
                     </div>
                 )}
             </div>

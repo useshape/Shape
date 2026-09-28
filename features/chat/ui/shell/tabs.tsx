@@ -1,10 +1,15 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+
+
 import { useCallback } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { Icon } from "@/components/ui/icon";
+
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { TabBarShell } from "@/features/editor/ui/tabs/tab-bar-shell";
 import {
@@ -156,7 +161,7 @@ function SortableChatTab({
                             )}
                         >
                             <span className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}>
-                                <Icon icon={"close"} />
+                                <Icon icon={Dismiss20Regular} />
                             </span>
                         </button>
                     ) : null}
@@ -269,7 +274,7 @@ export function ChatTabBar({
                     className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "ml-0.5 shrink-0 self-center")}
                     aria-label="New chat"
                 >
-                    <Icon icon={"add-circle"} />
+                    <Icon icon={Add20Regular} />
                 </button>
             }
         >

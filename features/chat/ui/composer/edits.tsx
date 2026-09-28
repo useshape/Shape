@@ -1,8 +1,13 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+
+
 import React, { useMemo } from "react";
-import { diffLines } from "diff";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+import { countChangedLines } from "@/lib/ui/diff-count";
+
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -15,15 +20,7 @@ import { getProjectPath } from "@/lib/backend";
 import { Tooltip } from "@/components/ui/tooltip";
 
 function countDiff(original: string, replacement: string): { add: number; del: number } {
-    let add = 0;
-    let del = 0;
-    for (const part of diffLines(original || "", replacement || "")) {
-        const lines = part.value.split("\n").length - (part.value.endsWith("\n") ? 1 : 0);
-        const n = Math.max(lines, part.value ? 1 : 0);
-        if (part.added) add += n;
-        if (part.removed) del += n;
-    }
-    return { add, del };
+    return countChangedLines(original, replacement);
 }
 
 export function PendingEditsPanel({
@@ -139,7 +136,7 @@ export function PendingEditsPanel({
                                             onAccept(edit.id);
                                         }}
                                     >
-                                        <Icon icon={"check"} size={ICON_SIZE_SM} />
+                                        <Icon icon={Checkmark20Regular} />
                                     </span>
                                 </Tooltip>
                             ) : null}
@@ -153,7 +150,7 @@ export function PendingEditsPanel({
                                             onReject(edit.id);
                                         }}
                                     >
-                                        <Icon icon={"close"} size={ICON_SIZE_SM} />
+                                        <Icon icon={Dismiss20Regular} />
                                     </span>
                                 </Tooltip>
                             ) : null}

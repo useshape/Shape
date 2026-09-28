@@ -1,11 +1,15 @@
 "use client";
 
+import { FluentIcon, settingsIcons, type SettingsGlyph } from "../fluent-icons";
+
+
 import React, { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Icon } from "@/components/ui/icon";
+
+
 import { loadCustomEditorFont } from "@/lib/editor/custom-fonts";
 import {
     DropdownMenu,
@@ -14,12 +18,31 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 
+const InSettingCard = React.createContext(false);
+
+const settingCardClass = "overflow-hidden squircle-[18px] bg-settings-card";
+
+export function SettingCard({
+    children,
+    className,
+}: {
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <InSettingCard.Provider value={true}>
+            <div className={cn(settingCardClass, "flex flex-col divide-y divide-border-subtle", className)}>
+                {children}
+            </div>
+        </InSettingCard.Provider>
+    );
+}
+
 export function SettingSection({
     id,
     title,
     description,
     action,
-    card = true,
     children,
 }: {
     id?: string;
@@ -27,29 +50,45 @@ export function SettingSection({
     description?: string;
     /** Control aligned with the title (e.g. Save). */
     action?: React.ReactNode;
-    /** When false, children are the card (full-bleed field). */
+    /** Kept so existing callers compile. Rows are cards on their own. */
     card?: boolean;
     children: React.ReactNode;
 }) {
     return (
-        <div
-            id={id}
-            className="mb-8 last:mb-0 scroll-mt-3"
-        >
-            <div className="mb-2.5 flex items-start justify-between gap-4">
+        <div id={id} className="mb-8 last:mb-0 scroll-mt-3">
+            <div className="mb-2 flex items-start justify-between gap-4 px-1">
                 <div className="min-w-0">
-                    <h2 className="text-md font-regular text-text-primary">{title}</h2>
-                    {description && <p className="mt-0.5 text-sm font-medium text-text-muted">{description}</p>}
+                    <h2 className="text-xs font-normal text-text-muted">{title}</h2>
+                    {description ? <p className="mt-1 max-w-xl text-sm font-normal leading-4 text-text-muted">{description}</p> : null}
                 </div>
-                {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
+                {action ? <div className="shrink-0">{action}</div> : null}
             </div>
-            {card ? (
-                <div className="flex flex-col overflow-hidden squircle-2xl bg-surface-3 divide-y divide-border">
-                    {children}
+            <div className="flex flex-col gap-2">{children}</div>
+        </div>
+    );
+}
+
+function SettingRowBody({
+    title,
+    description,
+    icon,
+    children,
+}: {
+    title: string;
+    description?: string;
+    icon?: SettingsGlyph;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 px-3.5 py-2.5">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                {icon ? <FluentIcon icon={icon} className="shrink-0 text-text-muted" /> : null}
+                <div className="min-w-0">
+                    <div className="text-sm font-medium text-text-primary">{title}</div>
+                    {description ? <div className="mt-0.5 text-xs leading-4 font-normal text-text-muted">{description}</div> : null}
                 </div>
-            ) : (
-                children
-            )}
+            </div>
+            <div className="flex shrink-0 items-center">{children}</div>
         </div>
     );
 }
@@ -57,35 +96,59 @@ export function SettingSection({
 export function SettingRow({
     title,
     description,
+    icon,
     children,
     stack,
 }: {
     title: string;
     description?: string;
+    icon?: SettingsGlyph;
     children: React.ReactNode;
     stack?: boolean;
 }) {
+    const inCard = React.useContext(InSettingCard);
     if (stack) {
-        return (
-            <div className="space-y-2.5 py-3.5 first:pt-0">
+        const stacked = (
+            <div className="space-y-2.5 px-3.5 py-3">
                 <div>
                     <div className="text-sm font-medium text-text-primary">{title}</div>
-                    {description && <div className="mt-0.5 text-sm text-text-muted">{description}</div>}
+                    {description ? <div className="mt-0.5 text-xs leading-4 text-text-muted">{description}</div> : null}
                 </div>
                 {children}
             </div>
         );
+        return inCard ? stacked : <div className={settingCardClass}>{stacked}</div>;
     }
 
-    return (
-        <div className="flex items-start justify-between gap-4 p-3">
-            <div className="min-w-0 flex-1">
-                <div className="text-md font-regular text-text-primary">{title}</div>
-                {description && <div className="mt-0.5 text-sm text-text-muted">{description}</div>}
-            </div>
-            <div className="flex items-center shrink-0">{children}</div>
-        </div>
+    const row = (
+        <SettingRowBody title={title} description={description} icon={icon}>
+            {children}
+        </SettingRowBody>
     );
+    return inCard ? row : <div className={settingCardClass}>{row}</div>;
+}
+
+export function SettingActionRow({
+    title,
+    icon,
+    onClick,
+}: {
+    title: string;
+    icon: SettingsGlyph;
+    onClick: () => void;
+}) {
+    const inCard = React.useContext(InSettingCard);
+    const row = (
+        <button
+            type="button"
+            onClick={onClick}
+            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-normal text-text-primary hover:bg-white/4"
+        >
+            <FluentIcon icon={icon} className="shrink-0 text-text-muted" />
+            <span>{title}</span>
+        </button>
+    );
+    return inCard ? row : <div className={settingCardClass}>{row}</div>;
 }
 
 export function SettingSelect<T extends string>({
@@ -105,12 +168,15 @@ export function SettingSelect<T extends string>({
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button
-                    variant="secondary"
-                    size="md"
-                    className={cn("min-w-[200px] justify-between gap-2 bg-panel-hover!", className)}
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                        "h-8 min-w-0 justify-between gap-1.5 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10",
+                        className,
+                    )}
                 >
                     <span className="truncate">{label}</span>
-                    <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
+                    <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[180px]">
@@ -137,7 +203,14 @@ export function SettingSwitch({
     onChange: (v: boolean) => void;
     disabled?: boolean;
 }) {
-    return <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />;
+    return (
+        <Switch
+            checked={checked}
+            onCheckedChange={onChange}
+            disabled={disabled}
+            className="data-[state=checked]:bg-success data-[state=unchecked]:bg-white/20 [[data-theme=light]_&]:data-[state=unchecked]:bg-black/15"
+        />
+    );
 }
 
 export function SettingNumberSelect({
@@ -297,10 +370,10 @@ export function SettingMultiSelect({
                 <Button
                     variant="secondary"
                     size="sm"
-                    className={cn("min-w-[200px] max-w-[280px] justify-between gap-2 bg-panel-hover!", className)}
+                    className={cn("h-8 min-w-[200px] max-w-[280px] justify-between gap-2 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10", className)}
                 >
                     <span className="truncate">{summary}</span>
-                    <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
+                    <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[200px]">

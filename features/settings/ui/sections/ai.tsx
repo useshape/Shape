@@ -1,5 +1,7 @@
 "use client";
 
+import { FluentIcon, settingsIcons } from "../fluent-icons";
+
 import React from "react";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "@/lib/utils";
@@ -12,7 +14,7 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { Icon } from "@/components/ui/icon";
+
 import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
 import { useShapeAuth } from "@/lib/cloud/store";
 import {
@@ -22,8 +24,10 @@ import {
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/cloud/store";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
     SettingSection,
+    SettingCard,
     SettingRow,
     SettingSelect,
     SettingSwitch,
@@ -53,12 +57,14 @@ function RulesEditor({ value }: { value: string }) {
             }
             card={false}
         >
+            <SettingCard>
             <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Add your custom instructions…"
-                className="min-h-40 rounded-xl border-border-subtle bg-surface-2 px-4 py-3.5 text-md"
+                className="min-h-40 rounded-xl border-0 bg-transparent px-3.5 py-3 text-sm"
             />
+            </SettingCard>
         </SettingSection>
     );
 }
@@ -80,7 +86,7 @@ function ModelRow({
                 <div className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
                     <span className="min-w-0 truncate">{model.name}</span>
                     {isApiModel(model) ? (
-                        <Icon icon={"bolt"} className="shrink-0 text-text-muted" />
+                        <FluentIcon icon={settingsIcons.link} className="shrink-0 text-text-muted" />
                     ) : null}
                 </div>
                 <div className="text-sm text-text-muted">
@@ -88,45 +94,6 @@ function ModelRow({
                 </div>
             </div>
             <SettingSwitch checked={enabled} onChange={onToggle} disabled={!!unavailableReason} />
-        </div>
-    );
-}
-
-function IndexProgressBar({
-    percent,
-    indexing,
-    phase,
-}: {
-    percent: number;
-    indexing: boolean;
-    phase?: string;
-}) {
-    const label = indexing
-        ? phase === "scanning"
-            ? "Scanning files…"
-            : phase === "persisting"
-              ? "Saving index…"
-              : `Indexing… ${percent}%`
-        : `${percent}%`;
-
-    return (
-        <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-sm">
-                <span className="text-text-primary">{label}</span>
-            </div>
-            <div className="h-1 w-full rounded-full bg-surface-2 overflow-hidden">
-                <div
-                    className={cn(
-                        "h-full rounded-full bg-success transition-all duration-300",
-                        indexing && phase === "scanning" && "animate-pulse w-1/3 opacity-70",
-                    )}
-                    style={
-                        indexing && phase === "scanning"
-                            ? undefined
-                            : { width: `${indexing ? Math.max(percent, 4) : percent}%` }
-                    }
-                />
-            </div>
         </div>
     );
 }
@@ -292,6 +259,7 @@ export function AiSettingsPanel({
             {page === "models" ? (
                 <>
             <SettingSection id="settings-ai-models" title="Models">
+                <SettingCard>
                 {displayedModels.map((model) => (
                     <ModelRow
                         key={model.id}
@@ -305,19 +273,18 @@ export function AiSettingsPanel({
                         }
                     />
                 ))}
-                <Button
+                <button
                     type="button"
-                    variant="secondary"
-                    size="md"
-                    className="w-full bg-panel-hover! rounded-none py-6"
+                    className="px-3.5 py-2.5 text-left text-sm text-text-muted hover:bg-white/4 hover:text-text-primary"
                     onClick={() => setShowAllModels((v) => !v)}
                 >
                     {showAllModels ? "Show fewer models" : "View all models"}
-                </Button>
+                </button>
+                </SettingCard>
             </SettingSection>
 
-            <SettingSection title="Behavior">
-                <SettingRow title="Default Model">
+            <SettingSection title="Default">
+                <SettingRow title="Default model" description="Used when a chat is set to Auto.">
                     <SettingSelect
                         value={a.defaultModel}
                         options={visibleModels.map((m) => ({ value: m.id, label: m.name }))}
@@ -326,13 +293,14 @@ export function AiSettingsPanel({
                 </SettingRow>
             </SettingSection>
 
-            <SettingSection title="Auto-Run">
-                <SettingRow title="Auto-run mode">
+            <SettingSection title="Auto-run">
+                <SettingCard>
+                <SettingRow title="Auto-run mode" description="When the agent may run terminal commands.">
                     <SettingSelect
                         value={a.autoRunMode}
                         options={[
                             { value: "ask", label: "Ask every time" },
-                            { value: "auto", label: "Auto (safe commands)" },
+                            { value: "auto", label: "Auto" },
                             { value: "always", label: "Run everything" },
                         ] satisfies Array<{ value: AutoRunModeSetting; label: string }>}
                         onChange={(v) => {
@@ -341,7 +309,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Protect destructive git">
+                <SettingRow title="Protect destructive git" description="Force push, reset, and clean still ask.">
                     <SettingSwitch
                         checked={a.protectDestructiveGit}
                         onChange={(on) => {
@@ -350,10 +318,12 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
+                </SettingCard>
             </SettingSection>
 
             <SettingSection title="Edits">
-                <SettingRow title="Require edit approval">
+                <SettingCard>
+                <SettingRow title="Require edit approval" description="Stage file edits before they are written.">
                     <SettingSwitch
                         checked={a.requireEditApproval}
                         onChange={(on) => {
@@ -362,64 +332,23 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Auto-apply agent edits">
+                <SettingRow title="Auto-apply agent edits" description="Write approved edits without a second confirm.">
                     <SettingSwitch
                         checked={a.autoApplyEdits}
                         onChange={(on) => updateSettingSection("ai", { autoApplyEdits: on })}
                     />
                 </SettingRow>
+                </SettingCard>
             </SettingSection>
                 </>
             ) : null}
 
             {page === "context" ? (
-            <SettingSection id="settings-ai-context" title="Context">
-                <SettingRow title="Max context lines per file">
-                    <SettingNumberSelect
-                        value={a.maxContextLines}
-                        options={MAX_CONTEXT_PRESETS}
-                        onChange={(v) => updateSettingSection("ai", { maxContextLines: v })}
-                    />
-                </SettingRow>
-                <SettingRow title="Semantic embeddings">
-                    <SettingSwitch
-                        checked={a.indexEmbeddings}
-                        onChange={(on) => {
-                            updateSettingSection("ai", { indexEmbeddings: on });
-                            void commands.setIndexEmbeddings(on).catch(() => { /* ignore */ });
-                        }}
-                    />
-                </SettingRow>
-                <SettingRow
-                    title="Project memory"
-                >
-                    <SettingSwitch
-                        checked={a.chatMemoryEnabled}
-                        onChange={(on) => {
-                            updateSettingSection("ai", { chatMemoryEnabled: on });
-                            void commands.setChatMemoryEnabled(on).catch(() => { /* ignore */ });
-                        }}
-                    />
-                </SettingRow>
-                <div className="p-3 space-y-2">
-                    <IndexProgressBar percent={indexPercent} indexing={indexing} phase={indexPhase} />
-                    <div className="text-sm text-text-muted">
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="secondary" className="w-full bg-panel-hover!" size="md" disabled={indexing} onClick={() => void handleReindex()}>
-                            {indexing ? "Indexing…" : "Re-index"}
-                        </Button>
-                    </div>
-                </div>
-            </SettingSection>
-            ) : null}
-
-            {page === "rules" ? <RulesEditor value={a.customRules} /> : null}
-            {page === "context" ? (
+            <>
             <SettingSection id="settings-ai-review" title="Review">
                 <SettingRow
                     title="Adversarial review"
-                    description="After huge multi-file writes, run a second-pass critique as a tool row. Skips small UI nits."
+                    description="A second pass after large multi-file edits."
                 >
                     <SettingSwitch
                         checked={a.reviewAdversarialEnabled}
@@ -429,7 +358,124 @@ export function AiSettingsPanel({
                     />
                 </SettingRow>
             </SettingSection>
+            <SettingSection id="settings-ai-context" title="Context">
+                <SettingRow title="Max context lines" description="How much of each file is sent with a turn.">
+                    <SettingNumberSelect
+                        value={a.maxContextLines}
+                        options={MAX_CONTEXT_PRESETS}
+                        onChange={(v) => updateSettingSection("ai", { maxContextLines: v })}
+                    />
+                </SettingRow>
+                <SettingCard>
+                    <SettingRow title="Semantic codebase index" description="Keyword search stays available.">
+                        <span className="text-sm text-text-muted">Always on</span>
+                    </SettingRow>
+                    <SettingRow title="Semantic embeddings" description="Search by meaning, not only exact words.">
+                        <SettingSwitch
+                            checked={a.indexEmbeddings}
+                            onChange={(on) => {
+                                updateSettingSection("ai", { indexEmbeddings: on });
+                                void commands.setIndexEmbeddings(on).catch(() => { /* ignore */ });
+                            }}
+                        />
+                    </SettingRow>
+                    <SettingRow
+                        title="Chat memory"
+                        description="The agent can look up past chats in this project when needed."
+                    >
+                        <SettingSwitch
+                            checked={a.chatMemoryEnabled}
+                            onChange={(on) => {
+                                updateSettingSection("ai", { chatMemoryEnabled: on });
+                                void commands.setChatMemoryEnabled(on).catch(() => { /* ignore */ });
+                            }}
+                        />
+                    </SettingRow>
+                </SettingCard>
+            </SettingSection>
+            <SettingSection title="Index">
+                <SettingCard>
+                    <div className="px-3.5 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="text-sm font-medium text-text-primary">
+                                    {indexing
+                                        ? indexPhase === "scanning"
+                                            ? "Scanning files…"
+                                            : indexPhase === "persisting"
+                                              ? "Saving index…"
+                                              : `Indexing… ${indexPercent}%`
+                                        : indexStatus
+                                          ? "Indexed"
+                                          : "Not indexed yet"}
+                                </div>
+                                <div className="mt-0.5 text-xs text-text-muted">
+                                    {indexStatus
+                                        ? `${indexStatus.filesIndexed.toLocaleString()} files · ${indexStatus.chunks.toLocaleString()} chunks${
+                                              indexStatus.lastIndexedAt
+                                                  ? ` · Last indexed ${new Date(indexStatus.lastIndexedAt).toLocaleString(undefined, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                                                  : ""
+                                          }`
+                                        : "Index this project so search can find code."}
+                                </div>
+                            </div>
+                            <Button variant="secondary" size="sm" className="h-7 shrink-0 rounded-lg px-2.5" disabled={indexing} onClick={() => void handleReindex()}>
+                                {indexing ? "Indexing…" : "Re-index"}
+                            </Button>
+                        </div>
+                        <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                                className={cn(
+                                    "h-full rounded-full bg-success",
+                                    indexing && indexPhase === "scanning" && "w-1/3 animate-pulse",
+                                )}
+                                style={
+                                    indexing && indexPhase === "scanning"
+                                        ? undefined
+                                        : { width: `${indexing ? Math.max(indexPercent, 4) : indexStatus ? Math.max(indexPercent, indexStatus.filesIndexed ? 100 : 0) : 0}%` }
+                                }
+                            />
+                        </div>
+                    </div>
+                </SettingCard>
+            </SettingSection>
+            <SettingSection
+                title="API keys"
+                description="Use your own OpenRouter or OpenAI key. Chat goes straight to the provider. OpenRouter is used when both are set."
+            >
+                <SettingCard>
+                    <div className="px-3.5 py-3">
+                        <div className="text-sm font-medium text-text-primary">OpenRouter</div>
+                        <Input
+                            type="password"
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={a.openRouterApiKey}
+                            placeholder="sk-or-…"
+                            className="mt-2"
+                            onChange={(e) => updateSettingSection("ai", { openRouterApiKey: e.target.value })}
+                        />
+                    </div>
+                </SettingCard>
+                <SettingCard>
+                    <div className="px-3.5 py-3">
+                        <div className="text-sm font-medium text-text-primary">OpenAI</div>
+                        <Input
+                            type="password"
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={a.openaiApiKey}
+                            placeholder="sk-…"
+                            className="mt-2"
+                            onChange={(e) => updateSettingSection("ai", { openaiApiKey: e.target.value })}
+                        />
+                    </div>
+                </SettingCard>
+            </SettingSection>
+            </>
             ) : null}
+
+            {page === "rules" ? <RulesEditor value={a.customRules} /> : null}
             {page === "workflows" ? <WorkflowsEditor value={a.workflows ?? []} /> : null}
         </>
     );

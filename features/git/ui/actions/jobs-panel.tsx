@@ -1,7 +1,13 @@
 "use client";
 
+import { GithubMark } from "@/components/ui/github-mark";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
+
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
 import { cn } from "@/lib/utils";
@@ -139,7 +145,7 @@ export function JobsPanel({
                                     onClick={() => onToggleJob(job.id)}
                                 >
                                     <Icon
-                                        icon={"alt-arrow-right"}
+                                        icon={ChevronRight20Regular}
                                         className={cn(
                                             "mt-0.5 shrink-0 text-text-muted transition-transform duration-200 ease-[var(--ease-out)]",
                                             open && "rotate-90",
@@ -192,7 +198,7 @@ export function JobsPanel({
                                             className="gap-1"
                                             onClick={() => onViewLogs(job.id)}
                                         >
-                                            <Icon icon={"programming"} />
+                                            <Icon icon={WindowConsole20Regular} />
                                             View logs
                                         </Button>
                                         {job.html_url ? (
@@ -202,7 +208,7 @@ export function JobsPanel({
                                                 className="gap-1"
                                                 onClick={() => onOpenUrl(job.html_url)}
                                             >
-                                                <Icon icon={"code-square"} />
+                                                <Icon icon={GithubMark} />
                                                 GitHub
                                             </Button>
                                         ) : null}

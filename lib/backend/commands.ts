@@ -116,6 +116,7 @@ export const commands = {
     getRustDeps: (projectPath: string) => invokeCommand<[string, string][]>("get_rust_deps", { projectPath }),
     getProjectState: () => invokeCommand<ProjectState>("get_project_state"),
     openUrlExternal: (url: string) => invokeCommand("open_url_external", { url }),
+    pinToTaskbar: () => invokeCommand<void>("pin_to_taskbar"),
     agentBrowseStop: () => invokeCommand<void>("agent_browse_stop"),
     agentBrowsePointer: (kind: "click" | "move", x: number, y: number) =>
         invokeCommand<void>("agent_browse_pointer", { kind, x, y }),
@@ -664,6 +665,9 @@ export const commands = {
     getConversations: (projectPath?: string) => invokeCommand<Conversation[]>("get_conversations", { projectPath: projectPath ?? null }),
     clearChatHistory: () => invokeCommand<void>("clear_chat_history"),
     newChat: () => invokeCommand<void>("new_chat"),
+    setChatIncognito: (enabled: boolean) =>
+        invokeCommand<void>("set_chat_incognito", { enabled }),
+    getChatIncognito: () => invokeCommand<boolean>("get_chat_incognito"),
     loadConversation: (id: string, projectPath?: string | null) =>
         invokeCommand<void>("load_conversation", { id, projectPath: projectPath ?? null }),
     deleteConversation: (id: string) => invokeCommand<void>("delete_conversation", { id }),

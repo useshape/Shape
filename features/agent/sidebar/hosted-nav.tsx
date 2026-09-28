@@ -1,8 +1,13 @@
 "use client";
 
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+
+
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -40,7 +45,7 @@ export function HostedSidebarBack({
         };
     }, [collapsed]);
 
-    const icon = closeIcon ? "close" : "arrow-left";
+    const icon = closeIcon ? Dismiss20Regular : ArrowLeft20Regular;
 
     if (slot && !collapsed) {
         return createPortal(
@@ -85,7 +90,7 @@ export function HostedSidebarBack({
                 aria-label={label}
                 className="gap-2 px-1.5!"
             >
-                <Icon icon={icon} size={ICON_SIZE_MD} />
+                <Icon icon={icon} />
                 <span className="min-w-0 truncate">{label}</span>
             </Button>
         </div>

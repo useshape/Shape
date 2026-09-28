@@ -1,7 +1,27 @@
 "use client";
 
+import { ArrowDownload20Regular } from "@fluentui/react-icons/headless/svg/arrow-download";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { ArrowUp20Regular } from "@fluentui/react-icons/headless/svg/arrow-up";
+import { ArrowUpload20Regular } from "@fluentui/react-icons/headless/svg/arrow-upload";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { LayoutColumnTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-column-two";
+import { LayoutRowTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-row-two";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+
+
 import React, { useState, useCallback, useEffect } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -786,22 +806,22 @@ export default function Source({
                 <GitChromeActions>
                     <Tooltip content="Refresh">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} aria-label="Refresh">
-                            <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowSync20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Pull">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePull} aria-label="Pull">
-                            <Icon icon={"download-minimalistic"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowDownload20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Push">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePush} aria-label="Push">
-                            <Icon icon={"arrow-up"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowUp20Regular} />
                         </Button>
                     </Tooltip>
                     <Tooltip content="Sync">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSync} aria-label="Sync">
-                            <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowUpload20Regular} />
                         </Button>
                     </Tooltip>
                 </GitChromeActions>
@@ -815,22 +835,22 @@ export default function Source({
                         <div className="flex shrink-0 items-center gap-0.5">
                         <Tooltip content="Refresh Repository">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={() => void refresh()}>
-                                <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                                <Icon icon={ArrowSync20Regular} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Pull">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePull}>
-                                <Icon icon={"download-minimalistic"} size={ICON_SIZE_SM} />
+                                <Icon icon={ArrowDownload20Regular} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Push">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handlePush}>
-                                <Icon icon={"arrow-up"} size={ICON_SIZE_SM} />
+                                <Icon icon={ArrowUp20Regular} />
                             </Button>
                         </Tooltip>
                         <Tooltip content="Sync Changes">
                             <Button variant="ghost" size="icon" className="w-6 h-6 hover:bg-panel-hover" onClick={handleSync}>
-                                <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
+                                <Icon icon={ArrowUpload20Regular} />
                             </Button>
                         </Tooltip>
                         {!embedded && project_path ? <GitManagerTrigger /> : null}
@@ -840,7 +860,7 @@ export default function Source({
                                 <DropdownMenu modal={false}>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="w-6 h-6" aria-label="More actions">
-                                            <Icon icon={"menu-dots"} size={ICON_SIZE_SM} />
+                                            <Icon icon={MoreHorizontal20Regular} />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-48">
@@ -962,12 +982,12 @@ export default function Source({
                                 className="h-7 w-full justify-between gap-2 px-2 hover:bg-panel-hover text-text-secondary hover:text-text-primary"
                             >
                                 <span className="flex items-center gap-1.5 min-w-0">
-                                    <Icon icon={"folder"} size={ICON_SIZE_SM} className="shrink-0" />
+                                    <Icon icon={Folder20Filled} className="shrink-0" />
                                     <span className="truncate text-sm">
                                         {repos.find((r) => r.path === activeRepoPath)?.name ?? "Repository"}
                                     </span>
                                 </span>
-                                <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} className="shrink-0" />
+                                <Icon icon={ChevronDown20Regular} className="shrink-0" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-56">
@@ -981,7 +1001,7 @@ export default function Source({
                                 >
                                     <span className="truncate">{repo.name}</span>
                                     {activeRepoPath === repo.path && (
-                                        <Icon icon={"check"} size={ICON_SIZE_SM} className="ml-auto shrink-0" />
+                                        <Icon icon={Checkmark20Regular} className="ml-auto shrink-0" />
                                     )}
                                 </DropdownMenuItem>
                             ))}
@@ -1081,9 +1101,9 @@ export default function Source({
                             />
                             {lastCommit && (
                                 <div className="flex items-center text-sm text-text-muted gap-0.5 px-2 min-w-0">
-                                    <Icon icon={"git-branch"} size={ICON_SIZE_SM} className="shrink-0" />
+                                    <Icon icon={Branch20Regular} className="shrink-0" />
                                     <span className="font-medium shrink-0 truncate max-w-[30%]">{currentBranch}</span>
-                                    <Icon icon={"alt-arrow-right"} size={ICON_SIZE_SM} className="shrink-0" />
+                                    <Icon icon={ChevronRight20Regular} className="shrink-0" />
                                     <span className="truncate flex-1 min-w-0">
                                         {lastCommit.message.split('\n')[0]}
                                     </span>
@@ -1137,7 +1157,7 @@ export default function Source({
                                             className="gap-1 px-3 h-7 text-xs font-medium"
                                             onClick={() => void handleSync()}
                                         >
-                                            <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
+                                            <Icon icon={ArrowUpload20Regular} />
                                             <span>Push</span>
                                         </Button>
                                     ) : (
@@ -1162,7 +1182,7 @@ export default function Source({
                                                         disabled={!commitTitle.trim()}
                                                         aria-label="Commit options"
                                                     >
-                                                        <Icon icon={"alt-arrow-down"} size={ICON_SIZE_SM} />
+                                                        <Icon icon={ChevronDown20Regular} />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
@@ -1243,7 +1263,7 @@ export default function Source({
                                     <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden border border-border-subtle bg-editor">
                                         {!diffFile ? (
                                             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-                                                <Icon icon={"file-text"} size={ICON_SIZE_SM} className="text-text-muted" />
+                                                <Icon icon={DocumentText20Regular} className="text-text-muted" />
                                                 <p>Select a file to view changes</p>
                                             </div>
                                         ) : (
@@ -1273,10 +1293,9 @@ export default function Source({
                                                             <Icon
                                                                 icon={
                                                                     sideBySide
-                                                                        ? "align-bottom"
-                                                                        : "sidebar-code"
+                                                                        ? LayoutRowTwo20Regular
+                                                                        : LayoutColumnTwo20Regular
                                                                 }
-                                                                size={ICON_SIZE_SM}
                                                             />
                                                         </Button>
                                                     </Tooltip>
@@ -1287,7 +1306,7 @@ export default function Source({
                                                         className="h-6 w-6 shrink-0 p-0"
                                                         onClick={() => setDiffFile(null)}
                                                     >
-                                                        <Icon icon={"close"} size={ICON_SIZE_SM} />
+                                                        <Icon icon={Dismiss20Regular} />
                                                     </Button>
                                                 </div>
                                                 <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -1349,9 +1368,9 @@ export default function Source({
                             />
                             {lastCommit && (
                                 <div className="flex items-center text-sm text-text-muted gap-0.5 px-2 min-w-0">
-                                    <Icon icon={"git-branch"} size={ICON_SIZE_SM} className="shrink-0" />
+                                    <Icon icon={Branch20Regular} className="shrink-0" />
                                     <span className="font-medium shrink-0 truncate max-w-[30%]">{currentBranch}</span>
-                                    <Icon icon={"alt-arrow-right"} size={ICON_SIZE_SM} className="shrink-0" />
+                                    <Icon icon={ChevronRight20Regular} className="shrink-0" />
                                     <span className="truncate flex-1 min-w-0">
                                         {lastCommit.message.split('\n')[0]}
                                     </span>
@@ -1438,17 +1457,17 @@ export default function Source({
                                                 <div className="flex gap-1 shrink-0">
                                                     <Tooltip content="Edit URL">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingRemote(remote)} aria-label="Edit URL">
-                                                            <Icon icon={"pen"} size={ICON_SIZE_SM} />
+                                                            <Icon icon={Edit20Regular} />
                                                         </Button>
                                                     </Tooltip>
                                                     <Tooltip content="Copy URL">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => void navigator.clipboard.writeText(remote.url)} aria-label="Copy URL">
-                                                            <Icon icon={"clipboard"} size={ICON_SIZE_SM} />
+                                                            <Icon icon={Clipboard20Regular} />
                                                         </Button>
                                                     </Tooltip>
                                                     <Tooltip content="Remove">
                                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-error" onClick={() => void handleRemoveRemote(remote.name)} aria-label="Remove remote">
-                                                            <Icon icon={"trash-bin-trash"} size={ICON_SIZE_SM} />
+                                                            <Icon icon={Delete20Filled} />
                                                         </Button>
                                                     </Tooltip>
                                                 </div>

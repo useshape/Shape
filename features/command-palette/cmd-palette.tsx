@@ -1,9 +1,14 @@
 "use client";
 
+import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
+import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
+
+
 import { providerIcon } from "@/lib/ui/provider-icon";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ICON_SIZE_SM, Icon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { FileIcon } from "@/components/ui/file-icon";
 import { FrameworkMark } from "@/features/chat/ui/shell/brand-marks";
 import { SearchInput } from "@/components/ui/search";
@@ -725,7 +730,7 @@ export function CommandPalette() {
                                                     className="ml-2 shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-error/10 hover:text-error"
                                                     title="Delete"
                                                 >
-                                                    <Icon icon={"trash-bin-trash"} />
+                                                    <Icon icon={Delete20Filled} />
                                                 </button>
                                             ) : null}
                                         </div>
@@ -746,7 +751,7 @@ export function CommandPalette() {
                                         {action.archive || action.delete ? <ContextMenuSeparator /> : null}
                                         {action.archive ? (
                                             <ContextMenuItem onClick={() => action.archive?.()}>
-                                                <Icon icon="inbox" size={ICON_SIZE_SM} />
+                                                <Icon icon={MailInbox20Regular} />
                                                 {action.muted ? "Unarchive" : "Archive"}
                                             </ContextMenuItem>
                                         ) : null}
@@ -755,7 +760,7 @@ export function CommandPalette() {
                                                 className="text-error"
                                                 onClick={(e) => action.delete?.(e as unknown as React.MouseEvent)}
                                             >
-                                                <Icon icon="trash-bin-trash" size={ICON_SIZE_SM} />
+                                                <Icon icon={Delete20Filled} />
                                                 Delete
                                             </ContextMenuItem>
                                         ) : null}

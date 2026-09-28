@@ -1,5 +1,9 @@
 "use client";
 
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Navigation20Regular } from "@fluentui/react-icons/headless/svg/navigation";
+
+
 import {
     Menubar,
     MenubarMenu,
@@ -16,6 +20,7 @@ import {
 import { agentMenuStructure, type MenuItem } from "@/lib/ui/menus";
 import type { RepoHistoryEntry } from "@/lib/workspace/repo-history";
 import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { titlebarIconButtonClass } from "./layout-controls";
@@ -137,7 +142,7 @@ export function TitlebarMenuToggle({
                 onClick={() => onOpenChange(!open)}
                 className={cn(titlebarIconButtonClass, open && "bg-panel-hover text-text-primary")}
             >
-                <Icon icon={"hamburger-menu"} />
+                <Icon icon={Navigation20Regular} />
             </button>
         </Tooltip>
     );
@@ -187,7 +192,7 @@ export function TitlebarMenubar({
             {overflow.length > 0 && (
                 <MenubarMenu>
                     <MenubarTrigger>
-                        <Icon icon={"menu-dots"} />
+                        <Icon icon={MoreHorizontal20Regular} />
                     </MenubarTrigger>
                     <MenubarPortal>
                         <MenubarContent alignOffset={-5}>

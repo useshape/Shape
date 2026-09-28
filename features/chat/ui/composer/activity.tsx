@@ -1,7 +1,13 @@
 "use client";
 
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+
+
+
 import React from "react";
-import { ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { cn } from "@/lib/utils";
 import {
     DropdownMenu,
@@ -37,7 +43,7 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
                                 <span className="t-spin-check__ring" />
                             </span>
                         ) : (
-                            <SolarIcon name="check" size={ICON_SIZE_SM} className="text-success" />
+                            <Icon icon={Checkmark20Regular} className="text-success" />
                         )}
                     </span>
                     <span className="truncate">{active.label}</span>
@@ -55,7 +61,7 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
                                     <span className="t-spin-check__ring" />
                                 </span>
                             ) : item.status === "done" ? (
-                                <SolarIcon name="check" size={ICON_SIZE_SM} className="text-success" />
+                                <Icon icon={Checkmark20Regular} className="text-success" />
                             ) : (
                                 <span className="size-3.5 rounded-full border-2 border-text-muted/45" />
                             )}

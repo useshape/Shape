@@ -1,23 +1,30 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { ArrowEnter20Regular } from "@fluentui/react-icons/headless/svg/arrow-enter";
+import { ArrowExit20Regular } from "@fluentui/react-icons/headless/svg/arrow-exit";
+import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
+import { EyeOff20Regular } from "@fluentui/react-icons/headless/svg/eye-off";
+import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
+
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
+import { isIncognitoChat, setIncognitoChat, subscribeIncognito } from "@/lib/chat/incognito";
 import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
-import { logoutGitHub, loginGitHub, useGitHubAuth } from "@/lib/github/store";
+import { useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { SHAPE_API_BASE, dashboardUrl } from "@/lib/cloud/api";
-import { commands } from "@/lib/backend/commands";
-import { notify } from "@/features/notifications";
+import { commands, useProjectState } from "@/lib/backend";
 import {
     DropdownMenu,
     DropdownMenuTrigger,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown";
 
 export function ProfileAvatar({
@@ -38,9 +45,7 @@ export function ProfileAvatar({
         gitAvatarUrl
         ?? (shapeUserId && !offline ? `${SHAPE_API_BASE}/api/avatar/${shapeUserId}` : null);
 
-    if (!imageSrc || failed) {
-        return null;
-    }
+    if (!imageSrc || failed) return null;
 
     return (
         // eslint-disable-next-line @next/next/no-img-element
@@ -56,52 +61,31 @@ export function ProfileAvatar({
     );
 }
 
-async function checkForUpdates() {
-    try {
-        const { checkForAppUpdates } = await import("@/lib/window/updater");
-        const status = await checkForAppUpdates({ force: true });
-        if (status.kind === "available") {
-            notify.info("Update available", `Shape ${status.version} is available.`);
-        } else if (status.kind === "upToDate") {
-            notify.success("You're on the latest version.");
-        } else if (status.kind === "error") {
-            notify.error("Check for updates", status.message);
-        }
-    } catch (error) {
-        notify.error(
-            "Check for updates",
-            error instanceof Error ? error.message : String(error),
-        );
-    }
-}
-
 export function AccountMenu({ children }: { children: ReactNode }) {
     const shapeAuth = useShapeAuth();
     const githubAuth = useGitHubAuth();
+    const { project_path } = useProjectState();
+    const [incognito, setIncognito] = useState(isIncognitoChat());
+
+    useEffect(() => subscribeIncognito(() => setIncognito(isIncognitoChat())), []);
 
     const displayName =
         (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
         ?? (githubAuth.loggedIn && githubAuth.username ? githubAuth.username : null)
         ?? "Sign in";
 
-    const handleGitHubLogout = useCallback(async () => {
-        try {
-            await logoutGitHub(githubAuth.username ?? undefined);
-        } catch (error) {
-            notify.error(
-                "GitHub logout failed",
-                error instanceof Error ? error.message : String(error),
-            );
-        }
-    }, [githubAuth.username]);
+    const newChat = useCallback(() => {
+        window.dispatchEvent(new Event("shape-chat-new"));
+        window.dispatchEvent(new Event("shape-chat-focus-input"));
+    }, []);
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-64">
-                <div className="flex items-center gap-2.5 px-2 py-0.5">
+            <DropdownMenuContent align="start" side="bottom" className="w-56">
+                <div className="flex items-center gap-2.5 px-2 py-1.5">
                     <ProfileAvatar
-                        size={18}
+                        size={22}
                         gitAvatarUrl={githubAuth.loggedIn ? githubAuth.avatarUrl : null}
                         shapeUserId={shapeAuth.userId}
                         offline={Boolean(shapeAuth.offline)}
@@ -117,7 +101,7 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                 {shapeAuth.loggedIn && !shapeAuth.offline && shapeAuth.tier === "free" ? (
                     <button
                         type="button"
-                        className="mx-1 mt-1 flex w-[calc(100%-0.5rem)] flex-col gap-0.5 rounded-lg bg-surface-2 px-2.5 py-2 text-left hover:bg-panel-hover"
+                        className="mx-1 mt-0.5 flex w-[calc(100%-0.5rem)] flex-col gap-0.5 rounded-lg bg-surface-2 px-2.5 py-2 text-left hover:bg-panel-hover"
                         onClick={() => void commands.openUrlExternal(`${dashboardUrl()}/settings/billing`)}
                     >
                         <span className="text-sm font-medium text-text-primary">Get Plus</span>
@@ -126,75 +110,65 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                 ) : null}
 
                 <DropdownMenuSeparator />
-
                 <DropdownMenuItem onClick={() => void openSettingsWindow()}>
+                    <Icon icon={Settings20Regular} />
                     Settings
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                    onClick={() => void openSettingsWindow({ category: "keyboard" })}
+                    onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
                 >
-                    Keyboard shortcuts
+                    <Icon icon={FolderOpen20Regular} />
+                    Open folder
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer" onClick={() => void checkForUpdates()}>
-                    <Icon icon={"cloud-upload"} size={ICON_SIZE_SM} />
-                    Check for updates
+                {project_path ? (
+                    <DropdownMenuItem onClick={() => void commands.revealPath(project_path)}>
+                        <Icon icon={Open20Regular} />
+                        Reveal in Explorer
+                    </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem
+                    onClick={() =>
+                        window.dispatchEvent(
+                            new CustomEvent("shape-command-palette", {
+                                detail: { placeholder: "Search…" },
+                            }),
+                        )
+                    }
+                >
+                    <Icon icon={Search20Regular} />
+                    Search
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={newChat}>
+                    <Icon icon={Compose20Regular} />
+                    New chat
                 </DropdownMenuItem>
 
-                <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="cursor-pointer">
-                        <Icon icon={"code-square"} size={ICON_SIZE_SM} />
-                        GitHub
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-56">
-                        {githubAuth.loggedIn ? (
-                            <>
-                                <div className="flex items-center gap-2 px-2 py-1.5">
-                                    {githubAuth.avatarUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={githubAuth.avatarUrl}
-                                            alt=""
-                                            className="size-6 shrink-0 rounded-full object-cover"
-                                        />
-                                    ) : null}
-                                    <span className="min-w-0 truncate text-sm font-medium text-text-primary">
-                                        {githubAuth.username || "GitHub"}
-                                    </span>
-                                </div>
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => void handleGitHubLogout()}
-                                >
-                                    <Icon icon={"logout"} size={ICON_SIZE_SM} />
-                                    Log out
-                                </DropdownMenuItem>
-                            </>
-                        ) : (
-                            <DropdownMenuItem
-                                className="cursor-pointer"
-                                onClick={() => void loginGitHub()}
-                            >
-                                <Icon icon={"login"} size={ICON_SIZE_SM} />
-                                Log in
-                            </DropdownMenuItem>
-                        )}
-                    </DropdownMenuSubContent>
-                </DropdownMenuSub>
                 {shapeAuth.loggedIn ? (
                     <DropdownMenuItem
                         className="cursor-pointer text-danger hover:text-danger hover:bg-danger/10"
                         onClick={() => void logoutShape()}
                     >
-                        <Icon icon={"logout"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowExit20Regular} />
                         Sign out
                     </DropdownMenuItem>
                 ) : (
                     <DropdownMenuItem onClick={() => requestShapeLogin()}>
-                        <Icon icon={"login"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowEnter20Regular} />
                         Sign in
                     </DropdownMenuItem>
                 )}
+
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                    className={cn(
+                        "cursor-pointer",
+                        incognito && "bg-incognito text-white focus:bg-incognito focus:text-white",
+                    )}
+                    onClick={() => void setIncognitoChat(!incognito)}
+                >
+                    <Icon icon={EyeOff20Regular} />
+                    Incognito
+                </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );

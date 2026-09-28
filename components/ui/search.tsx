@@ -1,8 +1,14 @@
 "use client";
 
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+
+
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_SM, ICON_SIZE_MD } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 
 export type SearchInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "size"> & {
@@ -78,8 +84,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                 )}
             >
                 <Icon
-                    icon={"magnifier"}
-                    size={ICON_SIZE_MD}
+                    icon={Search20Regular}
                     className="pointer-events-none absolute left-2.5 z-10 pr-0.5 text-input-placeholder!"
                 />
                 <input
@@ -112,8 +117,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                 <div className="absolute right-1 z-10 flex h-full items-center">
                     {isLoading ? (
                         <Icon
-                            icon={"refresh"}
-                            size={ICON_SIZE_SM}
+                            icon={ArrowSync20Regular}
                             className="mr-1.5 animate-spin text-input-placeholder"
                         />
                     ) : showClear ? (
@@ -131,7 +135,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                                 innerRef.current?.focus();
                             }}
                         >
-                            <Icon icon={"close"} size={ICON_SIZE_MD} />
+                            <Icon icon={Dismiss20Regular} />
                         </Button>
                     ) : null}
                 </div>

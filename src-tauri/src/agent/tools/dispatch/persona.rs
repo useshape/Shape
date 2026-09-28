@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use tauri::Emitter;
 
 use crate::agent::commands::streaming::{self, ProxyContext};
-use crate::agent::tools::browse::SNAPSHOT_JS;
+use crate::agent::tools::browse::{is_same_document_nav, scroll_past_in_page_anchor, SNAPSHOT_JS};
 use crate::browser::{self, cdp};
 
 use super::common::{clip, error_outcome, escape_xml_attr, get_str};
@@ -491,7 +491,16 @@ async fn act_on(ws: &str, id: u64, action: &str, decision: &Value) -> String {
         return format!("Typed \"{text}\" into {name}");
     }
     let href = str_of(&v, "href");
+    let current_href = cdp::eval(ws, r#"(function(){return location.href||""})()"#)
+        .await
+        .unwrap_or_default();
     if href.starts_with("http://") || href.starts_with("https://") {
+        if is_same_document_nav(&current_href, &href) {
+            let _ = cdp::click_px(ws, x, y).await;
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            scroll_past_in_page_anchor(ws).await;
+            return format!("Clicked \"{name}\" and scrolled past the in-page link");
+        }
         let _ = cdp::call(ws, "Page.navigate", json!({ "url": href })).await;
         cdp::wait_ready(ws, Duration::from_secs(6)).await;
         return format!("Followed \"{name}\" to {href}");

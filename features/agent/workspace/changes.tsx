@@ -1,8 +1,20 @@
 "use client";
 
+import { GithubMark } from "@/components/ui/github-mark";
+import { Alert20Regular } from "@fluentui/react-icons/headless/svg/alert";
+import { ArrowUp20Regular } from "@fluentui/react-icons/headless/svg/arrow-up";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
+import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
+import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+
+
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { commands, type GitFileParams } from "@/lib/backend";
-import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { notify } from "@/features/notifications";
 import { discoverGitRepos, pickDefaultRepo } from "@/lib/git/repos";
@@ -170,11 +182,11 @@ const FileRow = memo(function FileRow({
                 <ContextMenuItem onClick={() => onOpenFile(file)}>Open file</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => onToggleStage(file)} className="gap-1.5">
-                    <Icon icon={"git-pull-request"} size={ICON_SIZE_SM}/>
+                    <Icon icon={BranchRequest20Regular}/>
                     {file.staged ? "Unstage" : "Stage"}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => onDiscard(file)} className="text-error gap-1.5">
-                    <Icon icon={"trash-bin-trash"} size={ICON_SIZE_SM}/>
+                    <Icon icon={Delete20Filled}/>
                     Discard changes
                 </ContextMenuItem>
             </ContextMenuContent>
@@ -469,10 +481,10 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
             ? "color-mix(in srgb, var(--color-warn) 22%, transparent)"
             : "color-mix(in srgb, var(--color-success) 22%, transparent)";
 
-    const tabs: { id: PanelTab; label: string; icon?: SolarIconName }[] = [
+    const tabs: { id: PanelTab; label: string; icon?: IconGlyph }[] = [
         { id: "changes", label: `Changes${files.length ? ` ${files.length}` : ""}` },
         { id: "checks", label: "Checks" },
-        { id: "review", label: "Review", icon: "eye" },
+        { id: "review", label: "Review", icon: Eye20Regular },
     ];
 
     return (
@@ -501,7 +513,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                         className="flex size-6 items-center justify-center rounded-md hover:opacity-90"
                         style={{ color: toneFg }}
                     >
-                        <Icon icon={"square-forward"} size={ICON_SIZE_SM}/>
+                        <Icon icon={Open20Regular}/>
                     </button>
                 ) : null}
                 <span
@@ -509,7 +521,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                     style={{ color: toneFg }}
                 >
                     <Icon
-                        icon={statusTone === "warn" ? "danger-triangle" : "arrow-up"}
+                        icon={statusTone === "warn" ? Alert20Regular : ArrowUp20Regular}
                     />
                     {statusLabel}
                     {totals.plus > 0 || totals.minus > 0 ? (
@@ -531,7 +543,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                             color: toneFg,
                         }}
                     >
-                        <Icon icon={"git-pull-request"} size={ICON_SIZE_SM}/>
+                        <Icon icon={BranchRequest20Regular}/>
                         Merge
                     </button>
                 ) : (
@@ -545,7 +557,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                             color: toneFg,
                         }}
                     >
-                        <Icon icon={"git-pull-request"} size={ICON_SIZE_SM}/>
+                        <Icon icon={BranchRequest20Regular}/>
                         Commit & Push
                     </button>
                 )}
@@ -556,14 +568,14 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-md font-medium leading-snug">
                             <span>Committing to</span>
-                            <Icon icon={"code-square"} size={ICON_SIZE_SM} className="text-text-primary" />
+                            <Icon icon={GithubMark} className="text-text-primary" />
                             <span className="text-text-primary">
                                 {ownerRepo
                                     ? `${ownerRepo.owner}/${ownerRepo.repo}`
                                     : fileName(projectPath)}
                             </span>
                             <span>on branch</span>
-                            <Icon icon={"git-branch"} size={ICON_SIZE_SM} className="text-text-primary" />
+                            <Icon icon={Branch20Regular} className="text-text-primary" />
                             <span className="text-text-primary">{branch ?? "HEAD"}</span>
                             <span>
                                 with{" "}
@@ -645,7 +657,7 @@ export function ChangesView({ projectPath }: { projectPath: string }) {
                             className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover"
                             aria-label="More"
                         >
-                            <Icon icon={"menu-dots"} size={ICON_SIZE_SM} />
+                            <Icon icon={MoreHorizontal20Regular} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">

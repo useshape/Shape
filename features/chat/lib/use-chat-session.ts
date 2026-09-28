@@ -28,10 +28,15 @@ import {
 } from "./chat-session-utils";
 import { getSettings } from "@/lib/settings";
 import { getVisibleModels, resolveChatModels, sanitizeEnabledModels } from "@/lib/settings/models";
-import { getCatalogDefaultEnabledIds, getCatalogModels, isCatalogModelAllowed, useShapeCatalog } from "@/lib/catalog/store";
+import { getCatalogDefaultEnabledIds, getCatalogModels, useShapeCatalog } from "@/lib/catalog/store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
+import {
+    isIncognitoChat,
+    purgeIncognitoConversation,
+    setIncognitoChat,
+} from "@/lib/chat/incognito";
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
 import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat/mentions";
 import { buildPlanBuildMessage } from "@/lib/chat/continue-action";
@@ -95,6 +100,37 @@ function writePersistedChatTabs(
     }
 }
 
+const COMPOSER_PREFS_KEY = "shape-composer";
+
+type ComposerEffort = "low" | "high" | "ultra" | "max";
+type ComposerPrefs = { model?: string; effort?: ComposerEffort; fast?: boolean };
+
+function readComposerPrefs(): ComposerPrefs {
+    if (typeof window === "undefined") return {};
+    try {
+        const raw = localStorage.getItem(COMPOSER_PREFS_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as ComposerPrefs;
+        const effort = parsed.effort;
+        const known = effort === "low" || effort === "high" || effort === "ultra" || effort === "max";
+        return {
+            model: typeof parsed.model === "string" ? parsed.model : undefined,
+            effort: known ? effort : undefined,
+            fast: typeof parsed.fast === "boolean" ? parsed.fast : undefined,
+        };
+    } catch {
+        return {};
+    }
+}
+
+function writeComposerPrefs(prefs: ComposerPrefs) {
+    try {
+        localStorage.setItem(COMPOSER_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+        /* ignore */
+    }
+}
+
 export function useChatSession() {
     const [uploadedFiles, setUploadedFiles] = React.useState<ComposerAttachment[]>([]);
 
@@ -138,16 +174,20 @@ export function useChatSession() {
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
     const [openChatTabs, setOpenChatTabs] = React.useState<ChatTab[]>([
         { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-        { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
+        { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
     ]);
     const [activeChatTabId, setActiveChatTabId] = React.useState<string>(NEW_CHAT_TAB_ID);
-    const [selectedModel, setSelectedModel] = React.useState("auto");
+    const [selectedModel, setSelectedModel] = React.useState(
+        () => readComposerPrefs().model || "auto",
+    );
     const selectedModelRef = React.useRef(selectedModel);
     selectedModelRef.current = selectedModel;
-    const appliedDefaultModelRef = React.useRef(false);
+    const appliedDefaultModelRef = React.useRef(Boolean(readComposerPrefs().model));
     const [selectedMode, setSelectedMode] = React.useState("Code");
-    const [reasoningEffort, setReasoningEffort] = React.useState<"low" | "high" | "ultra" | "max">("low");
-    const [fastMode, setFastMode] = React.useState(true);
+    const [reasoningEffort, setReasoningEffort] = React.useState<"low" | "high" | "ultra" | "max">(
+        () => readComposerPrefs().effort || "low",
+    );
+    const [fastMode, setFastMode] = React.useState(() => readComposerPrefs().fast ?? true);
     const tabsHydratedForRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
@@ -212,7 +252,7 @@ export function useChatSession() {
             if (persisted) {
                 const tabs = [...persisted.tabs];
                 if (!tabs.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
-                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] });
+                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] });
                 }
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
                     tabs.unshift({ id: NEW_CHAT_TAB_ID, title: "New Chat" });
@@ -234,7 +274,7 @@ export function useChatSession() {
                         if (!cancelled) {
                             setOpenChatTabs([
                                 { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                                { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
+                                { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
                             ]);
                             setActiveChatTabId(NEW_CHAT_TAB_ID);
                         }
@@ -250,7 +290,7 @@ export function useChatSession() {
                         });
                         setOpenChatTabs((prev) => {
                             if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) return prev;
-                            return [...prev, { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] }];
+                            return [...prev, { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] }];
                         });
                         setActiveChatTabId(DEMO_CHAT_TAB_ID);
                     }
@@ -258,7 +298,7 @@ export function useChatSession() {
             } else {
                 setOpenChatTabs([
                     { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                    { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
+                    { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
                 ]);
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
             }
@@ -894,7 +934,7 @@ export function useChatSession() {
                 ),
             ];
 
-            void captureTelemetry("chat_message_sent", {
+            if (!isIncognitoChat()) void captureTelemetry("chat_message_sent", {
                 mode: selectedMode,
                 model: selectedModel,
                 message_length_bucket: messageLengthBucket(userMsg.length),
@@ -954,7 +994,7 @@ export function useChatSession() {
             return true;
         } catch (err) {
             console.error("Failed to send message:", err);
-            void captureTelemetryError(err, {
+            if (!isIncognitoChat()) void captureTelemetryError(err, {
                 feature: "chat_send",
                 mode: selectedMode,
                 model: selectedModel,
@@ -1214,12 +1254,21 @@ export function useChatSession() {
     );
 
     React.useEffect(() => {
+        writeComposerPrefs({
+            model: selectedModel,
+            effort: reasoningEffort,
+            fast: fastMode,
+        });
+    }, [selectedModel, reasoningEffort, fastMode]);
+
+    React.useEffect(() => {
+        if (!catalog) return;
         const ai = getSettings().ai;
         const keyed = resolveChatModels(getCatalogModels(), {
             openaiKey: false,
             openRouterKey: false,
             signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
-        }).filter((m) => m.id === "auto" || isCatalogModelAllowed(m.id));
+        });
         const enabled = sanitizeEnabledModels(
             ai.enabledModels,
             keyed.map((m) => m.id),
@@ -1227,13 +1276,13 @@ export function useChatSession() {
         );
         const visible = getVisibleModels(keyed, enabled);
         const current = selectedModelRef.current;
+        if (keyed.some((m) => m.id === current)) return;
         if (!appliedDefaultModelRef.current && visible.some((m) => m.id === ai.defaultModel)) {
             appliedDefaultModelRef.current = true;
             setSelectedModel(ai.defaultModel);
             return;
         }
         appliedDefaultModelRef.current = true;
-        if (visible.some((m) => m.id === current)) return;
         if (visible.some((m) => m.id === ai.defaultModel)) {
             setSelectedModel(ai.defaultModel);
         } else if (visible.length > 0) {
@@ -1299,7 +1348,7 @@ export function useChatSession() {
             setDemoChatPinned(false);
             setViewingConversation(null);
             await commands.newChat();
-            void captureTelemetry("chat_new");
+            if (!isIncognitoChat()) void captureTelemetry("chat_new");
             clearAllDesignPreviewSessions();
             setSendError(null);
             setMessages([]);
@@ -1349,6 +1398,7 @@ export function useChatSession() {
         try {
             const conv = recentConvs.find((c) => c.id === tabId);
             setViewingConversation(tabId);
+            await setIncognitoChat(false);
             await commands.loadConversation(tabId, conv?.project_path ?? project_path);
             clearAllDesignPreviewSessions();
             setContextSummarized(false);
@@ -1359,11 +1409,15 @@ export function useChatSession() {
     };
 
     const handleCloseChatTab = async (tabId: string) => {
+        if (isIncognitoChat() && tabId === conversationIdRef.current) {
+            await purgeIncognitoConversation(tabId);
+            await setIncognitoChat(false);
+        }
         const remaining = openChatTabs.filter((tab) => tab.id !== tabId);
         if (remaining.length === 0) {
             setOpenChatTabs([
                 { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
+                { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
             ]);
             setActiveChatTabId(NEW_CHAT_TAB_ID);
             setMessages([]);
@@ -1489,6 +1543,7 @@ export function useChatSession() {
                 pinDemo(true);
                 const demo = buildDemoChatMessages();
                 setMessages(demo);
+                setChatTitle("Feed warning jump");
                 void import("@/features/agent/subagents/store").then(({ seedDemoSubagents }) => {
                     seedDemoSubagents();
                 });
@@ -1498,12 +1553,12 @@ export function useChatSession() {
                 setOpenChatTabs((prev) => {
                     if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
                         return prev.map((t) =>
-                            t.id === DEMO_CHAT_TAB_ID ? { ...t, title: "API Gateway throttle", models: ["auto"] } : t,
+                            t.id === DEMO_CHAT_TAB_ID ? { ...t, title: "Feed warning jump", models: ["auto"] } : t,
                         );
                     }
                     return [
                         ...prev.filter((t) => t.id !== NEW_CHAT_TAB_ID),
-                        { id: DEMO_CHAT_TAB_ID, title: "API Gateway throttle", models: ["auto"] },
+                        { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
                     ];
                 });
                 setActiveChatTabId(DEMO_CHAT_TAB_ID);
@@ -1539,7 +1594,7 @@ export function useChatSession() {
                 const { setChatGenerating } = await import("@/features/chat/lib/generating-chats");
                 setChatGenerating(convId, false);
             }
-            void captureTelemetry("chat_stopped", {
+            if (!isIncognitoChat()) void captureTelemetry("chat_stopped", {
                 mode: selectedMode,
                 model: selectedModel,
             });

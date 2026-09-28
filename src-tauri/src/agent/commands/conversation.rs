@@ -239,6 +239,7 @@ pub fn new_chat(
     *state.current_conversation_id.lock()? = None;
     state.clear_design_preview_state();
     state.clear_file_checkpoints();
+    state.set_incognito(false);
 
     // Refresh the index only when it is actually stale — an unconditional
     // rescan on every new chat wasted a full project walk.
@@ -294,8 +295,23 @@ pub fn load_conversation(
     *state.current_conversation_id.lock()? = Some(id.clone());
     state.clear_design_preview_state();
     state.replace_file_checkpoints(checkpoints::load_checkpoints(&id));
+    state.set_incognito(false);
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_chat_incognito(
+    enabled: bool,
+    state: tauri::State<'_, AgentState>,
+) -> Result<(), AppError> {
+    state.set_incognito(enabled);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_chat_incognito(state: tauri::State<'_, AgentState>) -> Result<bool, AppError> {
+    Ok(state.incognito())
 }
 
 #[tauri::command]

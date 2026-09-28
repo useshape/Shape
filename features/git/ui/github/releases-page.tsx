@@ -1,7 +1,13 @@
 "use client";
 
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { Tag20Regular } from "@fluentui/react-icons/headless/svg/tag";
+
+
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll";
 import { cn } from "@/lib/utils";
@@ -167,7 +173,7 @@ export function ReleasesPage() {
     const versionsPane = (
         <div className="workbench-panel flex h-full min-h-0 flex-col overflow-hidden">
             <div className="flex h-9 shrink-0 items-center gap-2 px-3">
-                <Icon icon={"tag"} size={ICON_SIZE_SM} className="shrink-0 text-text-muted" />
+                <Icon icon={Tag20Regular} className="shrink-0 text-text-muted" />
                 <FadeTruncate
                     className="min-w-0 flex-1 text-sm font-medium"
                     title={owner && repoName ? `Releases · ${owner}/${repoName}` : "Releases"}
@@ -197,7 +203,7 @@ export function ReleasesPage() {
                     onClick={() => void load()}
                     aria-label="Refresh"
                 >
-                    <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                    <Icon icon={ArrowSync20Regular} />
                 </Button>
             </div>
             <div className="px-3 pb-1.5 text-xs font-medium text-text-muted">Versions</div>
@@ -230,8 +236,7 @@ export function ReleasesPage() {
                                 >
                                     <span className="flex min-w-0 items-center gap-1.5">
                                         <Icon
-                                            icon={"tag"}
-                                            size={ICON_SIZE_SM}
+                                            icon={Tag20Regular}
                                             className="shrink-0 text-text-muted"
                                         />
                                         <span className="truncate font-mono text-sm">{label}</span>
@@ -309,7 +314,7 @@ export function ReleasesPage() {
                                 ) : null}
                                 {selected.tagName ? (
                                     <span className="inline-flex items-center gap-1 font-mono text-text-secondary">
-                                        <Icon icon={"tag"} size={ICON_SIZE_SM} />
+                                        <Icon icon={Tag20Regular} />
                                         {selected.tagName}
                                     </span>
                                 ) : null}
@@ -325,7 +330,7 @@ export function ReleasesPage() {
                                         void commands.openUrlExternal(selected.htmlUrl!)
                                     }
                                 >
-                                    <Icon icon={"square-forward"} size={ICON_SIZE_SM} />
+                                    <Icon icon={Open20Regular} />
                                     GitHub
                                 </Button>
                             ) : null}

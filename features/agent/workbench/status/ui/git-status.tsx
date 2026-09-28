@@ -1,6 +1,10 @@
 "use client";
 
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+
+
 import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useGitBranch } from "@/features/agent/workbench/hooks/use-git-branch";
@@ -20,7 +24,7 @@ export function GitStatusButton() {
                     window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "source" }))
                 }
             >
-                <Icon icon={"git-branch"} className="shrink-0" />
+                <Icon icon={Branch20Regular} className="shrink-0" />
                 {branch ? <span className="font-medium">{branch}</span> : null}
             </Button>
         </Tooltip>

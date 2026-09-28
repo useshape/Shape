@@ -69,7 +69,7 @@ export function isOpenAiApiModel(model: { id: string; provider: string }): boole
 
 export function resolveChatModels(
     catalog: ModelInfo[],
-    opts: { openaiKey: boolean; openRouterKey: boolean; signedIn: boolean },
+    _opts: { openaiKey: boolean; openRouterKey: boolean; signedIn: boolean },
 ): ModelInfo[] {
     const byId = new Map<string, ModelInfo>();
     const add = (model: ModelInfo) => {
@@ -78,11 +78,9 @@ export function resolveChatModels(
 
     add(catalog.find((m) => m.id === "auto") ?? AUTO_MODEL);
 
-    if (opts.signedIn) {
-        for (const model of catalog) {
-            if (model.id === "auto" || model.id === "openrouter/auto") continue;
-            add(model);
-        }
+    for (const model of catalog) {
+        if (model.id === "auto" || model.id === "openrouter/auto") continue;
+        add(model);
     }
 
     return [...byId.values()];

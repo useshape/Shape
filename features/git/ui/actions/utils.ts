@@ -1,4 +1,9 @@
-import type { SolarIconName } from "@/components/ui/icon";
+import type { IconGlyph } from "@/components/ui/icon";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { Circle20Regular } from "@fluentui/react-icons/headless/svg/circle";
+import { DismissCircle20Filled } from "@fluentui/react-icons/headless/svg/dismiss-circle";
+import { Stop20Filled } from "@fluentui/react-icons/headless/svg/stop";
 import { commands } from "@/lib/backend";
 
 export function formatRelative(iso?: string | null): string {
@@ -49,7 +54,7 @@ export function statusLabel(status?: string | null, conclusion?: string | null):
 }
 
 export type StatusIconDef = {
-    icon: SolarIconName;
+    icon: IconGlyph;
     spin?: boolean;
 };
 
@@ -59,24 +64,24 @@ export function statusIcon(
 ): StatusIconDef {
     const s = (conclusion || status || "").toLowerCase();
     if (["success", "completed", "passed"].includes(s)) {
-        return { icon: "check-circle" };
+        return { icon: CheckmarkCircle20Filled };
     }
     if (["failure", "failed", "error", "timed_out"].includes(s)) {
-        return { icon: "close-circle" };
+        return { icon: DismissCircle20Filled };
     }
     if (["cancelled", "canceled", "skipped", "neutral", "closed"].includes(s)) {
-        return { icon: "stop" };
+        return { icon: Stop20Filled };
     }
     if (["open"].includes(s)) {
-        return { icon: "record" };
+        return { icon: Circle20Regular };
     }
     if (["in_progress", "pending", "waiting", "requested"].includes(s)) {
-        return { icon: "refresh", spin: true };
+        return { icon: ArrowSync20Regular, spin: true };
     }
     if (["queued"].includes(s)) {
-        return { icon: "record" };
+        return { icon: Circle20Regular };
     }
-    return { icon: "record" };
+    return { icon: Circle20Regular };
 }
 
 export function actorAvatarUrl(actor?: {

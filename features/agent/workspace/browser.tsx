@@ -1,9 +1,31 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { ArrowRight20Regular } from "@fluentui/react-icons/headless/svg/arrow-right";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
+import { Cursor20Filled } from "@fluentui/react-icons/headless/svg/cursor";
+import { Database20Regular } from "@fluentui/react-icons/headless/svg/database";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
+import { History20Regular } from "@fluentui/react-icons/headless/svg/history";
+import { Link20Regular } from "@fluentui/react-icons/headless/svg/link";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { Play20Filled } from "@fluentui/react-icons/headless/svg/play";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+import { Shield20Regular } from "@fluentui/react-icons/headless/svg/shield";
+import { Star20Regular } from "@fluentui/react-icons/headless/svg/star";
+import { Target20Regular } from "@fluentui/react-icons/headless/svg/target";
+
+
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Favicon } from "@/components/ui/favicon";
-import { ICON_SIZE_SM, Icon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     DropdownMenu,
@@ -125,7 +147,7 @@ function TabChip({
                 ) : url ? (
                     <Favicon url={url} size={14} />
                 ) : (
-                    <Icon icon="global" size={14} className="text-text-muted" />
+                    <Icon icon={Globe20Regular} className="text-text-muted" />
                 )}
             </span>
             <span className="min-w-0 flex-1 truncate">{title}</span>
@@ -143,7 +165,7 @@ function TabChip({
                         active ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100",
                     )}
                 >
-                    <Icon icon="close" size={12} />
+                    <Icon icon={Dismiss20Regular} />
                 </button>
             ) : null}
         </div>
@@ -292,9 +314,9 @@ function UrlBar({
                                 )}
                             >
                                 {item.kind === "search" ? (
-                                    <Icon icon="magnifier" size={14} className="shrink-0 text-text-muted" />
+                                    <Icon icon={Search20Regular} className="shrink-0 text-text-muted" />
                                 ) : item.kind === "go" ? (
-                                    <Icon icon="global" size={14} className="shrink-0 text-text-muted" />
+                                    <Icon icon={Globe20Regular} className="shrink-0 text-text-muted" />
                                 ) : (
                                     <Favicon url={item.url} size={14} />
                                 )}
@@ -545,7 +567,7 @@ function PageStage({
 function ErrorPage({ tab }: { tab: BrowserTab }) {
     return (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <Icon icon="global" size={28} className="text-text-muted" />
+            <Icon icon={Globe20Regular} className="text-text-muted" />
             <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium text-text-primary">This site can&apos;t be reached</span>
                 {tab.url ? <span className="text-xs text-text-muted">{hostnameOf(tab.url) || tab.url}</span> : null}
@@ -561,7 +583,7 @@ function ErrorPage({ tab }: { tab: BrowserTab }) {
 function EnginePage({ error, onRetry }: { error: string; onRetry: () => void }) {
     return (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <Icon icon="global" size={28} className="text-text-muted" />
+            <Icon icon={Globe20Regular} className="text-text-muted" />
             <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium text-text-primary">The browser couldn&apos;t start</span>
                 <span className="max-w-md text-xs text-text-secondary">{error}</span>
@@ -583,7 +605,7 @@ function NewTabPage({ onOpen }: { onOpen: (url: string) => void }) {
         <div className="flex h-full flex-col items-center justify-center gap-4 px-6">
             {devUrl ? (
                 <Button variant="secondary" size="sm" onClick={() => onOpen(devUrl)} className="gap-2 font-normal">
-                    <Icon icon="play" size={ICON_SIZE_SM} className="text-text-muted" />
+                    <Icon icon={Play20Filled} className="text-text-muted" />
                     <span className="truncate">{devUrl}</span>
                 </Button>
             ) : null}
@@ -833,7 +855,7 @@ export function BrowserView() {
                         title={agentFrame?.title || "Agent"}
                         url={agentFrame?.url || ""}
                         loading={agentFrame?.status === "loading"}
-                        icon={<Icon icon="cursor" size={14} className="text-accent" />}
+                        icon={<Icon icon={Cursor20Filled} className="text-accent" />}
                         onSelect={() => selectTab(AGENT_TAB)}
                     />
                 ) : null}
@@ -878,27 +900,27 @@ export function BrowserView() {
                         }}
                         className="flex size-7 shrink-0 items-center justify-center rounded text-text-muted hover:bg-panel-hover hover:text-text-primary"
                     >
-                        <Icon icon="add-circle" size={14} />
+                        <Icon icon={Add20Regular} />
                     </button>
                 </Tooltip>
             </div>
 
             <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border-subtle px-1">
                 <ToolBtn label="Back" disabled={!canBack} onClick={() => active && !active.pending && void commands.browserSurfaceBack(active.id)}>
-                    <Icon icon="arrow-left" />
+                    <Icon icon={ArrowLeft20Regular} />
                 </ToolBtn>
                 <ToolBtn label="Forward" disabled={!canForward} onClick={() => active && !active.pending && void commands.browserSurfaceForward(active.id)}>
-                    <Icon icon="arrow-right" />
+                    <Icon icon={ArrowRight20Regular} />
                 </ToolBtn>
                 <ToolBtn
                     label="Reload"
                     disabled={showAgent || !active || active.pending || !active.url}
                     onClick={() => active && void commands.browserSurfaceReload(active.id, false)}
                 >
-                    <Icon icon="refresh" />
+                    <Icon icon={ArrowSync20Regular} />
                 </ToolBtn>
                 <ToolBtn label={bookmarked ? "Remove bookmark" : "Bookmark"} onClick={toggleBookmark} active={bookmarked} disabled={!currentUrl}>
-                    <Icon icon="star" className={bookmarked ? "text-accent" : undefined} />
+                    <Icon icon={Star20Regular} className={bookmarked ? "text-accent" : undefined} />
                 </ToolBtn>
                 <UrlBar value={urlValue} onChange={setUrlDraft} onSubmit={submitUrl} />
                 <Tooltip content={designTooltip} side="bottom" delayDuration={80}>
@@ -915,7 +937,7 @@ export function BrowserView() {
                                 designOn && "bg-panel-active text-accent",
                             )}
                         >
-                            <Icon icon="palette" />
+                            <Icon icon={Color20Regular} />
                         </button>
                     </span>
                 </Tooltip>
@@ -932,7 +954,7 @@ export function BrowserView() {
                             picking && "bg-panel-active text-accent",
                         )}
                     >
-                        <Icon icon="target" />
+                        <Icon icon={Target20Regular} />
                     </button>
                 </Tooltip>
                 <DropdownMenu>
@@ -942,19 +964,19 @@ export function BrowserView() {
                             className="flex size-7 shrink-0 items-center justify-center rounded text-text-muted hover:bg-panel-hover hover:text-text-primary data-[state=open]:bg-panel-hover data-[state=open]:text-text-primary"
                             aria-label="Developer tools"
                         >
-                            <Icon icon="code" />
+                            <Icon icon={Code20Regular} />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" side="top" className="w-56">
                         <DropdownMenuItem disabled>
-                            <Icon icon="gallery" size={ICON_SIZE_SM} />
+                            <Icon icon={Camera20Filled} />
                             Take Screenshot
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             disabled={!active || showAgent}
                             onClick={() => active && !active.pending && void commands.browserSurfaceReload(active.id, true)}
                         >
-                            <Icon icon="refresh" size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowSync20Regular} />
                             Hard Reload
                         </DropdownMenuItem>
                         <DropdownMenuItem
@@ -963,7 +985,7 @@ export function BrowserView() {
                                 if (currentUrl) void navigator.clipboard.writeText(currentUrl);
                             }}
                         >
-                            <Icon icon="link" size={ICON_SIZE_SM} />
+                            <Icon icon={Link20Regular} />
                             Copy Current URL
                         </DropdownMenuItem>
                         <DropdownMenuItem
@@ -972,7 +994,7 @@ export function BrowserView() {
                                 if (currentUrl) void commands.openUrlExternal(currentUrl);
                             }}
                         >
-                            <Icon icon="square-forward" size={ICON_SIZE_SM} />
+                            <Icon icon={Open20Regular} />
                             Open Externally
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -987,15 +1009,15 @@ export function BrowserView() {
                         </DropdownMenuCheckboxItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => void commands.browserClear("history")}>
-                            <Icon icon="history" size={ICON_SIZE_SM} />
+                            <Icon icon={History20Regular} />
                             Clear Browsing History
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => void commands.browserClear("cookies")}>
-                            <Icon icon="shield" size={ICON_SIZE_SM} />
+                            <Icon icon={Shield20Regular} />
                             Clear Cookies
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => void commands.browserClear("cache")}>
-                            <Icon icon="database" size={ICON_SIZE_SM} />
+                            <Icon icon={Database20Regular} />
                             Clear Cache
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -1026,7 +1048,7 @@ export function BrowserView() {
                 {showAgent && agentFrame ? (
                     <div className="flex h-full min-h-0 flex-col">
                         {agentFrame.image ? (
-                            <BrowseStage frame={agentFrame} interactive className="min-h-0 flex-1" />
+                        <BrowseStage frame={agentFrame} interactive className="min-h-0 flex-1" />
                         ) : (
                             <div className="flex flex-1 items-center justify-center text-xs text-text-muted">
                                 {agentFrame.status === "error" ? agentFrame.error : "Opening…"}
@@ -1040,9 +1062,9 @@ export function BrowserView() {
                     </div>
                 ) : active ? (
                     designOn && designReady ? (
-                        <Suspense fallback={<div className="h-full bg-panel" />}>
+                    <Suspense fallback={<div className="h-full bg-panel" />}>
                             <PreviewPanel hideToolbar design={designOn} onDesignChange={setDesignOn} />
-                        </Suspense>
+                    </Suspense>
                     ) : !active.url || active.pending ? (
                         <NewTabPage onOpen={submitUrl} />
                     ) : null

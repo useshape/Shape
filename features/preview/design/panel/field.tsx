@@ -1,5 +1,8 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+
+
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +11,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { type SolarIconName,  Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -30,7 +34,7 @@ export function Field({
     mapValue = (next) => next,
 }: {
     label?: string;
-    icon?: SolarIconName;
+    icon?: IconGlyph;
     value?: string;
     property: string;
     onPreview: (styles: Styles) => void;
@@ -102,7 +106,7 @@ export function Field({
             className="order-first flex h-full shrink-0 cursor-ew-resize items-center justify-center pl-2 text-text-muted"
         >
             {icon ? (
-                <Icon icon={icon} size={ICON_SIZE_MD} />
+                <Icon icon={icon} />
             ) : (
                 <span className="text-sm font-medium leading-none">{label}</span>
             )}
@@ -163,7 +167,7 @@ export function SelectField({
     icon,
 }: {
     label?: string;
-    icon?: SolarIconName;
+    icon?: IconGlyph;
     value: string;
     options: Array<string | readonly [string, string]>;
     onChange: (value: string) => void;
@@ -187,7 +191,7 @@ export function SelectField({
                     {hasPrefix ? (
                         <span className="flex h-full shrink-0 items-center justify-center pl-2 text-text-muted">
                             {icon ? (
-                                <Icon icon={icon} size={ICON_SIZE_MD} />
+                                <Icon icon={icon} />
                             ) : (
                                 <span className="text-sm font-medium leading-none">{label}</span>
                             )}
@@ -202,8 +206,7 @@ export function SelectField({
                         {Array.isArray(display) ? display[1] : display || value || "Auto"}
                     </span>
                     <Icon
-                        icon={"alt-arrow-down"}
-                        size={ICON_SIZE_SM}
+                        icon={ChevronDown20Regular}
                         className="mr-1.5 shrink-0 text-text-muted"
                     />
                 </Button>
@@ -232,7 +235,7 @@ export function IconButton({
     label: string;
     active?: boolean;
     onClick?: () => void;
-    icon: SolarIconName;
+    icon: IconGlyph;
 }) {
     return (
         <Button
@@ -253,7 +256,7 @@ export function Segment({
     value,
     onChange,
 }: {
-    items: Array<{ value: string; label?: string; icon?: SolarIconName; title: string }>;
+    items: Array<{ value: string; label?: string; icon?: IconGlyph; title: string }>;
     value: string;
     onChange: (value: string) => void;
 }) {
@@ -284,7 +287,7 @@ export function Segment({
                             !item.label && "px-0",
                         )}
                     >
-                        {item.icon ? <Icon icon={item.icon} size={ICON_SIZE_SM} /> : null}
+                        {item.icon ? <Icon icon={item.icon} /> : null}
                         {item.label ? <span className="truncate">{item.label}</span> : null}
                     </button>
                 );

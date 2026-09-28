@@ -1,5 +1,14 @@
 "use client";
 
+import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
+import { Cursor20Filled } from "@fluentui/react-icons/headless/svg/cursor";
+import { DataPie20Filled } from "@fluentui/react-icons/headless/svg/data-pie";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
+import { Rhombus20Filled } from "@fluentui/react-icons/headless/svg/rhombus";
+import { Window20Filled } from "@fluentui/react-icons/headless/svg/window";
+
+
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -7,7 +16,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Icon, type SolarIconName } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { DesignToolMode } from "./bottom-toolbar";
@@ -20,7 +30,7 @@ function RailBtn({
     onClick,
 }: {
     label: string;
-    icon: SolarIconName;
+    icon: IconGlyph;
     active?: boolean;
     disabled?: boolean;
     onClick?: () => void;
@@ -37,7 +47,7 @@ function RailBtn({
                 aria-label={label}
                 className={cn("size-9 rounded-md", active && "bg-panel-hover text-text-primary")}
             >
-                <Icon icon={icon} size={18} />
+                <Icon icon={icon} />
             </Button>
         </Tooltip>
     );
@@ -63,25 +73,25 @@ export function DesignRail({
             <div className="flex flex-col items-center gap-0.5">
                 <RailBtn
                     label="Inspect"
-                    icon={"pen"}
+                    icon={Edit20Regular}
                     active={mode === "select"}
                     onClick={() => onModeChange("select")}
                 />
                 <RailBtn
                     label="Normal"
-                    icon={"cursor"}
+                    icon={Cursor20Filled}
                     active={mode === "normal"}
                     onClick={() => onModeChange("normal")}
                 />
                 <RailBtn
                     label="Auto layout"
-                    icon={"widget"}
+                    icon={Grid20Regular}
                     active={mode === "autolayout"}
                     onClick={() => onModeChange("autolayout")}
                 />
                 <RailBtn
                     label="Rotate"
-                    icon={"pie-chart"}
+                    icon={DataPie20Filled}
                     active={mode === "rotate"}
                     onClick={() => onModeChange("rotate")}
                 />
@@ -96,17 +106,17 @@ export function DesignRail({
                                 aria-label="Capture"
                                 className="size-9 rounded-md"
                             >
-                                <Icon icon={"gallery"} size={18} />
+                                <Icon icon={Camera20Filled} />
                             </Button>
                         </DropdownMenuTrigger>
                     </Tooltip>
                     <DropdownMenuContent side="right" align="start" className="min-w-36">
                         <DropdownMenuItem disabled={!canCaptureElement} onClick={onCaptureElement}>
-                            <Icon icon={"stars-minimalistic"} size={16} />
+                            <Icon icon={Rhombus20Filled} />
                             Element
                         </DropdownMenuItem>
                         <DropdownMenuItem disabled={!canCapture} onClick={onCaptureScreen}>
-                            <Icon icon={"monitor"} size={16} />
+                            <Icon icon={Window20Filled} />
                             Screen
                         </DropdownMenuItem>
                     </DropdownMenuContent>

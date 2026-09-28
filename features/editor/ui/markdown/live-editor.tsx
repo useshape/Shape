@@ -1,5 +1,16 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Link20Regular } from "@fluentui/react-icons/headless/svg/link";
+import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
+import { TextBold20Regular } from "@fluentui/react-icons/headless/svg/text-bold";
+import { TextItalic20Regular } from "@fluentui/react-icons/headless/svg/text-italic";
+import { TextNumberListLtr20Regular } from "@fluentui/react-icons/headless/svg/text-number-list-ltr";
+import { TextStrikethrough20Regular } from "@fluentui/react-icons/headless/svg/text-strikethrough";
+import { TextUnderline20Regular } from "@fluentui/react-icons/headless/svg/text-underline";
+
+
+
 import { useEffect, useRef, useState } from "react";
 import { EditorSelection, EditorState, type Extension, type Range } from "@codemirror/state";
 import {
@@ -18,7 +29,9 @@ import { markdown, markdownKeymap, markdownLanguage } from "@codemirror/lang-mar
 import { tags as t } from "@lezer/highlight";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ICON_SIZE_SM, Icon } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -55,22 +68,14 @@ class CheckWidget extends WidgetType {
     eq(other: CheckWidget) {
         return other.checked === this.checked;
     }
-    toDOM(view: EditorView) {
-        const el = document.createElement("input");
-        el.type = "checkbox";
-        el.checked = this.checked;
-        el.className = "cm-md-check";
-        el.addEventListener("mousedown", (event) => {
-            event.preventDefault();
-            const pos = view.posAtDOM(el);
-            view.dispatch({
-                changes: { from: pos, to: pos + 3, insert: this.checked ? "[ ]" : "[x]" },
-            });
-        });
+    toDOM() {
+        const el = document.createElement("span");
+        el.className = this.checked ? "cm-md-check cm-md-check-on" : "cm-md-check";
+        el.setAttribute("aria-hidden", "true");
         return el;
     }
     ignoreEvent() {
-        return false;
+        return true;
     }
 }
 
@@ -314,11 +319,19 @@ const proseTheme = EditorView.theme({
         textAlign: "center",
     },
     ".cm-md-check": {
-        width: "15px",
-        height: "15px",
+        display: "inline-block",
+        width: "14px",
+        height: "14px",
         margin: "0 8px -2px 0",
-        accentColor: "var(--accent)",
-        cursor: "pointer",
+        borderRadius: "999px",
+        border: "1.5px solid color-mix(in srgb, var(--text-muted) 70%, transparent)",
+        verticalAlign: "middle",
+        pointerEvents: "none",
+    },
+    ".cm-md-check-on": {
+        background: "var(--accent)",
+        borderColor: "var(--accent)",
+        boxShadow: "inset 0 0 0 2px var(--panel)",
     },
     ".cm-md-rule": {
         display: "inline-block",
@@ -514,7 +527,7 @@ function FormatBar({
                 <DropdownMenuTrigger asChild>
                     <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 font-normal">
                         Text
-                        <Icon icon="alt-arrow-down" size={ICON_SIZE_SM} className="text-text-muted" />
+                        <Icon icon={ChevronDown20Regular} className="text-text-muted" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-36">
@@ -525,24 +538,24 @@ function FormatBar({
                 </DropdownMenuContent>
             </DropdownMenu>
             <span className="mx-0.5 h-4 w-px bg-border-subtle" />
-            <Mark icon="text-bold" label="Bold" onClick={() => onFormat("**")} />
-            <Mark icon="text-italic" label="Italic" onClick={() => onFormat("*")} />
-            <Mark icon="text-underline" label="Underline" onClick={() => onFormat("<u>", "</u>")} />
-            <Mark icon="text-cross" label="Strikethrough" onClick={() => onFormat("~~")} />
+            <Mark icon={TextBold20Regular} label="Bold" onClick={() => onFormat("**")} />
+            <Mark icon={TextItalic20Regular} label="Italic" onClick={() => onFormat("*")} />
+            <Mark icon={TextUnderline20Regular} label="Underline" onClick={() => onFormat("<u>", "</u>")} />
+            <Mark icon={TextStrikethrough20Regular} label="Strikethrough" onClick={() => onFormat("~~")} />
             <span className="mx-0.5 h-4 w-px bg-border-subtle" />
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button type="button" variant="ghost" size="icon" className="size-7" aria-label="List">
-                        <Icon icon="list" size={ICON_SIZE_SM} />
+                        <Icon icon={TextNumberListLtr20Regular} />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-40">
                     <DropdownMenuItem onClick={() => onList("- ")}>
-                        <Icon icon="checklist" size={ICON_SIZE_SM} />
+                        <Icon icon={TaskListSquareLtr20Regular} />
                         Bulleted list
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onList("1. ")}>
-                        <Icon icon="list" size={ICON_SIZE_SM} />
+                        <Icon icon={TextNumberListLtr20Regular} />
                         Numbered list
                     </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -569,15 +582,23 @@ function FormatBar({
                     </div>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <Mark icon="link" label="Link" onClick={onLink} />
+            <Mark icon={Link20Regular} label="Link" onClick={onLink} />
         </div>
     );
 }
 
-function Mark({ icon, label, onClick }: { icon: "text-bold" | "text-italic" | "text-underline" | "text-cross" | "link"; label: string; onClick: () => void }) {
+function Mark({
+    icon,
+    label,
+    onClick,
+}: {
+    icon: IconGlyph;
+    label: string;
+    onClick: () => void;
+}) {
     return (
         <Button type="button" variant="ghost" size="icon" className="size-7" aria-label={label} title={label} onClick={onClick}>
-            <Icon icon={icon} size={ICON_SIZE_SM} />
+            <Icon icon={icon} />
         </Button>
     );
 }

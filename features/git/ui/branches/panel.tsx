@@ -1,9 +1,22 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { ArrowUpload20Regular } from "@fluentui/react-icons/headless/svg/arrow-upload";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Cloud20Regular } from "@fluentui/react-icons/headless/svg/cloud";
+import { CloudOff20Regular } from "@fluentui/react-icons/headless/svg/cloud-off";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { LayoutColumnTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-column-two";
+import { LayoutRowTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-row-two";
+
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { GitChromeActions } from "@/features/git/ui/manager/chrome";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShapeLogo } from "@/components/ui/shape-logo";
@@ -61,16 +74,7 @@ function Avatar({
     size?: number;
 }) {
     const url = resolveGithubAvatarUrl(email, name, size * 2);
-    if (!url) {
-        return (
-            <span
-                className="inline-flex shrink-0 items-center justify-center rounded-full bg-panel-hover text-[10px] font-medium text-text-muted"
-                style={{ width: size, height: size }}
-            >
-                {(name || "?").slice(0, 1).toUpperCase()}
-            </span>
-        );
-    }
+    if (!url) return null;
     return (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt="" width={size} height={size} className="shrink-0 rounded-full" draggable={false} />
@@ -131,7 +135,7 @@ function BranchRow({
                     )}
                 >
                     <Icon
-                        icon={item.kind === "remote" ? "cloud" : "git-branch"}
+                        icon={item.kind === "remote" ? Cloud20Regular : Branch20Regular}
                         className={cn("shrink-0", isCurrent ? "text-accent" : "text-text-muted")}
                     />
                     <div className="min-w-0 flex-1">
@@ -190,7 +194,7 @@ function SectionHeader({
             className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
         >
             <Icon
-                icon={"alt-arrow-right"}
+                icon={ChevronRight20Regular}
                 className={cn(
                     "shrink-0 transition-transform duration-200 ease-[var(--ease-out)]",
                     open && "rotate-90",
@@ -556,22 +560,22 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
             <GitChromeActions>
                 <Tooltip content="Fetch">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitFetch(project_path).then(refresh)} disabled={loading} aria-label="Fetch">
-                        <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowSync20Regular} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Pull">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPull(project_path).then(refresh)} disabled={loading} aria-label="Pull">
-                        <Icon icon={"cloud-cross"} size={ICON_SIZE_SM} />
+                        <Icon icon={CloudOff20Regular} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Push">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void commands.gitPush(project_path)} disabled={loading} aria-label="Push">
-                        <Icon icon={"upload-minimalistic"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowUpload20Regular} />
                     </Button>
                 </Tooltip>
                 <Tooltip content="Refresh">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={loading} aria-label="Refresh">
-                        <Icon icon={"refresh"} size={ICON_SIZE_SM} />
+                        <Icon icon={ArrowSync20Regular} />
                     </Button>
                 </Tooltip>
             </GitChromeActions>
@@ -580,7 +584,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
             <div className="shrink-0 px-2.5 py-2">
                 <div className="flex items-center gap-2">
                     <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5">
-                        <Icon icon={"add-circle"} className="shrink-0 text-text-muted" />
+                        <Icon icon={Add20Regular} className="shrink-0 text-text-muted" />
                         <Input
                             value={newBranchName}
                             onChange={(e) => setNewBranchName(e.target.value)}
@@ -682,13 +686,13 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                                                 className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover/40 hover:text-text-secondary"
                                             >
                                                 <Icon
-                                                    icon={"alt-arrow-right"}
+                                                    icon={ChevronRight20Regular}
                                                     className={cn(
                                                         "transition-transform duration-200 ease-[var(--ease-out)]",
                                                         open && "rotate-90",
                                                     )}
                                                 />
-                                                <Icon icon={"cloud"} />
+                                                <Icon icon={Cloud20Regular} />
                                                 <span className="flex-1 truncate font-medium">{remote}</span>
                                                 <span className="text-xs tabular-nums">{fullCount}</span>
                                             </button>
@@ -738,7 +742,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                 <>
                     <div className="flex h-9 shrink-0 items-center gap-2 px-3">
                         <Icon
-                            icon={selectedItem.kind === "remote" ? "cloud" : "git-branch"}
+                            icon={selectedItem.kind === "remote" ? Cloud20Regular : Branch20Regular}
                             className="shrink-0 text-text-muted"
                         />
                         <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
@@ -758,7 +762,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                                     className="h-6 w-6 shrink-0 p-0"
                                     onClick={clearCompare}
                                 >
-                                    <Icon icon={"close"} />
+                                    <Icon icon={Dismiss20Regular} />
                                 </Button>
                             </Tooltip>
                         ) : null}
@@ -910,7 +914,7 @@ export function BranchWindow({ active = true }: { active?: boolean }) {
                                                     onClick={() => setSideBySide((v) => !v)}
                                                 >
                                                     <Icon
-                                                        icon={sideBySide ? "align-bottom" : "sidebar-code"}
+                                                        icon={sideBySide ? LayoutRowTwo20Regular : LayoutColumnTwo20Regular}
                                                     />
                                                 </Button>
                                             </Tooltip>

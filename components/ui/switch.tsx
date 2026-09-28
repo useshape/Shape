@@ -1,8 +1,12 @@
 "use client";
 
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+
+
 import * as React from "react";
 import * as SwitchPrimitives from "@radix-ui/react-switch";
-import { Icon, ICON_SIZE_XS } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 
 export const Switch = React.forwardRef<
@@ -54,7 +58,7 @@ export const Switch = React.forwardRef<
                 )}
             >
                 {loading ? (
-                    <Icon icon={"refresh"} size={ICON_SIZE_XS} className="animate-spin text-text-muted" />
+                    <Icon icon={ArrowSync20Regular} className="animate-spin text-text-muted" />
                 ) : null}
             </SwitchPrimitives.Thumb>
         </SwitchPrimitives.Root>

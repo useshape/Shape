@@ -1,8 +1,15 @@
 "use client";
 
+import { Alert20Regular } from "@fluentui/react-icons/headless/svg/alert";
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Info20Regular } from "@fluentui/react-icons/headless/svg/info";
+
+
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { type SolarIconName,  Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { notificationStore, useNotifications, type Notification } from "@/features/notifications";
 import { errorDocsUrl } from "@/lib/errors/catalog";
@@ -14,11 +21,11 @@ const TOAST_EXIT_MS = 220;
 export const TOAST_STACK_CLASS =
     "pointer-events-none fixed bottom-4 right-4 left-auto z-notification ml-auto w-[min(400px,calc(100vw-24px))] outline-none";
 
-const typeIcons: Record<Notification["type"], SolarIconName> = {
-    info: "info-circle",
-    success: "check-circle",
-    warning: "danger-triangle",
-    error: "danger-triangle",
+const typeIcons: Record<Notification["type"], IconGlyph> = {
+    info: Info20Regular,
+    success: CheckmarkCircle20Filled,
+    warning: Alert20Regular,
+    error: Alert20Regular,
 };
 
 const typeVisual: Record<Notification["type"], string> = {
@@ -129,7 +136,7 @@ function ToastCard({
                     }}
                     aria-label="Dismiss notification"
                 >
-                    <Icon icon={"close"} size={ICON_SIZE_SM} />
+                    <Icon icon={Dismiss20Regular} />
                 </Button>
             </div>
             {autoHideMs ? (

@@ -1,8 +1,15 @@
 "use client";
 
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { DismissCircle20Filled } from "@fluentui/react-icons/headless/svg/dismiss-circle";
+import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
+
+
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { GeneratingIndicator } from "@/features/chat/ui/blocks/generating";
@@ -55,9 +62,9 @@ function Card({ card }: { card: SubagentCard }) {
                     {card.title}
                 </span>
                 {card.status === "done" ? (
-                    <Icon icon={"check-circle"} className={cn("shrink-0", statusTone(card.status))} />
+                    <Icon icon={CheckmarkCircle20Filled} className={cn("shrink-0", statusTone(card.status))} />
                 ) : card.status === "error" ? (
-                    <Icon icon={"close-circle"} className={cn("shrink-0", statusTone(card.status))} />
+                    <Icon icon={DismissCircle20Filled} className={cn("shrink-0", statusTone(card.status))} />
                 ) : null}
             </div>
 
@@ -73,11 +80,11 @@ function Card({ card }: { card: SubagentCard }) {
                         }}
                         className="flex w-full items-center gap-2 py-0.5 text-left text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
                     >
-                        <Icon icon={"magic-stick"} className="shrink-0 text-text-secondary" />
+                        <Icon icon={Sparkle20Filled} className="shrink-0 text-text-secondary" />
                         <span className="min-w-0 flex-1 truncate">Reviewing changes...</span>
                         <span className="shrink-0 tabular-nums text-text-muted">{clockLabel(card)}</span>
                         <Icon
-                            icon={"alt-arrow-right"}
+                            icon={ChevronRight20Regular}
                             className={cn("shrink-0 opacity-50 transition-transform duration-200", open && "rotate-90")}
                         />
                     </button>

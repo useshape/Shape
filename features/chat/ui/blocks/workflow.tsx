@@ -1,12 +1,23 @@
 "use client";
 
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Globe20Filled } from "@fluentui/react-icons/headless/svg/globe";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
+
+
 import React, { useState } from "react";
-import { Icon, type SolarIconName } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
+
 import { FileIcon } from "@/components/ui/file-icon";
-import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
-import { diffLines } from "diff";
+import { countChangedLines } from "@/lib/ui/diff-count";
+import { ActionLine, splitActionLabel } from "./action-line";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -20,7 +31,6 @@ import { openProjectFile } from "@/lib/window/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path/utils";
 import { TerminalCommandStep } from "./terminal-live";
 import { parseWebSearchHits, WebSearchBlock } from "./search";
-import { ActionLine } from "./action-line";
 import { providerIcon } from "@/lib/ui/provider-icon";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
@@ -469,31 +479,31 @@ function GitActionChip({
     children?: React.ReactNode;
 }) {
     const hasDelta = (add ?? 0) > 0 || (del ?? 0) > 0;
+    const sentence = detail ? `${label} ${detail}` : label;
+    const parts = splitActionLabel(sentence);
     const trigger = (
         <button
             type="button"
             className={cn(
-                "flex items-center gap-1.5 py-0.5 chat-text font-regular text-text-primary/80 hover:text-text-primary transition-colors w-fit max-w-full text-left",
+                "group/line flex w-fit max-w-full items-center gap-1.5 py-0.5 text-left chat-text font-normal text-text-muted",
                 children ? "cursor-pointer" : "cursor-default",
             )}
         >
-            <span>
-                {label}
-                {detail ? (
-                    <>
-                        {" "}
-                        <span className="text-text-secondary">{detail}</span>
-                    </>
-                ) : null}
+            <span className="min-w-0 truncate">
+                <span className="text-text-secondary group-hover/line:text-text-primary">{parts.action}</span>
+                {parts.detail ? <span className="text-text-muted"> {parts.detail}</span> : null}
             </span>
             {hasDelta ? (
-                <span className="inline-flex items-center gap-1.5 shrink-0 tabular-nums">
+                <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
                     {(add ?? 0) > 0 ? <span className="text-success">+{add}</span> : null}
                     {(del ?? 0) > 0 ? <span className="text-error">-{del}</span> : null}
                 </span>
             ) : null}
             {children ? (
-                <Icon icon={"alt-arrow-down"} className="shrink-0 opacity-50" />
+                <Icon
+                    icon={ChevronRight20Regular}
+                    className="shrink-0 text-text-muted opacity-50 transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)] group-data-[state=open]/line:rotate-90"
+                />
             ) : null}
         </button>
     );
@@ -716,8 +726,23 @@ function GitDiffGroup({
             <div className="flex flex-col gap-2 p-1">
                 {file ? <FilePill path={file} /> : null}
                 {body.trim() ? (
-                    <pre className="max-h-56 overflow-auto rounded-lg bg-surface-1/80 px-2.5 py-2 font-mono text-xs leading-relaxed text-text-secondary whitespace-pre-wrap break-all custom-scrollbar">
-                        {body}
+                    <pre className="max-h-56 overflow-auto rounded-lg bg-surface-1/80 px-2.5 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all custom-scrollbar">
+                        {body.split("\n").map((line, index) => {
+                            const added = line.startsWith("+") && !line.startsWith("+++");
+                            const removed = line.startsWith("-") && !line.startsWith("---");
+                            return (
+                                <div
+                                    key={index}
+                                    className={cn(
+                                        added && "text-success",
+                                        removed && "text-error",
+                                        !added && !removed && "text-text-muted",
+                                    )}
+                                >
+                                    {line || " "}
+                                </div>
+                            );
+                        })}
                     </pre>
                 ) : (
                     <span className="px-1 text-sm text-text-muted">No diff output</span>
@@ -769,7 +794,7 @@ export function ReadGroup({
             {unique.map((file, i) => (
                 <ActionLine
                     key={`${file.path}-${i}`}
-                    action="read"
+                    action="Read"
                     detail={formatReadTarget(file)}
                     title={file.path}
                     onClick={() => void openProjectFile(file.path)}
@@ -785,7 +810,7 @@ export function ReadGroup({
         </div>
     );
 }
-function computeGroupHeader(visible: Chunk[]): { icon: SolarIconName; label: string } {
+function computeGroupHeader(visible: Chunk[]): { icon: IconGlyph; label: string } {
     const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
     const hasExplore = visible.some((b) =>
         ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit", "inspect_runtime"].includes(b.type),
@@ -795,12 +820,12 @@ function computeGroupHeader(visible: Chunk[]): { icon: SolarIconName; label: str
     );
     const hasCommand = visible.some((b) => b.type === "terminal_command" || b.type === "run");
 
-    if (hasEdit && hasExplore) return { icon: "pen", label: "Explored and edited" };
-    if (hasEdit) return { icon: "pen", label: "Edited files" };
-    if (hasCommand && !hasExplore) return { icon: "programming", label: "Ran commands" };
-    if (hasExplore) return { icon: "magnifier", label: "Explored codebase" };
-    if (hasThink) return { icon: "magic-stick", label: "Thought" };
-    return { icon: "magic-stick", label: "Worked" };
+    if (hasEdit && hasExplore) return { icon: Edit20Regular, label: "Explored and edited" };
+    if (hasEdit) return { icon: Edit20Regular, label: "Edited files" };
+    if (hasCommand && !hasExplore) return { icon: WindowConsole20Regular, label: "Ran commands" };
+    if (hasExplore) return { icon: Search20Regular, label: "Explored codebase" };
+    if (hasThink) return { icon: Sparkle20Filled, label: "Thought" };
+    return { icon: Sparkle20Filled, label: "Worked" };
 }
 
 export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
@@ -1201,7 +1226,7 @@ export function AgentWorkflow({
                 if (row.kind === "subagent_group") {
                     return (
                         <div key={`subs-${i}`} className="flex flex-col">
-                            <ActionLine action="Spawning subagents in parallel" />
+                            <ActionLine action="Spawning" detail="subagents" />
                             {row.blocks.map((block, index) => (
                                 <ActionItem key={block.file || index} block={block} isFileEditResolved={isFileEditResolved} />
                             ))}
@@ -1223,31 +1248,18 @@ export function AgentWorkflow({
         return <div className="flex flex-col w-full my-1 select-none">{rows}</div>;
     }
 
-    const header = computeGroupHeader(visibleBlocks);
-    const showRows = isOpen;
+    const header = splitActionLabel(computeGroupHeader(visibleBlocks).label);
 
     return (
-        <div className="flex flex-col w-full my-1 select-none">
-            <button
-                type="button"
-                onClick={() => setIsOpen((open) => !open)}
-                className="flex items-center gap-2 py-1 w-fit text-left group"
+        <div className="my-1 flex w-full select-none flex-col">
+            <ActionLine
+                action={header.action}
+                detail={header.detail}
+                open={isOpen}
+                onOpenChange={setIsOpen}
             >
-                <Icon icon={header.icon} className="text-text-muted shrink-0" />
-                <span className="chat-text text-text-secondary group-hover:text-text-primary transition-colors">
-                    {header.label}
-                </span>
-                <Icon
-                    icon={showRows ? "alt-arrow-up" : "alt-arrow-down"}
-                    className="text-text-muted shrink-0"
-                />
-            </button>
-
-            {showRows && (
-                <div className="flex flex-col gap-0.5 mt-0.5 ml-0">
-                    {rows}
-                </div>
-            )}
+                {rows}
+            </ActionLine>
         </div>
     );
 }
@@ -1281,7 +1293,6 @@ export function ActionItem({
     block: Chunk;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
 }) {
-    const [expanded, setExpanded] = useState(false);
     const config = getWorkflowActionConfig(block);
 
     const isThink = block.type === "think" || block.type === "thought";
@@ -1289,14 +1300,7 @@ export function ActionItem({
 
     const editStats = React.useMemo(() => {
         if (!isEdit || block.isGenerating) return null;
-        const changes = diffLines(block.original || "", block.replacement || "");
-        let add = 0;
-        let del = 0;
-        changes.forEach((c) => {
-            if (c.added) add += c.value.split("\n").length - 1 || 1;
-            if (c.removed) del += c.value.split("\n").length - 1 || 1;
-        });
-        return { add, del };
+        return countChangedLines(block.original || "", block.replacement || "");
     }, [isEdit, block.original, block.replacement, block.isGenerating]);
 
     if (!config) return null;
@@ -1309,12 +1313,10 @@ export function ActionItem({
         // Edit approval cards live in TurnWorkflowSummary; keep a compact
         // fallback if this legacy AgentWorkflow path still renders one.
         return (
-            <div className="py-0.5 chat-text text-text-muted">
-                Pending edit approval for{" "}
-                <span className="text-text-secondary">
-                    {(block.file || "").split(/[\\/]/).pop() || "file"}
-                </span>
-            </div>
+            <ActionLine
+                action="Pending"
+                detail={(block.file || "").split(/[\\/]/).pop() || "file"}
+            />
         );
     }
 
@@ -1375,9 +1377,10 @@ export function ActionItem({
         const name = block.query || "agent";
         const id = block.file || name;
         return (
-            <button
-                type="button"
-                className="flex items-center gap-1.5 py-0.5 chat-text font-medium text-text-primary/80 hover:text-text-primary"
+            <ActionLine
+                action="Spawned"
+                detail={name}
+                icon={providerIcon(block.command || "auto", 14)}
                 onClick={() => {
                     void import("@/features/agent/subagents/store").then(({ openSubagent, upsertSubagent }) => {
                         upsertSubagent({
@@ -1393,12 +1396,7 @@ export function ActionItem({
                         openSubagent(id);
                     });
                 }}
-            >
-                {providerIcon(block.command || "auto", 14)}
-                <span>
-                    Spawned <span className="text-text-secondary">{name}</span>
-                </span>
-            </button>
+            />
         );
     }
 
@@ -1413,101 +1411,57 @@ export function ActionItem({
         ? (isFileEditResolved?.(block.file, block.replacement) ?? false)
         : false;
 
-    const handleClick = () => {
-        if (config.expandable) {
-            setExpanded((e) => !e);
-            return;
-        }
-        if (isEdit && block.file) {
-            openFileEdit(block.file, block.original || "", block.replacement || "", editResolved);
-            return;
-        }
-        config.onClick?.();
-    };
+    const lead = splitActionLabel(isEdit && editResolved ? "Applied" : config.label);
+    const queryText = config.query
+        ? String(config.query).length > 60
+            ? `${String(config.query).slice(0, 60)}…`
+            : String(config.query)
+        : "";
+    const fileLabel = config.file?.split(/[\\/]/).pop() || "";
+    const detail = [lead.detail, queryText, fileLabel].filter(Boolean).join(" ");
+    const favicons = [
+        ...("faviconUrl" in config && config.faviconUrl ? [String(config.faviconUrl)] : []),
+        ...("resultUrls" in config && Array.isArray(config.resultUrls) ? config.resultUrls : []),
+    ];
 
     return (
-        <div className="flex flex-col w-full py-0.5">
-            <button
-                type="button"
-                onClick={handleClick}
-                className={cn(
-                    "flex items-center gap-1.5 w-fit text-left group",
-                    (config.expandable || config.onClick || isEdit) && "cursor-pointer hover:opacity-80",
-                )}
-            >
-                {"faviconUrl" in config && config.faviconUrl ? (
-                    <Favicon url={String(config.faviconUrl)} size={14} />
-                ) : null}
-
-                {"chromiumIcon" in config && config.chromiumIcon ? (
-                    <Icon icon="chrome" size={14} className="text-text-muted" />
-                ) : null}
-
-                <span className="chat-text font-medium text-text-primary/80">
-                    {isEdit && editResolved ? "Applied" : config.label}
-                    {config.query ? (
-                        <>
-                            {" "}
-                            <span className="font-medium text-text-secondary">
-                                {typeof config.query === "string" && config.query.length > 60
-                                    ? `"${config.query.slice(0, 60)}…"`
-                                    : block.type === "web_visit"
-                                      ? String(config.query)
-                                      : `"${config.query}"`}
-                            </span>
-                        </>
-                    ) : null}
-                </span>
-
-                {"resultUrls" in config && Array.isArray(config.resultUrls) && config.resultUrls.length > 0 ? (
-                    <span className="inline-flex items-center -space-x-1 shrink-0">
-                        {config.resultUrls.map((url: string) => (
-                            <span
-                                key={url}
-                                className="inline-flex size-4 items-center justify-center rounded-md border border-border-subtle bg-panel overflow-hidden"
-                            >
-                                <Favicon url={url} size={12} />
-                            </span>
-                        ))}
-                    </span>
-                ) : null}
-
-                {config.file && <FilePill path={config.file} />}
-
-                {editStats && !editResolved && (
-                    <span className="flex items-center gap-1 chat-text ml-0.5">
-                        <span className="text-success">+{editStats.add}</span>
-                        <span className="text-error">-{editStats.del}</span>
-                    </span>
-                )}
-
-                {config.expandable && (
-                    <Icon
-                        icon={"alt-arrow-right"}
-                        className={cn(
-                            "text-text-disabled transition-transform duration-200 shrink-0",
-                            expanded && "rotate-90",
-                        )}
-                    />
-                )}
-            </button>
-
-            {expanded && config.expandable && config.content && (
-                <div className={cn(
-                    "chat-text mt-1 mb-1",
-                    isThink
-                        ? "text-text-muted leading-relaxed"
-                        : useMarkdown
-                            ? "font-sans"
-                            : "overflow-x-auto whitespace-pre-wrap p-2 rounded-md border border-border-subtle bg-panel text-text-secondary chat-text font-mono",
-                )}>
-                    {useMarkdown ? (
-                        <ChatMarkdown content={config.content || ""} />
-                    ) : (
-                        config.content
+        <ActionLine
+            action={lead.action}
+            detail={detail || undefined}
+            add={!editResolved ? editStats?.add ?? 0 : 0}
+            del={!editResolved ? editStats?.del ?? 0 : 0}
+            favicons={favicons}
+            icon={
+                "chromiumIcon" in config && config.chromiumIcon ? (
+                    <Icon icon={Globe20Filled} className="text-text-muted" />
+                ) : undefined
+            }
+            onClick={
+                !config.expandable && (isEdit || config.onClick)
+                    ? () => {
+                          if (isEdit && block.file) {
+                              openFileEdit(block.file, block.original || "", block.replacement || "", editResolved);
+                              return;
+                          }
+                          config.onClick?.();
+                      }
+                    : undefined
+            }
+        >
+            {config.expandable && config.content ? (
+                <div
+                    className={cn(
+                        "mb-1 mt-1 chat-text",
+                        isThink
+                            ? "leading-relaxed text-text-muted"
+                            : useMarkdown
+                              ? "font-sans"
+                              : "overflow-x-auto whitespace-pre-wrap rounded-md border border-border-subtle bg-panel p-2 font-mono chat-text text-text-secondary",
                     )}
+                >
+                    {useMarkdown ? <ChatMarkdown content={config.content || ""} /> : config.content}
                 </div>
-            )}
-        </div>
+            ) : null}
+        </ActionLine>
     );
 }

@@ -1,10 +1,16 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+
+
 import { useCallback, useMemo } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { FileIcon } from "@/components/ui/file-icon";
 import {
     DropdownMenu,
@@ -86,7 +92,7 @@ function SortableWorkspaceTab({
                             {tab.kind === "file" || tab.kind === "diff" ? (
                                 <FileIcon name={tab.title} className="size-4" />
                             ) : (
-                                <Icon icon={iconFor(tab.kind)} className="text-text-muted" size={ICON_SIZE_SM} />
+                                <Icon icon={iconFor(tab.kind)} className="text-text-muted" />
                             )}
                         </div>
                         <span className="min-w-0 truncate pr-1 text-sm">{tab.title}</span>
@@ -106,7 +112,7 @@ function SortableWorkspaceTab({
                             )}
                         >
                             <span className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}>
-                                <Icon icon={"close"} size={ICON_SIZE_SM} />
+                                <Icon icon={Dismiss20Regular} />
                             </span>
                         </button>
                     ) : null}
@@ -201,27 +207,27 @@ export function WorkspaceTabs({
                     className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
                     aria-label="New tab"
                 >
-                    <Icon icon={"add-circle"} size={ICON_SIZE_MD} />
+                    <Icon icon={Add20Regular} />
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem onClick={() => onNew("browser")}>
-                    <Icon icon={iconFor("browser")} size={ICON_SIZE_MD} />
+                    <Icon icon={iconFor("browser")} />
                     <span className="flex-1">Browser</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("files")}>
-                    <Icon icon={iconFor("files")} size={ICON_SIZE_MD} />
+                    <Icon icon={iconFor("files")} />
                     <span className="flex-1">Files</span>
                     <span className="text-2xs text-text-muted">Ctrl+G</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onNew("graph")}>
-                    <Icon icon={iconFor("graph")} size={ICON_SIZE_MD} />
+                    <Icon icon={iconFor("graph")} />
                     <span className="flex-1">Graph</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     onClick={() => window.dispatchEvent(new Event("shape-open-pull-requests"))}
                 >
-                    <Icon icon={iconFor("prs")} size={ICON_SIZE_MD} />
+                    <Icon icon={iconFor("prs")} />
                     <span className="flex-1">Pull requests</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>

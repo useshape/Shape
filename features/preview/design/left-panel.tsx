@@ -1,8 +1,25 @@
 "use client";
 
+import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
+import { CheckboxUnchecked20Regular } from "@fluentui/react-icons/headless/svg/checkbox-unchecked";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { EyeOff20Regular } from "@fluentui/react-icons/headless/svg/eye-off";
+import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
+import { Link20Regular } from "@fluentui/react-icons/headless/svg/link";
+import { SquareShadow20Regular } from "@fluentui/react-icons/headless/svg/square-shadow";
+import { TextFontSize20Regular } from "@fluentui/react-icons/headless/svg/text-font-size";
+
+
+
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, ICON_SIZE_MD, ICON_SIZE_SM, type SolarIconName } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
+
 import { ScrollArea } from "@/components/ui/scroll";
 import { SearchInput } from "@/components/ui/search";
 import { cn } from "@/lib/utils";
@@ -21,12 +38,12 @@ import {
 type PanelTab = "layers" | "pages" | "library";
 
 function kindIcon(kind: ReturnType<typeof layerKind>) {
-    if (kind === "text") return "text-field";
-    if (kind === "link") return "link";
-    if (kind === "image") return "gallery";
-    if (kind === "vector") return "widget";
-    if (kind === "button") return "box";
-    return "box";
+    if (kind === "text") return TextFontSize20Regular;
+    if (kind === "link") return Link20Regular;
+    if (kind === "image") return Camera20Filled;
+    if (kind === "vector") return Grid20Regular;
+    if (kind === "button") return CheckboxUnchecked20Regular;
+    return CheckboxUnchecked20Regular;
 }
 
 function kindClass(kind: ReturnType<typeof layerKind>) {
@@ -60,7 +77,7 @@ function Section({
             >
                 <span className="min-w-0 flex-1">{title}</span>
                 {count != null ? <span className="text-xs text-text-muted">{count}</span> : null}
-                <Icon icon={open ? "alt-arrow-down" : "alt-arrow-right"} size={ICON_SIZE_MD} className="text-text-muted" />
+                <Icon icon={open ? ChevronDown20Regular : ChevronRight20Regular} className="text-text-muted" />
             </button>
             {open ? <div className="pb-2">{children}</div> : null}
         </div>
@@ -217,12 +234,11 @@ export function DesignLeftPanel({
                                         }}
                                     >
                                         {hasChildren ? (
-                                            <Icon icon={isCollapsed ? "alt-arrow-right" : "alt-arrow-down"} size={ICON_SIZE_SM} />
+                                            <Icon icon={isCollapsed ? ChevronRight20Regular : ChevronDown20Regular} />
                                         ) : null}
                                     </span>
                                     <Icon
                                         icon={KindIcon}
-                                        size={ICON_SIZE_SM}
                                         className={layer.variable ? "text-violet-400" : kindClass(kind)}
                                     />
                                     {editing ? (
@@ -250,7 +266,7 @@ export function DesignLeftPanel({
                                             {title}
                                         </button>
                                     )}
-                                    {layer.hidden ? <Icon icon={"eye-closed"} size={12} /> : null}
+                                    {layer.hidden ? <Icon icon={EyeOff20Regular} /> : null}
                                 </div>
                             );
                         })}
@@ -276,7 +292,7 @@ export function DesignLeftPanel({
                                     activePage === page.path && "bg-panel-active text-text-primary",
                                 )}
                             >
-                                <Icon icon={"file"} size={ICON_SIZE_SM} className="text-text-muted" />
+                                <Icon icon={Document20Regular} className="text-text-muted" />
                                 <span className="min-w-0 flex-1 truncate">{page.label}</span>
                                 <span className="max-w-20 truncate text-2xs text-text-muted">{page.path}</span>
                             </button>
@@ -300,7 +316,7 @@ export function DesignLeftPanel({
                                 onClick={() => onPageChange(page.path)}
                                 className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                             >
-                                <Icon icon={"file"} size={ICON_SIZE_SM} className="text-accent" />
+                                <Icon icon={Document20Regular} className="text-accent" />
                                 <span className="min-w-0 flex-1 truncate">{page.label}</span>
                             </button>
                         ))}
@@ -321,7 +337,7 @@ export function DesignLeftPanel({
                                         onClick={() => onOpenPath?.(item.path)}
                                         className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                                     >
-                                        <Icon icon={"box"} size={ICON_SIZE_SM} className="text-accent" />
+                                        <Icon icon={CheckboxUnchecked20Regular} className="text-accent" />
                                         <span className="min-w-0 flex-1 truncate">{item.name.replace(/\.(tsx|jsx)$/i, "")}</span>
                                     </button>
                                 ))}
@@ -334,13 +350,13 @@ export function DesignLeftPanel({
                         onToggle={() => setOpenGroups((c) => ({ ...c, Styles: !c.Styles }))}
                     >
                         {[
-                            ["Text", tokens.text, "text-field"],
-                            ["Link", tokens.link, "link"],
-                            ["Color", tokens.color, "palette"],
+                            ["Text", tokens.text, TextFontSize20Regular],
+                            ["Link", tokens.link, Link20Regular],
+                            ["Color", tokens.color, Color20Regular],
                         ].map(([label, list, icon]) => (
                             <div key={String(label)}>
                                 <p className="flex items-center gap-2 px-3 py-1 text-xs font-medium text-text-muted">
-                                    <Icon icon={icon as SolarIconName} size={ICON_SIZE_SM} />
+                                    <Icon icon={icon as IconGlyph} />
                                     {String(label)}
                                 </p>
                                 {(list as ThemeToken[]).slice(0, 24).filter((token) => filtered(token.name, token.value)).map((token) => (
@@ -355,7 +371,7 @@ export function DesignLeftPanel({
                                                 style={{ background: token.value }}
                                             />
                                         ) : (
-                                            <Icon icon={"palette"} size={ICON_SIZE_SM} className="text-text-muted" />
+                                            <Icon icon={Color20Regular} className="text-text-muted" />
                                         )}
                                         <span className="min-w-0 flex-1 truncate">{token.name}</span>
                                     </div>
@@ -367,7 +383,7 @@ export function DesignLeftPanel({
                                         onClick={() => onOpenPath?.(item.path)}
                                         className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                                     >
-                                        <Icon icon={"file"} size={ICON_SIZE_SM} />
+                                        <Icon icon={Document20Regular} />
                                         <span className="min-w-0 flex-1 truncate">{item.name}</span>
                                     </button>
                                 ))}
@@ -387,7 +403,7 @@ export function DesignLeftPanel({
                                 onClick={() => onOpenPath?.(item.path)}
                                 className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                             >
-                                <Icon icon={"widget"} size={ICON_SIZE_SM} className="text-success" />
+                                <Icon icon={Grid20Regular} className="text-success" />
                                 <span className="min-w-0 flex-1 truncate">{item.name}</span>
                             </button>
                         ))}
@@ -405,7 +421,7 @@ export function DesignLeftPanel({
                                 onClick={() => onOpenPath?.(item.path)}
                                 className="flex h-7 w-full items-center gap-2 px-3 text-left text-sm text-text-secondary hover:bg-panel-hover"
                             >
-                                <Icon icon={"code"} size={ICON_SIZE_SM} className="text-text-muted" />
+                                <Icon icon={Code20Regular} className="text-text-muted" />
                                 <span className="min-w-0 flex-1 truncate">{item.name}</span>
                             </button>
                         ))}

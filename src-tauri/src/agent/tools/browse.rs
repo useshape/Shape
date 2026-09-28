@@ -366,6 +366,29 @@ pub(crate) const SNAPSHOT_JS: &str = r#"(function(){
   return JSON.stringify({ title: document.title || "", href: href, failed: failed, elements: out });
 })()"#;
 
+pub fn url_without_fragment(url: &str) -> &str {
+    url.split('#').next().unwrap_or(url)
+}
+
+pub fn is_same_document_nav(current: &str, target: &str) -> bool {
+    !current.is_empty()
+        && !target.is_empty()
+        && url_without_fragment(current) == url_without_fragment(target)
+        && current != target
+}
+
+pub async fn scroll_past_in_page_anchor(ws: &str) {
+    let _ = eval_script(
+        ws,
+        r#"(function(){
+  var step = Math.max(360, (window.innerHeight || 720) * 0.7);
+  window.scrollBy({ top: step, left: 0, behavior: "auto" });
+  return "ok";
+})()"#,
+    )
+    .await;
+}
+
 async fn act_on_target(
     app: &tauri::AppHandle,
     ws: &str,
@@ -425,7 +448,16 @@ async fn act_on_target(
         return Ok(format!("Typed into [{id}] {name}"));
     }
     let link = v.get("href").and_then(|n| n.as_str()).unwrap_or("");
+    let current_href = eval_script(ws, r#"(function(){return location.href||""})()"#)
+        .await
+        .unwrap_or_default();
     if link.starts_with("http://") || link.starts_with("https://") {
+        if is_same_document_nav(&current_href, link) {
+            click_px(ws, x, y).await?;
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            scroll_past_in_page_anchor(ws).await;
+            return Ok(format!("Clicked [{id}] {name} (scrolled past in-page link)"));
+        }
         drive(ws, "Page.navigate", json!({ "url": link })).await?;
         tokio::time::sleep(Duration::from_millis(120)).await;
         return Ok(format!("Opened {link}"));

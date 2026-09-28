@@ -1,7 +1,12 @@
 "use client";
 
+import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
+import { Target20Regular } from "@fluentui/react-icons/headless/svg/target";
+
+
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
+
 import { FileIcon } from "@/components/ui/file-icon";
 import { Favicon } from "@/components/ui/favicon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
@@ -58,11 +63,11 @@ export function MentionChipIcon({ mention }: { mention: ChatMention }) {
         return <Favicon url={mention.path || label} size={12} />;
     }
     if (mention.kind === "element") {
-        return <Icon icon="target" className="text-accent-text" size={12} />;
+        return <Icon icon={Target20Regular} className="text-accent-text" />;
     }
     const token = mention.kind === "design" ? designTokenById(mention.id || mention.path) : undefined;
     if (token) {
-        return <Icon icon={token.icon} className="text-accent-text" size={12} />;
+        return <Icon icon={token.icon} className="text-accent-text" />;
     }
     return null;
 }
@@ -78,5 +83,5 @@ export function WorkflowChipIcon({ workflow }: { workflow?: AgentWorkflow }) {
             />
         );
     }
-    return <Icon icon={"command"} className="text-accent-text" size={12} />;
+    return <Icon icon={Code20Regular} className="text-accent-text" />;
 }

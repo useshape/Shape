@@ -1,7 +1,19 @@
 "use client";
 
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
+import { Circle20Filled } from "@fluentui/react-icons/headless/svg/circle";
+import { Note20Regular } from "@fluentui/react-icons/headless/svg/note";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
+
+
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Icon, ICON_SIZE_SM, ICON_SIZE_XS } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll";
@@ -109,7 +121,7 @@ function FindingCard({
                     className="h-6 gap-1 px-1.5 text-2xs"
                     onClick={onFix}
                 >
-                    <Icon icon={"chat-round-line"} size={ICON_SIZE_XS} />
+                    <Icon icon={Chat20Filled} />
                     Fix in chat
                 </Button>
             </div>
@@ -612,7 +624,7 @@ export function GitHubDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowLeft20Regular} />
                         </Button>
                     ) : null}
                 </div>
@@ -640,7 +652,7 @@ export function GitHubDetailPane({
                             onClick={onBack}
                             aria-label="Back to list"
                         >
-                            <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                            <Icon icon={ArrowLeft20Regular} />
                         </Button>
                     ) : null}
                     <div className="min-w-0 flex-1">
@@ -718,7 +730,7 @@ export function GitHubDetailPane({
                             className="h-7 gap-1 px-2"
                             onClick={() => openUrl(url)}
                         >
-                            <Icon icon={"square-forward"} size={ICON_SIZE_SM} />
+                            <Icon icon={Open20Regular} />
                             Open
                         </Button>
                     ) : null}
@@ -759,8 +771,7 @@ export function GitHubDetailPane({
                                 onClick={() => void runWalkthrough()}
                             >
                                 <Icon
-                                    icon={"magic-stick"}
-                                    size={ICON_SIZE_SM}
+                                    icon={Sparkle20Filled}
                                     className={cn(walkthroughLoading && "animate-spin")}
                                 />
                                 {walkthroughLoading ? "Walking through…" : "Walk through"}
@@ -773,8 +784,7 @@ export function GitHubDetailPane({
                                 onClick={() => void runFindIssues()}
                             >
                                 <Icon
-                                    icon={"magnifier"}
-                                    size={ICON_SIZE_SM}
+                                    icon={Search20Regular}
                                     className={cn(findingsLoading && "animate-spin")}
                                 />
                                 {findingsLoading ? "Finding issues…" : "Find issues"}
@@ -785,7 +795,7 @@ export function GitHubDetailPane({
                                 className="h-7 gap-1 px-2 text-xs"
                                 onClick={askInChat}
                             >
-                                <Icon icon={"chat-round-line"} size={ICON_SIZE_SM} />
+                                <Icon icon={Chat20Filled} />
                                 Ask in chat
                             </Button>
                         </div>
@@ -822,8 +832,7 @@ export function GitHubDetailPane({
                                             onClick={() => void runWalkthrough()}
                                         >
                                             <Icon
-                                                icon={"magic-stick"}
-                                                size={ICON_SIZE_SM}
+                                                icon={Sparkle20Filled}
                                             />
                                             Walk through this pull request
                                         </Button>
@@ -1103,8 +1112,7 @@ export function GitHubDetailPane({
                                             }
                                         >
                                             <Icon
-                                                icon={"git-commit"}
-                                                size={ICON_SIZE_SM}
+                                                icon={Circle20Filled}
                                                 className="shrink-0 text-text-muted"
                                             />
                                             <span className="min-w-0 flex-1 truncate text-sm">
@@ -1143,7 +1151,6 @@ export function GitHubDetailPane({
                                             >
                                                 <Icon
                                                     icon={icon.icon}
-                                                    size={ICON_SIZE_SM}
                                                     className={cn(
                                                         "shrink-0",
                                                         statusTone(run.status, run.conclusion),
@@ -1416,7 +1423,7 @@ export function GitHubDetailPane({
                         className="h-7 w-full gap-1 text-xs"
                         onClick={askInChat}
                     >
-                        <Icon icon={"chat-round-line"} size={ICON_SIZE_SM} />
+                        <Icon icon={Chat20Filled} />
                         Ask in chat
                     </Button>
                 </div>

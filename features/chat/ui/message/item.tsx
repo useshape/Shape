@@ -1,7 +1,21 @@
+import { ArrowUndo20Regular } from "@fluentui/react-icons/headless/svg/arrow-undo";
+import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-fork";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Person20Regular } from "@fluentui/react-icons/headless/svg/person";
+import { ThumbDislike20Regular } from "@fluentui/react-icons/headless/svg/thumb-dislike";
+import { ThumbLike20Regular } from "@fluentui/react-icons/headless/svg/thumb-like";
+
 import React from "react";
 import { cn } from "@/lib/utils";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
-import { Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -394,12 +408,12 @@ function ChatMessageItemInner({
                         <div className="flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
                             <Tooltip content="Copy Message" side="top">
                                 <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon icon={"clipboard"} />
+                                    <Icon icon={Clipboard20Regular} />
                                 </button>
                             </Tooltip>
                             <Tooltip content="Restore to this checkpoint" side="top">
                                 <button onClick={() => onRestore?.(index)} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon icon={"undo-left"} />
+                                    <Icon icon={ArrowUndo20Regular} />
                                 </button>
                             </Tooltip>
                         </div>
@@ -462,7 +476,7 @@ function ChatMessageItemInner({
                         <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
                             {renamed ? (
                                 <div className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-text-muted">
-                                    <Icon icon={"pen"} className="size-3.5 shrink-0" />
+                                    <Icon icon={Edit20Regular} className="size-3.5 shrink-0" />
                                     <span>Renamed from</span>
                                     <span className="min-w-0 truncate font-medium text-text-secondary">{renamed.from}</span>
                                 </div>
@@ -478,9 +492,9 @@ function ChatMessageItemInner({
                                         );
                                     }}
                                 >
-                                    <Icon icon={"git-fork"} className="size-3.5 shrink-0" />
+                                    <Icon icon={BranchFork20Regular} className="size-3.5 shrink-0" />
                                     <span>Forked from</span>
-                                    <Icon icon={"folder"} className="size-3.5 shrink-0 text-text-muted" />
+                                    <Icon icon={Folder20Filled} className="size-3.5 shrink-0 text-text-muted" />
                                     <span className="min-w-0 truncate font-medium text-text-secondary">{forked.title}</span>
                                 </button>
                             ) : null}
@@ -499,7 +513,7 @@ function ChatMessageItemInner({
                 <div className="flex items-center gap-0.5 select-none">
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
-                            <Icon icon={"clipboard"} />
+                            <Icon icon={Clipboard20Regular} />
                         </Button>
                     </Tooltip>
                     {role === "assistant" ? (
@@ -511,7 +525,7 @@ function ChatMessageItemInner({
                                     className={feedback === "up" ? "text-text-primary" : ""}
                                     onClick={() => onFeedback?.(index, feedback === "up" ? null : "up")}
                                 >
-                                    <Icon icon={"like"} />
+                                    <Icon icon={ThumbLike20Regular} />
                                 </Button>
                             </Tooltip>
                             <Tooltip content="Bad response" side="bottom">
@@ -521,7 +535,7 @@ function ChatMessageItemInner({
                                     className={feedback === "down" ? "text-text-primary" : ""}
                                     onClick={() => onFeedback?.(index, feedback === "down" ? null : "down")}
                                 >
-                                    <Icon icon={"dislike"} />
+                                    <Icon icon={ThumbDislike20Regular} />
                                 </Button>
                             </Tooltip>
                         </>
@@ -540,7 +554,7 @@ function ChatMessageItemInner({
                     >
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
-                                <Icon icon={"menu-dots"} />
+                                <Icon icon={MoreHorizontal20Regular} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-72 overflow-hidden p-0">
@@ -627,7 +641,7 @@ function ChatMessageItemInner({
                                                 onClick={() => setAdvanced(true)}
                                             >
                                                 Advanced
-                                                <Icon icon={"alt-arrow-down"} size={ICON_SIZE_MD} />
+                                                <Icon icon={ChevronDown20Regular} />
                                             </button>
                                         ) : null}
                                     </>

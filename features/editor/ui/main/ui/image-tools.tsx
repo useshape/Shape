@@ -1,7 +1,20 @@
 "use client";
 
+import { ArrowRedo20Regular } from "@fluentui/react-icons/headless/svg/arrow-redo";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { ArrowUndo20Regular } from "@fluentui/react-icons/headless/svg/arrow-undo";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { ChevronUp20Regular } from "@fluentui/react-icons/headless/svg/chevron-up";
+import { Circle20Regular } from "@fluentui/react-icons/headless/svg/circle";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Filter20Regular } from "@fluentui/react-icons/headless/svg/filter";
+import { Flashlight20Regular } from "@fluentui/react-icons/headless/svg/flashlight";
+import { WeatherSunny20Regular } from "@fluentui/react-icons/headless/svg/weather-sunny";
+
+
 import { useCallback, useEffect, useState } from "react";
-import { type SolarIconName,  Icon } from "@/components/ui/icon";
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { LabeledSlider, Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -95,7 +108,7 @@ function CollapsibleSection({
     children,
 }: {
     title: string;
-    icon: SolarIconName;
+    icon: IconGlyph;
     defaultOpen?: boolean;
     children: React.ReactNode;
 }) {
@@ -110,7 +123,7 @@ function CollapsibleSection({
             >
                 <Icon icon={icon} className="text-text-secondary shrink-0" />
                 <span className="flex-1 text-sm text-text-primary">{title}</span>
-                <Icon icon={open ? "alt-arrow-up" : "alt-arrow-right"} className="text-text-muted" />
+                <Icon icon={open ? ChevronUp20Regular : ChevronRight20Regular} className="text-text-muted" />
             </button>
             {open ? (
                 <div className="space-y-3 px-2.5 pb-3">
@@ -195,7 +208,7 @@ export function ImageToolsCard({
                         onClick={resetAdjustments}
                         title="Reset adjustments"
                     >
-                        <Icon icon={"refresh"} />
+                        <Icon icon={ArrowSync20Regular} />
                     </Button>
                     <Button
                         variant="ghost"
@@ -205,7 +218,7 @@ export function ImageToolsCard({
                         onClick={() => session.undo()}
                         title="Undo"
                     >
-                        <Icon icon={"undo-left"} />
+                        <Icon icon={ArrowUndo20Regular} />
                     </Button>
                     <Button
                         variant="ghost"
@@ -215,7 +228,7 @@ export function ImageToolsCard({
                         onClick={() => session.redo()}
                         title="Redo"
                     >
-                        <Icon icon={"undo-right"} />
+                        <Icon icon={ArrowRedo20Regular} />
                     </Button>
                     <Button
                         variant="ghost"
@@ -225,7 +238,7 @@ export function ImageToolsCard({
                         onClick={() => session.discard()}
                         title="Discard changes"
                     >
-                        <Icon icon={"close"} />
+                        <Icon icon={Dismiss20Regular} />
                     </Button>
                     <Button
                         variant="secondary"
@@ -240,7 +253,7 @@ export function ImageToolsCard({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-2">
-                <CollapsibleSection title="White Balance" icon={"sun"}>
+                <CollapsibleSection title="White Balance" icon={WeatherSunny20Regular}>
                     <LabeledSlider
                         label="Temperature"
                         value={adj.temperature}
@@ -261,7 +274,7 @@ export function ImageToolsCard({
                     />
                 </CollapsibleSection>
 
-                <CollapsibleSection title="Tone" icon={"flashlight"}>
+                <CollapsibleSection title="Tone" icon={Flashlight20Regular}>
                     <LabeledSlider label="Exposure" value={adj.exposure} min={-100} max={100} onChange={(exposure) => preview({ exposure })} onCommit={(exposure) => commit({ exposure })} />
                     <LabeledSlider label="Contrast" value={adj.contrast - 100} min={-100} max={100} onChange={(v) => preview({ contrast: v + 100 })} onCommit={(v) => commit({ contrast: v + 100 })} />
                     <LabeledSlider label="Highlight" value={adj.highlights} min={-100} max={100} onChange={(highlights) => preview({ highlights })} onCommit={(highlights) => commit({ highlights })} />
@@ -269,7 +282,7 @@ export function ImageToolsCard({
                     <LabeledSlider label="Saturation" value={adj.saturation - 100} min={-100} max={100} onChange={(v) => preview({ saturation: v + 100 })} onCommit={(v) => commit({ saturation: v + 100 })} />
                 </CollapsibleSection>
 
-                <CollapsibleSection title="Sharpen" icon={"filter"}>
+                <CollapsibleSection title="Sharpen" icon={Filter20Regular}>
                     <EffectSlider
                         label="Intensity"
                         value={adj.sharpen}
@@ -278,7 +291,7 @@ export function ImageToolsCard({
                     />
                 </CollapsibleSection>
 
-                <CollapsibleSection title="Vignette" icon={"record"}>
+                <CollapsibleSection title="Vignette" icon={Circle20Regular}>
                     <EffectSlider
                         label="Strength"
                         value={adj.vignette}

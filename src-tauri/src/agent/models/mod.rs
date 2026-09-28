@@ -265,6 +265,8 @@ pub struct AgentState {
     /// Optional user OpenRouter / OpenAI keys (BYOK). When set, chat skips the Shape proxy.
     pub byok_openrouter_key: Mutex<Option<String>>,
     pub byok_openai_key: Mutex<Option<String>>,
+    /// Ephemeral chat: history is not written to disk.
+    pub incognito: AtomicBool,
 }
 
 impl Default for AgentState {
@@ -305,7 +307,16 @@ impl AgentState {
             chat_memory_enabled: AtomicBool::new(false),
             byok_openrouter_key: Mutex::new(None),
             byok_openai_key: Mutex::new(None),
+            incognito: AtomicBool::new(false),
         }
+    }
+
+    pub fn incognito(&self) -> bool {
+        self.incognito.load(Ordering::SeqCst)
+    }
+
+    pub fn set_incognito(&self, enabled: bool) {
+        self.incognito.store(enabled, Ordering::SeqCst);
     }
 
     pub fn chat_memory_enabled(&self) -> bool {

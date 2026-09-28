@@ -1,16 +1,49 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ArrowSortDown20Regular } from "@fluentui/react-icons/headless/svg/arrow-sort-down";
+import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
+import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
+import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
+import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { Pin20Regular } from "@fluentui/react-icons/headless/svg/pin";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+
+
+
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+    type ReactNode,
+} from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
-import { ICON_SIZE_SM, Icon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { cn } from "@/lib/utils";
-import { formatCompactAgo, getRepoName } from "@/lib/workspace/repo-history";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SearchInput } from "@/components/ui/search";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
-import { useGitBranch } from "@/features/agent/workbench/hooks/use-git-branch";
+import {
+    clearChatUnread,
+    getPinnedChatIds,
+    getPinnedChatIdsServer,
+    getUnreadChatIds,
+    getUnreadChatIdsServer,
+    markChatUnread,
+    setChatPinned,
+    subscribePinnedChats,
+    subscribeUnreadChats,
+} from "@/lib/sidebar/chat-list-meta";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -49,17 +82,6 @@ function loadSort(): ChatSort {
     return "recent";
 }
 
-function extractPrNumber(conversation: Conversation): string | null {
-    const titleHit = (conversation.title || "").match(/#(\d{2,7})\b/);
-    if (titleHit?.[1]) return titleHit[1];
-    for (const message of conversation.history || []) {
-        const text = typeof message.content === "string" ? message.content : "";
-        const hit = text.match(/#(\d{2,7})\b/);
-        if (hit?.[1]) return hit[1];
-    }
-    return null;
-}
-
 function HeaderIconBtn({
     label,
     onClick,
@@ -94,21 +116,17 @@ function HeaderIconBtn({
 function ChatRow({
     id,
     title,
-    repo,
     path,
-    branch,
-    pr,
-    ago,
     active,
+    pinned,
+    unread,
 }: {
     id: string;
     title: string;
-    repo: string;
     path: string;
-    branch: string | null;
-    pr: string | null;
-    ago: string;
     active: boolean;
+    pinned: boolean;
+    unread: boolean;
 }) {
     const generating = useIsChatGenerating(id);
     const [renaming, setRenaming] = useState(false);
@@ -126,6 +144,7 @@ function ChatRow({
     }, [renaming]);
 
     const openChat = () => {
+        clearChatUnread(id);
         window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
     };
 
@@ -166,7 +185,7 @@ function ChatRow({
             <ContextMenuTrigger asChild>
                 <div
                     className={cn(
-                        "group/chat w-full p-2 squircle-xl text-sm",
+                        "group/chat flex h-8 w-full items-center rounded-md px-2 text-sm",
                         "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                         active
                             ? "bg-panel-hover text-text-primary"
@@ -197,42 +216,38 @@ function ChatRow({
                         <button
                             type="button"
                             onClick={openChat}
-                            className="flex w-full flex-col gap-0.5 text-left"
+                            className="flex w-full items-center gap-2 text-left"
                         >
-                            <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
-                                <span className="min-w-0 truncate">{repo}</span>
-                                <span className="shrink-0 tabular-nums">{generating ? "now" : ago}</span>
+                            <span className="min-w-0 flex-1 truncate text-sm font-normal text-text-primary">
+                                {title}
                             </span>
-                            <span className="block truncate text-sm text-text-primary">{title}</span>
-                            <span className="flex min-w-0 items-center gap-2 text-xs text-text-muted">
-                                {generating ? (
-                                    <span>Working...</span>
-                                ) : (
-                                    <>
-                                        {branch ? (
-                                            <span className="min-w-0 truncate">{branch}</span>
-                                        ) : (
-                                            <span />
-                                        )}
-                                        {pr ? (
-                                            <span className="ml-auto shrink-0 tabular-nums text-text-muted">
-                                                #{pr}
-                                            </span>
-                                        ) : null}
-                                    </>
-                                )}
-                            </span>
+                            {generating ? (
+                                <Icon
+                                    icon={ArrowSync20Regular}
+                                    className="shrink-0 animate-spin text-text-muted"
+                                    style={{ ["--icon-size" as string]: "14px" }}
+                                />
+                            ) : unread ? (
+                                <span
+                                    className="size-2 shrink-0 rounded-full bg-accent"
+                                    aria-label="Unread"
+                                />
+                            ) : null}
                         </button>
                     )}
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent className="min-w-48">
                 <ContextMenuItem onClick={openChat}>
-                    <Icon icon="square-forward" size={ICON_SIZE_SM} />
+                    <Icon icon={Open20Regular} />
                     Open
                 </ContextMenuItem>
+                <ContextMenuItem onClick={() => setChatPinned(id, !pinned)}>
+                    <Icon icon={Pin20Regular} />
+                    {pinned ? "Unpin" : "Pin"}
+                </ContextMenuItem>
                 <ContextMenuItem onClick={startRename}>
-                    <Icon icon="pen" size={ICON_SIZE_SM} />
+                    <Icon icon={Edit20Regular} />
                     Rename
                 </ContextMenuItem>
                 <ContextMenuItem
@@ -240,7 +255,7 @@ function ChatRow({
                         window.dispatchEvent(new CustomEvent("shape-chat-new"));
                     }}
                 >
-                    <Icon icon="add-circle" size={ICON_SIZE_SM} />
+                    <Icon icon={Add20Regular} />
                     New Chat
                 </ContextMenuItem>
                 <ContextMenuSeparator />
@@ -249,7 +264,7 @@ function ChatRow({
                         void navigator.clipboard.writeText(title);
                     }}
                 >
-                    <Icon icon="copy" size={ICON_SIZE_SM} />
+                    <Icon icon={Copy20Regular} />
                     Copy Title
                 </ContextMenuItem>
                 {path ? (
@@ -258,17 +273,17 @@ function ChatRow({
                             void commands.revealPath(path).catch(() => {});
                         }}
                     >
-                        <Icon icon="folder-open" size={ICON_SIZE_SM} />
+                        <Icon icon={FolderOpen20Regular} />
                         Reveal Folder
                     </ContextMenuItem>
                 ) : null}
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={archive}>
-                    <Icon icon="inbox" size={ICON_SIZE_SM} />
+                    <Icon icon={MailInbox20Regular} />
                     Archive
                 </ContextMenuItem>
                 <ContextMenuItem onClick={remove} className="text-error">
-                    <Icon icon="trash-bin-trash" size={ICON_SIZE_SM} />
+                    <Icon icon={Delete20Filled} />
                     Delete
                 </ContextMenuItem>
             </ContextMenuContent>
@@ -278,13 +293,23 @@ function ChatRow({
 
 export function ChatList({ onNewChat }: { onNewChat: () => void }) {
     const { project_path } = useProjectState();
-    const branch = useGitBranch(project_path);
     const [chats, setChats] = useState<Conversation[]>([]);
     const [query, setQuery] = useState("");
     const [searchOpen, setSearchOpen] = useState(false);
     const [sort, setSort] = useState<ChatSort>("recent");
     const [activeId, setActiveId] = useState<string | null>(null);
     const searchRef = useRef<HTMLInputElement>(null);
+
+    const pinnedIds = useSyncExternalStore(
+        subscribePinnedChats,
+        getPinnedChatIds,
+        getPinnedChatIdsServer,
+    );
+    const unreadIds = useSyncExternalStore(
+        subscribeUnreadChats,
+        getUnreadChatIds,
+        getUnreadChatIdsServer,
+    );
 
     useEffect(() => {
         setSort(loadSort());
@@ -327,11 +352,24 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
     useEffect(() => {
         const onActive = (e: Event) => {
             const id = (e as CustomEvent<{ id?: string }>).detail?.id;
-            setActiveId(id && id !== NEW_CHAT_TAB_ID ? id : null);
+            const next = id && id !== NEW_CHAT_TAB_ID ? id : null;
+            setActiveId(next);
+            if (next) clearChatUnread(next);
         };
         window.addEventListener("shape-chat-active", onActive as EventListener);
         return () => window.removeEventListener("shape-chat-active", onActive as EventListener);
     }, []);
+
+    useEffect(() => {
+        const onGenerating = (e: Event) => {
+            const detail = (e as CustomEvent<{ id?: string; generating?: boolean }>).detail;
+            const id = detail?.id;
+            if (!id || detail?.generating) return;
+            if (id !== activeId) markChatUnread(id);
+        };
+        window.addEventListener("shape-chat-generating", onGenerating as EventListener);
+        return () => window.removeEventListener("shape-chat-generating", onGenerating as EventListener);
+    }, [activeId]);
 
     useEffect(() => {
         let cancelled = false;
@@ -359,6 +397,9 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
             : live;
         const sorted = [...filtered];
         sorted.sort((a, b) => {
+            const aPin = pinnedIds.has(a.id);
+            const bPin = pinnedIds.has(b.id);
+            if (aPin !== bPin) return aPin ? -1 : 1;
             if (sort === "name-asc") {
                 return (a.title || "").localeCompare(b.title || "", undefined, {
                     sensitivity: "base",
@@ -373,7 +414,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
             return sort === "oldest" ? delta : -delta;
         });
         return sorted;
-    }, [chats, query, sort]);
+    }, [chats, query, sort, pinnedIds]);
 
     const toggleSearch = () => {
         setSearchOpen((open) => {
@@ -388,7 +429,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                 <span className="text-sm font-medium text-text-muted">Chats</span>
                 <div className="flex items-center">
                     <HeaderIconBtn label="Search" onClick={toggleSearch} active={searchOpen}>
-                        <Icon icon={"magnifier"} />
+                        <Icon icon={Search20Regular} />
                     </HeaderIconBtn>
                     <DropdownMenu>
                         <Tooltip content="Sort" side="bottom" delayDuration={80}>
@@ -398,7 +439,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                                     aria-label="Sort"
                                     className="flex size-7 items-center justify-center rounded-md text-text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary data-[state=open]:bg-panel-hover data-[state=open]:text-text-primary"
                                 >
-                                    <Icon icon={"sort-from-top-to-bottom"} />
+                                    <Icon icon={ArrowSortDown20Regular} />
                                 </button>
                             </DropdownMenuTrigger>
                         </Tooltip>
@@ -416,7 +457,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <HeaderIconBtn label="New chat" onClick={onNewChat}>
-                        <Icon icon={"add-circle"} />
+                        <Icon icon={Compose20Regular} />
                     </HeaderIconBtn>
                 </div>
             </div>
@@ -461,7 +502,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         onClick={() => window.dispatchEvent(new Event("shape-new-project"))}
                         className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                     >
-                        <Icon icon={"folder"} />
+                        <Icon icon={FolderOpen20Regular} />
                         New project
                     </button>
                 ) : visible.length === 0 ? (
@@ -470,7 +511,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         onClick={onNewChat}
                         className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                     >
-                        <Icon icon={"add-circle"} className="shrink-0" />
+                        <Icon icon={Compose20Regular} className="shrink-0" />
                         <span>{query.trim() ? "No matching chats" : "New chat"}</span>
                     </button>
                 ) : (
@@ -480,12 +521,10 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                                 key={c.id}
                                 id={c.id}
                                 title={c.title?.trim() || "Untitled"}
-                                repo={getRepoName(c.project_path || project_path || "")}
                                 path={c.project_path || project_path || ""}
-                                branch={branch}
-                                pr={extractPrNumber(c)}
-                                ago={formatCompactAgo(c.timestamp)}
                                 active={c.id === activeId}
+                                pinned={pinnedIds.has(c.id)}
+                                unread={unreadIds.has(c.id)}
                             />
                         ))}
                     </div>

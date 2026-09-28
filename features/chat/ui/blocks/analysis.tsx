@@ -1,7 +1,15 @@
 "use client";
 
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+
+
+
 import React from "react";
 import { Icon } from "@/components/ui/icon";
+
+
 import { cn } from "@/lib/utils";
 
 type AnalysisItem = {
@@ -12,8 +20,8 @@ type AnalysisItem = {
 export function CodebaseAnalysis({ items, isActive }: { items: AnalysisItem[]; isActive?: boolean }) {
     const [isOpen, setIsOpen] = React.useState(false);
 
-    const fileCount = items.filter(i => i.type === "file").length;
-    const folderCount = items.filter(i => i.type === "folder").length;
+    const fileCount = items.filter((i) => i.type === "file").length;
+    const folderCount = items.filter((i) => i.type === "folder").length;
     const searchCount = items.filter(i => i.type === "search").length;
 
     const summary = [
@@ -29,7 +37,7 @@ export function CodebaseAnalysis({ items, isActive }: { items: AnalysisItem[]; i
                 className="flex items-center gap-2 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors group w-full text-left"
             >
                 <Icon
-                    icon={"alt-arrow-down"}
+                    icon={ChevronDown20Regular}
                     className={cn(
                         "text-text-muted transition-transform duration-[var(--transition-fast)]",
                         !isOpen && "-rotate-90"

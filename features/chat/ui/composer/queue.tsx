@@ -1,7 +1,12 @@
 "use client";
 
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+
+
 import React from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     DropdownMenu,
@@ -56,7 +61,7 @@ export function QueuedMessagesPanel({
                                     className="rounded p-0.5 text-text-muted hover:text-text-primary"
                                     onClick={() => onEdit(item.id)}
                                 >
-                                    <Icon icon={"pen"} size={ICON_SIZE_SM} />
+                                    <Icon icon={Edit20Regular} />
                                 </button>
                             </Tooltip>
                             <Tooltip content="Remove">
@@ -65,7 +70,7 @@ export function QueuedMessagesPanel({
                                     className="rounded p-0.5 text-text-muted hover:text-error"
                                     onClick={() => onRemove(item.id)}
                                 >
-                                    <Icon icon={"close"} size={ICON_SIZE_SM} />
+                                    <Icon icon={Dismiss20Regular} />
                                 </button>
                             </Tooltip>
                         </div>

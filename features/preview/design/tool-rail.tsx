@@ -1,6 +1,26 @@
 "use client";
 
-import { type SolarIconName,  Icon, ICON_SIZE_MD } from "@/components/ui/icon";
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
+import { CheckboxUnchecked20Regular } from "@fluentui/react-icons/headless/svg/checkbox-unchecked";
+import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
+import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
+import { DataTrending20Regular } from "@fluentui/react-icons/headless/svg/data-trending";
+import { Database20Regular } from "@fluentui/react-icons/headless/svg/database";
+import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
+import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
+import { Person20Regular } from "@fluentui/react-icons/headless/svg/person";
+import { QuestionCircle20Regular } from "@fluentui/react-icons/headless/svg/question-circle";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
+import { ShoppingBag20Regular } from "@fluentui/react-icons/headless/svg/shopping-bag";
+import { Tag20Regular } from "@fluentui/react-icons/headless/svg/tag";
+import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
+import { TextNumberListLtr20Regular } from "@fluentui/react-icons/headless/svg/text-number-list-ltr";
+
+
+import { type IconGlyph, Icon } from "@/components/ui/icon";
+
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,7 +31,7 @@ function RailBtn({
     active,
 }: {
     label: string;
-    icon: SolarIconName;
+    icon: IconGlyph;
     active?: boolean;
 }) {
     return (
@@ -26,33 +46,33 @@ function RailBtn({
                 aria-label={label}
                 aria-pressed={active}
             >
-                <Icon icon={icon} size={ICON_SIZE_MD} />
+                <Icon icon={icon} />
             </Button>
         </Tooltip>
     );
 }
 
-const TOP_TOOLS: { label: string; icon: SolarIconName; active?: boolean }[] = [
-    { label: "Add", icon: "add-circle" },
-    { label: "Pages", icon: "file-text" },
-    { label: "Sections", icon: "list-check", active: true },
-    { label: "Theme", icon: "box" },
-    { label: "Apps", icon: "widget" },
-    { label: "Media", icon: "gallery" },
-    { label: "Metaobjects", icon: "database" },
-    { label: "Navigation", icon: "list" },
-    { label: "Customers", icon: "user" },
-    { label: "Products", icon: "bag" },
-    { label: "Discounts", icon: "tag" },
-    { label: "Analytics", icon: "chart" },
+const TOP_TOOLS: { label: string; icon: IconGlyph; active?: boolean }[] = [
+    { label: "Add", icon: Add20Regular },
+    { label: "Pages", icon: DocumentText20Regular },
+    { label: "Sections", icon: TaskListSquareLtr20Regular, active: true },
+    { label: "Theme", icon: CheckboxUnchecked20Regular },
+    { label: "Apps", icon: Grid20Regular },
+    { label: "Media", icon: Camera20Filled },
+    { label: "Metaobjects", icon: Database20Regular },
+    { label: "Navigation", icon: TextNumberListLtr20Regular },
+    { label: "Customers", icon: Person20Regular },
+    { label: "Products", icon: ShoppingBag20Regular },
+    { label: "Discounts", icon: Tag20Regular },
+    { label: "Analytics", icon: DataTrending20Regular },
 ];
 
-const BOTTOM_TOOLS: { label: string; icon: SolarIconName }[] = [
-    { label: "Settings", icon: "settings" },
-    { label: "Help", icon: "question-circle" },
-    { label: "Theme check", icon: "check-circle" },
-    { label: "Search", icon: "magnifier" },
-    { label: "Themes", icon: "palette" },
+const BOTTOM_TOOLS: { label: string; icon: IconGlyph }[] = [
+    { label: "Settings", icon: Settings20Regular },
+    { label: "Help", icon: QuestionCircle20Regular },
+    { label: "Theme check", icon: CheckmarkCircle20Filled },
+    { label: "Search", icon: Search20Regular },
+    { label: "Themes", icon: Color20Regular },
 ];
 
 export function DesignToolRail() {

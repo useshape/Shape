@@ -1,7 +1,11 @@
 "use client";
 
+import { ArrowDownload20Regular } from "@fluentui/react-icons/headless/svg/arrow-download";
+
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll";
@@ -534,7 +538,7 @@ export function ActionsConsole({ focus }: { focus: ActionsFocus }) {
                 disabled={art.expired || downloadingArtifactId === art.id}
                 onClick={() => void downloadArtifact(art)}
             >
-                <Icon icon={"download-minimalistic"} />
+                <Icon icon={ArrowDownload20Regular} />
                 {downloadingArtifactId === art.id ? "Saving…" : "Download"}
             </Button>
         </li>

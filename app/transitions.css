@@ -563,6 +563,8 @@
 .t-composer-hint {
   position: absolute;
   inset: 0;
+  display: flex;
+  align-items: center;
   overflow: hidden;
   pointer-events: none;
 }
@@ -571,7 +573,7 @@
   color: var(--text-muted);
   font-size: 0.875rem;
   font-weight: 500;
-  line-height: 1.625;
+  line-height: 1.5rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -590,6 +592,9 @@
 .t-composer-hint__text[data-phase="enter"] {
   opacity: 0;
   transform: translateY(var(--hint-distance));
+}
+.bg-incognito .t-composer-hint__text {
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .t-swap {

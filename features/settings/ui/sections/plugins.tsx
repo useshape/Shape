@@ -1,11 +1,12 @@
 "use client";
 
+import { FluentIcon, settingsIcons } from "../fluent-icons";
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
-import { Switch } from "@/components/ui/switch";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { commands } from "@/lib/backend";
 import { notify } from "@/features/notifications";
@@ -37,7 +38,7 @@ import {
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { SettingRow, SettingSection, SettingSelect } from "../shared/controls";
+import { SettingCard, SettingRow, SettingSection, SettingSelect, SettingSwitch } from "../shared/controls";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 
 const APPROVAL_OPTIONS: Array<{ value: AutoRunModeSetting; label: string }> = [
@@ -361,7 +362,7 @@ function PluginCarousel({
                         canPrev ? "opacity-100" : "pointer-events-none opacity-0",
                     )}
                 >
-                    <Icon icon={"alt-arrow-left"} />
+                    <FluentIcon icon={settingsIcons.chevronLeft} />
                 </button>
                 <button
                     type="button"
@@ -373,7 +374,7 @@ function PluginCarousel({
                         canNext ? "opacity-100" : "pointer-events-none opacity-0",
                     )}
                 >
-                    <Icon icon={"alt-arrow-right"} />
+                    <FluentIcon icon={settingsIcons.chevronRight} />
                 </button>
             </div>
         </section>
@@ -459,7 +460,7 @@ function PluginDetail({
                 size="md"
                 className="mb-10 squircle-2xl bg-surface-3"
             >
-                <Icon icon={"arrow-left"} size={ICON_SIZE_SM} />
+                <FluentIcon icon={settingsIcons.arrowLeft} />
                 Back
             </Button>
             <div className="flex items-start gap-4">
@@ -498,7 +499,7 @@ function PluginDetail({
                             <Button
                                 type="button"
                                 variant="ghost"
-                                size="md"
+                                size="sm"
                                 onClick={enableAll}
                             >
                                 Enable all
@@ -506,10 +507,11 @@ function PluginDetail({
                         ) : null
                     }
                 >
+                    <SettingCard>
                     {toolsLoading && tools.length === 0 ? (
                         <PluginActionsSkeleton />
                     ) : tools.length === 0 ? (
-                        <div className="px-4 py-8 text-center text-sm text-text-muted">
+                        <div className="px-3.5 py-6 text-center text-sm text-text-muted">
                             Connect and wait a moment, then reopen to load actions.
                         </div>
                     ) : (
@@ -519,13 +521,14 @@ function PluginDetail({
                                 title={humanizePluginActionName(tool.slug, tool.name)}
                                 description={cleanPluginActionDescription(tool.description)}
                             >
-                                <Switch
+                                <SettingSwitch
                                     checked={!disabled.has(tool.slug)}
-                                    onCheckedChange={(on) => setActionEnabled(tool.slug, on)}
+                                    onChange={(on) => setActionEnabled(tool.slug, on)}
                                 />
                             </SettingRow>
                         ))
                     )}
+                    </SettingCard>
                 </SettingSection>
             ) : null}
             </div>
@@ -676,7 +679,7 @@ export function PluginsSettingsView() {
                                         className="bg-surface-3 squircle-2xl"
                                     >
                                         {categoryLabel}
-                                        <Icon icon={"alt-arrow-down"} className="shrink-0 text-text-muted" />
+                                        <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" className="min-w-40">

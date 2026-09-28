@@ -1,12 +1,16 @@
 "use client";
 
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+
+
+
 import React, { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { ICON_SIZE_MD, ICON_SIZE_SM, SolarIcon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
+
 import { cn } from "@/lib/utils";
-import { diffLines } from "diff";
-import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
-import { getShapeSyntaxTheme } from "@/lib/ui/syntax-theme";
 import type { Chunk } from "../md/renderer";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { commands } from "@/lib/backend/commands";
@@ -23,24 +27,16 @@ import {
     GeneratedMediaStep,
 } from "./workflow";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { Favicon } from "@/components/ui/favicon";
 import { humanizePluginActionName } from "@/lib/plugins/logos";
 import { PluginActivityCard } from "./plugin-card";
 import { parseWebSearchHits, WebSearchBlock, WebSearchTrail } from "./search";
-import { ActionLine } from "./action-line";
+import { changedDiffLines, countChangedLines } from "@/lib/ui/diff-count";
+import { ActionLine, splitActionLabel } from "./action-line";
+import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
 import { BrowseChatCard } from "./browse-frame";
 import { openSubagent, upsertSubagent } from "@/features/agent/subagents/store";
-
-function formatDuration(ms?: number): string {
-    if (!ms || ms < 1000) return "1s";
-    const totalSec = Math.round(ms / 1000);
-    if (totalSec < 60) return `${totalSec}s`;
-    const min = Math.floor(totalSec / 60);
-    const sec = totalSec % 60;
-    return sec > 0 ? `${min}m ${sec}s` : `${min}m`;
-}
 
 function estimateThoughtSeconds(content: string): number {
     const words = content.trim().split(/\s+/).filter(Boolean).length;
@@ -96,62 +92,37 @@ function SubagentRow({ block }: { block: Chunk }) {
     const task = (block.type === "subagent_ref" ? block.content : "")?.trim();
     const model = modelChipLabel(block.command);
     return (
-        <button
-            type="button"
+        <ActionLine
+            action="Spawned"
+            detail={task || name}
+            icon={providerIcon(block.command || "auto", 14)}
             onClick={() => openSpawnedAgent(block)}
-            className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left chat-text text-text-secondary hover:text-text-primary"
-        >
-            <span className="shrink-0 text-text-muted">Spawned</span>
-            <span className="flex size-4 shrink-0 items-center justify-center">
-                {providerIcon(block.command || "auto", 14)}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-text-primary">{task || name}</span>
-            {model ? (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-4 px-2 py-0.5 text-xs text-text-secondary">
-                    {providerIcon(block.command || "auto", 12)}
-                    {model}
-                </span>
-            ) : null}
-        </button>
+            extra={
+                model ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 text-text-muted">
+                        {providerIcon(block.command || "auto", 12)}
+                        {model}
+                    </span>
+                ) : null
+            }
+        />
     );
 }
 
 function SubagentSpawnGroup({ blocks }: { blocks: Chunk[] }) {
-    const [open, setOpen] = useState(true);
     return (
-        <div className="shape-row-in py-0.5">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex w-fit max-w-full items-center gap-2 text-left chat-text text-text-secondary hover:text-text-primary"
-            >
-                <span>Spawning subagents in parallel</span>
-                <SolarIcon
-                    name="alt-arrow-down"
-                    size={ICON_SIZE_SM}
-                    className={cn("text-text-muted transition-transform duration-200", open && "rotate-180")}
-                />
-            </button>
-            {open ? (
-                <div className="mt-0.5 flex flex-col">
-                    {blocks.map((block, index) => (
-                        <SubagentRow key={`${block.type}-${block.file || block.query}-${index}`} block={block} />
-                    ))}
-                </div>
-            ) : null}
-        </div>
+        <ActionLine action="Spawning" detail="subagents" defaultOpen>
+            <div className="flex flex-col">
+                {blocks.map((block, index) => (
+                    <SubagentRow key={`${block.type}-${block.file || block.query}-${index}`} block={block} />
+                ))}
+            </div>
+        </ActionLine>
     );
 }
 
 function editDelta(block: Chunk): { add: number; del: number } {
-    const changes = diffLines(block.original || "", block.replacement || "");
-    let add = 0;
-    let del = 0;
-    changes.forEach((c) => {
-        if (c.added) add += Math.max(0, c.value.split("\n").length - 1);
-        if (c.removed) del += Math.max(0, c.value.split("\n").length - 1);
-    });
-    return { add, del };
+    return countChangedLines(block.original || "", block.replacement || "");
 }
 
 function isLintCommand(cmd: string): boolean {
@@ -264,173 +235,63 @@ function computeTurnStats(blocks: Chunk[]) {
     };
 }
 
-function LineDelta({ add, del }: { add: number; del: number }) {
-    if (add === 0 && del === 0) return null;
-    return (
-        <span className="inline-flex items-center gap-1 font-mono chat-text shrink-0 tabular-nums">
-            {add > 0 ? <span className="text-success">+{add}</span> : null}
-            {del > 0 ? <span className="text-error">-{del}</span> : null}
-        </span>
-    );
-}
-
-function ThoughtHeading({ content, isActive }: { content: string; isActive?: boolean }) {
-    const trimmed = content.trim();
-    if (!trimmed) return isActive ? <>Thinking</> : <>Thought briefly</>;
-    if (trimmed.length < 40) {
-        return isActive ? <>Thinking</> : <>Thought briefly</>;
-    }
-    const secs = estimateThoughtSeconds(trimmed);
-    if (isActive) return <>Thinking</>;
-    return (
-        <>
-            Thought <span className="wf-summary-text-strong">for {secs}s</span>
-        </>
-    );
-}
-
 function ThoughtStep({
     content,
     isActive,
-    showBody,
 }: {
     content: string;
     isActive?: boolean;
-    showBody?: boolean;
 }) {
-    const [open, setOpen] = useState(false);
     const trimmed = content.trim();
     if (!trimmed) return null;
+    if (isActive) return <ActionLine action="Thinking" shimmer />;
 
     const expandable = trimmed.length >= 80;
-
+    const detail = trimmed.length < 40 ? "briefly" : `${estimateThoughtSeconds(trimmed)}s`;
     return (
-        <div className="py-0.5">
-            {isActive ? (
-                <span className="wf-summary-text">Thinking</span>
-            ) : (
-                <button
-                    type="button"
-                    onClick={() => expandable && setOpen((v) => !v)}
-                    className={cn(
-                        "flex items-center gap-1 wf-summary-text transition-colors",
-                        expandable ? "hover:text-text-primary cursor-pointer" : "cursor-default",
-                    )}
-                >
-                    <span>
-                        <ThoughtHeading content={trimmed} isActive={false} />
-                    </span>
-                    {expandable ? (
-                        <SolarIcon
-                            name="alt-arrow-right"
-                            size={ICON_SIZE_SM}
-                            className={cn("opacity-0 transition-transform duration-200", open && "rotate-90 opacity-50")}
-                        />
-                    ) : null}
-                </button>
-            )}
-            {expandable && !isActive ? (
-                <Collapse open={open || !!showBody}>
-                    <div className="mt-1 chat-text leading-relaxed text-text-muted max-w-full whitespace-pre-wrap">
-                        {trimmed}
-                    </div>
-                </Collapse>
+        <ActionLine action="Thought" detail={detail}>
+            {expandable ? (
+                <div className="mt-1 max-w-full whitespace-pre-wrap chat-text leading-relaxed text-text-muted">
+                    {trimmed}
+                </div>
             ) : null}
-        </div>
+        </ActionLine>
     );
 }
 
-function getLanguage(path: string) {
-    const ext = path.split(".").pop()?.toLowerCase();
-    switch (ext) {
-        case "tsx":
-        case "ts":
-            return "typescript";
-        case "js":
-        case "jsx":
-            return "javascript";
-        case "rs":
-            return "rust";
-        case "json":
-            return "json";
-        case "css":
-            return "css";
-        case "md":
-            return "markdown";
-        default:
-            return "plaintext";
-    }
-}
-
 function WorkflowEditPreview({
-    file,
     original,
     replacement,
 }: {
-    file: string;
     original: string;
     replacement: string;
 }) {
-    const language = getLanguage(file);
-    const rows = React.useMemo(() => {
-        const changes = diffLines(original, replacement);
-        const out: { type: "add" | "remove"; line: string; num: number }[] = [];
-        let oldNum = 1;
-        let newNum = 1;
-        for (const part of changes) {
-            const lines = part.value.split("\n");
-            if (lines[lines.length - 1] === "") lines.pop();
-            for (const line of lines) {
-                if (part.added) {
-                    out.push({ type: "add", line, num: newNum });
-                    newNum += 1;
-                } else if (part.removed) {
-                    out.push({ type: "remove", line, num: oldNum });
-                    oldNum += 1;
-                } else {
-                    oldNum += 1;
-                    newNum += 1;
-                }
-            }
-        }
-        const all = out.filter((r) => r.type === "add" || r.type === "remove");
-        return all.slice(0, 24);
-    }, [original, replacement]);
+    const rows = React.useMemo(
+        () => changedDiffLines(original, replacement),
+        [original, replacement],
+    );
 
     if (rows.length === 0) return null;
 
     return (
-        <div className="my-1.5 overflow-hidden border-t border-b border-border bg-surface-3 max-w-full">
-            <div className="max-h-[220px] overflow-y-auto custom-scrollbar chat-text font-mono">
+        <div className="mt-1 overflow-hidden border-y border-border-subtle bg-surface-3 max-w-full">
+            <div className="max-h-[220px] overflow-y-auto custom-scrollbar font-mono text-sm">
                 {rows.map((row, i) => (
                     <div
                         key={`${row.type}-${i}`}
                         className={cn(
                             "flex items-start gap-2 px-2 py-px border-l-2",
                             row.type === "add"
-                                ? "border-l-success/50 bg-success/[0.04]"
-                                : "border-l-error/40 bg-error/[0.04]",
+                                ? "border-l-success/50 bg-success/[0.04] text-success"
+                                : "border-l-error/40 bg-error/[0.04] text-error",
                         )}
                     >
-                        <span className="w-8 shrink-0 text-right text-text-disabled select-none tabular-nums">
+                        <span className="w-8 shrink-0 text-right select-none tabular-nums opacity-70">
                             {row.num}
                         </span>
-                        <SyntaxHighlighter
-                            style={getShapeSyntaxTheme() as { [key: string]: React.CSSProperties }}
-                            language={language}
-                            PreTag="span"
-                            CodeTag="span"
-                            customStyle={{
-                                margin: 0,
-                                padding: 0,
-                                background: "transparent",
-                                display: "block",
-                                flex: 1,
-                                minWidth: 0,
-                            }}
-                        >
+                        <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">
                             {row.line || " "}
-                        </SyntaxHighlighter>
+                        </span>
                     </div>
                 ))}
             </div>
@@ -483,7 +344,7 @@ function EditApprovalRow({ block }: { block: Chunk }) {
     if (status !== "pending") {
         return (
             <ActionLine
-                action={status === "applied" ? "Applying edit to" : "Rejected edit to"}
+                action={status === "applied" ? "Edited" : "Rejected"}
                 detail={fileName(file)}
             />
         );
@@ -491,23 +352,27 @@ function EditApprovalRow({ block }: { block: Chunk }) {
 
     return (
         <ApprovalCard
-            icon={<SolarIcon name="pen" className="text-text-muted" size={ICON_SIZE_MD} />}
+            icon={<Icon icon={Edit20Regular} className="text-text-muted" />}
             title={
                 <button
                     type="button"
                     onClick={() => setDiffOpen((v) => !v)}
-                    className="flex min-w-0 items-center gap-1.5 text-left"
+                    className="group/line flex min-w-0 items-center gap-1.5 text-left chat-text font-normal text-text-muted"
                 >
-                    <span>Edit file</span>
-                    <span className="truncate text-text-primary">{fileName(file)}</span>
-                    <span className="flex shrink-0 items-center gap-1">
-                        <span className="text-success">+{add}</span>
-                        <span className="text-error">-{del}</span>
-                    </span>
-                    <SolarIcon
-                        name="alt-arrow-right"
-                        size={ICON_SIZE_SM}
-                        className={cn("opacity-50 transition-transform duration-200", diffOpen && "rotate-90")}
+                    <span className="text-text-secondary group-hover/line:text-text-primary">Edit</span>
+                    <span className="min-w-0 truncate text-text-muted">{fileName(file)}</span>
+                    {add > 0 || del > 0 ? (
+                        <span className="flex shrink-0 items-center gap-1 tabular-nums">
+                            {add > 0 ? <span className="text-success">+{add}</span> : null}
+                            {del > 0 ? <span className="text-error">-{del}</span> : null}
+                        </span>
+                    ) : null}
+                    <Icon
+                        icon={ChevronRight20Regular}
+                        className={cn(
+                            "shrink-0 text-text-muted opacity-50 transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                            diffOpen && "rotate-90",
+                        )}
                     />
                 </button>
             }
@@ -519,7 +384,6 @@ function EditApprovalRow({ block }: { block: Chunk }) {
         >
             <Collapse open={diffOpen}>
                 <WorkflowEditPreview
-                    file={file}
                     original={block.original || ""}
                     replacement={block.replacement || ""}
                 />
@@ -530,42 +394,17 @@ function EditApprovalRow({ block }: { block: Chunk }) {
 
 /** Applied (previously gated) edit — same presentation as a normal edit row. */
 function StepRowAppliedEdit({ block }: { block: Chunk }) {
-    const [diffOpen, setDiffOpen] = useState(false);
     const { add, del } = editDelta(block);
-    const hasDiff = add > 0 || del > 0;
     const file = block.file || "";
     return (
-        <div className="shape-row-in py-0.5">
-            <button
-                type="button"
-                onClick={() => hasDiff && setDiffOpen((v) => !v)}
-                className={cn(
-                    "flex items-center gap-1.5 chat-text text-text-muted w-fit max-w-full text-left",
-                    hasDiff && "hover:text-text-primary transition-colors",
-                )}
-            >
-                <span>
-                    Edited <span className="text-text-secondary">{fileName(file)}</span>
-                </span>
-                <LineDelta add={add} del={del} />
-                {hasDiff ? (
-                    <SolarIcon
-                        name="alt-arrow-right"
-                        size={ICON_SIZE_SM}
-                        className={cn("opacity-50 transition-transform duration-200", diffOpen && "rotate-90")}
-                    />
-                ) : null}
-            </button>
-            {hasDiff ? (
-                <Collapse open={diffOpen}>
-                    <WorkflowEditPreview
-                        file={file}
-                        original={block.original || ""}
-                        replacement={block.replacement || ""}
-                    />
-                </Collapse>
+        <ActionLine action="Edited" detail={fileName(file)} add={add} del={del}>
+            {add > 0 || del > 0 ? (
+                <WorkflowEditPreview
+                    original={block.original || ""}
+                    replacement={block.replacement || ""}
+                />
             ) : null}
-        </div>
+        </ActionLine>
     );
 }
 
@@ -628,8 +467,6 @@ function PluginCallStep({ block }: { block: Chunk }) {
 }
 
 function StepRow({ block }: { block: Chunk }) {
-    const [diffOpen, setDiffOpen] = useState(false);
-
     if (block.type === "browse_session") {
         let image = "";
         let x: number | undefined;
@@ -650,7 +487,7 @@ function StepRow({ block }: { block: Chunk }) {
             image = "";
         }
         return (
-            <div className="shape-row-in py-0.5">
+            <div className="py-0.5">
                 <div className="mt-1.5">
                     <BrowseChatCard
                         url={block.visitUrl}
@@ -676,23 +513,14 @@ function StepRow({ block }: { block: Chunk }) {
         const mcp = raw.match(/^\[MCP\s+([^\]]+)\]/i)?.[1]?.trim();
         if (mcp) {
             const label = humanizeToolName(mcp.replace(/^mcp__/i, "").replace(/__/g, " "));
-            return (
-                <div className="py-0.5 chat-text font-regular text-text-primary/80 truncate">
-                    Called <span className="text-text-secondary">{label}</span>
-                </div>
-            );
+            return <ActionLine action="Called" detail={label} />;
         }
         const summary = raw.replace(/\s+/g, " ").trim().slice(0, 72);
         return (
-            <div className="py-0.5 chat-text font-regular text-text-primary/80 truncate">
-                Tool result
-                {summary ? (
-                    <>
-                        {" "}
-                        <span className="text-text-secondary">{summary}{raw.length > 72 ? "…" : ""}</span>
-                    </>
-                ) : null}
-            </div>
+            <ActionLine
+                action="Ran"
+                detail={summary ? `${summary}${raw.length > 72 ? "…" : ""}` : "tool"}
+            />
         );
     }
 
@@ -764,61 +592,28 @@ function StepRow({ block }: { block: Chunk }) {
         const host = block.visitHost || block.visitTitle || block.content || "";
         const url = block.visitUrl || block.visitHost || "";
         return (
-            <button
-                type="button"
-                onClick={() => {
-                    if (block.visitUrl) void commands.openUrlExternal(block.visitUrl);
-                }}
-                className="flex items-center gap-1.5 py-0.5 chat-text font-regular text-text-primary/80 hover:text-text-primary transition-colors w-fit max-w-full text-left"
-            >
-                {url ? (
-                    <span className="chat-link-favicon">
-                        <Favicon url={url} size={12} />
-                    </span>
-                ) : null}
-                <span>
-                    {block.isGenerating ? "Visiting" : "Visited"}{" "}
-                    <span className="text-text-secondary">{host}</span>
-                </span>
-            </button>
+            <ActionLine
+                action={block.isGenerating ? "Visiting" : "Visited"}
+                detail={host}
+                favicons={url ? [url] : undefined}
+                shimmer={Boolean(block.isGenerating)}
+                onClick={block.visitUrl ? () => void commands.openUrlExternal(block.visitUrl!) : undefined}
+            />
         );
     }
 
     if (block.type === "edit" && block.file) {
         const { add, del } = editDelta(block);
-        const hasDiff = add > 0 || del > 0;
+        const file = block.file;
         return (
-            <div className="shape-row-in py-0.5">
-                <button
-                    type="button"
-                    onClick={() => hasDiff && setDiffOpen((v) => !v)}
-                    className={cn(
-                        "flex items-center gap-1.5 text-md font-medium text-text-primary/80 w-fit max-w-full text-left",
-                        hasDiff && "hover:text-text-primary transition-colors",
-                    )}
-                >
-                    <span>
-                        Edited <span className="text-text-secondary">{fileName(block.file)}</span>
-                    </span>
-                    <LineDelta add={add} del={del} />
-                    {hasDiff ? (
-                        <SolarIcon
-                            name="alt-arrow-right"
-                            size={ICON_SIZE_SM}
-                            className={cn("opacity-50 transition-transform duration-200", diffOpen && "rotate-90")}
-                        />
-                    ) : null}
-                </button>
-                {hasDiff ? (
-                    <Collapse open={diffOpen}>
-                        <WorkflowEditPreview
-                            file={block.file}
-                            original={block.original || ""}
-                            replacement={block.replacement || ""}
-                        />
-                    </Collapse>
+            <ActionLine action="Edited" detail={fileName(file)} add={add} del={del}>
+                {add > 0 || del > 0 ? (
+                    <WorkflowEditPreview
+                        original={block.original || ""}
+                        replacement={block.replacement || ""}
+                    />
                 ) : null}
-            </div>
+            </ActionLine>
         );
     }
 
@@ -831,10 +626,10 @@ function StepRow({ block }: { block: Chunk }) {
         if (finishedFine && !block.isGenerating && isLintCommand(cmd)) {
             const status = lintStatusFromOutput(block.content || "");
             if (status === "clean") {
-                return <div className="py-0.5 text-md text-text-primary/80">No linter errors</div>;
+                return <ActionLine action="Checked" detail="no linter errors" />;
             }
             if (status === "errors") {
-                return <div className="py-0.5 text-md text-text-primary/80">Linter errors found</div>;
+                return <ActionLine action="Checked" detail="linter errors" />;
             }
         }
         return <TerminalCommandStep block={block} />;
@@ -850,10 +645,10 @@ function StepRow({ block }: { block: Chunk }) {
             return <StepRowAppliedEdit block={block} />;
         }
         return (
-            <div className="py-0.5 text-md text-text-primary/80">
-                {status === "cancelled" ? "Cancelled edit to " : "Rejected edit to "}
-                <span className="text-text-secondary">{block.file ? fileName(block.file) : "file"}</span>
-            </div>
+            <ActionLine
+                action={status === "cancelled" ? "Cancelled" : "Rejected"}
+                detail={block.file ? fileName(block.file) : "file"}
+            />
         );
     }
 
@@ -878,11 +673,52 @@ function StepRow({ block }: { block: Chunk }) {
     return <ActionItem block={block} />;
 }
 
+function turnSummary(blocks: Chunk[], stats: ReturnType<typeof computeTurnStats>, isActive?: boolean, activityLabel?: string | null) {
+    const status = [...blocks].reverse().find((b) => b.type === "status" && b.content?.trim());
+    if (status?.content?.trim()) return status.content.trim();
+    if (isActive && activityLabel?.trim() && !/^(working|thinking)$/i.test(activityLabel.trim())) {
+        return activityLabel.trim();
+    }
+    const parts: string[] = [];
+    if (stats.editFileCount > 0) {
+        parts.push(`Edited ${stats.editFileCount} file${stats.editFileCount === 1 ? "" : "s"}`);
+    }
+    if (stats.reads > 0) {
+        parts.push(`${parts.length ? "explored" : "Explored"} ${stats.reads} file${stats.reads === 1 ? "" : "s"}`);
+    }
+    if (stats.searches > 0 && stats.reads === 0) {
+        parts.push(`${parts.length ? "searched" : "Searched"} ${stats.searches} time${stats.searches === 1 ? "" : "s"}`);
+    }
+    if (parts.length > 0) return parts.join(", ");
+    return isActive ? "Working" : "Worked";
+}
+
+function turnMarks(blocks: Chunk[]) {
+    const urls: string[] = [];
+    const toolkits: string[] = [];
+    for (const block of blocks) {
+        if (block.type === "web_visit" && (block.visitUrl || block.visitHost)) {
+            urls.push(block.visitUrl || `https://${block.visitHost}`);
+        }
+        if (block.type === "inspect_runtime" && block.query) urls.push(block.query);
+        if (block.type === "web_search" || block.type === "web_result") {
+            for (const hit of parseWebSearchHits(block.content || "")) {
+                if (hit.url) urls.push(hit.url);
+            }
+        }
+        if (block.type === "plugin_call" && block.pluginToolkit) toolkits.push(block.pluginToolkit);
+    }
+    return {
+        urls: [...new Set(urls.filter(Boolean))].slice(0, 4),
+        toolkits: [...new Set(toolkits.filter(Boolean))].slice(0, 4),
+    };
+}
+
 export function TurnWorkflowSummary({
     blocks,
     isActive,
-    durationMs,
     showHeader = true,
+    activityLabel,
     children,
 }: {
     blocks: Chunk[];
@@ -901,20 +737,11 @@ export function TurnWorkflowSummary({
     );
     const [open, setOpen] = useState(() => !!isActive);
     const [prevActive, setPrevActive] = useState(isActive);
-    const startedAtRef = React.useRef<number | null>(isActive ? Date.now() : null);
-    const [tick, setTick] = useState(0);
 
     if (isActive !== prevActive) {
         setPrevActive(isActive);
         setOpen(!!isActive);
-        startedAtRef.current = isActive ? Date.now() : null;
     }
-
-    useEffect(() => {
-        if (!isActive) return;
-        const id = window.setInterval(() => setTick((n) => n + 1), 250);
-        return () => window.clearInterval(id);
-    }, [isActive]);
 
     if (visible.length === 0) return <>{children}</>;
 
@@ -935,11 +762,8 @@ export function TurnWorkflowSummary({
         const cmd = (b.command || b.content || "").trim();
         return isLintCommand(cmd) && lintStatusFromOutput(b.content || "") === "clean";
     });
-    const elapsedMs = (isActive && startedAtRef.current
-        ? Date.now() - startedAtRef.current
-        : durationMs) ?? 0;
-    void tick;
-    const workedLabel = formatDuration(elapsedMs);
+    const headline = splitActionLabel(turnSummary(blocks, stats, isActive, activityLabel));
+    const marks = turnMarks(blocks);
 
     const pendingApprovalRows = (
         <div className="flex flex-col gap-1 my-1">
@@ -958,25 +782,31 @@ export function TurnWorkflowSummary({
     return (
         <div className="mb-2 select-none">
             {showHeader ? (
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex w-fit max-w-full items-center gap-2 py-0.5 chat-text font-medium text-text-muted hover:text-text-primary transition-colors"
-            >
-                <span className="wf-summary-text min-w-0 text-left">
-                    Worked for{" "}
-                    <span className="wf-summary-text-strong">{workedLabel}</span>
-                </span>
-                <SolarIcon
-                    name="alt-arrow-right"
-                    size={ICON_SIZE_SM}
-                    className={cn("opacity-50 transition-transform duration-200", open && "rotate-90")}
-                />
-            </button>
-            ) : null}
-
-            <Collapse open={showHeader ? open : true}>
-                <div className="flex flex-col">
+                <ActionLine
+                    action={headline.action}
+                    detail={headline.detail}
+                    add={stats.linesAdded}
+                    del={stats.linesRemoved}
+                    favicons={marks.urls}
+                    shimmer={Boolean(isActive)}
+                    open={open}
+                    onOpenChange={setOpen}
+                    extra={
+                        marks.toolkits.length > 0 ? (
+                            <span className="inline-flex shrink-0 items-center -space-x-1.5">
+                                {marks.toolkits.map((toolkit) => (
+                                    <span
+                                        key={toolkit}
+                                        className="inline-flex size-4 items-center justify-center overflow-hidden rounded-full border border-border-subtle bg-panel"
+                                    >
+                                        <PluginLogo toolkit={toolkit} name={toolkit} size={12} />
+                                    </span>
+                                ))}
+                            </span>
+                        ) : null
+                    }
+                >
+                    <div className="flex flex-col">
                     {leadThought?.content?.trim() ? (
                         <ThoughtStep content={leadThought.content} isActive={leadThought.isGenerating} />
                     ) : null}
@@ -1052,10 +882,11 @@ export function TurnWorkflowSummary({
                                 });
                             })()}
                             {showLintFooter && !lintShownInSteps ? (
-                                <div className="py-0.5 chat-text font-medium text-text-muted">No linter errors</div>
+                                <ActionLine action="Checked" detail="no linter errors" />
                             ) : null}
-                </div>
-            </Collapse>
+                    </div>
+                </ActionLine>
+            ) : null}
 
             {pendingBlocks.length > 0 ? pendingApprovalRows : null}
 

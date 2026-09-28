@@ -1,5 +1,9 @@
 "use client";
 
+import { GithubMark } from "@/components/ui/github-mark";
+import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
+
 import * as React from "react";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import { commands } from "@/lib/backend";
@@ -35,14 +39,14 @@ export function WelcomeOpenDialog({
             id: entry.path,
             label: getRepoName(entry.path),
             description: entry.path,
-            icon: "folder" as const,
+            icon: Folder20Filled,
         }));
         return [
             ...recent,
             {
                 id: "__browse__",
                 label: "Browse...",
-                icon: "folder" as const,
+                icon: Folder20Filled,
             },
         ];
     }, [recentFolders]);
@@ -125,7 +129,7 @@ export function WelcomeCloneDialog({
         {
             id: "__github__",
             label: "Clone from GitHub",
-            icon: "code-square",
+            icon: GithubMark,
             hint: "remote sources",
         },
     ];
@@ -144,7 +148,7 @@ export function WelcomeCloneDialog({
                 id: parent,
                 label: getRepoName(parent) || parent,
                 description: parent,
-                icon: "folder" as const,
+                icon: Folder20Filled,
             };
         });
         // Dedupe parents
@@ -156,7 +160,7 @@ export function WelcomeCloneDialog({
         });
         return [
             ...unique,
-            { id: "__browse__", label: "Browse...", icon: "folder" as const },
+            { id: "__browse__", label: "Browse...", icon: Folder20Filled },
         ];
     }, [recentFolders]);
 
@@ -254,7 +258,7 @@ export function WelcomeSshDialog({
         {
             id: "__add__",
             label: "+ Add new host...",
-            icon: "programming",
+            icon: WindowConsole20Regular,
         },
     ];
 

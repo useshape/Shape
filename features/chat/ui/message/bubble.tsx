@@ -82,7 +82,7 @@ export function EntityPill({
     className?: string;
 }) {
     return (
-        <span className={cn("wf-pill", className)}>
+        <span className={cn("inline-flex max-w-full items-center gap-1.5 chat-text text-text-muted", className)}>
             {icon ? <span className="flex size-5 shrink-0 items-center justify-center">{icon}</span> : null}
             <span className="truncate">{label}</span>
         </span>

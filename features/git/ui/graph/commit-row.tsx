@@ -1,5 +1,9 @@
+import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
+import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import React, { useState, useCallback, useRef, useMemo } from "react";
-import { Icon, ICON_SIZE_SM } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+
 import {
     ContextMenu,
     ContextMenuTrigger,
@@ -219,7 +223,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     </Tooltip>
                                 )
                             )}
-                            {isMerge && <Icon icon={"git-pull-request"} size={ICON_SIZE_SM} className="text-text-primary shrink-0 opacity-80" />}
+                            {isMerge && <Icon icon={BranchRequest20Regular} className="text-text-primary shrink-0 opacity-80" />}
                             {isManager ? (
                                 <span
                                     className={cn(
@@ -291,14 +295,14 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                                 className="flex items-center gap-1.5 cursor-pointer hover:text-text-primary transition-colors py-0.5"
                                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard.writeText(log.hash); notify.success("Copied", "Commit hash copied to clipboard"); }}
                                             >
-                                                <Icon icon={"clipboard"} size={ICON_SIZE_SM} />
+                                                <Icon icon={Clipboard20Regular} />
                                                 <span className="text-sm font-medium select-text">{log.hash.slice(0, 7)}</span>
                                             </div>
                                             <div
                                                 className="flex items-center gap-1.5 cursor-pointer hover:text-text-primary transition-colors py-0.5"
                                                 onClick={handleOpenGitHub}
                                             >
-                                                <Icon icon={"square-forward"} size={ICON_SIZE_SM} />
+                                                <Icon icon={Open20Regular} />
                                                 <span className="text-sm">Open in GitHub</span>
                                             </div>
                                         </div>
