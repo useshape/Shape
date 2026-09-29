@@ -31,9 +31,22 @@ let bus: MultiworkBusLine[] = [];
 let activeWorkerId: string | null = null;
 /** Conversation currently shown in the Multiwork UI (filters workers). */
 let focusConversationId: string | null = null;
+/** Cached filtered list — stable reference for useSyncExternalStore. */
+let workersSnapshot: MultiworkWorker[] = workers;
 const listeners = new Set<Listener>();
 
+function rebuildWorkersSnapshot() {
+    if (!focusConversationId) {
+        workersSnapshot = workers;
+        return;
+    }
+    workersSnapshot = workers.filter(
+        (w) => !w.parentId || w.parentId === focusConversationId,
+    );
+}
+
 function emit() {
+    rebuildWorkersSnapshot();
     for (const l of listeners) l();
 }
 
@@ -62,6 +75,7 @@ export function setMultiworkMode(on: boolean) {
 }
 
 export function setMultiworkFocusConversation(id: string | null) {
+    if (focusConversationId === id) return;
     focusConversationId = id;
     emit();
 }
@@ -71,19 +85,11 @@ export function getBoardView(): "board" | "chat" {
 }
 
 export function setBoardView(_view: "board" | "chat") {
-    /* board/chat tabs removed — kept for API compat */
-    emit();
-}
-
-function visibleWorkers(): MultiworkWorker[] {
-    if (!focusConversationId) return workers;
-    return workers.filter(
-        (w) => !w.parentId || w.parentId === focusConversationId,
-    );
+    /* board/chat tabs removed — no-op */
 }
 
 export function getWorkers(): MultiworkWorker[] {
-    return visibleWorkers();
+    return workersSnapshot;
 }
 
 export function getBus(): MultiworkBusLine[] {

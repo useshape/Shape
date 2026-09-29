@@ -2,7 +2,6 @@
 
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { ArrowSortDown20Regular } from "@fluentui/react-icons/headless/svg/arrow-sort-down";
-import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
@@ -10,10 +9,10 @@ import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
 import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { People20Regular } from "@fluentui/react-icons/headless/svg/people";
 import { Pin20Regular } from "@fluentui/react-icons/headless/svg/pin";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
-
-
+import { Eclipse } from "loading-dev";
 
 import {
     useCallback,
@@ -119,6 +118,7 @@ function ChatRow({
     active,
     pinned,
     unread,
+    multiwork,
 }: {
     id: string;
     title: string;
@@ -126,6 +126,7 @@ function ChatRow({
     active: boolean;
     pinned: boolean;
     unread: boolean;
+    multiwork: boolean;
 }) {
     const generating = useIsChatGenerating(id);
     const [renaming, setRenaming] = useState(false);
@@ -220,18 +221,30 @@ function ChatRow({
                             <span className="min-w-0 flex-1 truncate text-sm font-normal text-text-primary">
                                 {title}
                             </span>
-                            {generating ? (
-                                <Icon
-                                    icon={ArrowSync20Regular}
-                                    className="shrink-0 animate-spin text-text-muted"
-                                    style={{ ["--icon-size" as string]: "14px" }}
-                                />
-                            ) : unread ? (
-                                <span
-                                    className="size-2 shrink-0 rounded-full bg-accent"
-                                    aria-label="Unread"
-                                />
-                            ) : null}
+                            <span className="relative flex shrink-0 items-center">
+                                {multiwork ? (
+                                    <Icon
+                                        icon={People20Regular}
+                                        className="text-text-muted"
+                                        style={{ ["--icon-size" as string]: "14px" }}
+                                    />
+                                ) : null}
+                                {generating ? (
+                                    <Eclipse
+                                        size={12}
+                                        className={cn(
+                                            "text-text-muted",
+                                            multiwork && "absolute -right-1 -top-1",
+                                        )}
+                                        aria-hidden
+                                    />
+                                ) : !multiwork && unread ? (
+                                    <span
+                                        className="size-2 shrink-0 rounded-full bg-accent"
+                                        aria-label="Unread"
+                                    />
+                                ) : null}
+                            </span>
                         </button>
                     )}
                 </div>
@@ -292,9 +305,9 @@ function ChatRow({
 
 export function ChatList({
     onNewChat,
-    listKind = "chat",
 }: {
     onNewChat: () => void;
+    /** @deprecated unified Sessions list — ignored */
     listKind?: "chat" | "multiwork";
 }) {
     const { project_path } = useProjectState();
@@ -387,11 +400,7 @@ export function ChatList({
     }, [project_path]);
 
     const visible = useMemo(() => {
-        const live = chats.filter((c) => {
-            if (c.archived) return false;
-            const kind = c.kind === "multiwork" ? "multiwork" : "chat";
-            return kind === listKind;
-        });
+        const live = chats.filter((c) => !c.archived);
         const sorted = [...live];
         sorted.sort((a, b) => {
             const aPin = pinnedIds.has(a.id);
@@ -411,7 +420,7 @@ export function ChatList({
             return sort === "oldest" ? delta : -delta;
         });
         return sorted;
-    }, [chats, sort, pinnedIds, listKind]);
+    }, [chats, sort, pinnedIds]);
 
     const openCommandPalette = () => {
         window.dispatchEvent(
@@ -424,9 +433,7 @@ export function ChatList({
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between pl-3 pr-1 pb-1 pt-3">
-                <span className="text-sm font-medium text-text-muted">
-                    {listKind === "multiwork" ? "Sessions" : "Chats"}
-                </span>
+                <span className="text-sm font-medium text-text-muted">Sessions</span>
                 <div className="flex items-center">
                     <HeaderIconBtn label="Search" onClick={openCommandPalette}>
                         <Icon icon={Search20Regular} />
@@ -492,6 +499,7 @@ export function ChatList({
                                 active={c.id === activeId}
                                 pinned={pinnedIds.has(c.id)}
                                 unread={unreadIds.has(c.id)}
+                                multiwork={c.kind === "multiwork"}
                             />
                         ))}
                     </div>

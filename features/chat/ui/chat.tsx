@@ -31,7 +31,6 @@ import {
     MultiworkWorkerView,
     closeWorker,
     getActiveWorker,
-    getWorkers,
     isMultiworkMode,
     setMultiworkFocusConversation,
     subscribeMultiwork,
@@ -62,7 +61,6 @@ export default function Chat({
     const activeSubagent = React.useSyncExternalStore(subscribeSubagents, getActiveSubagent, getActiveSubagent);
     const multiwork = useSyncExternalStore(subscribeMultiwork, isMultiworkMode, () => false);
     const activeWorker = useSyncExternalStore(subscribeMultiwork, getActiveWorker, getActiveWorker);
-    const workers = useSyncExternalStore(subscribeMultiwork, getWorkers, getWorkers);
 
     React.useEffect(() => {
         setSubagentParentConversation(session.conversationId);
@@ -298,121 +296,123 @@ export default function Chat({
     const insetX = embedded ? "px-2" : "px-5 md:px-6";
     const columnWidth = embedded ? "max-w-none" : "max-w-4xl";
 
+    const chatColumn = activeSubagent && !multiwork ? (
+        <div className="relative min-h-0 flex-1">
+            <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
+                <SubagentChatView />
+            </div>
+        </div>
+    ) : multiwork && activeWorker ? (
+        <>
+            <div className={cn("flex shrink-0 items-center gap-2 pt-3", insetX)}>
+                <Button type="button" variant="ghost" size="xs" onClick={() => closeWorker()}>
+                    Back to chat
+                </Button>
+                <span className="truncate text-sm text-text-muted">{activeWorker.title}</span>
+            </div>
+            <div className="relative min-h-0 flex-1">
+                <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
+                    <MultiworkWorkerView />
+                </div>
+            </div>
+            <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
+                <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
+                    {composer}
+                </div>
+            </div>
+        </>
+    ) : isEmpty && !embedded ? (
+        <div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center pb-8", insetX)}>
+            <div className={cn("flex w-full flex-col items-center gap-5", columnWidth)}>
+                <ChatEmptyState
+                    onSelectMode={(mode) => {
+                        session.setSelectedMode(mode);
+                        window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
+                    }}
+                />
+                <div className="w-full">
+                    {composer}
+                </div>
+            </div>
+        </div>
+    ) : (
+        <>
+            <div className="relative min-h-0 flex-1">
+                <div
+                    ref={session.scrollContainerRef}
+                    onScroll={session.handleScroll}
+                    onKeyDown={(e) => {
+                        if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
+                        const target = e.target as HTMLElement | null;
+                        if (target?.closest("textarea, input, [contenteditable='true']")) return;
+                        e.preventDefault();
+                        const root = e.currentTarget;
+                        const range = document.createRange();
+                        range.selectNodeContents(root);
+                        const sel = window.getSelection();
+                        sel?.removeAllRanges();
+                        sel?.addRange(range);
+                    }}
+                    className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto no-scrollbar select-text", insetX)}
+                >
+                    <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-8 pt-3" : "pb-48 pt-8")}>
+                        <ChatMessageList
+                            messageGroups={session.messageGroups}
+                            messages={session.messages}
+                            isLoading={session.isLoading}
+                            activityLabel={session.activityLabel}
+                            messagesEndRef={session.messagesEndRef}
+                            onRedo={session.handleRedo}
+                            onRestore={session.handleRestore}
+                            onFork={session.handleFork}
+                            onFeedback={session.handleFeedback}
+                            isFileEditResolved={session.isEditResolved}
+                            activeChatTabId={session.activeChatTabId}
+                            fullWidthBubbles={multiwork}
+                        />
+                    </div>
+                </div>
+                <div
+                    className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-linear-to-b from-panel/50 to-transparent transition-opacity duration-200"
+                    style={{ opacity: session.scrolledFromTop ? 1 : 0 }}
+                    aria-hidden
+                />
+                {turnCount >= 2 && !embedded && !multiwork ? (
+                    <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 py-6 md:flex lg:right-3">
+                        <div className="pointer-events-auto flex h-full w-full items-stretch justify-end">
+                            <ChatHistoryStepper
+                                className="h-full"
+                                turnCount={turnCount}
+                                activeIndex={activeTurn}
+                                onSelect={selectTurn}
+                                turnLabels={turnLabels}
+                            />
+                        </div>
+                    </div>
+                ) : null}
+            </div>
+
+            <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
+                <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
+                    <div
+                        className="pointer-events-none absolute inset-x-0 bottom-full h-20 bg-linear-to-t from-panel to-transparent"
+                        aria-hidden
+                    />
+                    {composer}
+                </div>
+            </div>
+        </>
+    );
+
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
             {embedded ? null : tabsSlot ? createPortal(titlebar, tabsSlot) : null}
 
-            <div className="relative flex min-h-0 flex-1 flex-col">
-                {activeSubagent && !multiwork ? (
-                    <div className="relative min-h-0 flex-1">
-                        <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
-                            <SubagentChatView />
-                        </div>
-                    </div>
-                ) : multiwork && activeWorker ? (
-                    <>
-                        <div className={cn("flex shrink-0 items-center gap-2 pt-3", insetX)}>
-                            <Button type="button" variant="ghost" size="xs" onClick={() => closeWorker()}>
-                                Back to chat
-                            </Button>
-                            <span className="truncate text-sm text-text-muted">{activeWorker.title}</span>
-                        </div>
-                        <div className="relative min-h-0 flex-1">
-                            <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
-                                <MultiworkWorkerView />
-                            </div>
-                        </div>
-                        <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
-                            <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
-                                {composer}
-                            </div>
-                        </div>
-                    </>
-                ) : isEmpty && !embedded ? (
-                    <div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center pb-8", insetX)}>
-                        <div className={cn("flex w-full flex-col items-center gap-5", columnWidth)}>
-                            <ChatEmptyState
-                                onSelectMode={(mode) => {
-                                    session.setSelectedMode(mode);
-                                    window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
-                                }}
-                            />
-                            <div className="w-full">
-                                {composer}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <div className="relative min-h-0 flex-1">
-                            <div
-                                ref={session.scrollContainerRef}
-                                onScroll={session.handleScroll}
-                                onKeyDown={(e) => {
-                                    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
-                                    const target = e.target as HTMLElement | null;
-                                    if (target?.closest("textarea, input, [contenteditable='true']")) return;
-                                    e.preventDefault();
-                                    const root = e.currentTarget;
-                                    const range = document.createRange();
-                                    range.selectNodeContents(root);
-                                    const sel = window.getSelection();
-                                    sel?.removeAllRanges();
-                                    sel?.addRange(range);
-                                }}
-                                className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto no-scrollbar select-text", insetX)}
-                            >
-                                <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-8 pt-3" : "pb-48 pt-8")}>
-                                    {multiwork && workers.length > 0 ? (
-                                        <MultiworkBoard className="mb-3" />
-                                    ) : null}
-                                    <ChatMessageList
-                                        messageGroups={session.messageGroups}
-                                        messages={session.messages}
-                                        isLoading={session.isLoading}
-                                        activityLabel={session.activityLabel}
-                                        messagesEndRef={session.messagesEndRef}
-                                        onRedo={session.handleRedo}
-                                        onRestore={session.handleRestore}
-                                        onFork={session.handleFork}
-                                        onFeedback={session.handleFeedback}
-                                        isFileEditResolved={session.isEditResolved}
-                                        activeChatTabId={session.activeChatTabId}
-                                        fullWidthBubbles={multiwork}
-                                    />
-                                </div>
-                            </div>
-                            <div
-                                className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-linear-to-b from-panel/50 to-transparent transition-opacity duration-200"
-                                style={{ opacity: session.scrolledFromTop ? 1 : 0 }}
-                                aria-hidden
-                            />
-                            {turnCount >= 2 && !embedded ? (
-                                <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 py-6 md:flex lg:right-3">
-                                    <div className="pointer-events-auto flex h-full w-full items-stretch justify-end">
-                                        <ChatHistoryStepper
-                                            className="h-full"
-                                            turnCount={turnCount}
-                                            activeIndex={activeTurn}
-                                            onSelect={selectTurn}
-                                            turnLabels={turnLabels}
-                                        />
-                                    </div>
-                                </div>
-                            ) : null}
-                        </div>
-
-                        <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
-                            <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
-                                <div
-                                    className="pointer-events-none absolute inset-x-0 bottom-full h-20 bg-linear-to-t from-panel to-transparent"
-                                    aria-hidden
-                                />
-                                {composer}
-                            </div>
-                        </div>
-                    </>
-                )}
+            <div className="relative flex min-h-0 flex-1 flex-row overflow-hidden">
+                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+                    {chatColumn}
+                </div>
+                {multiwork ? <MultiworkBoard /> : null}
             </div>
             <ChatErrorDialog
                 message={session.sendError}
