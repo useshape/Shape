@@ -30,7 +30,6 @@ import { Icon } from "@/components/ui/icon";
 
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
-import { SearchInput } from "@/components/ui/search";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
 import {
@@ -291,14 +290,17 @@ function ChatRow({
     );
 }
 
-export function ChatList({ onNewChat }: { onNewChat: () => void }) {
+export function ChatList({
+    onNewChat,
+    listKind = "chat",
+}: {
+    onNewChat: () => void;
+    listKind?: "chat" | "multiwork";
+}) {
     const { project_path } = useProjectState();
     const [chats, setChats] = useState<Conversation[]>([]);
-    const [query, setQuery] = useState("");
-    const [searchOpen, setSearchOpen] = useState(false);
     const [sort, setSort] = useState<ChatSort>("recent");
     const [activeId, setActiveId] = useState<string | null>(null);
-    const searchRef = useRef<HTMLInputElement>(null);
 
     const pinnedIds = useSyncExternalStore(
         subscribePinnedChats,
@@ -384,18 +386,13 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
         };
     }, [project_path]);
 
-    useEffect(() => {
-        if (!searchOpen) return;
-        searchRef.current?.focus();
-    }, [searchOpen]);
-
     const visible = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        const live = chats.filter((c) => !c.archived);
-        const filtered = q
-            ? live.filter((c) => (c.title || "Untitled").toLowerCase().includes(q))
-            : live;
-        const sorted = [...filtered];
+        const live = chats.filter((c) => {
+            if (c.archived) return false;
+            const kind = c.kind === "multiwork" ? "multiwork" : "chat";
+            return kind === listKind;
+        });
+        const sorted = [...live];
         sorted.sort((a, b) => {
             const aPin = pinnedIds.has(a.id);
             const bPin = pinnedIds.has(b.id);
@@ -414,21 +411,24 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
             return sort === "oldest" ? delta : -delta;
         });
         return sorted;
-    }, [chats, query, sort, pinnedIds]);
+    }, [chats, sort, pinnedIds, listKind]);
 
-    const toggleSearch = () => {
-        setSearchOpen((open) => {
-            if (open) setQuery("");
-            return !open;
-        });
+    const openCommandPalette = () => {
+        window.dispatchEvent(
+            new CustomEvent("shape-command-palette", {
+                detail: { placeholder: "Search…" },
+            }),
+        );
     };
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between pl-3 pr-1 pb-1 pt-3">
-                <span className="text-sm font-medium text-text-muted">Chats</span>
+                <span className="text-sm font-medium text-text-muted">
+                    {listKind === "multiwork" ? "Sessions" : "Chats"}
+                </span>
                 <div className="flex items-center">
-                    <HeaderIconBtn label="Search" onClick={toggleSearch} active={searchOpen}>
+                    <HeaderIconBtn label="Search" onClick={openCommandPalette}>
                         <Icon icon={Search20Regular} />
                     </HeaderIconBtn>
                     <DropdownMenu>
@@ -462,39 +462,6 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                 </div>
             </div>
 
-            <div
-                className={cn(
-                    "grid transition-[grid-template-rows] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-                    searchOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                )}
-            >
-                <div className="min-h-0 overflow-hidden">
-                    <div
-                        className={cn(
-                            "origin-top px-2 mt-1 pb-2",
-                            "transition-[opacity,transform,filter] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-                            searchOpen
-                                ? "translate-y-0 opacity-100 blur-0"
-                                : "pointer-events-none -translate-y-1.5 opacity-0 blur-[2px]",
-                        )}
-                    >
-                        <SearchInput
-                            ref={searchRef}
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search chats"
-                            onKeyDown={(e) => {
-                                if (e.key === "Escape") {
-                                    e.preventDefault();
-                                    setSearchOpen(false);
-                                    setQuery("");
-                                }
-                            }}
-                        />
-                    </div>
-                </div>
-            </div>
-
             <ScrollArea fadeFrom="from-sidebar" className="min-h-0 flex-1 px-1.5 pb-2">
                 {!project_path ? (
                     <button
@@ -512,7 +479,7 @@ export function ChatList({ onNewChat }: { onNewChat: () => void }) {
                         className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                     >
                         <Icon icon={Compose20Regular} className="shrink-0" />
-                        <span>{query.trim() ? "No matching chats" : "New chat"}</span>
+                        <span>New chat</span>
                     </button>
                 ) : (
                     <div className="space-y-0.5">

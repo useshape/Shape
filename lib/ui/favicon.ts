@@ -15,7 +15,13 @@ export function hostnameOf(urlOrHost: string): string {
     }
 }
 
-/** Google s2 favicon URL for a domain or full URL. */
+/** A tab title that is not just the address. */
+export function pageLabel(title: string, url: string): string {
+    const trimmed = title.trim();
+    const host = hostnameOf(url);
+    if (!trimmed || /^https?:\/\//i.test(trimmed)) return host || "New tab";
+    return trimmed;
+}
 export function faviconUrl(urlOrHost: string, size = 32): string | null {
     const host = hostnameOf(urlOrHost);
     if (!host) return null;

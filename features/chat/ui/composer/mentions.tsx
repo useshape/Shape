@@ -53,7 +53,6 @@ const CATEGORIES: {
     { id: "skills", label: "Skills", icon: DocumentText20Regular },
     { id: "mcp", label: "MCP Servers", icon: Grid20Regular },
     { id: "terminals", label: "Terminals", icon: WindowConsole20Regular },
-    { id: "browser", label: "Browser", icon: Globe20Regular },
     { id: "design", label: "Design", icon: Color20Regular },
 ];
 

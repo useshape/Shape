@@ -205,7 +205,11 @@ export function DesignPreviewGallery({
     const frame = (ref: React.RefObject<HTMLIFrameElement | null>, className: string) =>
         framed ? (
             <div className="relative size-full">
-                {!frameReady ? <div className="preview-shimmer absolute inset-0 z-10" aria-hidden /> : null}
+                {!frameReady ? (
+                    <div className="preview-shimmer absolute inset-0 z-10" aria-hidden>
+                        <span className="preview-shimmer-blob" />
+                    </div>
+                ) : null}
                 <iframe
                     ref={ref}
                     title={item.name || "Component preview"}

@@ -65,7 +65,7 @@ function RotatingIdleWord() {
     return <StatusWipe text={IDLE_WORDS[index]!} />;
 }
 
-/** Live status — bouncing dots plus the current activity label. */
+/** Live status — Eclipse plus the current activity label. */
 export function GeneratingIndicator({
     label,
 }: {

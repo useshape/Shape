@@ -237,6 +237,7 @@ pub fn new_chat(
     state.reset_title_meta();
     *state.history_summary.lock()? = None;
     *state.current_conversation_id.lock()? = None;
+    *state.conversation_kind.lock()? = None;
     state.clear_design_preview_state();
     state.clear_file_checkpoints();
     state.set_incognito(false);
@@ -293,6 +294,11 @@ pub fn load_conversation(
     };
     state.set_title_meta(conv.title_locked, anchor);
     *state.current_conversation_id.lock()? = Some(id.clone());
+    *state.conversation_kind.lock()? = Some(if conv.kind == "multiwork" {
+        "multiwork".to_string()
+    } else {
+        "chat".to_string()
+    });
     state.clear_design_preview_state();
     state.replace_file_checkpoints(checkpoints::load_checkpoints(&id));
     state.set_incognito(false);
@@ -484,25 +490,58 @@ pub fn fork_conversation(
     Ok(serde_json::json!({ "id": new_id, "title": new_title }))
 }
 
+fn normalize_feedback(feedback: Option<String>) -> Option<String> {
+    feedback
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| s == "up" || s == "down")
+}
+
 #[tauri::command]
 pub fn set_message_feedback(
     index: usize,
     feedback: Option<String>,
+    conversation_id: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    {
-        let mut hist = state.history.lock()?;
-        let Some(msg) = hist.get_mut(index) else {
+    let value = normalize_feedback(feedback);
+    let current = state.current_conversation_id.lock()?.clone();
+    let target = conversation_id.filter(|id| !id.is_empty());
+    let use_live = target.is_none() || target.as_ref() == current.as_ref();
+    if use_live {
+        {
+            let mut hist = state.history.lock()?;
+            let Some(msg) = hist.get_mut(index) else {
+                return Err(AppError::Message("Message not found.".to_string()));
+            };
+            msg.feedback = value;
+        }
+        if let Some(path) = app_state.0.lock()?.project_path.clone() {
+            let _ = history::save_current_conversation(&state, &path);
+        }
+        return Ok(());
+    }
+
+    let id = target.unwrap_or_default();
+    let Some(path) = app_state.0.lock()?.project_path.clone() else {
+        return Err(AppError::Message("Message not found.".to_string()));
+    };
+    let (title, mut hist) = {
+        let convs = state.conversations.lock()?;
+        let Some(conv) = convs
+            .get(&path)
+            .and_then(|list| list.iter().find(|c| c.id == id))
+        else {
             return Err(AppError::Message("Message not found.".to_string()));
         };
-        msg.feedback = feedback
-            .map(|s| s.trim().to_ascii_lowercase())
-            .filter(|s| s == "up" || s == "down");
+        if conv.history.get(index).is_none() {
+            return Err(AppError::Message("Message not found.".to_string()));
+        }
+        (conv.title.clone(), conv.history.clone())
+    };
+    if let Some(msg) = hist.get_mut(index) {
+        msg.feedback = value;
     }
-    if let Some(path) = app_state.0.lock()?.project_path.clone() {
-        let _ = history::save_current_conversation(&state, &path);
-    }
-    Ok(())
+    history::upsert_conversation_snapshot(&state, &path, &id, &title, hist)
 }
 

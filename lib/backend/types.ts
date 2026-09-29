@@ -275,6 +275,8 @@ export interface Conversation {
     timestamp: number;
     /** Hidden from the sidebar; still opens from the command palette. */
     archived?: boolean;
+    /** Regular chat vs Multiwork session. */
+    kind?: "chat" | "multiwork";
 }
 
 export interface BrowserTab {

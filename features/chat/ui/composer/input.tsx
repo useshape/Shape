@@ -37,6 +37,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuCheckboxItem,
     DropdownMenuTrigger,
     DropdownMenuLabel,
     DropdownMenuSub,
@@ -110,6 +111,12 @@ type ChatInputProps = {
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     selectedModel: string;
     setSelectedModel: (m: string) => void;
+    /** Extra worker models in Multiwork (checkbox multi-select). */
+    selectedWorkerModels?: string[];
+    setSelectedWorkerModels?: (models: string[]) => void;
+    multiSelectModels?: boolean;
+    /** Hide Ask/Code/Visual mode picker (Multiwork orchestrator assigns worker modes). */
+    hideModeSelect?: boolean;
     selectedMode: string;
     setSelectedMode: (m: string) => void;
     reasoningEffort: ReasoningEffort;
@@ -852,6 +859,10 @@ export function ChatInput({
     addUploadedFiles,
     selectedModel,
     setSelectedModel,
+    selectedWorkerModels = [],
+    setSelectedWorkerModels,
+    multiSelectModels = false,
+    hideModeSelect = false,
     selectedMode,
     setSelectedMode,
     reasoningEffort,
@@ -1156,8 +1167,15 @@ export function ChatInput({
         releaseDate: "Rolling",
     };
     const modelInfo = MODELS.find((m) => m.id === selectedModel) || autoModel;
-    const modelName =
+    const workerExtra = multiSelectModels
+        ? selectedWorkerModels.filter((id) => id && id !== selectedModel)
+        : [];
+    const modelNameBase =
         selectedModel === "auto" || modelInfo.name === "auto" ? "Auto" : modelInfo.name;
+    const modelName =
+        multiSelectModels && workerExtra.length > 0
+            ? `${modelNameBase} +${workerExtra.length}`
+            : modelNameBase;
     const modelTriggerLabel = [modelName, effortLabel(reasoningEffort), fastMode ? "Fast" : null]
         .filter(Boolean)
         .join(" ");
@@ -1191,6 +1209,7 @@ export function ChatInput({
     const [incognito, setIncognito] = React.useState(() => isIncognitoChat());
     React.useEffect(() => subscribeIncognito(() => setIncognito(isIncognitoChat())), []);
     const [plusPlugins, setPlusPlugins] = React.useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
+    const [pluginQuery, setPluginQuery] = React.useState("");
     const [skills, setSkills] = React.useState<Skill[]>(() => listSkills());
     React.useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
 
@@ -1388,28 +1407,52 @@ export function ChatInput({
                                         Plugins
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="w-56">
-                                        {plusPlugins.length === 0 ? (
-                                            <DropdownMenuItem disabled>No plugins</DropdownMenuItem>
-                                        ) : (
-                                            plusPlugins.map((plugin) => (
-                                                <DropdownMenuItem
-                                                    key={plugin.toolkit}
-                                                    onClick={() =>
-                                                        appendToken(
-                                                            formatMentionToken({
-                                                                kind: "plugin",
-                                                                id: plugin.toolkit,
-                                                                path: plugin.toolkit,
-                                                                label: plugin.name,
-                                                            }),
-                                                        )
-                                                    }
-                                                >
-                                                    <PluginLogo toolkit={plugin.toolkit} name={plugin.name} size={14} />
-                                                    <span className="min-w-0 flex-1 truncate">{plugin.name}</span>
-                                                </DropdownMenuItem>
-                                            ))
-                                        )}
+                                        <SearchInput
+                                            borderless
+                                            placeholder="Search plugins"
+                                            autoFocus
+                                            value={pluginQuery}
+                                            onChange={(e) => setPluginQuery(e.target.value)}
+                                            onKeyDown={(e) => e.stopPropagation()}
+                                            onKeyUp={(e) => e.stopPropagation()}
+                                            onPointerDown={(e) => e.stopPropagation()}
+                                        />
+                                        <div className="max-h-40 overflow-y-auto">
+                                            {(() => {
+                                                const q = pluginQuery.trim().toLowerCase();
+                                                const matches = plusPlugins.filter(
+                                                    (plugin) =>
+                                                        !q
+                                                        || plugin.name.toLowerCase().includes(q)
+                                                        || plugin.toolkit.toLowerCase().includes(q),
+                                                );
+                                                if (matches.length === 0) {
+                                                    return (
+                                                        <DropdownMenuItem disabled>
+                                                            {plusPlugins.length === 0 ? "No plugins" : "No matches"}
+                                                        </DropdownMenuItem>
+                                                    );
+                                                }
+                                                return matches.map((plugin) => (
+                                                    <DropdownMenuItem
+                                                        key={plugin.toolkit}
+                                                        onClick={() =>
+                                                            appendToken(
+                                                                formatMentionToken({
+                                                                    kind: "plugin",
+                                                                    id: plugin.toolkit,
+                                                                    path: plugin.toolkit,
+                                                                    label: plugin.name,
+                                                                }),
+                                                            )
+                                                        }
+                                                    >
+                                                        <PluginLogo toolkit={plugin.toolkit} name={plugin.name} size={14} />
+                                                        <span className="min-w-0 flex-1 truncate">{plugin.name}</span>
+                                                    </DropdownMenuItem>
+                                                ));
+                                            })()}
+                                        </div>
                                     </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                                 <DropdownMenuSub>
@@ -1670,11 +1713,13 @@ export function ChatInput({
 
                 <div className="flex items-center justify-between gap-2 px-1">
                     <div className="flex min-w-0 items-center gap-0.5">
-                        <ModeMenu
-                            selectedMode={selectedMode}
-                            setSelectedMode={setSelectedMode}
-                            disabled={needsSignIn}
-                        />
+                        {hideModeSelect ? null : (
+                            <ModeMenu
+                                selectedMode={selectedMode}
+                                setSelectedMode={setSelectedMode}
+                                disabled={needsSignIn}
+                            />
+                        )}
                         <WorkspaceBranchSwitch />
                     </div>
 
@@ -1748,13 +1793,34 @@ export function ChatInput({
                                             onPointerDown={(e) => e.stopPropagation()}
                                         />
                                         <div className="custom-scrollbar max-h-[280px] overflow-y-auto">
+                                            {multiSelectModels ? (
+                                                <div className="px-2.5 py-1.5 text-xs text-text-muted">
+                                                    Orchestrator uses the primary model. Extra picks become the worker pool.
+                                                </div>
+                                            ) : null}
                                             {modelMatches(autoModel) ? (
-                                                <ModelItem
-                                                    model={autoModel}
-                                                    isSelected={selectedModel === "auto"}
-                                                    onSelect={() => setSelectedModel("auto")}
-                                                    effort={reasoningEffort}
-                                                />
+                                                multiSelectModels ? (
+                                                    <DropdownMenuCheckboxItem
+                                                        checked={selectedModel === "auto" || selectedWorkerModels.includes("auto")}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) {
+                                                                setSelectedModel("auto");
+                                                                setSelectedWorkerModels?.(
+                                                                    selectedWorkerModels.filter((id) => id !== "auto"),
+                                                                );
+                                                            }
+                                                        }}
+                                                    >
+                                                        Auto
+                                                    </DropdownMenuCheckboxItem>
+                                                ) : (
+                                                    <ModelItem
+                                                        model={autoModel}
+                                                        isSelected={selectedModel === "auto"}
+                                                        onSelect={() => setSelectedModel("auto")}
+                                                        effort={reasoningEffort}
+                                                    />
+                                                )
                                             ) : null}
                                             {providerOrder.filter((p) => p !== "Auto").map((provider) => {
                                                 const providerModels = MODELS.filter(
@@ -1770,6 +1836,49 @@ export function ChatInput({
                                                             const allowed =
                                                                 Boolean(shapeAuth.loggedIn && !shapeAuth.offline) &&
                                                                 (isCatalogModelAllowed(m.id) || isApiModel(m));
+                                                            if (multiSelectModels) {
+                                                                const inPool =
+                                                                    selectedModel === m.id
+                                                                    || selectedWorkerModels.includes(m.id);
+                                                                return (
+                                                                    <DropdownMenuCheckboxItem
+                                                                        key={m.id}
+                                                                        checked={inPool}
+                                                                        disabled={!allowed}
+                                                                        onCheckedChange={(checked) => {
+                                                                            if (!allowed) return;
+                                                                            if (checked) {
+                                                                                if (selectedModel === "auto" || !selectedWorkerModels.length) {
+                                                                                    if (selectedModel !== m.id) {
+                                                                                        setSelectedWorkerModels?.(
+                                                                                            [...selectedWorkerModels.filter((id) => id !== m.id), m.id],
+                                                                                        );
+                                                                                    }
+                                                                                } else if (selectedModel !== m.id) {
+                                                                                    setSelectedWorkerModels?.(
+                                                                                        [...selectedWorkerModels.filter((id) => id !== m.id), m.id],
+                                                                                    );
+                                                                                }
+                                                                            } else if (selectedModel === m.id) {
+                                                                                const [next, ...rest] = selectedWorkerModels;
+                                                                                if (next) {
+                                                                                    setSelectedModel(next);
+                                                                                    setSelectedWorkerModels?.(rest);
+                                                                                }
+                                                                            } else {
+                                                                                setSelectedWorkerModels?.(
+                                                                                    selectedWorkerModels.filter((id) => id !== m.id),
+                                                                                );
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <span className="flex min-w-0 items-center gap-1.5">
+                                                                            {providerIcon(m.id, 14)}
+                                                                            <span className="truncate">{m.name}</span>
+                                                                        </span>
+                                                                    </DropdownMenuCheckboxItem>
+                                                                );
+                                                            }
                                                             return (
                                                                 <ModelItem
                                                                     key={m.id}

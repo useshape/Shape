@@ -315,23 +315,21 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener("resize", apply);
     }, [clampWorkspace, persistWorkspace, sidebarOpen]);
 
-    const openBrowser = useCallback(() => {
-        if (!project_path) return;
-        persistWorkspace(true);
-        window.dispatchEvent(
-            new CustomEvent("shape-set-active-tab", { detail: "browser" }),
-        );
-    }, [project_path, persistWorkspace]);
-
     useEffect(() => {
-        const onOpenBrowser = () => openBrowser();
-        window.addEventListener("shape-toggle-design-mode", onOpenBrowser);
-        window.addEventListener("shape-open-browser", onOpenBrowser);
-        return () => {
-            window.removeEventListener("shape-toggle-design-mode", onOpenBrowser);
-            window.removeEventListener("shape-open-browser", onOpenBrowser);
+        const onOpenFiles = () => {
+            if (!project_path) return;
+            persistWorkspace(true);
+            window.dispatchEvent(
+                new CustomEvent("shape-set-active-tab", { detail: "files" }),
+            );
         };
-    }, [openBrowser]);
+        window.addEventListener("shape-toggle-design-mode", onOpenFiles);
+        window.addEventListener("shape-open-browser", onOpenFiles);
+        return () => {
+            window.removeEventListener("shape-toggle-design-mode", onOpenFiles);
+            window.removeEventListener("shape-open-browser", onOpenFiles);
+        };
+    }, [project_path, persistWorkspace]);
 
     /** Terminal lives in the chat column dock, not the right workspace. */
     const openWorkspaceTerminal = useCallback(() => {
@@ -395,8 +393,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 open={sidebarOpen}
                 overlay={overlay}
                 onToggleSidebar={toggleSidebar}
-                showBrowser={Boolean(project_path)}
-                onBrowser={openBrowser}
                 onSearch={() => {
                     window.dispatchEvent(
                         new CustomEvent("shape-command-palette", {

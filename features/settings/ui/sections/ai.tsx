@@ -24,7 +24,6 @@ import {
 } from "@/lib/settings";
 import { getShapeAccessToken } from "@/lib/cloud/store";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import {
     SettingSection,
     SettingCard,
@@ -32,6 +31,7 @@ import {
     SettingSelect,
     SettingSwitch,
     SettingNumberSelect,
+    SETTING_CONTROL_BTN,
     MAX_CONTEXT_PRESETS,
 } from "../shared/controls";
 import { WorkflowsEditor } from "./workflows";
@@ -48,7 +48,8 @@ function RulesEditor({ value }: { value: string }) {
             action={
                 <Button
                     size="sm"
-                    variant="secondary"
+                    variant="ghost"
+                    className={SETTING_CONTROL_BTN}
                     disabled={!dirty}
                     onClick={() => updateSettingSection("ai", { customRules: draft })}
                 >
@@ -419,7 +420,7 @@ export function AiSettingsPanel({
                                         : "Index this project so search can find code."}
                                 </div>
                             </div>
-                            <Button variant="secondary" size="sm" className="h-7 shrink-0 rounded-lg px-2.5" disabled={indexing} onClick={() => void handleReindex()}>
+                            <Button variant="ghost" size="sm" className={cn(SETTING_CONTROL_BTN, "shrink-0")} disabled={indexing} onClick={() => void handleReindex()}>
                                 {indexing ? "Indexing…" : "Re-index"}
                             </Button>
                         </div>
@@ -436,39 +437,6 @@ export function AiSettingsPanel({
                                 }
                             />
                         </div>
-                    </div>
-                </SettingCard>
-            </SettingSection>
-            <SettingSection
-                title="API keys"
-                description="Use your own OpenRouter or OpenAI key. Chat goes straight to the provider. OpenRouter is used when both are set."
-            >
-                <SettingCard>
-                    <div className="px-3.5 py-3">
-                        <div className="text-sm font-medium text-text-primary">OpenRouter</div>
-                        <Input
-                            type="password"
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={a.openRouterApiKey}
-                            placeholder="sk-or-…"
-                            className="mt-2"
-                            onChange={(e) => updateSettingSection("ai", { openRouterApiKey: e.target.value })}
-                        />
-                    </div>
-                </SettingCard>
-                <SettingCard>
-                    <div className="px-3.5 py-3">
-                        <div className="text-sm font-medium text-text-primary">OpenAI</div>
-                        <Input
-                            type="password"
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={a.openaiApiKey}
-                            placeholder="sk-…"
-                            className="mt-2"
-                            onChange={(e) => updateSettingSection("ai", { openaiApiKey: e.target.value })}
-                        />
                     </div>
                 </SettingCard>
             </SettingSection>

@@ -38,7 +38,7 @@ import {
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { SettingCard, SettingRow, SettingSection, SettingSelect, SettingSwitch } from "../shared/controls";
+import { SettingCard, SettingRow, SettingSection, SettingSelect, SettingSwitch, SETTING_CONTROL_BTN } from "../shared/controls";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 
 const APPROVAL_OPTIONS: Array<{ value: AutoRunModeSetting; label: string }> = [
@@ -456,9 +456,9 @@ function PluginDetail({
             <Button
                 type="button"
                 onClick={onBack}
-                variant="outline"
-                size="md"
-                className="mb-10 squircle-2xl bg-surface-3"
+                variant="ghost"
+                size="sm"
+                className={cn(SETTING_CONTROL_BTN, "mb-10 w-auto")}
             >
                 <FluentIcon icon={settingsIcons.arrowLeft} />
                 Back
@@ -470,11 +470,11 @@ function PluginDetail({
                     <p className="mt-1 text-sm text-text-muted">{plugin.description}</p>
                 </div>
                 {plugin.connected ? (
-                    <Button variant="outline" size="md" disabled={busy} onClick={onDisconnect}>
+                    <Button variant="ghost" size="sm" className={SETTING_CONTROL_BTN} disabled={busy} onClick={onDisconnect}>
                         Disconnect
                     </Button>
                 ) : (
-                    <Button size="md" disabled={busy} onClick={onConnect}>
+                    <Button size="sm" disabled={busy} onClick={onConnect}>
                         {busy ? "Connecting…" : "Connect"}
                     </Button>
                 )}
@@ -674,9 +674,9 @@ export function PluginsSettingsView() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
-                                        variant="outline"
-                                        size="md"
-                                        className="bg-surface-3 squircle-2xl"
+                                        variant="ghost"
+                                        size="sm"
+                                        className={SETTING_CONTROL_BTN}
                                     >
                                         {categoryLabel}
                                         <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />

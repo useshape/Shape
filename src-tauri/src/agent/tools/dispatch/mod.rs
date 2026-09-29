@@ -6,6 +6,7 @@ mod discover;
 mod files;
 mod git;
 mod meta;
+mod multiwork;
 mod persona;
 mod subagent;
 mod terminal;
@@ -38,6 +39,8 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "save_media",
     "generate_svg",
     "generate_image",
+    "generate_audio",
+    "edit_image",
 ];
 
 const WORKSPACE_UNTRUSTED_MSG: &str =
@@ -111,6 +114,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
             || name == "plugin_run"
             || name == "generate_svg"
             || name == "generate_image"
+            || name == "generate_audio"
+            || name == "edit_image"
             || name == "save_media"
             || name == "browse")
     {
@@ -172,9 +177,18 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "wait" => terminal::tool_wait(&args, ctx).await,
         "save_plan" => meta::tool_save_plan(&args, ctx),
         "spawn_subagent" => subagent::tool_spawn_subagent(&args, ctx).await,
+        "spawn_worker" => multiwork::tool_spawn_worker(&args, ctx).await,
+        "message_worker" => multiwork::tool_message_worker(&args, ctx).await,
+        "broadcast_workers" => multiwork::tool_broadcast_workers(&args, ctx).await,
+        "set_worker_status" => multiwork::tool_set_worker_status(&args, ctx).await,
+        "message_peer" => multiwork::tool_message_peer(&args, ctx).await,
+        "report_orchestrator" => multiwork::tool_report_orchestrator(&args, ctx).await,
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
-        "browse" => crate::agent::tools::browse::tool_browse(&args, ctx).await,
+        "browse" => blocked_outcome(
+            "browse",
+            "The in-app browser was removed. Use web_search and visit_url instead.",
+        ),
         "design_review" => persona::tool_design_review(&args, ctx).await,
         "mcp_search" => meta::tool_mcp_search(&args, ctx).await,
         "mcp_call" => meta::tool_mcp_call_named(&args, ctx).await,
@@ -182,6 +196,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "ask_user" => meta::tool_ask_user(&args, ctx).await,
         "generate_svg" => crate::agent::tools::generate::tool_generate_svg(&args, ctx).await,
         "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,
+        "generate_audio" => crate::agent::tools::generate::tool_generate_audio(&args, ctx).await,
+        "edit_image" => crate::agent::tools::generate::tool_edit_image(&args, ctx).await,
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
         other => {

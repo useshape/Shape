@@ -16,6 +16,7 @@ export function ChatMessageList({
     onFeedback,
     isFileEditResolved,
     emptyState,
+    fullWidthBubbles,
 }: {
     messageGroups: { msg: ChatMessage; msgIdx: number }[][];
     messages: ChatMessage[];
@@ -31,6 +32,7 @@ export function ChatMessageList({
     activeChatTabId?: string;
     /** @deprecated sticky removed */
     stickyTurnIndex?: number;
+    fullWidthBubbles?: boolean;
 }) {
     return (
         <>
@@ -72,6 +74,7 @@ export function ChatMessageList({
                                             onFork={onFork}
                                             onFeedback={onFeedback}
                                             isFileEditResolved={isFileEditResolved}
+                                            fullWidthBubbles={fullWidthBubbles}
                                         />
                                     </div>
                                 );

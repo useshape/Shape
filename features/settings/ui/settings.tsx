@@ -45,6 +45,7 @@ import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { ThemePicker } from "./theme/picker";
 import { normalizeColorTheme } from "@/lib/settings/themes";
 import { FluentIcon } from "./fluent-icons";
+import { ShapeLogo } from "@/components/ui/shape-logo";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
 import { KeyboardShortcutsView } from "./sections/shortcuts";
 import { PluginsSettingsView } from "./sections/plugins";
@@ -1055,7 +1056,11 @@ export function SettingsView({
                                                                 disabled && "pointer-events-none opacity-40",
                                                             )}
                                                         >
-                                                            <FluentIcon icon={leaf.icon} />
+                                                            {leaf.id === "account-profile" ? (
+                                                                <ShapeLogo size={16} className="shrink-0" />
+                                                            ) : (
+                                                                <FluentIcon icon={leaf.icon} />
+                                                            )}
                                                             <span className="min-w-0 flex-1 truncate">{leaf.label}</span>
                                                         </button>
                                                     );

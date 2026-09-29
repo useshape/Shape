@@ -30,7 +30,8 @@ import { providerIcon } from "@/lib/ui/provider-icon";
 import { humanizePluginActionName } from "@/lib/plugins/logos";
 import { PluginActivityCard } from "./plugin-card";
 import { parseWebSearchHits, WebSearchBlock, WebSearchTrail } from "./search";
-import { changedDiffLines, countChangedLines } from "@/lib/ui/diff-count";
+import { countChangedLines } from "@/lib/ui/diff-count";
+import { ChatEditDiff } from "./chat-diff";
 import { ActionLine, splitActionLabel } from "./action-line";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ApprovalCard } from "./approval";
@@ -251,7 +252,7 @@ function ThoughtStep({
     return (
         <ActionLine action="Thought" detail={detail}>
             {expandable ? (
-                <div className="mt-1 max-w-full whitespace-pre-wrap chat-text leading-relaxed text-text-muted">
+                <div className="mt-1 w-full min-w-0 whitespace-pre-wrap chat-text leading-relaxed text-text-muted">
                     {trimmed}
                 </div>
             ) : null}
@@ -266,37 +267,7 @@ function WorkflowEditPreview({
     original: string;
     replacement: string;
 }) {
-    const rows = React.useMemo(
-        () => changedDiffLines(original, replacement),
-        [original, replacement],
-    );
-
-    if (rows.length === 0) return null;
-
-    return (
-        <div className="mt-1 overflow-hidden border-y border-border-subtle bg-surface-3 max-w-full">
-            <div className="max-h-[220px] overflow-y-auto custom-scrollbar font-mono text-sm">
-                {rows.map((row, i) => (
-                    <div
-                        key={`${row.type}-${i}`}
-                        className={cn(
-                            "flex items-start gap-2 px-2 py-px border-l-2",
-                            row.type === "add"
-                                ? "border-l-success/50 bg-success/[0.04] text-success"
-                                : "border-l-error/40 bg-error/[0.04] text-error",
-                        )}
-                    >
-                        <span className="w-8 shrink-0 text-right select-none tabular-nums opacity-70">
-                            {row.num}
-                        </span>
-                        <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">
-                            {row.line || " "}
-                        </span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+    return <ChatEditDiff original={original} replacement={replacement} />;
 }
 
 /**
@@ -412,8 +383,10 @@ function PluginCallStep({ block }: { block: Chunk }) {
     const [localStatus, setLocalStatus] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const status = localStatus ?? block.commandStatus ?? "ok";
-    const toolkit = block.pluginToolkit || "plugins";
-    const label = humanizePluginActionName(block.pluginSlug || "", block.pluginLabel) || "Plugin";
+    const toolkit = block.pluginToolkit || "";
+    const slug = block.pluginSlug || "";
+    const label = humanizePluginActionName(slug, block.pluginLabel) || "Plugin";
+    const discovery = slug === "plugin_list" || slug === "plugin_search" || slug === "plugin_tools";
 
     useEffect(() => {
         if (status !== "pending" || !block.commandId) return;
@@ -451,10 +424,21 @@ function PluginCallStep({ block }: { block: Chunk }) {
             .finally(() => setIsProcessing(false));
     }, [block.commandId, isProcessing]);
 
+    if (discovery || status !== "pending") {
+        const lead = splitActionLabel(label);
+        const failed = status === "error" || status === "rejected" || status === "cancelled";
+        return (
+            <ActionLine
+                action={failed ? "Failed" : lead.action}
+                detail={failed ? lead.detail || label : lead.detail}
+            />
+        );
+    }
+
     return (
         <PluginActivityCard
             toolkit={toolkit}
-            slug={block.pluginSlug}
+            slug={slug}
             label={label}
             body={block.content || ""}
             status={status}
@@ -528,7 +512,7 @@ function StepRow({ block }: { block: Chunk }) {
         return <PluginCallStep block={block} />;
     }
 
-    if (block.type === "generated_svg" || block.type === "generated_image") {
+    if (block.type === "generated_svg" || block.type === "generated_image" || block.type === "generated_audio") {
         return <GeneratedMediaStep block={block} />;
     }
 
@@ -706,7 +690,16 @@ function turnMarks(blocks: Chunk[]) {
                 if (hit.url) urls.push(hit.url);
             }
         }
-        if (block.type === "plugin_call" && block.pluginToolkit) toolkits.push(block.pluginToolkit);
+        if (
+            block.type === "plugin_call"
+            && block.pluginToolkit
+            && block.pluginToolkit !== "plugins"
+            && block.pluginSlug !== "plugin_list"
+            && block.pluginSlug !== "plugin_search"
+            && block.pluginSlug !== "plugin_tools"
+        ) {
+            toolkits.push(block.pluginToolkit);
+        }
     }
     return {
         urls: [...new Set(urls.filter(Boolean))].slice(0, 4),

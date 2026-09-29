@@ -724,6 +724,10 @@ button:focus-visible,
   overflow: visible;
 }
 
+.icon-sm { --icon-size: var(--icon-sm); }
+.icon-md { --icon-size: var(--icon-md); }
+.icon-lg { --icon-size: var(--icon-lg); }
+
 .shape-icon * {
   fill: currentColor;
   stroke: currentColor;
@@ -1444,15 +1448,71 @@ body[data-resizing] .xterm {
   animation: git-generate-shimmer 1.1s linear infinite;
 }
 
+/* Soft morphing gradient for image/SVG generation placeholders. */
+@keyframes preview-blob-a {
+  0%, 100% { transform: translate(-12%, -18%) scale(1); }
+  33% { transform: translate(28%, 8%) scale(1.18); }
+  66% { transform: translate(6%, 32%) scale(0.92); }
+}
+@keyframes preview-blob-b {
+  0%, 100% { transform: translate(42%, 18%) scale(1.05); }
+  40% { transform: translate(-8%, 36%) scale(1.22); }
+  70% { transform: translate(18%, -14%) scale(0.88); }
+}
+@keyframes preview-blob-c {
+  0%, 100% { transform: translate(8%, 48%) scale(1.1); }
+  50% { transform: translate(36%, -6%) scale(0.95); }
+}
+
 .preview-shimmer {
-  background-image: linear-gradient(
-    90deg,
-    var(--color-surface-3, #27272a) 0%,
-    color-mix(in srgb, var(--color-panel-hover, #3f3f46) 80%, white) 45%,
-    var(--color-surface-3, #27272a) 90%
-  );
-  background-size: 200% 100%;
-  animation: git-generate-shimmer 1.2s linear infinite;
+  overflow: hidden;
+  background: var(--color-surface-2, #1c1c1f);
+}
+.preview-shimmer::before,
+.preview-shimmer::after,
+.preview-shimmer > .preview-shimmer-blob {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(28px);
+  opacity: 0.85;
+  will-change: transform;
+}
+.preview-shimmer::before {
+  inset: -20% auto auto -15%;
+  width: 70%;
+  height: 70%;
+  background: color-mix(in srgb, var(--color-accent, #7c6af0) 55%, transparent);
+  animation: preview-blob-a 7s ease-in-out infinite;
+}
+.preview-shimmer::after {
+  inset: auto -18% -22% auto;
+  width: 65%;
+  height: 65%;
+  background: color-mix(in srgb, #56c4ff 50%, transparent);
+  animation: preview-blob-b 8.5s ease-in-out infinite;
+}
+.preview-shimmer > .preview-shimmer-blob {
+  inset: 30% -10% auto 35%;
+  width: 55%;
+  height: 55%;
+  background: color-mix(in srgb, #ff7ab8 45%, transparent);
+  animation: preview-blob-c 6.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .preview-shimmer::before,
+  .preview-shimmer::after,
+  .preview-shimmer > .preview-shimmer-blob {
+    animation: none;
+  }
+  .preview-shimmer {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-accent, #7c6af0) 35%, var(--color-surface-2, #1c1c1f)),
+      color-mix(in srgb, #56c4ff 25%, var(--color-surface-2, #1c1c1f)),
+      color-mix(in srgb, #ff7ab8 20%, var(--color-surface-2, #1c1c1f))
+    );
+  }
 }
 
 .agent-progress-loading-text {
@@ -1531,7 +1591,10 @@ body[data-resizing] .xterm {
 /* ── Smooth expand/collapse for chat workflow dropdowns ── */
 .chat-collapse {
   display: grid;
+  /* 1fr keeps the body as wide as the row. An auto column shrinks to the longest word. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 0fr;
+  width: 100%;
   transition: grid-template-rows 180ms var(--ease-out);
 }
 

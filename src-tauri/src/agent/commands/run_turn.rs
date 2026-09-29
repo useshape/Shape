@@ -21,7 +21,7 @@ pub const MAX_TOOL_LOOPS_VISUAL: usize = 25;
 pub fn max_loops_for_mode(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
         "visual" | "design" => MAX_TOOL_LOOPS_VISUAL,
-        "code" | "agent" | "review" => MAX_TOOL_LOOPS_CODE,
+        "code" | "agent" | "review" | "multiwork" => MAX_TOOL_LOOPS_CODE,
         _ => MAX_TOOL_LOOPS,
     }
 }
@@ -66,13 +66,13 @@ fn readonly_nudge_after(mode: &str) -> usize {
     }
 }
 
-/// Hard-stop a read-only loop. Code mode stops early so a small edit
-/// cannot spend the turn searching.
+/// Hard-stop a read-only loop after enough explore rounds. Code mode needs
+/// room for reviews and multi-file searches before forcing a reply.
 fn readonly_hard_stop_after(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
         "visual" | "design" => 16,
-        "ask" | "plan" => 24,
-        _ => 8,
+        "ask" | "plan" => 32,
+        _ => 32,
     }
 }
 
@@ -162,6 +162,31 @@ fn duplicate_call_message(name: &str) -> String {
         "DUPLICATE CALL BLOCKED: you already called {} with these exact arguments this turn and the result has not changed. \
          Do not repeat it. Use the earlier result, try a different tool or different arguments, or answer the user.",
         name
+    )
+}
+
+fn read_file_path_arg(arguments: &str) -> Option<String> {
+    let args: Value = serde_json::from_str(arguments).ok()?;
+    let path = args.get("path")?.as_str()?.trim().to_string();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
+    }
+}
+
+fn is_access_denied_result(result: &str) -> bool {
+    let lower = result.to_lowercase();
+    lower.contains("access denied")
+        || lower.contains("sensitive file")
+        || lower.contains("cannot be read by the ai")
+}
+
+fn denied_path_retry_message(path: &str) -> String {
+    format!(
+        "Access denied (already told this turn): '{}' is blocked. Do not retry this path. \
+Continue with other files or answer from what you already have.",
+        path
     )
 }
 
@@ -428,6 +453,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut explore_nudge_sent = false;
     let mut last_round_failed = false;
     let mut page_shots: Vec<String> = Vec::new();
+    let mut denied_paths: HashSet<String> = HashSet::new();
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
@@ -677,10 +703,18 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 json!({ "phase": "tool", "tool": tool_calls[0].name }),
             );
 
-            // The duplicate-call guard still applies per call.
+            // The duplicate-call / denied-path guards still apply per call.
             let blocked: Vec<Option<String>> = tool_calls
                 .iter()
                 .map(|call| {
+                    if call.name == "read_file" {
+                        if let Some(path) = read_file_path_arg(&call.arguments) {
+                            let abs = resolve_abs(&path, config.project_path);
+                            if denied_paths.contains(&abs) || denied_paths.contains(&path) {
+                                return Some(denied_path_retry_message(&path));
+                            }
+                        }
+                    }
                     let key = duplicate_call_key(&call.name, &call.arguments);
                     if executed_readonly_calls.insert(key) {
                         None
@@ -727,6 +761,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 results[i] = Some(out);
             }
 
+            let mut round_had_real_explore = false;
             // Emit and record results in the model's original call order.
             for (i, call) in tool_calls.iter().enumerate() {
                 if let Some(msg) = &blocked[i] {
@@ -747,6 +782,14 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     &call.name,
                     &tool_outcome.tool_result,
                 );
+                if call.name == "read_file" && is_access_denied_result(&tool_outcome.tool_result) {
+                    if let Some(path) = read_file_path_arg(&call.arguments) {
+                        denied_paths.insert(resolve_abs(&path, config.project_path));
+                        denied_paths.insert(path);
+                    }
+                } else {
+                    round_had_real_explore = true;
+                }
                 if tool_result_looks_failed(&tool_outcome.tool_result) {
                     round_failed = true;
                 }
@@ -770,20 +813,29 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 read_coverage.clear();
             }
 
-            // Count this parallel read-only batch as one explore round.
+            // Skip explore counting when every call was a duplicate or denied retry.
+            if !round_had_real_explore {
+                last_round_failed = round_failed;
+                continue;
+            }
             consecutive_readonly_rounds += 1;
             let hard_stop = readonly_hard_stop_after(config.mode);
             if consecutive_readonly_rounds >= hard_stop {
                 logging::warn(
                     "chat",
                     &format!(
-                        "Read-only thrash after {} rounds — hard-stopping turn",
+                        "Read-only thrash after {} rounds — synthesizing reply",
                         consecutive_readonly_rounds
                     ),
                 );
-                final_full_response.push_str(
-                    "\n<tool_result>\n[chat] Stopped after too many search/read loops. Ask me to continue with a narrower request.\n</tool_result>\n",
-                );
+                force_text_response(
+                    &mut config,
+                    &mut final_full_response,
+                    &mut total_input_tokens,
+                    &mut total_output_tokens,
+                    NUDGE_CONCISE_USER_REPLY,
+                )
+                .await;
                 break 'outer;
             }
             if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {
@@ -799,6 +851,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         }
 
         let mut round_had_write = false;
+        let mut round_had_real_explore = false;
         for call in tool_calls {
             if config.cancel.is_cancelled() {
                 break 'outer;
@@ -814,6 +867,21 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 json!({ "phase": "tool", "tool": call.name })
             };
             streaming::emit_chat_status(&config.app_handle, tool_status);
+
+            if call.name == "read_file" {
+                if let Some(path) = read_file_path_arg(&call.arguments) {
+                    let abs = resolve_abs(&path, config.project_path);
+                    if denied_paths.contains(&abs) || denied_paths.contains(&path) {
+                        push_tool_result(
+                            config.api_messages,
+                            &call.id,
+                            &call.name,
+                            &denied_path_retry_message(&path),
+                        );
+                        continue;
+                    }
+                }
+            }
 
             // Loop guard: an identical read-only call cannot yield new information.
             // Block it with an actionable message instead of burning another result.
@@ -994,6 +1062,15 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
             push_tool_result(config.api_messages, &call.id, &call.name, &content);
 
+            if call.name == "read_file" && is_access_denied_result(&content) {
+                if let Some(path) = read_file_path_arg(&call.arguments) {
+                    denied_paths.insert(resolve_abs(&path, config.project_path));
+                    denied_paths.insert(path);
+                }
+            } else {
+                round_had_real_explore = true;
+            }
+
             if tool_result_looks_failed(&content) {
                 round_failed = true;
             }
@@ -1090,6 +1167,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
         if round_had_write {
             consecutive_readonly_rounds = 0;
+        } else if !round_had_real_explore {
+            // Denied-path / duplicate-only rounds do not count toward the explore cap.
         } else {
             consecutive_readonly_rounds += 1;
             let hard_stop = readonly_hard_stop_after(config.mode);
@@ -1097,13 +1176,18 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 logging::warn(
                     "chat",
                     &format!(
-                        "Read-only thrash after {} rounds — hard-stopping turn",
+                        "Read-only thrash after {} rounds — synthesizing reply",
                         consecutive_readonly_rounds
                     ),
                 );
-                final_full_response.push_str(
-                    "\n<tool_result>\n[chat] Stopped after too many search/read loops. Ask me to continue with a narrower request.\n</tool_result>\n",
-                );
+                force_text_response(
+                    &mut config,
+                    &mut final_full_response,
+                    &mut total_input_tokens,
+                    &mut total_output_tokens,
+                    NUDGE_CONCISE_USER_REPLY,
+                )
+                .await;
                 break;
             }
             if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {

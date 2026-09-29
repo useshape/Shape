@@ -92,7 +92,7 @@ export function ReviewDebatePanel({
                 onClick={() => setOpen((v) => !v)}
             />
             <Collapse open={open}>
-                <div className="pl-5.5 py-1 text-sm font-medium text-text-primary prose-compact chat-markdown">
+                <div className="w-full min-w-0 py-1 text-sm font-medium text-text-primary prose-compact chat-markdown">
                     <ChatMarkdown content={display} />
                 </div>
             </Collapse>

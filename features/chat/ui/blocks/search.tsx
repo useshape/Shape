@@ -166,7 +166,7 @@ function SourceStack({ sources }: { sources: WebSearchResult[] }) {
 function SourcesBranch({ sources }: { sources: WebSearchResult[] }) {
     const [open, setOpen] = React.useState(true);
     return (
-        <div className="mt-1 pl-5">
+        <div className="mt-1 w-full min-w-0">
             <button
                 type="button"
                 onClick={() => setOpen((value) => !value)}

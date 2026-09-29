@@ -147,6 +147,13 @@ pub struct Conversation {
     /// Hidden from the sidebar; still opens from the command palette.
     #[serde(default)]
     pub archived: bool,
+    /// Regular chat vs Multiwork session.
+    #[serde(default = "default_conversation_kind")]
+    pub kind: String,
+}
+
+fn default_conversation_kind() -> String {
+    "chat".to_string()
 }
 
 /// Click-through questions the agent is waiting on (`ask_user`).
@@ -220,6 +227,8 @@ pub struct AgentState {
     pub current_project: Mutex<Option<String>>,
     pub conversations: Mutex<HashMap<String, Vec<Conversation>>>,
     pub current_conversation_id: Mutex<Option<String>>,
+    /// `chat` or `multiwork` for the active conversation.
+    pub conversation_kind: Mutex<Option<String>>,
     pub cancellation_token: Mutex<CancellationToken>,
     /// Per-conversation cancel tokens so Stop only ends the chat you are looking at.
     pub cancel_tokens: Mutex<HashMap<String, CancellationToken>>,
@@ -285,6 +294,7 @@ impl AgentState {
             current_project: Mutex::new(None),
             conversations: Mutex::new(HashMap::new()),
             current_conversation_id: Mutex::new(None),
+            conversation_kind: Mutex::new(None),
             cancellation_token: Mutex::new(CancellationToken::new()),
             cancel_tokens: Mutex::new(HashMap::new()),
             active_terminals: Mutex::new(std::collections::HashSet::new()),

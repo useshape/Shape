@@ -184,10 +184,9 @@ export function pluginLetter(name: string): string {
     return name.trim().slice(0, 1).toUpperCase() || "?";
 }
 
-export function isShapePluginMeta(toolkit?: string, slug?: string): boolean {
-    const t = (toolkit || "").toLowerCase();
-    const s = (slug || "").toLowerCase();
-    return t === "plugins" || s === "plugin_list" || s === "plugin_search" || s === "plugin_tools";
+/** Meta discovery tools — never force the Shape logo in workflow chips. */
+export function isShapePluginMeta(_toolkit?: string, _slug?: string): boolean {
+    return false;
 }
 
 export function humanizePluginActionName(slug: string, name?: string): string {

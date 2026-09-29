@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../lib/use-chat-session";
@@ -25,6 +25,18 @@ import {
     subscribeSubagents,
     upsertSubagent,
 } from "@/features/agent/subagents/store";
+import {
+    MultiworkBoard,
+    MultiworkConfirmDialog,
+    MultiworkWorkerView,
+    closeWorker,
+    getActiveWorker,
+    getWorkers,
+    isMultiworkMode,
+    setMultiworkFocusConversation,
+    subscribeMultiwork,
+} from "@/features/multiwork";
+import { Button } from "@/components/ui/button";
 
 function stickyPromptText(content: string): string {
     const cleaned = content
@@ -48,10 +60,17 @@ export default function Chat({
 }) {
     const session = useChatSession();
     const activeSubagent = React.useSyncExternalStore(subscribeSubagents, getActiveSubagent, getActiveSubagent);
+    const multiwork = useSyncExternalStore(subscribeMultiwork, isMultiworkMode, () => false);
+    const activeWorker = useSyncExternalStore(subscribeMultiwork, getActiveWorker, getActiveWorker);
+    const workers = useSyncExternalStore(subscribeMultiwork, getWorkers, getWorkers);
 
     React.useEffect(() => {
         setSubagentParentConversation(session.conversationId);
         return () => setSubagentParentConversation(null);
+    }, [session.conversationId]);
+
+    React.useEffect(() => {
+        setMultiworkFocusConversation(session.conversationId);
     }, [session.conversationId]);
 
     React.useEffect(() => {
@@ -203,12 +222,16 @@ export default function Chat({
                 ?? session.messages.at(-1)?.timestamp
                 ?? null
             }
-            subagentTitle={activeSubagent?.title ?? null}
-            subagentModel={activeSubagent?.model ?? null}
+            subagentTitle={activeSubagent?.title ?? activeWorker?.title ?? null}
+            subagentModel={activeSubagent?.model ?? activeWorker?.model ?? null}
             extractedSubagents={extractedSubagents}
-            onCloseSubagent={() => closeSubagent()}
+            onCloseSubagent={() => {
+                closeSubagent();
+                closeWorker();
+            }}
             onSelect={(id) => {
                 closeSubagent();
+                closeWorker();
                 void session.handleSelectChatTab(id);
             }}
         />
@@ -249,6 +272,10 @@ export default function Chat({
             addUploadedFiles={session.addUploadedFiles}
             selectedModel={session.selectedModel}
             setSelectedModel={session.setSelectedModel}
+            selectedWorkerModels={session.selectedWorkerModels}
+            setSelectedWorkerModels={session.setSelectedWorkerModels}
+            multiSelectModels={multiwork}
+            hideModeSelect={multiwork}
             selectedMode={session.selectedMode}
             setSelectedMode={session.setSelectedMode}
             reasoningEffort={session.reasoningEffort}
@@ -276,12 +303,31 @@ export default function Chat({
             {embedded ? null : tabsSlot ? createPortal(titlebar, tabsSlot) : null}
 
             <div className="relative flex min-h-0 flex-1 flex-col">
-                {activeSubagent ? (
+                {activeSubagent && !multiwork ? (
                     <div className="relative min-h-0 flex-1">
                         <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
                             <SubagentChatView />
                         </div>
                     </div>
+                ) : multiwork && activeWorker ? (
+                    <>
+                        <div className={cn("flex shrink-0 items-center gap-2 pt-3", insetX)}>
+                            <Button type="button" variant="ghost" size="xs" onClick={() => closeWorker()}>
+                                Back to chat
+                            </Button>
+                            <span className="truncate text-sm text-text-muted">{activeWorker.title}</span>
+                        </div>
+                        <div className="relative min-h-0 flex-1">
+                            <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
+                                <MultiworkWorkerView />
+                            </div>
+                        </div>
+                        <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
+                            <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
+                                {composer}
+                            </div>
+                        </div>
+                    </>
                 ) : isEmpty && !embedded ? (
                     <div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center pb-8", insetX)}>
                         <div className={cn("flex w-full flex-col items-center gap-5", columnWidth)}>
@@ -317,6 +363,9 @@ export default function Chat({
                                 className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto no-scrollbar select-text", insetX)}
                             >
                                 <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-8 pt-3" : "pb-48 pt-8")}>
+                                    {multiwork && workers.length > 0 ? (
+                                        <MultiworkBoard className="mb-3" />
+                                    ) : null}
                                     <ChatMessageList
                                         messageGroups={session.messageGroups}
                                         messages={session.messages}
@@ -329,6 +378,7 @@ export default function Chat({
                                         onFeedback={session.handleFeedback}
                                         isFileEditResolved={session.isEditResolved}
                                         activeChatTabId={session.activeChatTabId}
+                                        fullWidthBubbles={multiwork}
                                     />
                                 </div>
                             </div>
@@ -372,6 +422,7 @@ export default function Chat({
                     void session.handleSendMessage();
                 }}
             />
+            <MultiworkConfirmDialog />
         </div>
     );
 }

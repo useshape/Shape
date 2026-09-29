@@ -16,6 +16,8 @@ export type WorkspaceTab = {
     title: string;
     /** Absolute path for plan / file tabs. */
     path?: string;
+    url?: string;
+    favicon?: string;
     markdown?: string;
     diff?: {
         id: string;
@@ -35,7 +37,6 @@ export function uid(prefix: string) {
 export const DEFAULT_TABS: WorkspaceTab[] = [
     { id: "graph", kind: "graph", title: "Graph" },
     { id: "files", kind: "files", title: "Files" },
-    { id: "browser", kind: "browser", title: "Browser" },
 ];
 
 export function iconFor(kind: TabKind): IconGlyph {
