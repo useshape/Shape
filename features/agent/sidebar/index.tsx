@@ -271,7 +271,6 @@ export function AgentSidebar({
 
                         {expanded ? (
                             <ChatList
-                                listKind={multiwork ? "multiwork" : "chat"}
                                 onNewChat={() => {
                                     if (multiwork) {
                                         // New Multiwork session (stay in mode).

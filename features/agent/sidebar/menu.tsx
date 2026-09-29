@@ -3,16 +3,13 @@
 import { ArrowEnter20Regular } from "@fluentui/react-icons/headless/svg/arrow-enter";
 import { ArrowExit20Regular } from "@fluentui/react-icons/headless/svg/arrow-exit";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
-import { EyeOff20Regular } from "@fluentui/react-icons/headless/svg/eye-off";
 import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
-import { cn } from "@/lib/utils";
-import { isIncognitoChat, setIncognitoChat, subscribeIncognito } from "@/lib/chat/incognito";
 import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { useGitHubAuth } from "@/lib/github/store";
@@ -65,9 +62,6 @@ export function AccountMenu({ children }: { children: ReactNode }) {
     const shapeAuth = useShapeAuth();
     const githubAuth = useGitHubAuth();
     const { project_path } = useProjectState();
-    const [incognito, setIncognito] = useState(isIncognitoChat());
-
-    useEffect(() => subscribeIncognito(() => setIncognito(isIncognitoChat())), []);
 
     const displayName =
         (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
@@ -157,18 +151,6 @@ export function AccountMenu({ children }: { children: ReactNode }) {
                         Sign in
                     </DropdownMenuItem>
                 )}
-
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                    className={cn(
-                        "cursor-pointer",
-                        incognito && "bg-incognito text-white focus:bg-incognito focus:text-white",
-                    )}
-                    onClick={() => void setIncognitoChat(!incognito)}
-                >
-                    <Icon icon={EyeOff20Regular} />
-                    Incognito
-                </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );

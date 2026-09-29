@@ -10,14 +10,12 @@ import { CodeTextEdit20Filled, CodeTextEdit20Regular } from "@fluentui/react-ico
 import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { ChatMultiple20Filled, ChatMultiple20Regular } from "@fluentui/react-icons/headless/svg/chat-multiple";
-import { Incognito24Filled, Incognito24Regular } from "@fluentui/react-icons/headless/svg/incognito";
 import { CalendarMultiple24Filled, CalendarMultiple24Regular } from "@fluentui/react-icons/headless/svg/calendar-multiple";
 import { ColorLine24Filled, ColorLine24Regular } from "@fluentui/react-icons/headless/svg/color-line";
 import { BugProhibited20Filled, BugProhibited20Regular } from "@fluentui/react-icons/headless/svg/bug-prohibited";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
-import { EyeOff20Regular } from "@fluentui/react-icons/headless/svg/eye-off";
 import { Folder20Regular } from "@fluentui/react-icons/headless/svg/folder";
 import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
 import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
@@ -77,7 +75,6 @@ import {
 import type { BrowserPickedElement } from "@/lib/backend/types";
 import { registerElementMention } from "@/lib/chat/element-mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
-import { isIncognitoChat, setIncognitoChat, subscribeIncognito } from "@/lib/chat/incognito";
 import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
 import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins/api";
 import { PluginLogo } from "@/components/ui/plugin-logo";
@@ -1206,8 +1203,6 @@ export function ChatInput({
     const needsSignIn =
         !shapeAuth.isLoading && !shapeAuth.loggedIn && !hasByokApiKeys(settings.ai);
 
-    const [incognito, setIncognito] = React.useState(() => isIncognitoChat());
-    React.useEffect(() => subscribeIncognito(() => setIncognito(isIncognitoChat())), []);
     const [plusPlugins, setPlusPlugins] = React.useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
     const [pluginQuery, setPluginQuery] = React.useState("");
     const [skills, setSkills] = React.useState<Skill[]>(() => listSkills());
@@ -1298,22 +1293,13 @@ export function ChatInput({
                     </div>
                 ) : null}
 
-                {incognito ? (
-                    <div className="flex items-center justify-center gap-2 px-2 text-sm" style={{ color: "var(--incognito-muted)" }}>
-                        <Icon icon={Incognito24Filled} className="mt-0.5 shrink-0" />
-                        <span>This chat won&apos;t appear in your history and will not be used to train models.</span>
-                    </div>
-                ) : null}
-
                 <div
                     ref={composerBoxRef}
                     className={cn(
                         "relative flex w-full flex-col border transition-colors rounded-full p-1.5",
-                        incognito
-                            ? "border-border bg-incognito"
-                            : "border-border-subtle/20 bg-surface-4",
+                        "border-border-subtle/20 bg-surface-4",
                         uploadedFiles.length > 0 && "rounded-[22px]",
-                        dragOver && !incognito && "bg-surface-3/80",
+                        dragOver && "bg-surface-3/80",
                         needsSignIn && "cursor-default",
                     )}
                     onDrop={needsSignIn ? undefined : handleDrop}
@@ -1379,7 +1365,7 @@ export function ChatInput({
                                 <button
                                     className={cn(
                                         "size-9 shrink-0 p-0 mr-2",
-                                        incognito ? "text-[var(--incognito-muted)]" : "text-text-muted hover:text-text-primary",
+                                        "text-text-muted hover:text-text-primary",
                                         "rounded-full bg-panel-hover hover:bg-panel-active",
                                     )}
                                     aria-label="Add"
@@ -1485,11 +1471,6 @@ export function ChatInput({
                                         )}
                                     </DropdownMenuSubContent>
                                 </DropdownMenuSub>
-                                <DropdownMenuItem onClick={() => void setIncognitoChat(!incognito)}>
-                                    <Icon icon={EyeOff20Regular} />
-                                    Incognito
-                                    {incognito ? <Icon icon={Checkmark20Regular} className="ml-auto" /> : null}
-                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <div className="relative h-6 min-w-0 flex-1">
@@ -1503,10 +1484,7 @@ export function ChatInput({
                         <div
                             ref={mentionOverlayRef}
                             aria-hidden
-                            className={cn(
-                                "pointer-events-none absolute inset-0 z-0 flex items-center overflow-hidden whitespace-pre text-sm font-medium leading-6 no-scrollbar",
-                                incognito ? "text-[var(--incognito-fg)]" : "text-text-primary",
-                            )}
+                            className="pointer-events-none absolute inset-0 z-0 flex items-center overflow-hidden whitespace-pre text-sm font-medium leading-6 text-text-primary no-scrollbar"
                         >
                             {(() => {
                                 const mentionRs = mentionRanges(inputValue);
@@ -1585,7 +1563,7 @@ export function ChatInput({
                                     }
                                     rows={1}
                                     className="relative z-[1] h-6 min-h-6 w-full flex-1 resize-none overflow-hidden border-none bg-transparent text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-nowrap"
-                                    style={{ caretColor: incognito ? "var(--incognito-fg)" : "var(--text-primary)" }}
+                                    style={{ caretColor: "var(--text-primary)" }}
                                 />
                             </ContextMenuTrigger>
                             <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -1640,10 +1618,7 @@ export function ChatInput({
                                 <Button
                                     variant="ghost"
                                     size="xs"
-                                    className={cn(
-                                        "h-8 shrink-0 px-2 font-medium hover:bg-transparent",
-                                        incognito ? "text-[var(--incognito-fg)]" : "text-text-primary",
-                                    )}
+                                    className="h-8 shrink-0 px-2 font-medium text-text-primary hover:bg-transparent"
                                     aria-label="Fast"
                                     disabled={needsSignIn}
                                 >
@@ -1685,13 +1660,8 @@ export function ChatInput({
                             disabled={sendDisabled}
                             className={cn(
                                 "flex size-8 shrink-0 items-center justify-center rounded-full text-white transition-all disabled:opacity-40",
-                                !incognito && (sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted"),
+                                sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted",
                             )}
-                            style={
-                                incognito
-                                    ? { background: sendActive ? "var(--incognito-send)" : "color-mix(in srgb, var(--incognito-send) 35%, transparent)" }
-                                    : undefined
-                            }
                             aria-label={
                                 isLoading && inputValue.trim()
                                     ? "Queue message"

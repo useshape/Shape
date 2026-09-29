@@ -672,26 +672,17 @@ fn report_orchestrator() -> Value {
     )
 }
 
-/// Tools for the Multiwork orchestrator turn (delegate-first; workers do the searching).
+/// Tools for the Multiwork orchestrator turn (delegate-only; workers explore/implement).
 pub fn multiwork_orchestrator_tools(family: ModelFamily) -> Vec<Value> {
-    let mut tools = vec![
-        list_dir(),
-        read_file(),
+    let _ = family;
+    vec![
         spawn_worker(),
         message_worker(),
         broadcast_workers(),
         set_worker_status(),
         ask_user(),
         finish(),
-    ];
-    // Merge tools after workers finish — not for first-pass exploration.
-    tools.insert(tools.len().saturating_sub(2), create_file());
-    if family.uses_apply_patch() {
-        tools.insert(tools.len().saturating_sub(2), apply_patch());
-    } else {
-        tools.insert(tools.len().saturating_sub(2), edit_file());
-    }
-    tools
+    ]
 }
 
 /// Full code tools plus peer messaging for a Multiwork worker.
