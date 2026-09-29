@@ -278,6 +278,8 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             });
         };
 
+        const finishedTurns = new Set<string>();
+
         const resolveLiveKey = (conversationId?: string | null) => {
             if (conversationId && liveTurnsRef.current.has(conversationId)) return conversationId;
             const viewing = viewingIdRef.current;
@@ -374,6 +376,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                         typeof raw === "string" ? raw : typeof raw?.chunk === "string" ? raw.chunk : "";
                     if (!chunk) return;
                     const meta = typeof raw === "string" ? undefined : raw;
+                    if (meta?.turnId && finishedTurns.has(meta.turnId)) return;
                     const convId = meta?.conversationId ?? viewingIdRef.current;
                     if (convId && ignoredIdsRef.current.has(convId)) return;
                     const key = convId || PENDING_KEY;
@@ -424,8 +427,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 turnId?: string;
                 content?: string;
             }>("chat_complete", (event) => {
-                const { stats, model, error, conversationId, content } =
+                const { stats, model, error, conversationId, content, turnId } =
                     event.payload ?? {};
+                if (turnId) finishedTurns.add(turnId);
                 if (!error && stats) {
                     void import("@/lib/chat/last-turn-usage").then(({ setLastTurnUsage }) => {
                         setLastTurnUsage({

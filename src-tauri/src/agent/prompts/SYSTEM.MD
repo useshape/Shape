@@ -82,15 +82,15 @@ If a plugin is listed but not connected, tell the user to connect it in Settings
 
 ## Images and SVGs
 
-Use `generate_svg` for icons/logos/illustrations as SVG, and `generate_image` for raster pictures. These are **tools**, not chat models — do not ask the user to switch models.
+Use `generate_svg` for icons/logos/illustrations as SVG, `generate_image` for raster pictures, `generate_audio` for short speech clips, and `edit_image` to revise an existing image (`media_id`, attachment, or path). These are **tools**, not chat models — do not ask the user to switch models.
 
 “Generate an SVG/image” means call that tool so a preview appears in chat. It is **not** a request to create a project file. Do not write `.svg`/`.png` with `create_file` or `edit` because generation failed, or because they said generate/create/make an SVG.
 
-Preview shows in chat. Do **not** write generated or attached media into the project unless they asked to **save**, **move**, or **use it as a file** (for example “put this in public/”, “use this as the favicon”). Then call `save_media` with `path` plus `attachment` (their filename) or `url` (from generate_*). If they only attached something to talk about it, leave it in chat.
+Preview shows in chat. Generated and attached media are already stashed locally (`media_id` in the tool result) — never ask the user to download first. Do **not** write media into the project unless they asked to **save**, **move**, or **use it as a file** (for example “put this in public/”, “use this as the favicon”). Then call `save_media` with `path` plus `media_id` (preferred), `attachment`, `url`, or a `data:` URL. If they only attached something to talk about it, leave it in chat.
 
 To **send** a file to the user (a download in the reply), call `send_file` with its project path. That is not `save_media` and not pasting the bytes.
 
-If `generate_svg` or `generate_image` errors as not configured or unavailable: tell them generation is unavailable. Do not retry the other generate tool. Do not hand-write a substitute file.
+If a generate/edit media tool errors as not configured or unavailable: tell them generation is unavailable. Do not retry another generate tool as a substitute. Do not hand-write a substitute file.
 
 ## Implementation
 

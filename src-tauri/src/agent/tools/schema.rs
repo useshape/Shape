@@ -58,10 +58,11 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         update_todos(),
         screenshot_page(),
         inspect_runtime(),
-        browse(),
         design_review(),
         generate_svg(),
         generate_image(),
+        generate_audio(),
+        edit_image(),
         save_media(),
         send_file(),
         ask_user(),
@@ -569,6 +570,145 @@ fn spawn_subagent() -> Value {
     )
 }
 
+fn spawn_worker() -> Value {
+    tool(
+        "spawn_worker",
+        "Start a full coding worker on the Multiwork board (max 6). Prefer non-overlapping file scopes. Returns a worker id for messaging and status.",
+        json!({
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short card title."},
+                "task": {"type": "string", "description": "Concrete implementation task for the worker."},
+                "model": {"type": "string", "description": "Optional model id override for this worker."},
+                "files": {
+                    "description": "Optional file/path scope hints (string or array of paths).",
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}}
+                    ]
+                }
+            },
+            "required": ["task"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn message_worker() -> Value {
+    tool(
+        "message_worker",
+        "Send a message on the Multiwork session bus to one worker.",
+        json!({
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "content": {"type": "string"}
+            },
+            "required": ["id", "content"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn broadcast_workers() -> Value {
+    tool(
+        "broadcast_workers",
+        "Broadcast a message to all Multiwork workers on the session bus.",
+        json!({
+            "type": "object",
+            "properties": {
+                "content": {"type": "string"}
+            },
+            "required": ["content"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn set_worker_status() -> Value {
+    tool(
+        "set_worker_status",
+        "Move a worker card between board columns: running, review, or done.",
+        json!({
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "column": {"type": "string", "enum": ["running", "review", "done"]}
+            },
+            "required": ["id", "column"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn message_peer() -> Value {
+    tool(
+        "message_peer",
+        "Message another Multiwork worker or the orchestrator on the session bus.",
+        json!({
+            "type": "object",
+            "properties": {
+                "to": {"type": "string", "description": "Worker id/title or \"orchestrator\"."},
+                "content": {"type": "string"}
+            },
+            "required": ["content"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn report_orchestrator() -> Value {
+    tool(
+        "report_orchestrator",
+        "Report progress or a blocker to the Multiwork orchestrator (updates your board card).",
+        json!({
+            "type": "object",
+            "properties": {
+                "content": {"type": "string"}
+            },
+            "required": ["content"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+/// Tools for the Multiwork orchestrator turn (delegate-first; workers do the searching).
+pub fn multiwork_orchestrator_tools(family: ModelFamily) -> Vec<Value> {
+    let mut tools = vec![
+        list_dir(),
+        read_file(),
+        spawn_worker(),
+        message_worker(),
+        broadcast_workers(),
+        set_worker_status(),
+        ask_user(),
+        finish(),
+    ];
+    // Merge tools after workers finish — not for first-pass exploration.
+    tools.insert(tools.len().saturating_sub(2), create_file());
+    if family.uses_apply_patch() {
+        tools.insert(tools.len().saturating_sub(2), apply_patch());
+    } else {
+        tools.insert(tools.len().saturating_sub(2), edit_file());
+    }
+    tools
+}
+
+/// Full code tools plus peer messaging for a Multiwork worker.
+pub fn multiwork_worker_tools(family: ModelFamily) -> Vec<Value> {
+    let mut tools = all_tools_for_family(family);
+    // Drop research-only subagent; workers get bus tools instead.
+    tools.retain(|t| {
+        t.get("function")
+            .and_then(|f| f.get("name"))
+            .and_then(|n| n.as_str())
+            != Some("spawn_subagent")
+    });
+    insert_before_finish(&mut tools, message_peer());
+    insert_before_finish(&mut tools, report_orchestrator());
+    tools
+}
+
 fn update_todos() -> Value {
     tool(
         "update_todos",
@@ -815,6 +955,40 @@ fn generate_image() -> Value {
     )
 }
 
+fn generate_audio() -> Value {
+    tool(
+        "generate_audio",
+        "Generate a short speech audio clip from text (budget TTS). Preview plays in chat. Media is stashed locally as media_id — use save_media to put it in the project. Do not ask the user to download first.",
+        json!({
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Text to speak."},
+                "voice": {"type": "string", "description": "Optional voice id (provider-specific)."}
+            },
+            "required": ["prompt"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn edit_image() -> Value {
+    tool(
+        "edit_image",
+        "Edit an existing image with a prompt (budget model, not frontier). Pass media_id from a prior generate, an attachment name, or a project path. Result is stashed as media_id.",
+        json!({
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "How to change the image."},
+                "media_id": {"type": "string", "description": "Stashed media id from generate/edit."},
+                "attachment": {"type": "string", "description": "User-attached image filename."},
+                "path": {"type": "string", "description": "Project-relative image path."}
+            },
+            "required": ["prompt"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn send_file() -> Value {
     tool(
         "send_file",
@@ -834,13 +1008,14 @@ fn send_file() -> Value {
 fn save_media() -> Value {
     tool(
         "save_media",
-        "Write an image/SVG into the project. ONLY when the user asked to save, move, or use attached/generated media as a file. Pass `attachment` for a file they attached in chat, or `url` for a generate_svg/generate_image result. Do not call this just because they attached or generated something.",
+        "Write generated or attached media into the project. Prefer `media_id` from generate_*/edit_image (already on disk). Also accepts attachment name, data: URL, or https URL. ONLY when the user asked to save, move, or use the media as a file. Never ask them to download first.",
         json!({
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "Project-relative destination, e.g. public/hero.png or src/assets/logo.svg."},
+                "media_id": {"type": "string", "description": "Id returned by generate_svg/generate_image/generate_audio/edit_image."},
                 "attachment": {"type": "string", "description": "Filename of a user-attached image in this chat."},
-                "url": {"type": "string", "description": "https URL returned by generate_svg or generate_image."}
+                "url": {"type": "string", "description": "https or data: URL from generation."}
             },
             "required": ["path"],
             "additionalProperties": false
@@ -914,29 +1089,6 @@ fn mcp_call() -> Value {
                 "arguments": {"type": "object", "description": "Arguments for that tool.", "additionalProperties": true}
             },
             "required": ["name"],
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn browse() -> Value {
-    tool(
-        "browse",
-        "Drive the page shown in the chat. Pair with web_search: open the URL search found instead of clicking through the site. open and act return element ids, and links include href — open that href instead of clicking the link. act is for buttons, menus, and fields. If the site fails to load, Shape shows its own error — do not click it.",
-        json!({
-            "type": "object",
-            "properties": {
-                "action": {"type": "string", "description": "open, act, observe, click, type, scroll, script, devtools, shot, or stop. open and act already list element ids."},
-                "url": {"type": "string", "description": "Page to open. Required for action open."},
-                "target": {"type": "number", "description": "Element id from observe. Required for action act."},
-                "method": {"type": "string", "description": "For act: click or type. Defaults to click."},
-                "x": {"type": "number", "description": "Horizontal position, 0 (left) to 100 (right). Only for action click."},
-                "y": {"type": "number", "description": "Vertical position, 0 (top) to 100 (bottom). Only for action click."},
-                "text": {"type": "string", "description": "Text to insert. Required for action type."},
-                "dy": {"type": "number", "description": "Scroll delta in pixels. Positive scrolls down."},
-                "script": {"type": "string", "description": "JavaScript evaluated in the page. Required for action script."}
-            },
-            "required": ["action"],
             "additionalProperties": false
         }),
     )

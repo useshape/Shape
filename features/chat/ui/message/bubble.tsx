@@ -28,7 +28,7 @@ export function UserMessageCard({
     );
 }
 
-/** Three-dot typing indicator (iMessage style). */
+/** Circular spinner while the assistant is typing. */
 export function TypingDots({ className }: { className?: string }) {
     return (
         <span className={className} role="status" aria-label="Typing">
@@ -37,7 +37,7 @@ export function TypingDots({ className }: { className?: string }) {
     );
 }
 
-/** Compact working dots for sidebar / chat tabs. */
+/** Compact spinner for sidebar / chat tabs. */
 export function WorkingDots({ className }: { className?: string }) {
     return (
         <Eclipse size={12} className={cn("text-text-muted", className)} aria-hidden />

@@ -17,6 +17,7 @@ import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { countChangedLines } from "@/lib/ui/diff-count";
+import { ChatPatchDiff } from "./chat-diff";
 import { ActionLine, splitActionLabel } from "./action-line";
 import {
     DropdownMenu,
@@ -526,8 +527,8 @@ function GitActionChip({
 
 export function GeneratedMediaStep({ block }: { block: Chunk }) {
     const src = (block.content || "").trim();
-    const isSvg = block.type === "generated_svg";
-    const labelNoun = isSvg ? "SVG" : "image";
+    const labelNoun =
+        block.type === "generated_svg" ? "SVG" : block.type === "generated_audio" ? "audio" : "image";
     if (!src && !block.isGenerating) return null;
     if (block.isGenerating && !src) {
         return <GitActionChip label={`Generating ${labelNoun}`} />;
@@ -535,8 +536,22 @@ export function GeneratedMediaStep({ block }: { block: Chunk }) {
     return (
         <GitActionChip label={`Generated ${labelNoun}`}>
             <div className="flex flex-col gap-2 p-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={labelNoun} className="max-h-56 w-full object-contain rounded-lg bg-surface-2" />
+                {block.type === "generated_audio" ? (
+                    <div className="relative overflow-hidden rounded-lg bg-linear-to-br from-accent/20 via-surface-2 to-surface-3 p-2">
+                        <div className="pointer-events-none absolute -right-6 -top-6 size-20 rounded-full bg-accent/25 blur-2xl" aria-hidden />
+                        <audio controls src={src} className="relative z-10 w-full" preload="metadata" />
+                    </div>
+                ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={src}
+                        alt={labelNoun}
+                        className={cn(
+                            "w-full rounded-lg bg-surface-2",
+                            block.type === "generated_svg" ? "max-h-72 object-contain p-2" : "max-h-56 object-cover",
+                        )}
+                    />
+                )}
             </div>
         </GitActionChip>
     );
@@ -725,28 +740,7 @@ function GitDiffGroup({
         <GitActionChip label={label} detail={fileName} add={add} del={del}>
             <div className="flex flex-col gap-2 p-1">
                 {file ? <FilePill path={file} /> : null}
-                {body.trim() ? (
-                    <pre className="max-h-56 overflow-auto rounded-lg bg-surface-1/80 px-2.5 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all custom-scrollbar">
-                        {body.split("\n").map((line, index) => {
-                            const added = line.startsWith("+") && !line.startsWith("+++");
-                            const removed = line.startsWith("-") && !line.startsWith("---");
-                            return (
-                                <div
-                                    key={index}
-                                    className={cn(
-                                        added && "text-success",
-                                        removed && "text-error",
-                                        !added && !removed && "text-text-muted",
-                                    )}
-                                >
-                                    {line || " "}
-                                </div>
-                            );
-                        })}
-                    </pre>
-                ) : (
-                    <span className="px-1 text-sm text-text-muted">No diff output</span>
-                )}
+                <ChatPatchDiff body={body} />
             </div>
         </GitActionChip>
     );
@@ -763,7 +757,7 @@ export function formatReadTarget(file: {
             : file.start
               ? `:${file.start}`
               : "";
-    return `${file.path}${range}:raw`;
+    return `${file.path}${range}`;
 }
 
 export function estimateReadTokens(files: { path: string; start?: number; end?: number }[]): number {
@@ -916,10 +910,11 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
             };
         case "generated_svg":
         case "generated_image":
+        case "generated_audio":
             return {
                 label: block.isGenerating
-                    ? `Generating ${block.type === "generated_svg" ? "SVG" : "image"}`
-                    : `Generated ${block.type === "generated_svg" ? "SVG" : "image"}`,
+                    ? `Generating ${block.type === "generated_svg" ? "SVG" : block.type === "generated_audio" ? "audio" : "image"}`
+                    : `Generated ${block.type === "generated_svg" ? "SVG" : block.type === "generated_audio" ? "audio" : "image"}`,
                 expandable: true,
                 content: block.content,
             };
@@ -1320,7 +1315,7 @@ export function ActionItem({
         );
     }
 
-    if (block.type === "generated_svg" || block.type === "generated_image") {
+    if (block.type === "generated_svg" || block.type === "generated_image" || block.type === "generated_audio") {
         return <GeneratedMediaStep block={block} />;
     }
 

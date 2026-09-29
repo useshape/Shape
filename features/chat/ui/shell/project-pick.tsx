@@ -1,6 +1,8 @@
 "use client";
 
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
@@ -196,44 +198,23 @@ export function ProjectQuickPick({
                 hint: i < 9 ? `Ctrl+${i + 1}` : undefined,
             }));
         const extras: QuickPickItem[] = [
-            { id: "__browse__", label: "Open folder", description: "Browse a folder on disk", icon: Folder20Filled },
-            ...SCAFFOLD_ITEMS,
             {
-                id: "git",
-                label: "Git URL",
-                description: "Clone from a remote URL",
-                iconNode: mark(<GitUrlMark />),
+                id: "__browse__",
+                label: "Open folder",
+                description: "Browse a folder on disk",
+                icon: FolderOpen20Regular,
             },
             {
-                id: "github",
-                label: "GitHub repository",
-                description: "Clone GitHub owner/repo",
-                iconNode: mark(<GitHubMark />),
-            },
-            {
-                id: "gitlab",
-                label: "GitLab repository",
-                description: "Clone group/project",
-                iconNode: mark(<GitLabMark />),
-            },
-            {
-                id: "bitbucket",
-                label: "Bitbucket repository",
-                description: "Clone workspace/repo",
-                iconNode: mark(<BitbucketMark />),
-            },
-            {
-                id: "azure",
-                label: "Azure DevOps repository",
-                description: "Clone org/project/repo",
-                iconNode: mark(<AzureDevOpsMark />),
+                id: "__create__",
+                label: "Create new project",
+                description: "Scaffold or clone a repository",
+                icon: Add20Regular,
             },
         ];
         return [...rows, ...extras.filter((item) => matchesQuery(item, q))];
     }, [query, recents]);
 
     const sourceItems: QuickPickItem[] = [
-        { id: "local", label: "Open folder", description: "Browse a folder on disk", icon: Folder20Filled },
         ...SCAFFOLD_ITEMS,
         {
             id: "git",
@@ -338,7 +319,7 @@ export function ProjectQuickPick({
                     if (!next) reset();
                     onOpenChange(next);
                 }}
-                placeholder="Open folder, create a project, or clone…"
+                placeholder="Create a project or clone…"
                 query={query}
                 onQueryChange={setQuery}
                 items={sourceItems.filter((item) => matchesQuery(item, q))}
@@ -364,10 +345,9 @@ export function ProjectQuickPick({
             onQueryChange={setQuery}
             items={projectItems}
             onSelect={(item) => {
-                if (item.id === "git" || item.id === "github" || item.id === "gitlab" || item.id === "bitbucket" || item.id === "azure") {
+                if (item.id === "__create__") {
                     setQuery("");
-                    setCloneKind(item.id);
-                    setStep("clone");
+                    setStep("sources");
                     return;
                 }
                 if (handleScaffoldOrLocal(item.id)) return;

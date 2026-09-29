@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 
 
-import { SettingRow, SettingSection, SettingCard } from "../shared/controls";
+import { SettingRow, SettingSection, SettingCard, SETTING_CONTROL_BTN } from "../shared/controls";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import {
     logoutShape,
@@ -101,6 +101,8 @@ export function AccountSettingsPanel() {
                         </div>
                         <Button
                             size="sm"
+                            variant="ghost"
+                            className={SETTING_CONTROL_BTN}
                             onClick={() => requestShapeLogin()}
                             disabled={auth.isLoggingIn}
                         >
@@ -128,9 +130,9 @@ export function AccountSettingsPanel() {
                             </div>
                         </div>
                         <Button
-                            variant="secondary"
-                            size="md"
-                            className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10"
+                            variant="ghost"
+                            size="sm"
+                            className={SETTING_CONTROL_BTN}
                             onClick={() => openShapeBilling()}
                         >
                             Manage billing
@@ -176,9 +178,9 @@ export function AccountSettingsPanel() {
             <SettingSection title="Profile">
                 <SettingRow title="Email" description={auth.email ?? undefined}>
                     <Button
-                        variant="secondary"
-                        size="md"
-                        className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10"
+                        variant="ghost"
+                        size="sm"
+                        className={SETTING_CONTROL_BTN}
                         onClick={() => void refreshShapeAuth()}
                         disabled={auth.revalidating}
                     >
@@ -187,9 +189,9 @@ export function AccountSettingsPanel() {
                 </SettingRow>
                 <SettingRow title="Open dashboard">
                     <Button
-                        variant="secondary"
-                        size="md"
-                        className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10"
+                        variant="ghost"
+                        size="sm"
+                        className={SETTING_CONTROL_BTN}
                         onClick={() => void commands.openUrlExternal(`${SHAPE_API_BASE}/dashboard`)}
                     >
                         Open
@@ -197,7 +199,7 @@ export function AccountSettingsPanel() {
                     </Button>
                 </SettingRow>
                 <SettingRow title="Sign out">
-                    <Button variant="secondary" size="md" className="h-8 gap-1.5 shrink-0 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10" onClick={() => void logoutShape()}>
+                    <Button variant="ghost" size="sm" className={SETTING_CONTROL_BTN} onClick={() => void logoutShape()}>
                         Sign out
                     </Button>
                 </SettingRow>

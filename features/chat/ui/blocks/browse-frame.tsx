@@ -180,9 +180,9 @@ export function BrowseChatCard({
     if (!frame.image.trim()) return null;
 
     return (
-        <div className="w-full max-w-[480px]">
+        <div className="w-full max-w-[300px]">
             <div className="relative">
-                <BrowseStage frame={frame} natural className="overflow-hidden rounded-2xl border border-border-subtle shadow-sm" />
+                <BrowseStage frame={frame} natural className="overflow-hidden rounded-lg border border-border-subtle shadow-md/60" />
                 {controlling ? (
                     <button
                         type="button"

@@ -53,6 +53,8 @@ pub async fn send_chat_message(
     openrouter_api_key: Option<String>,
     #[allow(unused_variables)]
     openai_api_key: Option<String>,
+    models: Option<Vec<String>>,
+    conversation_kind: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -135,8 +137,14 @@ pub async fn send_chat_message(
         "plan" => prompts::PLAN_MD,
         "visual" | "design" => prompts::DESIGN_MD,
         "review" => prompts::REVIEW_MD,
+        "multiwork" => prompts::MULTIWORK_MD,
         _ => "",
     };
+    let is_multiwork = mode_to_use.eq_ignore_ascii_case("multiwork")
+        || conversation_kind
+            .as_deref()
+            .map(|k| k.eq_ignore_ascii_case("multiwork"))
+            .unwrap_or(false);
     if matches!(
         mode_to_use.to_ascii_lowercase().as_str(),
         "visual" | "design"
@@ -165,10 +173,17 @@ pub async fn send_chat_message(
             state.title.lock()?.take();
             *state.history_summary.lock()? = None;
             *state.current_conversation_id.lock()? = None;
+            *state.conversation_kind.lock()? = None;
             state.clear_design_preview_state();
             state.clear_file_checkpoints();
             *active_proj = current_proj_path.clone();
         }
+    }
+
+    if is_multiwork {
+        *state.conversation_kind.lock()? = Some("multiwork".to_string());
+    } else if state.conversation_kind.lock()?.is_none() {
+        *state.conversation_kind.lock()? = Some("chat".to_string());
     }
 
     let stored_user_message = display_message
@@ -211,6 +226,14 @@ pub async fn send_chat_message(
         }
         guard.clone().expect("conversation id just ensured")
     };
+
+    if is_multiwork {
+        let mut pool = models.unwrap_or_default();
+        if pool.is_empty() {
+            pool.push(raw_model.clone());
+        }
+        crate::agent::multiwork::set_model_pool(&owned_conversation_id, pool);
+    }
 
     let turn_id = uuid::Uuid::new_v4().to_string();
     let conversation_id = Some(owned_conversation_id.clone());
@@ -480,7 +503,11 @@ pub async fn send_chat_message(
     turn_context.push_str(&context_string);
     messages::append_turn_context(&mut api_messages, &turn_context);
 
-    let tools = schema::stable_tools(family);
+    let tools = if is_multiwork {
+        schema::multiwork_orchestrator_tools(family)
+    } else {
+        schema::stable_tools(family)
+    };
     let mcp_tokens: u64 = 0;
 
     let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());
@@ -739,7 +766,7 @@ pub async fn send_chat_message(
                     .map(|c| c.history.clone())
                     .unwrap_or_default()
             };
-            history::replace_or_push_assistant(&mut hist, assistant_message);
+            history::replace_or_push_assistant(&mut hist, assistant_message.clone());
             let _ = history::upsert_conversation_snapshot(
                 &state,
                 path,
@@ -748,14 +775,28 @@ pub async fn send_chat_message(
                 hist,
             );
         }
-        // Release any UI still keyed to this turn (e.g. agent window that did not switch).
+        // The open chat is still this turn. Send the same details the menu reads,
+        // even though live history now belongs to whatever the user switched to.
         let _ = app_handle.emit(
             "chat_complete",
             json!({
+                "stats": {
+                    "timeMs": duration_ms,
+                    "cost": 0.0,
+                    "tokens": billed_tokens,
+                    "inputTokens": total_input_tokens,
+                    "outputTokens": total_output_tokens,
+                    "creditsCharged": null,
+                    "usedAuto": used_auto,
+                    "reasoningEffort": &effort_norm,
+                    "mode": &mode_to_use,
+                    "contextBreakdown": breakdown,
+                },
                 "model": model_to_use,
                 "turnId": &turn_id,
                 "conversationId": &owned_conversation_id,
                 "error": interrupt_error,
+                "content": assistant_message.content,
             }),
         );
     } else if still_this_turn {

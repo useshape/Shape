@@ -7,9 +7,22 @@ import { Icon } from "@/components/ui/icon";
 import { Favicon } from "@/components/ui/favicon";
 import { ShimmerText } from "@/components/ui/shimmer-text";
 import { cn } from "@/lib/utils";
+import { hostnameOf } from "@/lib/ui/favicon";
 import { Collapse } from "./collapse";
 
 const MARK_LIMIT = 4;
+
+function uniqueFaviconHosts(urls: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const url of urls) {
+        const host = hostnameOf(url) || url.trim();
+        if (!host || seen.has(host)) continue;
+        seen.add(host);
+        out.push(url);
+    }
+    return out;
+}
 
 /** First word of a sentence is the action; the rest is muted detail. */
 export function splitActionLabel(sentence: string): { action: string; detail?: string } {
@@ -60,7 +73,7 @@ export function ActionLine({
     const isOpen = open ?? uncontrolled;
     const collapsible = children != null && children !== false;
     const interactive = collapsible || Boolean(onClick);
-    const marks = [...new Set((favicons ?? []).filter(Boolean))].slice(0, MARK_LIMIT);
+    const marks = uniqueFaviconHosts(favicons ?? []).slice(0, MARK_LIMIT);
 
     const toggle = () => {
         const next = !isOpen;
@@ -71,7 +84,7 @@ export function ActionLine({
     const Tag = interactive ? "button" : "div";
 
     return (
-        <div>
+        <div className="w-full min-w-0">
             <Tag
                 type={interactive ? "button" : undefined}
                 title={title}
@@ -119,7 +132,7 @@ export function ActionLine({
                     <Icon
                         icon={ChevronRight20Regular}
                         className={cn(
-                            "shrink-0 text-text-muted opacity-50 transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                            "shrink-0 text-text-muted icon-sm transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                             isOpen && "rotate-90",
                         )}
                     />

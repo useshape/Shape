@@ -187,6 +187,12 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
 
     let mut convs = state.conversations.lock()?;
     let list = project_conversation_list(&mut convs, proj_path);
+    let kind = state
+        .conversation_kind
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .unwrap_or_else(|| "chat".to_string());
     if let Some(existing) = list.iter_mut().find(|c| c.id == id) {
         existing.history = history;
         existing.title = title;
@@ -194,6 +200,9 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
         let (locked, anchor) = state.title_meta();
         existing.title_locked = locked;
         existing.title_anchor_turns = anchor;
+        if existing.kind.trim().is_empty() || existing.kind == "chat" {
+            existing.kind = kind;
+        }
         collapse_duplicate_assistants(&mut existing.history);
     } else {
         let (locked, anchor) = state.title_meta();
@@ -206,6 +215,7 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
             title_locked: locked,
             title_anchor_turns: anchor,
             archived: false,
+            kind,
         });
         if let Some(last) = list.last_mut() {
             collapse_duplicate_assistants(&mut last.history);
@@ -246,6 +256,7 @@ pub fn upsert_conversation_snapshot(
             title_locked: false,
             title_anchor_turns: 0,
             archived: false,
+            kind: "chat".to_string(),
         });
         if let Some(last) = list.last_mut() {
             collapse_duplicate_assistants(&mut last.history);

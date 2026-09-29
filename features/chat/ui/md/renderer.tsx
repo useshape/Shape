@@ -120,7 +120,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image' | 'browse_session' | 'chart' | 'insight_card';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card';
     content?: string;
     file?: string;
     query?: string;
@@ -445,7 +445,7 @@ function unescapeXml(s: string): string {
     };
 
     const parseGeneratedMediaBlock = (
-        type: "generated_svg" | "generated_image",
+        type: "generated_svg" | "generated_image" | "generated_audio",
         tagFull: string,
         content: string,
         isGenerating: boolean,
@@ -528,6 +528,7 @@ function unescapeXml(s: string): string {
             { type: 'generated_svg', start: '<generated_svg', end: '</generated_svg>' },
             { type: 'generated_svg', start: '<recraft_svg', end: '</recraft_svg>' },
             { type: 'generated_image', start: '<generated_image', end: '</generated_image>' },
+            { type: 'generated_audio', start: '<generated_audio', end: '</generated_audio>' },
             { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
             { type: 'browse_session', start: '<browse_session', end: '</browse_session>' },
             { type: 'chart', start: '<chart', end: '</chart>' },
@@ -678,8 +679,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_call') {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, false));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 chunks.push(parseSentFileBlock(tagFull, content));
             } else {
@@ -774,9 +775,9 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, true));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, true));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -871,9 +872,9 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image') {
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image", tagFull, content, false));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -1239,11 +1240,17 @@ export function MessageRenderer({
                 />
             );
         }
-        if (chunk.type === 'generated_svg' || chunk.type === 'generated_image') {
+        if (chunk.type === 'generated_svg' || chunk.type === 'generated_image' || chunk.type === 'generated_audio') {
             return (
                 <GeneratedMediaCard
                     key={`media-${index}`}
-                    kind={chunk.type === "generated_svg" ? "svg" : "image"}
+                    kind={
+                        chunk.type === "generated_svg"
+                            ? "svg"
+                            : chunk.type === "generated_audio"
+                              ? "audio"
+                              : "image"
+                    }
                     src={chunk.content}
                     prompt={chunk.mediaPrompt || chunk.query}
                     credits={chunk.mediaCredits}

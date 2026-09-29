@@ -181,6 +181,14 @@ pub fn resolve_safe_path(user_path: &str, project_root: &str) -> Result<PathBuf,
     Ok(resolved)
 }
 
+/// Template env files are safe to read (no secrets); real `.env*` stay blocked.
+fn is_env_template_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        ".env.example" | ".env.sample" | ".env.template"
+    )
+}
+
 /// Check if a file path targets a sensitive file that should not be accessible.
 pub fn is_sensitive_path(path: &Path) -> bool {
     let name = path
@@ -188,9 +196,9 @@ pub fn is_sensitive_path(path: &Path) -> bool {
         .and_then(|n| n.to_str())
         .unwrap_or("");
 
-    // Any `.env*` / `*.env` variant (`.env.staging`, `local.env`, …).
+    // Any `.env*` / `*.env` variant (`.env.staging`, `local.env`, …), except templates.
     if ascii_eq_ignore_case(name, ".env")
-        || name.to_ascii_lowercase().starts_with(".env.")
+        || (name.to_ascii_lowercase().starts_with(".env.") && !is_env_template_name(name))
         || ascii_ends_with_ignore_case(name, ".env")
     {
         return true;
@@ -319,9 +327,13 @@ mod tests {
     #[test]
     fn test_sensitive_detection() {
         assert!(is_sensitive_path(Path::new("/project/.env")));
+        assert!(is_sensitive_path(Path::new("/project/.env.local")));
         assert!(is_sensitive_path(Path::new("/project/.git/config")));
         assert!(is_sensitive_path(Path::new("/project/id_rsa")));
         assert!(!is_sensitive_path(Path::new("/project/src/main.rs")));
+        assert!(!is_sensitive_path(Path::new("/project/.env.example")));
+        assert!(!is_sensitive_path(Path::new("/project/.env.sample")));
+        assert!(!is_sensitive_path(Path::new("/project/.env.template")));
     }
 
     #[test]

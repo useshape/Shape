@@ -109,7 +109,7 @@ function SortableChatTab({
                         )}
                     >
                         {generating ? (
-                            <WorkingDots className="imsg-typing imsg-typing-sm shrink-0" />
+                            <WorkingDots className="shrink-0" />
                         ) : tab.gitStatus ? (
                             <span
                                 className={cn(

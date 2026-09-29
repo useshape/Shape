@@ -24,8 +24,9 @@ const containerClasses =
     "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border-secondary bg-surface-4/80 backdrop-blur-sm text-text-primary shadow-md";
 const shortcutClasses =
     "ml-auto shrink-0 pr-1 text-sm text-text-muted group-focus:text-text-primary";
-/** Tight inset — rows sit near the panel edge (Cursor-style). */
+/** Inset so rows and the panel sit off the edges. */
 const menuInsetClasses = "p-1";
+const menuCollisionPadding = 8;
 
 /** Overflow scrim — GitLab-style fade when the panel can scroll. */
 function DropdownScrollScrim({ side, visible }: { side: "up" | "down"; visible: boolean }) {
@@ -147,13 +148,14 @@ DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayNam
 const DropdownMenuSubContent = React.forwardRef<
     React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
     React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
->(({ className, sideOffset = 4, children, ...props }, ref) => {
+>(({ className, sideOffset = 4, collisionPadding = menuCollisionPadding, children, ...props }, ref) => {
     const overlayRoot = useOverlayRoot();
     return (
     <DropdownMenuPrimitive.Portal container={overlayRoot}>
         <DropdownMenuPrimitive.SubContent
             ref={ref}
             sideOffset={sideOffset}
+            collisionPadding={collisionPadding}
             className={cn(
                 containerClasses,
                 "min-w-32 max-h-[var(--radix-dropdown-menu-sub-content-available-height,_80vh)] p-0",
@@ -179,13 +181,14 @@ const DropdownMenuContent = React.forwardRef<
     React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
         portalled?: boolean;
     }
->(({ className, sideOffset = 4, align = "start", children, portalled = true, ...props }, ref) => {
+>(({ className, sideOffset = 4, align = "start", collisionPadding = menuCollisionPadding, children, portalled = true, ...props }, ref) => {
     const overlayRoot = useOverlayRoot();
     const content = (
         <DropdownMenuPrimitive.Content
             ref={ref}
             sideOffset={sideOffset}
             align={align}
+            collisionPadding={collisionPadding}
             className={cn(
                 containerClasses,
                 "min-w-32 max-h-[var(--radix-dropdown-menu-content-available-height,_80vh)] p-0",
@@ -496,11 +499,12 @@ MenubarSubTrigger.displayName = MenubarPrimitive.SubTrigger.displayName;
 const MenubarSubContent = React.forwardRef<
     React.ElementRef<typeof MenubarPrimitive.SubContent>,
     React.ComponentPropsWithoutRef<typeof MenubarPrimitive.SubContent>
->(({ className, sideOffset = 4, ...props }, ref) => (
+>(({ className, sideOffset = 4, collisionPadding = menuCollisionPadding, ...props }, ref) => (
     <MenubarPrimitive.Portal>
         <MenubarPrimitive.SubContent
             ref={ref}
             sideOffset={sideOffset}
+            collisionPadding={collisionPadding}
             className={cn(
                 containerClasses,
                 "min-w-32",
@@ -516,13 +520,14 @@ MenubarSubContent.displayName = MenubarPrimitive.SubContent.displayName;
 const MenubarContent = React.forwardRef<
     React.ElementRef<typeof MenubarPrimitive.Content>,
     React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Content>
->(({ className, alignOffset = -4, sideOffset = 4, ...props }, ref) => (
+>(({ className, alignOffset = -4, sideOffset = 4, collisionPadding = menuCollisionPadding, ...props }, ref) => (
     <MenubarPrimitive.Portal>
         <MenubarPrimitive.Content
             ref={ref}
             align="start"
             alignOffset={alignOffset}
             sideOffset={sideOffset}
+            collisionPadding={collisionPadding}
             className={cn(
                 containerClasses,
                 "min-w-32",

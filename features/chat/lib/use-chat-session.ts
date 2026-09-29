@@ -45,6 +45,14 @@ import { loadProjectRules } from "@/lib/workspace/rules";
 import { isWorkspaceTrusted } from "@/lib/workspace/trust";
 import { clearAllDesignPreviewSessions } from "@/lib/agent-preview/store";
 import {
+    applyBusEvent,
+    applyWorkerEvent,
+    confirmMultiworkStart,
+    isMultiworkMode,
+    resetMultiworkSession,
+    setMultiworkMode,
+} from "@/features/multiwork";
+import {
     createPendingAttachment,
     processAttachment,
     type ComposerAttachment,
@@ -180,6 +188,7 @@ export function useChatSession() {
     const [selectedModel, setSelectedModel] = React.useState(
         () => readComposerPrefs().model || "auto",
     );
+    const [selectedWorkerModels, setSelectedWorkerModels] = React.useState<string[]>([]);
     const selectedModelRef = React.useRef(selectedModel);
     selectedModelRef.current = selectedModel;
     const appliedDefaultModelRef = React.useRef(Boolean(readComposerPrefs().model));
@@ -810,6 +819,13 @@ export function useChatSession() {
             return false;
         }
 
+        const multiwork = isMultiworkMode();
+        const isFirstMultiworkSend = multiwork && messagesRef.current.length === 0;
+        if (isFirstMultiworkSend) {
+            const ok = await confirmMultiworkStart();
+            if (!ok) return false;
+        }
+
         sendingInFlightRef.current = true;
 
         let userMsg = messageContent;
@@ -968,10 +984,17 @@ export function useChatSession() {
             const messageWithWorkflows = applyWorkflows(expandedMessage, settings.ai.workflows);
             const pluginAutoAllow = matchWorkflows(userMsg, settings.ai.workflows).flatMap(workflowAllowKeys);
 
+            const workerModels = multiwork
+                ? [
+                      selectedModel,
+                      ...selectedWorkerModels.filter((id) => id && id !== selectedModel),
+                  ]
+                : undefined;
+
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 selectedModel,
-                selectedMode,
+                multiwork ? "Multiwork" : selectedMode,
                 mergedRules,
                 token,
                 undefined,
@@ -989,6 +1012,8 @@ export function useChatSession() {
                 fastMode ? "priority" : null,
                 undefined,
                 userMsg,
+                workerModels,
+                multiwork ? "multiwork" : undefined,
             );
             await refreshMetadata();
             return true;
@@ -1245,7 +1270,7 @@ export function useChatSession() {
                 prev.map((m, i) => (i === msgIdx ? { ...m, feedback: value || undefined } : m)),
             );
             try {
-                await commands.setMessageFeedback(msgIdx, value);
+                await commands.setMessageFeedback(msgIdx, value, conversationIdRef.current);
             } catch (err) {
                 console.error("Failed to save feedback:", err);
             }
@@ -1353,6 +1378,10 @@ export function useChatSession() {
             setSendError(null);
             setMessages([]);
             setContextSummarized(false);
+            if (isMultiworkMode()) {
+                // New Multiwork session only (Sessions → new). Main New Chat turns mode off first.
+                resetMultiworkSession();
+            }
             void import("@/features/agent/subagents/store").then(({ resetSubagents }) => {
                 resetSubagents();
             });
@@ -1496,6 +1525,12 @@ export function useChatSession() {
                 setContextSummarized(false);
                 const history = await commands.getChatHistory();
                 setMessages(history);
+                if (conv?.kind === "multiwork") {
+                    // Re-enter Multiwork without wiping background workers for this session.
+                    setMultiworkMode(true);
+                } else if (isMultiworkMode()) {
+                    setMultiworkMode(false);
+                }
                 await refreshHistory(true);
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
@@ -1517,6 +1552,27 @@ export function useChatSession() {
         window.addEventListener("shape-chat-load", onLoad as EventListener);
         return () => window.removeEventListener("shape-chat-load", onLoad as EventListener);
     }, [handleLoadConversation]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        const unlisteners: (() => void)[] = [];
+        void listen("multiwork-worker", (event) => {
+            applyWorkerEvent((event.payload ?? {}) as Parameters<typeof applyWorkerEvent>[0]);
+        }).then((fn) => {
+            if (cancelled) fn();
+            else unlisteners.push(fn);
+        });
+        void listen("multiwork-bus", (event) => {
+            applyBusEvent((event.payload ?? {}) as Parameters<typeof applyBusEvent>[0]);
+        }).then((fn) => {
+            if (cancelled) fn();
+            else unlisteners.push(fn);
+        });
+        return () => {
+            cancelled = true;
+            unlisteners.forEach((fn) => fn());
+        };
+    }, []);
 
     React.useEffect(() => {
         const onRename = (e: Event) => {
@@ -1620,6 +1676,8 @@ export function useChatSession() {
         addUploadedFiles,
         selectedModel,
         setSelectedModel,
+        selectedWorkerModels,
+        setSelectedWorkerModels,
         selectedMode,
         setSelectedMode,
         reasoningEffort,

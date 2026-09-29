@@ -50,6 +50,7 @@ import { UserMessageCard } from "./bubble";
 import { ContextChip, MentionChipIcon, WorkflowChipIcon } from "./context-chip";
 import { GeneratingIndicator } from "../blocks/generating";
 import { isAutoModelId } from "@/lib/chat/usage-display";
+import { commands } from "@/lib/backend/commands";
 import { parseUserAttachments } from "../../lib/user-attachments";
 import type { ParsedUserAttachment } from "../../lib/user-attachments";
 import { MessageAttachmentPill } from "../composer/attachments";
@@ -110,6 +111,7 @@ type ChatMessageItemProps = {
     onFeedback?: (index: number, value: "up" | "down" | null) => void;
     feedback?: "up" | "down" | null;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
+    fullWidthBubbles?: boolean;
 };
 
 function SentAttachmentPill({ att }: { att: ParsedUserAttachment }) {
@@ -284,13 +286,23 @@ function ChatMessageItemInner({
     onFeedback,
     feedback,
     isFileEditResolved,
+    fullWidthBubbles,
 }: ChatMessageItemProps) {
     const [expanded, setExpanded] = React.useState(false);
     const [forkOpen, setForkOpen] = React.useState(false);
     const [menuOpen, setMenuOpen] = React.useState(false);
+    const [menuStats, setMenuStats] = React.useState(stats);
+    const [menuModel, setMenuModel] = React.useState(model);
     const [advanced, setAdvanced] = React.useState(false);
     const [contextVeil, setContextVeil] = React.useState(true);
     const bodyRef = React.useRef<HTMLDivElement>(null);
+    const shownStats = menuStats ?? stats;
+    const shownModel = menuModel ?? model;
+
+    React.useEffect(() => {
+        setMenuStats(stats);
+        setMenuModel(model);
+    }, [stats, model]);
 
     const getCopyText = () => {
         if (role === "user") {
@@ -372,13 +384,16 @@ function ChatMessageItemInner({
             <ContextMenu>
             <ContextMenuTrigger asChild>
             <div
-                className="relative mb-2 flex w-full select-text justify-end pl-10"
+                className={cn(
+                    "relative mb-2 flex w-full select-text justify-end",
+                    !fullWidthBubbles && "pl-10",
+                )}
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
-                <div className="group inline-flex max-w-[min(100%,36rem)] items-start gap-2">
-                    <div className="flex min-w-0 flex-col items-end gap-1">
-                        <UserMessageCard>
+                <div className={cn("group inline-flex items-start gap-2", fullWidthBubbles ? "w-full max-w-none" : "max-w-[min(100%,36rem)]")}>
+                    <div className={cn("flex min-w-0 flex-col gap-1", fullWidthBubbles ? "w-full items-stretch" : "items-end")}>
+                        <UserMessageCard className={fullWidthBubbles ? "max-w-none w-full" : undefined}>
                             <div
                                 role={isLong ? "button" : undefined}
                                 tabIndex={isLong ? 0 : undefined}
@@ -405,7 +420,7 @@ function ChatMessageItemInner({
                                 </div>
                             </div>
                         </UserMessageCard>
-                        <div className="flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className={cn("flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100", fullWidthBubbles && "justify-end")}>
                             <Tooltip content="Copy Message" side="top">
                                 <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
                                     <Icon icon={Clipboard20Regular} />
@@ -418,7 +433,7 @@ function ChatMessageItemInner({
                             </Tooltip>
                         </div>
                     </div>
-                    <UserMessageAvatar />
+                    {fullWidthBubbles ? null : <UserMessageAvatar />}
                 </div>
             </div>
             </ContextMenuTrigger>
@@ -549,7 +564,15 @@ function ChatMessageItemInner({
                         if (!open) {
                             setAdvanced(false);
                             setContextVeil(true);
+                            return;
                         }
+                        if (typeof index !== "number" || index < 0) return;
+                        void commands.getChatHistory().then((history) => {
+                            const msg = history[index];
+                            if (!msg || msg.role !== "assistant") return;
+                            if (msg.stats) setMenuStats(msg.stats);
+                            if (msg.model) setMenuModel(msg.model);
+                        }).catch(() => {});
                     }}
                     >
                         <DropdownMenuTrigger asChild>
@@ -574,41 +597,41 @@ function ChatMessageItemInner({
                             ) : null}
                             <div className="relative overflow-hidden">
                                 <div className="flex flex-col gap-2 p-1 chat-text">
-                                {formatMessageModelLabel(model, stats) ? (
-                                    <DetailRow label="Model" value={formatMessageModelLabel(model, stats)} />
+                                {formatMessageModelLabel(shownModel, shownStats) ? (
+                                    <DetailRow label="Model" value={formatMessageModelLabel(shownModel, shownStats)} />
                                 ) : null}
-                                {stats || model ? (
+                                {shownStats || shownModel ? (
                                     <DetailRow
                                         label="Routing"
                                         value={
-                                            stats?.usedAuto || isAutoModelId(model)
+                                            shownStats?.usedAuto || isAutoModelId(shownModel)
                                                 ? "Auto"
                                                 : "Explicit"
                                         }
                                     />
                                 ) : null}
-                                {stats?.mode ? <DetailRow label="Mode" value={stats.mode} /> : null}
-                                {stats?.reasoningEffort ? (
+                                {shownStats?.mode ? <DetailRow label="Mode" value={shownStats.mode} /> : null}
+                                {shownStats?.reasoningEffort ? (
                                     <DetailRow
                                         label="Reasoning"
                                         value={
-                                            stats.reasoningEffort.charAt(0).toUpperCase()
-                                            + stats.reasoningEffort.slice(1)
+                                            shownStats.reasoningEffort.charAt(0).toUpperCase()
+                                            + shownStats.reasoningEffort.slice(1)
                                         }
                                     />
                                 ) : null}
-                                {stats?.timeMs != null ? (
+                                {shownStats?.timeMs != null ? (
                                     <DetailRow
                                         label="Elapsed"
                                         value={
-                                            stats.timeMs < 1000
-                                                ? `${Math.round(stats.timeMs)}ms`
-                                                : `${(stats.timeMs / 1000).toFixed(1)}s`
+                                            shownStats.timeMs < 1000
+                                                ? `${Math.round(shownStats.timeMs)}ms`
+                                                : `${(shownStats.timeMs / 1000).toFixed(1)}s`
                                         }
                                     />
                                 ) : null}
                                 </div>
-                                {hasContextWindowData(stats?.contextBreakdown, stats?.inputTokens, stats?.outputTokens) ? (
+                                {hasContextWindowData(shownStats?.contextBreakdown, shownStats?.inputTokens, shownStats?.outputTokens) ? (
                                     <>
                                         <div
                                             className="grid transition-[grid-template-rows] duration-500 ease-out"
@@ -620,9 +643,9 @@ function ChatMessageItemInner({
                                         >
                                             <div className="min-h-0 px-2 pt-1 pb-1">
                                                 <ContextWindowMenu
-                                                    breakdown={stats?.contextBreakdown}
-                                                    inputTokens={stats?.inputTokens}
-                                                    outputTokens={stats?.outputTokens}
+                                                    breakdown={shownStats?.contextBreakdown}
+                                                    inputTokens={shownStats?.inputTokens}
+                                                    outputTokens={shownStats?.outputTokens}
                                                 />
                                             </div>
                                         </div>

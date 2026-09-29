@@ -2,11 +2,14 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { isBrowserTab } from "@/lib/window/browser-tab";
-import { WorkspacePreview } from "./preview";
 
 export function FileEditor({ path }: { path: string }) {
     if (isBrowserTab(path)) {
-        return <WorkspacePreview />;
+        return (
+            <div className="flex h-full items-center justify-center p-4 text-sm text-text-muted">
+                The in-app browser was removed.
+            </div>
+        );
     }
 
     return <CodeEditor path={path} />;

@@ -1,7 +1,9 @@
 //! Headless Chromium for the agent's `browse` tool and design-review personas.
-//! The Browser tab the user drives is a child webview (`surface`), not this.
+//! The Browser tab the user drives is an iframe in the main webview (`surface`), not this.
 
 pub mod cdp;
+#[cfg(windows)]
+pub mod devtools_dock;
 pub mod surface;
 
 use std::path::PathBuf;

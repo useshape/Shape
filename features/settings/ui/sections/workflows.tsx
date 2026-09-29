@@ -28,7 +28,7 @@ import { fetchPlugins, fetchPluginTools, peekPluginsCache, type PluginRow, type 
 import { newWorkflowId, workflowPluginTools, type AgentWorkflow } from "@/lib/chat/workflows";
 import { updateSettingSection } from "@/lib/settings";
 import { cn } from "@/lib/utils";
-import { SettingActionRow, SettingCard, SettingSection } from "../shared/controls";
+import { SettingActionRow, SettingCard, SettingSection, SETTING_CONTROL_BTN } from "../shared/controls";
 
 export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
     const [open, setOpen] = React.useState(false);
@@ -339,9 +339,9 @@ function PluginPicker({
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button
-                        variant="outline"
-                        size="md"
-                        className="w-full justify-between gap-2 bg-panel-hover!"
+                        variant="ghost"
+                        size="sm"
+                        className={cn(SETTING_CONTROL_BTN, "w-full")}
                     >
                         <span className="flex min-w-0 items-center gap-2">
                             {selected ? (

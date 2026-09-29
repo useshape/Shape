@@ -43,8 +43,10 @@ import {
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { commands } from "@/lib/backend";
 import { languageForPath } from "./lang";
+import { shapeSyntaxLinter } from "./syntax-lint";
 import { SHAPE_CLIP_CODE, rememberShapeClip } from "@/features/chat/lib/shape-clip";
 import { shapeEditorChrome } from "./theme";
+import { lintGutter } from "@codemirror/lint";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -138,7 +140,7 @@ export function CodeMirrorEditor({
                         run: openSearchPanel,
                     },
                 ]),
-                ...(lang ? [lang] : []),
+                ...(lang ? [lang, shapeSyntaxLinter(path), lintGutter()] : []),
                 EditorView.updateListener.of((update) => {
                     if (!update.docChanged) return;
                     const next = update.state.doc.toString();

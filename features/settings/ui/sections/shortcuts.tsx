@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
+import { SETTING_CONTROL_BTN } from "../shared/controls";
 import { notify } from "@/features/notifications";
 import {
     DropdownMenu,
@@ -300,7 +301,7 @@ export function KeyboardShortcutsView() {
                         />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button type="button" variant="outline" size="md" className="gap-1.5 bg-panel-hover">
+                                <Button type="button" variant="ghost" size="sm" className={SETTING_CONTROL_BTN}>
                                     <FluentIcon icon={settingsIcons.download} />
                                     Import
                                 </Button>
@@ -319,9 +320,9 @@ export function KeyboardShortcutsView() {
                         </DropdownMenu>
                         <Button
                             type="button"
-                            variant="outline"
-                            size="md"
-                            className="gap-1.5 bg-panel-hover"
+                            variant="ghost"
+                            size="sm"
+                            className={SETTING_CONTROL_BTN}
                             onClick={() => void onExportJson()}
                         >
                             <FluentIcon icon={settingsIcons.upload} />
@@ -329,9 +330,9 @@ export function KeyboardShortcutsView() {
                         </Button>
                         <Button
                             type="button"
-                            variant="outline"
-                            size="md"
-                            className="gap-1.5 bg-panel-hover"
+                            variant="ghost"
+                            size="sm"
+                            className={SETTING_CONTROL_BTN}
                             onClick={() => {
                                 resetKeybindingOverrides();
                                 reload();

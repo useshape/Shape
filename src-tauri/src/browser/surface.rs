@@ -1,26 +1,190 @@
-//! The Browser tab the user drives. Each tab is a child webview inside the main
-//! window (Tauri multi-webview). Shape draws the toolbar; the webview draws the
-//! page. Built-in error pages and the WebView2 context menu are turned off.
-//!
+//! The Browser tab the user drives is an iframe in the main webview, not a
+//! second window. WebView2's `AdditionalAllowedFrameAncestors` lets that named
+//! frame load sites that send `X-Frame-Options` or a tight `frame-ancestors`.
 //! The agent's browser is a separate headless process and does not come through here.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl};
+use tauri::{AppHandle, Emitter, Manager};
+
+const FRAME_NAME: &str = "shape-browser";
+const TOOLS_NAME: &str = "shape-devtools";
+
+/// Origins that may frame the page. The live document origin is prepended when
+/// the frame is created. No wildcard: a framed site must be inside Shape.
+const ANCESTORS: &str = "http://localhost:48921 http://127.0.0.1:48921 http://tauri.localhost https://tauri.localhost http://asset.localhost https://asset.localhost";
 
 const HOST_SCRIPT: &str = r##"
 (function () {
+  if (window.name !== "shape-browser") return;
   if (window.__shapeBrowser) return;
   window.__shapeBrowser = true;
+  var mode = "__SHAPE_SCHEME__";
+  var nativeMatch = window.matchMedia.bind(window);
+  var realMatches = Object.getOwnPropertyDescriptor(window.MediaQueryList.prototype, "matches");
+  var tracked = [];
+  function forced(query) {
+    if (mode !== "light" && mode !== "dark") return null;
+    var text = String(query);
+    if (text.indexOf("prefers-color-scheme") < 0) return null;
+    if (text.indexOf("dark") >= 0) return mode === "dark";
+    if (text.indexOf("light") >= 0) return mode === "light";
+    return null;
+  }
+  window.matchMedia = function (query) {
+    var list = nativeMatch(query);
+    if (forced(query) == null || !realMatches || typeof realMatches.get !== "function") return list;
+    try {
+      Object.defineProperty(list, "matches", {
+        configurable: true,
+        get: function () {
+          var next = forced(query);
+          return next == null ? realMatches.get.call(list) : next;
+        }
+      });
+    } catch (err) {
+      return list;
+    }
+    tracked.push(list);
+    return list;
+  };
+  function retarget() {
+    tracked.forEach(function (list) {
+      var event;
+      try {
+        event = new MediaQueryListEvent("change", { matches: list.matches, media: list.media });
+      } catch (err) {
+        event = new Event("change");
+      }
+      try { list.dispatchEvent(event); } catch (err) {}
+    });
+  }
   window.__shapePick = false;
   function send(payload) {
+    try { parent.postMessage(payload, "*"); } catch (e) {}
+  }
+  function pageTitle() {
+    var title = String(document.title || "").trim();
+    if (!title) return "";
+    if (title === location.href) return "";
+    try {
+      var parsed = new URL(title);
+      if (parsed.hostname === location.hostname) return "";
+    } catch (err) {}
+    return title;
+  }
+  function faviconHref() {
+    var nodes = document.querySelectorAll("link[rel]");
+    var best = "";
+    var score = -1;
+    for (var i = 0; i < nodes.length; i++) {
+      var rel = String(nodes[i].getAttribute("rel") || "").toLowerCase();
+      if (rel.indexOf("icon") < 0) continue;
+      var href = nodes[i].href || "";
+      if (!href || href.indexOf("data:") === 0) continue;
+      var rank = rel.indexOf("apple") >= 0 ? 1 : 3;
+      var sizes = String(nodes[i].getAttribute("sizes") || "");
+      if (sizes.indexOf("32") >= 0 || sizes.indexOf("48") >= 0) rank += 2;
+      if (rank >= score) { score = rank; best = href; }
+    }
+    if (!best) return "";
+    return best;
+  }
+  function describe(el, type) {
+    var r = el.getBoundingClientRect();
+    var vw = window.innerWidth || 1;
+    var vh = window.innerHeight || 1;
+    var text = "";
+    try { text = String(el.innerText || "").replace(/\s+/g, " ").trim().slice(0, 400); } catch (err) {}
+    return {
+      type: type,
+      tag: String(el.tagName || "").toLowerCase(),
+      label: el.id ? "#" + el.id : String(el.tagName || "").toLowerCase(),
+      selector: el.id ? "#" + el.id : String(el.tagName || "").toLowerCase(),
+      rect: { x: (r.left / vw) * 100, y: (r.top / vh) * 100, w: (r.width / vw) * 100, h: (r.height / vh) * 100 },
+      text: text,
+      url: String(location.href || ""),
+      title: String(document.title || "")
+    };
+  }
+  var reportTimer = 0;
+  function report(travel) {
+    var payload = {
+      type: "shape-browser-page",
+      url: String(location.href || ""),
+      title: pageTitle(),
+      favicon: faviconHref(),
+      travel: !!travel
+    };
+    send(payload);
     try { window.chrome.webview.postMessage(payload); } catch (e) {}
   }
+  function scheduleReport() {
+    if (reportTimer) return;
+    reportTimer = setTimeout(function () { reportTimer = 0; report(false); }, 60);
+  }
+  function applyPick(on) {
+    window.__shapePick = !!on;
+    var root = document.documentElement;
+    if (root) root.style.cursor = on ? "crosshair" : "";
+    if (!on) send({ type: "shape-browser-hover" });
+  }
+  var lastHover = 0;
+  window.addEventListener("message", function (e) {
+    var data = e.data;
+    if (!data || data.type !== "shape-browser-host") return;
+    if (data.pick != null) applyPick(data.pick);
+    if (data.scheme === "light" || data.scheme === "dark" || data.scheme === "system") {
+      mode = data.scheme;
+      retarget();
+    }
+    if (data.reload) {
+      try { location.reload(); } catch (err) {}
+    }
+    if (data.history === "back" || data.history === "forward") {
+      var before = location.href;
+      try { data.history === "back" ? history.back() : history.forward(); } catch (err) {}
+      setTimeout(function () {
+        if (location.href === before && data.goto && data.goto !== before) location.href = data.goto;
+      }, 200);
+    }
+  });
+  function watchMeta() {
+    var head = document.head || document.documentElement;
+    if (!head || head.__shapeWatch) return;
+    head.__shapeWatch = true;
+    var obs = new MutationObserver(function () { scheduleReport(); });
+    obs.observe(head, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["href", "rel"] });
+  }
+  var pushState = history.pushState;
+  history.pushState = function () {
+    var result = pushState.apply(this, arguments);
+    scheduleReport();
+    return result;
+  };
+  var replaceState = history.replaceState;
+  history.replaceState = function () {
+    var result = replaceState.apply(this, arguments);
+    scheduleReport();
+    return result;
+  };
+  window.addEventListener("popstate", function () { report(true); });
+  window.addEventListener("hashchange", function () { scheduleReport(); });
+  document.addEventListener("DOMContentLoaded", function () { watchMeta(); scheduleReport(); });
+  window.addEventListener("load", function () { watchMeta(); scheduleReport(); });
+  document.addEventListener("mousemove", function (e) {
+    if (!window.__shapePick) return;
+    var now = Date.now();
+    if (now - lastHover < 40) return;
+    lastHover = now;
+    var el = e.target;
+    if (!el || !el.tagName) return;
+    send(describe(el, "shape-browser-hover"));
+  }, true);
   document.addEventListener("contextmenu", function (e) {
     e.preventDefault();
-    send({ type: "menu", x: e.clientX, y: e.clientY });
+    send({ type: "shape-browser-menu", x: e.clientX, y: e.clientY });
   }, true);
   document.addEventListener("click", function (e) {
     if (!window.__shapePick) return;
@@ -28,21 +192,7 @@ const HOST_SCRIPT: &str = r##"
     e.stopPropagation();
     var el = e.target;
     if (!el || !el.tagName) return;
-    var r = el.getBoundingClientRect();
-    var vw = window.innerWidth || 1;
-    var vh = window.innerHeight || 1;
-    var text = "";
-    try { text = String(el.innerText || "").replace(/\s+/g, " ").trim().slice(0, 400); } catch (err) {}
-    send({
-      type: "pick",
-      tag: String(el.tagName || "").toLowerCase(),
-      label: (el.id ? "#" + el.id : String(el.tagName || "").toLowerCase()),
-      selector: el.id ? "#" + el.id : String(el.tagName || "").toLowerCase(),
-      rect: { x: (r.left / vw) * 100, y: (r.top / vh) * 100, w: (r.width / vw) * 100, h: (r.height / vh) * 100 },
-      text: text,
-      url: String(location.href || ""),
-      title: String(document.title || "")
-    });
+    send(describe(el, "shape-browser-pick"));
   }, true);
 })();
 "##;
@@ -57,101 +207,65 @@ pub struct SurfaceState {
     can_forward: bool,
 }
 
-struct Bounds {
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    shown: bool,
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FrameNav {
+    url: String,
+    ok: bool,
+    error: String,
 }
 
-static SEQ: AtomicU64 = AtomicU64::new(1);
-static TABS: Mutex<Vec<String>> = Mutex::new(Vec::new());
-static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
-static BOUNDS: Mutex<Bounds> = Mutex::new(Bounds { x: 0.0, y: 0.0, w: 0.0, h: 0.0, shown: false });
-/// URL to keep in the address bar after we replace a failed load with our own page.
-static FAILED: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+static APP: Mutex<Option<AppHandle>> = Mutex::new(None);
+static FRAME_URL: Mutex<String> = Mutex::new(String::new());
+static SCHEME: Mutex<String> = Mutex::new(String::new());
+static SCRIPT_IDS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-fn tabs() -> std::sync::MutexGuard<'static, Vec<String>> {
-    TABS.lock().unwrap_or_else(|p| p.into_inner())
+fn script_source() -> String {
+    let scheme = SCHEME.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    let mode = if scheme == "light" || scheme == "dark" {
+        scheme
+    } else {
+        "system".to_string()
+    };
+    HOST_SCRIPT.replace("__SHAPE_SCHEME__", &mode)
 }
 
-fn active_id() -> Option<String> {
-    ACTIVE.lock().unwrap_or_else(|p| p.into_inner()).clone()
-}
-
-fn set_active(id: Option<String>) {
-    *ACTIVE.lock().unwrap_or_else(|p| p.into_inner()) = id;
-}
-
-fn remember_failure(id: &str, url: &str) {
-    let mut list = FAILED.lock().unwrap_or_else(|p| p.into_inner());
-    list.retain(|(k, _)| k != id);
-    list.push((id.to_string(), url.to_string()));
-}
-
-fn take_failure(id: &str) -> Option<String> {
-    let mut list = FAILED.lock().unwrap_or_else(|p| p.into_inner());
-    let url = list.iter().find(|(k, _)| k == id).map(|(_, u)| u.clone());
-    list.retain(|(k, _)| k != id);
-    url
-}
-
-fn peek_failure(id: &str) -> Option<String> {
-    FAILED
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .iter()
-        .find(|(k, _)| k == id)
-        .map(|(_, u)| u.clone())
+fn emit_frame(url: &str, ok: bool, error: &str) {
+    let Some(app) = APP.lock().unwrap_or_else(|p| p.into_inner()).clone() else {
+        return;
+    };
+    let _ = app.emit(
+        "browser-frame",
+        FrameNav {
+            url: url.to_string(),
+            ok,
+            error: error.to_string(),
+        },
+    );
 }
 
 fn error_sentence(code: i32) -> &'static str {
-    use webview2_com::Microsoft::Web::WebView2::Win32::*;
-    let status = COREWEBVIEW2_WEB_ERROR_STATUS(code);
-    if status == COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED {
+    if code == 13 {
         "This site's address couldn't be found."
-    } else if status == COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT
-        || status == COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE
-    {
+    } else if code == 12 || code == 6 {
         "Nothing is listening at this address."
-    } else if status == COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT {
+    } else if code == 7 {
         "The site took too long to respond."
-    } else if status == COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED {
+    } else if code == 11 {
         "You're offline."
-    } else if status == COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED {
+    } else if code == 9 {
         "The connection was closed before the page loaded."
     } else if (1..=5).contains(&code) {
         "This site's security certificate isn't valid."
     } else {
-        "This site can't be reached."
+        "This page can't be shown in the app."
     }
 }
 
-fn error_html(message: &str, url: &str) -> String {
-    format!(
-        r#"<!doctype html><html><head><meta charset="utf-8"><title>Can't reach</title>
-<style>
-html,body{{margin:0;height:100%;background:#141414;color:#ececec;font:14px/1.4 "Segoe UI",sans-serif;}}
-main{{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:24px;}}
-p{{margin:0;color:#a3a3a3;max-width:420px;}}
-small{{color:#737373;word-break:break-all;}}
-</style></head><body><main>
-<strong>This site can't be reached</strong>
-<p>{message}</p>
-<small>{url}</small>
-</main></body></html>"#,
-        message = html_escape(message),
-        url = html_escape(url),
-    )
-}
-
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
-
-fn emit_state(app: &AppHandle, state: SurfaceState) {
-    let _ = app.emit("browser-surface", state);
+pub fn install(app: &AppHandle) {
+    *APP.lock().unwrap_or_else(|p| p.into_inner()) = Some(app.clone());
+    #[cfg(windows)]
+    hook_main(app);
 }
 
 #[cfg(windows)]
@@ -166,332 +280,617 @@ fn read_pwstr(mut ptr: windows_core::PWSTR) -> String {
 }
 
 #[cfg(windows)]
-fn read_state(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2, id: &str) -> SurfaceState {
+fn origin_of(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if host.is_empty() {
+        return None;
+    }
+    Some(format!("{scheme}://{host}"))
+}
+
+#[cfg(windows)]
+fn ancestors_for(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2) -> String {
     unsafe {
-        let mut url_ptr = windows_core::PWSTR::null();
-        let url = if core.Source(&mut url_ptr).is_ok() { read_pwstr(url_ptr) } else { String::new() };
-        let mut title_ptr = windows_core::PWSTR::null();
-        let title = if core.DocumentTitle(&mut title_ptr).is_ok() { read_pwstr(title_ptr) } else { String::new() };
-        let mut back = windows_core::BOOL(0);
-        let mut forward = windows_core::BOOL(0);
-        let _ = core.CanGoBack(&mut back);
-        let _ = core.CanGoForward(&mut forward);
-        let shown = if url.is_empty() || url == "about:blank" || title == "Can't reach" {
-            peek_failure(id).unwrap_or(url)
-        } else {
-            let _ = take_failure(id);
-            url
-        };
-        SurfaceState {
-            id: id.to_string(),
-            url: shown,
-            title,
-            can_back: back.as_bool(),
-            can_forward: forward.as_bool(),
+        let mut ptr = windows_core::PWSTR::null();
+        if core.Source(&mut ptr).is_err() {
+            return ANCESTORS.to_string();
+        }
+        let src = read_pwstr(ptr);
+        match origin_of(&src) {
+            Some(origin) => format!("{origin} {ANCESTORS}"),
+            None => ANCESTORS.to_string(),
         }
     }
 }
 
 #[cfg(windows)]
-fn install_host(app: AppHandle, label: String) {
-    use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED;
-    use webview2_com::{NavigationCompletedEventHandler, WebMessageReceivedEventHandler};
+fn install_script(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2) {
+    use webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler;
+    use windows_core::PCWSTR;
 
-    let Some(webview) = app.get_webview(&label) else { return };
-    let app_nav = app.clone();
-    let app_msg = app.clone();
-    let label_nav = label.clone();
-    let label_msg = label.clone();
-    let _ = webview.with_webview(move |platform| unsafe {
-        let Ok(core) = platform.controller().CoreWebView2() else { return };
-        if let Ok(settings) = core.Settings() {
-            let _ = settings.SetAreDefaultContextMenusEnabled(false);
-            let _ = settings.SetIsBuiltInErrorPageEnabled(false);
-            let _ = settings.SetAreDevToolsEnabled(true);
-            let _ = settings.SetIsStatusBarEnabled(false);
+    let source = script_source();
+    let wide: Vec<u16> = source.encode_utf16().chain(std::iter::once(0)).collect();
+    let done = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|hr, id| {
+        if hr.is_ok() {
+            let text = id.to_string();
+            if !text.is_empty() {
+                SCRIPT_IDS.lock().unwrap_or_else(|p| p.into_inner()).push(text);
+            }
         }
-        let mut token = 0i64;
-        let nav = NavigationCompletedEventHandler::create(Box::new(move |sender, args| {
-            let (Some(sender), Some(args)) = (sender, args) else { return Ok(()) };
-            let mut success = windows_core::BOOL(0);
-            args.IsSuccess(&mut success)?;
-            if !success.as_bool() {
-                let mut status = Default::default();
-                args.WebErrorStatus(&mut status)?;
-                if status == COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED {
-                    return Ok(());
-                }
-                let mut url_ptr = windows_core::PWSTR::null();
-                let url = if sender.Source(&mut url_ptr).is_ok() { read_pwstr(url_ptr) } else { String::new() };
-                remember_failure(&label_nav, &url);
-                let html = error_html(error_sentence(status.0), &url);
-                let wide: Vec<u16> = html.encode_utf16().chain(std::iter::once(0)).collect();
-                let _ = sender.NavigateToString(windows_core::PCWSTR(wide.as_ptr()));
-                emit_state(&app_nav, SurfaceState {
-                    id: label_nav.clone(),
-                    url,
-                    title: "Can't reach".into(),
-                    can_back: false,
-                    can_forward: false,
-                });
-                return Ok(());
-            }
-            let state = read_state(&sender, &label_nav);
-            if state.url.starts_with("http") && state.title != "Can't reach" {
-                crate::browser::record_history(&state.url, &state.title);
-            }
-            emit_state(&app_nav, state);
-            Ok(())
-        }));
-        let _ = core.add_NavigationCompleted(&nav, &mut token);
-        std::mem::forget(nav);
+        Ok(())
+    }));
+    unsafe {
+        if core
+            .AddScriptToExecuteOnDocumentCreated(PCWSTR(wide.as_ptr()), &done)
+            .is_err()
+        {
+            log::warn!("browser frame script was not installed");
+        }
+    }
+    std::mem::forget(done);
+}
 
-        let mut msg_token = 0i64;
-        let msg = WebMessageReceivedEventHandler::create(Box::new(move |_sender, args| {
-            let Some(args) = args else { return Ok(()) };
+#[cfg(windows)]
+fn refresh_script(app: &AppHandle) {
+    use windows_core::PCWSTR;
+
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = window.with_webview(|webview| unsafe {
+        let Ok(core) = webview.controller().CoreWebView2() else {
+            return;
+        };
+        let ids = std::mem::take(&mut *SCRIPT_IDS.lock().unwrap_or_else(|p| p.into_inner()));
+        for id in ids {
+            let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+            let _ = core.RemoveScriptToExecuteOnDocumentCreated(PCWSTR(wide.as_ptr()));
+        }
+        install_script(&core);
+    });
+}
+
+#[cfg(windows)]
+fn frame_name(frame: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Frame) -> String {
+    unsafe {
+        let mut ptr = windows_core::PWSTR::null();
+        if frame.Name(&mut ptr).is_err() {
+            return String::new();
+        }
+        read_pwstr(ptr)
+    }
+}
+
+#[cfg(windows)]
+fn hook_main(app: &AppHandle) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_4;
+    use webview2_com::{FrameCreatedEventHandler, WebMessageReceivedEventHandler};
+    use windows_core::Interface;
+
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = window.with_webview(|webview| unsafe {
+        let Ok(core) = webview.controller().CoreWebView2() else {
+            return;
+        };
+        install_script(&core);
+
+        let messages = WebMessageReceivedEventHandler::create(Box::new(|_sender, args| {
+            let Some(args) = args else {
+                return Ok(());
+            };
             let mut ptr = windows_core::PWSTR::null();
             if args.WebMessageAsJson(&mut ptr).is_err() {
                 return Ok(());
             }
             let raw = read_pwstr(ptr);
-            let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else { return Ok(()) };
-            match value.get("type").and_then(|t| t.as_str()) {
-                Some("menu") => {
-                    let x = value.get("x").and_then(|n| n.as_f64()).unwrap_or(0.0);
-                    let y = value.get("y").and_then(|n| n.as_f64()).unwrap_or(0.0);
-                    show_menu(&app_msg, &label_msg, x, y);
-                }
-                Some("pick") => {
-                    let _ = app_msg.emit("browser-surface-pick", value);
-                }
-                _ => {}
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+                return Ok(());
+            };
+            if value.get("type").and_then(|t| t.as_str()) != Some("shape-browser-page") {
+                return Ok(());
+            }
+            let url = value.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let title = value.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            if url.starts_with("http://") || url.starts_with("https://") {
+                crate::browser::record_history(url, title);
             }
             Ok(())
         }));
-        let _ = core.add_WebMessageReceived(&msg, &mut msg_token);
-        std::mem::forget(msg);
-    });
-}
+        let mut msg_token = 0i64;
+        let _ = core.add_WebMessageReceived(&messages, &mut msg_token);
+        std::mem::forget(messages);
 
-#[cfg(windows)]
-fn show_menu(app: &AppHandle, id: &str, x: f64, y: f64) {
-    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-    use tauri::Wry;
-    let _ = id;
-    let bounds = BOUNDS.lock().unwrap_or_else(|p| p.into_inner());
-    let pos = tauri::LogicalPosition::new(bounds.x + x, bounds.y + y);
-    drop(bounds);
-    let Ok(back) = MenuItem::with_id(app, "shape-browser-back", "Back", true, None::<&str>) else { return };
-    let Ok(forward) = MenuItem::with_id(app, "shape-browser-forward", "Forward", true, None::<&str>) else { return };
-    let Ok(reload) = MenuItem::with_id(app, "shape-browser-reload", "Reload", true, None::<&str>) else { return };
-    let Ok(sep) = PredefinedMenuItem::separator(app) else { return };
-    let Ok(pick) = MenuItem::with_id(app, "shape-browser-pick", "Select Element", true, None::<&str>) else { return };
-    let Ok(copy) = MenuItem::with_id(app, "shape-browser-copy", "Copy Current URL", true, None::<&str>) else { return };
-    let Ok(open) = MenuItem::with_id(app, "shape-browser-external", "Open Externally", true, None::<&str>) else { return };
-    let items: [&dyn tauri::menu::IsMenuItem<Wry>; 7] = [&back, &forward, &reload, &sep, &pick, &copy, &open];
-    let Ok(menu) = Menu::with_items(app, &items) else { return };
-    if let Some(window) = app.get_window("main") {
-        let _ = window.popup_menu_at(&menu, pos);
-    }
-}
-
-#[cfg(windows)]
-fn place(app: &AppHandle) {
-    let bounds = BOUNDS.lock().unwrap_or_else(|p| p.into_inner());
-    let active = active_id();
-    let labels = tabs().clone();
-    drop(bounds);
-    let bounds = BOUNDS.lock().unwrap_or_else(|p| p.into_inner());
-    for label in labels {
-        let Some(webview) = app.get_webview(&label) else { continue };
-        let visible = bounds.shown && bounds.w > 1.0 && bounds.h > 1.0 && active.as_deref() == Some(label.as_str());
-        if visible {
-            let _ = webview.set_position(LogicalPosition::new(bounds.x, bounds.y));
-            let _ = webview.set_size(LogicalSize::new(bounds.w, bounds.h));
-            let _ = webview.show();
-        } else {
-            let _ = webview.hide();
-        }
-    }
-}
-
-#[cfg(not(windows))]
-fn place(_app: &AppHandle) {}
-
-fn webview_of(app: &AppHandle, id: &str) -> Result<tauri::Webview, String> {
-    app.get_webview(id).ok_or_else(|| "That tab is closed.".to_string())
-}
-
-#[tauri::command]
-pub async fn browser_surface_open(app: AppHandle, url: Option<String>) -> Result<SurfaceState, String> {
-    #[cfg(not(windows))]
-    {
-        let _ = (app, url);
-        return Err("The in-app browser is only available on Windows.".into());
-    }
-    #[cfg(windows)]
-    {
-        let id = format!("shape-browser-{}", SEQ.fetch_add(1, Ordering::Relaxed));
-        let start = url.unwrap_or_default();
-        let parsed = if start.trim().is_empty() {
-            "about:blank".parse().map_err(|e: url::ParseError| e.to_string())?
-        } else {
-            start.parse().map_err(|e: url::ParseError| e.to_string())?
+        let Ok(core4) = core.cast::<ICoreWebView2_4>() else {
+            log::warn!("browser frame host needs a newer WebView2");
+            return;
         };
-        let window = app.get_window("main").ok_or_else(|| "The main window is not open.".to_string())?;
-        let builder = tauri::webview::WebviewBuilder::new(&id, WebviewUrl::External(parsed))
-            .initialization_script(HOST_SCRIPT)
-            .focused(false)
-            .on_document_title_changed({
-                let app = app.clone();
-                let id = id.clone();
-                move |webview, _title| {
-                    let app = app.clone();
-                    let id = id.clone();
-                    let _ = webview.with_webview(move |platform| unsafe {
-                        if let Ok(core) = platform.controller().CoreWebView2() {
-                            emit_state(&app, read_state(&core, &id));
-                        }
-                    });
+        let created = FrameCreatedEventHandler::create(Box::new(|sender, args| {
+            let Some(args) = args else {
+                return Ok(());
+            };
+            let frame = args.Frame()?;
+            let ancestors = sender.as_ref().map(ancestors_for).unwrap_or_else(|| ANCESTORS.to_string());
+            watch_frame(frame, ancestors);
+            Ok(())
+        }));
+        let mut token = 0i64;
+        if core4.add_FrameCreated(&created, &mut token).is_err() {
+            log::warn!("browser frame host was not installed");
+        }
+        std::mem::forget(created);
+    });
+
+    fn watch_frame(
+        frame: webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Frame,
+        ancestors: String,
+    ) {
+        use webview2_com::FrameNameChangedEventHandler;
+
+        let name = frame_name(&frame);
+        if name == FRAME_NAME || name == TOOLS_NAME {
+            attach_nav(&frame, ancestors, name == FRAME_NAME);
+            return;
+        }
+        let renamed = FrameNameChangedEventHandler::create(Box::new(move |sender, _| {
+            let Some(frame) = sender else {
+                return Ok(());
+            };
+            let name = frame_name(&frame);
+            if name == FRAME_NAME || name == TOOLS_NAME {
+                attach_nav(&frame, ancestors.clone(), name == FRAME_NAME);
+            }
+            Ok(())
+        }));
+        let mut token = 0i64;
+        unsafe {
+            let _ = frame.add_NameChanged(&renamed, &mut token);
+        }
+        std::mem::forget(renamed);
+    }
+
+    fn attach_nav(
+        frame: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Frame,
+        ancestors: String,
+        track: bool,
+    ) {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            ICoreWebView2Frame2, ICoreWebView2NavigationStartingEventArgs2,
+            COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED,
+        };
+        use webview2_com::{FrameNavigationCompletedEventHandler, FrameNavigationStartingEventHandler};
+        use windows_core::{Interface, PCWSTR};
+
+        let Ok(frame2) = frame.cast::<ICoreWebView2Frame2>() else {
+            return;
+        };
+        let ancestors_nav = ancestors;
+        let starting = FrameNavigationStartingEventHandler::create(Box::new(move |_frame, args| {
+            let Some(args) = args else {
+                return Ok(());
+            };
+            if let Ok(args2) = args.cast::<ICoreWebView2NavigationStartingEventArgs2>() {
+                let wide: Vec<u16> = ancestors_nav.encode_utf16().chain(std::iter::once(0)).collect();
+                unsafe {
+                    let _ = args2.SetAdditionalAllowedFrameAncestors(PCWSTR(wide.as_ptr()));
                 }
-            });
-        window
-            .add_child(builder, LogicalPosition::new(0.0, 0.0), LogicalSize::new(1.0, 1.0))
-            .map_err(|e| e.to_string())?;
-        tabs().push(id.clone());
-        set_active(Some(id.clone()));
-        install_host(app.clone(), id.clone());
-        place(&app);
-        Ok(SurfaceState { id, url: start, title: String::new(), can_back: false, can_forward: false })
+            }
+            unsafe {
+                let mut uri = windows_core::PWSTR::null();
+                if args.Uri(&mut uri).is_ok() {
+                    let url = read_pwstr(uri);
+                    if track && (url.starts_with("http://") || url.starts_with("https://")) {
+                        *FRAME_URL.lock().unwrap_or_else(|p| p.into_inner()) = url.clone();
+                        emit_frame(&url, true, "");
+                        let mode = SCHEME.lock().unwrap_or_else(|p| p.into_inner()).clone();
+                        let page = url;
+                        tauri::async_runtime::spawn(async move {
+                            let _ = emulate_scheme(&page, &mode).await;
+                        });
+                    }
+                }
+            }
+            Ok(())
+        }));
+        let completed = FrameNavigationCompletedEventHandler::create(Box::new(move |_frame, args| {
+            if !track {
+                return Ok(());
+            }
+            let Some(args) = args else {
+                return Ok(());
+            };
+            let mut success = windows_core::BOOL(0);
+            unsafe { args.IsSuccess(&mut success)? };
+            let url = FRAME_URL.lock().unwrap_or_else(|p| p.into_inner()).clone();
+            if success.as_bool() {
+                if url.starts_with("http://") || url.starts_with("https://") {
+                    crate::browser::record_history(&url, "");
+                }
+                return Ok(());
+            }
+            let mut status = Default::default();
+            unsafe { args.WebErrorStatus(&mut status)? };
+            if status == COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED {
+                return Ok(());
+            }
+            emit_frame(&url, false, error_sentence(status.0));
+            Ok(())
+        }));
+        let mut start_token = 0i64;
+        let mut done_token = 0i64;
+        unsafe {
+            let _ = frame2.add_NavigationStarting(&starting, &mut start_token);
+            let _ = frame2.add_NavigationCompleted(&completed, &mut done_token);
+        }
+        std::mem::forget(starting);
+        std::mem::forget(completed);
     }
 }
 
 #[tauri::command]
-pub async fn browser_surface_close(app: AppHandle, id: String) -> Result<(), String> {
-    tabs().retain(|t| t != &id);
-    if active_id().as_deref() == Some(id.as_str()) {
-        set_active(tabs().last().cloned());
-    }
-    if let Some(webview) = app.get_webview(&id) {
-        let _ = webview.close();
-    }
-    place(&app);
+pub async fn browser_surface_open(_app: AppHandle, url: Option<String>) -> Result<SurfaceState, String> {
+    Ok(SurfaceState {
+        id: "frame".into(),
+        url: url.unwrap_or_default(),
+        title: String::new(),
+        can_back: false,
+        can_forward: false,
+    })
+}
+
+#[tauri::command]
+pub async fn browser_surface_close(_app: AppHandle, _id: String) -> Result<(), String> {
     Ok(())
 }
 
 #[tauri::command]
-pub async fn browser_surface_activate(app: AppHandle, id: String) -> Result<(), String> {
-    if !tabs().iter().any(|t| t == &id) {
-        return Err("That tab is closed.".into());
-    }
-    set_active(Some(id));
-    place(&app);
+pub async fn browser_surface_activate(_app: AppHandle, _id: String) -> Result<(), String> {
     Ok(())
 }
 
 #[tauri::command]
-pub async fn browser_surface_navigate(app: AppHandle, id: String, url: String) -> Result<(), String> {
-    let _ = take_failure(&id);
-    let parsed = url.parse().map_err(|e: url::ParseError| e.to_string())?;
-    webview_of(&app, &id)?.navigate(parsed).map_err(|e| e.to_string())
+pub async fn browser_surface_navigate(_app: AppHandle, _id: String, _url: String) -> Result<(), String> {
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn browser_surface_back(app: AppHandle, id: String) -> Result<(), String> {
+pub async fn browser_surface_back(_app: AppHandle, _id: String) -> Result<(), String> {
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn browser_surface_forward(_app: AppHandle, _id: String) -> Result<(), String> {
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn browser_surface_reload(_app: AppHandle, _id: String, _hard: Option<bool>) -> Result<(), String> {
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn browser_surface_bounds(
+    _app: AppHandle,
+    _x: f64,
+    _y: f64,
+    _w: f64,
+    _h: f64,
+    _shown: bool,
+) -> Result<(), String> {
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn browser_surface_hide(_app: AppHandle) -> Result<(), String> {
+    Ok(())
+}
+
+fn host_key(url: &str) -> Option<String> {
+    let (_, rest) = url.split_once("://")?;
+    let host = rest.split(['/', '?', '#']).next()?.trim();
+    if host.is_empty() {
+        return None;
+    }
+    Some(host.trim_start_matches("www.").to_ascii_lowercase())
+}
+
+pub(crate) fn is_app_page(url: &str) -> bool {
+    url.contains("localhost:48921")
+        || url.contains("127.0.0.1:48921")
+        || url.contains("tauri.localhost")
+        || url.contains("asset.localhost")
+}
+
+pub(crate) fn score_target(page_url: &str, want: &str, kind: &str) -> i32 {
+    if page_url.is_empty() || is_app_page(page_url) {
+        return -1;
+    }
+    let (Some(page_host), Some(want_host)) = (host_key(page_url), host_key(want)) else {
+        return -1;
+    };
+    if page_host != want_host {
+        return -1;
+    }
+    let mut score = match kind {
+        "iframe" => 20,
+        "page" | "other" => 12,
+        "browser" | "service_worker" | "shared_worker" | "worker" => return -1,
+        _ => 8,
+    };
+    let page_trim = page_url.trim_end_matches('/');
+    let want_trim = want.trim_end_matches('/');
+    if page_trim == want_trim {
+        score += 40;
+    } else if page_url.starts_with(want) || want.starts_with(page_trim) {
+        score += 15;
+    }
+    score
+}
+
+pub(crate) fn inspector_url(item: &serde_json::Value) -> String {
+    let id = item
+        .get("id")
+        .or_else(|| item.get("targetId"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if !id.is_empty() {
+        return format!("http://127.0.0.1:9333/devtools/inspector.html?ws=127.0.0.1:9333/devtools/page/{id}");
+    }
+    item.get("devtoolsFrontendUrl")
+        .and_then(|v| v.as_str())
+        .filter(|front| front.starts_with("http"))
+        .unwrap_or("")
+        .to_string()
+}
+
+pub(crate) fn best_target(list: &[serde_json::Value], want: &str) -> Option<serde_json::Value> {
+    list.iter()
+        .filter_map(|item| {
+            let page_url = item.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let kind = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let score = score_target(page_url, want, kind);
+            (score >= 0).then_some((score, item.clone()))
+        })
+        .max_by_key(|(score, _)| *score)
+        .map(|(_, item)| item)
+}
+
+async fn iframe_targets() -> Result<Vec<serde_json::Value>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let list = client
+        .get("http://127.0.0.1:9333/json/list")
+        .send()
+        .await
+        .map_err(|_| "Restart Shape, then open developer tools for this page.".to_string())?
+        .json::<Vec<serde_json::Value>>()
+        .await
+        .map_err(|e| e.to_string())?;
+    if list.iter().any(|item| {
+        let url = item.get("url").and_then(|v| v.as_str()).unwrap_or("");
+        !is_app_page(url)
+    }) {
+        return Ok(list);
+    }
+    let version = client
+        .get("http://127.0.0.1:9333/json/version")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+    let ws = version
+        .get("webSocketDebuggerUrl")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if ws.is_empty() {
+        return Ok(list);
+    }
+    let (mut socket, _) = tokio_tungstenite::connect_async(&ws)
+        .await
+        .map_err(|e| e.to_string())?;
+    use futures::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    socket
+        .send(Message::Text(r#"{"id":1,"method":"Target.getTargets"}"#.into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        let next = tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
+            .await
+            .map_err(|_| "Developer tools didn't answer.".to_string())?;
+        let Some(msg) = next else { break };
+        let text = match msg.map_err(|e| e.to_string())? {
+            Message::Text(text) => text,
+            _ => continue,
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+        if value.get("id").and_then(|v| v.as_i64()) != Some(1) {
+            continue;
+        }
+        let infos = value
+            .pointer("/result/targetInfos")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        return Ok(infos
+            .into_iter()
+            .map(|info| {
+                serde_json::json!({
+                    "url": info.get("url").cloned().unwrap_or(serde_json::Value::Null),
+                    "type": info.get("type").cloned().unwrap_or(serde_json::Value::Null),
+                    "id": info.get("targetId").cloned().unwrap_or(serde_json::Value::Null),
+                })
+            })
+            .collect());
+    }
+    Ok(list)
+}
+
+#[cfg(windows)]
+async fn emulate_scheme(page_url: &str, mode: &str) -> Result<(), String> {
+    let mut last = String::from("This page doesn't have a color scheme yet.");
+    for _ in 0..6 {
+        match emulate_scheme_once(page_url, mode).await {
+            Ok(()) => return Ok(()),
+            Err(err) => last = err,
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+    }
+    Err(last)
+}
+
+#[cfg(windows)]
+async fn emulate_scheme_once(page_url: &str, mode: &str) -> Result<(), String> {
+    let list = iframe_targets().await?;
+    let page = best_target(&list, page_url).ok_or_else(|| "This page doesn't have a color scheme yet.".to_string())?;
+    let id = page
+        .get("id")
+        .or_else(|| page.get("targetId"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if id.is_empty() {
+        return Err("This page doesn't have a color scheme yet.".into());
+    }
+    let params = if mode == "light" || mode == "dark" {
+        format!(r#"{{"media":"","features":[{{"name":"prefers-color-scheme","value":"{mode}"}}]}}"#)
+    } else {
+        r#"{"media":"","features":[]}"#.to_string()
+    };
+    session_call(id, "Emulation.setEmulatedMedia", &params).await
+}
+
+#[cfg(windows)]
+async fn session_call(target_id: &str, method: &str, params: &str) -> Result<(), String> {
+    use futures::SinkExt;
+    use tokio_tungstenite::tungstenite::Message;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let version = client
+        .get("http://127.0.0.1:9333/json/version")
+        .send()
+        .await
+        .map_err(|_| "Restart Shape, then try again.".to_string())?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+    let ws = version
+        .get("webSocketDebuggerUrl")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if ws.is_empty() {
+        return Err("Restart Shape, then try again.".into());
+    }
+    let (mut socket, _) = tokio_tungstenite::connect_async(&ws)
+        .await
+        .map_err(|e| e.to_string())?;
+    let attach = format!(
+        r#"{{"id":1,"method":"Target.attachToTarget","params":{{"targetId":"{target_id}","flatten":true}}}}"#
+    );
+    socket
+        .send(Message::Text(attach.into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    let attached = next_cdp(&mut socket, 1).await?;
+    let session = attached
+        .pointer("/result/sessionId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if session.is_empty() {
+        return Err("This page doesn't have developer tools yet.".into());
+    }
+    let call = format!(r#"{{"id":2,"sessionId":"{session}","method":"{method}","params":{params}}}"#);
+    socket
+        .send(Message::Text(call.into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    let done = next_cdp(&mut socket, 2).await?;
+    if done.get("error").is_some() {
+        return Err("This page doesn't have developer tools yet.".into());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+async fn next_cdp(
+    socket: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    id: i64,
+) -> Result<serde_json::Value, String> {
+    use futures::StreamExt;
+    use tokio_tungstenite::tungstenite::Message;
+
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        let next = tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
+            .await
+            .map_err(|_| "Developer tools didn't answer.".to_string())?;
+        let Some(msg) = next else {
+            break;
+        };
+        let text = match msg.map_err(|e| e.to_string())? {
+            Message::Text(text) => text,
+            _ => continue,
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+        if value.get("id").and_then(|v| v.as_i64()) == Some(id) {
+            return Ok(value);
+        }
+    }
+    Err("Developer tools didn't answer.".into())
+}
+
+#[tauri::command]
+pub async fn browser_surface_devtools(_app: AppHandle, url: String) -> Result<String, String> {
     #[cfg(windows)]
     {
-        let webview = webview_of(&app, &id)?;
-        webview.with_webview(|platform| unsafe {
-            if let Ok(core) = platform.controller().CoreWebView2() {
-                let _ = core.GoBack();
-            }
-        }).map_err(|e| e.to_string())?;
-        Ok(())
+        return crate::browser::devtools_dock::inspector_for(url.trim()).await;
     }
     #[cfg(not(windows))]
     {
-        let _ = (app, id);
-        Err("The in-app browser is only available on Windows.".into())
+        let _ = url;
+        Err("Developer tools for the page are only available on Windows.".into())
     }
 }
 
 #[tauri::command]
-pub async fn browser_surface_forward(app: AppHandle, id: String) -> Result<(), String> {
+pub async fn browser_surface_scheme(app: AppHandle, scheme: String) {
+    let mode = if scheme == "light" || scheme == "dark" {
+        scheme
+    } else {
+        "system".to_string()
+    };
+    *SCHEME.lock().unwrap_or_else(|p| p.into_inner()) = mode.clone();
     #[cfg(windows)]
     {
-        let webview = webview_of(&app, &id)?;
-        webview.with_webview(|platform| unsafe {
-            if let Ok(core) = platform.controller().CoreWebView2() {
-                let _ = core.GoForward();
-            }
-        }).map_err(|e| e.to_string())?;
-        Ok(())
+        refresh_script(&app);
+        let url = FRAME_URL.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        if url.starts_with("http://") || url.starts_with("https://") {
+            let _ = emulate_scheme(&url, &mode).await;
+        }
     }
     #[cfg(not(windows))]
     {
-        let _ = (app, id);
-        Err("The in-app browser is only available on Windows.".into())
+        let _ = (app, mode);
     }
 }
 
 #[tauri::command]
-pub async fn browser_surface_reload(app: AppHandle, id: String, hard: Option<bool>) -> Result<(), String> {
-    let webview = webview_of(&app, &id)?;
-    if hard.unwrap_or(false) {
-        let _ = webview.eval("location.reload()");
-    }
-    webview.reload().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn browser_surface_bounds(app: AppHandle, x: f64, y: f64, w: f64, h: f64, shown: bool) -> Result<(), String> {
-    *BOUNDS.lock().unwrap_or_else(|p| p.into_inner()) = Bounds { x, y, w, h, shown };
-    place(&app);
+pub async fn browser_surface_pick(_app: AppHandle, _id: String, _on: bool) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub async fn browser_surface_hide(app: AppHandle) -> Result<(), String> {
-    BOUNDS.lock().unwrap_or_else(|p| p.into_inner()).shown = false;
-    place(&app);
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn browser_surface_pick(app: AppHandle, id: String, on: bool) -> Result<(), String> {
-    let webview = webview_of(&app, &id)?;
-    webview
-        .eval(format!("window.__shapePick = {on}"))
-        .map_err(|e| e.to_string())
-}
-
-pub fn on_menu(app: &AppHandle, id: &str) {
-    let Some(tab) = active_id() else { return };
-    match id {
-        "shape-browser-back" => {
-            let app = app.clone();
-            let tab = tab.clone();
-            tauri::async_runtime::spawn(async move { let _ = browser_surface_back(app, tab).await; });
-        }
-        "shape-browser-forward" => {
-            let app = app.clone();
-            let tab = tab.clone();
-            tauri::async_runtime::spawn(async move { let _ = browser_surface_forward(app, tab).await; });
-        }
-        "shape-browser-reload" => {
-            let app = app.clone();
-            let tab = tab.clone();
-            tauri::async_runtime::spawn(async move { let _ = browser_surface_reload(app, tab, Some(false)).await; });
-        }
-        "shape-browser-pick" => {
-            let _ = app.emit("browser-surface-action", "pick");
-        }
-        "shape-browser-copy" => {
-            let _ = app.emit("browser-surface-action", "copy");
-        }
-        "shape-browser-external" => {
-            let _ = app.emit("browser-surface-action", "external");
-        }
-        _ => {}
-    }
-}
+pub fn on_menu(_app: &AppHandle, _id: &str) {}

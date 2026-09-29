@@ -1,13 +1,10 @@
 "use client";
 
-import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
 import { ArrowRight20Regular } from "@fluentui/react-icons/headless/svg/arrow-right";
 import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
 import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
 import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
-import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
-import { Cursor20Filled } from "@fluentui/react-icons/headless/svg/cursor";
 import { Database20Regular } from "@fluentui/react-icons/headless/svg/database";
 import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
@@ -19,9 +16,11 @@ import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Shield20Regular } from "@fluentui/react-icons/headless/svg/shield";
 import { Star20Regular } from "@fluentui/react-icons/headless/svg/star";
 import { Target20Regular } from "@fluentui/react-icons/headless/svg/target";
+import { WeatherMoon20Regular } from "@fluentui/react-icons/headless/svg/weather-moon";
+import { WeatherSunny20Regular } from "@fluentui/react-icons/headless/svg/weather-sunny";
 
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Favicon } from "@/components/ui/favicon";
 import { Icon } from "@/components/ui/icon";
@@ -35,18 +34,17 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { commands, useProjectState } from "@/lib/backend";
+import { commands } from "@/lib/backend";
 import type { BrowserHistoryEntry, BrowserPickedElement, BrowserTab } from "@/lib/backend/types";
 import { hostnameOf } from "@/lib/ui/favicon";
 import { cn } from "@/lib/utils";
 import { AgentControlBar, BrowseStage } from "@/features/chat/ui/blocks/browse-frame";
 import { useBrowseFrame } from "@/features/agent/browser/session";
 import { resolveBrowserInput } from "@/features/agent/browser/store";
-import { getLastDevUrl, isLocalPreviewUrl, navigatePreview } from "@/features/preview/store";
-import { isWebProject } from "@/features/detection/lib/lib";
+import { MAJOR_SITES } from "@/features/agent/browser/sites";
+import { getLastDevUrl } from "@/features/preview/store";
+import { iconFor } from "./model";
 import { ToolBtn } from "./tool";
-
-const PreviewPanel = lazy(() => import("@/features/preview/ui/preview-panel"));
 
 const PAGE_W = 1280;
 const PAGE_H = 800;
@@ -180,6 +178,19 @@ type Suggestion =
     | { kind: "search"; query: string; url: string }
     | { kind: "go"; url: string };
 
+function siteMatches(query: string, host: string, title: string) {
+    const q = query.toLowerCase();
+    if (!q) return false;
+    const name = host.toLowerCase().replace(/^www\./, "");
+    if (name.startsWith(q)) return true;
+    const label = name.split(".")[0] ?? "";
+    if (label.startsWith(q)) return true;
+    const heading = title.toLowerCase();
+    if (heading.startsWith(q)) return true;
+    if (q.length >= 3 && heading.split(/[^a-z0-9]+/).some((word) => word.startsWith(q))) return true;
+    return false;
+}
+
 function UrlBar({
     value,
     onChange,
@@ -199,21 +210,36 @@ function UrlBar({
 
     const buildSuggestions = useCallback(async (q: string) => {
         const trimmed = q.trim();
+        const query = trimmed.toLowerCase();
         let history: BrowserHistoryEntry[] = [];
         try {
-            history = await commands.browserHistory(trimmed, 6);
+            history = await commands.browserHistory("", 40);
         } catch {
             history = [];
         }
         const out: Suggestion[] = [];
-        if (trimmed) {
-            if (looksLikeUrl(trimmed)) {
-                out.push({ kind: "go", url: resolveBrowserInput(trimmed) });
-            }
+        const seen = new Set<string>();
+        const addSite = (url: string, title: string) => {
+            const host = hostnameOf(url);
+            if (!host || seen.has(host)) return;
+            if (query && !siteMatches(query, host, title)) return;
+            seen.add(host);
+            out.push({ kind: "history", url, title });
+        };
+        if (trimmed && looksLikeUrl(trimmed)) {
+            out.push({ kind: "go", url: resolveBrowserInput(trimmed) });
         }
-        for (const h of history) {
-            if (out.some((s) => s.kind === "go" && s.url === h.url)) continue;
-            out.push({ kind: "history", url: h.url, title: h.title });
+        if (!query) {
+            for (const entry of history) {
+                addSite(entry.url, entry.title);
+                if (out.length >= 6) break;
+            }
+        } else {
+            for (const entry of history) addSite(entry.url, entry.title);
+            for (const host of MAJOR_SITES) {
+                if (out.filter((item) => item.kind === "history").length >= 6) break;
+                addSite(`https://${host}`, host.split(".")[0] ?? host);
+            }
         }
         if (trimmed && !looksLikeUrl(trimmed)) {
             out.push({ kind: "search", query: trimmed, url: resolveBrowserInput(trimmed) });
@@ -297,7 +323,7 @@ function UrlBar({
                 />
             </form>
             {open && items.length > 0 ? (
-                <div className="absolute bottom-full left-0 right-0 z-30 mb-1 flex flex-col gap-0.5 rounded-xl border border-border-subtle bg-surface-3 p-1 shadow-sm">
+                <div data-shape-float="" className="absolute top-full left-0 right-0 z-30 mt-1 flex max-h-64 flex-col gap-0.5 overflow-auto rounded-xl border border-border-subtle bg-surface-3 p-1 shadow-sm">
                     {items.map((item, index) => {
                         const active = index === selected;
                         return (
@@ -595,14 +621,47 @@ function EnginePage({ error, onRetry }: { error: string; onRetry: () => void }) 
     );
 }
 
-function NewTabPage({ onOpen }: { onOpen: (url: string) => void }) {
+function NewTabPage({
+    onOpen,
+    onUseTool,
+}: {
+    onOpen: (url: string) => void;
+    onUseTool?: (kind: "files" | "graph" | "prs") => void;
+}) {
     const [recent, setRecent] = useState<BrowserHistoryEntry[]>([]);
     useEffect(() => {
         void commands.browserHistory("", 8).then(setRecent).catch(() => setRecent([]));
     }, []);
     const devUrl = getLastDevUrl();
+    const tools: { kind: "files" | "graph" | "prs"; label: string; shortcut?: string }[] = [
+        { kind: "files", label: "Files", shortcut: "Ctrl+G" },
+        { kind: "graph", label: "Graph" },
+        { kind: "prs", label: "Pull requests" },
+    ];
     return (
-        <div className="flex h-full flex-col items-center justify-center gap-4 px-6">
+        <div className="flex h-full flex-col items-center justify-center gap-6 px-6">
+            {onUseTool ? (
+                <div className="flex w-full max-w-xl flex-col gap-2">
+                    <span className="text-sm text-text-primary">Tools</span>
+                    <div className="grid grid-cols-2 gap-2">
+                        {tools.map((tool) => (
+                            <button
+                                key={tool.kind}
+                                type="button"
+                                onClick={() => onUseTool(tool.kind)}
+                                className={cn(
+                                    "flex h-10 min-w-0 items-center gap-2 rounded-lg bg-surface-1 px-2.5 text-left",
+                                    "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover",
+                                )}
+                            >
+                                <Icon icon={iconFor(tool.kind)} className="text-text-muted" />
+                                <span className="min-w-0 flex-1 truncate text-xs text-text-primary">{tool.label}</span>
+                                {tool.shortcut ? <span className="text-2xs text-text-muted">{tool.shortcut}</span> : null}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
             {devUrl ? (
                 <Button variant="secondary" size="sm" onClick={() => onOpen(devUrl)} className="gap-2 font-normal">
                     <Icon icon={Play20Filled} className="text-text-muted" />
@@ -627,9 +686,9 @@ function NewTabPage({ onOpen }: { onOpen: (url: string) => void }) {
                         </button>
                     ))}
                 </div>
-            ) : (
+            ) : !onUseTool ? (
                 <span className="text-xs text-text-muted">Type a URL or search above.</span>
-            )}
+            ) : null}
         </div>
     );
 }
@@ -642,11 +701,31 @@ type PageTab = {
     pending: boolean;
     url: string;
     title: string;
-    canBack: boolean;
-    canForward: boolean;
+    favicon: string;
+    entries: string[];
+    index: number;
+    error: string | null;
 };
 
-export function BrowserView() {
+function blankTab(id: string): PageTab {
+    return { id, pending: true, url: "", title: "", favicon: "", entries: [], index: 0, error: null };
+}
+
+const SCHEME_KEY = "shape-browser-scheme";
+type ColorScheme = "system" | "light" | "dark";
+
+export function BrowserView({
+    tabId = null,
+    tabIds,
+    onMeta,
+    onUseTool,
+}: {
+    tabId?: string | null;
+    tabIds?: string[];
+    onMeta?: (id: string, title: string, url: string, favicon?: string) => void;
+    onUseTool?: (kind: "files" | "graph" | "prs") => void;
+} = {}) {
+    const controlled = Array.isArray(tabIds);
     const [tabs, setTabs] = useState<PageTab[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
     const agentFrame = useBrowseFrame();
@@ -654,22 +733,26 @@ export function BrowserView() {
     const [localActive, setLocalActive] = useState<string | null>(null);
     const [urlDraft, setUrlDraft] = useState<string | null>(null);
     const [picking, setPicking] = useState(false);
+    const [hover, setHover] = useState<{ label: string; rect: { x: number; y: number; w: number; h: number } } | null>(null);
     const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
     const [bookmarkBar, setBookmarkBar] = useState(false);
-    const [designOn, setDesignOn] = useState(false);
-    const [webProject, setWebProject] = useState(false);
-    const { project_path } = useProjectState();
+    const [scheme, setScheme] = useState<ColorScheme>(() => {
+        if (typeof window === "undefined") return "system";
+        const saved = loadJson<ColorScheme>(SCHEME_KEY, "system");
+        return saved === "light" || saved === "dark" ? saved : "system";
+    });
+    const [toolsUrl, setToolsUrl] = useState<string | null>(null);
+    const [toolsError, setToolsError] = useState<string | null>(null);
+    const [frameSrc, setFrameSrc] = useState("about:blank");
+    const [reloadKey, setReloadKey] = useState(0);
+    const [pageMenu, setPageMenu] = useState<{ x: number; y: number } | null>(null);
     const openedOnce = useRef(false);
-    const stageRef = useRef<HTMLDivElement>(null);
+    const frameRef = useRef<HTMLIFrameElement>(null);
+    const activeIdRef = useRef<string | null>(null);
+    const rustNav = useRef(false);
+    const travelUntil = useRef(0);
+    const frameTab = useRef<string | null>(null);
     const currentUrlRef = useRef("");
-
-    useEffect(() => {
-        if (!project_path) {
-            setWebProject(false);
-            return;
-        }
-        void isWebProject(project_path).then(setWebProject).catch(() => setWebProject(false));
-    }, [project_path]);
 
     useEffect(() => {
         setBookmarks(loadJson<Bookmark[]>(BOOKMARKS_KEY, []));
@@ -684,57 +767,93 @@ export function BrowserView() {
         wasAgentActive.current = agentActive;
     }, [agentActive]);
 
-    // First open: an empty tab. The child webview is created on the first navigation.
     useEffect(() => {
+        if (controlled) return;
         if (openedOnce.current) return;
         openedOnce.current = true;
         const last = getLastDevUrl();
         if (last) setUrlDraft(last);
-        setTabs([{ id: "new-1", pending: true, url: "", title: "", canBack: false, canForward: false }]);
+        setTabs([blankTab("new-1")]);
         setActiveId("new-1");
+    }, [controlled]);
+
+    useEffect(() => {
+        if (!controlled || !tabIds) return;
+        setTabs((prev) => {
+            if (prev.length === tabIds.length && prev.every((tab, index) => tab.id === tabIds[index])) return prev;
+            return tabIds.map((id) => prev.find((tab) => tab.id === id) ?? blankTab(id));
+        });
+        if (tabId) setActiveId(tabId);
+    }, [controlled, tabIds, tabId]);
+
+    const noteNavigation = useCallback((url: string, title: string | undefined, error: string | null, travel = false, favicon?: string) => {
+        if (!url || url === "about:blank") return;
+        const id = activeIdRef.current;
+        if (!id) return;
+        const traveling = travel || Date.now() < travelUntil.current;
+        setTabs((prev) => prev.map((tab) => {
+            if (tab.id !== id || tab.pending) return tab;
+            const nextTitle = title?.trim() && !/^https?:\/\//i.test(title.trim()) ? title.trim() : tab.title;
+            const nextIcon = favicon || tab.favicon;
+            if (traveling) {
+                const found = tab.entries.lastIndexOf(url);
+                return {
+                    ...tab,
+                    url,
+                    title: nextTitle,
+                    favicon: nextIcon,
+                    index: found >= 0 ? found : tab.index,
+                    error,
+                };
+            }
+            let entries = tab.entries;
+            let index = tab.index;
+            if (entries[index] !== url) {
+                entries = [...entries.slice(0, index + 1), url];
+                index = entries.length - 1;
+            }
+            return {
+                ...tab,
+                url,
+                title: nextTitle,
+                favicon: nextIcon,
+                entries,
+                index,
+                error,
+            };
+        }));
     }, []);
 
     useEffect(() => {
-        let unlistenState: (() => void) | undefined;
-        let unlistenPick: (() => void) | undefined;
-        let unlistenAction: (() => void) | undefined;
+        let unlisten: (() => void) | undefined;
         void import("@tauri-apps/api/event").then(({ listen }) => {
-            void listen<PageTab>("browser-surface", (event) => {
+            void listen<{ url: string; ok: boolean; error: string }>("browser-frame", (event) => {
                 const next = event.payload;
-                if (!next?.id) return;
-                setTabs((prev) => prev.map((tab) => (tab.id === next.id ? { ...tab, ...next, pending: false } : tab)));
-            }).then((fn) => { unlistenState = fn; });
-            void listen<BrowserPickedElement>("browser-surface-pick", (event) => {
-                const el = event.payload;
-                if (!el?.tag) return;
-                setPicking(false);
-                window.dispatchEvent(new CustomEvent("shape-chat-attach-element", { detail: el }));
-                window.dispatchEvent(new Event("shape-chat-focus-input"));
-            }).then((fn) => { unlistenPick = fn; });
-            void listen<string>("browser-surface-action", (event) => {
-                if (event.payload === "pick") setPicking(true);
-                if (event.payload === "copy" || event.payload === "external") {
-                    window.dispatchEvent(new CustomEvent("shape-browser-surface-action", { detail: event.payload }));
-                }
-            }).then((fn) => { unlistenAction = fn; });
+                if (!next?.url) return;
+                rustNav.current = true;
+                noteNavigation(next.url, undefined, next.ok ? null : next.error || "This page can't be shown in the app.", Date.now() < travelUntil.current);
+            }).then((fn) => { unlisten = fn; });
         });
-        return () => {
-            unlistenState?.();
-            unlistenPick?.();
-            unlistenAction?.();
-            void commands.browserSurfaceHide();
-        };
-    }, []);
+        return () => unlisten?.();
+    }, [noteNavigation]);
 
     const showAgent = localActive === AGENT_TAB && agentActive;
     const active = useMemo(() => tabs.find((t) => t.id === activeId) ?? null, [tabs, activeId]);
+    const pageUrlRef = useRef("");
+    pageUrlRef.current = active?.url ?? "";
+    useEffect(() => {
+        setToolsUrl(null);
+        setToolsError(null);
+    }, [active?.url]);
     const urlValue = urlDraft ?? (showAgent ? agentFrame?.url || "" : displayUrl(active?.url || ""));
 
     useEffect(() => {
         setUrlDraft(null);
         setPicking(false);
-        setDesignOn(false);
+        setHover(null);
     }, [activeId, showAgent]);
+
+    activeIdRef.current = activeId;
 
     const selectTab = (id: string) => {
         if (id === AGENT_TAB) {
@@ -744,8 +863,7 @@ export function BrowserView() {
         setLocalActive(null);
         setActiveId(id);
         const tab = tabs.find((t) => t.id === id);
-        if (tab && !tab.pending) void commands.browserSurfaceActivate(id);
-        else void commands.browserSurfaceHide();
+        setFrameSrc(tab && !tab.pending && tab.url ? tab.url : "about:blank");
     };
 
     const submitUrl = (raw: string) => {
@@ -753,64 +871,141 @@ export function BrowserView() {
         const resolved = resolveBrowserInput(raw);
         if (!resolved) return;
         setLocalActive(null);
-        if (active && !active.pending && !showAgent) {
-            setTabs((prev) => prev.map((tab) => (tab.id === active.id ? { ...tab, url: resolved } : tab)));
-            void commands.browserSurfaceNavigate(active.id, resolved);
+        setPageMenu(null);
+        const current = active;
+        if (current && !showAgent) {
+            const entries = current.entries.slice(0, current.index + 1);
+            if (entries[entries.length - 1] !== resolved) entries.push(resolved);
+            setTabs((prev) => prev.map((tab) => (tab.id === current.id
+                ? { ...tab, pending: false, url: resolved, title: "", favicon: "", error: null, entries, index: entries.length - 1 }
+                : tab)));
+            setFrameSrc(resolved);
+            frameTab.current = current.id;
+            if (frameRef.current) frameRef.current.src = resolved;
             return;
         }
-        void commands.browserSurfaceOpen(resolved).then((tab) => {
-            setTabs((prev) => {
-                if (active?.pending) return prev.map((item) => (item.id === active.id ? { ...tab, pending: false } : item));
-                return [...prev, { ...tab, pending: false }];
-            });
-            setActiveId(tab.id);
-        }).catch(() => {});
+        const id = `tab-${Date.now()}`;
+        setTabs((prev) => [...prev, {
+            id,
+            pending: false,
+            url: resolved,
+            title: "",
+            favicon: "",
+            entries: [resolved],
+            index: 0,
+            error: null,
+        }]);
+        setActiveId(id);
+        setFrameSrc(resolved);
     };
 
     const currentUrl = showAgent ? agentFrame?.url || "" : active?.url || "";
     currentUrlRef.current = currentUrl;
-    const surfaceShown = !showAgent && !designOn && !!active && !active.pending && !!active.url;
-
     useEffect(() => {
-        const el = stageRef.current;
-        if (!el) return;
-        const send = () => {
-            let node: HTMLElement | null = el;
-            let hidden = false;
-            while (node) {
-                const style = getComputedStyle(node);
-                if (style.visibility === "hidden" || style.display === "none") hidden = true;
-                node = node.parentElement;
-            }
-            const rect = el.getBoundingClientRect();
-            void commands.browserSurfaceBounds(rect.x, rect.y, rect.width, rect.height, surfaceShown && !hidden);
-        };
-        send();
-        const obs = new ResizeObserver(send);
-        obs.observe(el);
-        const timer = window.setInterval(send, 300);
+        if (!active?.url || !onMeta) return;
+        onMeta(active.id, active.title, active.url, active.favicon);
+    }, [active?.id, active?.title, active?.url, active?.favicon, onMeta]);
+    const showPage = !showAgent && !!active && !active.pending && !!active.url;
+
+    const goHistory = (delta: number) => {
+        if (!active || active.pending || showAgent) return;
+        const index = active.index + delta;
+        const url = active.entries[index];
+        if (!url) return;
+        travelUntil.current = Date.now() + 800;
+        setTabs((prev) => prev.map((tab) => (tab.id === active.id ? { ...tab, index, url, error: null } : tab)));
+        frameRef.current?.contentWindow?.postMessage({
+            type: "shape-browser-host",
+            history: delta < 0 ? "back" : "forward",
+            goto: url,
+        }, "*");
+    };
+
+    const reloadPage = () => {
+        if (!active?.url || showAgent) return;
+        setTabs((prev) => prev.map((tab) => (tab.id === active.id ? { ...tab, error: null } : tab)));
+        frameRef.current?.contentWindow?.postMessage({ type: "shape-browser-host", reload: true }, "*");
+    };
+
+    const chooseScheme = (next: ColorScheme) => {
+        setScheme(next);
+        saveJson(SCHEME_KEY, next);
+    };
+
+    const seenScheme = useRef<ColorScheme | null>(null);
+    useEffect(() => {
+        let cancel = false;
+        const changed = seenScheme.current !== null && seenScheme.current !== scheme;
+        seenScheme.current = scheme;
+        void commands.browserSurfaceScheme(scheme).then(() => {
+            if (cancel) return;
+            const frame = frameRef.current?.contentWindow;
+            frame?.postMessage({ type: "shape-browser-host", scheme }, "*");
+            if (changed) frame?.postMessage({ type: "shape-browser-host", reload: true }, "*");
+        });
         return () => {
-            obs.disconnect();
-            window.clearInterval(timer);
+            cancel = true;
         };
-    }, [surfaceShown]);
+    }, [scheme]);
 
     useEffect(() => {
-        if (!active || active.pending) return;
-        void commands.browserSurfacePick(active.id, picking && surfaceShown);
-    }, [picking, active, surfaceShown]);
+        const frame = frameRef.current;
+        if (!frame || !active?.id) return;
+        if (frameTab.current === active.id) return;
+        frameTab.current = active.id;
+        frame.src = /^https?:\/\//i.test(active.url) ? active.url : "about:blank";
+    }, [active?.id, active?.url]);
 
     useEffect(() => {
-        const onAction = (event: Event) => {
-            const action = (event as CustomEvent<string>).detail;
-            const url = currentUrlRef.current;
-            if (!url) return;
-            if (action === "copy") void navigator.clipboard.writeText(url);
-            if (action === "external") void commands.openUrlExternal(url);
+        const frame = frameRef.current;
+        if (!frame) return;
+        const send = () => frame.contentWindow?.postMessage({ type: "shape-browser-host", pick: picking }, "*");
+        send();
+        frame.addEventListener("load", send);
+        return () => frame.removeEventListener("load", send);
+    }, [picking, frameSrc, reloadKey, showPage]);
+
+    useEffect(() => {
+        const onMessage = (event: MessageEvent) => {
+            const frame = frameRef.current;
+            if (!frame || event.source !== frame.contentWindow) return;
+            const data = event.data as {
+                type?: string;
+                url?: string;
+                title?: string;
+                favicon?: string;
+                x?: number;
+                y?: number;
+                tag?: string;
+                label?: string;
+                travel?: boolean;
+                rect?: { x: number; y: number; w: number; h: number };
+            } | null;
+            if (!data || typeof data.type !== "string") return;
+            if (data.type === "shape-browser-page" && data.url) {
+                noteNavigation(data.url, data.title, null, !!data.travel, data.favicon);
+                return;
+            }
+            if (data.type === "shape-browser-hover") {
+                if (!data.rect || !data.label) setHover(null);
+                else setHover({ label: data.label, rect: data.rect });
+                return;
+            }
+            if (data.type === "shape-browser-menu") {
+                const rect = frame.getBoundingClientRect();
+                setPageMenu({ x: rect.left + (data.x || 0), y: rect.top + (data.y || 0) });
+                return;
+            }
+            if (data.type === "shape-browser-pick" && data.tag) {
+                setPicking(false);
+                const el = data as BrowserPickedElement;
+                window.dispatchEvent(new CustomEvent("shape-chat-attach-element", { detail: el }));
+                window.dispatchEvent(new Event("shape-chat-focus-input"));
+            }
         };
-        window.addEventListener("shape-browser-surface-action", onAction);
-        return () => window.removeEventListener("shape-browser-surface-action", onAction);
-    }, []);
+        window.addEventListener("message", onMessage);
+        return () => window.removeEventListener("message", onMessage);
+    }, [noteNavigation]);
     const bookmarked = bookmarks.some((b) => b.url === currentUrl);
     const toggleBookmark = () => {
         if (!currentUrl || currentUrl === "about:blank") return;
@@ -821,101 +1016,41 @@ export function BrowserView() {
         saveJson(BOOKMARKS_KEY, next);
     };
 
-    const canBack = showAgent ? false : Boolean(active?.canBack);
-    const canForward = showAgent ? false : Boolean(active?.canForward);
-
-    // Design mode inspects the running local site through the in-app frame.
-    const designReady = !showAgent && webProject && isLocalPreviewUrl(currentUrl);
-    const designTooltip = !webProject
-        ? "Design mode is for websites. This project doesn't look like a web app."
-        : !isLocalPreviewUrl(currentUrl)
-          ? "Open the running local site to use Design mode."
-          : designOn
-            ? "Exit design mode"
-            : "Design mode";
-    useEffect(() => {
-        if (!designReady && designOn) setDesignOn(false);
-    }, [designReady, designOn]);
-    const toggleDesign = () => {
-        if (!designReady) return;
-        if (!designOn) {
-            setPicking(false);
-            void navigatePreview(currentUrl);
-        }
-        setDesignOn((v) => !v);
+    const closeTools = () => {
+        setToolsUrl(null);
+        setToolsError(null);
     };
+    const openTools = () => {
+        if (!active?.url) return;
+        const pageUrl = active.url;
+        void commands.browserSurfaceDevtools(pageUrl).then((next) => {
+            if (!next || pageUrlRef.current !== pageUrl) return;
+            setToolsError(null);
+            setToolsUrl(next);
+        }).catch((err: unknown) => {
+            setToolsUrl(null);
+            const message = typeof err === "string" ? err : err instanceof Error ? err.message : "";
+            setToolsError(message || "This page doesn't have developer tools yet.");
+        });
+    };
+
+    const canBack = !showAgent && !!active && active.index > 0;
+    const canForward = !showAgent && !!active && active.index < active.entries.length - 1;
 
     return (
         <div className="flex h-full min-h-0 flex-col">
             <AgentControlBar />
-            <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border-subtle px-1" role="tablist">
-                {agentActive ? (
-                    <TabChip
-                        active={showAgent}
-                        title={agentFrame?.title || "Agent"}
-                        url={agentFrame?.url || ""}
-                        loading={agentFrame?.status === "loading"}
-                        icon={<Icon icon={Cursor20Filled} className="text-accent" />}
-                        onSelect={() => selectTab(AGENT_TAB)}
-                    />
-                ) : null}
-                {tabs.map((tab) => (
-                    <TabChip
-                        key={tab.id}
-                        active={!showAgent && tab.id === activeId}
-                        title={tab.title || (tab.url ? hostnameOf(tab.url) : "New tab")}
-                        url={tab.url}
-                        onSelect={() => selectTab(tab.id)}
-                        onClose={() => {
-                            if (!tab.pending) void commands.browserSurfaceClose(tab.id);
-                            setTabs((prev) => {
-                                const next = prev.filter((item) => item.id !== tab.id);
-                                if (next.length === 0) {
-                                    const id = `new-${Date.now()}`;
-                                    setActiveId(id);
-                                    return [{ id, pending: true, url: "", title: "", canBack: false, canForward: false }];
-                                }
-                                if (tab.id === activeId) {
-                                    const fallback = next[next.length - 1];
-                                    setActiveId(fallback.id);
-                                    if (!fallback.pending) void commands.browserSurfaceActivate(fallback.id);
-                                }
-                                return next;
-                            });
-                        }}
-                    />
-                ))}
-                <Tooltip content="New tab" side="bottom" delayDuration={80}>
-                    <button
-                        type="button"
-                        aria-label="New tab"
-                        onClick={() => {
-                            const id = `new-${Date.now()}`;
-                            setTabs((prev) => [...prev, { id, pending: true, url: "", title: "", canBack: false, canForward: false }]);
-                            setActiveId(id);
-                            setLocalActive(null);
-                            setUrlDraft("");
-                            void commands.browserSurfaceHide();
-                            window.setTimeout(() => window.dispatchEvent(new Event("shape-browser-focus-url")), 30);
-                        }}
-                        className="flex size-7 shrink-0 items-center justify-center rounded text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                    >
-                        <Icon icon={Add20Regular} />
-                    </button>
-                </Tooltip>
-            </div>
-
             <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border-subtle px-1">
-                <ToolBtn label="Back" disabled={!canBack} onClick={() => active && !active.pending && void commands.browserSurfaceBack(active.id)}>
+                <ToolBtn label="Back" disabled={!canBack} onClick={() => goHistory(-1)}>
                     <Icon icon={ArrowLeft20Regular} />
                 </ToolBtn>
-                <ToolBtn label="Forward" disabled={!canForward} onClick={() => active && !active.pending && void commands.browserSurfaceForward(active.id)}>
+                <ToolBtn label="Forward" disabled={!canForward} onClick={() => goHistory(1)}>
                     <Icon icon={ArrowRight20Regular} />
                 </ToolBtn>
                 <ToolBtn
                     label="Reload"
                     disabled={showAgent || !active || active.pending || !active.url}
-                    onClick={() => active && void commands.browserSurfaceReload(active.id, false)}
+                    onClick={reloadPage}
                 >
                     <Icon icon={ArrowSync20Regular} />
                 </ToolBtn>
@@ -923,30 +1058,12 @@ export function BrowserView() {
                     <Icon icon={Star20Regular} className={bookmarked ? "text-accent" : undefined} />
                 </ToolBtn>
                 <UrlBar value={urlValue} onChange={setUrlDraft} onSubmit={submitUrl} />
-                <Tooltip content={designTooltip} side="bottom" delayDuration={80}>
-                    <span className="inline-flex">
-                        <button
-                            type="button"
-                            aria-label={designTooltip}
-                            aria-pressed={designOn}
-                            disabled={!designReady}
-                            onClick={toggleDesign}
-                            className={cn(
-                                "flex size-7 shrink-0 items-center justify-center rounded text-text-muted",
-                                "hover:bg-panel-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-30",
-                                designOn && "bg-panel-active text-accent",
-                            )}
-                        >
-                            <Icon icon={Color20Regular} />
-                        </button>
-                    </span>
-                </Tooltip>
                 <Tooltip content={picking ? "Stop selecting" : "Select an element to mention it in chat"} side="bottom" delayDuration={80}>
                     <button
                         type="button"
                         aria-label="Select element"
                         aria-pressed={picking}
-                        disabled={showAgent || designOn || !active || !active.url}
+                        disabled={showAgent || !active || !active.url}
                         onClick={() => setPicking((v) => !v)}
                         className={cn(
                             "flex size-7 shrink-0 items-center justify-center rounded text-text-muted",
@@ -967,14 +1084,25 @@ export function BrowserView() {
                             <Icon icon={Code20Regular} />
                         </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" side="top" className="w-56">
+                    <DropdownMenuContent align="end" side="bottom" className="w-56">
+                        <DropdownMenuCheckboxItem
+                            checked={!!toolsUrl || !!toolsError}
+                            disabled={!active || active.pending || showAgent || !active.url}
+                            onCheckedChange={(checked) => {
+                                if (!checked) closeTools();
+                                else if (!toolsUrl) openTools();
+                            }}
+                        >
+                            <Icon icon={Code20Regular} />
+                            Developer tools
+                        </DropdownMenuCheckboxItem>
                         <DropdownMenuItem disabled>
                             <Icon icon={Camera20Filled} />
                             Take Screenshot
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             disabled={!active || showAgent}
-                            onClick={() => active && !active.pending && void commands.browserSurfaceReload(active.id, true)}
+                            onClick={() => active && !active.pending && reloadPage()}
                         >
                             <Icon icon={ArrowSync20Regular} />
                             Hard Reload
@@ -997,6 +1125,18 @@ export function BrowserView() {
                             <Icon icon={Open20Regular} />
                             Open Externally
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem checked={scheme === "system"} onCheckedChange={() => chooseScheme("system")}>
+                            System theme
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={scheme === "light"} onCheckedChange={() => chooseScheme("light")}>
+                            <Icon icon={WeatherSunny20Regular} />
+                            Light
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={scheme === "dark"} onCheckedChange={() => chooseScheme("dark")}>
+                            <Icon icon={WeatherMoon20Regular} />
+                            Dark
+                        </DropdownMenuCheckboxItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuCheckboxItem
                             checked={bookmarkBar}
@@ -1044,9 +1184,20 @@ export function BrowserView() {
                 </div>
             ) : null}
 
-            <div ref={stageRef} className="relative min-h-0 flex-1 bg-panel">
+            <div className="flex min-h-0 flex-1 bg-panel">
+                <div className="relative min-h-0 min-w-0 flex-1">
+                <iframe
+                    ref={frameRef}
+                    name="shape-browser"
+                    title={active?.title || "Browser"}
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+                    className={cn(
+                        "absolute inset-0 h-full w-full border-0 bg-panel",
+                        showPage ? "block" : "hidden",
+                    )}
+                />
                 {showAgent && agentFrame ? (
-                    <div className="flex h-full min-h-0 flex-col">
+                    <div className="relative z-[1] flex h-full min-h-0 flex-col bg-panel">
                         {agentFrame.image ? (
                         <BrowseStage frame={agentFrame} interactive className="min-h-0 flex-1" />
                         ) : (
@@ -1060,18 +1211,88 @@ export function BrowserView() {
                             </pre>
                         ) : null}
                     </div>
-                ) : active ? (
-                    designOn && designReady ? (
-                    <Suspense fallback={<div className="h-full bg-panel" />}>
-                            <PreviewPanel hideToolbar design={designOn} onDesignChange={setDesignOn} />
-                    </Suspense>
-                    ) : !active.url || active.pending ? (
-                        <NewTabPage onOpen={submitUrl} />
-                    ) : null
-                ) : (
-                    <NewTabPage onOpen={submitUrl} />
-                )}
+                ) : !showPage ? (
+                    <NewTabPage onOpen={submitUrl} onUseTool={onUseTool} />
+                ) : null}
+                {showPage && picking && hover ? (
+                    <div className="pointer-events-none absolute z-10" style={{ left: `${hover.rect.x}%`, top: `${hover.rect.y}%`, width: `${hover.rect.w}%`, height: `${hover.rect.h}%` }}>
+                        <div className="h-full w-full rounded-sm border border-accent bg-accent/15" />
+                        <span className="absolute left-0 top-0 -translate-y-full rounded-md bg-accent px-1.5 py-0.5 font-mono text-2xs text-white">
+                            {hover.label}
+                        </span>
+                    </div>
+                ) : null}
+                {showPage && active?.error ? (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-panel px-6 text-center">
+                        <Icon icon={Globe20Regular} className="text-text-muted" />
+                        <div className="flex flex-col gap-1">
+                            <span className="text-sm font-medium text-text-primary">This page can&apos;t be shown</span>
+                            <span className="max-w-md text-xs text-text-secondary">{active.error}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="secondary" size="sm" onClick={reloadPage}>Try again</Button>
+                            <Button variant="secondary" size="sm" onClick={() => void commands.openUrlExternal(active.url)}>Open externally</Button>
+                        </div>
+                    </div>
+                ) : null}
+                </div>
+                {toolsUrl && showPage ? (
+                    <iframe
+                        name="shape-devtools"
+                        title="Developer tools"
+                        src={toolsUrl}
+                        className="h-full w-[min(440px,46%)] shrink-0 border-l border-border-subtle bg-panel"
+                    />
+                ) : toolsError && showPage ? (
+                    <div className="flex h-full w-[min(440px,46%)] shrink-0 items-center border-l border-border-subtle bg-panel px-4">
+                        <p className="text-xs text-text-secondary">{toolsError}</p>
+                    </div>
+                ) : null}
             </div>
+                {pageMenu ? (
+                    <DropdownMenu open onOpenChange={(open) => { if (!open) setPageMenu(null); }}>
+                        <DropdownMenuTrigger asChild>
+                            <span className="fixed z-20 size-px" style={{ left: pageMenu.x, top: pageMenu.y }} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem disabled={!canBack} onClick={() => goHistory(-1)}>
+                                <Icon icon={ArrowLeft20Regular} />
+                                Back
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled={!canForward} onClick={() => goHistory(1)}>
+                                <Icon icon={ArrowRight20Regular} />
+                                Forward
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled={!active?.url} onClick={reloadPage}>
+                                <Icon icon={ArrowSync20Regular} />
+                                Reload
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem disabled={!active?.url} onClick={() => setPicking(true)}>
+                                <Icon icon={Target20Regular} />
+                                Select Element
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                disabled={!currentUrl}
+                                onClick={() => {
+                                    if (currentUrl) void navigator.clipboard.writeText(currentUrl);
+                                }}
+                            >
+                                <Icon icon={Link20Regular} />
+                                Copy Current URL
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                disabled={!currentUrl}
+                                onClick={() => {
+                                    if (currentUrl) void commands.openUrlExternal(currentUrl);
+                                }}
+                            >
+                                <Icon icon={Open20Regular} />
+                                Open Externally
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
         </div>
     );
 }

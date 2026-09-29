@@ -10,28 +10,16 @@ import { FileTree } from "./tree";
 import { SingleFileDiffEditor, type FileDiffTabInfo } from "./file-diff";
 import Graph from "@/features/git/ui/graph/graph";
 import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
-import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
-import { Tooltip } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { PullRequestsPanel } from "@/features/chat/ui/prs/view";
 import { subscribePrUi, getPrUi } from "@/features/chat/ui/prs/store";
-import { WorkspacePreview } from "./preview";
 import { isBrowserTab } from "@/lib/window/browser-tab";
+import { WorkspaceTabs } from "./tabs";
 import {
     DEFAULT_TABS,
-    iconFor,
     uid,
     type TabKind,
     type WorkspaceTab,
 } from "./model";
-
-const PANES: { kind: TabKind; label: string }[] = [
-    { kind: "files", label: "Files" },
-    { kind: "graph", label: "Graph" },
-    { kind: "browser", label: "Browser" },
-    { kind: "prs", label: "Pull requests" },
-];
 
 export function AgentWorkspace({
     projectPath,
@@ -73,14 +61,22 @@ export function AgentWorkspace({
                   ? "Graph"
                   : kind === "prs"
                     ? "Pull requests"
-                    : kind === "browser"
-                      ? "Browser"
+                      : kind === "browser"
+                      ? "New tab"
                       : "Changes";
         const prev = tabsRef.current;
         const existing = prev.find((t) => t.kind === kind);
         if (existing) commitTabs(prev, existing.id);
         else commitTabs([...prev, { id: kind, kind, title }], kind);
         if (opts?.expand) onExpandRef.current();
+    }, [commitTabs]);
+
+    const closeTab = useCallback((id: string) => {
+        const prev = tabsRef.current;
+        if (prev.length <= 1) return;
+        const next = prev.filter((tab) => tab.id !== id);
+        const activate = activeIdRef.current === id ? next[next.length - 1].id : activeIdRef.current;
+        commitTabs(next, activate);
     }, [commitTabs]);
 
     const openFile = useCallback(
@@ -158,7 +154,7 @@ export function AgentWorkspace({
             const tabId = (e as CustomEvent<string>).detail?.toLowerCase();
             if (!tabId) return;
             if (tabId === "preview" || tabId === "browser") {
-                addTab("browser", { expand: true });
+                addTab("files", { expand: true });
             }
             if (tabId === "graph" || tabId === "git") {
                 addTab("graph", { expand: true });
@@ -183,7 +179,7 @@ export function AgentWorkspace({
             const path = (e as CustomEvent<{ path?: string }>).detail?.path;
             if (!path) return;
             if (isBrowserTab(path)) {
-                addTab("browser", { expand: true });
+                addTab("files", { expand: true });
                 return;
             }
             openFile(path);
@@ -210,7 +206,7 @@ export function AgentWorkspace({
     useEffect(() => {
         if (!active_file) return;
         if (isBrowserTab(active_file)) {
-            addTab("browser", { expand: true });
+            addTab("files", { expand: true });
             return;
         }
         if (active_file.startsWith("shape://")) return;
@@ -246,29 +242,25 @@ export function AgentWorkspace({
 
     return (
         <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-panel">
-            <div className="flex h-titlebar shrink-0 items-center gap-0.5 px-1.5" data-tauri-drag-region>
-                <div className="flex min-w-0 items-center gap-0.5" data-no-drag>
-                    {PANES.map((pane) => (
-                        <Tooltip key={pane.kind} content={pane.label} side="bottom" delayDuration={80}>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={pane.label}
-                                aria-pressed={active?.kind === pane.kind}
-                                onClick={() => addTab(pane.kind, { expand: true })}
-                                className={cn(
-                                    "size-7 shrink-0 text-text-muted hover:text-text-primary",
-                                    active?.kind === pane.kind && "bg-panel-hover text-text-primary",
-                                )}
-                            >
-                                <Icon icon={iconFor(pane.kind)} />
-                            </Button>
-                        </Tooltip>
-                    ))}
+            <div className="flex h-titlebar shrink-0 items-stretch" data-tauri-drag-region>
+                <WorkspaceTabs
+                    className="min-w-0 flex-1 bg-transparent"
+                    tabs={tabs}
+                    activeId={active?.id ?? ""}
+                    onSelect={(id) => {
+                        activeIdRef.current = id;
+                        setActiveId(id);
+                    }}
+                    onClose={closeTab}
+                    onNew={(kind) => {
+                        if (kind === "browser") addTab("files", { expand: true });
+                        else addTab(kind, { expand: true });
+                    }}
+                    onReorder={(next) => commitTabs(next, activeIdRef.current)}
+                />
+                <div className="shrink-0" data-no-drag>
+                    <WindowControlsSpacer />
                 </div>
-                <div className="min-w-0 flex-1" />
-                <WindowControlsSpacer />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -295,15 +287,6 @@ export function AgentWorkspace({
                     ) : active?.kind === "diff" && active.diff ? (
                         <SingleFileDiffEditor tab={active.diff} />
                     ) : null}
-                    <div
-                        className={
-                            active?.kind === "browser"
-                                ? "h-full"
-                                : "pointer-events-none invisible absolute inset-0 h-full"
-                        }
-                    >
-                        <WorkspacePreview />
-                    </div>
                 </div>
             </div>
         </aside>

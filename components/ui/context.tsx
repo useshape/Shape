@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 const itemClasses =
     "group relative flex cursor-default select-none items-center gap-3 rounded-lg px-1.5 py-1 text-sm outline-none focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]";
 const containerClasses =
-    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border bg-surface-4 p-1 text-text-primary shadow-md";
+    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border bg-surface-4 p-2 text-text-primary shadow-md";
 const shortcutClasses = "ml-auto shrink-0 pr-2 text-sm text-text-muted group-focus:text-text-primary";
 
 const ContextMenu = ContextMenuPrimitive.Root;
@@ -61,11 +61,12 @@ ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
 const ContextMenuSubContent = React.forwardRef<
     React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
     React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
->(({ className, sideOffset = 4, ...props }, ref) => (
+>(({ className, sideOffset = 4, collisionPadding = 8, ...props }, ref) => (
     <ContextMenuPrimitive.Portal>
         <ContextMenuPrimitive.SubContent
             ref={ref}
             sideOffset={sideOffset}
+            collisionPadding={collisionPadding}
             className={cn(
                 containerClasses,
                 "min-w-32 max-h-[var(--radix-context-menu-content-available-height,_80vh)] overflow-y-auto custom-scrollbar",
@@ -80,10 +81,11 @@ ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName;
 const ContextMenuContent = React.forwardRef<
     React.ElementRef<typeof ContextMenuPrimitive.Content>,
     React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>
->(({ className, ...props }, ref) => (
+>(({ className, collisionPadding = 8, ...props }, ref) => (
     <ContextMenuPrimitive.Portal>
         <ContextMenuPrimitive.Content
             ref={ref}
+            collisionPadding={collisionPadding}
             className={cn(
                 containerClasses,
                 "min-w-32 max-h-[var(--radix-context-menu-content-available-height,_80vh)] overflow-y-auto custom-scrollbar",

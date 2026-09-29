@@ -45,6 +45,29 @@ pub fn run() {
     // Release GUI builds have no console; ConPTY needs a hidden one to inherit
     // or Windows pops a visible console window for every terminal/shell spawn.
     crate::core::process::ensure_hidden_console_for_conpty();
+    #[cfg(windows)]
+    {
+        const PORT: &str = "--remote-debugging-port=9333";
+        const ORIGINS: &str = "--remote-allow-origins=*";
+        const SITES: &str = "--site-per-process";
+        let mut existing = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+        for flag in [PORT, ORIGINS, SITES] {
+            let present = if flag == PORT {
+                existing.contains("remote-debugging-port")
+            } else {
+                existing.split_whitespace().any(|part| part == flag)
+            };
+            if present {
+                continue;
+            }
+            if existing.trim().is_empty() {
+                existing = flag.to_string();
+            } else {
+                existing = format!("{existing} {flag}");
+            }
+        }
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", existing);
+    }
 
     // Load env from src-tauri/ or shape/ (tauri dev cwd varies)
     let _ = dotenvy::from_filename(".env.local");
@@ -110,6 +133,7 @@ pub fn run() {
             #[cfg(windows)]
             crate::core::windows_notifications::init();
             crate::core::mic::allow_microphone(app.handle());
+            crate::browser::surface::install(app.handle());
 
             // Initialize menu
             commands::ipc::shortcuts::setup_menu(app.handle())?;
@@ -336,6 +360,8 @@ pub fn run() {
             browser::surface::browser_surface_reload,
             browser::surface::browser_surface_bounds,
             browser::surface::browser_surface_hide,
+            browser::surface::browser_surface_devtools,
+            browser::surface::browser_surface_scheme,
             browser::surface::browser_surface_pick,
             core::mic::dictation_start,
             core::mic::dictation_stop,

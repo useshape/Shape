@@ -76,12 +76,12 @@
   --check-ease-bob: cubic-bezier(0.34, 1.35, 0.64, 1);
   --check-ease-path: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* iOS press: snap in, spring out (asymmetric — not one linear ease). */
+  /* Subtle press: snap in, soft settle out (no spring overshoot). */
   --press-in-dur: 80ms;
   --press-in-ease: cubic-bezier(0.3, 0.0, 0.2, 1);
-  --press-out-dur: 520ms;
-  --press-out-ease: cubic-bezier(0.22, 1.56, 0.32, 1);
-  --press-scale: 0.96;
+  --press-out-dur: 220ms;
+  --press-out-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-scale: 0.985;
 }
 
 @keyframes shape-popover-in {

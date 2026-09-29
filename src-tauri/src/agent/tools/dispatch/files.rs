@@ -231,6 +231,11 @@ pub(super) async fn tool_save_media(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         Ok(s) => s,
         Err(e) => return error_outcome("save_media", &e),
     };
+    let media_id = args
+        .get("media_id")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     let attachment = args
         .get("attachment")
         .and_then(|v| v.as_str())
@@ -242,32 +247,50 @@ pub(super) async fn tool_save_media(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         .map(str::trim)
         .filter(|s| !s.is_empty());
 
-    let bytes = if let Some(name) = attachment {
-        match find_attached_bytes(ctx, name) {
+    let bytes = if let Some(id) = media_id {
+        match crate::agent::media_stash::read_bytes(id) {
             Ok(b) => b,
             Err(e) => return error_outcome("save_media", &e),
         }
     } else if let Some(href) = url {
-        if !(href.starts_with("https://") || href.starts_with("http://")) {
-            return error_outcome("save_media", "url must be http(s).");
-        }
-        match ctx.client.get(href).send().await {
-            Ok(resp) if resp.status().is_success() => match resp.bytes().await {
-                Ok(b) => b.to_vec(),
-                Err(e) => return error_outcome("save_media", &e.to_string()),
-            },
-            Ok(resp) => {
-                return error_outcome(
-                    "save_media",
-                    &format!("Could not download media ({})", resp.status()),
-                );
+        if href.starts_with("data:") {
+            match crate::agent::media_stash::decode_data_url(href) {
+                Ok((_, b)) => b,
+                Err(e) => return error_outcome("save_media", &e),
             }
-            Err(e) => return error_outcome("save_media", &e.to_string()),
+        } else if href.starts_with("https://") || href.starts_with("http://") {
+            match ctx.client.get(href).send().await {
+                Ok(resp) if resp.status().is_success() => match resp.bytes().await {
+                    Ok(b) => b.to_vec(),
+                    Err(e) => return error_outcome("save_media", &e.to_string()),
+                },
+                Ok(resp) => {
+                    return error_outcome(
+                        "save_media",
+                        &format!("Could not download media ({})", resp.status()),
+                    );
+                }
+                Err(e) => return error_outcome("save_media", &e.to_string()),
+            }
+        } else {
+            return error_outcome("save_media", "url must be http(s) or a data: URL.");
+        }
+    } else if let Some(name) = attachment {
+        if let Some(entry) = crate::agent::media_stash::find_by_name(name) {
+            match std::fs::read(&entry.path) {
+                Ok(b) => b,
+                Err(e) => return error_outcome("save_media", &e.to_string()),
+            }
+        } else {
+            match find_attached_bytes(ctx, name) {
+                Ok(b) => b,
+                Err(e) => return error_outcome("save_media", &e),
+            }
         }
     } else {
         return error_outcome(
             "save_media",
-            "Pass `attachment` (user file name) or `url` (generated media).",
+            "Pass `media_id`, `attachment`, `url` (https or data:), or a generated media reference.",
         );
     };
 
@@ -296,16 +319,52 @@ fn find_attached_bytes(ctx: &ToolCtx<'_>, name: &str) -> Result<Vec<u8>, String>
         .map_err(|_| "Could not read chat history.".to_string())?;
     let needle = name.to_ascii_lowercase();
     for msg in history.iter().rev() {
-        if msg.role != "user" {
-            continue;
-        }
         if let Some(bytes) = decode_attached_image(&msg.content, &needle) {
+            let _ = crate::agent::media_stash::stash_bytes(
+                &bytes,
+                "application/octet-stream",
+                "attachment",
+                ctx.conversation_id.as_deref(),
+                None,
+                Some(name),
+            );
+            return Ok(bytes);
+        }
+        if let Some(bytes) = decode_generated_media(&msg.content, &needle) {
             return Ok(bytes);
         }
     }
     Err(format!(
-        "No attached file named '{name}' in this chat. Use the filename from the user's attachment."
+        "No attached or generated media named '{name}' in this chat."
     ))
+}
+
+fn decode_generated_media(content: &str, name_lc: &str) -> Option<Vec<u8>> {
+    for tag in ["generated_image", "generated_svg", "generated_audio", "attached_asset"] {
+        let open = format!("<{tag}");
+        let close = format!("</{tag}>");
+        let mut rest = content;
+        while let Some(start) = rest.find(&open) {
+            let after = &rest[start..];
+            let end = after.find(&close)?;
+            let block = &after[..end];
+            let close_angle = block.find('>')?;
+            let attrs = &block[..close_angle].to_ascii_lowercase();
+            let body = block[close_angle + 1..].trim();
+            let name_ok = name_lc.is_empty()
+                || attrs.contains(&format!("name=\"{name_lc}\""))
+                || attrs.contains(&format!("media_id=\"{name_lc}\""));
+            if name_ok {
+                if body.starts_with("data:") {
+                    if let Ok((_, bytes)) = crate::agent::media_stash::decode_data_url(body) {
+                        return Some(bytes);
+                    }
+                }
+            }
+            rest = &rest[start + end + close.len()..];
+        }
+    }
+    None
 }
 
 fn decode_attached_image(content: &str, name_lc: &str) -> Option<Vec<u8>> {

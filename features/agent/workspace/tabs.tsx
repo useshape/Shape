@@ -10,14 +10,9 @@ import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { Icon } from "@/components/ui/icon";
+import { Favicon } from "@/components/ui/favicon";
 
 import { FileIcon } from "@/components/ui/file-icon";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -85,11 +80,13 @@ function SortableWorkspaceTab({
                     {...attributes}
                     {...listeners}
                     onClick={() => onSelect(tab.id)}
-                    className={workbenchTabItemClass(isActive, isDragging)}
+                    className={cn(workbenchTabItemClass(isActive, isDragging), "max-w-44")}
                 >
                     <div className={cn(WORKBENCH_TAB_CONTENT_CLASS, isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS)}>
                         <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-                            {tab.kind === "file" || tab.kind === "diff" ? (
+                            {tab.kind === "browser" && tab.url ? (
+                                <Favicon url={tab.url} src={tab.favicon} size={16} />
+                            ) : tab.kind === "file" || tab.kind === "diff" ? (
                                 <FileIcon name={tab.title} className="size-4" />
                             ) : (
                                 <Icon icon={iconFor(tab.kind)} className="text-text-muted" />
@@ -200,38 +197,14 @@ export function WorkspaceTabs({
     );
 
     const newMenu = (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
-                    aria-label="New tab"
-                >
-                    <Icon icon={Add20Regular} />
-                </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => onNew("browser")}>
-                    <Icon icon={iconFor("browser")} />
-                    <span className="flex-1">Browser</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onNew("files")}>
-                    <Icon icon={iconFor("files")} />
-                    <span className="flex-1">Files</span>
-                    <span className="text-2xs text-text-muted">Ctrl+G</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onNew("graph")}>
-                    <Icon icon={iconFor("graph")} />
-                    <span className="flex-1">Graph</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                    onClick={() => window.dispatchEvent(new Event("shape-open-pull-requests"))}
-                >
-                    <Icon icon={iconFor("prs")} />
-                    <span className="flex-1">Pull requests</span>
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <button
+            type="button"
+            className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
+            aria-label="New tab"
+            onClick={() => onNew("files")}
+        >
+            <Icon icon={Add20Regular} />
+        </button>
     );
 
     return (

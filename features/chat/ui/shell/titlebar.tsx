@@ -15,7 +15,6 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
 import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
-import { OpenInMenu } from "./open-in";
 import { CommitMenu } from "@/features/agent/workspace/commit-menu";
 import {
     DropdownMenu,
@@ -163,7 +162,6 @@ export function ChatTitlebar({
 
     const actions = (
         <div className="flex items-center gap-2">
-            <OpenInMenu />
             {project_path ? <CommitMenu projectPath={project_path} /> : null}
             <Tooltip content={terminalOpen ? "Hide terminal" : "Show terminal"}>
                 <button

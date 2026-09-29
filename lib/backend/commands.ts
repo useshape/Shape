@@ -159,6 +159,9 @@ export const commands = {
     browserSurfaceBounds: (x: number, y: number, w: number, h: number, shown: boolean) =>
         invokeCommand<void>("browser_surface_bounds", { x, y, w, h, shown }),
     browserSurfaceHide: () => invokeCommand<void>("browser_surface_hide"),
+    browserSurfaceDevtools: (url: string) => invokeCommand<string>("browser_surface_devtools", { url }),
+    browserSurfaceScheme: (scheme: "system" | "light" | "dark") =>
+        invokeCommand<void>("browser_surface_scheme", { scheme }),
     browserSurfacePick: (id: string, on: boolean) =>
         invokeCommand<void>("browser_surface_pick", { id, on }),
     showDesktopNotification: (title: string, body: string) =>
@@ -514,6 +517,9 @@ export const commands = {
         serviceTier?: string | null,
         byok?: { openRouterApiKey?: string | null; openaiApiKey?: string | null },
         displayMessage?: string | null,
+        /** Multiwork worker model pool (orchestrator uses `model`). */
+        models?: string[],
+        conversationKind?: "chat" | "multiwork",
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -535,6 +541,8 @@ export const commands = {
             openrouterApiKey: byok?.openRouterApiKey ?? null,
             openaiApiKey: byok?.openaiApiKey ?? null,
             displayMessage: displayMessage ?? null,
+            models: models ?? null,
+            conversationKind: conversationKind ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -817,10 +825,11 @@ export const commands = {
         invokeCommand<{ id: string; title: string }>("fork_conversation", {
             messageIndex,
         }),
-    setMessageFeedback: (index: number, feedback?: "up" | "down" | null) =>
+    setMessageFeedback: (index: number, feedback?: "up" | "down" | null, conversationId?: string | null) =>
         invokeCommand<void>("set_message_feedback", {
             index,
             feedback: feedback ?? null,
+            conversationId: conversationId ?? null,
         }),
     setIndexEmbeddings: (enabled: boolean) =>
         invokeCommand<void>("set_index_embeddings", { enabled }),

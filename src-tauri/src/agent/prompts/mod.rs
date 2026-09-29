@@ -11,6 +11,7 @@ pub const CI_EXPLAIN_MD: &str = include_str!("CI_EXPLAIN.MD");
 pub const RELEASE_SUMMARY_MD: &str = include_str!("RELEASE_SUMMARY.MD");
 pub const EXPLAIN_GIT_MD: &str = include_str!("EXPLAIN_GIT.MD");
 pub const DESIGN_MD: &str = include_str!("DESIGN.md");
+pub const MULTIWORK_MD: &str = include_str!("MULTIWORK.MD");
 
 pub const FAMILY_ANTHROPIC_MD: &str = include_str!("FAMILY_ANTHROPIC.MD");
 pub const FAMILY_OPENAI_MD: &str = include_str!("FAMILY_OPENAI.MD");
