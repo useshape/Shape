@@ -1,9 +1,8 @@
 "use client";
 
-import { FluentIcon, settingsIcons } from "../fluent-icons";
-
-
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import { useMemo } from "react";
+import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 
 
@@ -136,7 +135,7 @@ export function AccountSettingsPanel() {
                             onClick={() => openShapeBilling()}
                         >
                             Manage billing
-                            <FluentIcon icon={settingsIcons.open} className="text-text-muted" />
+                            <Icon icon={Open20Regular} className="text-text-muted" />
                         </Button>
                     </div>
                 </div>
@@ -195,7 +194,7 @@ export function AccountSettingsPanel() {
                         onClick={() => void commands.openUrlExternal(`${SHAPE_API_BASE}/dashboard`)}
                     >
                         Open
-                        <FluentIcon icon={settingsIcons.open} className="text-text-muted" />
+                        <Icon icon={Open20Regular} className="text-text-muted" />
                     </Button>
                 </SettingRow>
                 <SettingRow title="Sign out">

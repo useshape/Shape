@@ -1,9 +1,8 @@
 "use client";
 
-import { FluentIcon, settingsIcons, type SettingsGlyph } from "../fluent-icons";
-
-
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import React, { useRef } from "react";
+import { Icon, type IconGlyph } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,7 @@ const settingCardClass = "overflow-hidden squircle-[18px] bg-settings-card";
 
 /** Shared chrome for settings action / select triggers. */
 export const SETTING_CONTROL_BTN =
-    "h-8 min-w-0 justify-between gap-1.5 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10";
+    "h-9 min-w-0 justify-between gap-1.5 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10";
 
 export function SettingCard({
     children,
@@ -80,13 +79,13 @@ function SettingRowBody({
 }: {
     title: string;
     description?: string;
-    icon?: SettingsGlyph;
+    icon?: IconGlyph;
     children: React.ReactNode;
 }) {
     return (
         <div className="flex items-center justify-between gap-4 px-3.5 py-2.5">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                {icon ? <FluentIcon icon={icon} className="shrink-0 text-text-muted" /> : null}
+                {icon ? <Icon icon={icon} className="shrink-0 text-text-muted" /> : null}
                 <div className="min-w-0">
                     <div className="text-sm font-medium text-text-primary">{title}</div>
                     {description ? <div className="mt-0.5 text-xs leading-4 font-normal text-text-muted">{description}</div> : null}
@@ -106,7 +105,7 @@ export function SettingRow({
 }: {
     title: string;
     description?: string;
-    icon?: SettingsGlyph;
+    icon?: IconGlyph;
     children: React.ReactNode;
     stack?: boolean;
 }) {
@@ -138,7 +137,7 @@ export function SettingActionRow({
     onClick,
 }: {
     title: string;
-    icon: SettingsGlyph;
+    icon: IconGlyph;
     onClick: () => void;
 }) {
     const inCard = React.useContext(InSettingCard);
@@ -148,7 +147,7 @@ export function SettingActionRow({
             onClick={onClick}
             className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-normal text-text-primary hover:bg-white/4"
         >
-            <FluentIcon icon={icon} className="shrink-0 text-text-muted" />
+            <Icon icon={icon} className="shrink-0 text-text-muted" />
             <span>{title}</span>
         </button>
     );
@@ -177,7 +176,7 @@ export function SettingSelect<T extends string>({
                     className={cn(SETTING_CONTROL_BTN, className)}
                 >
                     <span className="truncate">{label}</span>
-                    <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
+                    <Icon icon={ChevronDown20Regular} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[180px]">
@@ -374,7 +373,7 @@ export function SettingMultiSelect({
                     className={cn("h-8 min-w-[200px] max-w-[280px] justify-between gap-2 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10", className)}
                 >
                     <span className="truncate">{summary}</span>
-                    <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
+                    <Icon icon={ChevronDown20Regular} className="shrink-0 text-text-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[200px]">

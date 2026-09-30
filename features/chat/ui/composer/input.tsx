@@ -89,6 +89,7 @@ import {
 import { microphoneConstraints, microphoneErrorMessage, useSettings, hasByokApiKeys } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
+import { MultiworkAgentChips, getWorkers, isMultiworkMode, subscribeMultiwork } from "@/features/multiwork";
 import { commands } from "@/lib/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
@@ -879,6 +880,8 @@ export function ChatInput({
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
+    const multiwork = React.useSyncExternalStore(subscribeMultiwork, isMultiworkMode, () => false);
+    const multiworkWorkers = React.useSyncExternalStore(subscribeMultiwork, getWorkers, getWorkers);
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
     const allModels = resolveChatModels(getCatalogModels(), {
@@ -1254,7 +1257,8 @@ export function ChatInput({
     const hasContextStrip =
         (pendingEdits?.length ?? 0) > 0 ||
         queuedMessages.length > 0 ||
-        taskItems.length > 0;
+        taskItems.length > 0 ||
+        (multiwork && multiworkWorkers.length > 0);
 
     const sendDisabled =
         needsSignIn ||
@@ -1290,6 +1294,7 @@ export function ChatInput({
                             />
                         ) : null}
                         {taskItems.length > 0 ? <ComposerTasksStrip items={taskItems} /> : null}
+                        <MultiworkAgentChips />
                     </div>
                 ) : null}
 
@@ -1623,7 +1628,7 @@ export function ChatInput({
                                     disabled={needsSignIn}
                                 >
                                     <span className="text-sm">{fastMode ? "Fast" : "Standard"}</span>
-                                    <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60" />
+                                    <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60 icon-md" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
@@ -1713,7 +1718,7 @@ export function ChatInput({
                                             <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
                                         ) : null}
                                         <SwapText value={effortLabel(reasoningEffort)} />
-                                        <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60" />
+                                        <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60 icon-md" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>

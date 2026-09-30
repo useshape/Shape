@@ -1,8 +1,8 @@
 "use client";
 
-import { FluentIcon, settingsIcons } from "../fluent-icons";
-
+import { Link20Regular } from "@fluentui/react-icons/headless/svg/link";
 import React from "react";
+import { Icon } from "@/components/ui/icon";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -87,7 +87,7 @@ function ModelRow({
                 <div className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
                     <span className="min-w-0 truncate">{model.name}</span>
                     {isApiModel(model) ? (
-                        <FluentIcon icon={settingsIcons.link} className="shrink-0 text-text-muted" />
+                        <Icon icon={Link20Regular} className="shrink-0 text-text-muted" />
                     ) : null}
                 </div>
                 <div className="text-sm text-text-muted">

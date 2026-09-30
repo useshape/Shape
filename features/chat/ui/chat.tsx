@@ -26,7 +26,6 @@ import {
     upsertSubagent,
 } from "@/features/agent/subagents/store";
 import {
-    MultiworkBoard,
     MultiworkConfirmDialog,
     MultiworkWorkerView,
     closeWorker,
@@ -312,7 +311,9 @@ export default function Chat({
             </div>
             <div className="relative min-h-0 flex-1">
                 <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
-                    <MultiworkWorkerView />
+                    <div className="mx-auto w-full max-w-4xl">
+                        <MultiworkWorkerView />
+                    </div>
                 </div>
             </div>
             <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
@@ -322,8 +323,8 @@ export default function Chat({
             </div>
         </>
     ) : isEmpty && !embedded ? (
-        <div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center pb-8", insetX)}>
-            <div className={cn("flex w-full flex-col items-center gap-5", columnWidth)}>
+        <div className={cn("relative flex min-h-0 flex-1 flex-col items-center", multiwork ? "justify-start pt-16" : "justify-center pb-8", insetX)}>
+            <div className={cn("relative flex w-full flex-col items-center gap-5", columnWidth)}>
                 <ChatEmptyState
                     onSelectMode={(mode) => {
                         session.setSelectedMode(mode);
@@ -333,6 +334,9 @@ export default function Chat({
                 <div className="w-full">
                     {composer}
                 </div>
+                {multiwork ? (
+                    <img src="/promo/cloud.png" alt="" className="mt-2 w-full max-w-lg select-none" />
+                ) : null}
             </div>
         </div>
     ) : (
@@ -368,7 +372,7 @@ export default function Chat({
                             onFeedback={session.handleFeedback}
                             isFileEditResolved={session.isEditResolved}
                             activeChatTabId={session.activeChatTabId}
-                            fullWidthBubbles={multiwork}
+                            fullWidthBubbles={false}
                         />
                     </div>
                 </div>
@@ -408,11 +412,8 @@ export default function Chat({
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
             {embedded ? null : tabsSlot ? createPortal(titlebar, tabsSlot) : null}
 
-            <div className="relative flex min-h-0 flex-1 flex-row overflow-hidden">
-                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-                    {chatColumn}
-                </div>
-                {multiwork ? <MultiworkBoard /> : null}
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                {chatColumn}
             </div>
             <ChatErrorDialog
                 message={session.sendError}

@@ -299,7 +299,7 @@ export async function detectDevCommand(path: string): Promise<DevCommandInfo | n
             return null;
         }
 
-        const raw = await commands.readFile(pkgEntry.path);
+        const raw = (await commands.readFile(pkgEntry.path)).replace(/^\uFEFF/, "");
         const pkg = JSON.parse(raw) as Record<string, unknown>;
         const scripts =
             typeof pkg.scripts === "object" && pkg.scripts

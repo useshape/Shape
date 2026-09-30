@@ -47,7 +47,7 @@ const NUDGE_REASONING_ONLY: &str = "You thought but did not call any tools or re
 Call the tools you need now (read/search/etc), or give a short answer. Do not only think again.";
 
 const NUDGE_PLAN_REASONING_ONLY: &str = "You thought but did not research or save a plan. \
-Use read/search tools now, then call save_plan when ready. Do not only think again.";
+Use read/search tools now, then call save_plan with content plus a todos array. Do not outline in chat first.";
 
 const NUDGE_ASK_REASONING_ONLY: &str = "You thought but did not call tools or answer. \
 Read or search what you need, then answer the user. Do not only think again.";

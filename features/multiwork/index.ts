@@ -1,14 +1,15 @@
 export {
-    MultiworkBoard,
-} from "./board";
-export {
     MultiworkConfirmDialog,
     confirmMultiworkStart,
-} from "./confirm-dialog";
+} from "./ui/confirm";
 export {
     MultiworkWorkerView,
-} from "./worker-view";
+} from "./ui/worker";
 export {
+    MultiworkAgentChips,
+} from "./ui/chips";
+export {
+    appendWorkerLive,
     applyBusEvent,
     applyWorkerEvent,
     closeWorker,
@@ -16,6 +17,7 @@ export {
     getActiveWorkerId,
     getBoardView,
     getBus,
+    getAllWorkers,
     getWorkers,
     isMultiworkMode,
     openWorker,
@@ -27,4 +29,4 @@ export {
     upsertWorker,
     type MultiworkColumn,
     type MultiworkWorker,
-} from "./session-store";
+} from "./session/store";

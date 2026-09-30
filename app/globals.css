@@ -144,7 +144,7 @@
   --statusbar-height: 33px;
 
   /* ── Typography ── */
-  --font-ui: "Geist Variable", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --type-weight-normal: 500;
   --type-weight-medium: 600;

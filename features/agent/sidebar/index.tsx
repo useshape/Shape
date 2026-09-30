@@ -74,7 +74,7 @@ function NavItem({
             onClick={onClick}
             aria-current={active ? "page" : undefined}
             className={cn(
-                "flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left",
+                "flex h-9 w-full items-center justify-start gap-2 px-1.5! text-left",
                 active && "bg-panel-active",
             )}
         >
@@ -174,7 +174,7 @@ export function AgentSidebar({
                         <div
                             className={cn(
                                 "relative z-20 flex h-titlebar shrink-0 items-center",
-                                expanded ? "justify-between px-2" : "justify-center px-1.5",
+                                expanded ? "justify-between pl-3 pr-2" : "justify-center px-1.5",
                             )}
                         >
                             <SidebarToggleBtn
@@ -197,7 +197,7 @@ export function AgentSidebar({
                         <div
                             className={cn(
                                 "relative z-20 flex h-titlebar shrink-0 items-center gap-1",
-                                expanded ? "justify-between px-2" : "justify-center px-1.5",
+                                expanded ? "justify-between pl-3 pr-2" : "justify-center px-1.5",
                             )}
                         >
                             {expanded ? (
@@ -205,21 +205,18 @@ export function AgentSidebar({
                                     <button
                                         type="button"
                                         aria-label="Account"
-                                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-panel-hover"
+                                        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-panel-hover"
                                     >
                                         <ProfileAvatar
                                             gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
                                             shapeUserId={shapeAuth.userId}
                                             offline={Boolean(shapeAuth.offline)}
                                             name={displayName}
-                                            size={22}
+                                            size={20}
                                         />
-                                        <span className="min-w-0 flex-1 truncate text-sm font-normal text-text-primary">
-                                            {displayName}
-                                        </span>
                                         <Icon
                                             icon={ChevronDown20Regular}
-                                            className="shrink-0 text-text-muted"
+                                            className="shrink-0 text-text-muted!"
                                             style={{ ["--icon-size" as string]: "14px" }}
                                         />
                                     </button>
@@ -246,7 +243,7 @@ export function AgentSidebar({
                                     variant="ghost"
                                     size="sm"
                                     onClick={newChat}
-                                    className="flex h-8 w-full items-center justify-start gap-3 px-1.5! text-left"
+                                    className="flex h-9 w-full items-center justify-start gap-2 px-1.5! text-left"
                                 >
                                     <Icon icon={Compose20Regular} className="shrink-0 text-text-muted" />
                                     <span className="min-w-0 flex-1 truncate">New Chat</span>

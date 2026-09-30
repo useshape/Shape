@@ -129,28 +129,19 @@ export function SidebarToggleBtn({
     onToggle: () => void;
     collapsed?: boolean;
 }) {
-    if (collapsed) {
-        return (
-            <Tooltip content={open ? "Hide sidebar" : "Show sidebar"} side="right" delayDuration={80}>
-                <button
-                    type="button"
-                    aria-label={open ? "Hide sidebar" : "Show sidebar"}
-                    onClick={onToggle}
-                    className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                >
-                    <Icon icon={PanelLeft20Filled} />
-                </button>
-            </Tooltip>
-        );
-    }
     return (
-        <button
-            type="button"
-            aria-label={open ? "Hide sidebar" : "Show sidebar"}
-            onClick={onToggle}
-            className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-        >
-            <Icon icon={PanelLeft20Filled} />
-        </button>
+        <Tooltip content={open ? "Hide sidebar" : "Show sidebar"} side={collapsed ? "right" : "bottom"} delayDuration={80}>
+            <button
+                type="button"
+                aria-label={open ? "Hide sidebar" : "Show sidebar"}
+                onClick={onToggle}
+                className={cn(
+                    "flex items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary",
+                    collapsed ? "size-9" : "size-7",
+                )}
+            >
+                <Icon icon={PanelLeft20Filled} />
+            </button>
+        </Tooltip>
     );
 }

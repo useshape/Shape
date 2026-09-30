@@ -8,6 +8,7 @@ import { setChatGenerating } from "./generating-chats";
 import { isDemoChatPinned } from "./demo-chat";
 import { NEW_CHAT_TAB_ID } from "../ui/shell/tabs";
 import { upsertTaggedBlockInContent } from "./upsert-stream-blocks";
+import { appendWorkerLive } from "@/features/multiwork";
 
 const TOOL_LABELS: Record<string, string> = {
     read_file: "Reading file",
@@ -318,6 +319,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             }>("chat_started", (event) => {
                 const tid = event.payload?.turnId ?? null;
                 const convId = event.payload?.conversationId ?? null;
+                if (convId?.startsWith("mw-worker-")) return;
                 const startedModel = event.payload?.model;
                 const usedAuto = event.payload?.usedAuto;
                 if (convId) {
@@ -376,6 +378,11 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                         typeof raw === "string" ? raw : typeof raw?.chunk === "string" ? raw.chunk : "";
                     if (!chunk) return;
                     const meta = typeof raw === "string" ? undefined : raw;
+                    const workerConv = meta?.conversationId;
+                    if (workerConv?.startsWith("mw-worker-")) {
+                        appendWorkerLive(workerConv.slice("mw-worker-".length), chunk);
+                        return;
+                    }
                     if (meta?.turnId && finishedTurns.has(meta.turnId)) return;
                     const convId = meta?.conversationId ?? viewingIdRef.current;
                     if (convId && ignoredIdsRef.current.has(convId)) return;

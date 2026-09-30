@@ -85,7 +85,8 @@ const cssHighlight = HighlightStyle.define([
 /** VS Code Dark+ token colors. The light theme keeps the semantic CSS palette. */
 const darkHighlight = HighlightStyle.define([
     { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: "#6A9955", fontStyle: "italic" },
-    { tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.definitionKeyword, t.operatorKeyword, t.modifier], color: "#569CD6" },
+    { tag: [t.keyword, t.moduleKeyword, t.definitionKeyword, t.modifier], color: "#569CD6" },
+    { tag: [t.controlKeyword, t.operatorKeyword], color: "#C586C0" },
     { tag: [t.string, t.special(t.string), t.character, t.attributeValue], color: "#CE9178" },
     { tag: [t.regexp, t.escape], color: "#D7BA7D" },
     { tag: [t.number, t.integer, t.float], color: "#B5CEA8" },
@@ -97,14 +98,14 @@ const darkHighlight = HighlightStyle.define([
     { tag: [t.variableName, t.definition(t.variableName), t.local(t.variableName), t.special(t.variableName)], color: "#9CDCFE" },
     { tag: [t.operator, t.compareOperator, t.logicOperator, t.arithmeticOperator, t.punctuation, t.bracket, t.paren, t.squareBracket, t.brace, t.separator, t.angleBracket], color: "#D4D4D4" },
     { tag: t.tagName, color: "#569CD6" },
-    { tag: [t.heading, t.heading1, t.heading2], color: "#569CD6", fontWeight: "600" },
-    { tag: [t.link, t.url], color: "#569CD6" },
+    { tag: [t.heading, t.heading1, t.heading2, t.heading3, t.heading4, t.heading5, t.heading6], color: "#569CD6", fontWeight: "600" },
+    { tag: [t.link, t.url], color: "#569CD6", textDecoration: "underline" },
     { tag: t.emphasis, fontStyle: "italic", color: "#D4D4D4" },
     { tag: t.strong, fontWeight: "700", color: "#D4D4D4" },
-    { tag: t.strikethrough, textDecoration: "line-through", color: "#D4D4D4" },
-    { tag: t.quote, color: "#CE9178" },
-    { tag: t.monospace, color: "#D4D4D4" },
-    { tag: [t.meta, t.processingInstruction], color: "#6A9955" },
+    { tag: t.strikethrough, textDecoration: "line-through", color: "#808080" },
+    { tag: t.quote, color: "#6A9955" },
+    { tag: [t.monospace, t.special(t.string)], color: "#CE9178" },
+    { tag: [t.meta, t.processingInstruction], color: "#9CDCFE" },
     { tag: t.invalid, color: "#F44747" },
 ]);
 
@@ -126,8 +127,14 @@ function chromeTheme(dark: boolean) {
                 fontFeatureSettings: '"liga" 0, "calt" 0',
                 lineHeight: dark ? "1.35" : "1.55",
                 overflow: "auto",
+                scrollbarWidth: "none",
                 backgroundColor: "var(--panel)",
                 color: dark ? "#D4D4D4" : "var(--text-primary)",
+            },
+            ".cm-scroller::-webkit-scrollbar": {
+                display: "none",
+                width: "0",
+                height: "0",
             },
             ".cm-content": {
                 caretColor: dark ? "#AEAFAD" : "var(--text-primary)",
@@ -233,9 +240,7 @@ function chromeTheme(dark: boolean) {
                 fontWeight: "600",
             },
             ".cm-panels": {
-                backgroundColor: "var(--color-surface-2)",
-                color: "var(--color-text-primary)",
-                borderTop: "1px solid var(--color-border-subtle)",
+                display: "none",
             },
             ".cm-panels .cm-panel": {
                 padding: "6px 10px",
@@ -283,9 +288,8 @@ function chromeTheme(dark: boolean) {
             ".cm-underline": {
                 textDecoration: "none !important",
             },
-            ".cm-mergeView, .cm-mergeViewEditor, .cm-editor, .cm-scroller, .cm-content": {
+            ".cm-mergeView, .cm-mergeViewEditor, .cm-editor, .cm-scroller": {
                 backgroundColor: "var(--panel) !important",
-                color: "var(--text-primary)",
             },
         },
         { dark },

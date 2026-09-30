@@ -1,6 +1,6 @@
 //! Multiwork session registry: worker pool, model round-robin, nested turns.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex};
 
@@ -23,12 +23,20 @@ static MODEL_POOLS: LazyLock<Mutex<HashMap<String, (Vec<String>, usize)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static WORKER_META: LazyLock<Mutex<HashMap<String, WorkerMeta>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+static RUNNING: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+static INBOX: LazyLock<Mutex<HashMap<String, Vec<(String, String)>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Clone)]
 struct WorkerMeta {
     title: String,
     parent_conversation_id: Option<String>,
     model: String,
+    project_path: String,
+    api_key: String,
+    files_hint: Option<String>,
+    cancel: CancellationToken,
 }
 
 pub fn set_model_pool(conversation_id: &str, models: Vec<String>) {
@@ -46,10 +54,32 @@ pub fn clear_session(conversation_id: &str) {
     if let Ok(mut guard) = MODEL_POOLS.lock() {
         guard.remove(conversation_id);
     }
+    let ids: Vec<String> = WORKER_META
+        .lock()
+        .ok()
+        .map(|g| {
+            g.iter()
+                .filter(|(_, w)| w.parent_conversation_id.as_deref() == Some(conversation_id))
+                .map(|(id, _)| id.clone())
+                .collect()
+        })
+        .unwrap_or_default();
     if let Ok(mut meta) = WORKER_META.lock() {
-        meta.retain(|_, w| w.parent_conversation_id.as_deref() != Some(conversation_id));
+        for id in &ids {
+            meta.remove(id);
+        }
     }
-    WORKER_COUNT.store(0, Ordering::SeqCst);
+    if let Ok(mut run) = RUNNING.lock() {
+        for id in &ids {
+            run.remove(id);
+        }
+        WORKER_COUNT.store(run.len(), Ordering::SeqCst);
+    }
+    if let Ok(mut inbox) = INBOX.lock() {
+        for id in &ids {
+            inbox.remove(id);
+        }
+    }
 }
 
 fn next_model(conversation_id: Option<&str>, fallback: &str) -> String {
@@ -82,8 +112,16 @@ pub fn emit_bus(app: &AppHandle, payload: Value) {
     let _ = app.emit("multiwork-bus", payload);
 }
 
-pub fn register_worker(id: &str, title: &str, parent: Option<String>, model: &str) {
-    WORKER_COUNT.fetch_add(1, Ordering::SeqCst);
+pub fn register_worker(
+    id: &str,
+    title: &str,
+    parent: Option<String>,
+    model: &str,
+    project_path: &str,
+    api_key: &str,
+    files_hint: Option<String>,
+    cancel: CancellationToken,
+) {
     if let Ok(mut meta) = WORKER_META.lock() {
         meta.insert(
             id.to_string(),
@@ -91,15 +129,23 @@ pub fn register_worker(id: &str, title: &str, parent: Option<String>, model: &st
                 title: title.to_string(),
                 parent_conversation_id: parent,
                 model: model.to_string(),
+                project_path: project_path.to_string(),
+                api_key: api_key.to_string(),
+                files_hint,
+                cancel,
             },
         );
+    }
+    if let Ok(mut run) = RUNNING.lock() {
+        run.insert(id.to_string());
+        WORKER_COUNT.store(run.len(), Ordering::SeqCst);
     }
 }
 
 pub fn unregister_worker(id: &str) {
-    WORKER_COUNT.fetch_sub(1, Ordering::SeqCst);
-    if let Ok(mut meta) = WORKER_META.lock() {
-        meta.remove(id);
+    if let Ok(mut run) = RUNNING.lock() {
+        run.remove(id);
+        WORKER_COUNT.store(run.len(), Ordering::SeqCst);
     }
 }
 
@@ -115,6 +161,168 @@ pub fn worker_parent(id: &str) -> Option<String> {
         .lock()
         .ok()
         .and_then(|g| g.get(id).and_then(|w| w.parent_conversation_id.clone()))
+}
+
+fn clone_meta(id: &str) -> Option<WorkerMeta> {
+    WORKER_META.lock().ok().and_then(|g| g.get(id).cloned())
+}
+
+fn take_inbox(id: &str) -> Vec<(String, String)> {
+    INBOX
+        .lock()
+        .ok()
+        .and_then(|mut g| g.remove(id))
+        .unwrap_or_default()
+}
+
+fn enqueue_inbox(to_id: &str, from: &str, content: &str) {
+    if let Ok(mut g) = INBOX.lock() {
+        g.entry(to_id.to_string())
+            .or_default()
+            .push((from.to_string(), content.to_string()));
+    }
+}
+
+pub fn resolve_worker_id(query: &str) -> Option<String> {
+    let q = query.trim();
+    if q.is_empty() || q.eq_ignore_ascii_case("orchestrator") {
+        return None;
+    }
+    let Ok(meta) = WORKER_META.lock() else {
+        return None;
+    };
+    if meta.contains_key(q) {
+        return Some(q.to_string());
+    }
+    meta.iter()
+        .find(|(_, w)| w.title.eq_ignore_ascii_case(q))
+        .map(|(id, _)| id.clone())
+}
+
+pub fn worker_is_running(id: &str) -> bool {
+    RUNNING
+        .lock()
+        .ok()
+        .map(|g| g.contains(id))
+        .unwrap_or(false)
+}
+
+fn format_peer_followup(msgs: &[(String, String)]) -> String {
+    msgs.iter()
+        .map(|(from, content)| {
+            let title = if from == "orchestrator" {
+                "orchestrator".to_string()
+            } else {
+                worker_title(from).unwrap_or_else(|| from.clone())
+            };
+            format!("Message from {title}:\n{content}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn wake_idle_worker(app: AppHandle, id: &str, task: String) {
+    let Some(meta) = clone_meta(id) else {
+        return;
+    };
+    spawn_worker_turn(
+        app,
+        meta.project_path,
+        meta.api_key,
+        meta.model,
+        task,
+        meta.title,
+        id.to_string(),
+        meta.parent_conversation_id,
+        meta.cancel,
+        meta.files_hint,
+    );
+}
+
+pub fn deliver_peer_message(
+    app: &AppHandle,
+    from_id: &str,
+    to: &str,
+    content: &str,
+) -> Result<String, String> {
+    let from_title = if from_id == "orchestrator" {
+        "orchestrator".to_string()
+    } else {
+        worker_title(from_id).unwrap_or_else(|| from_id.to_string())
+    };
+    let to_trim = to.trim();
+    emit_bus(
+        app,
+        json!({
+            "from": from_title,
+            "to": to_trim,
+            "content": content,
+            "workerId": from_id,
+        }),
+    );
+    if to_trim.eq_ignore_ascii_case("orchestrator") {
+        return Ok("Message sent to the orchestrator.".to_string());
+    }
+    let to_id =
+        resolve_worker_id(to_trim).ok_or_else(|| format!("No worker matching \"{to_trim}\"."))?;
+    if to_id == from_id {
+        return Err("Cannot message yourself.".to_string());
+    }
+    enqueue_inbox(&to_id, from_id, content);
+    let to_title = worker_title(&to_id).unwrap_or_else(|| to_id.clone());
+    emit_worker(
+        app,
+        json!({
+            "id": to_id,
+            "activity": content.chars().take(96).collect::<String>(),
+        }),
+    );
+    if !worker_is_running(&to_id) {
+        let pending = take_inbox(&to_id);
+        if !pending.is_empty() {
+            wake_idle_worker(app.clone(), &to_id, format_peer_followup(&pending));
+        }
+    }
+    Ok(format!("Message delivered to {to_title}."))
+}
+
+pub fn deliver_broadcast(app: &AppHandle, from_id: &str, content: &str) -> Result<String, String> {
+    let ids: Vec<String> = WORKER_META
+        .lock()
+        .ok()
+        .map(|g| {
+            g.keys()
+                .filter(|id| id.as_str() != from_id)
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    if ids.is_empty() {
+        return Ok("No workers to broadcast to.".to_string());
+    }
+    let from_title = if from_id == "orchestrator" {
+        "orchestrator".to_string()
+    } else {
+        worker_title(from_id).unwrap_or_else(|| from_id.to_string())
+    };
+    emit_bus(
+        app,
+        json!({
+            "from": from_title,
+            "content": content,
+        }),
+    );
+    let n = ids.len();
+    for id in ids {
+        enqueue_inbox(&id, from_id, content);
+        if !worker_is_running(&id) {
+            let pending = take_inbox(&id);
+            if !pending.is_empty() {
+                wake_idle_worker(app.clone(), &id, format_peer_followup(&pending));
+            }
+        }
+    }
+    Ok(format!("Broadcast queued for {n} workers."))
 }
 
 pub fn spawn_worker_turn(
@@ -134,6 +342,10 @@ pub fn spawn_worker_turn(
         &title,
         parent_conversation_id.clone(),
         &model,
+        &project_path,
+        &api_key,
+        files_hint.clone(),
+        cancel.clone(),
     );
     emit_worker(
         &app,
@@ -150,49 +362,85 @@ pub fn spawn_worker_turn(
     );
 
     tauri::async_runtime::spawn(async move {
-        let outcome = run_worker_inner(
-            app.clone(),
-            project_path,
-            api_key,
-            model.clone(),
-            task.clone(),
-            title.clone(),
-            worker_id.clone(),
-            parent_conversation_id.clone(),
-            cancel,
-            files_hint,
-        )
-        .await;
+        let mut current_task = task.clone();
+        loop {
+            let outcome = run_worker_inner(
+                app.clone(),
+                project_path.clone(),
+                api_key.clone(),
+                model.clone(),
+                current_task.clone(),
+                title.clone(),
+                worker_id.clone(),
+                parent_conversation_id.clone(),
+                cancel.clone(),
+                files_hint.clone(),
+            )
+            .await;
 
-        let (status, activity, transcript) = match outcome {
-            Ok(text) => {
-                let line = text
-                    .lines()
-                    .find(|l| !l.trim().is_empty())
-                    .unwrap_or("Done")
-                    .chars()
-                    .take(96)
-                    .collect::<String>();
-                ("done", line, text)
+            let pending = take_inbox(&worker_id);
+            if !pending.is_empty() {
+                emit_worker(
+                    &app,
+                    json!({
+                        "id": worker_id,
+                        "activity": "Peer message…",
+                        "status": "running",
+                        "column": "running",
+                        "conversationId": parent_conversation_id,
+                    }),
+                );
+                current_task = format_peer_followup(&pending);
+                continue;
             }
-            Err(err) => ("error", err.clone(), err),
-        };
 
-        emit_worker(
-            &app,
-            json!({
-                "id": worker_id,
-                "title": title,
-                "task": task,
-                "model": model,
-                "activity": activity,
-                "column": if status == "done" { "review" } else { "running" },
-                "status": status,
-                "transcript": transcript,
-                "conversationId": parent_conversation_id,
-            }),
-        );
-        unregister_worker(&worker_id);
+            unregister_worker(&worker_id);
+            let late = take_inbox(&worker_id);
+            if !late.is_empty() {
+                register_worker(
+                    &worker_id,
+                    &title,
+                    parent_conversation_id.clone(),
+                    &model,
+                    &project_path,
+                    &api_key,
+                    files_hint.clone(),
+                    cancel.clone(),
+                );
+                current_task = format_peer_followup(&late);
+                continue;
+            }
+
+            let (status, activity, transcript) = match outcome {
+                Ok(text) => {
+                    let line = text
+                        .lines()
+                        .find(|l| !l.trim().is_empty())
+                        .unwrap_or("Done")
+                        .chars()
+                        .take(96)
+                        .collect::<String>();
+                    ("done", line, text)
+                }
+                Err(err) => ("error", err.clone(), err),
+            };
+
+            emit_worker(
+                &app,
+                json!({
+                    "id": worker_id,
+                    "title": title,
+                    "task": task,
+                    "model": model,
+                    "activity": activity,
+                    "column": if status == "done" { "review" } else { "running" },
+                    "status": status,
+                    "transcript": transcript,
+                    "conversationId": parent_conversation_id,
+                }),
+            );
+            break;
+        }
     });
 }
 
@@ -226,7 +474,7 @@ async fn run_worker_inner(
     let system = format!(
         "You are a Multiwork worker in Shape IDE named \"{title}\" (id {worker_id}).\n\
          Complete your assigned task with code tools. Prefer non-overlapping edits.\n\
-         Use `report_orchestrator` for status updates and `message_peer` to talk to siblings.\n\
+         Use `report_orchestrator` for status and `message_peer` to talk to other workers (id or title) — they get a follow-up turn with your message.\n\
          Keep progress concise; the board shows your card."
     );
     let user = format!("{task}{files_block}");

@@ -225,7 +225,7 @@ export function ChatTitlebar({
     );
 
     return (
-        <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden">
+        <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1">
             <Breadcrumb className="w-auto min-w-0 max-w-full overflow-hidden" aria-label="Project">
                 {repo ? (
                     <BreadcrumbItem onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}>

@@ -6,6 +6,7 @@ import Chat from "@/features/chat/ui/chat";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { AgentSidebar, AGENT_SIDEBAR_NAV_SLOT } from "./sidebar";
+import { ChatList } from "./sidebar/chats";
 import { AgentChrome } from "./chrome";
 import { AgentWorkspace } from "./workspace";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
@@ -21,6 +22,41 @@ const SIDEBAR_EXPANDED = 304;
 const MAX_WORKSPACE_RATIO = 0.72;
 const MAX_WORKSPACE_PX = 1200;
 const SPLASH_KEY = "shape-agent-splash-seen";
+
+function SidebarPeek() {
+    const [shown, setShown] = useState(false);
+    const timer = useRef<number | null>(null);
+
+    const arm = () => {
+        if (timer.current) window.clearTimeout(timer.current);
+        timer.current = window.setTimeout(() => setShown(true), 400);
+    };
+    const disarm = () => {
+        if (timer.current) window.clearTimeout(timer.current);
+        timer.current = null;
+    };
+
+    return (
+        <>
+            <div className="fixed inset-y-0 left-0 z-40 w-2" onMouseEnter={arm} onMouseLeave={disarm} />
+            <div
+                className={cn(
+                    "fixed inset-y-0 left-0 z-40 flex w-72 flex-col overflow-hidden rounded-r-md border-y border-r border-border bg-sidebar shadow-xl transition-transform duration-300 ease-[var(--ease-out)]",
+                    shown ? "translate-x-0" : "pointer-events-none -translate-x-full",
+                )}
+                onMouseEnter={() => setShown(true)}
+                onMouseLeave={() => setShown(false)}
+            >
+                <ChatList
+                    onNewChat={() => {
+                        window.dispatchEvent(new Event("shape-chat-new"));
+                        window.dispatchEvent(new Event("shape-chat-focus-input"));
+                    }}
+                />
+            </div>
+        </>
+    );
+}
 
 /**
  * Agent View — left sidebar (agent / settings / git / files nav),
@@ -401,6 +437,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                     );
                 }}
             />
+            {sidebarOpen ? null : <SidebarPeek />}
 
             <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel rounded-xl border-l border-border">
                 <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">

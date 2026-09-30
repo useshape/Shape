@@ -1,44 +1,122 @@
-const SVG = (body: string, color = "#a3a3a3") =>
-    `data:image/svg+xml,${encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
-    )}`;
+import bodies from "./vscode-bodies.json";
 
-const FILE = SVG(
-    `<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>`,
-);
-const FOLDER = SVG(
-    `<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>`,
-);
-const FOLDER_OPEN = SVG(
-    `<path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/>`,
-);
-
-const BY_EXT: Record<string, string> = {
-    ts: FILE,
-    tsx: FILE,
-    js: FILE,
-    jsx: FILE,
-    json: FILE,
-    md: FILE,
-    css: FILE,
-    html: FILE,
-    rs: FILE,
-    py: FILE,
-    toml: FILE,
-    yml: FILE,
-    yaml: FILE,
+const EXT: Record<string, keyof typeof bodies> = {
+    ts: "file-type-typescript",
+    mts: "file-type-typescript",
+    cts: "file-type-typescript",
+    tsx: "file-type-reactts",
+    js: "file-type-js",
+    mjs: "file-type-js",
+    cjs: "file-type-js",
+    jsx: "file-type-reactjs",
+    json: "file-type-json",
+    jsonc: "file-type-json",
+    md: "file-type-markdown",
+    mdx: "file-type-markdown",
+    css: "file-type-css",
+    scss: "file-type-css",
+    sass: "file-type-css",
+    less: "file-type-css",
+    html: "file-type-html",
+    htm: "file-type-html",
+    rs: "file-type-rust",
+    py: "file-type-python",
+    toml: "file-type-toml",
+    yml: "file-type-yaml",
+    yaml: "file-type-yaml",
+    png: "file-type-image",
+    jpg: "file-type-image",
+    jpeg: "file-type-image",
+    gif: "file-type-image",
+    webp: "file-type-image",
+    ico: "file-type-image",
+    svg: "file-type-svg",
+    xml: "file-type-xml",
+    go: "file-type-go",
+    java: "file-type-java",
+    sh: "file-type-shell",
+    bash: "file-type-shell",
+    zsh: "file-type-shell",
+    ps1: "file-type-powershell",
+    sql: "file-type-sql",
+    vue: "file-type-vue",
+    svelte: "file-type-svelte",
+    pdf: "file-type-pdf",
+    zip: "file-type-zip",
+    gz: "file-type-zip",
+    php: "file-type-php",
+    cpp: "file-type-cpp",
+    cc: "file-type-cpp",
+    cxx: "file-type-cpp",
+    c: "file-type-c",
+    h: "file-type-c",
+    cs: "file-type-csharp",
+    kt: "file-type-kotlin",
+    swift: "file-type-swift",
+    rb: "file-type-ruby",
+    lua: "file-type-lua",
+    graphql: "file-type-graphql",
+    gql: "file-type-graphql",
+    prisma: "file-type-prisma",
+    wasm: "file-type-wasm",
+    log: "file-type-log",
+    mp3: "file-type-audio",
+    wav: "file-type-audio",
+    mp4: "file-type-video",
+    mov: "file-type-video",
+    ttf: "file-type-font",
+    otf: "file-type-font",
+    woff: "file-type-font",
+    woff2: "file-type-font",
+    txt: "file-type-text",
+    env: "file-type-dotenv",
 };
+
+const NAME: Record<string, keyof typeof bodies> = {
+    "package.json": "file-type-npm",
+    "package-lock.json": "file-type-npm",
+    "pnpm-lock.yaml": "file-type-npm",
+    "yarn.lock": "file-type-npm",
+    "tsconfig.json": "file-type-tsconfig",
+    "cargo.toml": "file-type-cargo",
+    "cargo.lock": "file-type-cargo",
+    dockerfile: "file-type-docker",
+    "docker-compose.yml": "file-type-docker",
+    "docker-compose.yaml": "file-type-docker",
+    ".gitignore": "file-type-git",
+    ".gitattributes": "file-type-git",
+    ".gitmodules": "file-type-git",
+    license: "file-type-license",
+    "license.md": "file-type-license",
+    ".env": "file-type-dotenv",
+};
+
+const uriCache = new Map<string, string>();
+
+function uri(id: keyof typeof bodies): string {
+    const hit = uriCache.get(id);
+    if (hit) return hit;
+    const body = bodies[id] || bodies["default-file"];
+    const svg = `data:image/svg+xml,${encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32">${body}</svg>`,
+    )}`;
+    uriCache.set(id, svg);
+    return svg;
+}
 
 export function isDocumentLightTheme(): boolean {
     if (typeof document === "undefined") return false;
     return document.documentElement.getAttribute("data-theme") === "light";
 }
 
-export function getFolderIconPath(_name: string, isOpen = false, _light = false): string {
-    return isOpen ? FOLDER_OPEN : FOLDER;
+export function getFolderIconPath(_name: string, _isOpen = false, _light = false): string {
+    return uri("default-file");
 }
 
 export function getIconPath(name: string, _light = false): string {
-    const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
-    return BY_EXT[ext] ?? FILE;
+    const base = name.split(/[\\/]/).pop()?.toLowerCase() || name.toLowerCase();
+    if (NAME[base]) return uri(NAME[base]);
+    if (base.startsWith(".env")) return uri("file-type-dotenv");
+    const ext = base.includes(".") ? base.split(".").pop()! : "";
+    return uri(EXT[ext] ?? "default-file");
 }

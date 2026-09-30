@@ -85,7 +85,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
             >
                 <Icon
                     icon={Search20Regular}
-                    className="pointer-events-none absolute left-2.5 z-10 pr-0.5 text-input-placeholder!"
+                    className="pointer-events-none absolute left-2.5 mb-0.5 z-10 pr-0.5 text-input-placeholder!"
                 />
                 <input
                     {...props}
@@ -107,11 +107,12 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                         "disabled:cursor-not-allowed disabled:opacity-50",
                         "[&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
                         borderless
-                            ? "rounded-none border-0 bg-transparent py-2 pl-9 pr-8 shadow-none focus-visible:ring-0"
+                            ? "rounded-none border-0 bg-transparent! py-2 pl-9 pr-8 shadow-none focus-visible:ring-0"
                             : cn(
                                   "squircle-2xl border border-input-border bg-input-bg py-0 pl-9 pr-8",
                                   "focus-visible:border-border-focus focus-visible:ring-1 focus-visible:ring-border-focus",
                               ),
+                        className,
                     )}
                 />
                 <div className="absolute right-1 z-10 flex h-full items-center">

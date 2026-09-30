@@ -85,13 +85,13 @@
 }
 
 @keyframes shape-popover-in {
-  from { opacity: 0; transform: scale(var(--dropdown-pre-scale, 0.97)); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; scale: var(--dropdown-pre-scale, 0.97); }
+  to { opacity: 1; scale: 1; }
 }
 
 @keyframes shape-popover-out {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(var(--dropdown-closing-scale, 0.99)); }
+  from { opacity: 1; scale: 1; }
+  to { opacity: 0; scale: var(--dropdown-closing-scale, 0.99); }
 }
 
 .shape-popover-content {

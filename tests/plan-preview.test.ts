@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { displayPlanName, humanizePlanTitle, parsePlanMarkdown } from "@/lib/plan/preview";
+import {
+    displayPlanName,
+    humanizePlanTitle,
+    joinPlanDocument,
+    parsePlanMarkdown,
+    splitPlanDocument,
+} from "@/lib/plan/preview";
 
 describe("plan-preview", () => {
     it("parses goal and todos from plan markdown", () => {
@@ -44,5 +50,22 @@ Implement the authorization code flow.
             "Install the session packages",
             "Create src/oauth.ts",
         ]);
+    });
+
+    it("keeps todos in a trailing comment, not a markdown heading", () => {
+        const file = joinPlanDocument("# Auth\n\n## Goal\nShip OAuth.\n", [
+            { label: "Add callback route", done: false },
+            { label: "Store session", done: true },
+        ]);
+        expect(file).not.toMatch(/##\s*Todos/i);
+        expect(file).toContain("<!--shape-todos");
+        const split = splitPlanDocument(file);
+        expect(split.body).toContain("## Goal");
+        expect(split.body).not.toContain("shape-todos");
+        expect(split.todos).toEqual([
+            { label: "Add callback route", done: false },
+            { label: "Store session", done: true },
+        ]);
+        expect(parsePlanMarkdown(file).todos).toEqual(["Add callback route", "Store session"]);
     });
 });

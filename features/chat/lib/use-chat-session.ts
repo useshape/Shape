@@ -193,6 +193,8 @@ export function useChatSession() {
     selectedModelRef.current = selectedModel;
     const appliedDefaultModelRef = React.useRef(Boolean(readComposerPrefs().model));
     const [selectedMode, setSelectedMode] = React.useState("Code");
+    const selectedModeRef = React.useRef(selectedMode);
+    selectedModeRef.current = selectedMode;
     const [reasoningEffort, setReasoningEffort] = React.useState<"low" | "high" | "ultra" | "max">(
         () => readComposerPrefs().effort || "low",
     );
@@ -984,17 +986,14 @@ export function useChatSession() {
             const messageWithWorkflows = applyWorkflows(expandedMessage, settings.ai.workflows);
             const pluginAutoAllow = matchWorkflows(userMsg, settings.ai.workflows).flatMap(workflowAllowKeys);
 
-            const workerModels = multiwork
-                ? [
-                      selectedModel,
-                      ...selectedWorkerModels.filter((id) => id && id !== selectedModel),
-                  ]
-                : undefined;
+            const modelToSend = selectedModelRef.current || "auto";
+            const modeToSend = selectedModeRef.current;
+            const workerModels = multiwork ? [modelToSend] : undefined;
 
             await commands.sendChatMessage(
                 messageWithWorkflows,
-                selectedModel,
-                multiwork ? "Multiwork" : selectedMode,
+                modelToSend,
+                multiwork ? "Multiwork" : modeToSend,
                 mergedRules,
                 token,
                 undefined,
@@ -1528,7 +1527,7 @@ export function useChatSession() {
                 if (conv?.kind === "multiwork") {
                     // Re-enter Multiwork without wiping background workers for this session.
                     setMultiworkMode(true);
-                } else if (isMultiworkMode()) {
+                } else if (conv && isMultiworkMode()) {
                     setMultiworkMode(false);
                 }
                 await refreshHistory(true);

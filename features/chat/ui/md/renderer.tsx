@@ -16,7 +16,6 @@ import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
 import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
-import { DesignPreviewGallery } from '../blocks/gallery';
 import { GeneratedMediaCard } from '../blocks/generated-media';
 import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
@@ -1230,14 +1229,16 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'design_previews') {
+            const n = chunk.designPreviews?.length ?? 0;
+            if (n === 0) return null;
+            const names = (chunk.designPreviews || [])
+                .map((p) => p.name)
+                .filter(Boolean)
+                .join(" · ");
             return (
-                <DesignPreviewGallery
-                    key={`design-previews-${chunk.commandId || index}`}
-                    previews={chunk.designPreviews || []}
-                    selectedId={chunk.selectedConcept}
-                    pickId={chunk.commandId}
-                    status={chunk.commandStatus}
-                />
+                <p key={`design-previews-${index}`} className="my-1 text-sm text-text-muted">
+                    {names || `${n} design concept${n === 1 ? "" : "s"}`}
+                </p>
             );
         }
         if (chunk.type === 'generated_svg' || chunk.type === 'generated_image' || chunk.type === 'generated_audio') {
