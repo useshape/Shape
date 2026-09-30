@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import * as ReactWindow from "react-window";
 
 describe("deps", () => {
-    it("window", () => {
-        expect(ReactWindow.List).toBeTypeOf("function");
-        expect("FixedSizeList" in ReactWindow).toBe(false);
-    });
-
     it("tsserver", () => {
         expect(existsSync(path.resolve("node_modules/typescript/lib/tsserver.js"))).toBe(true);
     });

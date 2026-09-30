@@ -371,6 +371,7 @@ pub fn run() {
             agent::commands::conversation::get_conversations,
             agent::commands::approvals::apply_file_edit,
             agent::commands::commit_message::generate_commit_message,
+            agent::commands::commit_message::rewrite_open_file,
             agent::commands::git_ai::summarize_pull_request,
             agent::commands::git_ai::review_pull_request,
             agent::commands::git_ai::draft_pull_request,

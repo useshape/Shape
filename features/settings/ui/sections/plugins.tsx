@@ -1,8 +1,11 @@
 "use client";
 
-import { FluentIcon, settingsIcons } from "../fluent-icons";
-
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { ChevronLeft20Regular } from "@fluentui/react-icons/headless/svg/chevron-left";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
@@ -362,7 +365,7 @@ function PluginCarousel({
                         canPrev ? "opacity-100" : "pointer-events-none opacity-0",
                     )}
                 >
-                    <FluentIcon icon={settingsIcons.chevronLeft} />
+                    <Icon icon={ChevronLeft20Regular} />
                 </button>
                 <button
                     type="button"
@@ -374,7 +377,7 @@ function PluginCarousel({
                         canNext ? "opacity-100" : "pointer-events-none opacity-0",
                     )}
                 >
-                    <FluentIcon icon={settingsIcons.chevronRight} />
+                    <Icon icon={ChevronRight20Regular} />
                 </button>
             </div>
         </section>
@@ -460,7 +463,7 @@ function PluginDetail({
                 size="sm"
                 className={cn(SETTING_CONTROL_BTN, "mb-10 w-auto")}
             >
-                <FluentIcon icon={settingsIcons.arrowLeft} />
+                <Icon icon={ArrowLeft20Regular} />
                 Back
             </Button>
             <div className="flex items-start gap-4">
@@ -679,7 +682,7 @@ export function PluginsSettingsView() {
                                         className={SETTING_CONTROL_BTN}
                                     >
                                         {categoryLabel}
-                                        <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
+                                        <Icon icon={ChevronDown20Regular} className="shrink-0 text-text-muted" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" className="min-w-40">

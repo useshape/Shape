@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "@fontsource-variable/geist";
+import "@fontsource-variable/inter";
 import "./globals.css";
 import ClientLayout from "@/app/client-layout";
 

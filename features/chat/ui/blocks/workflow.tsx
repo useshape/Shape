@@ -1,5 +1,6 @@
 "use client";
 
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { Globe20Filled } from "@fluentui/react-icons/headless/svg/globe";
@@ -449,9 +450,7 @@ function GitStatusBadge({ status }: { status: string }) {
                 ? "text-warning"
                 : "text-text-muted";
     return (
-        <span className={cn("ml-auto shrink-0 text-sm font-medium bg-panel-hover squircle-xl px-2.5 py-1 tabular-nums",)}>
-            {label}
-        </span>
+        <span className={cn("ml-auto shrink-0 text-xs", color)}>{label}</span>
     );
 }
 
@@ -1353,19 +1352,28 @@ export function ActionItem({
     }
 
     if (block.type === "git_operation") {
+        const running = block.gitStatus === "running";
+        const failed = block.gitStatus === "error";
         const content = (config.content || "").trim();
-        const shortLabel =
-            config.label.length > 24 ? config.label.slice(0, 22) + "…" : config.label;
-        if (content) {
-            return (
-                <GitActionChip label={shortLabel}>
-                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all px-2 py-1.5 text-sm text-text-secondary custom-scrollbar">
-                        {content}
-                    </pre>
-                </GitActionChip>
-            );
-        }
-        return <GitActionChip label={shortLabel} />;
+        const fileLabel = config.file?.split(/[\\/]/).pop();
+        return (
+            <div className="flex w-fit max-w-full items-center gap-2 py-0.5 text-sm">
+                <Icon
+                    icon={Branch20Regular}
+                    className={cn("icon-sm shrink-0", running && "animate-spin", failed ? "text-error" : "text-text-muted")}
+                />
+                <span className={cn("text-text-secondary", failed && "text-error")}>{config.label}</span>
+                {fileLabel ? (
+                    <span className="inline-flex min-w-0 items-center gap-1 text-text-muted">
+                        <FileIcon name={fileLabel} className="size-4" />
+                        <span className="truncate">{fileLabel}</span>
+                    </span>
+                ) : null}
+                {content && content.length < 180 && !fileLabel ? (
+                    <span className="truncate text-text-muted">{content}</span>
+                ) : null}
+            </div>
+        );
     }
 
     if (block.type === "subagent" || block.type === "subagent_ref") {

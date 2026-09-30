@@ -468,24 +468,15 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         }
         return (
             <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
-                {isPlanFile ? (
-                    <PlanEditorHeader
-                        path={path}
-                        title={planTitle}
-                        raw={mode === "raw"}
-                        onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
-                    />
-                ) : (
-                    <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
-                        <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
-                        {isMarkdown ? (
-                            <MarkdownViewSwitch
-                                raw={mode === "raw"}
-                                onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
-                            />
-                        ) : null}
-                    </div>
-                )}
+                <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
+                    <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
+                    {isMarkdown && !isPlanFile ? (
+                        <MarkdownViewSwitch
+                            raw={mode === "raw"}
+                            onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
+                        />
+                    ) : null}
+                </div>
                 <div className="flex-1 w-full min-h-0 overflow-hidden relative">
                     <CodeMirrorEditor
                         path={path}
@@ -520,7 +511,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         saveDirtyBuffer(path, next, savedContentRef.current);
     };
 
-    if (isMarkdown && mode === "preview") {
+    if (isMarkdown && !isPlanFile && mode === "preview") {
         return (
             <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
                 {isPlanFile ? (

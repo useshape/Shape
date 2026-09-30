@@ -1,20 +1,25 @@
 "use client";
 
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
-import { ArrowSortDown20Regular } from "@fluentui/react-icons/headless/svg/arrow-sort-down";
+import { Bookmark20Regular } from "@fluentui/react-icons/headless/svg/bookmark";
+import { Checkmark } from "@/components/ui/checkmark";
+import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Filter20Regular } from "@fluentui/react-icons/headless/svg/filter";
 import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
 import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
-import { People20Regular } from "@fluentui/react-icons/headless/svg/people";
+import { PeopleChat24Filled } from "@fluentui/react-icons";
 import { Pin20Regular } from "@fluentui/react-icons/headless/svg/pin";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Eclipse } from "loading-dev";
 
 import {
+    Fragment,
     useCallback,
     useEffect,
     useMemo,
@@ -25,8 +30,7 @@ import {
 } from "react";
 import { commands, useProjectState } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
-import { Icon } from "@/components/ui/icon";
-
+import { Icon, type IconGlyph } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
@@ -38,7 +42,13 @@ import {
     getUnreadChatIds,
     getUnreadChatIdsServer,
     markChatUnread,
+    CHAT_COLOR_HEX,
+    deleteCollection,
+    getCollections,
+    getCollectionsServer,
     setChatPinned,
+    subscribeCollections,
+    type ChatColor,
     subscribePinnedChats,
     subscribeUnreadChats,
 } from "@/lib/sidebar/chat-list-meta";
@@ -52,15 +62,33 @@ import {
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import {
+    getAllWorkers,
+    openWorker,
+    subscribeMultiwork,
+    type MultiworkWorker,
+} from "@/features/multiwork";
 import { ScrollArea } from "@/components/ui/scroll";
+import { COLLECTION_GLYPH, CollectionDialog } from "./collection-dialog";
 
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
+type ChatFilter = "all" | "pinned" | "unread" | "multiwork" | "collection";
 
 const SORT_KEY = "shape-sidebar-chat-sort";
+const FILTER_OPTIONS: { value: ChatFilter; label: string }[] = [
+    { value: "all", label: "All sessions" },
+    { value: "pinned", label: "Pinned" },
+    { value: "unread", label: "Unread" },
+    { value: "multiwork", label: "Multiwork" },
+];
+
 const SORT_OPTIONS: { value: ChatSort; label: string }[] = [
     { value: "recent", label: "Recent" },
     { value: "oldest", label: "Oldest" },
@@ -111,6 +139,13 @@ function HeaderIconBtn({
     );
 }
 
+function workerDot(worker: MultiworkWorker): string {
+    if (worker.status === "error") return "bg-error";
+    if (worker.status === "done" || worker.column === "done") return "bg-success";
+    if (worker.column === "review") return "bg-warning";
+    return "bg-accent";
+}
+
 function ChatRow({
     id,
     title,
@@ -119,6 +154,13 @@ function ChatRow({
     pinned,
     unread,
     multiwork,
+    color,
+    workers,
+    edge = "none",
+    selecting = false,
+    selected = false,
+    onToggleSelect,
+    onCollect,
 }: {
     id: string;
     title: string;
@@ -127,10 +169,25 @@ function ChatRow({
     pinned: boolean;
     unread: boolean;
     multiwork: boolean;
+    color: ChatColor | null;
+    workers: MultiworkWorker[];
+    /** Where this row sits inside a collection stack. */
+    edge?: "none" | "only" | "first" | "mid" | "last";
+    selecting?: boolean;
+    selected?: boolean;
+    onToggleSelect?: () => void;
+    onCollect?: () => void;
 }) {
     const generating = useIsChatGenerating(id);
     const [renaming, setRenaming] = useState(false);
     const [draft, setDraft] = useState(title);
+    const [expanded, setExpanded] = useState(false);
+    const workerCount = useRef(0);
+    if (workerCount.current !== workers.length) {
+        const appeared = workerCount.current === 0 && workers.length > 0;
+        workerCount.current = workers.length;
+        if (appeared) setExpanded(true);
+    }
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -180,126 +237,274 @@ function ChatRow({
         setRenaming(true);
     };
 
+    const actions: { key: string; label: string; icon: IconGlyph; run: () => void; danger?: boolean; sep?: boolean }[] = [
+        { key: "open", label: "Open", icon: Open20Regular, run: openChat },
+        { key: "collect", label: "Add to collection", icon: Bookmark20Regular, run: () => onCollect?.() },
+        { key: "pin", label: pinned ? "Unpin" : "Pin", icon: Pin20Regular, run: () => setChatPinned(id, !pinned) },
+        { key: "rename", label: "Rename", icon: Edit20Regular, run: startRename },
+        { key: "new", label: "New Chat", icon: Add20Regular, run: () => window.dispatchEvent(new CustomEvent("shape-chat-new")) },
+        { key: "copy", label: "Copy Title", icon: Copy20Regular, sep: true, run: () => void navigator.clipboard.writeText(title) },
+        ...(path
+            ? [{ key: "reveal", label: "Reveal Folder", icon: FolderOpen20Regular, run: () => void commands.revealPath(path).catch(() => {}) }]
+            : []),
+        { key: "archive", label: "Archive", icon: MailInbox20Regular, sep: true, run: archive },
+        { key: "delete", label: "Delete", icon: Delete20Filled, danger: true, run: remove },
+    ];
+
+    const menuItems = (
+        Item: (props: { onClick?: () => void; className?: string; children?: ReactNode }) => ReactNode,
+        Separator: () => ReactNode,
+    ) =>
+        actions.map((action) => (
+            <Fragment key={action.key}>
+                {action.sep ? Separator() : null}
+                <Item onClick={action.run} className={action.danger ? "text-error" : undefined}>
+                    <Icon icon={action.icon} />
+                    {action.label}
+                </Item>
+            </Fragment>
+        ));
+
+    const fade = multiwork && workers.length > 0 ? "9rem" : "7.25rem";
+
     return (
-        <ContextMenu>
-            <ContextMenuTrigger asChild>
-                <div
-                    className={cn(
-                        "group/chat flex h-8 w-full items-center rounded-md px-2 text-sm",
-                        "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-                        active
-                            ? "bg-panel-hover text-text-primary"
-                            : "text-text-primary hover:bg-panel-hover",
-                    )}
-                >
-                    {renaming ? (
-                        <input
-                            ref={inputRef}
-                            value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
-                            onBlur={commitRename}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    commitRename();
-                                }
-                                if (e.key === "Escape") {
-                                    e.preventDefault();
-                                    setDraft(title);
-                                    setRenaming(false);
-                                }
-                            }}
-                            className="w-full rounded bg-transparent px-0 text-sm text-text-primary outline-none ring-1 ring-border"
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={openChat}
-                            className="flex w-full items-center gap-2 text-left"
-                        >
-                            <span className="min-w-0 flex-1 truncate text-sm font-normal text-text-primary">
-                                {title}
-                            </span>
-                            <span className="relative flex shrink-0 items-center">
-                                {multiwork ? (
-                                    <Icon
-                                        icon={People20Regular}
-                                        className="text-text-muted"
-                                        style={{ ["--icon-size" as string]: "14px" }}
-                                    />
-                                ) : null}
-                                {generating ? (
-                                    <Eclipse
-                                        size={12}
-                                        className={cn(
-                                            "text-text-muted",
-                                            multiwork && "absolute -right-1 -top-1",
-                                        )}
-                                        aria-hidden
-                                    />
-                                ) : !multiwork && unread ? (
+        <div
+            className={cn(
+                "flex flex-col overflow-hidden",
+                color && "bg-[color-mix(in_oklch,var(--chat-tint)_22%,transparent)] text-text-primary",
+                color && active && "bg-[color-mix(in_oklch,var(--chat-tint)_30%,transparent)]",
+            )}
+            style={color ? { ["--chat-tint" as string]: CHAT_COLOR_HEX[color] } : undefined}
+        >
+            <ContextMenu>
+                <ContextMenuTrigger asChild>
+                    <div
+                        className={cn(
+                            "group/chat relative flex h-10 w-full items-center gap-1 px-2 text-sm",
+                            !color && "squircle-2xl",
+                            "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                            !color && (active ? "bg-panel-hover text-text-primary" : "text-text-primary hover:bg-panel-hover"),
+                            color && "text-text-primary hover:bg-[color-mix(in_oklch,var(--chat-tint)_12%,transparent)]",
+                        )}
+                    >
+                        {renaming ? (
+                            <input
+                                ref={inputRef}
+                                value={draft}
+                                onChange={(e) => setDraft(e.target.value)}
+                                onBlur={commitRename}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        commitRename();
+                                    }
+                                    if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        setDraft(title);
+                                        setRenaming(false);
+                                    }
+                                }}
+                                className="w-full rounded bg-transparent px-0 text-sm text-text-primary outline-none ring-1 ring-border"
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        if (event.ctrlKey || event.metaKey) {
+                                            onToggleSelect?.();
+                                            return;
+                                        }
+                                        openChat();
+                                    }}
+                                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                >
                                     <span
-                                        className="size-2 shrink-0 rounded-full bg-accent"
-                                        aria-label="Unread"
-                                    />
+                                        className={cn(
+                                            "grid shrink-0 transition-[grid-template-columns,opacity,margin] duration-200 ease-[var(--ease-out)]",
+                                            selecting ? "mr-1 grid-cols-[14px] opacity-100" : "grid-cols-[0px] opacity-0",
+                                        )}
+                                    >
+                                        <span className="overflow-hidden">
+                                            <Checkmark
+                                                checked={selected}
+                                                onCheckedChange={() => onToggleSelect?.()}
+                                            />
+                                        </span>
+                                    </span>
+                                    <span
+                                        className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-normal text-text-primary [--title-fade:1.25rem] group-hover/chat:[--title-fade:var(--title-fade-hover)] group-has-[[data-state=open]]/chat:[--title-fade:var(--title-fade-hover)]"
+                                        style={{
+                                            ["--title-fade-hover" as string]: fade,
+                                            maskImage: "linear-gradient(to right, #000 0, #000 calc(100% - var(--title-fade)), transparent)",
+                                        }}
+                                    >
+                                        {title}
+                                    </span>
+                                </button>
+                                <span className="flex shrink-0 items-center group-hover/chat:invisible has-[[data-state=open]]:invisible">
+                                    {generating ? (
+                                        <Eclipse size={12} className="text-text-muted" aria-hidden />
+                                    ) : multiwork ? (
+                                        <Icon
+                                            icon={PeopleChat24Filled}
+                                            className="text-text-muted"
+                                            style={{ ["--icon-size" as string]: "16px" }}
+                                        />
+                                    ) : unread ? (
+                                        <span className="size-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
+                                    ) : null}
+                                </span>
+                                <span className={cn(
+                                    "pointer-events-none absolute z-10 flex items-center opacity-0 group-hover/chat:pointer-events-auto group-hover/chat:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
+                                    multiwork && workers.length > 0 ? "right-7" : "right-1",
+                                )}>
+                                    <Tooltip content="Add to collection" side="bottom">
+                                        <button
+                                            type="button"
+                                            aria-label="Add to collection"
+                                            onClick={() => onCollect?.()}
+                                            className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
+                                        >
+                                            <Icon icon={Bookmark20Regular} className="icon-sm" />
+                                        </button>
+                                    </Tooltip>
+                                    <Tooltip content={pinned ? "Unpin" : "Pin"} side="bottom">
+                                        <button
+                                            type="button"
+                                            aria-label={pinned ? "Unpin" : "Pin"}
+                                        onClick={() => setChatPinned(id, !pinned)}
+                                        className={cn(
+                                            "flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary",
+                                            pinned && "text-text-primary",
+                                        )}
+                                    >
+                                        <Icon icon={Pin20Regular} className="icon-sm" />
+                                    </button>
+                                    </Tooltip>
+                                    <DropdownMenu modal={false}>
+                                        <Tooltip content="Chat actions" side="bottom">
+                                        <DropdownMenuTrigger asChild>
+                                            <button
+                                                type="button"
+                                                aria-label="Chat actions"
+                                                className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
+                                            >
+                                                <Icon icon={MoreHorizontal20Regular} className="icon-sm" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        </Tooltip>
+                                        <DropdownMenuContent side="bottom" align="end" sideOffset={6} className="min-w-48">
+                                            {menuItems(
+                                                (props) => <DropdownMenuItem {...props} />,
+                                                () => <DropdownMenuSeparator />,
+                                            )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </span>
+                                {multiwork && workers.length > 0 ? (
+                                    <button
+                                        type="button"
+                                        aria-label={expanded ? "Hide agents" : "Show agents"}
+                                        aria-expanded={expanded}
+                                        onClick={() => setExpanded((open) => !open)}
+                                        className="flex size-5 shrink-0 items-center justify-center text-text-muted"
+                                    >
+                                        <Icon
+                                            icon={ChevronRight20Regular}
+                                            className={cn(
+                                                "icon-sm transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                                                expanded && "rotate-90",
+                                            )}
+                                        />
+                                    </button>
                                 ) : null}
+                            </>
+                        )}
+                    </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="min-w-48">
+                    {menuItems(
+                        (props) => <ContextMenuItem {...props} />,
+                        () => <ContextMenuSeparator />,
+                    )}
+                </ContextMenuContent>
+            </ContextMenu>
+            {multiwork && expanded && workers.length > 0 ? (
+                <div className="flex flex-col">
+                    {workers.map((worker) => (
+                        <button
+                            key={worker.id}
+                            type="button"
+                            onClick={() => {
+                                clearChatUnread(id);
+                                window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
+                                openWorker(worker.id);
+                            }}
+                            className={cn(
+                                "flex h-8 items-center gap-2 pr-2 pl-7 text-left text-sm text-text-secondary",
+                                color
+                                    ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
+                                    : "hover:bg-panel-hover hover:text-text-primary",
+                            )}
+                        >
+                            <span className={cn("size-1.5 shrink-0 rounded-full", workerDot(worker))} aria-hidden />
+                            <span className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-1.5rem),transparent)]">
+                                {worker.title}
                             </span>
                         </button>
-                    )}
+                    ))}
                 </div>
-            </ContextMenuTrigger>
-            <ContextMenuContent className="min-w-48">
-                <ContextMenuItem onClick={openChat}>
-                    <Icon icon={Open20Regular} />
-                    Open
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => setChatPinned(id, !pinned)}>
-                    <Icon icon={Pin20Regular} />
-                    {pinned ? "Unpin" : "Pin"}
-                </ContextMenuItem>
-                <ContextMenuItem onClick={startRename}>
-                    <Icon icon={Edit20Regular} />
-                    Rename
-                </ContextMenuItem>
-                <ContextMenuItem
-                    onClick={() => {
-                        window.dispatchEvent(new CustomEvent("shape-chat-new"));
-                    }}
-                >
-                    <Icon icon={Add20Regular} />
-                    New Chat
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem
-                    onClick={() => {
-                        void navigator.clipboard.writeText(title);
-                    }}
-                >
-                    <Icon icon={Copy20Regular} />
-                    Copy Title
-                </ContextMenuItem>
-                {path ? (
-                    <ContextMenuItem
-                        onClick={() => {
-                            void commands.revealPath(path).catch(() => {});
-                        }}
-                    >
-                        <Icon icon={FolderOpen20Regular} />
-                        Reveal Folder
-                    </ContextMenuItem>
-                ) : null}
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={archive}>
-                    <Icon icon={MailInbox20Regular} />
-                    Archive
-                </ContextMenuItem>
-                <ContextMenuItem onClick={remove} className="text-error">
-                    <Icon icon={Delete20Filled} />
-                    Delete
-                </ContextMenuItem>
-            </ContextMenuContent>
-        </ContextMenu>
+            ) : null}
+        </div>
+    );
+}
+
+function SessionRow({
+    chat,
+    projectPath,
+    activeId,
+    pinned,
+    unread,
+    color,
+    workers,
+    edge = "none",
+    selecting,
+    selected,
+    onToggleSelect,
+    onCollect,
+}: {
+    chat: Conversation;
+    projectPath: string;
+    activeId: string | null;
+    pinned: boolean;
+    unread: boolean;
+    color: ChatColor | null;
+    workers: MultiworkWorker[];
+    edge?: "none" | "only" | "first" | "mid" | "last";
+    selecting: boolean;
+    selected: boolean;
+    onToggleSelect: () => void;
+    onCollect: () => void;
+}) {
+    return (
+        <ChatRow
+            id={chat.id}
+            title={chat.title?.trim() || "Untitled"}
+            path={chat.project_path || projectPath}
+            active={chat.id === activeId}
+            pinned={pinned}
+            unread={unread}
+            multiwork={chat.kind === "multiwork"}
+            color={color}
+            workers={workers}
+            edge={edge}
+            selecting={selecting}
+            selected={selected}
+            onToggleSelect={onToggleSelect}
+            onCollect={onCollect}
+        />
     );
 }
 
@@ -313,6 +518,10 @@ export function ChatList({
     const { project_path } = useProjectState();
     const [chats, setChats] = useState<Conversation[]>([]);
     const [sort, setSort] = useState<ChatSort>("recent");
+    const [filter, setFilter] = useState<ChatFilter>("all");
+    const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [collect, setCollect] = useState<{ ids: string[]; editId?: string } | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
 
     const pinnedIds = useSyncExternalStore(
@@ -325,6 +534,8 @@ export function ChatList({
         getUnreadChatIds,
         getUnreadChatIdsServer,
     );
+    const collections = useSyncExternalStore(subscribeCollections, getCollections, getCollectionsServer);
+    const allWorkers = useSyncExternalStore(subscribeMultiwork, getAllWorkers, getAllWorkers);
 
     useEffect(() => {
         setSort(loadSort());
@@ -422,6 +633,53 @@ export function ChatList({
         return sorted;
     }, [chats, sort, pinnedIds]);
 
+    const filtered = useMemo(() => {
+        if (filter === "pinned") return visible.filter((c) => pinnedIds.has(c.id));
+        if (filter === "unread") return visible.filter((c) => unreadIds.has(c.id));
+        if (filter === "multiwork") return visible.filter((c) => c.kind === "multiwork");
+        if (filter === "collection" && collectionFilter) {
+            const ids = new Set(collections.find((c) => c.id === collectionFilter)?.chatIds ?? []);
+            return visible.filter((c) => ids.has(c.id));
+        }
+        return visible;
+    }, [visible, filter, collectionFilter, pinnedIds, unreadIds, collections]);
+
+    const collected = new Set(collections.flatMap((collection) => collection.chatIds));
+    const byId = new Map(filtered.map((chat) => [chat.id, chat]));
+    const collectionGroups = collections
+        .map((collection) => ({
+            collection,
+            chats: collection.chatIds
+                .map((id) => byId.get(id))
+                .filter((chat): chat is Conversation => Boolean(chat)),
+        }))
+        .filter((group) => group.chats.length > 0);
+    const plainPinned = filtered.filter((c) => pinnedIds.has(c.id) && !collected.has(c.id));
+    const plainChats = filtered.filter((c) => !pinnedIds.has(c.id) && !collected.has(c.id));
+
+    const selected = new Set(selectedIds);
+    const toggleSelect = (id: string) => {
+        setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+    };
+    const openCollect = (id: string) => {
+        setCollect({ ids: selectedIds.includes(id) ? [...selectedIds] : [id] });
+    };
+
+    const rowProps = (chat: Conversation, color: ChatColor | null, edge: "none" | "only" | "first" | "mid" | "last") => ({
+        chat,
+        projectPath: project_path || "",
+        activeId,
+        pinned: pinnedIds.has(chat.id),
+        unread: unreadIds.has(chat.id),
+        color,
+        edge,
+        workers: allWorkers.filter((worker) => worker.parentId === chat.id),
+        selecting: selectedIds.length > 0,
+        selected: selected.has(chat.id),
+        onToggleSelect: () => toggleSelect(chat.id),
+        onCollect: () => openCollect(chat.id),
+    });
+
     const openCommandPalette = () => {
         window.dispatchEvent(
             new CustomEvent("shape-command-palette", {
@@ -439,18 +697,64 @@ export function ChatList({
                         <Icon icon={Search20Regular} />
                     </HeaderIconBtn>
                     <DropdownMenu>
-                        <Tooltip content="Sort" side="bottom" delayDuration={80}>
+                        <Tooltip content="Filter" side="bottom" delayDuration={80}>
                             <DropdownMenuTrigger asChild>
                                 <button
                                     type="button"
-                                    aria-label="Sort"
+                                    aria-label="Filter"
                                     className="flex size-7 items-center justify-center rounded-md text-text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary data-[state=open]:bg-panel-hover data-[state=open]:text-text-primary"
                                 >
-                                    <Icon icon={ArrowSortDown20Regular} />
+                                    <Icon icon={Filter20Regular} />
                                 </button>
                             </DropdownMenuTrigger>
                         </Tooltip>
-                        <DropdownMenuContent align="end" className="min-w-36">
+                        <DropdownMenuContent align="end" className="min-w-40">
+                            <DropdownMenuLabel>Show</DropdownMenuLabel>
+                            <DropdownMenuRadioGroup
+                                value={filter === "collection" && collectionFilter ? `collection:${collectionFilter}` : filter}
+                                onValueChange={(value) => {
+                                    if (value.startsWith("collection:")) {
+                                        setFilter("collection");
+                                        setCollectionFilter(value.slice("collection:".length));
+                                        return;
+                                    }
+                                    setFilter(value as ChatFilter);
+                                    setCollectionFilter(null);
+                                }}
+                            >
+                                {FILTER_OPTIONS.map((opt) => (
+                                    <DropdownMenuRadioItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </DropdownMenuRadioItem>
+                                ))}
+                            </DropdownMenuRadioGroup>
+                            {collections.length > 0 ? (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel>Collections</DropdownMenuLabel>
+                                    <DropdownMenuRadioGroup
+                                        value={filter === "collection" && collectionFilter ? `collection:${collectionFilter}` : filter}
+                                        onValueChange={(value) => {
+                                            if (!value.startsWith("collection:")) return;
+                                            setFilter("collection");
+                                            setCollectionFilter(value.slice("collection:".length));
+                                        }}
+                                    >
+                                        {collections.map((collection) => (
+                                            <DropdownMenuRadioItem key={collection.id} value={`collection:${collection.id}`}>
+                                                <Icon
+                                                    icon={COLLECTION_GLYPH[collection.icon]}
+                                                    className="icon-sm"
+                                                    style={{ color: CHAT_COLOR_HEX[collection.color] }}
+                                                />
+                                                {collection.name}
+                                            </DropdownMenuRadioItem>
+                                        ))}
+                                    </DropdownMenuRadioGroup>
+                                </>
+                            ) : null}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Sort</DropdownMenuLabel>
                             <DropdownMenuRadioGroup
                                 value={sort}
                                 onValueChange={(value) => persistSort(value as ChatSort)}
@@ -479,7 +783,7 @@ export function ChatList({
                         <Icon icon={FolderOpen20Regular} />
                         New project
                     </button>
-                ) : visible.length === 0 ? (
+                ) : filtered.length === 0 ? (
                     <button
                         type="button"
                         onClick={onNewChat}
@@ -490,21 +794,91 @@ export function ChatList({
                     </button>
                 ) : (
                     <div className="space-y-0.5">
-                        {visible.map((c) => (
-                            <ChatRow
-                                key={c.id}
-                                id={c.id}
-                                title={c.title?.trim() || "Untitled"}
-                                path={c.project_path || project_path || ""}
-                                active={c.id === activeId}
-                                pinned={pinnedIds.has(c.id)}
-                                unread={unreadIds.has(c.id)}
-                                multiwork={c.kind === "multiwork"}
-                            />
+                        {plainPinned.map((c) => (
+                            <SessionRow key={c.id} {...rowProps(c, null, "none")} />
+                        ))}
+                        {collectionGroups.map((group) => {
+                            const hex = CHAT_COLOR_HEX[group.collection.color];
+                            return (
+                                <div key={group.collection.id} className="squircle-[20px] flex flex-col overflow-hidden">
+                                    <div
+                                        className="group/col relative flex h-8 items-center gap-1.5 bg-[color-mix(in_oklch,var(--chat-tint)_22%,transparent)] px-2 text-text-primary"
+                                        style={{ ["--chat-tint" as string]: hex }}
+                                    >
+                                        <Icon
+                                            icon={COLLECTION_GLYPH[group.collection.icon]}
+                                            className="icon-sm shrink-0"
+                                            style={{ color: hex }}
+                                        />
+                                        <span
+                                            className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm [--title-fade:0.75rem] group-hover/col:[--title-fade:3.5rem]"
+                                            style={{ maskImage: "linear-gradient(to right, #000 0, #000 calc(100% - var(--title-fade)), transparent)" }}
+                                        >
+                                            {group.collection.name}
+                                        </span>
+                                        <span className="pointer-events-none absolute right-1 z-10 flex items-center opacity-0 group-hover/col:pointer-events-auto group-hover/col:opacity-100">
+                                            <Tooltip content="Edit collection" side="bottom">
+                                            <button
+                                                type="button"
+                                                aria-label="Edit collection"
+                                                onClick={() =>
+                                                    setCollect({
+                                                        ids: group.collection.chatIds,
+                                                        editId: group.collection.id,
+                                                    })
+                                                }
+                                                className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
+                                            >
+                                                <Icon icon={Edit20Regular} className="icon-sm" />
+                                            </button>
+                                            </Tooltip>
+                                            <Tooltip content="Ungroup" side="bottom">
+                                            <button
+                                                type="button"
+                                                aria-label="Ungroup collection"
+                                                onClick={() => {
+                                                    deleteCollection(group.collection.id);
+                                                    if (collectionFilter === group.collection.id) {
+                                                        setFilter("all");
+                                                        setCollectionFilter(null);
+                                                    }
+                                                }}
+                                                className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
+                                            >
+                                                <Icon icon={Delete20Filled} className="icon-sm" />
+                                            </button>
+                                            </Tooltip>
+                                        </span>
+                                    </div>
+                                    {group.chats.map((c, index) => (
+                                        <SessionRow
+                                            key={c.id}
+                                            {...rowProps(
+                                                c,
+                                                group.collection.color,
+                                                index === group.chats.length - 1 ? "last" : "mid",
+                                            )}
+                                        />
+                                    ))}
+                                </div>
+                            );
+                        })}
+                        {plainChats.map((c) => (
+                            <SessionRow key={c.id} {...rowProps(c, null, "none")} />
                         ))}
                     </div>
                 )}
             </ScrollArea>
+            {collect ? (
+                <CollectionDialog
+                    chatIds={collect.ids}
+                    existing={collections.find((collection) => collection.id === collect.editId) ?? null}
+                    onClose={() => {
+                        setCollect(null);
+                        setSelectedIds([]);
+                    }}
+                />
+            ) : null}
         </div>
     );
 }

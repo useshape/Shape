@@ -6,7 +6,7 @@ import { MessageRenderer } from "@/features/chat/ui/md/renderer";
 import {
     getActiveWorker,
     subscribeMultiwork,
-} from "./session-store";
+} from "../session/store";
 
 export function MultiworkWorkerView() {
     const worker = useSyncExternalStore(subscribeMultiwork, getActiveWorker, getActiveWorker);

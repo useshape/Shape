@@ -43,7 +43,7 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
                                 <span className="t-spin-check__ring" />
                             </span>
                         ) : (
-                            <Icon icon={Checkmark20Regular} className="text-success" />
+                            <Icon icon={Checkmark20Regular} className="icon-sm text-success" />
                         )}
                     </span>
                     <span className="truncate">{active.label}</span>
@@ -61,9 +61,9 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
                                     <span className="t-spin-check__ring" />
                                 </span>
                             ) : item.status === "done" ? (
-                                <Icon icon={Checkmark20Regular} className="text-success" />
+                                <Icon icon={Checkmark20Regular} className="icon-sm text-success" />
                             ) : (
-                                <span className="size-3.5 rounded-full border-2 border-text-muted/45" />
+                                <span className="size-3.5 rounded-full border border-text-muted/55" />
                             )}
                         </span>
                         <span

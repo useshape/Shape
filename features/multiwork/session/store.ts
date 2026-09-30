@@ -12,6 +12,10 @@ export type MultiworkWorker = {
     status: "pending" | "running" | "done" | "error";
     transcript?: string;
     parentId?: string;
+    /** Latest activity lines, newest first. */
+    recent?: string[];
+    /** Raw live transcript tail from the worker turn. */
+    live?: string;
     updatedAt: number;
 };
 
@@ -37,12 +41,12 @@ const listeners = new Set<Listener>();
 
 function rebuildWorkersSnapshot() {
     if (!focusConversationId) {
-        workersSnapshot = workers;
+        workersSnapshot = workers.filter((w) => !w.parentId);
+        if (workersSnapshot.length === 0) workersSnapshot = EMPTY_WORKERS;
         return;
     }
-    workersSnapshot = workers.filter(
-        (w) => !w.parentId || w.parentId === focusConversationId,
-    );
+    workersSnapshot = workers.filter((w) => w.parentId === focusConversationId);
+    if (workersSnapshot.length === 0) workersSnapshot = EMPTY_WORKERS;
 }
 
 function emit() {
@@ -92,6 +96,19 @@ export function getWorkers(): MultiworkWorker[] {
     return workersSnapshot;
 }
 
+const EMPTY_WORKERS: MultiworkWorker[] = [];
+const liveBeforeCreate = new Map<string, string>();
+
+function keptParent(incoming: string | undefined, previous: string | undefined): string | undefined {
+    if (!incoming || incoming.startsWith("mw-worker-")) return previous;
+    return incoming;
+}
+
+/** Every worker, including ones whose parent chat is not focused. */
+export function getAllWorkers(): MultiworkWorker[] {
+    return workers.length === 0 ? EMPTY_WORKERS : workers;
+}
+
 export function getBus(): MultiworkBusLine[] {
     return bus;
 }
@@ -118,31 +135,55 @@ export function closeWorker() {
     emit();
 }
 
+function rememberActivity(prev: string[] | undefined, previous: string | undefined, next?: string): string[] {
+    const base = prev ?? [];
+    const line = next?.trim();
+    if (!line || line === previous || line === "Working…") return base;
+    return [line, ...base.filter((item) => item !== line)].slice(0, 6);
+}
+
 export function upsertWorker(partial: Partial<MultiworkWorker> & { id: string }) {
     const now = Date.now();
     const idx = workers.findIndex((w) => w.id === partial.id);
+    const prev = idx >= 0 ? workers[idx] : undefined;
+    const recent = rememberActivity(prev?.recent, prev?.activity, partial.activity);
+    const parentId = keptParent(partial.parentId, prev?.parentId);
+    const buffered = liveBeforeCreate.get(partial.id);
+    const live = partial.live ?? buffered ?? prev?.live;
+    if (buffered && (partial.live || prev)) liveBeforeCreate.delete(partial.id);
+    const next: MultiworkWorker = {
+        id: partial.id,
+        title: partial.title || prev?.title || "Worker",
+        task: partial.task ?? prev?.task ?? "",
+        model: partial.model ?? prev?.model,
+        activity: partial.activity ?? prev?.activity ?? "Working…",
+        column: partial.column ?? prev?.column ?? "running",
+        status: partial.status ?? prev?.status ?? "running",
+        transcript: partial.transcript ?? prev?.transcript,
+        parentId,
+        recent,
+        live,
+        updatedAt: now,
+    };
     if (idx >= 0) {
-        workers = workers.map((w, i) =>
-            i === idx ? { ...w, ...partial, updatedAt: now } : w,
-        );
+        workers = workers.map((w, i) => (i === idx ? next : w));
     } else {
-        workers = [
-            ...workers,
-            {
-                id: partial.id,
-                title: partial.title || "Worker",
-                task: partial.task || "",
-                model: partial.model,
-                activity: partial.activity || "Working…",
-                column: partial.column || "running",
-                status: partial.status || "running",
-                transcript: partial.transcript,
-                parentId: partial.parentId,
-                updatedAt: now,
-            },
-        ];
+        workers = [...workers, next];
     }
     emit();
+}
+
+/** Append a raw worker token. Display code strips tags before showing it. */
+export function appendWorkerLive(workerId: string, chunk: string) {
+    if (!workerId || !chunk) return;
+    const prev = workers.find((w) => w.id === workerId);
+    const base = prev?.live ?? liveBeforeCreate.get(workerId) ?? "";
+    const live = (base + chunk).slice(-2400);
+    if (!prev) {
+        liveBeforeCreate.set(workerId, live);
+        return;
+    }
+    upsertWorker({ id: workerId, live });
 }
 
 export function pushBusLine(line: Omit<MultiworkBusLine, "id" | "at"> & { id?: string }) {

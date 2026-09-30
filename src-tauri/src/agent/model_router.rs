@@ -76,6 +76,11 @@ pub fn is_auto_selection(model: &str) -> bool {
     matches!(model.trim(), "auto" | "openrouter/auto")
 }
 
+/// Model id for the in-editor single-file rewrite. Always Shape Auto (included).
+pub fn editor_rewrite_model() -> &'static str {
+    "auto"
+}
+
 pub fn mode_wants_vision(mode: &str) -> bool {
     matches!(
         mode.trim().to_ascii_lowercase().as_str(),
@@ -203,6 +208,15 @@ mod tests {
             proxy_model_id("anthropic/claude-sonnet-4.6"),
             "anthropic/claude-sonnet-4.6"
         );
+    }
+
+    #[test]
+    fn editor_rewrite_stays_on_auto() {
+        let id = editor_rewrite_model();
+        assert_eq!(id, "auto");
+        assert_eq!(proxy_model_id(id), "auto");
+        assert_ne!(id, MODEL_FAST);
+        assert!(!id.contains('/'));
     }
 
     #[test]

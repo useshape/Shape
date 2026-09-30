@@ -187,3 +187,82 @@ pub async fn generate_commit_message(
     }
     Ok(message)
 }
+
+fn strip_model_fences(text: &str) -> String {
+    let trimmed = text.trim();
+    let Some(rest) = trimmed.strip_prefix("```") else {
+        return trimmed.to_string();
+    };
+    let rest = rest.trim_start_matches(|c: char| c.is_ascii_alphanumeric() || c == '+' || c == '#' || c == '-');
+    let rest = rest.trim_start_matches(['\r', '\n']);
+    rest.strip_suffix("```").unwrap_or(rest).trim().to_string()
+}
+
+/// Rewrite one open file from an instruction. Does not create or append a chat.
+#[tauri::command]
+pub async fn rewrite_open_file(
+    access_token: Option<String>,
+    path: String,
+    instruction: String,
+    app: tauri::AppHandle,
+) -> Result<String, AppError> {
+    use tauri::Emitter;
+
+    let instruction = instruction.trim().to_string();
+    if instruction.is_empty() {
+        return Err(AppError::Message("Enter an edit instruction.".to_string()));
+    }
+    let auth_token = access_token
+        .filter(|t| !t.trim().is_empty())
+        .ok_or_else(|| AppError::Env("Sign in to Shape to use AI chat.".to_string()))?;
+    let original = std::fs::read_to_string(&path)
+        .map_err(|e| AppError::Message(format!("Could not read file: {}", e)))?;
+    if original.chars().count() > 80_000 {
+        return Err(AppError::Message("This file is too large to edit from the editor bar.".to_string()));
+    }
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file");
+    let prompt = format!(
+        "Rewrite the file `{name}` to satisfy the instruction. Return only the full new file contents. Do not add a markdown fence, commentary, or any other file.\n\nInstruction:\n{instruction}\n\nCurrent file:\n{original}"
+    );
+    let client = Client::new();
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    let ctx = streaming::ProxyContext::new("file-edit")
+        .with_provider(streaming::LlmProvider::Shape)
+        .with_turn(Some(turn_id), None);
+    let (message, _, _) = streaming::complete_chat_with_max_tokens(
+        &client,
+        &auth_token,
+        &prompt,
+        crate::agent::model_router::editor_rewrite_model(),
+        16000,
+        &ctx,
+    )
+    .await?;
+    let next = strip_model_fences(&message);
+    if next.trim().is_empty() {
+        return Err(AppError::Message("The edit came back empty.".to_string()));
+    }
+    std::fs::write(&path, &next).map_err(|e| AppError::Message(format!("Could not write file: {}", e)))?;
+    let _ = app.emit("shape-file-edited", &path);
+    Ok(next)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_fences_removes_wrapping_markdown() {
+        let out = strip_model_fences("```ts\nconst x = 1;\n```");
+        assert_eq!(out, "const x = 1;");
+    }
+
+    #[test]
+    fn strip_fences_leaves_plain_text() {
+        let src = "fn main() {}\n";
+        assert_eq!(strip_model_fences(src), "fn main() {}");
+    }
+}

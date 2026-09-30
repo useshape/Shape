@@ -2,14 +2,13 @@
 
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
-import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
-import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
-import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { commands, type FileEntry } from "@/lib/backend";
 import { Icon } from "@/components/ui/icon";
+import { FileIcon } from "@/components/ui/file-icon";
 
 import { cn } from "@/lib/utils";
 import {
@@ -31,11 +30,13 @@ function TreeNode({
     entry,
     depth,
     activePath,
+    query,
     onOpenFile,
 }: {
     entry: FileEntry;
     depth: number;
     activePath: string | null;
+    query: string;
     onOpenFile: (path: string) => void;
 }) {
     const [open, setOpen] = useState(false);
@@ -54,7 +55,12 @@ function TreeNode({
         if (open && children === null) void load();
     }, [open, children, load]);
 
-    const pad = 8 + depth * 12;
+    useEffect(() => {
+        if (query.trim() && entry.is_dir) setOpen(true);
+    }, [query, entry.is_dir]);
+
+    const pad = 6 + depth * 14;
+    const needle = query.trim().toLowerCase();
 
     const reveal = () => {
         void commands.revealPath(entry.path).catch(() => {});
@@ -64,6 +70,13 @@ function TreeNode({
     };
 
     if (entry.is_dir) {
+        const visibleChildren = children?.filter((child) => {
+            if (!needle || child.is_dir) return true;
+            return child.name.toLowerCase().includes(needle);
+        });
+        if (needle && !entry.name.toLowerCase().includes(needle) && visibleChildren && visibleChildren.length === 0 && children) {
+            return null;
+        }
         return (
             <div>
                 <ContextMenu>
@@ -71,16 +84,12 @@ function TreeNode({
                 <button
                     type="button"
                     onClick={() => setOpen((v) => !v)}
-                    className="flex w-full items-center gap-1 rounded-md py-0.5 pr-1 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                    className="flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                     style={{ paddingLeft: pad }}
                 >
                     <Icon
                         icon={open ? ChevronDown20Regular : ChevronRight20Regular}
-                        className="shrink-0 text-text-muted"
-                    />
-                    <Icon
-                        icon={open ? FolderOpen20Regular : Folder20Filled}
-                        className="shrink-0 text-text-muted"
+                        className="icon-sm shrink-0 text-text-muted"
                     />
                     <span className="min-w-0 truncate">{entry.name}</span>
                 </button>
@@ -91,20 +100,30 @@ function TreeNode({
                         <ContextMenuItem onClick={copyPath}>Copy Path</ContextMenuItem>
                     </ContextMenuContent>
                 </ContextMenu>
-                {open
-                    ? children?.map((child) => (
+                {open ? (
+                    <div className="relative">
+                        <span
+                            className="pointer-events-none absolute bottom-0 top-0 w-px bg-border-subtle"
+                            style={{ left: pad + 7 }}
+                            aria-hidden
+                        />
+                        {visibleChildren?.map((child) => (
                         <TreeNode
                             key={child.path}
                             entry={child}
                             depth={depth + 1}
                             activePath={activePath}
+                            query={query}
                             onOpenFile={onOpenFile}
                         />
-                    ))
-                    : null}
+                        ))}
+                    </div>
+                ) : null}
             </div>
         );
     }
+
+    if (needle && !entry.name.toLowerCase().includes(needle)) return null;
 
     const active =
         activePath != null
@@ -117,14 +136,14 @@ function TreeNode({
             type="button"
             onClick={() => onOpenFile(entry.path)}
             className={cn(
-                "flex w-full items-center gap-1.5 rounded-md py-0.5 pr-1 text-left text-sm",
+                "flex h-7 w-full items-center gap-1.5 rounded-md pr-2 text-left text-sm",
                 active
-                    ? "bg-panel-active text-text-primary"
+                    ? "bg-panel-active text-text-primary ring-1 ring-accent"
                     : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
             )}
-            style={{ paddingLeft: pad + 14 }}
+            style={{ paddingLeft: pad }}
         >
-            <Icon icon={DocumentText20Regular} className="shrink-0 text-text-muted" />
+            <FileIcon name={entry.name} className="size-4 shrink-0" />
             <span className="min-w-0 truncate">{entry.name}</span>
         </button>
             </ContextMenuTrigger>
@@ -158,7 +177,13 @@ export function FileTree({
 }) {
     const [roots, setRoots] = useState<FileEntry[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [query, setQuery] = useState("");
     const title = projectPath.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || projectPath;
+    const shown = useMemo(() => {
+        const needle = query.trim().toLowerCase();
+        if (!needle) return roots;
+        return roots.filter((entry) => entry.is_dir || entry.name.toLowerCase().includes(needle));
+    }, [query, roots]);
 
     useEffect(() => {
         let cancelled = false;
@@ -186,17 +211,26 @@ export function FileTree({
     return (
         <div className="box-border flex h-full min-h-0 w-full flex-col bg-panel">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-text-muted">
-                    <span className="truncate capitalize">{title}</span>
+                <div className="flex h-9 shrink-0 items-center gap-2 px-2">
+                    <Icon icon={Search20Regular} className="icon-sm shrink-0 text-text-muted" />
+                    <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Search files"
+                        aria-label="Search files"
+                        className="h-7 min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+                    />
+                    <span className="sr-only">{title}</span>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2 custom-scrollbar">
                     {error ? <div className="p-2 text-sm text-error">{error}</div> : null}
-                    {roots.map((entry) => (
+                    {shown.map((entry) => (
                         <TreeNode
                             key={entry.path}
                             entry={entry}
                             depth={0}
                             activePath={activePath}
+                            query={query}
                             onOpenFile={onOpenFile}
                         />
                     ))}

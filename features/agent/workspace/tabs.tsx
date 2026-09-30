@@ -23,7 +23,6 @@ import {
 import { TabBarShell } from "@/features/editor/ui/tabs/tab-bar-shell";
 import {
     WORKBENCH_TAB_ACTION_BUTTON_CLASS,
-    WORKBENCH_TAB_CLOSE_BUTTON_CLASS,
     WORKBENCH_TAB_CONTENT_ACTIVE_CLASS,
     WORKBENCH_TAB_CONTENT_CLASS,
     workbenchTabItemClass,
@@ -83,7 +82,8 @@ function SortableWorkspaceTab({
                     className={cn(workbenchTabItemClass(isActive, isDragging), "max-w-44")}
                 >
                     <div className={cn(WORKBENCH_TAB_CONTENT_CLASS, isActive && WORKBENCH_TAB_CONTENT_ACTIVE_CLASS)}>
-                        <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+                    <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+                        <span className={cn("flex items-center justify-center", canClose && "group-hover:opacity-0")}>
                             {tab.kind === "browser" && tab.url ? (
                                 <Favicon url={tab.url} src={tab.favicon} size={16} />
                             ) : tab.kind === "file" || tab.kind === "diff" ? (
@@ -91,28 +91,24 @@ function SortableWorkspaceTab({
                             ) : (
                                 <Icon icon={iconFor(tab.kind)} className="text-text-muted" />
                             )}
-                        </div>
-                        <span className="min-w-0 truncate pr-1 text-sm">{tab.title}</span>
+                        </span>
+                        {canClose ? (
+                            <button
+                                type="button"
+                                aria-label={`Close ${tab.title}`}
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onClose(tab.id);
+                                }}
+                                className="absolute inset-0 flex items-center justify-center text-text-muted opacity-0 hover:text-text-primary group-hover:opacity-100"
+                            >
+                                <Icon icon={Dismiss20Regular} className="icon-sm" />
+                            </button>
+                        ) : null}
                     </div>
-                    {canClose ? (
-                        <button
-                            type="button"
-                            aria-label={`Close ${tab.title}`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onClose(tab.id);
-                            }}
-                            className={cn(
-                                "absolute inset-y-0 right-0 z-[2] flex w-7 items-center justify-end pr-1 opacity-0 transition-opacity group-hover:opacity-100",
-                                "bg-linear-to-l to-transparent from-50%",
-                                isActive ? "from-surface-3" : "from-panel-hover",
-                            )}
-                        >
-                            <span className={WORKBENCH_TAB_CLOSE_BUTTON_CLASS}>
-                                <Icon icon={Dismiss20Regular} />
-                            </span>
-                        </button>
-                    ) : null}
+                        <span className="min-w-0 truncate text-sm">{tab.title}</span>
+                    </div>
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent className="min-w-44">

@@ -78,33 +78,53 @@ pub(super) fn tool_save_plan(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         Ok(s) => s,
         Err(e) => return error_outcome("save_plan", &e),
     };
-    if let Err(msg) = validate_plan_todos_section(&content) {
-        return error_outcome("save_plan", &msg);
+    let mut todos: Vec<String> = args
+        .get("todos")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    if todos.is_empty() {
+        todos = extract_todo_labels(&content);
     }
+    if todos.is_empty() {
+        return error_outcome(
+            "save_plan",
+            "Pass a `todos` array of checklist items (kept outside the markdown). Example: [\"Add login route\", \"Wire session\"].",
+        );
+    }
+    let body = strip_todos_section(&content);
+    let file_body = format_plan_file(&body, &todos);
     let slug = slugify_plan_title(&title);
     if slug.is_empty() {
         return error_outcome("save_plan", "title must contain at least one alphanumeric character.");
     }
-    let rel_path = format!(".shape/plans/{}.md", slug);
-    let abs_dir = std::path::Path::new(ctx.project_path).join(".shape/plans");
+    let Some(abs_dir) = plan_storage_dir(ctx.project_path) else {
+        return error_outcome("save_plan", "Could not resolve the app data directory.");
+    };
     if let Err(e) = std::fs::create_dir_all(&abs_dir) {
         return error_outcome("save_plan", &format!("Failed to create plans directory: {}", e));
     }
     let abs_path = abs_dir.join(format!("{}.md", slug));
-    if let Err(e) = std::fs::write(&abs_path, &content) {
+    if let Err(e) = std::fs::write(&abs_path, &file_body) {
         return error_outcome("save_plan", &format!("Failed to write plan file: {}", e));
     }
+    let stored = abs_path.to_string_lossy().replace('\\', "/");
     let _ = ctx.app_handle.emit("shape-plan-saved", serde_json::json!({
-        "path": rel_path,
+        "path": stored,
         "title": title,
-        "absolutePath": abs_path.to_string_lossy(),
+        "absolutePath": stored,
     }));
-    let _ = ctx.app_handle.emit("shape-file-edited", &rel_path);
     ToolOutcome {
-        tool_result: format!("Plan saved to {}", rel_path),
+        tool_result: format!("Plan saved internally as {}", slug),
         ui_chunk: format!(
             "\n<plan_saved path=\"{}\" title=\"{}\"></plan_saved>\n",
-            escape_xml_attr(&rel_path),
+            escape_xml_attr(&stored),
             escape_xml_attr(&title)
         ),
         side_effect: None,
@@ -220,6 +240,74 @@ pub(super) fn tool_update_todos(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome 
     }
 }
 
+fn extract_todo_labels(content: &str) -> Vec<String> {
+    let mut labels = Vec::new();
+    let mut in_todos = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## ") {
+            let heading = trimmed[3..].trim();
+            in_todos =
+                heading.eq_ignore_ascii_case("todos") || heading.eq_ignore_ascii_case("todo");
+            continue;
+        }
+        if in_todos {
+            if let Some(label) = checkbox_label(trimmed) {
+                labels.push(label);
+            }
+        }
+    }
+    labels
+}
+
+fn checkbox_label(trimmed: &str) -> Option<String> {
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = if lower.starts_with("- [ ]") {
+        trimmed.get(5..)?.trim()
+    } else if lower.starts_with("- [x]") {
+        trimmed.get(5..)?.trim()
+    } else if lower.starts_with("* [ ]") || lower.starts_with("* [x]") {
+        trimmed.get(5..)?.trim()
+    } else {
+        return None;
+    };
+    if rest.is_empty() {
+        None
+    } else {
+        Some(rest.to_string())
+    }
+}
+
+fn strip_todos_section(content: &str) -> String {
+    let mut out = String::new();
+    let mut skip = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## ") {
+            let heading = trimmed[3..].trim();
+            skip = heading.eq_ignore_ascii_case("todos") || heading.eq_ignore_ascii_case("todo");
+            if skip {
+                continue;
+            }
+        }
+        if skip {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.trim().to_string()
+}
+
+fn format_plan_file(body: &str, todos: &[String]) -> String {
+    let lines: Vec<String> = todos.iter().map(|t| format!("- [ ] {t}")).collect();
+    format!(
+        "{}\n\n<!--shape-todos\n{}\n-->\n",
+        body.trim_end(),
+        lines.join("\n")
+    )
+}
+
 /// Plan content must include a `## Todos` / `## Todo` section with at least one checkbox.
 pub(super) fn validate_plan_todos_section(content: &str) -> Result<(), String> {
     let mut saw_todos_heading = false;
@@ -304,6 +392,30 @@ pub(super) fn slugify_plan_title(title: &str) -> String {
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join("-")
+}
+
+/// App-data directory for plans (not the user's project `.shape/plans`).
+pub(super) fn plan_storage_dir(project_path: &str) -> Option<std::path::PathBuf> {
+    let project_key: String = project_path
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .take(80)
+        .collect();
+    let base = dirs::data_local_dir()?;
+    Some(base.join("Shape").join("plans").join(project_key))
+}
+
+#[cfg(test)]
+mod plan_storage_tests {
+    use super::*;
+
+    #[test]
+    fn plans_live_under_app_data_not_project() {
+        let dir = plan_storage_dir(r"C:\Users\me\project").expect("dir");
+        let as_str = dir.to_string_lossy().replace('\\', "/");
+        assert!(as_str.contains("Shape/plans"), "{as_str}");
+        assert!(!as_str.contains(".shape/plans"), "{as_str}");
+    }
 }
 
 pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {

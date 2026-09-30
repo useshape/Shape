@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { addSkill, listSkills, removeSkill, subscribeSkills, type Skill } from "@/lib/chat/skills";
 import { SettingActionRow, SettingCard, SettingRow, SettingSection } from "../shared/controls";
-import { FluentIcon, settingsIcons } from "../fluent-icons";
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -43,14 +46,14 @@ export function SkillsSettings() {
                 {skills.map((skill) => (
                     <SettingRow
                         key={skill.id}
-                        icon={settingsIcons.document}
+                        icon={Document20Regular}
                         title={skill.name}
                         description={`@skill:${skill.id}`}
                     >
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="size-7" aria-label={`Skill actions for ${skill.name}`}>
-                                    <FluentIcon icon={settingsIcons.more} />
+                                    <Icon icon={MoreHorizontal20Regular} />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -61,7 +64,7 @@ export function SkillsSettings() {
                         </DropdownMenu>
                     </SettingRow>
                 ))}
-                <SettingActionRow title="Add skill" icon={settingsIcons.add} onClick={() => inputRef.current?.click()} />
+                <SettingActionRow title="Add skill" icon={Add20Regular} onClick={() => inputRef.current?.click()} />
             </SettingCard>
         </SettingSection>
     );

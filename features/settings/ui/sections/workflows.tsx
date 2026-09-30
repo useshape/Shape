@@ -1,8 +1,12 @@
 "use client";
 
-import { FluentIcon, settingsIcons } from "../fluent-icons";
-
+import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { Delete20Regular } from "@fluentui/react-icons/headless/svg/delete";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Flowchart20Regular } from "@fluentui/react-icons/headless/svg/flowchart";
 import React from "react";
+import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 
 import { Input } from "@/components/ui/input";
@@ -71,7 +75,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
                                 setOpen(true);
                             }}
                         >
-                            <FluentIcon icon={settingsIcons.edit} />
+                            <Icon icon={Edit20Regular} />
                         </Button>
                         <Button
                             size="icon"
@@ -80,13 +84,13 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
                             aria-label="Delete workflow"
                             onClick={() => save(value.filter((x) => x.id !== w.id))}
                         >
-                            <FluentIcon icon={settingsIcons.delete} />
+                            <Icon icon={Delete20Regular} />
                         </Button>
                     </div>
                 ))}
             <SettingActionRow
                 title="Add workflow"
-                icon={settingsIcons.add}
+                icon={Add20Regular}
                 onClick={() => {
                     setEditing({
                         id: newWorkflowId(),
@@ -123,7 +127,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
 function WorkflowPluginMark({ toolkit }: { toolkit?: string }) {
     const plugins = peekPluginsCache()?.plugins ?? [];
     const plugin = toolkit ? plugins.find((p) => p.toolkit === toolkit && p.connected) : undefined;
-    if (!plugin) return <FluentIcon icon={settingsIcons.flowchart} className="shrink-0 text-text-muted" />;
+    if (!plugin) return <Icon icon={Flowchart20Regular} className="shrink-0 text-text-muted" />;
     return (
         <PluginLogo
             toolkit={plugin.toolkit}
@@ -272,7 +276,7 @@ function WorkflowDialog({
                                                 ? selectedToolNames.join(", ")
                                                 : "Select tools to auto-run"}
                                         </span>
-                                        <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
+                                        <Icon icon={ChevronDown20Regular} className="shrink-0 text-text-muted" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
@@ -355,7 +359,7 @@ function PluginPicker({
                             ) : null}
                             <span className="truncate">{selected?.name ?? "None"}</span>
                         </span>
-                        <FluentIcon icon={settingsIcons.chevronDown} className="shrink-0 text-text-muted" />
+                        <Icon icon={ChevronDown20Regular} className="shrink-0 text-text-muted" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Compartment } from "@codemirror/state";
+import { LanguageDescription } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
 import {
     EditorView,
     keymap,
@@ -33,7 +35,7 @@ import {
     indentOnInput,
     indentUnit,
 } from "@codemirror/language";
-import { highlightSelectionMatches, searchKeymap, openSearchPanel } from "@codemirror/search";
+import { highlightSelectionMatches, search, searchKeymap, SearchQuery, setSearchQuery, findNext, findPrevious } from "@codemirror/search";
 import {
     autocompletion,
     closeBrackets,
@@ -83,10 +85,12 @@ export function CodeMirrorEditor({
         if (!host) return;
 
         const lang = languageForPath(path);
+        const langCompartment = new Compartment();
         const state = EditorState.create({
             doc: content,
             extensions: [
                 ...shapeEditorChrome(),
+                search({ top: false }),
                 lineNumbers(),
                 highlightActiveLineGutter(),
                 highlightActiveLine(),
@@ -128,7 +132,7 @@ export function CodeMirrorEditor({
                 keymap.of([
                     ...closeBracketsKeymap,
                     ...defaultKeymap,
-                    ...searchKeymap,
+                    ...searchKeymap.filter((binding) => binding.key !== "Mod-f"),
                     ...historyKeymap,
                     ...foldKeymap,
                     ...completionKeymap,
@@ -137,10 +141,15 @@ export function CodeMirrorEditor({
                     { key: "Mod-[", run: indentLess },
                     {
                         key: "Mod-f",
-                        run: openSearchPanel,
+                        run: () => {
+                            window.dispatchEvent(
+                                new CustomEvent("shape-editor-find", { detail: { path: pathRef.current } }),
+                            );
+                            return true;
+                        },
                     },
                 ]),
-                ...(lang ? [lang, shapeSyntaxLinter(path), lintGutter()] : []),
+                langCompartment.of(lang ? [lang, shapeSyntaxLinter(path), lintGutter()] : []),
                 EditorView.updateListener.of((update) => {
                     if (!update.docChanged) return;
                     const next = update.state.doc.toString();
@@ -192,12 +201,50 @@ export function CodeMirrorEditor({
         const view = new EditorView({ state, parent: host });
         viewRef.current = view;
         pathRef.current = path;
+        const fileName = path.split(/[\\/]/).pop() || path;
+        const described = LanguageDescription.matchFilename(languages, fileName);
+        if (described) {
+            void described.load().then((support) => {
+                if (viewRef.current !== view) return;
+                view.dispatch({
+                    effects: langCompartment.reconfigure([support, shapeSyntaxLinter(path), lintGutter()]),
+                });
+            }).catch(() => {});
+        }
+        const onSearch = (event: Event) => {
+            const detail = (event as CustomEvent<{
+                path?: string;
+                query?: string;
+                caseSensitive?: boolean;
+                regexp?: boolean;
+                nav?: "next" | "prev";
+            }>).detail;
+            if (!detail || detail.path !== pathRef.current) return;
+            const query = new SearchQuery({
+                search: detail.query || "",
+                caseSensitive: Boolean(detail.caseSensitive),
+                regexp: Boolean(detail.regexp),
+            });
+            view.dispatch({ effects: setSearchQuery.of(query) });
+            if (detail.nav === "next") findNext(view);
+            if (detail.nav === "prev") findPrevious(view);
+            let count = 0;
+            if (detail.query && query.valid) {
+                const cursor = query.getCursor(view.state);
+                for (let step = cursor.next(); !step.done; step = cursor.next()) count += 1;
+            }
+            window.dispatchEvent(
+                new CustomEvent("shape-editor-search-count", { detail: { path: pathRef.current, count } }),
+            );
+        };
+        window.addEventListener("shape-editor-search", onSearch as EventListener);
         if (isFirstLoadRef.current) {
             isFirstLoadRef.current = false;
             savedContentRef.current = content;
         }
 
         return () => {
+            window.removeEventListener("shape-editor-search", onSearch as EventListener);
             view.destroy();
             viewRef.current = null;
         };
@@ -285,7 +332,11 @@ export function CodeMirrorEditor({
                 <ContextMenuItem
                     onClick={() => {
                         const v = viewRef.current;
-                        if (v) openSearchPanel(v);
+                        if (v) {
+                            window.dispatchEvent(
+                                new CustomEvent("shape-editor-find", { detail: { path: pathRef.current } }),
+                            );
+                        }
                     }}
                 >
                     Find

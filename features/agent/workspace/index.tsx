@@ -281,7 +281,18 @@ export function AgentWorkspace({
                     ) : active?.kind === "file" && active.path ? (
                         <EditorViewProvider>
                             <EditorSplitProvider>
-                                <FileEditor path={active.path} />
+                                <div className="flex h-full min-h-0">
+                                    <div className="min-w-0 flex-1">
+                                        <FileEditor path={active.path} />
+                                    </div>
+                                    <div className="w-64 shrink-0 border-l border-border">
+                                        <FileTree
+                                            projectPath={projectPath}
+                                            activePath={active.path}
+                                            onOpenFile={openFile}
+                                        />
+                                    </div>
+                                </div>
                             </EditorSplitProvider>
                         </EditorViewProvider>
                     ) : active?.kind === "diff" && active.diff ? (

@@ -541,14 +541,19 @@ fn write_to_terminal() -> Value {
 fn save_plan() -> Value {
     tool(
         "save_plan",
-        "Save an implementation plan as markdown to .shape/plans/{title}.md. Plan mode only. Call after researching the codebase. Include a markdown checkbox todo list under ## Todos (or numbered implementation steps) so Build can track progress.",
+        "Save the implementation plan. Research first, then call this with the full plan — do not outline in chat beforehand. Markdown body has Goal / Findings / Steps / Risks. Pass todos as a separate string array (not inside the markdown).",
         json!({
             "type": "object",
             "properties": {
                 "title": {"type": "string", "description": "Short slug for the plan file (e.g. auth-refactor)."},
-                "content": {"type": "string", "description": "Full markdown plan body. Must include a ## Todos section with `- [ ]` checkboxes or a numbered implementation steps list."}
+                "content": {"type": "string", "description": "Markdown plan body. Do not include a ## Todos section."},
+                "todos": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Checklist items shown under the plan (not in the markdown body)."
+                }
             },
-            "required": ["title", "content"],
+            "required": ["title", "content", "todos"],
             "additionalProperties": false
         }),
     )
@@ -644,11 +649,11 @@ fn set_worker_status() -> Value {
 fn message_peer() -> Value {
     tool(
         "message_peer",
-        "Message another Multiwork worker or the orchestrator on the session bus.",
+        "Talk to another Multiwork worker (id or title) or the orchestrator. Use this to coordinate overlapping files, hand off findings, or ask a sibling to wait. The other worker receives a follow-up turn with your message.",
         json!({
             "type": "object",
             "properties": {
-                "to": {"type": "string", "description": "Worker id/title or \"orchestrator\"."},
+                "to": {"type": "string", "description": "Worker id, worker title, or \"orchestrator\"."},
                 "content": {"type": "string"}
             },
             "required": ["content"],

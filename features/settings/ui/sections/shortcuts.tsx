@@ -1,8 +1,11 @@
 "use client";
 
-import { FluentIcon, settingsIcons } from "../fluent-icons";
-
+import { ArrowDownload20Regular } from "@fluentui/react-icons/headless/svg/arrow-download";
+import { ArrowUpload20Regular } from "@fluentui/react-icons/headless/svg/arrow-upload";
+import { Delete20Regular } from "@fluentui/react-icons/headless/svg/delete";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "@/components/ui/icon";
 
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
@@ -302,7 +305,7 @@ export function KeyboardShortcutsView() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button type="button" variant="ghost" size="sm" className={SETTING_CONTROL_BTN}>
-                                    <FluentIcon icon={settingsIcons.download} />
+                                    <Icon icon={ArrowDownload20Regular} />
                                     Import
                                 </Button>
                             </DropdownMenuTrigger>
@@ -325,7 +328,7 @@ export function KeyboardShortcutsView() {
                             className={SETTING_CONTROL_BTN}
                             onClick={() => void onExportJson()}
                         >
-                            <FluentIcon icon={settingsIcons.upload} />
+                            <Icon icon={ArrowUpload20Regular} />
                             Export
                         </Button>
                         <Button
@@ -369,7 +372,7 @@ export function KeyboardShortcutsView() {
                                                 className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                                 onClick={() => setRecording(b)}
                                             >
-                                                <FluentIcon icon={settingsIcons.edit} />
+                                                <Icon icon={Edit20Regular} />
                                             </button>
                                             <button
                                                 type="button"
@@ -380,7 +383,7 @@ export function KeyboardShortcutsView() {
                                                     reload();
                                                 }}
                                             >
-                                                <FluentIcon icon={settingsIcons.delete} />
+                                                <Icon icon={Delete20Regular} />
                                             </button>
                                         </div>
                                     </div>

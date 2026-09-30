@@ -134,7 +134,14 @@ fn llm_http_error(provider: &LlmProvider, status: reqwest::StatusCode, text: &st
 pub fn rewrite_model_for_provider(model: &str, provider: &LlmProvider) -> Result<String, AppError> {
     let m = crate::agent::model_router::normalize_model(model);
     match provider {
-        LlmProvider::Shape | LlmProvider::OpenRouter { .. } => Ok(m),
+        // Shape Cloud picks Auto's included model — never substitute a catalog slug.
+        LlmProvider::Shape => {
+            if crate::agent::model_router::is_auto_selection(model) {
+                return Ok(crate::agent::model_router::proxy_model_id(model));
+            }
+            Ok(m)
+        }
+        LlmProvider::OpenRouter { .. } => Ok(m),
         LlmProvider::OpenAi { .. } => {
             if m == crate::agent::model_router::MODEL_FAST
                 || crate::agent::model_router::is_auto_selection(model)
@@ -1398,6 +1405,16 @@ mod tests {
         assert_eq!(gpt.label(), "OpenAI");
         assert_eq!(rewrite_model_for_provider("openai/gpt-4o", &gpt).unwrap(), "gpt-4o");
         assert_eq!(rewrite_model_for_provider("auto", &gpt).unwrap(), "gpt-4o-mini");
+    }
+
+    #[test]
+    fn shape_auto_stays_auto_for_cloud() {
+        let shape = LlmProvider::Shape;
+        assert_eq!(rewrite_model_for_provider("auto", &shape).unwrap(), "auto");
+        assert_eq!(
+            rewrite_model_for_provider("openrouter/auto", &shape).unwrap(),
+            "auto"
+        );
     }
 
     #[test]

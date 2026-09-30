@@ -44,7 +44,7 @@ import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { ThemePicker } from "./theme/picker";
 import { normalizeColorTheme } from "@/lib/settings/themes";
-import { FluentIcon } from "./fluent-icons";
+import { Icon } from "@/components/ui/icon";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
 import { KeyboardShortcutsView } from "./sections/shortcuts";
@@ -1026,18 +1026,18 @@ export function SettingsView({
                         ) : null}
                         {collapsed ? null : (
                             <>
-                                <div className="shrink-0 px-2 pb-2">
+                                <div className="shrink-0 px-2 pb-2 mt-1">
                                     <SearchInput
                                         placeholder="Search..."
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
-                                        className="w-full"
+                                        className="w-full bg-transparent!"
                                     />
                                 </div>
-                                <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+                                <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2">
                                     {filteredNav.map((group) => (
                                         <div key={group.id}>
-                                            <div className="px-2 pb-1 text-xs text-text-muted">{group.label}</div>
+                                            <div className="px-1.5 pb-1 text-sm text-text-muted/50">{group.label}</div>
                                             <div className="space-y-0.5">
                                                 {group.children.map((leaf) => {
                                                     const active = activeLeafId === leaf.id;
@@ -1049,18 +1049,14 @@ export function SettingsView({
                                                             disabled={disabled}
                                                             onClick={() => onLeafClick(leaf)}
                                                             className={cn(
-                                                                "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-sm",
+                                                                "flex h-9 w-full items-center gap-1.5 rounded-lg px-2 text-left text-sm",
                                                                 active
                                                                     ? "bg-panel-hover text-text-primary"
                                                                     : "text-text-secondary hover:bg-panel-hover/50 hover:text-text-primary",
                                                                 disabled && "pointer-events-none opacity-40",
                                                             )}
                                                         >
-                                                            {leaf.id === "account-profile" ? (
-                                                                <ShapeLogo size={16} className="shrink-0" />
-                                                            ) : (
-                                                                <FluentIcon icon={leaf.icon} />
-                                                            )}
+                                                            <Icon icon={leaf.icon} className="icon-md"/>
                                                             <span className="min-w-0 flex-1 truncate">{leaf.label}</span>
                                                         </button>
                                                     );
@@ -1101,7 +1097,7 @@ export function SettingsView({
                     </div>
                 ) : (
                     <div className="absolute inset-0 overflow-y-auto px-8 py-8">
-                        <div className="mx-auto w-full max-w-2xl">
+                        <div className="mx-auto w-full max-w-4xl">
                             <h1 className="mb-6 text-2xl font-medium text-text-primary">
                                 {allSettingsLeaves().find((leaf) => leaf.id === activeLeafId)?.label}
                             </h1>

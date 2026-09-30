@@ -690,6 +690,8 @@ export const commands = {
             accessToken: accessToken ?? null,
             repoPath: repoPath ?? null,
         }),
+    rewriteOpenFile: (accessToken: string, path: string, instruction: string) =>
+        invokeCommand<string>("rewrite_open_file", { accessToken, path, instruction }),
     summarizePullRequest: (
         owner: string,
         repo: string,

@@ -102,28 +102,13 @@ pub(super) async fn tool_message_worker(args: &Value, ctx: &ToolCtx<'_>) -> Tool
         Ok(s) => s,
         Err(e) => return error_outcome("message_worker", &e),
     };
-    let to_title = multiwork::worker_title(&id).unwrap_or_else(|| id.clone());
-    multiwork::emit_bus(
-        ctx.app_handle,
-        json!({
-            "from": "orchestrator",
-            "to": to_title,
-            "content": content,
-            "workerId": id,
-        }),
-    );
-    multiwork::emit_worker(
-        ctx.app_handle,
-        json!({
-            "id": id,
-            "activity": content.chars().take(96).collect::<String>(),
-            "conversationId": ctx.conversation_id,
-        }),
-    );
-    ToolOutcome {
-        tool_result: format!("Messaged worker {id}."),
-        ui_chunk: String::new(),
-        side_effect: None,
+    match multiwork::deliver_peer_message(ctx.app_handle, "orchestrator", &id, &content) {
+        Ok(msg) => ToolOutcome {
+            tool_result: msg,
+            ui_chunk: String::new(),
+            side_effect: None,
+        },
+        Err(e) => error_outcome("message_worker", &e),
     }
 }
 
@@ -132,17 +117,13 @@ pub(super) async fn tool_broadcast_workers(args: &Value, ctx: &ToolCtx<'_>) -> T
         Ok(s) => s,
         Err(e) => return error_outcome("broadcast_workers", &e),
     };
-    multiwork::emit_bus(
-        ctx.app_handle,
-        json!({
-            "from": "orchestrator",
-            "content": content,
-        }),
-    );
-    ToolOutcome {
-        tool_result: "Broadcast sent to all workers.".to_string(),
-        ui_chunk: String::new(),
-        side_effect: None,
+    match multiwork::deliver_broadcast(ctx.app_handle, "orchestrator", &content) {
+        Ok(msg) => ToolOutcome {
+            tool_result: msg,
+            ui_chunk: String::new(),
+            side_effect: None,
+        },
+        Err(e) => error_outcome("broadcast_workers", &e),
     }
 }
 
@@ -202,19 +183,13 @@ pub(super) async fn tool_message_peer(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
         .as_deref()
         .and_then(|c| c.strip_prefix("mw-worker-"))
         .unwrap_or("worker");
-    let from_title = multiwork::worker_title(from).unwrap_or_else(|| from.to_string());
-    multiwork::emit_bus(
-        ctx.app_handle,
-        json!({
-            "from": from_title,
-            "to": to,
-            "content": content,
-        }),
-    );
-    ToolOutcome {
-        tool_result: "Message delivered.".to_string(),
-        ui_chunk: String::new(),
-        side_effect: None,
+    match multiwork::deliver_peer_message(ctx.app_handle, from, &to, &content) {
+        Ok(msg) => ToolOutcome {
+            tool_result: msg,
+            ui_chunk: String::new(),
+            side_effect: None,
+        },
+        Err(e) => error_outcome("message_peer", &e),
     }
 }
 

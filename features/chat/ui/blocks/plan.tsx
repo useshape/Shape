@@ -14,10 +14,11 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
-import { displayPlanName, parsePlanMarkdown, type PlanPreview } from "@/lib/plan/preview";
+import { displayPlanName, parsePlanMarkdown, splitPlanDocument, type PlanPreview } from "@/lib/plan/preview";
+import { ChatMarkdown } from "@/features/chat/ui/md/view";
 import { Button } from "@/components/ui/button";
 import { Collapse } from "./collapse";
-import { ShimmerText } from "@/components/ui/shimmer-text";
+import { CalendarCheckmark24Filled } from "@fluentui/react-icons";
 
 type PlanStep = {
     label: string;
@@ -55,36 +56,31 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                 type="button"
                 onClick={() => totalCount > 1 && setIsOpen((open) => !open)}
                 className={cn(
-                    "flex w-full items-center gap-2 p-2 text-left",
+                    "flex w-full items-center gap-2 px-2 py-2 text-left",
                     totalCount > 1 && "hover:bg-panel-hover/40 transition-colors cursor-pointer",
                 )}
             >
                 <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
-                    <Icon icon={TaskListSquareLtr20Regular} />
+                    <Icon icon={TaskListSquareLtr20Regular} className="icon-sm" />
                 </span>
                 <span className="truncate text-sm font-medium text-text-primary">
                     {completedCount} of {totalCount} done
                 </span>
-                {active ? (
-                    <span className="ml-auto min-w-0 truncate text-sm text-text-muted">
-                        {isGenerating ? <ShimmerText>{active.label}</ShimmerText> : active.label}
-                    </span>
-                ) : null}
             </button>
 
             <Collapse open={visibleSteps.length > 0}>
-                <div className="flex flex-col gap-1.5 px-3 py-2.5">
+                <div className="flex flex-col gap-1 px-2 pb-2">
                     {visibleSteps.map((step, i) => (
                         <div key={`${step.label}-${i}`} className="flex items-center gap-2">
                             <span className="flex size-4 shrink-0 items-center justify-center">
                             {step.status === "done" ? (
-                                <Icon icon={CheckmarkCircle20Filled} className="text-success" />
+                                <Icon icon={CheckmarkCircle20Filled} className="icon-sm text-success" />
                             ) : step.status === "active" ? (
                                 <span className="size-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
                             ) : step.status === "cancelled" ? (
-                                <Icon icon={Dismiss20Regular} className="text-text-disabled" />
+                                <Icon icon={Dismiss20Regular} className="icon-sm text-text-disabled" />
                             ) : (
-                                <span className="size-3.5 rounded-full border-2 border-text-muted/45" />
+                                <span className="size-3.5 rounded-full border border-text-muted/55" />
                             )}
                             </span>
                             <span className={cn(
@@ -125,7 +121,15 @@ export function PlanSavedBlock({
     const [preview, setPreview] = React.useState<PlanPreview | null>(() =>
         markdown ? parsePlanMarkdown(markdown) : null,
     );
+    const [body, setBody] = React.useState(() =>
+        markdown ? splitPlanDocument(markdown).body : "",
+    );
     const [open, setOpen] = React.useState(true);
+
+    const applyPlan = (content: string) => {
+        setPreview(parsePlanMarkdown(content));
+        setBody(splitPlanDocument(content).body);
+    };
 
     const resolvePath = (filePath: string) => {
         if (/^[a-zA-Z]:[\\\/]/.test(filePath) || filePath.startsWith("/")) return filePath;
@@ -140,13 +144,11 @@ export function PlanSavedBlock({
         let cancelled = false;
         void commands.readFile(absPath).then((content) => {
             if (!cancelled) {
-                setPreview(parsePlanMarkdown(content));
+                applyPlan(content);
                 setMissing(false);
             }
         }).catch(() => {
-            if (!cancelled) {
-                setPreview(markdown ? parsePlanMarkdown(markdown) : null);
-            }
+            if (!cancelled && markdown) applyPlan(markdown);
         });
         return () => { cancelled = true; };
     }, [absPath, markdown]);
@@ -167,38 +169,9 @@ export function PlanSavedBlock({
                 /* may already exist */
             }
             await commands.saveFile(absPath, markdown);
-            setPreview(parsePlanMarkdown(markdown));
+            applyPlan(markdown);
             setMissing(false);
             return true;
-        }
-    };
-
-    const openPlanPreview = async () => {
-        window.dispatchEvent(
-            new CustomEvent("shape-layout-toggle", {
-                detail: { id: "agent-workspace", value: true },
-            }),
-        );
-        window.dispatchEvent(
-            new CustomEvent("shape-open-workspace-plan", {
-                detail: {
-                    path: absPath,
-                    title: displayTitle,
-                    markdown,
-                },
-            }),
-        );
-        void ensurePlanFile().catch(() => {
-            /* panel still opens from in-chat markdown */
-        });
-    };
-
-    const handleOpen = async () => {
-        try {
-            await openPlanPreview();
-        } catch (e) {
-            console.error("Failed to open plan:", e);
-            setMissing(!markdown?.trim());
         }
     };
 
@@ -226,52 +199,46 @@ export function PlanSavedBlock({
     const todoCount = todos.length;
 
     return (
-        <div className="my-1 w-full overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
+        <div className="my-1 w-full overflow-hidden squircle-2xl border border-border-subtle bg-surface-2 p-2">
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover/40"
+                className="flex w-full items-center gap-2 text-left transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]"
             >
-                <Icon icon={TaskListSquareLtr20Regular} className="shrink-0 text-text-muted" />
-                <span className="min-w-0 flex-1 truncate text-sm text-text-secondary">
+                <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
+                    <Icon icon={CalendarCheckmark24Filled} className="icon-sm" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-md tracking-relaxed font-medium text-text-secondary">
                     {displayTitle}
                 </span>
                 <Icon
                     icon={ChevronDown20Regular}
                     className={cn(
-                        "shrink-0 text-text-muted transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                        "icon-sm shrink-0 text-text-muted transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                         open && "rotate-180",
                     )}
                 />
             </button>
 
             <Collapse open={open}>
-                <div className="flex flex-col gap-3 px-3 pb-3">
-                    {preview?.goal ? (
-                        <p className="text-sm text-text-primary leading-relaxed">{preview.goal}</p>
+                <div className="flex flex-col gap-2 pt-2">
+                    {body.trim() ? (
+                        <div className="chat-markdown px-1 text-sm text-text-primary">
+                            <ChatMarkdown content={body} />
+                        </div>
                     ) : null}
-                    <button
-                        type="button"
-                        onClick={() => { void handleOpen(); }}
-                        className="w-fit text-left text-sm text-accent-text hover:underline"
-                    >
-                        Read detailed plan
-                    </button>
 
                     {todoCount > 0 ? (
-                        <div className="rounded-xl bg-surface-1 px-3 py-2.5">
-                            <p className="text-sm text-text-muted">
-                                {todoCount} {todoCount === 1 ? "todo" : "todos"}
-                            </p>
-                            <ul className="mt-2 flex flex-col gap-2">
-                                {todos.map((todo) => (
-                                    <li key={todo} className="flex items-start gap-2">
-                                        <span className="mt-0.5 size-4 shrink-0 rounded-full border border-text-muted/45" />
-                                        <span className="text-sm text-text-primary leading-snug">{todo}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+                        <ul className="flex flex-col gap-1">
+                            {todos.map((todo, i) => (
+                                <li key={`${todo}-${i}`} className="flex items-start gap-2">
+                                    <span className="flex size-4 shrink-0 items-center justify-center">
+                                        <span className="size-3.5 rounded-full border border-text-muted/55" />
+                                    </span>
+                                    <span className="text-sm text-text-primary leading-snug">{todo}</span>
+                                </li>
+                            ))}
+                        </ul>
                     ) : null}
 
                     <div className="flex justify-end">

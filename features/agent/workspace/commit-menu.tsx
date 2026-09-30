@@ -12,7 +12,11 @@ import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { Icon } from "@/components/ui/icon";
@@ -78,7 +82,8 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
     const [lastMessage, setLastMessage] = useState("");
     const [hasRemote, setHasRemote] = useState(false);
     const [ahead, setAhead] = useState(0);
-    const [extras, setExtras] = useState(false);
+    const [behind, setBehind] = useState(0);
+    const [branch, setBranch] = useState("");
     const [publishOpen, setPublishOpen] = useState(false);
     const github = useGitHubAuth();
 
@@ -95,20 +100,25 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
             } catch {
                 setStats({});
             }
-            const [log, sync, remote] = await Promise.all([
+            const [log, sync, remote, current] = await Promise.all([
                 commands.gitLog(path, 1).catch(() => []),
                 commands.gitSyncStatus(path).catch(() => null),
                 commands.gitHasRemote(path).catch(() => false),
+                commands.gitCurrentBranch(path).catch(() => ""),
             ]);
             setLastMessage(log[0]?.message?.split("\n")[0] ?? "");
             setHasRemote(remote);
             setAhead(sync?.ahead ?? 0);
+            setBehind(sync?.behind ?? 0);
+            setBranch(current || "");
         } catch {
             setFiles([]);
             setStats({});
             setLastMessage("");
             setHasRemote(false);
             setAhead(0);
+            setBehind(0);
+            setBranch("");
         }
     }, [projectPath]);
 
@@ -265,6 +275,45 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
         }
     };
 
+    const runGit = async (label: string, task: () => Promise<unknown>) => {
+        if (!repo) return;
+        setBusy(true);
+        try {
+            await task();
+            window.dispatchEvent(new Event("shape-git-refresh"));
+            notify.success("Git", label);
+            await refresh();
+        } catch (err) {
+            notify.gitError(err);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const discardAll = async () => {
+        if (!repo || files.length === 0) return;
+        const ok = await confirm("Discard every uncommitted change in this repo?", {
+            title: "Discard changes",
+            kind: "warning",
+            okLabel: "Discard",
+            cancelLabel: "Cancel",
+        });
+        if (!ok) return;
+        await runGit("Changes discarded", async () => {
+            for (const file of files) await commands.gitDiscardChanges(repo, file.path);
+        });
+    };
+
+    const createBranch = async () => {
+        if (!repo) return;
+        const name = window.prompt("New branch name");
+        if (!name?.trim()) return;
+        await runGit(`Switched to ${name.trim()}`, async () => {
+            await commands.gitCreateBranch(repo, name.trim());
+            await commands.gitSwitchBranch(repo, name.trim());
+        });
+    };
+
     const suggest = async () => {
         if (!repo) return;
         const token = getShapeAccessToken();
@@ -352,33 +401,66 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                             <Icon icon={Checkmark20Regular} />
                             Commit
                         </Button>
-                        <Button
-                            variant="default"
-                            size="sm"
-                            className="h-7 rounded-none border-l border-white/20 px-1.5"
-                            aria-label="Commit options"
-                            disabled={busy}
-                            onClick={() => setExtras((open) => !open)}
-                        >
-                            <Icon icon={ChevronDown20Regular} />
-                        </Button>
+                        <DropdownMenuSub>
+                            <DropdownMenuSubTrigger
+                                aria-label="Commit options"
+                                disabled={busy}
+                                className="h-7 rounded-none border-l border-white/15 px-1.5"
+                            >
+                                <Icon icon={ChevronDown20Regular} />
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="min-w-52">
+                                <DropdownMenuItem disabled={busy || !lastMessage} onSelect={amend}>
+                                    Amend last commit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    disabled={busy || files.every((file) => !file.staged)}
+                                    onSelect={() => {
+                                        const staged = files.filter((file) => file.staged).map((file) => file.path);
+                                        void commitPaths(staged, messageBody());
+                                    }}
+                                >
+                                    Commit staged
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled={files.length === 0 || busy} onSelect={() => void stageAll()}>
+                                    Stage all
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!repo || busy} onSelect={() => void runGit("Unstaged", () => commands.gitUnstageAll(repo!))}>
+                                    Unstage all
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={files.length === 0 || busy} onSelect={() => void discardAll()}>
+                                    Discard all changes
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled={!hasRemote || busy} onSelect={() => void runGit("Fetched", () => commands.gitFetch(repo!))}>
+                                    Fetch
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!hasRemote || busy} onSelect={() => void runGit("Pulled", () => commands.gitPull(repo!))}>
+                                    Pull{behind > 0 ? ` (${behind})` : ""}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!hasRemote || busy} onSelect={() => void push()}>
+                                    Push{ahead > 0 ? ` (${ahead})` : ""}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!hasRemote || busy} onSelect={() => void runGit("Synced", () => commands.gitSync(repo!))}>
+                                    Sync
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled={files.length === 0 || busy} onSelect={() => void runGit("Stashed", () => commands.gitStashSave(repo!, title.trim() || "WIP", true))}>
+                                    Stash changes
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!repo || busy} onSelect={() => void runGit("Stash applied", () => commands.gitStashPop(repo!, 0))}>
+                                    Pop stash
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!repo || busy} onSelect={() => void createBranch()}>
+                                    New branch{branch ? ` from ${branch}` : ""}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!repo || busy || hasRemote} onSelect={() => setPublishOpen(true)}>
+                                    Publish repository
+                                </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                        </DropdownMenuSub>
                     </div>
-                    {extras ? (
-                        <div className="flex flex-col">
-                            <Button variant="ghost" size="sm" className="justify-start" disabled={busy || !lastMessage} onClick={amend}>
-                                Amend last commit
-                            </Button>
-                            <Button variant="ghost" size="sm" className="justify-start" disabled={!hasRemote || busy} onClick={() => void push()}>
-                                Push
-                            </Button>
-                            <Button variant="ghost" size="sm" className="justify-start" disabled={files.length === 0 || busy} onClick={() => void stageAll()}>
-                                Stage all
-                            </Button>
-                            <Button variant="ghost" size="sm" className="justify-start" disabled={!repo || busy || hasRemote} onClick={() => setPublishOpen(true)}>
-                                Publish repository
-                            </Button>
-                        </div>
-                    ) : null}
                 </div>
                 <DropdownMenuSeparator />
                 <div className="flex items-center gap-2 px-2 py-1 text-sm text-text-secondary">

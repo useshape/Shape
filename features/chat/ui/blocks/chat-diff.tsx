@@ -11,45 +11,35 @@ import {
 function DiffRows({ rows }: { rows: UnifiedDiffRow[] }) {
     if (rows.length === 0) return null;
     return (
-        <div className="mt-1 max-h-[260px] max-w-full overflow-auto custom-scrollbar border-y border-border-subtle bg-surface-3 font-mono text-sm">
-            <table className="w-max min-w-full border-collapse text-left">
-                <tbody>
-                    {rows.map((row, i) => {
-                        if (row.type === "hunk") {
-                            return (
-                                <tr key={`h-${i}`} className="bg-surface-2/80 text-text-muted">
-                                    <td colSpan={3} className="px-2 py-0.5 whitespace-pre select-none">
-                                        {row.line}
-                                    </td>
-                                </tr>
-                            );
-                        }
-                        const marker = row.type === "add" ? "+" : row.type === "remove" ? "-" : " ";
-                        return (
-                            <tr
-                                key={`${row.type}-${i}`}
-                                className={cn(
-                                    "border-l-2",
-                                    row.type === "add" && "border-l-success/50 bg-success/[0.06] text-success",
-                                    row.type === "remove" && "border-l-error/40 bg-error/[0.05] text-error",
-                                    row.type === "context" && "border-l-transparent text-text-secondary",
-                                )}
-                            >
-                                <td className="w-8 shrink-0 px-1 py-px text-right tabular-nums opacity-50 select-none">
-                                    {row.oldNum ?? ""}
-                                </td>
-                                <td className="w-8 shrink-0 px-1 py-px text-right tabular-nums opacity-50 select-none">
-                                    {row.newNum ?? ""}
-                                </td>
-                                <td className="px-2 py-px whitespace-pre">
-                                    <span className="mr-2 opacity-60 select-none">{marker}</span>
-                                    {row.line || " "}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
+        <div className="mt-1 max-h-64 w-full overflow-auto rounded-lg bg-surface-1 font-mono text-xs leading-5">
+            {rows.map((row, i) => {
+                if (row.type === "hunk") {
+                    return (
+                        <div key={`h-${i}`} className="bg-surface-2 px-2 py-0.5 text-text-muted whitespace-pre">
+                            {row.line}
+                        </div>
+                    );
+                }
+                const marker = row.type === "add" ? "+" : row.type === "remove" ? "-" : " ";
+                const num = row.type === "remove" ? row.oldNum : row.newNum ?? row.oldNum;
+                return (
+                    <div
+                        key={`${row.type}-${i}`}
+                        className={cn(
+                            "flex min-w-full",
+                            row.type === "add" && "bg-success/10 text-success",
+                            row.type === "remove" && "bg-error/10 text-error",
+                            row.type === "context" && "text-text-secondary",
+                        )}
+                    >
+                        <span className="w-8 shrink-0 select-none px-1 text-right tabular-nums text-text-disabled">
+                            {num ?? ""}
+                        </span>
+                        <span className="w-4 shrink-0 select-none text-center opacity-70">{marker}</span>
+                        <span className="min-w-0 flex-1 whitespace-pre px-2">{row.line || " "}</span>
+                    </div>
+                );
+            })}
         </div>
     );
 }
