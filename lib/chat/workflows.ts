@@ -11,6 +11,14 @@ export type AgentWorkflow = {
     pluginTool?: string;
     /** Plugin tool slugs pre-approved for this workflow. */
     pluginTools?: string[];
+    /** How the trigger is matched. */
+    when?: "slash" | "phrase" | "both";
+    /** Ask the agent to search the web for this workflow. */
+    webSearch?: boolean;
+    /** Ask the agent to open pages in the in-app browser. */
+    browse?: boolean;
+    /** Optional mode for the turn. */
+    mode?: "Ask" | "Code" | "Plan" | "Visual";
 };
 
 export function workflowPluginTools(w: AgentWorkflow): string[] {
@@ -46,22 +54,28 @@ export function workflowSlashToken(w: AgentWorkflow): string {
     return key ? `/${key}` : "";
 }
 
-function triggerHits(message: string, trigger: string): boolean {
-    const t = trigger.trim();
+function triggerHits(message: string, workflow: AgentWorkflow): boolean {
+    const t = workflow.trigger.trim();
     if (!t) return false;
+    const when = workflow.when ?? "both";
     const hay = message.trim();
     const first = hay.split(/\s+/)[0] ?? "";
-    if (first.startsWith("/") && slashKey(first) === slashKey(t)) return true;
-    const lower = hay.toLowerCase();
-    const needle = t.toLowerCase();
-    if (lower.includes(needle)) return true;
-    const slug = needle.replace(/\s+/g, "-");
-    return slug.length >= 2 && lower.includes(slug);
+    const slashHit = first.startsWith("/") && slashKey(first) === slashKey(t);
+    const phraseHit = (() => {
+        const lower = hay.toLowerCase();
+        const needle = t.toLowerCase();
+        if (lower.includes(needle)) return true;
+        const slug = needle.replace(/\s+/g, "-");
+        return slug.length >= 2 && lower.includes(slug);
+    })();
+    if (when === "slash") return slashHit;
+    if (when === "phrase") return phraseHit;
+    return slashHit || phraseHit;
 }
 
 export function matchWorkflows(message: string, workflows: AgentWorkflow[] | undefined): AgentWorkflow[] {
     if (!workflows?.length) return [];
-    return workflows.filter((w) => triggerHits(message, w.trigger));
+    return workflows.filter((w) => triggerHits(message, w));
 }
 
 /** Highlight ranges for `/command` tokens that match a saved workflow. */
@@ -88,17 +102,38 @@ export function slashCommandRanges(
     return ranges;
 }
 
+export function workflowSeeHow(w: AgentWorkflow): string {
+    const token = workflowSlashToken(w);
+    const when = w.when ?? "both";
+    const lines = [
+        when === "slash" ? `Runs when you type ${token || "/name"} in chat.` : null,
+        when === "phrase" ? `Runs when the message includes "${w.trigger || "..."}".` : null,
+        when === "both" ? `Runs on ${token || "/name"} or the phrase "${w.trigger || "..."}".` : null,
+        w.webSearch ? "Looks up current facts on the web." : null,
+        w.browse ? "May open pages in the Shape browser." : null,
+        w.mode ? `Uses ${w.mode} for the turn.` : null,
+        w.pluginToolkit ? `Can call ${w.pluginToolkit} without asking again.` : null,
+        w.prompt.trim() ? `Prompt: ${w.prompt.trim().slice(0, 220)}` : null,
+    ].filter(Boolean);
+    return lines.join("\n");
+}
+
 export function applyWorkflows(message: string, workflows: AgentWorkflow[] | undefined): string {
     const hits = matchWorkflows(message, workflows);
     if (hits.length === 0) return message;
     const blocks = hits.map((w) => {
         const tools = workflowPluginTools(w);
+        const extras: string[] = [];
+        if (w.webSearch) extras.push("Use web_search for current facts before you decide.");
+        if (w.browse) extras.push("Use browse / visit_url when a page is needed. Do not guess the contents.");
+        if (w.mode) extras.push(`Prefer ${w.mode} mode behavior for this turn.`);
+        const extra = extras.length ? `\n${extras.join(" ")}` : "";
         const plugin = w.pluginToolkit
             ? tools.length
                 ? `\nImmediately call plugin_run (do not call plugin_list, plugin_search, or plugin_tools first). toolkit="${w.pluginToolkit}". slugs: ${tools.map((s) => `"${s}"`).join(", ")}. These actions are already approved.`
                 : `\nPrefer plugin_run with toolkit="${w.pluginToolkit}". Do not list or search plugins first unless a slug is missing.`
             : "";
-        return `<workflow name="${escapeAttr(w.name)}" trigger="${escapeAttr(w.trigger)}">\n${w.prompt.trim()}${plugin}\n</workflow>`;
+        return `<workflow name="${escapeAttr(w.name)}" trigger="${escapeAttr(w.trigger)}">\n${w.prompt.trim()}${extra}${plugin}\n</workflow>`;
     });
     return `${blocks.join("\n\n")}\n\n${message}`;
 }

@@ -137,6 +137,27 @@ pub fn run() {
 
             // Initialize menu
             commands::ipc::shortcuts::setup_menu(app.handle())?;
+            if let Some(icon) = app.default_window_icon() {
+                let _ = tauri::tray::TrayIconBuilder::with_id("shape")
+                    .icon(icon.clone())
+                    .tooltip("Shape")
+                    .on_tray_icon_event(|tray, event| {
+                        let tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            ..
+                        } = event
+                        else {
+                            return;
+                        };
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    })
+                    .build(app);
+            }
             app.on_menu_event(|app, event| {
                 let id = event.id().0.as_str();
                 if id.starts_with("shape-browser-") {

@@ -81,6 +81,8 @@ export function AgentChrome({
     padWindowControls = false,
     sidebarOpen = true,
     onToggleSidebar,
+    onSidebarHoverStart,
+    onSidebarHoverEnd,
 }: {
     rightOpen: boolean;
     onToggleRight: () => void;
@@ -89,11 +91,19 @@ export function AgentChrome({
     padWindowControls?: boolean;
     sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
+    onSidebarHoverStart?: () => void;
+    onSidebarHoverEnd?: () => void;
 }) {
     return (
-        <div className="relative z-10 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent" data-tauri-drag-region>
+        <div className="relative z-30 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent" data-tauri-drag-region>
             {!sidebarOpen && onToggleSidebar ? (
-                <div className="relative z-10 flex shrink-0 items-center pl-1" data-no-drag>
+                <div
+                    data-sidebar-peek-toggle=""
+                    className="relative z-10 flex shrink-0 items-center pl-1"
+                    data-no-drag
+                    onMouseEnter={onSidebarHoverStart}
+                    onMouseLeave={onSidebarHoverEnd}
+                >
                     <SidebarToggleBtn open={false} onToggle={onToggleSidebar} />
                 </div>
             ) : null}

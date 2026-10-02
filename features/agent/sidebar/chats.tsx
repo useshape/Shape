@@ -696,7 +696,7 @@ export function ChatList({
                     <HeaderIconBtn label="Search" onClick={openCommandPalette}>
                         <Icon icon={Search20Regular} />
                     </HeaderIconBtn>
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                         <Tooltip content="Filter" side="bottom" delayDuration={80}>
                             <DropdownMenuTrigger asChild>
                                 <button

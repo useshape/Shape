@@ -19,6 +19,78 @@ import { SyntaxHighlighter } from "@/lib/ui/syntax-highlight";
 import { looksLikeProseMarkdown, preprocessChatMarkdown } from "./stream";
 import { ChatLinkChip } from "./link-chip";
 import { Button } from "@/components/ui/button";
+import { commands, getProjectPath } from "@/lib/backend";
+import { resolveProjectFilePath } from "@/lib/path/utils";
+
+const PATH_IN_PROSE =
+    /(?:^|(?<=\s))((?:\.{1,2}[\\/])?(?:[\w.-]+[\\/])+[\w.-]+\.[A-Za-z0-9]{1,12})(?=$|[\s,;:)\]"'`])/g;
+
+function ProjectPathLink({ path }: { path: string }) {
+    const [exists, setExists] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const resolved = resolveProjectFilePath(path, getProjectPath());
+        void commands
+            .readFile(resolved)
+            .then(() => {
+                if (!cancelled) setExists(true);
+            })
+            .catch(() =>
+                commands
+                    .lsDir(resolved)
+                    .then(() => {
+                        if (!cancelled) setExists(true);
+                    })
+                    .catch(() => {
+                        if (!cancelled) setExists(false);
+                    }),
+            );
+        return () => {
+            cancelled = true;
+        };
+    }, [path]);
+
+    if (!exists) return <>{path}</>;
+    return (
+        <button
+            type="button"
+            className="text-accent-text underline decoration-accent-text/40 underline-offset-2 hover:decoration-accent-text"
+            title={path}
+            onClick={() => {
+                void openProjectFile(path);
+            }}
+        >
+            {path}
+        </button>
+    );
+}
+
+function linkifyText(text: string): React.ReactNode {
+    PATH_IN_PROSE.lastIndex = 0;
+    const nodes: React.ReactNode[] = [];
+    let last = 0;
+    let match: RegExpExecArray | null;
+    let i = 0;
+    while ((match = PATH_IN_PROSE.exec(text)) !== null) {
+        const full = match[1];
+        if (!full || full.includes("://") || full.startsWith("http")) continue;
+        const start = match.index + (match[0].startsWith(full) ? 0 : match[0].length - full.length);
+        if (start > last) nodes.push(text.slice(last, start));
+        nodes.push(<ProjectPathLink key={`p-${i++}-${start}`} path={full} />);
+        last = start + full.length;
+    }
+    if (last === 0) return text;
+    if (last < text.length) nodes.push(text.slice(last));
+    return nodes;
+}
+
+function linkifyChildren(children: React.ReactNode): React.ReactNode {
+    return React.Children.map(children, (child) => {
+        if (typeof child === "string") return linkifyText(child);
+        return child;
+    });
+}
 
 function CodeBlock({ language, code, ...rest }: { language: string; code: string; [k: string]: unknown }) {
     const [copied, setCopied] = useState(false);
@@ -120,7 +192,7 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             );
         },
         p: ({ children }: { children?: React.ReactNode }) => (
-            <p className="mb-2 font-sans chat-text font-medium text-text-primary last:mb-0">{children}</p>
+            <p className="mb-2 font-sans chat-text font-medium text-text-primary last:mb-0">{linkifyChildren(children)}</p>
         ),
         ul: ({ children }: { children?: React.ReactNode }) => (
             <ul className="mb-2 ml-4 list-outside list-disc space-y-1 font-sans chat-text">{children}</ul>
@@ -129,16 +201,16 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             <ol className="mb-2 ml-4 list-outside list-decimal space-y-1 font-sans chat-text">{children}</ol>
         ),
         li: ({ children }: { children?: React.ReactNode }) => (
-            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">{children}</li>
+            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">{linkifyChildren(children)}</li>
         ),
         h1: ({ children }: { children?: React.ReactNode }) => (
-            <h1 className="mb-2 mt-4 font-sans chat-text font-medium text-text-primary">{children}</h1>
+            <h1 className="mb-2 mt-4 font-sans chat-text font-medium text-text-primary">{linkifyChildren(children)}</h1>
         ),
         h2: ({ children }: { children?: React.ReactNode }) => (
-            <h2 className="mb-1.5 mt-3 font-sans chat-text font-medium text-text-primary">{children}</h2>
+            <h2 className="mb-1.5 mt-3 font-sans chat-text font-medium text-text-primary">{linkifyChildren(children)}</h2>
         ),
         h3: ({ children }: { children?: React.ReactNode }) => (
-            <h3 className="mb-1 mt-2 font-sans chat-text font-medium text-text-primary">{children}</h3>
+            <h3 className="mb-1 mt-2 font-sans chat-text font-medium text-text-primary">{linkifyChildren(children)}</h3>
         ),
         strong: ({ children }: { children?: React.ReactNode }) => (
             <strong className="chat-text font-medium text-text-primary">{children}</strong>

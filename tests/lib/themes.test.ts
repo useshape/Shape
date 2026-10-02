@@ -10,24 +10,27 @@ function withColorTheme(colorTheme: unknown): ShapeSettings {
 }
 
 describe("theme registry", () => {
-    it("registers dark and light", () => {
-        expect(Object.keys(COLOR_THEMES)).toEqual(["dark", "light"]);
+    it("registers auto, dark, and light", () => {
+        expect(Object.keys(COLOR_THEMES)).toEqual(["auto", "dark", "light"]);
+        expect(COLOR_THEMES.auto.label).toBe("Auto");
         expect(COLOR_THEMES.dark.label).toBe("Dark");
         expect(COLOR_THEMES.light.label).toBe("Light");
     });
 
     it("recognizes valid theme ids", () => {
+        expect(isColorThemeId("auto")).toBe(true);
         expect(isColorThemeId("dark")).toBe(true);
         expect(isColorThemeId("light")).toBe(true);
         expect(isColorThemeId("graphite")).toBe(false);
     });
 
-    it("keeps light and migrates unknown themes to dark", () => {
+    it("keeps known themes and migrates unknown themes to auto", () => {
         expect(normalizeColorTheme("light")).toBe("light");
-        expect(normalizeColorTheme("solarized")).toBe("dark");
-        expect(normalizeColorTheme("nord")).toBe("dark");
-        expect(normalizeColorTheme("graphite")).toBe("dark");
-        expect(normalizeColorTheme(undefined)).toBe("dark");
+        expect(normalizeColorTheme("auto")).toBe("auto");
+        expect(normalizeColorTheme("solarized")).toBe("auto");
+        expect(normalizeColorTheme("nord")).toBe("auto");
+        expect(normalizeColorTheme("graphite")).toBe("auto");
+        expect(normalizeColorTheme(undefined)).toBe("auto");
         expect(normalizeColorTheme("dark")).toBe("dark");
     });
 });
@@ -47,7 +50,7 @@ describe("applyAppearanceSettings", () => {
         expect(document.documentElement.classList.contains("dark")).toBe(false);
     });
 
-    it("migrates removed accent themes to dark", () => {
+    it("migrates removed accent themes to auto (dark when the OS is not light)", () => {
         applyAppearanceSettings(withColorTheme("graphite"));
         expect(document.documentElement.dataset.theme).toBeUndefined();
         expect(document.documentElement.style.colorScheme).toBe("dark");

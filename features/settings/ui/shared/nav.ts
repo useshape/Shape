@@ -7,6 +7,7 @@ import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-f
 import { Bug20Regular } from "@fluentui/react-icons/headless/svg/bug";
 import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
 import { AgentsPerson24Regular } from "@fluentui/react-icons/headless/svg/agents-person";
+import { PeopleTeam24Regular } from "@fluentui/react-icons/headless/svg/people-team";
 import { DocumentData24Regular } from "@fluentui/react-icons/headless/svg/document-data";
 import { DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
 import { Keyboard20Regular } from "@fluentui/react-icons/headless/svg/keyboard";
@@ -54,6 +55,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Agents",
         children: [
             { id: "ai-models", label: "Models", icon: AgentsPerson24Regular, targetId: "settings-ai-models" },
+            { id: "ai-multiwork", label: "Multiwork", icon: PeopleTeam24Regular, targetId: "settings-ai-multiwork" },
             { id: "ai-rules", label: "Instructions", icon: DocumentEdit24Regular, targetId: "settings-ai-rules" },
             { id: "ai-workflows", label: "Workflows", icon: ArrowClockwiseDashesSettings24Regular, targetId: "settings-ai-workflows" },
             { id: "ai-skills", label: "Skills", icon: DocumentData24Regular, targetId: "settings-skills" },
@@ -83,7 +85,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Application",
         children: [
             { id: "keyboard-shortcuts", label: "Keyboard Shortcuts", icon: Keyboard20Regular, targetId: "settings-keyboard-shortcuts" },
-            { id: "updates", label: "Updates", icon: ArrowDownload20Regular, targetId: "settings-updates" },
+            { id: "updates", label: "About", icon: ArrowDownload20Regular, targetId: "settings-updates" },
             { id: "notifications", label: "Notifications", icon: Alert20Regular, targetId: "settings-notifications" },
             { id: "privacy", label: "Data Control", icon: Shield20Regular, targetId: "settings-privacy" },
             { id: "developer", label: "Developer", icon: Bug20Regular, targetId: "settings-developer" },
@@ -129,7 +131,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         id: "agents",
         label: "Agents",
         icon: Sparkle24Regular,
-        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context", "workflows", "commands"],
+        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context", "workflows", "commands", "multiwork"],
     },
     {
         id: "editor",

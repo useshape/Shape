@@ -166,7 +166,7 @@ export function AgentSidebar({
                     "flex h-full min-h-0 shrink-0 flex-col",
                     expanded ? "w-80" : "w-12",
                     "transition-[opacity,transform] duration-[var(--transition-base)] ease-[var(--ease-out)]",
-                    !open && "pointer-events-none -translate-x-3 opacity-0",
+                    !open && "pointer-events-none -translate-x-full opacity-0",
                 )}
             >
                 {showHostedNav ? (

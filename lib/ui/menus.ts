@@ -39,7 +39,6 @@ export function buildAgentMenuStructure(): Record<string, MenuItem[]> {
             { label: "Command Palette...", shortcut: getShortcutForLabel("Command Palette...") },
             { type: "separator" },
             { label: "Explorer", shortcut: getShortcutForLabel("Explorer") },
-            { label: "Changes" },
             { label: "Preview" },
             { type: "separator" },
             { label: "Git Manager" },

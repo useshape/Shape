@@ -384,11 +384,31 @@ pub async fn send_chat_message(
         .with_reasoning_effort(Some(effort_norm.clone()))
         .with_service_tier(tier_norm.clone());
 
-    let (context_string, _active_file, _project_root) = build_context_with_options(
-        &app_state,
-        context_options_for_query(message.clone(), (*index_state).clone()),
-    )
-    .await?;
+    let steer = if is_multiwork {
+        schema::SteerPacks::all_on()
+    } else {
+        crate::agent::tools::plugins::fetch_steer(
+            &auth_token,
+            &message,
+            &mode_to_use,
+            Some(&turn_id),
+            conversation_id.as_deref(),
+        )
+        .await
+    };
+    logging::debug(
+        "chat",
+        &format!(
+            "Steer packs: workspace={} plugins={} browse={} web={} git={} terminal={} media={}",
+            steer.workspace, steer.plugins, steer.browse, steer.web, steer.git, steer.terminal, steer.media
+        ),
+    );
+    let mut context_opts = context_options_for_query(message.clone(), (*index_state).clone());
+    context_opts.include_repo_map = steer.workspace;
+    context_opts.include_diagnostics = steer.workspace;
+    context_opts.include_git_status = steer.workspace || steer.git;
+    let (context_string, _active_file, _project_root) =
+        build_context_with_options(&app_state, context_opts).await?;
     logging::debug("chat", &format!("Context built: {} chars", context_string.len()));
 
     let mut prompt_parts = vec![prompts::SYSTEM_MD.to_string()];
@@ -501,12 +521,16 @@ pub async fn send_chat_message(
     }
     turn_context.push_str("\n\nCURRENT CONTEXT:\n");
     turn_context.push_str(&context_string);
+    if !steer.hint.is_empty() {
+        turn_context.push_str("\n");
+        turn_context.push_str(&steer.hint);
+    }
     messages::append_turn_context(&mut api_messages, &turn_context);
 
     let tools = if is_multiwork {
         schema::multiwork_orchestrator_tools(family)
     } else {
-        schema::stable_tools(family)
+        schema::apply_steer_packs(schema::stable_tools(family), &steer)
     };
     let mcp_tokens: u64 = 0;
 

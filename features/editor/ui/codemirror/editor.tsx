@@ -139,15 +139,6 @@ export function CodeMirrorEditor({
                     indentWithTab,
                     { key: "Mod-]", run: indentMore },
                     { key: "Mod-[", run: indentLess },
-                    {
-                        key: "Mod-f",
-                        run: () => {
-                            window.dispatchEvent(
-                                new CustomEvent("shape-editor-find", { detail: { path: pathRef.current } }),
-                            );
-                            return true;
-                        },
-                    },
                 ]),
                 langCompartment.of(lang ? [lang, shapeSyntaxLinter(path), lintGutter()] : []),
                 EditorView.updateListener.of((update) => {
@@ -327,19 +318,6 @@ export function CodeMirrorEditor({
                     }}
                 >
                     Select All
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem
-                    onClick={() => {
-                        const v = viewRef.current;
-                        if (v) {
-                            window.dispatchEvent(
-                                new CustomEvent("shape-editor-find", { detail: { path: pathRef.current } }),
-                            );
-                        }
-                    }}
-                >
-                    Find
                 </ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>

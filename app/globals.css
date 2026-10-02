@@ -145,6 +145,7 @@
 
   /* ── Typography ── */
   --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type-brand: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --type-weight-normal: 500;
   --type-weight-medium: 600;
@@ -359,6 +360,7 @@
   --color-scrollbar-hover: var(--scrollbar-hover);
 
   --font-sans: var(--font-ui);
+  --font-brand: var(--type-brand);
   --font-mono: var(--font-mono);
   --font-weight-normal: var(--type-weight-normal);
   --font-weight-medium: var(--type-weight-medium);
@@ -1774,6 +1776,31 @@ body[data-resizing] .xterm {
 
 .animate-in {
   animation: shape-fade-in var(--transition-base) var(--ease-out) both;
+}
+
+@keyframes shape-orb-breathe {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(1);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.18);
+    opacity: 0.72;
+  }
+}
+
+.onboard-orb {
+  position: absolute;
+  left: 50%;
+  bottom: -38%;
+  width: min(92vw, 720px);
+  height: min(92vw, 720px);
+  border-radius: 9999px;
+  pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 85%, white) 0%, transparent 68%);
+  filter: blur(72px);
+  animation: shape-orb-breathe 5.2s ease-in-out infinite;
 }
 
 /* Smooth editor scrolling (textarea + synced overlays) */

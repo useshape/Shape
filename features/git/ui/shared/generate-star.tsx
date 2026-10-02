@@ -2,7 +2,6 @@
 
 import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
 
-
 import { Icon } from "@/components/ui/icon";
 
 import { Tooltip } from "@/components/ui/tooltip";
@@ -55,15 +54,20 @@ export function GenerateStarButton({
             <button
                 type="button"
                 disabled={disabled || loading}
+                onPointerDown={(e) => {
+                    e.stopPropagation();
+                    if (e.pointerType === "mouse" || e.pointerType === "touch" || e.pointerType === "pen") {
+                        e.preventDefault();
+                        if (e.button !== 0 || disabled || loading) return;
+                        onClick();
+                    }
+                }}
                 onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (e.detail !== 0) return;
                     if (disabled || loading) return;
                     onClick();
-                }}
-                onPointerDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
                 }}
                 aria-label={label}
                 aria-busy={loading || undefined}

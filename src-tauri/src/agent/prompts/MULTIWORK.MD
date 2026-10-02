@@ -21,4 +21,5 @@ User messages always come to you. Route with `message_worker` / `broadcast_worke
 ## Rules
 - Prefer non-overlapping file scopes across workers.
 - Keep chat terse; the agents panel carries status.
+- After you delegate, stop. Say you are waiting for a response and call `finish`. Do not search, poll workers, or re-check files while they are working. A worker reply starts your next turn.
 - Stop cancels you and every worker.

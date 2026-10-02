@@ -22,6 +22,9 @@ pub struct ContextOptions {
     pub retrieval_query: Option<String>,
     pub repo_map_token_budget: usize,
     pub index_state: Option<IndexState>,
+    pub include_repo_map: bool,
+    pub include_diagnostics: bool,
+    pub include_git_status: bool,
 }
 
 impl Default for ContextOptions {
@@ -30,6 +33,9 @@ impl Default for ContextOptions {
             retrieval_query: None,
             repo_map_token_budget: DEFAULT_REPO_MAP_TOKENS,
             index_state: None,
+            include_repo_map: true,
+            include_diagnostics: true,
+            include_git_status: true,
         }
     }
 }
@@ -77,10 +83,12 @@ pub async fn build_context_with_options(
                 "Workspace status: empty/greenfield (no package.json, Cargo.toml, app/, or src/). After Design concept selection, scaffold then implement — do not refuse.\n",
             );
         }
-        let git_status = get_git_status_short(project_path, 5);
-        if !git_status.is_empty() {
-            context_string.push_str("Git:\n");
-            context_string.push_str(&git_status);
+        if opts.include_git_status {
+            let git_status = get_git_status_short(project_path, 5);
+            if !git_status.is_empty() {
+                context_string.push_str("Git:\n");
+                context_string.push_str(&git_status);
+            }
         }
     } else {
         context_string.push_str("No project open.\n");
@@ -92,7 +100,7 @@ pub async fn build_context_with_options(
     }
 
     // Critical diagnostics only (≤3 per file)
-    {
+    if opts.include_diagnostics {
         let state = app_state.0.lock()?;
         let mut diag_count = 0usize;
         for file in open_files.iter().take(5) {
@@ -113,22 +121,24 @@ pub async fn build_context_with_options(
     context_string.push_str("======================\n\n");
 
     // Repo map on send. Codebase retrieval happens on demand via `search_codebase`.
-    if let (Some(_project_path), Some(_query)) = (&project_path_opt, opts.retrieval_query.as_ref()) {
-        if opts.index_state.is_some() {
-            let boost_paths: Vec<String> = open_files
-                .iter()
-                .map(|f| f.path.clone())
-                .chain(active_path_opt.iter().cloned())
-                .collect();
-            let open_paths: Vec<String> = open_files.iter().map(|f| f.path.clone()).collect();
-            let map = build_repo_map(RepoMapInput {
-                open_files: &open_paths,
-                active_file: active_path_opt.as_deref(),
-                retrieval_files: &boost_paths,
-                token_budget: opts.repo_map_token_budget,
-            })
-            .await;
-            context_string.push_str(&format_repo_map_section(&map));
+    if opts.include_repo_map {
+        if let (Some(_project_path), Some(_query)) = (&project_path_opt, opts.retrieval_query.as_ref()) {
+            if opts.index_state.is_some() {
+                let boost_paths: Vec<String> = open_files
+                    .iter()
+                    .map(|f| f.path.clone())
+                    .chain(active_path_opt.iter().cloned())
+                    .collect();
+                let open_paths: Vec<String> = open_files.iter().map(|f| f.path.clone()).collect();
+                let map = build_repo_map(RepoMapInput {
+                    open_files: &open_paths,
+                    active_file: active_path_opt.as_deref(),
+                    retrieval_files: &boost_paths,
+                    token_budget: opts.repo_map_token_budget,
+                })
+                .await;
+                context_string.push_str(&format_repo_map_section(&map));
+            }
         }
     }
 

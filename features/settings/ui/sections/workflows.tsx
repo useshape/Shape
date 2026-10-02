@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { fetchPlugins, fetchPluginTools, peekPluginsCache, type PluginRow, type PluginToolHint } from "@/lib/plugins/api";
-import { newWorkflowId, workflowPluginTools, type AgentWorkflow } from "@/lib/chat/workflows";
+import { newWorkflowId, workflowPluginTools, workflowSeeHow, type AgentWorkflow } from "@/lib/chat/workflows";
 import { updateSettingSection } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { SettingActionRow, SettingCard, SettingSection, SETTING_CONTROL_BTN } from "../shared/controls";
@@ -43,11 +43,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
     };
 
     return (
-        <SettingSection
-            id="settings-ai-workflows"
-            title="Workflows"
-            description="Type / in chat to run one. Each workflow loads a prompt."
-        >
+        <SettingSection id="settings-ai-workflows" title="Workflows">
             <SettingCard>
             {value.map((w) => (
                     <div key={w.id} className="flex items-center gap-2.5 px-3.5 py-2.5">
@@ -97,6 +93,7 @@ export function WorkflowsEditor({ value }: { value: AgentWorkflow[] }) {
                         name: "",
                         trigger: "",
                         prompt: "",
+                        when: "both",
                     });
                     setOpen(true);
                 }}
@@ -214,23 +211,48 @@ function WorkflowDialog({
 
     return (
         <AlertDialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <AlertDialogContent className="max-w-[480px]">
+            <AlertDialogContent className="max-w-[520px]">
                 <AlertDialogHeader>
                     <AlertDialogTitle>
                         {existing.some((x) => x.id === draft.id) ? "Edit workflow" : "New workflow"}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                        Type / in the composer to pick this workflow, or mention its trigger phrase in a message.
+                        Tell Shape what to do when this routine runs. Use / to mention it in chat.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
-                <div className="flex flex-col gap-3 px-1 pb-2">
+                <div className="flex max-h-[min(70vh,560px)] flex-col gap-3 overflow-y-auto px-1 pb-2">
                     <Field label="Name">
                         <Input
                             value={draft.name}
                             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                            placeholder="Resend pricing"
+                            placeholder="e.g. Summarize my emails"
                             className="bg-panel-hover"
                         />
+                    </Field>
+                    <Field label="When">
+                        <div className="flex flex-wrap gap-1.5">
+                            {(
+                                [
+                                    ["both", "Slash or phrase"],
+                                    ["slash", "Slash only"],
+                                    ["phrase", "Phrase in the message"],
+                                ] as const
+                            ).map(([id, label]) => (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    onClick={() => setDraft({ ...draft, when: id })}
+                                    className={cn(
+                                        "rounded-full px-2.5 py-1 text-xs",
+                                        (draft.when ?? "both") === id
+                                            ? "bg-panel-hover text-text-primary"
+                                            : "text-text-muted hover:bg-panel-hover/60",
+                                    )}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </Field>
                     <Field label="Trigger">
                         <Input
@@ -244,11 +266,50 @@ function WorkflowDialog({
                         <Textarea
                             value={draft.prompt}
                             onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
-                            placeholder="Load this context and follow these steps…"
+                            placeholder="Tell Shape what to do when this routine runs."
                             className="min-h-28 bg-panel-hover"
                         />
                     </Field>
-                    <Field label="Plugin*">
+                    <div className="grid grid-cols-2 gap-2">
+                        <label className="flex items-center justify-between rounded-xl bg-panel-hover px-3 py-2 text-sm">
+                            <span>Web search</span>
+                            <input
+                                type="checkbox"
+                                className="accent-accent"
+                                checked={Boolean(draft.webSearch)}
+                                onChange={(e) => setDraft({ ...draft, webSearch: e.target.checked })}
+                            />
+                        </label>
+                        <label className="flex items-center justify-between rounded-xl bg-panel-hover px-3 py-2 text-sm">
+                            <span>Open pages</span>
+                            <input
+                                type="checkbox"
+                                className="accent-accent"
+                                checked={Boolean(draft.browse)}
+                                onChange={(e) => setDraft({ ...draft, browse: e.target.checked })}
+                            />
+                        </label>
+                    </div>
+                    <Field label="Mode">
+                        <div className="flex flex-wrap gap-1.5">
+                            {([undefined, "Ask", "Code", "Plan", "Visual"] as const).map((id) => (
+                                <button
+                                    key={id ?? "any"}
+                                    type="button"
+                                    onClick={() => setDraft({ ...draft, mode: id })}
+                                    className={cn(
+                                        "rounded-full px-2.5 py-1 text-xs",
+                                        draft.mode === id
+                                            ? "bg-panel-hover text-text-primary"
+                                            : "text-text-muted hover:bg-panel-hover/60",
+                                    )}
+                                >
+                                    {id ?? "Any"}
+                                </button>
+                            ))}
+                        </div>
+                    </Field>
+                    <Field label="Plugin">
                         <PluginPicker
                             plugins={connected}
                             selected={selected}
@@ -312,6 +373,12 @@ function WorkflowDialog({
                             </DropdownMenu>
                         </Field>
                     ) : null}
+                    <div className="rounded-xl bg-panel-hover px-3 py-2.5">
+                        <div className="text-xs font-medium text-text-secondary">See how</div>
+                        <p className="mt-1 whitespace-pre-wrap text-xs leading-4 text-text-muted">
+                            {workflowSeeHow(draft) || "Add a name, trigger, and prompt to preview this routine."}
+                        </p>
+                    </div>
                 </div>
                 <AlertDialogFooter>
                     <AlertDialogCancel onClick={onClose} className="w-full bg-panel-hover h-9 squircle-2xl">Cancel</AlertDialogCancel>

@@ -1,15 +1,13 @@
 /**
- * Color theme registry. Dark is default; Light is a soft chrome option.
+ * Color theme registry. Auto follows the OS; Dark is the fallback.
  */
 
-export type ColorThemeId = "dark" | "light";
+export type ColorThemeId = "auto" | "dark" | "light";
 
 export interface ColorThemeDefinition {
     id: ColorThemeId;
     label: string;
-    /** One line, shown under the theme name in pickers. */
     description: string;
-    /** Flat swatch colors used for small, non-live previews. */
     swatch: {
         background: string;
         surface: string;
@@ -18,10 +16,16 @@ export interface ColorThemeDefinition {
 }
 
 export const COLOR_THEMES: Record<ColorThemeId, ColorThemeDefinition> = {
+    auto: {
+        id: "auto",
+        label: "Auto",
+        description: "Match the system.",
+        swatch: { background: "#141414", surface: "#1a1a1a", accent: "#3946ff" },
+    },
     dark: {
         id: "dark",
         label: "Dark",
-        description: "Neutral charcoal. The default.",
+        description: "Neutral charcoal.",
         swatch: { background: "#141414", surface: "#1a1a1a", accent: "#3946ff" },
     },
     light: {
@@ -32,21 +36,30 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeDefinition> = {
     },
 };
 
-export const COLOR_THEME_ORDER: ColorThemeId[] = ["dark", "light"];
+export const COLOR_THEME_ORDER: ColorThemeId[] = ["auto", "dark", "light"];
 
 export function isColorThemeId(value: unknown): value is ColorThemeId {
     return typeof value === "string" && value in COLOR_THEMES;
 }
 
-/** True for themes that use a dark color scheme. */
-export function isDarkColorTheme(theme: ColorThemeId): boolean {
-    return theme !== "light";
+export function resolveColorTheme(theme: ColorThemeId): "dark" | "light" {
+    if (theme === "light") return "light";
+    if (theme === "dark") return "dark";
+    if (
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-color-scheme: light)").matches
+    ) {
+        return "light";
+    }
+    return "dark";
 }
 
-/**
- * Migrate unknown/removed values to dark; keep light when valid.
- */
+export function isDarkColorTheme(theme: ColorThemeId): boolean {
+    return resolveColorTheme(theme) !== "light";
+}
+
 export function normalizeColorTheme(value: unknown): ColorThemeId {
     if (isColorThemeId(value)) return value;
-    return "dark";
+    return "auto";
 }

@@ -123,10 +123,83 @@ pub async fn execute_plugin_tools(toolkit: &str, query: Option<&str>, access_tok
     }
 }
 
-pub async fn execute_plugin_search(query: &str, access_token: &str) -> String {
+pub async fn execute_plugin_search(
+    query: &str,
+    access_token: &str,
+    turn_id: Option<&str>,
+    conversation_id: Option<&str>,
+) -> String {
     let path = format!("/api/plugins/search?query={}", urlencoding::encode(query));
-    match plugin_request("GET", &path, access_token, None, None, None).await {
-        Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "{}".to_string()),
+    match plugin_request("GET", &path, access_token, None, turn_id, conversation_id).await {
+        Ok(data) => {
+            if let Some(answer) = data
+                .get("answer")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
+                return answer.to_string();
+            }
+            let mut rec = data
+                .get("recommended")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if rec.is_empty() {
+                rec = data
+                    .get("tools")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|t| t.get("slug"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+            }
+            let connected = data
+                .get("connected")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+            if rec.is_empty() && connected.is_empty() {
+                return "No plugins are connected. Tell the user to connect the app in Settings → Plugins."
+                    .to_string();
+            }
+            if rec.is_empty() {
+                return format!(
+                    "Connected: {connected}. No matching actions. plugin_search again with a shorter phrase like \"list\". Do not say the app is disconnected."
+                );
+            }
+            let rec_args = data
+                .get("tools")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    arr.iter().find(|t| t.get("slug").and_then(|s| s.as_str()) == Some(rec.as_str()))
+                })
+                .and_then(|t| t.get("args"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let mut lines = vec![
+                format!("Connected: {connected}."),
+                format!("plugin_run now: slug={rec} arguments={{{rec_args}}}"),
+                "Allowed slugs below. After a list result, plugin_run the FETCH/HISTORY/GET slug with the id from the list. Do not argue. Do not list twice.".to_string(),
+            ];
+            if let Some(arr) = data.get("tools").and_then(|v| v.as_array()) {
+                for t in arr.iter().take(6) {
+                    let slug = t.get("slug").and_then(|v| v.as_str()).unwrap_or("");
+                    if slug.is_empty() {
+                        continue;
+                    }
+                    let args = t.get("args").and_then(|v| v.as_str()).unwrap_or("");
+                    let p = t.get("p").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    lines.push(format!("- {slug} args={{{args}}} p={p:.2}"));
+                }
+            }
+            lines.join("\n")
+        }
         Err(e) => e,
     }
 }
@@ -137,18 +210,111 @@ pub async fn execute_plugin_run(
     access_token: &str,
     turn_id: Option<&str>,
     conversation_id: Option<&str>,
+    task: Option<&str>,
 ) -> String {
+    let mut body = json!({ "slug": slug, "arguments": arguments });
+    if let Some(task) = task.filter(|s| !s.is_empty()) {
+        body["task"] = json!(task.chars().take(2000).collect::<String>());
+    }
     match plugin_request(
         "POST",
         "/api/plugins/execute",
         access_token,
-        Some(json!({ "slug": slug, "arguments": arguments })),
+        Some(body),
         turn_id,
         conversation_id,
     )
     .await
     {
-        Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "{}".to_string()),
+        Ok(data) => {
+            if let Some(s) = data.get("result").and_then(|v| v.as_str()) {
+                return s.to_string();
+            }
+            serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string())
+        }
         Err(e) => e,
     }
+}
+
+/// Hidden per-turn pack picker. Fail open so a miss never blocks the main model.
+pub async fn fetch_steer(
+    access_token: &str,
+    message: &str,
+    mode: &str,
+    turn_id: Option<&str>,
+    conversation_id: Option<&str>,
+) -> crate::agent::tools::schema::SteerPacks {
+    use crate::agent::tools::schema::SteerPacks;
+    if access_token.trim().is_empty() {
+        return SteerPacks::all_on();
+    }
+    let base = crate::core::website_url::shape_website_base();
+    let url = format!("{}/api/agent/steer", base.trim_end_matches('/'));
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_millis(2500))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return SteerPacks::all_on(),
+    };
+    let mut req = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("Content-Type", "application/json")
+        .json(&json!({
+            "message": message.chars().take(4000).collect::<String>(),
+            "mode": mode,
+        }));
+    if let Some(turn_id) = turn_id.filter(|s| !s.is_empty()) {
+        req = req.header("X-Shape-Turn-Id", turn_id);
+    }
+    if let Some(conversation_id) = conversation_id.filter(|s| !s.is_empty()) {
+        req = req.header("X-Shape-Conversation-Id", conversation_id);
+    }
+    match req.send().await {
+        Ok(resp) if resp.status().is_success() => match resp.json::<Value>().await {
+            Ok(body) => SteerPacks::from_json(&body),
+            Err(_) => SteerPacks::all_on(),
+        },
+        _ => SteerPacks::all_on(),
+    }
+}
+
+pub async fn fetch_gate(
+    access_token: &str,
+    body: Value,
+    turn_id: Option<&str>,
+    conversation_id: Option<&str>,
+) -> Value {
+    if access_token.trim().is_empty() {
+        return json!({});
+    }
+    let base = crate::core::website_url::shape_website_base();
+    let url = format!("{}/api/agent/gate", base.trim_end_matches('/'));
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_millis(2500))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return json!({}),
+    };
+    let mut req = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("Content-Type", "application/json")
+        .json(&body);
+    if let Some(turn_id) = turn_id.filter(|s| !s.is_empty()) {
+        req = req.header("X-Shape-Turn-Id", turn_id);
+    }
+    if let Some(conversation_id) = conversation_id.filter(|s| !s.is_empty()) {
+        req = req.header("X-Shape-Conversation-Id", conversation_id);
+    }
+    match req.send().await {
+        Ok(resp) if resp.status().is_success() => resp.json::<Value>().await.unwrap_or_else(|_| json!({})),
+        _ => json!({}),
+    }
+}
+
+pub fn gate_action(body: &Value) -> &str {
+    body.get("action").and_then(|v| v.as_str()).unwrap_or("")
 }

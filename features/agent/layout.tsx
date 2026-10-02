@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Chat from "@/features/chat/ui/chat";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
+import { OverlayRootProvider } from "@/lib/ui/overlay-root";
 import { AgentSidebar, AGENT_SIDEBAR_NAV_SLOT } from "./sidebar";
 import { ChatList } from "./sidebar/chats";
 import { AgentChrome } from "./chrome";
@@ -13,6 +14,7 @@ import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
 import { TerminalDock } from "./terminal-dock";
 import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
+import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-terminal-notify";
 import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
 import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
 
@@ -23,38 +25,66 @@ const MAX_WORKSPACE_RATIO = 0.72;
 const MAX_WORKSPACE_PX = 1200;
 const SPLASH_KEY = "shape-agent-splash-seen";
 
-function SidebarPeek() {
-    const [shown, setShown] = useState(false);
-    const timer = useRef<number | null>(null);
+function isFlyoutUiTarget(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest("[data-sidebar-peek], [data-sidebar-peek-toggle]"));
+}
 
-    const arm = () => {
-        if (timer.current) window.clearTimeout(timer.current);
-        timer.current = window.setTimeout(() => setShown(true), 400);
-    };
-    const disarm = () => {
-        if (timer.current) window.clearTimeout(timer.current);
-        timer.current = null;
-    };
+function SidebarPeek({
+    shown,
+    onEnter,
+    onLeave,
+}: {
+    shown: boolean;
+    onEnter: () => void;
+    onLeave: () => void;
+}) {
+    const hostRef = useRef<HTMLDivElement>(null);
+    const [host, setHost] = useState<HTMLElement>();
+    const [mounted, setMounted] = useState(shown);
+
+    useLayoutEffect(() => {
+        setHost(hostRef.current ?? undefined);
+    }, []);
+
+    useEffect(() => {
+        if (shown) {
+            setMounted(true);
+            return;
+        }
+        const t = window.setTimeout(() => setMounted(false), 200);
+        return () => window.clearTimeout(t);
+    }, [shown]);
 
     return (
-        <>
-            <div className="fixed inset-y-0 left-0 z-40 w-2" onMouseEnter={arm} onMouseLeave={disarm} />
-            <div
-                className={cn(
-                    "fixed inset-y-0 left-0 z-40 flex w-72 flex-col overflow-hidden rounded-r-md border-y border-r border-border bg-sidebar shadow-xl transition-transform duration-300 ease-[var(--ease-out)]",
-                    shown ? "translate-x-0" : "pointer-events-none -translate-x-full",
-                )}
-                onMouseEnter={() => setShown(true)}
-                onMouseLeave={() => setShown(false)}
-            >
-                <ChatList
-                    onNewChat={() => {
-                        window.dispatchEvent(new Event("shape-chat-new"));
-                        window.dispatchEvent(new Event("shape-chat-focus-input"));
-                    }}
-                />
+        <div
+            ref={hostRef}
+            data-sidebar-peek=""
+            className={cn(
+                "fixed z-30 flex w-82 flex-col overflow-visible transition-opacity duration-200 ease-[var(--ease-out)]",
+                shown ? "opacity-100" : "pointer-events-none opacity-0",
+            )}
+            style={{ top: 0, bottom: 8, left: 8 }}
+            onMouseEnter={onEnter}
+            onMouseLeave={(e) => {
+                if (isFlyoutUiTarget(e.relatedTarget)) return;
+                onLeave();
+            }}
+        >
+            <div className="h-titlebar w-10 shrink-0" aria-hidden />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden squircle-2xl border border-border-subtle bg-sidebar shadow-md/40">
+                {mounted && host ? (
+                    <OverlayRootProvider value={host}>
+                        <ChatList
+                            onNewChat={() => {
+                                window.dispatchEvent(new Event("shape-chat-new"));
+                                window.dispatchEvent(new Event("shape-chat-focus-input"));
+                            }}
+                        />
+                    </OverlayRootProvider>
+                ) : null}
             </div>
-        </>
+        </div>
     );
 }
 
@@ -72,6 +102,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const [splashVisible, setSplashVisible] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
     const [navSlot, setNavSlot] = useState<HTMLElement | null>(null);
+    const [sidebarFlyout, setSidebarFlyout] = useState(false);
+    const flyoutTimer = useRef<number | null>(null);
     const dragging = useRef(false);
     const widthRef = useRef(560);
 
@@ -99,6 +131,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             void warmProjectAnalysis(project_path);
         });
     }, [project_path]);
+
+    useEffect(() => startAgentBackgroundExitToasts(), []);
 
     // Resolve sidebar nav portal target when overlay / explorer needs it.
     useEffect(() => {
@@ -201,6 +235,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [persistWorkspace]);
 
     const toggleSidebar = useCallback(() => {
+        setSidebarFlyout(false);
         setSidebarOpen((prev) => {
             const next = !prev;
             try {
@@ -210,6 +245,17 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             }
             return next;
         });
+    }, []);
+
+    const openSidebarFlyout = useCallback(() => {
+        if (flyoutTimer.current) window.clearTimeout(flyoutTimer.current);
+        flyoutTimer.current = null;
+        setSidebarFlyout(true);
+    }, []);
+
+    const closeSidebarFlyout = useCallback(() => {
+        if (flyoutTimer.current) window.clearTimeout(flyoutTimer.current);
+        flyoutTimer.current = window.setTimeout(() => setSidebarFlyout(false), 180);
     }, []);
 
     const toggleWorkspace = useCallback(() => {
@@ -234,7 +280,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 persistWorkspace(true);
                 return;
             }
-            if (["preview", "browser", "changes", "source", "graph", "git", "prs", "pulls", "agents"].includes(tabId)) {
+            if (["preview", "browser", "source", "graph", "git", "prs", "pulls", "agents"].includes(tabId)) {
                 setOverlay(null);
                 persistWorkspace(true);
             }
@@ -437,7 +483,9 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                     );
                 }}
             />
-            {sidebarOpen ? null : <SidebarPeek />}
+            {sidebarOpen ? null : (
+                <SidebarPeek shown={sidebarFlyout} onEnter={openSidebarFlyout} onLeave={closeSidebarFlyout} />
+            )}
 
             <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel rounded-xl border-l border-border">
                 <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -449,6 +497,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                         padWindowControls={!rightExpanded}
                         sidebarOpen={sidebarOpen}
                         onToggleSidebar={toggleSidebar}
+                        onSidebarHoverStart={openSidebarFlyout}
+                        onSidebarHoverEnd={closeSidebarFlyout}
                     />
                     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                             {overlay ? (

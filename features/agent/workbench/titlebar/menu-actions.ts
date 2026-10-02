@@ -203,9 +203,6 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                     }),
                 );
                 break;
-            case "Source Control":
-                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "changes" }));
-                break;
             case "Git Manager":
                 window.dispatchEvent(
                     new CustomEvent("shape-layout-toggle", {
@@ -220,9 +217,6 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 break;
             case "Preview":
                 window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "preview" }));
-                break;
-            case "Changes":
-                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "changes" }));
                 break;
             case "Terminal":
                 window.dispatchEvent(

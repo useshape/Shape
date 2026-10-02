@@ -464,14 +464,6 @@ export function CommandPalette() {
                 },
             },
             {
-                id: "current-file:find",
-                label: "Find in Current File",
-                shortcut: shortcut("Find"),
-                meta: name,
-                section: "Current File",
-                run: () => window.dispatchEvent(new Event("open-in-file-search")),
-            },
-            {
                 id: "current-file:goto-symbol",
                 label: "Go to Symbol in Editor…",
                 shortcut: shortcut("Go to Symbol in Editor..."),
@@ -850,13 +842,6 @@ function getAppCommands(): EditorAction[] {
                     }),
                 ),
         },
-        {
-            id: "app.nav.findInFile",
-            label: "Find in Current File",
-            shortcut: shortcut("Find"),
-            run: () => window.dispatchEvent(new Event("open-in-file-search")),
-        },
-        // ── View / Panels ──────────────────────────────────────────────────────
         {
             id: "app.view.sourceControl",
             label: "View: Show Source Control",

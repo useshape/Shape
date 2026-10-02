@@ -112,6 +112,9 @@ pub async fn generate_commit_message(
 
     let diff = git::git_staged_diff(project_path.clone()).unwrap_or_default();
     if diff.trim().is_empty() {
+        diff = git::git_diff(project_path.clone()).unwrap_or_default();
+    }
+    if diff.trim().is_empty() {
         return Err(AppError::Message(
             "No checked/staged changes detected. Please check the files you want to commit."
                 .to_string(),

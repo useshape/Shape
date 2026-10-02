@@ -114,7 +114,7 @@ const COLLAB_TOOLKITS = [
     "todoist",
 ];
 
-/** Shown even when the server catalog is short. Connect still goes through Composio. */
+/** Shown even when the server catalog is short. Connect goes through Composio. */
 const EXTRA_PLUGINS: PluginRow[] = [
     { id: "gmail", name: "Gmail", description: "Read, search, and send mail", category: "Chat", toolkit: "gmail", connected: false, logo: null },
     { id: "outlook", name: "Outlook", description: "Mail and calendar from Microsoft", category: "Chat", toolkit: "outlook", connected: false, logo: null },
@@ -135,7 +135,6 @@ const EXTRA_PLUGINS: PluginRow[] = [
     { id: "todoist", name: "Todoist", description: "Tasks and projects", category: "Work", toolkit: "todoist", connected: false, logo: null },
     { id: "miro", name: "Miro", description: "Boards", category: "Design", toolkit: "miro", connected: false, logo: null },
     { id: "canva", name: "Canva", description: "Designs", category: "Design", toolkit: "canva", connected: false, logo: null },
-    { id: "loom", name: "Loom", description: "Videos", category: "Work", toolkit: "loom", connected: false, logo: null },
     { id: "zendesk", name: "Zendesk", description: "Support tickets", category: "Support", toolkit: "zendesk", connected: false, logo: null },
     { id: "intercom", name: "Intercom", description: "Conversations", category: "Support", toolkit: "intercom", connected: false, logo: null },
     { id: "linkedin", name: "LinkedIn", description: "Posts and profiles", category: "Social", toolkit: "linkedin", connected: false, logo: null },

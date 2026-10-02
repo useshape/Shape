@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowUp20Regular } from "@fluentui/react-icons/headless/svg/arrow-up";
 import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 
@@ -29,10 +30,12 @@ export function QueuedMessagesPanel({
     items,
     onEdit,
     onRemove,
+    onSendNow,
 }: {
     items: QueuedMessage[];
     onEdit: (id: string) => void;
     onRemove: (id: string) => void;
+    onSendNow?: (id: string) => void;
 }) {
     if (items.length === 0) return null;
 
@@ -55,6 +58,17 @@ export function QueuedMessagesPanel({
                             {previewText(item.content, 160)}
                         </p>
                         <div className="flex shrink-0 gap-0.5">
+                            {onSendNow ? (
+                                <Tooltip content="Send now">
+                                    <button
+                                        type="button"
+                                        className="rounded p-0.5 text-text-muted hover:text-text-primary"
+                                        onClick={() => onSendNow(item.id)}
+                                    >
+                                        <Icon icon={ArrowUp20Regular} />
+                                    </button>
+                                </Tooltip>
+                            ) : null}
                             <Tooltip content="Edit">
                                 <button
                                     type="button"

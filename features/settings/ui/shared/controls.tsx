@@ -41,6 +41,27 @@ export function SettingCard({
     );
 }
 
+export function SettingVisualCard({
+    title,
+    subtitle,
+    image,
+}: {
+    title: string;
+    subtitle?: string;
+    image: string;
+}) {
+    return (
+        <div className="flex items-center gap-4 px-3.5 py-3">
+            <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-text-primary">{title}</div>
+                {subtitle ? <p className="mt-0.5 text-xs leading-4 text-text-muted">{subtitle}</p> : null}
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image} alt="" className="h-[88px] w-[148px] shrink-0 rounded-lg object-cover" />
+        </div>
+    );
+}
+
 export function SettingSection({
     id,
     title,

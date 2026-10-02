@@ -853,7 +853,8 @@ pub async fn stream_chat(
                     .cloned();
                 if let Some(primary) = primary {
                     let name = primary.name.clone();
-                    let should_announce = announced_tool_name.as_deref() != Some(name.as_str());
+                    let should_announce = name != "decide"
+                        && announced_tool_name.as_deref() != Some(name.as_str());
                     if should_announce {
                         announced_tool_name = Some(name.clone());
                         let label = if name == "render_design_previews" {
@@ -1308,11 +1309,17 @@ pub async fn complete_chat_with_max_tokens(
     proxy_ctx: &ProxyContext,
 ) -> Result<(String, usize, usize), AppError> {
     let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "messages": [{"role": "user", "content": message}],
         "max_tokens": max_tokens,
     });
+    if matches!(
+        proxy_ctx.feature.as_str(),
+        "commit" | "title" | "file-edit" | "caption"
+    ) {
+        body["reasoning"] = json!({ "enabled": false, "exclude": true });
+    }
 
     let resp = shape_proxy_request(client, api_key, proxy_ctx)
         .json(&body)
@@ -1321,12 +1328,7 @@ pub async fn complete_chat_with_max_tokens(
         .map_err(|e| AppError::Message(format!("Completion failed: {}", e)))?;
 
     let json = completion_json(resp, &proxy_ctx.provider).await?;
-    let content = json["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .trim()
-        .trim_matches('"')
-        .to_string();
+    let content = completion_message_text(&json);
     let input_tokens = json["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as usize;
     let output_tokens = json["usage"]["completion_tokens"].as_u64().unwrap_or(0) as usize;
     Ok((content, input_tokens, output_tokens))

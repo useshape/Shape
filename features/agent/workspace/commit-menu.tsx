@@ -323,9 +323,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
         }
         setBusy(true);
         try {
-            if (files.length > 0 && files.every((file) => !file.staged)) {
-                await commands.gitStageAll(repo);
-            }
+            await commands.gitStageAll(repo);
             const message = await commands.generateCommitMessage(token, repo);
             const lines = message.trim().split("\n");
             setTitle(lines[0] ?? "");
@@ -355,13 +353,14 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[320px]">
                 <div
-                    className="flex flex-col gap-1.5 px-1.5 py-1.5"
+                    className="flex flex-col gap-1.5"
                     onPointerDown={(event) => event.stopPropagation()}
                 >
                     <div className="relative">
                         <Input
                             value={title}
                             placeholder="Message"
+                            className="bg-transparent border-none focus-visible:ring-0 h-11 pr-9"
                             disabled={busy}
                             onChange={(event) => setTitle(event.target.value)}
                             onKeyDown={(event) => {
@@ -371,7 +370,6 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                                     commitAll();
                                 }
                             }}
-                            className="pr-8"
                         />
                         <GenerateStarButton
                             placement="inline"
@@ -387,27 +385,25 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                             rows={2}
                             onChange={(event) => setDescription(event.target.value)}
                             onKeyDown={(event) => event.stopPropagation()}
-                            className="w-full resize-none rounded-lg border border-border-subtle bg-input-bg px-2 py-1.5 text-sm text-text-primary outline-none"
+                            className="w-full resize-none rounded-lg border border-border-subtle px-2 py-1.5 text-sm text-text-primary outline-none"
                         />
                     ) : null}
-                    <div className="flex overflow-hidden rounded-lg">
+                    <div className="flex overflow-hidden px-1.5 pb-1.5">
                         <Button
                             variant="default"
-                            size="sm"
-                            className="h-7 flex-1 rounded-none"
+                            size="md"
+                            className="flex-1"
                             disabled={files.length === 0 || busy || !title.trim()}
                             onClick={commitAll}
                         >
-                            <Icon icon={Checkmark20Regular} />
                             Commit
                         </Button>
                         <DropdownMenuSub>
                             <DropdownMenuSubTrigger
                                 aria-label="Commit options"
                                 disabled={busy}
-                                className="h-7 rounded-none border-l border-white/15 px-1.5"
+                                className="bg-panel-hover ml-2"
                             >
-                                <Icon icon={ChevronDown20Regular} />
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent className="min-w-52">
                                 <DropdownMenuItem disabled={busy || !lastMessage} onSelect={amend}>
@@ -462,12 +458,10 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                         </DropdownMenuSub>
                     </div>
                 </div>
-                <DropdownMenuSeparator />
                 <div className="flex items-center gap-2 px-2 py-1 text-sm text-text-secondary">
-                    <Icon icon={ChevronDown20Regular} className="opacity-60" />
                     <span className="flex-1">Changes</span>
                     {files.length > 0 ? (
-                        <span className="rounded-full bg-accent px-1.5 text-xs text-white">{files.length}</span>
+                        <span className="rounded-full bg-primary px-1.5 text-xs text-text-primary">{files.length}</span>
                     ) : null}
                 </div>
                 <div className="max-h-64 overflow-y-auto">
@@ -480,14 +474,14 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                             return (
                                 <div
                                     key={`${file.path}-${file.staged}`}
-                                    className="flex items-center gap-2 px-2 py-0.5 text-sm"
+                                    className="flex items-center gap-2 px-2 py-1 text-sm"
                                 >
                                     <FileIcon name={fileName(file.path)} className="size-4 shrink-0" />
                                     <span className="min-w-0 flex-1 truncate text-text-primary">{fileName(file.path)}</span>
-                                    {folder ? <span className="shrink-0 text-xs text-text-muted">{folder}</span> : null}
+                                    {folder ? <span className="shrink-0 text-sm text-text-muted">{folder}</span> : null}
                                     <span
                                         className={cn(
-                                            "w-4 shrink-0 text-center text-xs",
+                                            "w-4 shrink-0 text-center text-sm",
                                             letter === "A" && "text-success",
                                             letter === "D" && "text-error",
                                             letter !== "A" && letter !== "D" && "text-warning",

@@ -62,7 +62,26 @@ pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
             execute_terminal_session(&command, &cmd_id, ctx).await
         }
         CommandSafety::NeedsApproval { reason } => {
-            run_with_approval(&command, &reason, ctx).await
+            if security::commands::is_destructive_git(&command) {
+                return run_with_approval(&command, &reason, ctx).await;
+            }
+            let gate = crate::agent::tools::plugins::fetch_gate(
+                ctx.api_key,
+                json!({
+                    "kind": "shell",
+                    "command": command,
+                    "task": super::common::latest_user_task(ctx),
+                }),
+                ctx.turn_id.as_deref(),
+                ctx.conversation_id.as_deref(),
+            )
+            .await;
+            if crate::agent::tools::plugins::gate_action(&gate) == "run" {
+                let cmd_id = format!("cmd-{}", uuid::Uuid::new_v4());
+                execute_terminal_session(&command, &cmd_id, ctx).await
+            } else {
+                run_with_approval(&command, &reason, ctx).await
+            }
         }
     }
 }

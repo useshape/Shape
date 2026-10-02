@@ -31,6 +31,7 @@ import {
     SettingSelect,
     SettingSwitch,
     SettingNumberSelect,
+    SettingVisualCard,
     SETTING_CONTROL_BTN,
     MAX_CONTEXT_PRESETS,
 } from "../shared/controls";
@@ -125,7 +126,7 @@ export function AiSettingsPanel({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context";
+    page: "models" | "rules" | "workflows" | "context" | "multiwork";
 }) {
     const a = settings.ai;
     const auth = useShapeAuth();
@@ -257,6 +258,31 @@ export function AiSettingsPanel({
 
     return (
         <>
+            {page === "multiwork" ? (
+                <>
+                    <SettingSection id="settings-ai-multiwork" title="Multiwork">
+                        <SettingCard>
+                            <SettingVisualCard
+                                title="Multiwork"
+                                subtitle="Several agents on one request."
+                                image="/marketing/multiwork.png"
+                            />
+                            <SettingRow title="Ask before starting">
+                                <SettingSwitch
+                                    checked={a.multiworkConfirm !== false}
+                                    onChange={(on) => updateSettingSection("ai", { multiworkConfirm: on })}
+                                />
+                            </SettingRow>
+                            <SettingRow title="Show worker chips">
+                                <SettingSwitch
+                                    checked={a.multiworkShowChips !== false}
+                                    onChange={(on) => updateSettingSection("ai", { multiworkShowChips: on })}
+                                />
+                            </SettingRow>
+                        </SettingCard>
+                    </SettingSection>
+                </>
+            ) : null}
             {page === "models" ? (
                 <>
             <SettingSection id="settings-ai-models" title="Models">

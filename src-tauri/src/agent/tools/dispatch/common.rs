@@ -152,6 +152,19 @@ pub(super) fn get_str(args: &Value, key: &str) -> Result<String, String> {
     }
 }
 
+pub(super) fn latest_user_task(ctx: &ToolCtx<'_>) -> String {
+    ctx.agent_state
+        .history
+        .lock()
+        .ok()
+        .and_then(|h| {
+            h.iter().rev().find(|m| m.role == "user").map(|m| {
+                m.content.chars().take(1500).collect::<String>()
+            })
+        })
+        .unwrap_or_default()
+}
+
 /// Short UI copy for tool errors. Keep fenced file dumps in `tool_result` only —
 /// markdown fences inside `<tool_result>` leak into the chat transcript.
 fn ui_error_message(message: &str) -> String {

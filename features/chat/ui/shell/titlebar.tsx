@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutRowTwo20Regular } from "@fluentui/react-icons/headless/svg/layout-row-two";
+import { PanelBottom20Filled } from "@fluentui/react-icons/headless/svg/panel-bottom";
 import { People20Filled } from "@fluentui/react-icons/headless/svg/people";
 
 
@@ -172,7 +172,7 @@ export function ChatTitlebar({
                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary data-[active=true]:text-text-primary"
                     data-active={terminalOpen}
                 >
-                    <Icon icon={LayoutRowTwo20Regular} />
+                    <Icon icon={PanelBottom20Filled} />
                 </button>
             </Tooltip>
         </div>

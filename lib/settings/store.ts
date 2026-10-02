@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { normalizeColorTheme, type ColorThemeId } from "./themes";
+import { normalizeColorTheme, resolveColorTheme, type ColorThemeId } from "./themes";
 import type { AgentWorkflow } from "@/lib/chat/workflows";
 
 export type WordWrapSetting = "off" | "on" | "bounded";
@@ -95,6 +95,10 @@ export interface ShapeSettings {
         reviewAdversarialEnabled: boolean;
         /** Trigger phrase → prompt (+ optional plugin tool) injected on send. */
         workflows: AgentWorkflow[];
+        /** Ask before the first Multiwork send. */
+        multiworkConfirm: boolean;
+        /** Show worker chips on the composer during Multiwork. */
+        multiworkShowChips: boolean;
         /** Terminal command approval mode (Cursor-style run modes). */
         autoRunMode: AutoRunModeSetting;
         /** Stage agent file edits for approval before they touch disk. */
@@ -262,6 +266,8 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         mcpServers: [],
         reviewAdversarialEnabled: true,
         workflows: [],
+        multiworkConfirm: true,
+        multiworkShowChips: true,
         autoRunMode: "auto",
         requireEditApproval: false,
         protectDestructiveGit: true,
@@ -342,7 +348,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         channel: "stable",
     },
     appearance: {
-        colorTheme: "dark",
+        colorTheme: "auto",
     },
 };
 
@@ -683,6 +689,21 @@ export function subscribeSettings(listener: () => void) {
     return () => listeners.delete(listener);
 }
 
+let schemeMql: MediaQueryList | null = null;
+let schemeListener: ((event: MediaQueryListEvent) => void) | null = null;
+
+function paintResolvedTheme(resolved: "dark" | "light") {
+    if (resolved === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.documentElement.style.colorScheme = "light";
+        document.documentElement.classList.remove("dark");
+        return;
+    }
+    delete document.documentElement.dataset.theme;
+    document.documentElement.style.colorScheme = "dark";
+    document.documentElement.classList.add("dark");
+}
+
 export function applyAppearanceSettings(settings: ShapeSettings) {
     if (typeof document === "undefined") return;
     document.documentElement.style.setProperty("--editor-font-family", settings.editor.fontFamily);
@@ -690,14 +711,17 @@ export function applyAppearanceSettings(settings: ShapeSettings) {
     document.documentElement.style.setProperty("--font-mono", settings.editor.fontFamily);
 
     const theme = normalizeColorTheme(settings.appearance.colorTheme);
-    if (theme === "light") {
-        document.documentElement.dataset.theme = "light";
-        document.documentElement.style.colorScheme = "light";
-        document.documentElement.classList.remove("dark");
-    } else {
-        delete document.documentElement.dataset.theme;
-        document.documentElement.style.colorScheme = "dark";
-        document.documentElement.classList.add("dark");
+    paintResolvedTheme(resolveColorTheme(theme));
+
+    if (schemeMql && schemeListener) {
+        schemeMql.removeEventListener("change", schemeListener);
+    }
+    schemeMql = null;
+    schemeListener = null;
+    if (theme === "auto" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        schemeMql = window.matchMedia("(prefers-color-scheme: light)");
+        schemeListener = () => paintResolvedTheme(resolveColorTheme("auto"));
+        schemeMql.addEventListener("change", schemeListener);
     }
 }
 

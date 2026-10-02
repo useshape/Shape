@@ -21,6 +21,7 @@ import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { PersonaReviewPanel } from '../blocks/persona-review';
 import { BrowseChatCard } from '../blocks/browse-frame';
+import { ChartBlock, InsightCard } from '../blocks/chart';
 import { QuestionsCard, parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
 
@@ -1176,7 +1177,12 @@ export function MessageRenderer({
                 />
             );
         }
-        if (chunk.type === 'chart' || chunk.type === 'insight_card') return null;
+        if (chunk.type === 'chart') {
+            return <ChartBlock key={`chart-${index}`} content={chunk.content} />;
+        }
+        if (chunk.type === 'insight_card') {
+            return <InsightCard key={`insight-${index}`} content={chunk.content} />;
+        }
         if (chunk.type === 'browse_session') {
             if (index !== lastBrowseIndex) return null;
             let image = "";

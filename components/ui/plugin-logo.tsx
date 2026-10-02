@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { useSettings } from "@/lib/settings";
+import { isDarkColorTheme, normalizeColorTheme } from "@/lib/settings/themes";
 import { isShapePluginMeta, pluginLogoCandidates } from "@/lib/plugins/logos";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,7 @@ export function PluginLogo({
     className?: string;
     slug?: string;
 }) {
-    const dark = useSettings().appearance.colorTheme !== "light";
+    const dark = isDarkColorTheme(normalizeColorTheme(useSettings().appearance.colorTheme));
     const [failedAt, setFailedAt] = useState(0);
     if (isShapePluginMeta(toolkit, slug)) {
         return <ShapeLogo size={size} className={className} />;
