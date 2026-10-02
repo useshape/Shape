@@ -13,6 +13,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { getSettings } from "@/lib/settings";
 
 type Pending = {
     resolve: (ok: boolean) => void;
@@ -27,6 +28,7 @@ function notify() {
 
 /** Confirm before the first Multiwork send (delegates to several agents). */
 export function confirmMultiworkStart(): Promise<boolean> {
+    if (getSettings().ai.multiworkConfirm === false) return Promise.resolve(true);
     return new Promise((resolve) => {
         pending = { resolve };
         notify();

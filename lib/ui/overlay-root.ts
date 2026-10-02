@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
 
 /** Visible window shell. Overlays must mount here or they paint on the transparent HWND. */
 export function getOverlayRoot(): HTMLElement | undefined {
@@ -14,10 +14,23 @@ export function getOverlayRoot(): HTMLElement | undefined {
     );
 }
 
+const OverlayRootContext = createContext<HTMLElement | undefined>(undefined);
+
+export function OverlayRootProvider({
+    value,
+    children,
+}: {
+    value: HTMLElement | undefined;
+    children: ReactNode;
+}) {
+    return createElement(OverlayRootContext.Provider, { value }, children);
+}
+
 export function useOverlayRoot(): HTMLElement | undefined {
+    const override = useContext(OverlayRootContext);
     const [node, setNode] = useState<HTMLElement | undefined>(undefined);
     useEffect(() => {
         setNode(getOverlayRoot());
     }, []);
-    return node;
+    return override ?? node;
 }

@@ -28,8 +28,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(new CustomEvent("shape-command-palette", { detail: { mode: "files" } }));
             return true;
         case "Find":
-            window.dispatchEvent(new Event("open-in-file-search"));
-            return true;
+            return false;
         case "Command Palette":
         case "Command Palette...":
             window.dispatchEvent(new CustomEvent("shape-command-palette"));

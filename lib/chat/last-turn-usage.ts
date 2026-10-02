@@ -2,6 +2,7 @@
 
 export type LastTurnUsage = {
     tokens: number;
+    inputTokens: number;
     creditsCharged: number;
     usedAuto: boolean;
     at: number;
@@ -20,6 +21,7 @@ export function getLastTurnUsage(): LastTurnUsage | null {
 
 export function setLastTurnUsage(next: {
     tokens?: number;
+    inputTokens?: number;
     creditsCharged?: number;
     usedAuto?: boolean;
 } | null) {
@@ -30,6 +32,7 @@ export function setLastTurnUsage(next: {
     }
     lastTurn = {
         tokens: next.tokens ?? 0,
+        inputTokens: next.inputTokens ?? next.tokens ?? 0,
         creditsCharged: next.creditsCharged ?? 0,
         usedAuto: Boolean(next.usedAuto),
         at: Date.now(),

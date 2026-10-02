@@ -51,6 +51,10 @@ export function useIsChatGenerating(chatId: string | null | undefined): boolean 
     return ids.has(chatId);
 }
 
+export function hasGeneratingChats(): boolean {
+    return generatingIds.size > 0;
+}
+
 /** Keep the active chat's generating flag in sync with session loading. */
 export function useSyncChatGenerating(
     chatId: string | null | undefined,

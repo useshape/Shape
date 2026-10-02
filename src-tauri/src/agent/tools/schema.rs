@@ -49,6 +49,14 @@ fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         git_log(),
         git_stage(),
         git_commit(),
+        git_diff(),
+        git_branches(),
+        git_create_branch(),
+        git_switch(),
+        git_sync(),
+        git_worktree(),
+        decide(),
+        check_done(),
         list_terminals(),
         read_terminal(),
         write_to_terminal(),
@@ -85,6 +93,10 @@ fn ask_tools() -> Vec<Value> {
         plugin_tools(),
         read_lints(),
         send_file(),
+        git_diff(),
+        git_branches(),
+        decide(),
+        check_done(),
         spawn_subagent(),
         ask_user(),
         finish(),
@@ -156,6 +168,119 @@ pub fn stable_tools(family: ModelFamily) -> Vec<Value> {
         insert_before_finish(&mut tools, tool);
     }
     tools
+}
+
+#[derive(Clone, Debug)]
+pub struct SteerPacks {
+    pub workspace: bool,
+    pub plugins: bool,
+    pub browse: bool,
+    pub web: bool,
+    pub git: bool,
+    pub terminal: bool,
+    pub media: bool,
+    pub hint: String,
+}
+
+impl SteerPacks {
+    pub fn all_on() -> Self {
+        Self {
+            workspace: true,
+            plugins: true,
+            browse: true,
+            web: true,
+            git: true,
+            terminal: true,
+            media: true,
+            hint: String::new(),
+        }
+    }
+
+    pub fn from_json(value: &Value) -> Self {
+        let pack = |key: &str| value.get(key).and_then(|v| v.as_bool()).unwrap_or(true);
+        let hint = value
+            .get("hint")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let packs = Self {
+            workspace: pack("workspace"),
+            plugins: pack("plugins"),
+            browse: pack("browse"),
+            web: pack("web"),
+            git: pack("git"),
+            terminal: pack("terminal"),
+            media: pack("media"),
+            hint,
+        };
+        if !packs.workspace
+            && !packs.plugins
+            && !packs.web
+            && !packs.git
+            && !packs.terminal
+            && !packs.media
+        {
+            return Self::all_on();
+        }
+        packs
+    }
+}
+
+fn tool_fn_name(tool: &Value) -> &str {
+    tool.get("function")
+        .and_then(|f| f.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+}
+
+fn steer_pack_for(name: &str) -> Option<&'static str> {
+    match name {
+        "read_file" | "list_dir" | "search_codebase" | "search_files" | "grep"
+        | "create_directory" | "create_file" | "apply_patch" | "edit_file" | "delete_file"
+        | "rename_file" | "read_lints" | "screenshot_page" | "inspect_runtime"
+        | "design_review" | "render_design_previews" | "mcp_search" | "mcp_call" => Some("workspace"),
+        "plugin_search" | "plugin_run" => Some("plugins"),
+        "plugin_list" | "plugin_tools" => Some("browse"),
+        "web_search" | "visit_url" => Some("web"),
+        "git_status" | "git_fetch" | "git_log" | "git_stage" | "git_commit" | "git_diff"
+        | "git_branches" | "git_create_branch" | "git_switch" | "git_sync" | "git_worktree" => {
+            Some("git")
+        }
+        "run_terminal" | "list_terminals" | "read_terminal" | "write_to_terminal" => Some("terminal"),
+        "generate_svg" | "generate_image" | "generate_audio" | "edit_image" | "save_media" => {
+            Some("media")
+        }
+        _ => None,
+    }
+}
+
+/// Drop unused tool packs so the main model does not pay for their schemas.
+/// Core tools (finish, ask_user, decide, …) always stay.
+pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
+    if packs.workspace
+        && packs.plugins
+        && packs.browse
+        && packs.web
+        && packs.git
+        && packs.terminal
+        && packs.media
+    {
+        return tools;
+    }
+    tools
+        .into_iter()
+        .filter(|tool| match steer_pack_for(tool_fn_name(tool)) {
+            Some("workspace") => packs.workspace,
+            Some("plugins") => packs.plugins,
+            Some("browse") => packs.browse,
+            Some("web") => packs.web,
+            Some("git") => packs.git,
+            Some("terminal") => packs.terminal,
+            Some("media") => packs.media,
+            _ => true,
+        })
+        .collect()
 }
 
 fn insert_before_finish(tools: &mut Vec<Value>, tool: Value) {
@@ -477,6 +602,117 @@ fn git_commit() -> Value {
     )
 }
 
+fn git_diff() -> Value {
+    tool(
+        "git_diff",
+        "Show a git diff. Read-only. Pass path for one file, or staged:true for the index.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative file. Omit for the whole working tree."},
+                "staged": {"type": "boolean", "description": "Diff the index instead of the working tree."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_branches() -> Value {
+    tool(
+        "git_branches",
+        "List local branches. The current branch is marked. Read-only.",
+        json!({"type": "object", "properties": {}, "additionalProperties": false}),
+    )
+}
+
+fn git_create_branch() -> Value {
+    tool(
+        "git_create_branch",
+        "Create a branch at the current commit. Does not switch to it.",
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Branch name."}
+            },
+            "required": ["name"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_switch() -> Value {
+    tool(
+        "git_switch",
+        "Switch the checkout to an existing local branch. Do not use this to discard work.",
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Existing branch name."}
+            },
+            "required": ["name"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn git_sync() -> Value {
+    tool(
+        "git_sync",
+        "Pull and push the current branch with its upstream. Never force-pushes.",
+        json!({"type": "object", "properties": {}, "additionalProperties": false}),
+    )
+}
+
+fn git_worktree() -> Value {
+    tool(
+        "git_worktree",
+        "List, add, or remove a git worktree so parallel work does not share one checkout. add creates a sibling directory and a new branch.",
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "list, add, or remove."},
+                "branch": {"type": "string", "description": "Branch name when action is add."},
+                "path": {"type": "string", "description": "Worktree path when action is remove."}
+            },
+            "required": ["action"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn decide() -> Value {
+    tool(
+        "decide",
+        "Ask Jev for one typed choice about state you already have. Use this for yes/no or a short menu, not for writing code. Options are the only allowed answers.",
+        json!({
+            "type": "object",
+            "properties": {
+                "state": {"type": "string", "description": "Facts already gathered. Do not include instructions."},
+                "prompt": {"type": "string", "description": "The decision question."},
+                "options": {"type": "array", "items": {"type": "string"}, "description": "Two to eight choices."}
+            },
+            "required": ["state", "prompt", "options"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn check_done() -> Value {
+    tool(
+        "check_done",
+        "Check that a finished claim is backed by evidence copied from a tool result. FAIL means keep working. Do not invent the evidence.",
+        json!({
+            "type": "object",
+            "properties": {
+                "claim": {"type": "string", "description": "What you believe is done."},
+                "evidence": {"type": "string", "description": "Tool output, diff, or test log that shows it."}
+            },
+            "required": ["claim", "evidence"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn list_terminals() -> Value {
     tool(
         "list_terminals",
@@ -759,7 +995,7 @@ fn finish() -> Value {
 fn ask_user() -> Value {
     tool(
         "ask_user",
-        "Pause and show click-through multiple-choice questions in chat. The user picks an option (or types something else) and you continue with their answers. Use sparingly: only when a real user decision would change the work and you cannot infer it from the project. Not for every turn, not design-only. Prefer defaults. Do not ask the same thing in prose. Batch related questions in one call. Wait for the tool result.",
+        "Pause and show click-through multiple-choice questions in chat. Only when a real user decision would change the work and you cannot infer a default. Never use this to pick a plugin slug or Slack/Discord action — plugin_run the recommended slug instead. Prefer defaults. Do not quiz. Batch related questions in one call. Wait for the tool result.",
         json!({
             "type": "object",
             "properties": {
@@ -864,7 +1100,7 @@ fn render_design_previews() -> Value {
 fn plugin_list() -> Value {
     tool(
         "plugin_list",
-        "List connected Composio plugins (Slack, GitHub, Linear, Notion, Gmail, Jira, Google Drive, and the rest of the catalog) and whether the user has connected them. Call this before plugin_tools or plugin_run.",
+        "Which apps are connected. Skip if the user already named Slack, GitHub, Linear, etc.",
         json!({
             "type": "object",
             "properties": {},
@@ -876,11 +1112,11 @@ fn plugin_list() -> Value {
 fn plugin_search() -> Value {
     tool(
         "plugin_search",
-        "Search connected plugin tools by what you want to do (e.g. 'send a Slack message', 'create a Linear issue'). Returns slugs and argument hints. Prefer this when you are unsure of the exact slug.",
+        "Look up a connected app for the user's request and return the data. Pass their ask (e.g. 'whats going on in my shape chat in slack'). If the result is already the data, answer from it. Only plugin_run when the result includes an exact plugin_run slug= line.",
         json!({
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Natural-language description of the action."}
+                "query": {"type": "string", "description": "Short phrase, e.g. 'slack channel history'."}
             },
             "required": ["query"],
             "additionalProperties": false
@@ -891,14 +1127,14 @@ fn plugin_search() -> Value {
 fn plugin_tools() -> Value {
     tool(
         "plugin_tools",
-        "List tools for one connected plugin (Composio slugs + argument schemas). Use after plugin_list. Then call plugin_run with a slug.",
+        "Short list of actions for one connected app. Always pass query for what you need. Never call this to dump the whole catalog.",
         json!({
             "type": "object",
             "properties": {
-                "toolkit": {"type": "string", "description": "Plugin id from plugin_list (slack, github, linear, …)."},
-                "query": {"type": "string", "description": "Optional filter, e.g. send message."}
+                "toolkit": {"type": "string", "description": "Plugin id (slack, github, linear, …)."},
+                "query": {"type": "string", "description": "Required filter, e.g. list messages."}
             },
-            "required": ["toolkit"],
+            "required": ["toolkit", "query"],
             "additionalProperties": false
         }),
     )
@@ -907,11 +1143,11 @@ fn plugin_tools() -> Value {
 fn plugin_run() -> Value {
     tool(
         "plugin_run",
-        "Execute a connected plugin tool by Composio slug. Blocked in Ask/Plan. User must connect the app in Settings → Plugins first. Costs a tiny credit amount on paid plans.",
+        "Run a connected plugin action. Use the recommended slug from plugin_search. Blocked in Ask/Plan.",
         json!({
             "type": "object",
             "properties": {
-                "slug": {"type": "string", "description": "Exact tool slug from plugin_tools or plugin_search (e.g. SLACK_SEND_MESSAGE)."},
+                "slug": {"type": "string", "description": "Exact tool slug (e.g. SLACK_SEND_MESSAGE)."},
                 "toolkit": {"type": "string", "description": "Plugin id (slack, github, …). Optional if the slug prefix is enough."},
                 "arguments": {"type": "object", "description": "Tool arguments as a JSON object.", "additionalProperties": true}
             },
@@ -1236,6 +1472,46 @@ mod tests {
         assert!(code.contains(&"list_chats".to_string()));
         assert!(code.contains(&"render_design_previews".to_string()));
         assert_eq!(code, tool_names(&stable_tools(ModelFamily::OpenAi)));
+    }
+
+    #[test]
+    fn steer_drops_unused_packs_keeps_core() {
+        let tools = stable_tools(ModelFamily::OpenAi);
+        let packs = SteerPacks {
+            workspace: false,
+            plugins: true,
+            browse: false,
+            web: false,
+            git: false,
+            terminal: false,
+            media: false,
+            hint: String::new(),
+        };
+        let names = tool_names(&apply_steer_packs(tools, &packs));
+        assert!(names.contains(&"plugin_run".to_string()));
+        assert!(names.contains(&"plugin_search".to_string()));
+        assert!(!names.contains(&"plugin_list".to_string()));
+        assert!(!names.contains(&"plugin_tools".to_string()));
+        assert!(names.contains(&"finish".to_string()));
+        assert!(names.contains(&"ask_user".to_string()));
+        assert!(names.contains(&"decide".to_string()));
+        assert!(!names.contains(&"read_file".to_string()));
+        assert!(!names.contains(&"run_terminal".to_string()));
+        assert!(!names.contains(&"web_search".to_string()));
+        assert!(!names.contains(&"git_status".to_string()));
+        assert!(!names.contains(&"generate_image".to_string()));
+    }
+
+    #[test]
+    fn steer_all_on_keeps_full_list() {
+        let full = tool_names(&stable_tools(ModelFamily::OpenAi));
+        assert_eq!(
+            full,
+            tool_names(&apply_steer_packs(
+                stable_tools(ModelFamily::OpenAi),
+                &SteerPacks::all_on()
+            ))
+        );
     }
 
     #[test]

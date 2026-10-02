@@ -6,7 +6,7 @@ use tauri::Emitter;
 use crate::agent::commands::streaming::{self, ProxyContext};
 use crate::agent::tools::search;
 
-use super::common::{clip, error_outcome, escape_xml_attr, get_str};
+use super::common::{clip, error_outcome, escape_xml_attr, get_str, latest_user_task};
 use super::{ToolCtx, ToolOutcome};
 
 fn emit_subagent(ctx: &ToolCtx<'_>, id: &str, title: &str, activity: &str, status: &str) {
@@ -36,6 +36,24 @@ pub(super) async fn tool_spawn_subagent(args: &Value, ctx: &ToolCtx<'_>) -> Tool
         .to_string();
     if title.chars().count() > 72 {
         title = format!("{}…", title.chars().take(71).collect::<String>());
+    }
+
+    let gate = crate::agent::tools::plugins::fetch_gate(
+        ctx.api_key,
+        json!({
+            "kind": "spawn",
+            "task": format!("{}\nUser: {}", task, latest_user_task(ctx)),
+        }),
+        ctx.turn_id.as_deref(),
+        ctx.conversation_id.as_deref(),
+    )
+    .await;
+    if crate::agent::tools::plugins::gate_action(&gate) == "skip" {
+        return ToolOutcome {
+            tool_result: "Do this yourself with the listed tools. It is not an independent parallel subtask.".into(),
+            ui_chunk: String::new(),
+            side_effect: None,
+        };
     }
 
     let id = format!(

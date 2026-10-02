@@ -438,6 +438,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut needs_reread: HashSet<String> = HashSet::new();
     let mut file_cache: HashMap<String, String> = HashMap::new();
     let mut executed_readonly_calls: HashSet<String> = HashSet::new();
+    let mut plugin_search_used = false;
+    let mut plugin_run_keys: HashSet<String> = HashSet::new();
     // Line ranges already returned for each file this turn.
     let mut read_coverage: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
     let mut wait_calls = 0usize;
@@ -698,10 +700,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 break 'outer;
             }
 
-            streaming::emit_chat_status(
-                &config.app_handle,
-                json!({ "phase": "tool", "tool": tool_calls[0].name }),
-            );
+            if tool_calls[0].name != "decide" {
+                streaming::emit_chat_status(
+                    &config.app_handle,
+                    json!({ "phase": "tool", "tool": tool_calls[0].name }),
+                );
+            }
 
             // The duplicate-call / denied-path guards still apply per call.
             let blocked: Vec<Option<String>> = tool_calls
@@ -857,16 +861,18 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 break 'outer;
             }
 
-            let tool_status = if call.name == "render_design_previews" {
-                json!({
-                    "phase": "tool",
-                    "tool": call.name,
-                    "label": "Creating designs",
-                })
-            } else {
-                json!({ "phase": "tool", "tool": call.name })
-            };
-            streaming::emit_chat_status(&config.app_handle, tool_status);
+            if call.name != "decide" {
+                let tool_status = if call.name == "render_design_previews" {
+                    json!({
+                        "phase": "tool",
+                        "tool": call.name,
+                        "label": "Creating designs",
+                    })
+                } else {
+                    json!({ "phase": "tool", "tool": call.name })
+                };
+                streaming::emit_chat_status(&config.app_handle, tool_status);
+            }
 
             if call.name == "read_file" {
                 if let Some(path) = read_file_path_arg(&call.arguments) {
@@ -885,6 +891,60 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
             // Loop guard: an identical read-only call cannot yield new information.
             // Block it with an actionable message instead of burning another result.
+            if call.name == "plugin_search" {
+                if plugin_search_used {
+                    push_tool_result(
+                        config.api_messages,
+                        &call.id,
+                        &call.name,
+                        "You already ran plugin_search this turn. plugin_run the recommended slug from that result exactly. Do not invent slugs. Do not web_search.",
+                    );
+                    continue;
+                }
+                plugin_search_used = true;
+            }
+            if call.name == "plugin_list" || call.name == "plugin_tools" {
+                push_tool_result(
+                    config.api_messages,
+                    &call.id,
+                    &call.name,
+                    "Skip catalog dumps. plugin_search once, then plugin_run the recommended slug with the args it listed.",
+                );
+                continue;
+            }
+            if call.name == "ask_user" && plugin_search_used {
+                push_tool_result(
+                    config.api_messages,
+                    &call.id,
+                    &call.name,
+                    "Do not ask the user which plugin action to run. plugin_run the recommended slug from plugin_search now.",
+                );
+                continue;
+            }
+            if call.name == "plugin_run" {
+                let slug = serde_json::from_str::<Value>(&call.arguments)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("slug")
+                            .and_then(|s| s.as_str())
+                            .map(|s| s.to_ascii_uppercase())
+                    })
+                    .unwrap_or_default();
+                let key = if slug.contains("LIST") {
+                    format!("plugin_run\u{1}{slug}")
+                } else {
+                    duplicate_call_key(&call.name, &call.arguments)
+                };
+                if !plugin_run_keys.insert(key) {
+                    push_tool_result(
+                        config.api_messages,
+                        &call.id,
+                        &call.name,
+                        "You already listed that. plugin_run the FETCH/HISTORY/GET slug with the id from that list. Do not list again.",
+                    );
+                    continue;
+                }
+            }
             if DEDUPED_READONLY_TOOLS.contains(&call.name.as_str()) {
                 let key = duplicate_call_key(&call.name, &call.arguments);
                 if !executed_readonly_calls.insert(key) {

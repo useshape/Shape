@@ -9,6 +9,12 @@ import { useCallback, useMemo } from "react";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 import { Icon } from "@/components/ui/icon";
 import { Favicon } from "@/components/ui/favicon";
 
@@ -193,14 +199,32 @@ export function WorkspaceTabs({
     );
 
     const newMenu = (
-        <button
-            type="button"
-            className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
-            aria-label="New tab"
-            onClick={() => onNew("files")}
-        >
-            <Icon icon={Add20Regular} />
-        </button>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className={WORKBENCH_TAB_ACTION_BUTTON_CLASS}
+                    aria-label="New tab"
+                    data-no-drag
+                >
+                    <Icon icon={Add20Regular} />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                {(
+                    [
+                        ["files", "Files"],
+                        ["graph", "Graph"],
+                        ["prs", "Pull requests"],
+                    ] as const
+                ).map(([kind, label]) => (
+                    <DropdownMenuItem key={kind} onSelect={() => onNew(kind)}>
+                        <Icon icon={iconFor(kind)} className="size-4" />
+                        {label}
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 
     return (

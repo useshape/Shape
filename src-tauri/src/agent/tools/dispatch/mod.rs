@@ -2,6 +2,7 @@
 
 mod chats;
 mod common;
+mod computer;
 mod discover;
 mod files;
 mod git;
@@ -35,6 +36,11 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "write_to_terminal",
     "save_plan",
     "git_stage",
+    "git_commit",
+    "git_create_branch",
+    "git_switch",
+    "git_sync",
+    "git_worktree",
     "plugin_run",
     "save_media",
     "generate_svg",
@@ -171,6 +177,14 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "git_log" => git::tool_git_log(&args, ctx),
         "git_stage" => git::tool_git_stage(&args, ctx),
         "git_commit" => git::tool_git_commit(&args, ctx).await,
+        "git_diff" => git::tool_git_diff(&args, ctx),
+        "git_branches" => git::tool_git_branches(ctx),
+        "git_create_branch" => git::tool_git_create_branch(&args, ctx),
+        "git_switch" => git::tool_git_switch(&args, ctx),
+        "git_sync" => git::tool_git_sync(ctx),
+        "git_worktree" => git::tool_git_worktree(&args, ctx),
+        "decide" => computer::tool_decide(&args, ctx).await,
+        "check_done" => computer::tool_check_done(&args, ctx).await,
         "list_terminals" => terminal::tool_list_terminals(ctx),
         "read_terminal" => terminal::tool_read_terminal(&args, ctx),
         "write_to_terminal" => terminal::tool_write_to_terminal(&args, ctx),

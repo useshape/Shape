@@ -41,7 +41,7 @@ import { messageLengthBucket } from "@/lib/telemetry/sanitize";
 import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat/mentions";
 import { buildPlanBuildMessage } from "@/lib/chat/continue-action";
 import { isolatePlanBranch } from "@/lib/plan/branch";
-import { loadProjectRules } from "@/lib/workspace/rules";
+import { listProjectRuleFiles, loadProjectRules } from "@/lib/workspace/rules";
 import { isWorkspaceTrusted } from "@/lib/workspace/trust";
 import { clearAllDesignPreviewSessions } from "@/lib/agent-preview/store";
 import {
@@ -162,6 +162,7 @@ export function useChatSession() {
     const [messageQueue, setMessageQueue] = React.useState<{ id: string; content: string }[]>([]);
     const messageQueueRef = React.useRef(messageQueue);
     messageQueueRef.current = messageQueue;
+    const [projectRuleFiles, setProjectRuleFiles] = React.useState<string[]>([]);
     const editingQueueIdRef = React.useRef<string | null>(null);
     const {
         messages,
@@ -320,6 +321,20 @@ export function useChatSession() {
             cancelled = true;
         };
     }, [project_path, setContextSummarized]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        if (!project_path || !isWorkspaceTrusted(project_path)) {
+            setProjectRuleFiles([]);
+            return;
+        }
+        void listProjectRuleFiles(project_path).then((names) => {
+            if (!cancelled) setProjectRuleFiles(names);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [project_path]);
 
     React.useEffect(() => {
         if (!tabsReady) return;
@@ -567,24 +582,46 @@ export function useChatSession() {
     };
 
     const handleRejectEdit = async (editId: string) => {
-        const edit = pendingEdits.find((e) => e.id === editId);
-        if (!edit) return;
-        const resolved = resolveChatFilePath(edit.file, project_path);
-        try {
-            await commands.applyFileEdit(resolved, "", edit.baseline);
-        } catch (e) {
-            console.error("Failed to revert edit for", edit.file, e);
-            notify.error(
-                "Undo failed",
-                `Could not restore ${edit.file.split(/[\\/]/).pop() || edit.file}.`,
+        const idx = pendingEdits.findIndex((e) => e.id === editId);
+        if (idx < 0) return;
+        const batch = pendingEdits.slice(idx);
+        const first = batch[0];
+        if (!first) return;
+        const failures: string[] = [];
+        for (const edit of batch) {
+            const resolved = resolveChatFilePath(edit.file, project_path);
+            try {
+                await commands.applyFileEdit(resolved, "", edit.baseline);
+            } catch (e) {
+                console.error("Failed to revert edit for", edit.file, e);
+                failures.push(edit.file.split(/[\\/]/).pop() || edit.file);
+            }
+            await markEditResolved(edit.file, "rejected", edit.replacement);
+            window.dispatchEvent(
+                new CustomEvent("shape-dismiss-diff", {
+                    detail: { path: resolved, rawPath: edit.file },
+                }),
             );
         }
-        await markEditResolved(edit.file, "rejected", edit.replacement);
-        window.dispatchEvent(
-            new CustomEvent("shape-dismiss-diff", {
-                detail: { path: resolved, rawPath: edit.file },
-            }),
-        );
+        if (failures.length > 0) {
+            notify.error(
+                "Undo failed",
+                `Could not restore ${failures.length === 1 ? failures[0] : `${failures.length} files`}.`,
+            );
+        }
+        const later = batch.length - 1;
+        const notice =
+            later > 0
+                ? `The user rejected the pending edit to \`${first.file}\` and dropped ${later} later pending edit${later === 1 ? "" : "s"} in this batch. Redo from that file.`
+                : `The user rejected the pending edit to \`${first.file}\`. Redo that change if it is still needed.`;
+        if (isLoadingRef.current) {
+            setMessageQueue((prev) => [
+                { id: `q-reject-${Date.now()}`, content: notice },
+                ...prev,
+            ]);
+        } else {
+            void handleSendMessageRef.current(notice);
+        }
     };
 
     const prevPendingCountRef = React.useRef(0);
@@ -775,6 +812,8 @@ export function useChatSession() {
     const handleSendMessageRef = React.useRef<(overrideContent?: string) => Promise<boolean>>(async () => false);
     const handleNewChatRef = React.useRef<() => Promise<void>>(async () => {});
     const sendingInFlightRef = React.useRef(false);
+    const skipQueueDrainRef = React.useRef(false);
+    const forceSendRef = React.useRef(false);
 
     const handleSendMessage = async (overrideContent?: string): Promise<boolean> => {
         const messageContent = typeof overrideContent === "string" ? overrideContent : inputValue;
@@ -812,8 +851,7 @@ export function useChatSession() {
 
         if (
             (!messageContent.trim() && uploadedFiles.length === 0) ||
-            isLoading ||
-            sendingInFlightRef.current
+            (!forceSendRef.current && (isLoading || sendingInFlightRef.current))
         ) {
             return false;
         }
@@ -1045,6 +1083,7 @@ export function useChatSession() {
 
     React.useEffect(() => {
         if (isLoading) return;
+        if (skipQueueDrainRef.current) return;
         const q = messageQueueRef.current;
         if (q.length === 0) return;
         const [next, ...rest] = q;
@@ -1261,20 +1300,6 @@ export function useChatSession() {
             }
         },
         [refreshHistory, setMessages, setConversationId, setCurrentConversationId, setChatTitle, setViewingConversation, syncOpenTabs],
-    );
-
-    const handleMessageFeedback = React.useCallback(
-        async (msgIdx: number, value: "up" | "down" | null) => {
-            setMessages((prev) =>
-                prev.map((m, i) => (i === msgIdx ? { ...m, feedback: value || undefined } : m)),
-            );
-            try {
-                await commands.setMessageFeedback(msgIdx, value, conversationIdRef.current);
-            } catch (err) {
-                console.error("Failed to save feedback:", err);
-            }
-        },
-        [setMessages],
     );
 
     React.useEffect(() => {
@@ -1623,7 +1648,9 @@ export function useChatSession() {
             })();
         };
         window.addEventListener("shape-demo-chat", onDemo);
-        return () => window.removeEventListener("shape-demo-chat", onDemo);
+        return () => {
+            window.removeEventListener("shape-demo-chat", onDemo);
+        };
     }, []);
 
     const handleViewAllHistory = React.useCallback(() => {
@@ -1656,6 +1683,23 @@ export function useChatSession() {
         } catch (e) {
             console.error("Failed to stop:", e);
             stoppingRef.current = false;
+        }
+    };
+
+    const handleSendQueuedNow = async (id: string) => {
+        const item = messageQueueRef.current.find((m) => m.id === id);
+        if (!item) return;
+        setMessageQueue((prev) => prev.filter((m) => m.id !== id));
+        skipQueueDrainRef.current = true;
+        forceSendRef.current = true;
+        if (isLoadingRef.current) {
+            await handleStopMessage();
+        }
+        try {
+            await handleSendMessageRef.current(item.content);
+        } finally {
+            forceSendRef.current = false;
+            skipQueueDrainRef.current = false;
         }
     };
 
@@ -1708,7 +1752,6 @@ export function useChatSession() {
         handleCloseChatTab,
         handleLoadConversation,
         handleFork: handleForkChat,
-        handleFeedback: handleMessageFeedback,
         handleViewAllHistory,
         handleRedo,
         handleRestore,
@@ -1718,6 +1761,8 @@ export function useChatSession() {
         messageQueue,
         handleEditQueuedMessage,
         handleRemoveQueuedMessage,
+        handleSendQueuedNow,
         handleUpdateQueuedMessage,
+        projectRuleFiles,
     };
 }

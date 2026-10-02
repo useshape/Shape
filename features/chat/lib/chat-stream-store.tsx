@@ -441,6 +441,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     void import("@/lib/chat/last-turn-usage").then(({ setLastTurnUsage }) => {
                         setLastTurnUsage({
                             tokens: stats.tokens ?? ((stats.inputTokens ?? 0) + (stats.outputTokens ?? 0)),
+                            inputTokens: stats.inputTokens,
                             creditsCharged: stats.creditsCharged ?? 0,
                             usedAuto: stats.usedAuto,
                         });

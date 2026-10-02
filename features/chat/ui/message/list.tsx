@@ -13,7 +13,6 @@ export function ChatMessageList({
     onRedo,
     onRestore,
     onFork,
-    onFeedback,
     isFileEditResolved,
     emptyState,
     fullWidthBubbles,
@@ -26,7 +25,6 @@ export function ChatMessageList({
     onRedo: (msgIdx: number) => void;
     onRestore: (msgIdx: number) => void;
     onFork?: (msgIdx: number) => void;
-    onFeedback?: (msgIdx: number, value: "up" | "down" | null) => void;
     isFileEditResolved: (file: string, replacement?: string) => boolean;
     emptyState?: ReactNode;
     activeChatTabId?: string;
@@ -65,14 +63,12 @@ export function ChatMessageList({
                                             timestamp={msg.timestamp}
                                             stats={msg.stats}
                                             model={msg.model}
-                                            feedback={msg.feedback}
                                             isGenerating={isGen}
                                             activityLabel={isGen ? activityLabel : null}
                                             index={msgIdx}
                                             onRedo={onRedo}
                                             onRestore={onRestore}
                                             onFork={onFork}
-                                            onFeedback={onFeedback}
                                             isFileEditResolved={isFileEditResolved}
                                             fullWidthBubbles={fullWidthBubbles}
                                         />

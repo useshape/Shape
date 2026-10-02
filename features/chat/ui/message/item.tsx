@@ -7,11 +7,10 @@ import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 import { Person20Regular } from "@fluentui/react-icons/headless/svg/person";
-import { ThumbDislike20Regular } from "@fluentui/react-icons/headless/svg/thumb-dislike";
-import { ThumbLike20Regular } from "@fluentui/react-icons/headless/svg/thumb-like";
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { toTimestampMs } from "@/lib/ui/timestamp";
 import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
 import { Icon } from "@/components/ui/icon";
 
@@ -108,8 +107,6 @@ type ChatMessageItemProps = {
     onRedo?: (index: number) => void;
     onRestore?: (index: number) => void;
     onFork?: (index: number) => void;
-    onFeedback?: (index: number, value: "up" | "down" | null) => void;
-    feedback?: "up" | "down" | null;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
     fullWidthBubbles?: boolean;
 };
@@ -262,6 +259,39 @@ function parseChatRenamed(content: string): { from: string; rest: string } | nul
     return { from, rest: content.slice(match[0].length) };
 }
 
+function formatSentClock(timestamp: number): string {
+    return new Date(toTimestampMs(timestamp)).toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
+function formatSentExact(timestamp: number): string {
+    return new Date(toTimestampMs(timestamp)).toLocaleString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+    });
+}
+
+function MessageSentTime({ timestamp }: { timestamp: number }) {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+    return (
+        <Tooltip content={formatSentExact(timestamp)} side="top" delayDuration={200}>
+            <time
+                dateTime={new Date(toTimestampMs(timestamp)).toISOString()}
+                className="cursor-default px-1 text-xs text-text-muted"
+            >
+                {formatSentClock(timestamp)}
+            </time>
+        </Tooltip>
+    );
+}
+
 function parseForkedFrom(content: string): { id: string; title: string; rest: string } | null {
     const match = content.match(/^<forked_from\b([^>]*)\/>\s*/);
     if (!match) return null;
@@ -274,6 +304,7 @@ function parseForkedFrom(content: string): { id: string; title: string; rest: st
 function ChatMessageItemInner({
     role,
     content,
+    timestamp,
     isGenerating,
     activityLabel,
     roleLabel: _roleLabel,
@@ -283,8 +314,6 @@ function ChatMessageItemInner({
     onRedo,
     onRestore,
     onFork,
-    onFeedback,
-    feedback,
     isFileEditResolved,
     fullWidthBubbles,
 }: ChatMessageItemProps) {
@@ -421,6 +450,7 @@ function ChatMessageItemInner({
                             </div>
                         </UserMessageCard>
                         <div className={cn("flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100", fullWidthBubbles && "justify-end")}>
+                            <MessageSentTime timestamp={timestamp} />
                             <Tooltip content="Copy Message" side="top">
                                 <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
                                     <Icon icon={Clipboard20Regular} />
@@ -526,35 +556,14 @@ function ChatMessageItemInner({
             </div>
             {!isGenerating && (
                 <div className="flex items-center gap-0.5 select-none">
+                    <span className="opacity-0 transition-opacity group-hover:opacity-100">
+                        <MessageSentTime timestamp={timestamp} />
+                    </span>
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
                             <Icon icon={Clipboard20Regular} />
                         </Button>
                     </Tooltip>
-                    {role === "assistant" ? (
-                        <>
-                            <Tooltip content="Good response" side="bottom">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={feedback === "up" ? "text-text-primary" : ""}
-                                    onClick={() => onFeedback?.(index, feedback === "up" ? null : "up")}
-                                >
-                                    <Icon icon={ThumbLike20Regular} />
-                                </Button>
-                            </Tooltip>
-                            <Tooltip content="Bad response" side="bottom">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={feedback === "down" ? "text-text-primary" : ""}
-                                    onClick={() => onFeedback?.(index, feedback === "down" ? null : "down")}
-                                >
-                                    <Icon icon={ThumbDislike20Regular} />
-                                </Button>
-                            </Tooltip>
-                        </>
-                    ) : null}
                     {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
                     {role === "assistant" ? (
                     <DropdownMenu

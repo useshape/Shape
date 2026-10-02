@@ -34,6 +34,28 @@ async function collectRulesFromDir(projectPath: string): Promise<string[]> {
     }
 }
 
+/** Names of project rule files that exist (shown on the composer). */
+export async function listProjectRuleFiles(projectPath: string | null): Promise<string[]> {
+    if (!projectPath) return [];
+    const names: string[] = [];
+    const root = await readRulesFile(RULES_FILE, projectPath);
+    if (root) names.push(RULES_FILE);
+    const sep = projectPath.includes("\\") ? "\\" : "/";
+    const dirPath = `${projectPath.replace(/[\\/]+$/, "")}${sep}${RULES_DIR.replace(/\//g, sep)}`;
+    try {
+        const entries = await commands.lsDir(dirPath);
+        for (const entry of entries) {
+            if (entry.is_dir) continue;
+            if (!/\.(md|mdc|txt)$/i.test(entry.name)) continue;
+            const content = await readRulesFile(`${RULES_DIR}/${entry.name}`, projectPath);
+            if (content) names.push(`${RULES_DIR}/${entry.name}`);
+        }
+    } catch {
+        /* no rules dir */
+    }
+    return names;
+}
+
 /** Load project rules from `.shape/rules.md` and `.shape/rules/*`. */
 export async function loadProjectRules(projectPath: string | null): Promise<string> {
     if (!projectPath) return "";

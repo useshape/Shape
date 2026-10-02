@@ -87,6 +87,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 if (win.label !== "main") return;
 
                 unlisten = await win.onCloseRequested(async (event) => {
+                    const { hasGeneratingChats } = await import("@/features/chat/lib/generating-chats");
+                    if (hasGeneratingChats()) {
+                        event.preventDefault();
+                        await win.hide();
+                        return;
+                    }
                     const { getProjectSnapshot, commands } = await import("@/lib/backend");
                     const dirty = getProjectSnapshot().open_files.filter((f) => f.is_dirty);
                     if (dirty.length === 0) return;

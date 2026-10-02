@@ -1,14 +1,13 @@
 import type { IconGlyph } from "@/components/ui/icon";
 import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
 import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
-import { Circle20Filled } from "@fluentui/react-icons/headless/svg/circle";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
 import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
 import { PersonAdd20Regular } from "@fluentui/react-icons/headless/svg/person-add";
 import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
 
-export type TabKind = "changes" | "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs" | "browser";
+export type TabKind = "graph" | "agents" | "plan" | "file" | "diff" | "files" | "prs" | "browser";
 
 export type WorkspaceTab = {
     id: string;
@@ -41,8 +40,6 @@ export const DEFAULT_TABS: WorkspaceTab[] = [
 
 export function iconFor(kind: TabKind): IconGlyph {
     switch (kind) {
-        case "changes":
-            return Circle20Filled;
         case "graph":
             return Branch20Regular;
         case "agents":

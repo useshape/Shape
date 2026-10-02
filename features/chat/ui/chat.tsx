@@ -242,6 +242,40 @@ export default function Chat({
     );
 
     const isEmpty = session.messages.length === 0;
+    const emptyStage = isEmpty && !embedded;
+    const emptyStageRef = React.useRef<HTMLDivElement>(null);
+    const emptyStackRef = React.useRef<HTMLDivElement>(null);
+    const [emptyTop, setEmptyTop] = React.useState(0);
+    const emptyTopMotion = React.useRef(false);
+
+    React.useLayoutEffect(() => {
+        if (!emptyStage) {
+            emptyTopMotion.current = false;
+            return;
+        }
+        const stage = emptyStageRef.current;
+        const stack = emptyStackRef.current;
+        if (!stage || !stack) return;
+
+        const place = () => {
+            if (multiwork) return 64;
+            return Math.max(16, Math.round((stage.clientHeight - stack.offsetHeight) / 2));
+        };
+
+        setEmptyTop(place());
+        const ro = new ResizeObserver(() => {
+            setEmptyTop(place());
+        });
+        ro.observe(stage);
+        ro.observe(stack);
+        const raf = window.requestAnimationFrame(() => {
+            emptyTopMotion.current = true;
+        });
+        return () => {
+            ro.disconnect();
+            window.cancelAnimationFrame(raf);
+        };
+    }, [emptyStage, multiwork]);
 
     const turnLabels = useMemo(
         () =>
@@ -288,6 +322,11 @@ export default function Chat({
             queuedMessages={session.messageQueue}
             onEditQueuedMessage={session.handleEditQueuedMessage}
             onRemoveQueuedMessage={session.handleRemoveQueuedMessage}
+            onSendQueuedNow={session.handleSendQueuedNow}
+            projectRuleFiles={session.projectRuleFiles}
+            onNewChat={() => {
+                void session.handleNewChat();
+            }}
             variant={embedded || !isEmpty ? "default" : "empty"}
         />
     );
@@ -322,10 +361,23 @@ export default function Chat({
                 </div>
             </div>
         </>
-    ) : isEmpty && !embedded ? (
-        <div className={cn("relative flex min-h-0 flex-1 flex-col items-center", multiwork ? "justify-start pt-16" : "justify-center pb-8", insetX)}>
-            <div className={cn("relative flex w-full flex-col items-center gap-5", columnWidth)}>
+    ) : emptyStage ? (
+        <div
+            ref={emptyStageRef}
+            className={cn("relative flex min-h-0 flex-1 flex-col items-center overflow-hidden", insetX)}
+        >
+            <div
+                ref={emptyStackRef}
+                className={cn("relative flex w-full shrink-0 flex-col items-center gap-5", columnWidth)}
+                style={{
+                    marginTop: emptyTop,
+                    transition: emptyTopMotion.current
+                        ? "margin-top 920ms cubic-bezier(0.22, 1, 0.36, 1)"
+                        : "none",
+                }}
+            >
                 <ChatEmptyState
+                    multiwork={multiwork}
                     onSelectMode={(mode) => {
                         session.setSelectedMode(mode);
                         window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
@@ -334,9 +386,21 @@ export default function Chat({
                 <div className="w-full">
                     {composer}
                 </div>
-                {multiwork ? (
-                    <img src="/promo/cloud.png" alt="" className="mt-2 w-full max-w-lg select-none" />
-                ) : null}
+            </div>
+            <div
+                className={cn(
+                    "grid w-full min-h-0 transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    columnWidth,
+                )}
+                style={{ gridTemplateRows: multiwork ? "1fr" : "0fr" }}
+            >
+                <div className="min-h-0 overflow-hidden">
+                    <img
+                        src="/marketing/multiwork.png"
+                        alt=""
+                        className="mt-2 w-full max-w-full h-50 object-cover squircle-2xl select-none"
+                    />
+                </div>
             </div>
         </div>
     ) : (
@@ -369,7 +433,6 @@ export default function Chat({
                             onRedo={session.handleRedo}
                             onRestore={session.handleRestore}
                             onFork={session.handleFork}
-                            onFeedback={session.handleFeedback}
                             isFileEditResolved={session.isEditResolved}
                             activeChatTabId={session.activeChatTabId}
                             fullWidthBubbles={false}
@@ -412,7 +475,12 @@ export default function Chat({
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
             {embedded ? null : tabsSlot ? createPortal(titlebar, tabsSlot) : null}
 
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div
+                className={cn(
+                    "relative flex min-h-0 flex-1 flex-col",
+                    emptyStage ? "overflow-visible" : "overflow-hidden",
+                )}
+            >
                 {chatColumn}
             </div>
             <ChatErrorDialog

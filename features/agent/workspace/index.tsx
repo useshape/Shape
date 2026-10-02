@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjectState } from "@/lib/backend";
 import { EditorViewProvider, EditorSplitProvider } from "@/core/providers/editor";
-import { ChangesView } from "./changes";
 import { PlanTabView } from "./plan-tab";
 import { FileEditor } from "./editor";
 import { FileTree } from "./tree";
@@ -61,9 +60,9 @@ export function AgentWorkspace({
                   ? "Graph"
                   : kind === "prs"
                     ? "Pull requests"
-                      : kind === "browser"
+                    : kind === "browser"
                       ? "New tab"
-                      : "Changes";
+                      : kind;
         const prev = tabsRef.current;
         const existing = prev.find((t) => t.kind === kind);
         if (existing) commitTabs(prev, existing.id);
@@ -193,7 +192,16 @@ export function AgentWorkspace({
         window.addEventListener("shape-open-workspace-plan", onOpenPlan as EventListener);
         window.addEventListener("shape-open-workspace-file", onOpenFile as EventListener);
         window.addEventListener("shape-open-file-diff", onOpenDiff as EventListener);
+        let stopRustTab: (() => void) | undefined;
+        void import("@tauri-apps/api/event").then(({ listen }) =>
+            listen<string>("shape-set-active-tab", (event) => {
+                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: event.payload }));
+            }).then((stop) => {
+                stopRustTab = stop;
+            }),
+        );
         return () => {
+            stopRustTab?.();
             window.removeEventListener("shape-set-active-tab", onTab as EventListener);
             window.removeEventListener("shape-open-workspace-plan", onOpenPlan as EventListener);
             window.removeEventListener("shape-open-workspace-file", onOpenFile as EventListener);
@@ -252,10 +260,7 @@ export function AgentWorkspace({
                         setActiveId(id);
                     }}
                     onClose={closeTab}
-                    onNew={(kind) => {
-                        if (kind === "browser") addTab("files", { expand: true });
-                        else addTab(kind, { expand: true });
-                    }}
+                    onNew={(kind) => addTab(kind, { expand: true })}
                     onReorder={(next) => commitTabs(next, activeIdRef.current)}
                 />
                 <div className="shrink-0" data-no-drag>
@@ -264,9 +269,7 @@ export function AgentWorkspace({
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">
-                    {active?.kind === "changes" ? (
-                        <ChangesView projectPath={projectPath} />
-                    ) : active?.kind === "graph" ? (
+                    {active?.kind === "graph" ? (
                         <Graph hideHeader surface="panel" active />
                     ) : active?.kind === "files" ? (
                         <FileTree

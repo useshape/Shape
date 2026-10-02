@@ -16,8 +16,10 @@ import { BugProhibited20Filled, BugProhibited20Regular } from "@fluentui/react-i
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
-import { Folder20Regular } from "@fluentui/react-icons/headless/svg/folder";
-import { Grid20Regular } from "@fluentui/react-icons/headless/svg/grid";
+import { FolderAdd24Filled, FolderAdd24Regular } from "@fluentui/react-icons/headless/svg/folder-add";
+import { Connected24Filled, Connected24Regular } from "@fluentui/react-icons/headless/svg/connected";
+import { DocumentEdit24Filled, DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
+import { MoviesAndTv24Filled, MoviesAndTv24Regular } from "@fluentui/react-icons/headless/svg/movies-and-tv";
 import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
 import { Mic20Regular } from "@fluentui/react-icons/headless/svg/mic";
 
@@ -93,6 +95,7 @@ import { MultiworkAgentChips, getWorkers, isMultiworkMode, subscribeMultiwork } 
 import { commands } from "@/lib/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
+import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
 
 type ChatInputProps = {
     inputValue: string;
@@ -131,6 +134,9 @@ type ChatInputProps = {
     queuedMessages?: QueuedMessage[];
     onEditQueuedMessage?: (id: string) => void;
     onRemoveQueuedMessage?: (id: string) => void;
+    onSendQueuedNow?: (id: string) => void;
+    projectRuleFiles?: string[];
+    onNewChat?: () => void;
     /** Tighter chrome for empty-chat centered layout */
     variant?: "default" | "empty";
 };
@@ -154,6 +160,15 @@ function formatContextWindow(raw?: string): string {
     const t = (raw ?? "").trim();
     if (!t) return "";
     return t.replace(/([0-9.]+)\s*K\b/i, "$1k").replace(/([0-9.]+)\s*M\b/i, "$1m");
+}
+
+function contextWindowTokens(raw?: string): number | null {
+    const t = (raw ?? "").trim();
+    const m = t.match(/^([0-9.]+)\s*([KM])$/i);
+    if (!m) return null;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return m[2].toUpperCase() === "M" ? Math.round(n * 1_000_000) : Math.round(n * 1000);
 }
 
 const ModelTooltip = ({
@@ -324,12 +339,12 @@ const CHAT_MODES = [
 ] as const;
 
 const COMPOSER_HINTS = [
-    "Ask Shape a task, @ for context",
+    "Ask a task. @ for files. / for a workflow.",
+    "Escape stops the current turn.",
+    "Queue a follow-up while Shape is working.",
     "Visual: ask to see a few button styles first",
     "Drop a screenshot to redesign",
-    "Ask with @codebase before you build",
     "Paste a stack trace to debug",
-    "Review a PR or file for edge cases",
 ] as const;
 
 function SwapText({
@@ -876,6 +891,9 @@ export function ChatInput({
     queuedMessages = [],
     onEditQueuedMessage,
     onRemoveQueuedMessage,
+    onSendQueuedNow,
+    projectRuleFiles = [],
+    onNewChat,
     variant = "default",
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
@@ -1015,6 +1033,23 @@ export function ChatInput({
         window.addEventListener("shape-chat-focus-input", onFocusInput);
         return () => window.removeEventListener("shape-chat-focus-input", onFocusInput);
     }, []);
+
+    React.useEffect(() => {
+        if (!isLoading) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            if (mentionOpen || slashOpen) return;
+            const t = e.target as HTMLElement | null;
+            if (t?.closest(".cm-editor, [role='dialog']")) return;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA") && t !== textareaRef.current) {
+                return;
+            }
+            e.preventDefault();
+            onStopMessage();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [isLoading, mentionOpen, slashOpen, onStopMessage]);
 
     // Files stay files. Huge text, terminal copies, and editor selections become attachments.
     const handlePaste = React.useCallback((e: React.ClipboardEvent) => {
@@ -1254,9 +1289,23 @@ export function ChatInput({
         };
     }, []);
 
+    const lastTurnUsage = React.useSyncExternalStore(
+        subscribeLastTurnUsage,
+        getLastTurnUsage,
+        getLastTurnUsage,
+    );
+    const selectedModelInfo =
+        MODELS.find((m) => m.id === selectedModel) ??
+        allModels.find((m) => m.id === selectedModel) ??
+        autoModel;
+    const windowTokens = contextWindowTokens(selectedModelInfo.contextWindow) ?? 200_000;
+    const usedTokens = lastTurnUsage?.inputTokens ?? lastTurnUsage?.tokens ?? 0;
+    const longChat = !isLoading && usedTokens > 0 && usedTokens / windowTokens >= 0.7;
+
     const hasContextStrip =
         (pendingEdits?.length ?? 0) > 0 ||
         queuedMessages.length > 0 ||
+        projectRuleFiles.length > 0 ||
         taskItems.length > 0 ||
         (multiwork && multiworkWorkers.length > 0);
 
@@ -1279,6 +1328,7 @@ export function ChatInput({
             <div className="relative z-10 flex w-full flex-col gap-1.5">
                 {hasContextStrip ? (
                     <div className="flex min-w-0 items-center gap-1 px-1">
+                        {pendingEdits.length > 0 ? (
                         <PendingEditsPanel
                             edits={pendingEdits}
                             onAcceptAll={onAcceptAllEdits ?? (() => {})}
@@ -1286,15 +1336,31 @@ export function ChatInput({
                             onAccept={onAcceptEdit}
                             onReject={onRejectEdit}
                         />
+                        ) : null}
                         {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
                             <QueuedMessagesPanel
                                 items={queuedMessages}
                                 onEdit={onEditQueuedMessage}
                                 onRemove={onRemoveQueuedMessage}
+                                onSendNow={onSendQueuedNow}
                             />
                         ) : null}
+                        {projectRuleFiles.length > 0 ? (
+                            <Tooltip content={projectRuleFiles.join("\n")}>
+                                <span className="flex h-6 min-w-0 max-w-56 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary">
+                                    <Icon icon={Document20Regular} />
+                                    <span className="truncate">
+                                        {projectRuleFiles
+                                            .map((name) => name.split(/[\\/]/).pop() || name)
+                                            .join(", ")}
+                                    </span>
+                                </span>
+                            </Tooltip>
+                        ) : null}
                         {taskItems.length > 0 ? <ComposerTasksStrip items={taskItems} /> : null}
-                        <MultiworkAgentChips />
+                        {multiwork && multiworkWorkers.length > 0 && settings.ai.multiworkShowChips !== false ? (
+                            <MultiworkAgentChips />
+                        ) : null}
                     </div>
                 ) : null}
 
@@ -1383,18 +1449,18 @@ export function ChatInput({
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-media-upload")?.click()}
                                 >
-                                    <Icon icon={Image20Regular} />
+                                    <Icon icon={MoviesAndTv24Filled} />
                                     Upload photos & file
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-folder-upload")?.click()}
                                 >
-                                    <Icon icon={Folder20Regular} />
+                                    <Icon icon={FolderAdd24Filled} />
                                     Attach folder
                                 </DropdownMenuItem>
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
-                                        <Icon icon={Grid20Regular} />
+                                        <Icon icon={Connected24Filled} />
                                         Plugins
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="w-56">
@@ -1448,7 +1514,7 @@ export function ChatInput({
                                 </DropdownMenuSub>
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
-                                        <Icon icon={DocumentText20Regular} />
+                                        <Icon icon={DocumentEdit24Filled} />
                                         Skills
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="w-56">
@@ -1882,6 +1948,20 @@ export function ChatInput({
                     </div>
                 </div>
             </div>
+            {longChat ? (
+                <p className="px-1 pt-1 text-xs text-text-muted">
+                    This chat is long.{" "}
+                    {onNewChat ? (
+                        <button
+                            type="button"
+                            className="text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
+                            onClick={onNewChat}
+                        >
+                            New chat
+                        </button>
+                    ) : null}
+                </p>
+            ) : null}
             <MediaLightbox
                 open={!!mediaViewer}
                 onClose={() => setMediaViewer(null)}

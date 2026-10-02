@@ -42,8 +42,7 @@ import { applyTelemetryPreference } from "@/lib/telemetry";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
-import { ThemePicker } from "./theme/picker";
-import { normalizeColorTheme } from "@/lib/settings/themes";
+import { COLOR_THEME_ORDER, COLOR_THEMES, normalizeColorTheme } from "@/lib/settings/themes";
 import { Icon } from "@/components/ui/icon";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
@@ -337,7 +336,7 @@ function AiSettings({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context";
+    page: "models" | "rules" | "workflows" | "context" | "multiwork";
 }) {
     return <AiSettingsPanel settings={settings} page={page} />;
 }
@@ -586,7 +585,8 @@ function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
 function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
     const u = settings.updates;
     const [version, setVersion] = useState("0.0.1");
-    const [iconSrc, setIconSrc] = useState("/app-icon.png");
+    const [checking, setChecking] = useState(false);
+    const [statusLine, setStatusLine] = useState("Shape is up to date.");
 
     useEffect(() => {
         void import("@tauri-apps/api/app")
@@ -595,26 +595,59 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
             .catch(() => {});
     }, []);
 
+    const checkNow = async () => {
+        setChecking(true);
+        try {
+            const { checkForAppUpdates, getUpdateStatus } = await import("@/lib/window/updater");
+            await checkForAppUpdates({ force: true, silent: false });
+            const status = getUpdateStatus();
+            if (status.kind === "upToDate" || status.kind === "idle") {
+                setStatusLine("Shape is up to date.");
+            } else if (status.kind === "available") {
+                setStatusLine(`Version ${status.version} is ready to install.`);
+            } else if (status.kind === "ready") {
+                setStatusLine(`Version ${status.version} downloaded.`);
+            } else if (status.kind === "error") {
+                setStatusLine(status.message);
+            } else if (status.kind === "checking") {
+                setStatusLine("Checking…");
+            }
+        } catch {
+            setStatusLine("Could not check for updates.");
+        } finally {
+            setChecking(false);
+        }
+    };
+
     return (
-        <SettingSection id="settings-updates" title="Updates">
+        <SettingSection id="settings-updates" title="About Shape">
             <SettingCard>
-            <div className="flex items-center gap-3 px-3.5 py-3">
-                <img
-                    src={iconSrc}
-                    alt=""
-                    width={40}
-                    height={40}
-                    className="size-10 shrink-0 rounded-lg object-cover"
-                    onError={() => setIconSrc("/logos/logo.svg")}
-                />
-                <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-text-primary">Shape</div>
-                    <div className="text-xs text-text-muted">Desktop app</div>
+                <div className="flex items-center gap-3 px-3.5 py-3">
+                    <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-text-primary">App</div>
+                        <div className="text-xs text-text-muted">
+                            Current version is v{version}. {statusLine}
+                        </div>
+                    </div>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={checking}
+                        onClick={() => void checkNow()}
+                    >
+                        {checking ? "Checking…" : "Check for updates"}
+                    </Button>
                 </div>
-                <span className="shrink-0 text-sm tabular-nums text-text-muted">{version}</span>
-            </div>
+                <div className="flex items-center gap-3 px-3.5 py-3">
+                    <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-text-primary">Updater</div>
+                        <div className="text-xs text-text-muted">
+                            {u.autoUpdate ? "Checks in the background." : "Manual checks only."} Channel: {u.channel === "pre" ? "pre-release" : "stable"}.
+                        </div>
+                    </div>
+                </div>
             </SettingCard>
-            <SettingRow title="Automatic updates">
+            <SettingRow title="Automatic updates" description="Download new versions when they ship.">
                 <SettingSwitch
                     checked={u.autoUpdate}
                     onChange={(v) => updateSettingSection("updates", { autoUpdate: v })}
@@ -911,6 +944,7 @@ export function SettingsView({
         if (section === "mcp" || section === "integrations") return null;
         if (section === "rules") return "settings-ai-rules";
         if (section === "workflows") return "settings-ai-workflows";
+        if (section === "multiwork") return "settings-ai-multiwork";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
         switch (category) {
@@ -1056,7 +1090,7 @@ export function SettingsView({
                                                                 disabled && "pointer-events-none opacity-40",
                                                             )}
                                                         >
-                                                            <Icon icon={leaf.icon} className="icon-md"/>
+                                                            <Icon icon={leaf.icon} className="icon-md settings-nav-icon"/>
                                                             <span className="min-w-0 flex-1 truncate">{leaf.label}</span>
                                                         </button>
                                                     );
@@ -1103,6 +1137,7 @@ export function SettingsView({
                             </h1>
                             {activeLeafId === "account-profile" ? <AccountSettingsPanel /> : null}
                             {activeLeafId === "ai-models" ? <AiSettings settings={settings} page="models" /> : null}
+                            {activeLeafId === "ai-multiwork" ? <AiSettings settings={settings} page="multiwork" /> : null}
                             {activeLeafId === "ai-rules" ? <AiSettings settings={settings} page="rules" /> : null}
                             {activeLeafId === "ai-workflows" ? <AiSettings settings={settings} page="workflows" /> : null}
                             {activeLeafId === "ai-skills" ? <SkillsSettings /> : null}
@@ -1111,9 +1146,15 @@ export function SettingsView({
                             {activeLeafId === "appearance" ? (
                                 <SettingSection id="settings-appearance" title="Appearance">
                                     <SettingRow title="Theme">
-                                        <ThemePicker
+                                        <SettingSelect
                                             value={normalizeColorTheme(settings.appearance.colorTheme)}
-                                            onChange={(id) => updateSettingSection("appearance", { colorTheme: id })}
+                                            options={COLOR_THEME_ORDER.map((id) => ({
+                                                value: id,
+                                                label: COLOR_THEMES[id].label,
+                                            }))}
+                                            onChange={(id) =>
+                                                updateSettingSection("appearance", { colorTheme: id })
+                                            }
                                         />
                                     </SettingRow>
                                 </SettingSection>

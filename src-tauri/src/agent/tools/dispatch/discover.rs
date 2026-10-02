@@ -9,7 +9,7 @@ use crate::agent::tools::search;
 
 use super::common::{
     clip, cleanup_pending_command, emit_command_resolved, error_outcome, escape_xml_attr,
-    escape_xml_text, get_str, wait_for_command_decision, ApprovalDecision,
+    escape_xml_text, get_str, latest_user_task, wait_for_command_decision, ApprovalDecision,
 };
 use super::{ToolCtx, ToolOutcome};
 
@@ -78,6 +78,28 @@ pub(super) async fn tool_web_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         Ok(s) => s,
         Err(e) => return error_outcome("web_search", &e),
     };
+    let gate = crate::agent::tools::plugins::fetch_gate(
+        ctx.api_key,
+        json!({
+            "kind": "web",
+            "query": query,
+            "task": latest_user_task(ctx),
+        }),
+        ctx.turn_id.as_deref(),
+        ctx.conversation_id.as_deref(),
+    )
+    .await;
+    if crate::agent::tools::plugins::gate_action(&gate) == "skip" {
+        let reason = gate
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Skip this web search.");
+        return ToolOutcome {
+            tool_result: reason.to_string(),
+            ui_chunk: String::new(),
+            side_effect: None,
+        };
+    }
     let res = search::execute_web_search(&query, ctx.api_key).await;
     let ui = format!(
         "\n<web_result query=\"{}\">\n{}\n</web_result>\n",
@@ -298,7 +320,13 @@ pub(super) async fn tool_plugin_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolO
         Ok(s) => s,
         Err(e) => return error_outcome("plugin_search", &e),
     };
-    let res = crate::agent::tools::plugins::execute_plugin_search(&query, ctx.api_key).await;
+    let res = crate::agent::tools::plugins::execute_plugin_search(
+        &query,
+        ctx.api_key,
+        ctx.turn_id.as_deref(),
+        ctx.conversation_id.as_deref(),
+    )
+    .await;
     let label = format!("Searched plugins for {query}");
     plugin_discovery_outcome("plugins", "plugin_search", &label, res)
 }
@@ -323,12 +351,14 @@ async fn execute_plugin_run_ui(
     ctx: &ToolCtx<'_>,
     cmd_id: Option<&str>,
 ) -> ToolOutcome {
+    let task = latest_user_task(ctx);
     let res = crate::agent::tools::plugins::execute_plugin_run(
         slug,
         arguments,
         ctx.api_key,
         ctx.turn_id.as_deref(),
         ctx.conversation_id.as_deref(),
+        if task.is_empty() { None } else { Some(task.as_str()) },
     )
     .await;
     let err = res.starts_with("ERROR")
@@ -376,6 +406,23 @@ pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
     };
 
     if preapproved || !plugin_needs_approval(mode, &slug) {
+        return execute_plugin_run_ui(&toolkit, &slug, &label, &arguments, ctx, None).await;
+    }
+
+    let gate = crate::agent::tools::plugins::fetch_gate(
+        ctx.api_key,
+        json!({
+            "kind": "plugin",
+            "slug": slug,
+            "toolkit": toolkit,
+            "args": arguments.to_string(),
+            "task": latest_user_task(ctx),
+        }),
+        ctx.turn_id.as_deref(),
+        ctx.conversation_id.as_deref(),
+    )
+    .await;
+    if crate::agent::tools::plugins::gate_action(&gate) == "run" {
         return execute_plugin_run_ui(&toolkit, &slug, &label, &arguments, ctx, None).await;
     }
 
