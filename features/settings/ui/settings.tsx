@@ -336,7 +336,7 @@ function AiSettings({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context" | "multiwork";
+    page: "models" | "rules" | "workflows" | "context" | "multiwork" | "subagents";
 }) {
     return <AiSettingsPanel settings={settings} page={page} />;
 }
@@ -945,6 +945,7 @@ export function SettingsView({
         if (section === "rules") return "settings-ai-rules";
         if (section === "workflows") return "settings-ai-workflows";
         if (section === "multiwork") return "settings-ai-multiwork";
+        if (section === "subagents" || section === "subagent") return "settings-ai-subagents";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
         switch (category) {
@@ -1137,6 +1138,7 @@ export function SettingsView({
                             </h1>
                             {activeLeafId === "account-profile" ? <AccountSettingsPanel /> : null}
                             {activeLeafId === "ai-models" ? <AiSettings settings={settings} page="models" /> : null}
+                            {activeLeafId === "ai-subagents" ? <AiSettings settings={settings} page="subagents" /> : null}
                             {activeLeafId === "ai-multiwork" ? <AiSettings settings={settings} page="multiwork" /> : null}
                             {activeLeafId === "ai-rules" ? <AiSettings settings={settings} page="rules" /> : null}
                             {activeLeafId === "ai-workflows" ? <AiSettings settings={settings} page="workflows" /> : null}

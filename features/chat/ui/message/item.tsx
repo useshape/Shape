@@ -284,7 +284,7 @@ function MessageSentTime({ timestamp }: { timestamp: number }) {
         <Tooltip content={formatSentExact(timestamp)} side="top" delayDuration={200}>
             <time
                 dateTime={new Date(toTimestampMs(timestamp)).toISOString()}
-                className="cursor-default px-1 text-xs text-text-muted"
+                className="cursor-default px-1 text-sm text-text-muted"
             >
                 {formatSentClock(timestamp)}
             </time>
@@ -556,7 +556,7 @@ function ChatMessageItemInner({
             </div>
             {!isGenerating && (
                 <div className="flex items-center gap-0.5 select-none">
-                    <span className="opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="ml-auto opacity-0 transition-opacity group-hover:opacity-100">
                         <MessageSentTime timestamp={timestamp} />
                     </span>
                     <Tooltip content="Copy Message" side="bottom">

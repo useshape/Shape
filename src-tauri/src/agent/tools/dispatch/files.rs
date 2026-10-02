@@ -34,11 +34,12 @@ pub(super) fn tool_read_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
     match res {
         Ok(content) => {
-            let display = if content.chars().count() > 30_000 {
-                let head: String = content.chars().take(30_000).collect();
+            let display = if content.chars().count() > files::MAX_READ_CHARS {
+                let head: String = content.chars().take(files::MAX_READ_CHARS).collect();
                 format!(
-                    "{}\n\n[truncated — file longer than 30,000 chars; call read_file again with start_line/end_line to see more]",
-                    head
+                    "{}\n\n[truncated — file longer than {} chars; call read_file again with start_line/end_line to see more]",
+                    head,
+                    files::MAX_READ_CHARS
                 )
             } else {
                 content.clone()

@@ -178,7 +178,10 @@ pub async fn tool_browse(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let act_result = match action.as_str() {
         "open" => {
             let url = match args.get("url").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) {
-                Some(u) => normalize_url(u),
+                Some(u) => match crate::agent::security::urls::validate_outbound_url(u) {
+                    Ok(url) => url,
+                    Err(err) => return fail(&err),
+                },
                 None => return fail("browse open requires url."),
             };
             STOP.store(false, Ordering::SeqCst);
@@ -983,14 +986,6 @@ async fn capture_jpeg(ws: &str) -> Result<String, String> {
 
 fn percent_to_px(x: f64, y: f64) -> (f64, f64) {
     ((x.clamp(0.0, 100.0) / 100.0) * VIEW_W, (y.clamp(0.0, 100.0) / 100.0) * VIEW_H)
-}
-
-fn normalize_url(raw: &str) -> String {
-    if raw.starts_with("http://") || raw.starts_with("https://") {
-        raw.to_string()
-    } else {
-        format!("https://{raw}")
-    }
 }
 
 fn truncate(text: &str, max: usize) -> String {

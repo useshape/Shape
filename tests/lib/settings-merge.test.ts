@@ -26,5 +26,7 @@ describe("settings merge", () => {
         const settings = getSettings();
         expect(settings.ai.autoApplyEdits).toBe(true);
         expect(settings.ai.defaultModel).toBe("auto");
+        expect(settings.ai.subagentModels).toEqual(["auto"]);
+        expect(settings.ai.subagentDefaultModel).toBe("auto");
     });
 });

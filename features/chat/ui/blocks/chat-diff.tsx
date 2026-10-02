@@ -11,16 +11,9 @@ import {
 function DiffRows({ rows }: { rows: UnifiedDiffRow[] }) {
     if (rows.length === 0) return null;
     return (
-        <div className="mt-1 max-h-64 w-full overflow-auto rounded-lg bg-surface-1 font-mono text-xs leading-5">
+        <div className="mt-1 max-h-48 w-full overflow-auto font-mono text-sm leading-5">
             {rows.map((row, i) => {
-                if (row.type === "hunk") {
-                    return (
-                        <div key={`h-${i}`} className="bg-surface-2 px-2 py-0.5 text-text-muted whitespace-pre">
-                            {row.line}
-                        </div>
-                    );
-                }
-                const marker = row.type === "add" ? "+" : row.type === "remove" ? "-" : " ";
+                if (row.type === "hunk") return null;
                 const num = row.type === "remove" ? row.oldNum : row.newNum ?? row.oldNum;
                 return (
                     <div
@@ -35,7 +28,6 @@ function DiffRows({ rows }: { rows: UnifiedDiffRow[] }) {
                         <span className="w-8 shrink-0 select-none px-1 text-right tabular-nums text-text-disabled">
                             {num ?? ""}
                         </span>
-                        <span className="w-4 shrink-0 select-none text-center opacity-70">{marker}</span>
                         <span className="min-w-0 flex-1 whitespace-pre px-2">{row.line || " "}</span>
                     </div>
                 );
@@ -53,7 +45,7 @@ export function ChatEditDiff({
     replacement: string;
 }) {
     const rows = useMemo(
-        () => unifiedDiffRows(original || "", replacement || "", 2),
+        () => unifiedDiffRows(original || "", replacement || "", 4),
         [original, replacement],
     );
     return <DiffRows rows={rows} />;

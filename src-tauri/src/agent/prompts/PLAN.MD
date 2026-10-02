@@ -16,3 +16,5 @@ Pass:
 - `todos` — array of short actionable checklist items (3–8). These are stored separately and shown under the plan.
 
 After it succeeds, one short confirmation. The UI has **Read detailed plan** and **Build**.
+
+In Implementation steps, label work as **independent** (can run in parallel) vs **depends on** another step. When the user builds, they may spawn worktree subagents for independent slices; dependent work stays ordered. Do not implement in Plan mode.

@@ -286,7 +286,6 @@ function TerminalCommandRow({
     output,
     isRunning,
     failed,
-    exitCode,
     defaultOpen = false,
     notice,
 }: {
@@ -295,7 +294,6 @@ function TerminalCommandRow({
     output: string;
     isRunning?: boolean;
     failed?: boolean;
-    exitCode?: number | null;
     defaultOpen?: boolean;
     notice?: string;
 }) {
@@ -317,11 +315,6 @@ function TerminalCommandRow({
         <ActionLine
             action={parts.action}
             detail={parts.detail}
-            extra={
-                failed && typeof exitCode === "number" ? (
-                    <span className="shrink-0 tabular-nums text-error">exit {exitCode}</span>
-                ) : null
-            }
             open={canExpand ? expanded : undefined}
             onOpenChange={canExpand ? setExpanded : undefined}
         >
@@ -570,7 +563,6 @@ export function TerminalCommandStep({ block }: { block: Chunk }) {
             statusLabel={statusLabel}
             output={staticOutput}
             failed={failed && !cancelled}
-            exitCode={exitCode}
         />
     );
 }

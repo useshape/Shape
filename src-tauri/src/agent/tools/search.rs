@@ -43,8 +43,8 @@ pub async fn execute_grep(query: &str, project_path: &Option<String>, opts: Grep
             Ok(target) if target.is_file() => {
                 if let Ok(content) = std::fs::read_to_string(&target) {
                     let char_count = content.chars().count();
-                    if char_count > 20_000 {
-                        let head: String = content.chars().take(20_000).collect();
+                    if char_count > 16_000 {
+                        let head: String = content.chars().take(16_000).collect();
                         return format!(
                             "File {}:\n{}\n\n[truncated — file is {} chars; use read_file with start_line/end_line to see more]",
                             clean_query, head, char_count
@@ -54,19 +54,10 @@ pub async fn execute_grep(query: &str, project_path: &Option<String>, opts: Grep
                 }
             }
             Ok(target) if target.is_dir() => {
-                let mut list = String::new();
-                if let Ok(entries) = std::fs::read_dir(&target) {
-                    list.push_str(&format!("Listing Folder contents of '{}':\n", clean_query));
-                    for entry in entries.filter_map(|e| e.ok()) {
-                        let name = entry.file_name().to_string_lossy().into_owned();
-                        if entry.path().is_dir() {
-                            list.push_str(&format!("- {}/\n", name));
-                        } else {
-                            list.push_str(&format!("- {}\n", name));
-                        }
-                    }
-                    return list;
-                }
+                return match crate::agent::tools::files::list_files(clean_query, path) {
+                    Ok(list) => list,
+                    Err(e) => format!("ERROR: {e}"),
+                };
             }
             Err(e) => {
                 // Exact path looked sensitive / out of bounds — do not fall through to rg.

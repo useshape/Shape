@@ -113,7 +113,7 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
     let cmd_lower = cmd_trimmed.to_lowercase();
 
     for pattern in BLOCKED_PATTERNS {
-        if cmd_lower.contains(pattern) {
+        if blocked_pattern_matches(&cmd_lower, pattern) {
             return CommandSafety::Blocked {
                 reason: format!(
                     "Command contains blocked pattern '{}'. This operation is too dangerous to execute.",
@@ -192,6 +192,17 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
     CommandSafety::NeedsApproval {
         reason: "Unrecognized command. Please review before executing.".to_string(),
     }
+}
+
+/// Phrase patterns stay substring matches (`rm -rf /`). Short verbs (`eval`, `format`)
+/// must be whole tokens so `git format-patch` and `npm run evaluate` are not blocked.
+fn blocked_pattern_matches(cmd_lower: &str, pattern: &str) -> bool {
+    if pattern.chars().any(|c| c.is_ascii_whitespace() || c == '/' || c == '\\') {
+        return cmd_lower.contains(pattern);
+    }
+    cmd_lower
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        .any(|tok| tok == pattern)
 }
 
 fn has_shell_metacharacters(cmd: &str) -> bool {
@@ -296,6 +307,22 @@ mod tests {
         ));
         assert!(matches!(
             check_command_safety("git config core.hooksPath /tmp/evil-hooks"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("eval $payload"),
+            CommandSafety::Blocked { .. }
+        ));
+    }
+
+    #[test]
+    fn blocked_verbs_do_not_match_substrings() {
+        assert!(!matches!(
+            check_command_safety("git format-patch HEAD~1"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(!matches!(
+            check_command_safety("npm run evaluate"),
             CommandSafety::Blocked { .. }
         ));
     }

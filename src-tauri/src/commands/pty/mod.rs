@@ -200,12 +200,28 @@ impl PtyState {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn list_session_ids(&self) -> Vec<u32> {
-        self.session_meta
-            .lock()
-            .map(|m| m.keys().copied().collect())
-            .unwrap_or_default()
+    pub fn kill_all_sync(&self) {
+        if let Ok(mut sessions) = self.sessions.lock() {
+            for (_, mut session) in sessions.drain() {
+                session.cancellation_token.cancel();
+                let _ = session.child.kill();
+                session.meta.mark_exited(Some(-1));
+            }
+        }
+        if let Ok(mut piped) = self.piped_sessions.lock() {
+            for (_, session) in piped.drain() {
+                if let Ok(mut guard) = session.child.lock() {
+                    if let Some(mut child) = guard.take() {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
+                }
+                session.meta.mark_exited(Some(-1));
+            }
+        }
+        if let Ok(mut meta) = self.session_meta.lock() {
+            meta.clear();
+        }
     }
 
     pub fn mark_preview_scrape(&self, id: u32) {

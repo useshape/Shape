@@ -194,16 +194,32 @@ export function resetSubagents() {
     emit();
 }
 
+/** Drop subagents for one parent chat. Other sessions keep their nested rows. */
+export function resetSubagentsForParent(parentId: string | null) {
+    if (!parentId) {
+        cards = cards.filter((c) => Boolean(c.parentId));
+        if (activeId && !cards.some((c) => c.id === activeId)) activeId = null;
+        emit();
+        return;
+    }
+    cards = cards.filter((c) => c.parentId && c.parentId !== parentId);
+    if (activeId && !cards.some((c) => c.id === activeId)) activeId = null;
+    emit();
+}
+
 export function applySubagentEvent(payload: {
     id?: string;
     title?: string;
     activity?: string;
     status?: string;
     model?: string;
+    task?: string;
+    transcript?: string;
     phase?: SubagentPhase;
     reads?: SubagentRead[];
     tokens?: number;
     truncated?: boolean;
+    conversationId?: string;
 }) {
     if (!payload.id) return;
     const raw = (payload.status || "running").toLowerCase();
@@ -221,10 +237,13 @@ export function applySubagentEvent(payload: {
         activity: payload.activity || "Working…",
         status,
         model: payload.model,
+        task: payload.task,
+        transcript: payload.transcript,
         phase: payload.phase,
         reads: payload.reads,
         tokens: payload.tokens,
         truncated: payload.truncated,
+        parentId: payload.conversationId,
     });
 }
 

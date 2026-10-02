@@ -1,14 +1,11 @@
 "use client";
 
-import { Alert20Regular } from "@fluentui/react-icons/headless/svg/alert";
-import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
 import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
-import { Info20Regular } from "@fluentui/react-icons/headless/svg/info";
 
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { type IconGlyph, Icon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 
 import { cn } from "@/lib/utils";
 import { notificationStore, useNotifications, type Notification } from "@/features/notifications";
@@ -19,21 +16,7 @@ import { Button } from "./button";
 export const TOAST_AUTO_HIDE_MS = 5500;
 const TOAST_EXIT_MS = 220;
 export const TOAST_STACK_CLASS =
-    "pointer-events-none fixed bottom-4 right-4 left-auto z-notification ml-auto w-[min(400px,calc(100vw-24px))] outline-none";
-
-const typeIcons: Record<Notification["type"], IconGlyph> = {
-    info: Info20Regular,
-    success: CheckmarkCircle20Filled,
-    warning: Alert20Regular,
-    error: Alert20Regular,
-};
-
-const typeVisual: Record<Notification["type"], string> = {
-    info: "bg-info/15 text-info",
-    success: "bg-success/15 text-success",
-    warning: "bg-warning/15 text-warning",
-    error: "bg-error/15 text-error",
-};
+    "pointer-events-none fixed top-3 left-1/2 z-notification w-[min(420px,calc(100vw-24px))] -translate-x-1/2 outline-none";
 
 function openNotificationTarget(notification: Notification) {
     if (notification.code != null) {
@@ -103,42 +86,25 @@ function ToastCard({
             }
             tabIndex={clickable ? 0 : undefined}
         >
-            <div className="flex items-start gap-3">
-                <div
-                    className={cn(
-                        "flex size-10 shrink-0 items-center justify-center rounded-full",
-                        typeVisual[notification.type],
-                    )}
-                >
-                    <Icon icon={typeIcons[notification.type]} />
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-                        <p className="text-sm font-medium text-text-primary">{notification.message}</p>
-                        {notification.code != null ? (
-                            <span className="text-xs text-text-muted">Error {notification.code}</span>
-                        ) : null}
-                    </div>
-                    {notification.description ? (
-                        <p className="text-sm leading-snug text-text-secondary">
-                            {notification.description}
-                        </p>
-                    ) : null}
-                </div>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-3 right-3 size-7"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDismiss();
-                    }}
-                    aria-label="Dismiss notification"
-                >
-                    <Icon icon={Dismiss20Regular} />
-                </Button>
+            <div className="flex items-center gap-2 pr-8">
+                <p className="min-w-0 flex-1 truncate text-sm text-text-primary">{notification.message}</p>
+                {notification.code != null ? (
+                    <span className="shrink-0 text-sm text-text-muted">Error {notification.code}</span>
+                ) : null}
             </div>
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute top-1 right-1 size-7"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDismiss();
+                }}
+                aria-label="Dismiss notification"
+            >
+                <Icon icon={Dismiss20Regular} />
+            </Button>
             {autoHideMs ? (
                 <span
                     aria-hidden

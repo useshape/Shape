@@ -22,7 +22,6 @@ import {
 } from "@/features/multiwork";
 import { ChatList } from "./chats";
 import { AccountMenu, ProfileAvatar } from "./menu";
-import { AgentTabsChip } from "./agent-tabs-chip";
 import { ChatHistoryMenu } from "@/features/chat/ui/shell/history";
 import { ChatUsageButton } from "@/features/chat/ui/composer/usage";
 import { Button } from "@/components/ui/button";
@@ -228,8 +227,6 @@ export function AgentSidebar({
                                 onToggle={toggleSidebar}
                             />
                         </div>
-
-                        {expanded ? <AgentTabsChip /> : null}
 
                         <nav
                             className={cn(

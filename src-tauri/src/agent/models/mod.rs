@@ -276,6 +276,10 @@ pub struct AgentState {
     pub byok_openai_key: Mutex<Option<String>>,
     /// Ephemeral chat: history is not written to disk.
     pub incognito: AtomicBool,
+    /// User-allowed model ids for `spawn_subagent` (never inherit the parent chat model).
+    pub subagent_models: Mutex<Vec<String>>,
+    /// Fallback when spawn omits model or the requested id is not allowed.
+    pub subagent_default_model: Mutex<String>,
 }
 
 impl Default for AgentState {
@@ -318,6 +322,8 @@ impl AgentState {
             byok_openrouter_key: Mutex::new(None),
             byok_openai_key: Mutex::new(None),
             incognito: AtomicBool::new(false),
+            subagent_models: Mutex::new(vec!["auto".to_string()]),
+            subagent_default_model: Mutex::new("auto".to_string()),
         }
     }
 

@@ -53,6 +53,13 @@ pub(super) async fn tool_spawn_worker(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
             }
         });
 
+    let checkout = crate::agent::checkout::prepare(
+        ctx.project_path,
+        &title,
+        crate::agent::checkout::Isolation::Worktree,
+    );
+    let task = format!("{task}\n\n{}", checkout.note);
+
     let model = multiwork::pick_worker_model(
         ctx.conversation_id.as_deref(),
         model_override,
@@ -73,7 +80,7 @@ pub(super) async fn tool_spawn_worker(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
 
     multiwork::spawn_worker_turn(
         ctx.app_handle.clone(),
-        ctx.project_path.to_string(),
+        checkout.project_path.clone(),
         ctx.api_key.to_string(),
         model.clone(),
         task.clone(),
@@ -84,9 +91,13 @@ pub(super) async fn tool_spawn_worker(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
         files,
     );
 
+    let branch = checkout
+        .branch
+        .map(|b| format!(" Isolated branch `{b}` — do not merge it."))
+        .unwrap_or_default();
     ToolOutcome {
         tool_result: format!(
-            "Started worker `{worker_id}` ({title}) on model `{model}`. Task: {task}"
+            "Started worker `{worker_id}` ({title}) on model `{model}`.{branch} Keep coordinating. Never merge worker branches."
         ),
         ui_chunk: String::new(),
         side_effect: None,

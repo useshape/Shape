@@ -473,8 +473,10 @@ async fn run_worker_inner(
 
     let system = format!(
         "You are a Multiwork worker in Shape IDE named \"{title}\" (id {worker_id}).\n\
-         Complete your assigned task with code tools. Prefer non-overlapping edits.\n\
-         Use `report_orchestrator` for status and `message_peer` to talk to other workers (id or title) — they get a follow-up turn with your message.\n\
+         You have an isolated checkout. Complete your assigned task with code tools.\n\
+         Never merge into the user's original branch. Never git_sync that branch. Never delete your worktree.\n\
+         When finished, report the branch name and what changed. The user/orchestrator will review — they merge, not you.\n\
+         Use `report_orchestrator` for status and `message_peer` to talk to other workers (id or title).\n\
          Keep progress concise; the board shows your card."
     );
     let user = format!("{task}{files_block}");
