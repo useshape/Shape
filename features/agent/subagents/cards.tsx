@@ -126,7 +126,7 @@ export function SubagentCards({ className }: { className?: string }) {
             <div className={cn("flex flex-col items-start gap-1 px-4 py-6", className)}>
                 <p className="text-sm text-text-muted">No agents running</p>
                 <p className="text-xs text-text-disabled">
-                    The AI can spawn subagents for parallel research. Each card shows the current step until it finishes.
+                    The AI can spawn subagents in the background while it keeps working. Shared checkout is the default; worktree isolation is for parallel edits.
                 </p>
             </div>
         );

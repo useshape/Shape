@@ -75,6 +75,14 @@ import {
     subscribeMultiwork,
     type MultiworkWorker,
 } from "@/features/multiwork";
+import {
+    applySubagentEvent,
+    getSubagents,
+    openSubagent,
+    subscribeSubagents,
+    type SubagentCard,
+} from "@/features/agent/subagents/store";
+import { listen } from "@tauri-apps/api/event";
 import { ScrollArea } from "@/components/ui/scroll";
 import { COLLECTION_GLYPH, CollectionDialog } from "./collection-dialog";
 
@@ -139,10 +147,10 @@ function HeaderIconBtn({
     );
 }
 
-function workerDot(worker: MultiworkWorker): string {
-    if (worker.status === "error") return "bg-error";
-    if (worker.status === "done" || worker.column === "done") return "bg-success";
-    if (worker.column === "review") return "bg-warning";
+function nestedDot(status: string, column?: string): string {
+    if (status === "error") return "bg-error";
+    if (status === "done" || column === "done") return "bg-success";
+    if (column === "review") return "bg-warning";
     return "bg-accent";
 }
 
@@ -156,6 +164,7 @@ function ChatRow({
     multiwork,
     color,
     workers,
+    subagents,
     edge = "none",
     selecting = false,
     selected = false,
@@ -171,6 +180,7 @@ function ChatRow({
     multiwork: boolean;
     color: ChatColor | null;
     workers: MultiworkWorker[];
+    subagents: SubagentCard[];
     /** Where this row sits inside a collection stack. */
     edge?: "none" | "only" | "first" | "mid" | "last";
     selecting?: boolean;
@@ -182,10 +192,11 @@ function ChatRow({
     const [renaming, setRenaming] = useState(false);
     const [draft, setDraft] = useState(title);
     const [expanded, setExpanded] = useState(false);
+    const nestedCount = workers.length + subagents.length;
     const workerCount = useRef(0);
-    if (workerCount.current !== workers.length) {
-        const appeared = workerCount.current === 0 && workers.length > 0;
-        workerCount.current = workers.length;
+    if (workerCount.current !== nestedCount) {
+        const appeared = workerCount.current === 0 && nestedCount > 0;
+        workerCount.current = nestedCount;
         if (appeared) setExpanded(true);
     }
     const inputRef = useRef<HTMLInputElement>(null);
@@ -265,7 +276,7 @@ function ChatRow({
             </Fragment>
         ));
 
-    const fade = multiwork && workers.length > 0 ? "9rem" : "7.25rem";
+    const fade = nestedCount > 0 ? "9rem" : "7.25rem";
 
     return (
         <div
@@ -343,22 +354,24 @@ function ChatRow({
                                         {title}
                                     </span>
                                 </button>
-                                <span className="flex shrink-0 items-center group-hover/chat:invisible has-[[data-state=open]]:invisible">
+                                <span className="flex shrink-0 items-center gap-1">
                                     {generating ? (
                                         <Eclipse size={12} className="text-text-muted" aria-hidden />
-                                    ) : multiwork ? (
+                                    ) : null}
+                                    {unread ? (
+                                        <span className="size-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
+                                    ) : null}
+                                    {!generating && multiwork ? (
                                         <Icon
                                             icon={PeopleChat24Filled}
                                             className="text-text-muted"
                                             style={{ ["--icon-size" as string]: "16px" }}
                                         />
-                                    ) : unread ? (
-                                        <span className="size-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
                                     ) : null}
                                 </span>
                                 <span className={cn(
                                     "pointer-events-none absolute z-10 flex items-center opacity-0 group-hover/chat:pointer-events-auto group-hover/chat:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
-                                    multiwork && workers.length > 0 ? "right-7" : "right-1",
+                                    nestedCount > 0 ? "right-7" : "right-1",
                                 )}>
                                     <Tooltip content="Add to collection" side="bottom">
                                         <button
@@ -403,7 +416,7 @@ function ChatRow({
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </span>
-                                {multiwork && workers.length > 0 ? (
+                                {nestedCount > 0 ? (
                                     <button
                                         type="button"
                                         aria-label={expanded ? "Hide agents" : "Show agents"}
@@ -431,11 +444,11 @@ function ChatRow({
                     )}
                 </ContextMenuContent>
             </ContextMenu>
-            {multiwork && expanded && workers.length > 0 ? (
+            {expanded && nestedCount > 0 ? (
                 <div className="flex flex-col">
                     {workers.map((worker) => (
                         <button
-                            key={worker.id}
+                            key={`w-${worker.id}`}
                             type="button"
                             onClick={() => {
                                 clearChatUnread(id);
@@ -449,9 +462,31 @@ function ChatRow({
                                     : "hover:bg-panel-hover hover:text-text-primary",
                             )}
                         >
-                            <span className={cn("size-1.5 shrink-0 rounded-full", workerDot(worker))} aria-hidden />
+                            <span className={cn("size-1.5 shrink-0 rounded-full", nestedDot(worker.status, worker.column))} aria-hidden />
                             <span className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-1.5rem),transparent)]">
                                 {worker.title}
+                            </span>
+                        </button>
+                    ))}
+                    {subagents.map((card) => (
+                        <button
+                            key={`s-${card.id}`}
+                            type="button"
+                            onClick={() => {
+                                clearChatUnread(id);
+                                window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
+                                openSubagent(card.id);
+                            }}
+                            className={cn(
+                                "flex h-8 items-center gap-2 pr-2 pl-7 text-left text-sm text-text-secondary",
+                                color
+                                    ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
+                                    : "hover:bg-panel-hover hover:text-text-primary",
+                            )}
+                        >
+                            <span className={cn("size-1.5 shrink-0 rounded-full", nestedDot(card.status))} aria-hidden />
+                            <span className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-1.5rem),transparent)]">
+                                {card.title}
                             </span>
                         </button>
                     ))}
@@ -469,6 +504,7 @@ function SessionRow({
     unread,
     color,
     workers,
+    subagents,
     edge = "none",
     selecting,
     selected,
@@ -482,6 +518,7 @@ function SessionRow({
     unread: boolean;
     color: ChatColor | null;
     workers: MultiworkWorker[];
+    subagents: SubagentCard[];
     edge?: "none" | "only" | "first" | "mid" | "last";
     selecting: boolean;
     selected: boolean;
@@ -499,6 +536,7 @@ function SessionRow({
             multiwork={chat.kind === "multiwork"}
             color={color}
             workers={workers}
+            subagents={subagents}
             edge={edge}
             selecting={selecting}
             selected={selected}
@@ -536,9 +574,20 @@ export function ChatList({
     );
     const collections = useSyncExternalStore(subscribeCollections, getCollections, getCollectionsServer);
     const allWorkers = useSyncExternalStore(subscribeMultiwork, getAllWorkers, getAllWorkers);
+    const allSubagents = useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
 
     useEffect(() => {
         setSort(loadSort());
+    }, []);
+
+    useEffect(() => {
+        let unlisten: (() => void) | undefined;
+        void listen("agent-subagent", (event) => {
+            applySubagentEvent((event.payload ?? {}) as Parameters<typeof applySubagentEvent>[0]);
+        }).then((fn) => {
+            unlisten = fn;
+        });
+        return () => unlisten?.();
     }, []);
 
     const persistSort = useCallback((next: ChatSort) => {
@@ -674,6 +723,7 @@ export function ChatList({
         color,
         edge,
         workers: allWorkers.filter((worker) => worker.parentId === chat.id),
+        subagents: allSubagents.filter((card) => card.parentId === chat.id),
         selecting: selectedIds.length > 0,
         selected: selected.has(chat.id),
         onToggleSelect: () => toggleSelect(chat.id),

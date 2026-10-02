@@ -110,7 +110,7 @@ pub async fn generate_commit_message(
         .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
         .ok_or(AppError::Message("No project open".to_string()))?;
 
-    let diff = git::git_staged_diff(project_path.clone()).unwrap_or_default();
+    let mut diff = git::git_staged_diff(project_path.clone()).unwrap_or_default();
     if diff.trim().is_empty() {
         diff = git::git_diff(project_path.clone()).unwrap_or_default();
     }

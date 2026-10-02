@@ -27,8 +27,8 @@ import {
     groupChatMessages,
 } from "./chat-session-utils";
 import { getSettings } from "@/lib/settings";
-import { getVisibleModels, resolveChatModels, sanitizeEnabledModels } from "@/lib/settings/models";
-import { getCatalogDefaultEnabledIds, getCatalogModels, useShapeCatalog } from "@/lib/catalog/store";
+import { getVisibleModels, resolveChatModels, sanitizeEnabledModels, subagentModelsForSend } from "@/lib/settings/models";
+import { getCatalogDefaultEnabledIds, getCatalogModels, isCatalogModelAllowed, useShapeCatalog } from "@/lib/catalog/store";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { captureTelemetry, captureTelemetryError } from "@/lib/telemetry";
@@ -178,6 +178,7 @@ export function useChatSession() {
         setViewingConversation,
         resumeLiveConversation,
         stopLiveTurn,
+        startDraftChat,
     } = useChatStream();
     const [recentConvs, setRecentConvs] = React.useState<Conversation[]>([]);
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
@@ -1027,6 +1028,12 @@ export function useChatSession() {
             const modelToSend = selectedModelRef.current || "auto";
             const modeToSend = selectedModeRef.current;
             const workerModels = multiwork ? [modelToSend] : undefined;
+            const catalogIds = getCatalogModels().map((m) => m.id);
+            const subagentSend = subagentModelsForSend(settings.ai.subagentModels, catalogIds, {
+                creditsRemaining: shapeAuth.creditsRemaining,
+                modelAllowed: isCatalogModelAllowed,
+                defaultModel: settings.ai.subagentDefaultModel,
+            });
 
             await commands.sendChatMessage(
                 messageWithWorkflows,
@@ -1051,6 +1058,8 @@ export function useChatSession() {
                 userMsg,
                 workerModels,
                 multiwork ? "multiwork" : undefined,
+                subagentSend.models,
+                subagentSend.defaultModel,
             );
             await refreshMetadata();
             return true;
@@ -1395,7 +1404,7 @@ export function useChatSession() {
         try {
             // Do not stop background generation; only the Stop button cancels.
             setDemoChatPinned(false);
-            setViewingConversation(null);
+            startDraftChat();
             await commands.newChat();
             if (!isIncognitoChat()) void captureTelemetry("chat_new");
             clearAllDesignPreviewSessions();
@@ -1406,8 +1415,8 @@ export function useChatSession() {
                 // New Multiwork session only (Sessions → new). Main New Chat turns mode off first.
                 resetMultiworkSession();
             }
-            void import("@/features/agent/subagents/store").then(({ resetSubagents }) => {
-                resetSubagents();
+            void import("@/features/agent/subagents/store").then(({ resetSubagentsForParent }) => {
+                resetSubagentsForParent(conversationIdRef.current);
             });
             setChatTitle("New Chat");
             setConversationId(null);

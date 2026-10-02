@@ -95,7 +95,6 @@ import { MultiworkAgentChips, getWorkers, isMultiworkMode, subscribeMultiwork } 
 import { commands } from "@/lib/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
-import { getLastTurnUsage, subscribeLastTurnUsage } from "@/lib/chat/last-turn-usage";
 
 type ChatInputProps = {
     inputValue: string;
@@ -1289,19 +1288,6 @@ export function ChatInput({
         };
     }, []);
 
-    const lastTurnUsage = React.useSyncExternalStore(
-        subscribeLastTurnUsage,
-        getLastTurnUsage,
-        getLastTurnUsage,
-    );
-    const selectedModelInfo =
-        MODELS.find((m) => m.id === selectedModel) ??
-        allModels.find((m) => m.id === selectedModel) ??
-        autoModel;
-    const windowTokens = contextWindowTokens(selectedModelInfo.contextWindow) ?? 200_000;
-    const usedTokens = lastTurnUsage?.inputTokens ?? lastTurnUsage?.tokens ?? 0;
-    const longChat = !isLoading && usedTokens > 0 && usedTokens / windowTokens >= 0.7;
-
     const hasContextStrip =
         (pendingEdits?.length ?? 0) > 0 ||
         queuedMessages.length > 0 ||
@@ -1948,20 +1934,6 @@ export function ChatInput({
                     </div>
                 </div>
             </div>
-            {longChat ? (
-                <p className="px-1 pt-1 text-xs text-text-muted">
-                    This chat is long.{" "}
-                    {onNewChat ? (
-                        <button
-                            type="button"
-                            className="text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
-                            onClick={onNewChat}
-                        >
-                            New chat
-                        </button>
-                    ) : null}
-                </p>
-            ) : null}
             <MediaLightbox
                 open={!!mediaViewer}
                 onClose={() => setMediaViewer(null)}

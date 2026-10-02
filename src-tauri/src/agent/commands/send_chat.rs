@@ -55,6 +55,8 @@ pub async fn send_chat_message(
     openai_api_key: Option<String>,
     models: Option<Vec<String>>,
     conversation_kind: Option<String>,
+    subagent_models: Option<Vec<String>>,
+    subagent_default_model: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -235,6 +237,8 @@ pub async fn send_chat_message(
         crate::agent::multiwork::set_model_pool(&owned_conversation_id, pool);
     }
 
+    crate::agent::subagents::set_policy(&state, subagent_models, subagent_default_model);
+
     let turn_id = uuid::Uuid::new_v4().to_string();
     let conversation_id = Some(owned_conversation_id.clone());
     state.reset_turn_meter(&turn_id);
@@ -384,18 +388,34 @@ pub async fn send_chat_message(
         .with_reasoning_effort(Some(effort_norm.clone()))
         .with_service_tier(tier_norm.clone());
 
-    let steer = if is_multiwork {
-        schema::SteerPacks::all_on()
-    } else {
-        crate::agent::tools::plugins::fetch_steer(
-            &auth_token,
-            &message,
-            &mode_to_use,
-            Some(&turn_id),
-            conversation_id.as_deref(),
-        )
-        .await
+    let context_opts = context_options_for_query(message.clone(), (*index_state).clone());
+    // Steer and workspace context are independent; overlapping them hid ~2s from first token.
+    let steer_fut = {
+        let auth = auth_token.clone();
+        let msg = message.clone();
+        let mode = mode_to_use.clone();
+        let tid = turn_id.clone();
+        let cid = conversation_id.clone();
+        async move {
+            if is_multiwork {
+                schema::SteerPacks::all_on()
+            } else {
+                crate::agent::tools::plugins::fetch_steer(
+                    &auth,
+                    &msg,
+                    &mode,
+                    Some(&tid),
+                    cid.as_deref(),
+                )
+                .await
+            }
+        }
     };
+    let (steer, ctx_res) = tokio::join!(
+        steer_fut,
+        build_context_with_options(&app_state, context_opts)
+    );
+    let (context_string, _active_file, _project_root) = ctx_res?;
     logging::debug(
         "chat",
         &format!(
@@ -403,12 +423,6 @@ pub async fn send_chat_message(
             steer.workspace, steer.plugins, steer.browse, steer.web, steer.git, steer.terminal, steer.media
         ),
     );
-    let mut context_opts = context_options_for_query(message.clone(), (*index_state).clone());
-    context_opts.include_repo_map = steer.workspace;
-    context_opts.include_diagnostics = steer.workspace;
-    context_opts.include_git_status = steer.workspace || steer.git;
-    let (context_string, _active_file, _project_root) =
-        build_context_with_options(&app_state, context_opts).await?;
     logging::debug("chat", &format!("Context built: {} chars", context_string.len()));
 
     let mut prompt_parts = vec![prompts::SYSTEM_MD.to_string()];
@@ -525,6 +539,8 @@ pub async fn send_chat_message(
         turn_context.push_str("\n");
         turn_context.push_str(&steer.hint);
     }
+    turn_context.push_str("\n");
+    turn_context.push_str(&crate::agent::subagents::policy_line(&state));
     messages::append_turn_context(&mut api_messages, &turn_context);
 
     let tools = if is_multiwork {

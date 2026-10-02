@@ -88,6 +88,10 @@ export interface ShapeSettings {
         autoApplyEdits: boolean;
         enabledModels: string[];
         defaultModel: string;
+        /** Models subagents may use. Never inherit the parent chat model. Empty means Auto only. */
+        subagentModels: string[];
+        /** Used when spawn_subagent omits model or the requested id is not allowed. */
+        subagentDefaultModel: string;
         /** @deprecated Folded into customRules on load. Kept for storage compat. */
         customSystemPrompt: string;
         customRules: string;
@@ -261,6 +265,8 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         autoApplyEdits: false,
         enabledModels: [],
         defaultModel: "auto",
+        subagentModels: ["auto"],
+        subagentDefaultModel: "auto",
         customSystemPrompt: "",
         customRules: "",
         mcpServers: [],
@@ -402,6 +408,15 @@ function mergeAiSettings(
         ?? base?.pluginApprovalDefault
         ?? DEFAULT_SETTINGS.ai.pluginApprovalDefault;
     merged.workflows = patch?.workflows ?? base?.workflows ?? DEFAULT_SETTINGS.ai.workflows;
+    merged.subagentModels = Array.isArray(patch?.subagentModels)
+        ? patch.subagentModels
+        : Array.isArray(base?.subagentModels)
+          ? base.subagentModels
+          : DEFAULT_SETTINGS.ai.subagentModels;
+    merged.subagentDefaultModel =
+        patch?.subagentDefaultModel
+        ?? base?.subagentDefaultModel
+        ?? DEFAULT_SETTINGS.ai.subagentDefaultModel;
     // Legacy "System Instructions" fold into Rules — one concept for user guidance.
     const legacy = merged.customSystemPrompt?.trim();
     if (legacy) {

@@ -19,7 +19,7 @@ pub fn all_tools() -> Vec<Value> {
     all_tools_for_family(ModelFamily::Other)
 }
 
-fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
+pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
     let mut tools = vec![
         read_file(),
         list_dir(),
@@ -666,7 +666,7 @@ fn git_sync() -> Value {
 fn git_worktree() -> Value {
     tool(
         "git_worktree",
-        "List, add, or remove a git worktree so parallel work does not share one checkout. add creates a sibling directory and a new branch.",
+        "List, add, or remove a git worktree so parallel work does not share one checkout. add creates a sibling directory and a new branch. Never merge that branch into the user's current branch unless they explicitly asked.",
         json!({
             "type": "object",
             "properties": {
@@ -798,12 +798,21 @@ fn save_plan() -> Value {
 fn spawn_subagent() -> Value {
     tool(
         "spawn_subagent",
-        "Delegate a focused research task to a subagent. The subagent searches the project, then writes a short answer from those results; its live status appears as a card in the right panel (not as a full chat). Use for independent parallel investigations (e.g. explore auth while you work on UI). Pass a short title and a specific task. Do not use this for edits, terminal commands, or the main user request — you still own the outcome.",
+        "Start a background subagent and return immediately so you can keep working. The subagent uses its own prompt and tools, then posts an update when finished — you are not blocked on this call. Default isolation is `shared` (same checkout; concurrent file edits can overwrite each other). Use `worktree` for true parallel coding (separate directory + branch). Never merge their branch yourself. Do not spawn a subagent for the whole user request.",
         json!({
             "type": "object",
             "properties": {
                 "title": {"type": "string", "description": "Short card title (e.g. Explore auth)."},
-                "task": {"type": "string", "description": "What the subagent should investigate. Be specific: symbols, files, or questions."}
+                "task": {"type": "string", "description": "Concrete task for the subagent. Include goals, constraints, and relevant paths."},
+                "isolation": {
+                    "type": "string",
+                    "enum": ["shared", "worktree"],
+                    "description": "shared (default): same checkout as you. worktree: isolated git worktree + new branch. Never auto-merged."
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Optional. Must be one of the user's allowed subagent models (see turn context). Disallowed ids, including the parent chat model, are ignored and the user's default is used."
+                }
             },
             "required": ["task"],
             "additionalProperties": false
@@ -814,7 +823,7 @@ fn spawn_subagent() -> Value {
 fn spawn_worker() -> Value {
     tool(
         "spawn_worker",
-        "Start a full coding worker on the Multiwork board (max 6). Prefer non-overlapping file scopes. Returns a worker id for messaging and status.",
+        "Start a full coding worker on the Multiwork board (max 6). Each worker gets an isolated git worktree and branch. Never merge those branches — leave them for the user to review. Prefer non-overlapping file scopes. Returns a worker id.",
         json!({
             "type": "object",
             "properties": {
@@ -931,10 +940,11 @@ pub fn multiwork_worker_tools(family: ModelFamily) -> Vec<Value> {
     let mut tools = all_tools_for_family(family);
     // Drop research-only subagent; workers get bus tools instead.
     tools.retain(|t| {
-        t.get("function")
+        let name = t
+            .get("function")
             .and_then(|f| f.get("name"))
-            .and_then(|n| n.as_str())
-            != Some("spawn_subagent")
+            .and_then(|n| n.as_str());
+        name != Some("spawn_subagent") && name != Some("git_sync")
     });
     insert_before_finish(&mut tools, message_peer());
     insert_before_finish(&mut tools, report_orchestrator());

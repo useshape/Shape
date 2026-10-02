@@ -7,6 +7,7 @@ import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-f
 import { Bug20Regular } from "@fluentui/react-icons/headless/svg/bug";
 import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
 import { AgentsPerson24Regular } from "@fluentui/react-icons/headless/svg/agents-person";
+import { PersonChat24Regular } from "@fluentui/react-icons/headless/svg/person-chat";
 import { PeopleTeam24Regular } from "@fluentui/react-icons/headless/svg/people-team";
 import { DocumentData24Regular } from "@fluentui/react-icons/headless/svg/document-data";
 import { DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
@@ -55,6 +56,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Agents",
         children: [
             { id: "ai-models", label: "Models", icon: AgentsPerson24Regular, targetId: "settings-ai-models" },
+            { id: "ai-subagents", label: "Subagents", icon: PersonChat24Regular, targetId: "settings-ai-subagents" },
             { id: "ai-multiwork", label: "Multiwork", icon: PeopleTeam24Regular, targetId: "settings-ai-multiwork" },
             { id: "ai-rules", label: "Instructions", icon: DocumentEdit24Regular, targetId: "settings-ai-rules" },
             { id: "ai-workflows", label: "Workflows", icon: ArrowClockwiseDashesSettings24Regular, targetId: "settings-ai-workflows" },
@@ -131,7 +133,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         id: "agents",
         label: "Agents",
         icon: Sparkle24Regular,
-        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context", "workflows", "commands", "multiwork"],
+        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context", "workflows", "commands", "multiwork", "subagent", "subagents"],
     },
     {
         id: "editor",

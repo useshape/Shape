@@ -18,8 +18,12 @@ pub fn build_messages_json(system_prompt: &str, history: &[ChatMessage], model: 
         history.len(), model, is_anthropic, accepts_images
     ));
 
+    let last_image_user = history.iter().rposition(|msg| {
+        msg.role == "user" && image_re.is_match(&msg.content)
+    });
+
     let mut msgs = vec![json!({"role": "system", "content": system_prompt})];
-    for msg in history {
+    for (idx, msg) in history.iter().enumerate() {
         if msg.content.trim().is_empty() {
             continue;
         }
@@ -31,6 +35,22 @@ pub fn build_messages_json(system_prompt: &str, history: &[ChatMessage], model: 
                     "
 [image attachment omitted — this model cannot view images]
 ",
+                )
+                .to_string();
+            msgs.push(json!({"role": msg.role, "content": stripped}));
+            continue;
+        }
+
+        // Older turns' pixels were already billed. Re-sending every image on every
+        // tool loop is one of the largest avoidable costs on vision models.
+        if msg.role == "user"
+            && image_re.is_match(&msg.content)
+            && last_image_user != Some(idx)
+        {
+            let stripped = image_re
+                .replace_all(
+                    &msg.content,
+                    "\n[earlier image omitted — already shown; do not re-describe it]\n",
                 )
                 .to_string();
             msgs.push(json!({"role": msg.role, "content": stripped}));
@@ -167,13 +187,13 @@ const CLEARED_TOOL_RESULT: &str = "[cleared to save context — re-call the tool
 const TRIMMED_TOOL_RESULT_SUFFIX: &str =
     "\n[middle omitted to save context — re-read only the specific lines you still need]";
 
-/// Soft budget (~6k tokens): trim old tool results to a short excerpt.
-/// Claude and Codex drop stale tool output early; carrying it is re-billed every loop.
-const TOOL_RESULT_SOFT_BUDGET: usize = 24_000;
-/// Hard budget (~12k tokens): clear old tool results entirely.
-const TOOL_RESULT_CHAR_BUDGET: usize = 48_000;
+/// Soft budget (~30k tokens): trim old tool results only after a long turn.
+/// Lower values rewrote the prompt prefix every loop and busted Gemini/OpenAI cache.
+const TOOL_RESULT_SOFT_BUDGET: usize = 120_000;
+/// Hard budget (~50k tokens): clear old tool results entirely.
+const TOOL_RESULT_CHAR_BUDGET: usize = 200_000;
 /// Never touch results from the most recent tool rounds.
-const TOOL_RESULT_KEEP_ROUNDS: usize = 3;
+const TOOL_RESULT_KEEP_ROUNDS: usize = 8;
 const TOOL_RESULT_TRIM_CHARS: usize = 600;
 
 /// Strip verbose tool XML from prior assistant turns, then trim middle history
@@ -574,6 +594,26 @@ mod tests {
                 .and_then(|u| u.as_str())
                 .is_some_and(|u| u.starts_with("data:image/png"))
         }));
+    }
+
+    #[test]
+    fn build_messages_omits_older_user_images() {
+        let history = vec![
+            msg(
+                "user",
+                "first <attached_image name=\"a.png\">data:image/png;base64,aaa</attached_image>",
+            ),
+            msg("assistant", "ok"),
+            msg(
+                "user",
+                "second <attached_image name=\"b.png\">data:image/png;base64,bbb</attached_image>",
+            ),
+        ];
+        let out = build_messages_json("sys", &history, MODEL_FAST_VISION);
+        let serialized = serde_json::to_string(&out).unwrap();
+        assert!(!serialized.contains("aaa"));
+        assert!(serialized.contains("bbb"));
+        assert!(serialized.contains("earlier image omitted"));
     }
 
     #[test]

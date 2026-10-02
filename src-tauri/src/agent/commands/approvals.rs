@@ -41,8 +41,8 @@ pub async fn stop_chat_message(
     let _ = app.emit("agent-browse", serde_json::json!({"id": "live", "status": "stopped"}));
     // Cancel first so waiters observe Stop instead of a fake Reject (which
     // used to look like accepted edits were undone).
-    if let Some(id) = current_id.as_deref() {
-        if let Some(token) = state.conversation_cancel_token(id) {
+    if let Ok(map) = state.cancel_tokens.lock() {
+        for token in map.values() {
             token.cancel();
         }
     }

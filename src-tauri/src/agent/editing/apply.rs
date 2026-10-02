@@ -15,6 +15,7 @@ use super::super::commands::logging;
 /// `x-ai/grok-4-fast` used to be the default here, but OpenRouter now returns 404 for it.
 /// Keep a small ordered chain so one provider deprecation does not break every edit.
 const DEFAULT_APPLY_MODELS: &[&str] = &[
+    "z-ai/glm-5.3-flash",
     "x-ai/grok-4.3",
     "openai/gpt-5.4-nano",
     "deepseek/deepseek-v4-flash",

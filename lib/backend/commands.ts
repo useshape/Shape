@@ -520,6 +520,9 @@ export const commands = {
         /** Multiwork worker model pool (orchestrator uses `model`). */
         models?: string[],
         conversationKind?: "chat" | "multiwork",
+        /** Models subagents may use (user settings). Never inherit the parent chat model. */
+        subagentModels?: string[],
+        subagentDefaultModel?: string,
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -543,6 +546,8 @@ export const commands = {
             displayMessage: displayMessage ?? null,
             models: models ?? null,
             conversationKind: conversationKind ?? null,
+            subagentModels: subagentModels ?? null,
+            subagentDefaultModel: subagentDefaultModel ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;

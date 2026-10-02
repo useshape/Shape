@@ -26,6 +26,8 @@ pub enum ModelFamily {
     DeepSeek,
     Google,
     XAi,
+    ZAi,
+    Qwen,
     Other,
 }
 
@@ -37,6 +39,8 @@ impl ModelFamily {
             Self::DeepSeek => "deepseek",
             Self::Google => "google",
             Self::XAi => "xai",
+            Self::ZAi => "zai",
+            Self::Qwen => "qwen",
             Self::Other => "other",
         }
     }
@@ -108,6 +112,7 @@ pub fn model_accepts_images(model: &str) -> bool {
         || m.starts_with("anthropic/")
         || m.starts_with("openai/")
         || m.starts_with("x-ai/")
+        || m.starts_with("qwen/")
         || m.contains("gemini")
         || m.contains("claude")
         || m.contains("gpt-4")
@@ -131,6 +136,8 @@ pub fn model_family(model: &str) -> ModelFamily {
             "deepseek" => return ModelFamily::DeepSeek,
             "google" | "google-ai" | "gemini" => return ModelFamily::Google,
             "x-ai" | "xai" => return ModelFamily::XAi,
+            "z-ai" | "zai" | "zhipu" | "glm" => return ModelFamily::ZAi,
+            "qwen" | "alibaba" => return ModelFamily::Qwen,
             // Some routers nest: `openrouter/openai/gpt-…` — rare; check rest.
             _ if rest.starts_with("openai/") || rest.starts_with("gpt-") => {
                 return ModelFamily::OpenAi;
@@ -142,6 +149,10 @@ pub fn model_family(model: &str) -> ModelFamily {
             _ if rest.starts_with("gemini") || rest.starts_with("google/") => {
                 return ModelFamily::Google;
             }
+            _ if rest.starts_with("glm") || rest.starts_with("z-ai/") => {
+                return ModelFamily::ZAi;
+            }
+            _ if rest.starts_with("qwen") => return ModelFamily::Qwen,
             _ => {}
         }
     }
@@ -167,6 +178,12 @@ pub fn model_family(model: &str) -> ModelFamily {
     }
     if m.starts_with("grok") {
         return ModelFamily::XAi;
+    }
+    if m.starts_with("glm") {
+        return ModelFamily::ZAi;
+    }
+    if m.starts_with("qwen") {
+        return ModelFamily::Qwen;
     }
 
     ModelFamily::Other
@@ -236,6 +253,9 @@ mod tests {
         );
         assert_eq!(model_family("google/gemini-2.5-pro"), ModelFamily::Google);
         assert_eq!(model_family("x-ai/grok-3"), ModelFamily::XAi);
+        assert_eq!(model_family("z-ai/glm-5.3"), ModelFamily::ZAi);
+        assert_eq!(model_family("z-ai/glm-5.3-flash"), ModelFamily::ZAi);
+        assert_eq!(model_family("qwen/qwen3-coder-plus"), ModelFamily::Qwen);
         assert_eq!(model_family("gpt-4o"), ModelFamily::OpenAi);
         assert_eq!(model_family("claude-3-5-sonnet"), ModelFamily::Anthropic);
         assert_eq!(model_family("some-vendor/mystery"), ModelFamily::Other);

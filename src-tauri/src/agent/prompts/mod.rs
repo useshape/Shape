@@ -18,7 +18,10 @@ pub const FAMILY_OPENAI_MD: &str = include_str!("FAMILY_OPENAI.MD");
 pub const FAMILY_DEEPSEEK_MD: &str = include_str!("FAMILY_DEEPSEEK.MD");
 pub const FAMILY_GOOGLE_MD: &str = include_str!("FAMILY_GOOGLE.MD");
 pub const FAMILY_XAI_MD: &str = include_str!("FAMILY_XAI.MD");
+pub const FAMILY_ZAI_MD: &str = include_str!("FAMILY_ZAI.MD");
+pub const FAMILY_QWEN_MD: &str = include_str!("FAMILY_QWEN.MD");
 pub const FAMILY_DEFAULT_MD: &str = include_str!("FAMILY_DEFAULT.MD");
+pub const SUBAGENT_MD: &str = include_str!("SUBAGENT.MD");
 
 use crate::agent::model_router::ModelFamily;
 
@@ -30,6 +33,8 @@ pub fn family_prompt(family: ModelFamily) -> &'static str {
         ModelFamily::DeepSeek => FAMILY_DEEPSEEK_MD,
         ModelFamily::Google => FAMILY_GOOGLE_MD,
         ModelFamily::XAi => FAMILY_XAI_MD,
+        ModelFamily::ZAi => FAMILY_ZAI_MD,
+        ModelFamily::Qwen => FAMILY_QWEN_MD,
         ModelFamily::Other => FAMILY_DEFAULT_MD,
     }
 }

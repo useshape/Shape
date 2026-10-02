@@ -15,7 +15,7 @@ import {
     useShapeCatalog,
 } from "@/lib/catalog/store";
 
-import { getVisibleModels, isApiModel, isModelEnabled, resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
+import { getVisibleModels, isApiModel, isModelEnabled, isSubagentModelEnabled, resolveChatModels, resolveSubagentDefaultModel, sanitizeEnabledModels, sanitizeSubagentModels, type ModelInfo } from "@/lib/settings/models";
 import { useShapeAuth } from "@/lib/cloud/store";
 import {
     type AutoRunModeSetting,
@@ -126,7 +126,7 @@ export function AiSettingsPanel({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context" | "multiwork";
+    page: "models" | "rules" | "workflows" | "context" | "multiwork" | "subagents";
 }) {
     const a = settings.ai;
     const auth = useShapeAuth();
@@ -139,6 +139,7 @@ export function AiSettingsPanel({
     const unavailableHint =
         "This model is not available on your plan.";
     const [showAllModels, setShowAllModels] = React.useState(false);
+    const [showAllSubagentModels, setShowAllSubagentModels] = React.useState(false);
     const [indexStatus, setIndexStatus] = React.useState<{
         filesIndexed: number;
         totalFiles: number;
@@ -156,6 +157,12 @@ export function AiSettingsPanel({
         defaultIds,
     );
     const visibleModels = getVisibleModels(allModels, enabledModels);
+    const subagentModels = sanitizeSubagentModels(
+        a.subagentModels,
+        allModels.map((m) => m.id),
+    );
+    const subagentDefaultModel = resolveSubagentDefaultModel(a.subagentDefaultModel, subagentModels);
+    const visibleSubagentModels = allModels.filter((m) => isSubagentModelEnabled(m.id, subagentModels));
     const featuredIds = React.useMemo(() => {
         const ids: string[] = [];
         const seen = new Set<string>();
@@ -167,6 +174,9 @@ export function AiSettingsPanel({
         return new Set(ids);
     }, [allModels]);
     const displayedModels = showAllModels
+        ? allModels
+        : allModels.filter((m) => featuredIds.has(m.id) || m.id === "auto");
+    const displayedSubagentModels = showAllSubagentModels
         ? allModels
         : allModels.filter((m) => featuredIds.has(m.id) || m.id === "auto");
 
@@ -232,6 +242,15 @@ export function AiSettingsPanel({
         setEnabledModels(next);
     };
 
+    const toggleSubagentModel = (modelId: string, enabled: boolean) => {
+        let next = enabled
+            ? subagentModels.includes(modelId) ? subagentModels : [...subagentModels, modelId]
+            : subagentModels.filter((id) => id !== modelId);
+        next = sanitizeSubagentModels(next, allModels.map((m) => m.id));
+        const nextDefault = resolveSubagentDefaultModel(subagentDefaultModel, next);
+        updateSettingSection("ai", { subagentModels: next, subagentDefaultModel: nextDefault });
+    };
+
     const handleReindex = async () => {
         if (indexing) return;
         setIndexing(true);
@@ -280,6 +299,54 @@ export function AiSettingsPanel({
                                 />
                             </SettingRow>
                         </SettingCard>
+                    </SettingSection>
+                </>
+            ) : null}
+            {page === "subagents" ? (
+                <>
+                    <SettingSection
+                        id="settings-ai-subagents"
+                        title="Subagents"
+                        description="Background subagents use Auto unless you turn on other models here. They never inherit the chat model. Named models are skipped if you are out of credits — Auto (included monthly usage) is used instead."
+                    >
+                        <SettingCard>
+                            {displayedSubagentModels.map((model) => (
+                                <ModelRow
+                                    key={model.id}
+                                    model={model}
+                                    enabled={isSubagentModelEnabled(model.id, subagentModels)}
+                                    onToggle={(on) => toggleSubagentModel(model.id, on)}
+                                    unavailableReason={
+                                        !isCatalogModelAllowed(model.id) && !isApiModel(model)
+                                            ? unavailableHint
+                                            : undefined
+                                    }
+                                />
+                            ))}
+                            <button
+                                type="button"
+                                className="px-3.5 py-2.5 text-left text-sm text-text-muted hover:bg-white/4 hover:text-text-primary"
+                                onClick={() => setShowAllSubagentModels((v) => !v)}
+                            >
+                                {showAllSubagentModels ? "Show fewer models" : "View all models"}
+                            </button>
+                        </SettingCard>
+                    </SettingSection>
+                    <SettingSection title="Default">
+                        <SettingRow
+                            title="Default subagent model"
+                            description="Used unless you allow another model and the parent names it. Subagents never use the chat model."
+                        >
+                            <SettingSelect
+                                value={subagentDefaultModel}
+                                options={visibleSubagentModels.map((m) => ({ value: m.id, label: m.name }))}
+                                onChange={(v) =>
+                                    updateSettingSection("ai", {
+                                        subagentDefaultModel: resolveSubagentDefaultModel(v, subagentModels),
+                                    })
+                                }
+                            />
+                        </SettingRow>
                     </SettingSection>
                 </>
             ) : null}

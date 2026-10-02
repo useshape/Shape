@@ -478,6 +478,17 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         loop_count += 1;
         config.proxy_ctx.refresh_request_id();
 
+        if let Some(cid) = conversation_id.as_deref() {
+            let updates = crate::agent::subagents::take_parent_updates(cid);
+            if !updates.is_empty() {
+                let body = updates.join("\n\n");
+                config.api_messages.push(json!({
+                    "role": "user",
+                    "content": format!("<subagent_update>\n{body}\n</subagent_update>\nIncorporate this if it is relevant and keep working. Do not wait for more subagents unless you need their output."),
+                }));
+            }
+        }
+
         // Reset the UI activity label: we're back in the model, not a tool.
         streaming::emit_chat_status(
             &config.app_handle,
@@ -650,7 +661,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 .collect();
             assistant_msg["tool_calls"] = Value::Array(calls);
         }
-        drop_stale_reasoning(config.api_messages);
+        // Do not rewrite earlier assistant messages here. Gemini/OpenAI implicit
+        // prompt cache requires a byte-identical prefix across tool loops; stripping
+        // reasoning from prior turns forces a full re-bill of ~20k input tokens.
         config.api_messages.push(assistant_msg);
 
         if outcome.tool_calls.is_empty() {
@@ -708,9 +721,25 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
 
             // The duplicate-call / denied-path guards still apply per call.
+            let mut plugin_search_in_batch = false;
             let blocked: Vec<Option<String>> = tool_calls
                 .iter()
                 .map(|call| {
+                    if call.name == "plugin_list" || call.name == "plugin_tools" {
+                        return Some(
+                            "Skip catalog dumps. plugin_search once, then plugin_run the recommended slug with the args it listed."
+                                .to_string(),
+                        );
+                    }
+                    if call.name == "plugin_search" {
+                        if plugin_search_used || plugin_search_in_batch {
+                            return Some(
+                                "You already ran plugin_search this turn. plugin_run the recommended slug from that result exactly. Do not invent slugs. Do not web_search."
+                                    .to_string(),
+                            );
+                        }
+                        plugin_search_in_batch = true;
+                    }
                     if call.name == "read_file" {
                         if let Some(path) = read_file_path_arg(&call.arguments) {
                             let abs = resolve_abs(&path, config.project_path);
@@ -727,6 +756,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     }
                 })
                 .collect();
+            if plugin_search_in_batch {
+                plugin_search_used = true;
+            }
 
             let ctxs: Vec<ToolCtx<'_>> = tool_calls
                 .iter()
@@ -813,6 +845,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 }
             }
 
+            // Prune only as overflow protection. Rewriting earlier tool results
+            // busts the cached prompt prefix (Claude Code uses cache_edits instead).
             if super::messages::clear_old_tool_results(config.api_messages) {
                 read_coverage.clear();
             }
@@ -1047,10 +1081,11 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         let abs = resolve_abs(path, config.project_path);
                         if !needs_reread.contains(&abs) {
                             if let Some(cached) = file_cache.get(&abs) {
-                                let display = if cached.chars().count() > 30_000 {
-                                    let head: String = cached.chars().take(30_000).collect();
+                                let cap = crate::agent::tools::files::MAX_READ_CHARS;
+                                let display = if cached.chars().count() > cap {
+                                    let head: String = cached.chars().take(cap).collect();
                                     format!(
-                                        "{}\n\n[truncated — file longer than 30,000 chars; call read_file again with start_line/end_line to see more]\n\
+                                        "{}\n\n[truncated — file longer than {cap} chars; call read_file again with start_line/end_line to see more]\n\
                                          [served from turn cache]",
                                         head
                                     )
@@ -1306,22 +1341,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         interrupt_error,
         wrote_files,
     })
-}
-
-/// Providers only need reasoning on the latest assistant turn to keep the chain of
-/// thought intact. Older copies are resent verbatim on every request and, over a long
-/// tool loop, become one of the largest parts of the input.
-fn drop_stale_reasoning(api_messages: &mut [Value]) {
-    for msg in api_messages.iter_mut() {
-        if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
-            continue;
-        }
-        if let Some(obj) = msg.as_object_mut() {
-            obj.remove("reasoning");
-            obj.remove("reasoning_content");
-            obj.remove("reasoning_details");
-        }
-    }
 }
 
 fn push_tool_result(api_messages: &mut Vec<Value>, id: &str, name: &str, content: &str) {

@@ -3,6 +3,20 @@ use crate::core::error::AppError;
 use std::fs;
 
 
+const LIST_DIR_MAX_ENTRIES: usize = 250;
+const NOISY_DIR_NAMES: &[&str] = &[
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "target",
+    ".next",
+    "coverage",
+    "__pycache__",
+    ".venv",
+    "venv",
+];
+
 /// List files in a directory, validated against the project root.
 pub fn list_files(path: &str, project_path: &str) -> Result<String, AppError> {
     let target = paths::resolve_safe_path(path, project_path)?;
@@ -16,23 +30,58 @@ pub fn list_files(path: &str, project_path: &str) -> Result<String, AppError> {
     }
 
     let entries = fs::read_dir(&target).map_err(AppError::Io)?;
-    let mut list = String::new();
-    list.push_str(&format!("Listing: {}\n", path));
+    let mut dirs: Vec<String> = Vec::new();
+    let mut files: Vec<String> = Vec::new();
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name().to_string_lossy().into_owned();
         if entry.path().is_dir() {
-            list.push_str(&format!("- {}/\n", name));
+            dirs.push(name);
         } else {
-            list.push_str(&format!("- {}\n", name));
+            files.push(name);
         }
+    }
+    dirs.sort();
+    files.sort();
+
+    let total = dirs.len() + files.len();
+    let mut list = String::new();
+    list.push_str(&format!("Listing: {} ({} entries)\n", path, total));
+    let mut shown = 0usize;
+    for name in dirs.iter().chain(files.iter()) {
+        if shown >= LIST_DIR_MAX_ENTRIES {
+            list.push_str(&format!(
+                "… {} more (narrow the path or use search_files/grep)\n",
+                total - shown
+            ));
+            break;
+        }
+        let is_dir = shown < dirs.len();
+        if is_dir && is_noisy_dir(name) {
+            list.push_str(&format!(
+                "- {name}/  [generated — do not list; search_files/grep instead]\n"
+            ));
+        } else if is_dir {
+            list.push_str(&format!("- {name}/\n"));
+        } else {
+            list.push_str(&format!("- {name}\n"));
+        }
+        shown += 1;
     }
     Ok(list)
 }
 
-/// Most source files fit under this, so a plain `read_file` returns the whole thing.
-/// A small default made models page through files in dozens of overlapping calls,
-/// which cost far more context than just handing over the file once.
-pub const DEFAULT_READ_LINES: usize = 1000;
+fn is_noisy_dir(name: &str) -> bool {
+    NOISY_DIR_NAMES
+        .iter()
+        .any(|n| name.eq_ignore_ascii_case(n))
+}
+
+/// Default window for a plain `read_file`. Larger files must be paged with
+/// start_line/end_line — dumping 1000+ unnumbered lines every tool loop is
+/// the main driver of 20k+ input tokens on Gemini/Claude.
+pub const DEFAULT_READ_LINES: usize = 400;
+/// Hard cap on a single read result (~4k tokens). Prefer paging over silent middles.
+pub const MAX_READ_CHARS: usize = 16_000;
 
 pub struct ImageRead {
     pub name: String,
@@ -171,19 +220,31 @@ pub fn read_file_range(
         )));
     }
 
-    let range_content = lines[start..end].join("\n");
+    let mut body = String::new();
+    let mut last = start;
+    for (i, line) in lines[start..end].iter().enumerate() {
+        let n = start + i + 1;
+        let numbered = format!("{n:>6}|{line}\n");
+        if !body.is_empty() && body.len() + numbered.len() > MAX_READ_CHARS {
+            break;
+        }
+        body.push_str(&numbered);
+        last = n;
+    }
     let mut out = format!(
         "File {} (lines {}-{} of {}):\n{}",
         path,
         start + 1,
-        end,
+        last,
         total_lines,
-        range_content
+        body.trim_end()
     );
-    if end < total_lines && start == 0 && end == DEFAULT_READ_LINES {
+    if last < total_lines {
         out.push_str(&format!(
-            "\n\n[Showing first {} lines — use start_line/end_line to read more]",
-            DEFAULT_READ_LINES
+            "\n\n[Showing lines {}-{} of {} — call read_file with start_line/end_line for the rest]",
+            start + 1,
+            last,
+            total_lines
         ));
     }
     Ok(out)
@@ -256,4 +317,24 @@ pub fn create_dir(path: &str, project_path: &str) -> Result<String, AppError> {
     let target = paths::validate_write_path(path, project_path)?;
     fs::create_dir_all(&target).map_err(AppError::Io)?;
     Ok(format!("Created directory {}", path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_range_numbers_lines_and_pages() {
+        let dir = std::env::temp_dir().join(format!("shape-read-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("sample.rs");
+        let body: String = (1..=20).map(|i| format!("line{i}\n")).collect();
+        std::fs::write(&file, body).unwrap();
+        let out = read_file_range("sample.rs", 2, 4, dir.to_str().unwrap()).unwrap();
+        assert!(out.contains("lines 2-4 of 20"));
+        assert!(out.contains("     2|line2"));
+        assert!(out.contains("     4|line4"));
+        assert!(!out.contains("line5"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

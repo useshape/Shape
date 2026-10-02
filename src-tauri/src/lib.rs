@@ -441,10 +441,13 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|_app, event| {
+        .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 browser::shutdown();
                 agent::tools::browse::stop_session();
+                if let Some(pty) = app.try_state::<PtyState>() {
+                    pty.inner().kill_all_sync();
+                }
             }
         });
 }

@@ -409,12 +409,37 @@ pub(super) async fn intercept_file_inspection_command(
     ctx: &ToolCtx<'_>,
 ) -> Option<ToolOutcome> {
     let segments = split_command_segments(command);
-    let (first, rest) = segments.split_first()?;
-    if !rest.iter().all(|s| is_benign_stage(s)) {
+    if segments.is_empty() {
         return None;
     }
 
-    let tokens = tokenize_segment(first);
+    let mut outcomes = Vec::new();
+    let mut i = 0;
+    while i < segments.len() {
+        let Some(outcome) = intercept_one_inspection_segment(&segments[i], ctx).await else {
+            return None;
+        };
+        outcomes.push(outcome);
+        i += 1;
+        while i < segments.len() && is_benign_stage(&segments[i]) {
+            i += 1;
+        }
+    }
+
+    if outcomes.len() == 1 {
+        return outcomes.pop();
+    }
+    let tool_result = outcomes.iter().map(|o| o.tool_result.as_str()).collect::<Vec<_>>().join("\n\n");
+    let ui_chunk = outcomes.iter().map(|o| o.ui_chunk.as_str()).collect::<Vec<_>>().join("");
+    Some(ToolOutcome {
+        tool_result,
+        ui_chunk,
+        side_effect: None,
+    })
+}
+
+async fn intercept_one_inspection_segment(segment: &str, ctx: &ToolCtx<'_>) -> Option<ToolOutcome> {
+    let tokens = tokenize_segment(segment);
     let (head, args) = tokens.split_first()?;
     let name = command_name(head);
     let mut parsed = parse_shell_read_args(args);
@@ -865,6 +890,10 @@ mod tests {
         );
         assert_eq!(split_command_segments("echo 'a | b'"), vec!["echo 'a | b'"]);
         assert_eq!(split_command_segments("a && b"), vec!["a", "b"]);
+        let chained = split_command_segments("Get-Content src/server.js; Get-Content src/user.js");
+        assert_eq!(chained.len(), 2);
+        assert!(command_name(tokenize_segment(&chained[0]).first().unwrap()).contains("get-content"));
+        assert!(!is_benign_stage(&chained[1]));
     }
 
     #[test]

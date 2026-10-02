@@ -71,6 +71,8 @@ type ChatStreamContextValue = ChatStreamState & {
     resumeLiveConversation: (id: string | null) => boolean;
     /** Instantly drop the live-turn spinner so Stop does not wait on the stream. */
     stopLiveTurn: () => void;
+    /** Leave a running turn in the background and show an empty draft. */
+    startDraftChat: () => void;
 };
 
 const defaultState: ChatStreamState = {
@@ -231,6 +233,16 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             console.error("Failed to sync chat stream:", err);
         }
     }, [applyLive, liveForView]);
+
+    const startDraftChat = React.useCallback(() => {
+        viewingIdRef.current = "__draft__";
+        turnIdRef.current = null;
+        setIsLoading(false);
+        setMessages([]);
+        setActivityLabel(null);
+        setTurnPhase("idle");
+        setTurnId(null);
+    }, []);
 
     const stopLiveTurn = React.useCallback(() => {
         const id = viewingIdRef.current;
@@ -457,6 +469,11 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 setChatGenerating(NEW_CHAT_TAB_ID, false);
                 const shown = !!conversationId && viewingIdRef.current === conversationId;
                 if (!shown) {
+                    if (conversationId) {
+                        void import("@/lib/sidebar/chat-list-meta").then(({ markChatUnread }) => {
+                            markChatUnread(conversationId);
+                        });
+                    }
                     if (!error) {
                         void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
                             showDesktopNotification("generationComplete", "Shape", "Generation finished"),
@@ -661,6 +678,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         setViewingConversation,
         resumeLiveConversation,
         stopLiveTurn,
+        startDraftChat,
     };
 
     return (
