@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import Onboarding from "@/features/onboarding/ui/view";
 import { PromoCardHost } from "@/features/promo/host";
 import { DesignPreviewCaptureHost } from "@/features/chat/ui/design-capture";
+import { WebviewReconnect } from "@/components/layout/webview-reconnect";
 
 function pathMatches(pathname: string | null, base: string) {
     if (!pathname) return false;
@@ -293,6 +294,7 @@ function Content({ children }: { children: React.ReactNode }) {
                 <PromoCardHost />
                 <DesignPreviewCaptureHost />
             </div>
+            <WebviewReconnect />
             {needsLogin ? (
                 <div className="absolute inset-0 z-[80] bg-background">
                     {auth.isLoading ? null : (

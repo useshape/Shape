@@ -1,0 +1,80 @@
+.root {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.5rem 0.35rem 0.25rem;
+    min-width: 16rem;
+    user-select: none;
+}
+
+.caption {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: var(--text-muted);
+}
+
+.track {
+    position: relative;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    outline: none;
+}
+
+.track::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0.35rem;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+
+.fill {
+    position: absolute;
+    inset-inline-start: 0.35rem;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--text-primary);
+    max-width: calc(100% - 0.7rem);
+}
+
+.thumb {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    margin-inline-start: -7px;
+    border-radius: 999px;
+    background: var(--text-primary);
+    transform: translateY(-50%);
+    box-shadow: 0 0 0 3px var(--surface-4, #111);
+    pointer-events: none;
+}
+
+.stop {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    margin-inline-start: -5px;
+    transform: translateY(-50%);
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.25rem;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+
+.labels span[data-active="true"] {
+    color: var(--text-primary);
+}

@@ -954,17 +954,13 @@ pub async fn stream_chat(
     if defer_content_emit && !deferred_content.is_empty() && tool_calls.is_empty() {
         emit_stream_token(app_handle, proxy_ctx, deferred_content);
     } else if defer_content_emit && !tool_calls.is_empty() && !deferred_content.is_empty() {
-        if is_brief_checkpoint(&deferred_content) {
-            emit_stream_token(app_handle, proxy_ctx, format!("{}\n\n", deferred_content.trim()));
-        } else {
-            logging::debug(
-                "stream",
-                &format!(
-                    "Suppressed {} chars of mid-tool narration from reply UI",
-                    content.len()
-                ),
-            );
-        }
+        logging::debug(
+            "stream",
+            &format!(
+                "Suppressed {} chars of mid-tool narration from reply UI",
+                deferred_content.len()
+            ),
+        );
     }
 
     if !tool_calls.is_empty()

@@ -242,7 +242,7 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
         | "design_review" | "render_design_previews" | "mcp_search" | "mcp_call" => Some("workspace"),
         "plugin_search" | "plugin_run" => Some("plugins"),
         "plugin_list" | "plugin_tools" => Some("browse"),
-        "web_search" | "visit_url" => Some("web"),
+        "web_search" | "visit_url" => None,
         "git_status" | "git_fetch" | "git_log" | "git_stage" | "git_commit" | "git_diff"
         | "git_branches" | "git_create_branch" | "git_switch" | "git_sync" | "git_worktree" => {
             Some("git")
@@ -1507,7 +1507,8 @@ mod tests {
         assert!(names.contains(&"decide".to_string()));
         assert!(!names.contains(&"read_file".to_string()));
         assert!(!names.contains(&"run_terminal".to_string()));
-        assert!(!names.contains(&"web_search".to_string()));
+        assert!(names.contains(&"web_search".to_string()));
+        assert!(names.contains(&"visit_url".to_string()));
         assert!(!names.contains(&"git_status".to_string()));
         assert!(!names.contains(&"generate_image".to_string()));
     }

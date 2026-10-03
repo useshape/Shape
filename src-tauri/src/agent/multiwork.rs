@@ -261,6 +261,12 @@ pub fn deliver_peer_message(
         }),
     );
     if to_trim.eq_ignore_ascii_case("orchestrator") {
+        let parent = worker_parent(from_id);
+        crate::agent::parent_resume::notify_parent_finished(
+            app,
+            parent.as_deref(),
+            format!("Message from {from_title}:\n{content}"),
+        );
         return Ok("Message sent to the orchestrator.".to_string());
     }
     let to_id =
@@ -438,6 +444,11 @@ pub fn spawn_worker_turn(
                     "transcript": transcript,
                     "conversationId": parent_conversation_id,
                 }),
+            );
+            crate::agent::parent_resume::notify_parent_finished(
+                &app,
+                parent_conversation_id.as_deref(),
+                format!("Worker \"{title}\" ({worker_id}) {status}.\n\n{transcript}"),
             );
             break;
         }

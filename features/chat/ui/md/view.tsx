@@ -21,6 +21,10 @@ import { ChatLinkChip } from "./link-chip";
 import { Button } from "@/components/ui/button";
 import { commands, getProjectPath } from "@/lib/backend";
 import { resolveProjectFilePath } from "@/lib/path/utils";
+import { ChatMermaid } from "./mermaid";
+import { ChatKeyedRowsTable, MarkdownTableShell } from "./data-table";
+import { parseKeyedRows, tableCellModelId } from "@/lib/chat/fence-tables";
+import { providerIcon } from "@/lib/ui/provider-icon";
 
 const PATH_IN_PROSE =
     /(?:^|(?<=\s))((?:\.{1,2}[\\/])?(?:[\w.-]+[\\/])+[\w.-]+\.[A-Za-z0-9]{1,12})(?=$|[\s,;:)\]"'`])/g;
@@ -135,13 +139,23 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
         pre: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
         code(props: { className?: string; children?: React.ReactNode }) {
             const { className, children, ...rest } = props;
-            const match = /language-(\w+)/.exec(className || "");
+            const match = /language-([a-z0-9-]+)/i.exec(className || "");
             const codeContent = String(children).replace(/\n$/, "");
             if (codeContent === "undefined") return null;
 
             if (match) {
-                const language = match[1]!;
-                if (language === "chart" || language === "insight" || language === "stats" || language === "filter-table" || language === "records") return null;
+                const language = match[1]!.toLowerCase();
+                if (language === "mermaid") {
+                    return <ChatMermaid source={codeContent} />;
+                }
+                if (language === "filter-table" || language === "records") {
+                    const rows = parseKeyedRows(codeContent);
+                    if (!rows) {
+                        return <CodeBlock language={language} code={codeContent} {...rest} />;
+                    }
+                    return <ChatKeyedRowsTable rows={rows} />;
+                }
+                if (language === "chart" || language === "insight" || language === "stats") return null;
                 return <CodeBlock language={language} code={codeContent} {...rest} />;
             }
 
@@ -229,19 +243,34 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             </blockquote>
         ),
         table: ({ children }: { children?: React.ReactNode }) => (
-            <div className="my-2 overflow-x-auto squircle-2xl bg-surface-3">
+            <MarkdownTableShell>
                 <table className="w-full min-w-50 border-collapse text-left">{children}</table>
-            </div>
+            </MarkdownTableShell>
         ),
         thead: ({ children }: { children?: React.ReactNode }) => (
-            <thead className="bg-surface-3">{children}</thead>
+            <thead>{children}</thead>
         ),
         th: ({ children }: { children?: React.ReactNode }) => (
             <th className="px-2.5 py-1.5 font-sans chat-text font-medium text-text-primary">{children}</th>
         ),
-        td: ({ children }: { children?: React.ReactNode }) => (
-            <td className="my-2 px-2.5 py-1.5 font-sans chat-text text-text-secondary">{children}</td>
-        ),
+        td: ({ children }: { children?: React.ReactNode }) => {
+            const text = React.Children.toArray(children)
+                .map((c) => (typeof c === "string" || typeof c === "number" ? String(c) : ""))
+                .join("");
+            const modelId = tableCellModelId(text);
+            return (
+                <td className="px-2.5 py-1.5 font-sans chat-text text-text-secondary">
+                    {modelId ? (
+                        <span className="inline-flex items-center gap-1.5">
+                            {providerIcon(modelId, 14)}
+                            {children}
+                        </span>
+                    ) : (
+                        children
+                    )}
+                </td>
+            );
+        },
         input: (props: React.InputHTMLAttributes<HTMLInputElement>) => {
             if (props.type !== "checkbox") return <input {...props} />;
             return (

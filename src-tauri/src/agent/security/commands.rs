@@ -25,8 +25,11 @@ const BLOCKED_PATTERNS: &[&str] = &[
     "pip install --user", "npm install -g",
     "sudo", "runas",
     "eval", "exec", "source /",
-    "powershell -enc", "powershell -e ",
-    "cmd /c del", "cmd /c rmdir",
+    "Stop-Process -Name node", "stop-process -name node",
+    "taskkill /im node.exe", "taskkill /im node",
+    "killall node", "pkill node", "pkill -f node",
+    "Stop-Process -Name app", "taskkill /im app.exe",
+    "killall Shape", "pkill Shape",
     // CVE-2026-26268 class: agent must not plant or retarget git hooks.
     ".git/hooks", ".git\\hooks",
     "git config core.hookspath", "git config --global core.hookspath",
@@ -123,6 +126,13 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
         }
     }
 
+    if kills_host_runtime(&cmd_lower) {
+        return CommandSafety::Blocked {
+            reason: "Killing all Node or Shape processes would close this app. Stop only the process this turn started (by PID), or change the port instead."
+                .to_string(),
+        };
+    }
+
     // Require approval for shell operators (chaining, redirection, substitution).
     if has_shell_metacharacters(&cmd_lower) {
         return CommandSafety::NeedsApproval {
@@ -194,8 +204,26 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
     }
 }
 
-/// Phrase patterns stay substring matches (`rm -rf /`). Short verbs (`eval`, `format`)
-/// must be whole tokens so `git format-patch` and `npm run evaluate` are not blocked.
+fn kills_host_runtime(cmd_lower: &str) -> bool {
+    let is_kill = cmd_lower.contains("stop-process")
+        || cmd_lower.contains("taskkill")
+        || cmd_lower.contains("killall")
+        || cmd_lower.contains("pkill");
+    if !is_kill {
+        return false;
+    }
+    let tokens: Vec<&str> = cmd_lower
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.'))
+        .filter(|t| !t.is_empty())
+        .collect();
+    tokens.iter().any(|tok| {
+        *tok == "node"
+            || *tok == "node.exe"
+            || *tok == "shape"
+            || *tok == "shape.exe"
+            || *tok == "app.exe"
+    })
+}
 fn blocked_pattern_matches(cmd_lower: &str, pattern: &str) -> bool {
     if pattern.chars().any(|c| c.is_ascii_whitespace() || c == '/' || c == '\\') {
         return cmd_lower.contains(pattern);
@@ -311,6 +339,22 @@ mod tests {
         ));
         assert!(matches!(
             check_command_safety("eval $payload"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("Stop-Process -Name node -Force"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("taskkill /F /IM node.exe"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("killall node"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("pkill node"),
             CommandSafety::Blocked { .. }
         ));
     }

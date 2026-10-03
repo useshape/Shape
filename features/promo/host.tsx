@@ -12,9 +12,10 @@ import { Icon } from "@/components/ui/icon";
 
 
 import { useProjectState } from "@/lib/backend";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { isWebProject } from "@/features/detection/lib/lib";
 import catalog from "@/content/promo-cards.json";
-import { SHAPE_API_BASE } from "@/lib/cloud/api";
+import { useRuntimeFlag } from "@/lib/runtime/store";
 import {
     loadSeenPromoIds,
     markPromoSeen,
@@ -50,6 +51,7 @@ export function PromoCardHost() {
     const pathname = usePathname();
     const router = useRouter();
     const { project_path } = useProjectState();
+    const promosOn = useRuntimeFlag("promo_cards", true);
     const [web, setWeb] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [seen, setSeen] = useState<string[]>([]);
@@ -99,7 +101,7 @@ export function PromoCardHost() {
         );
     }, [cards, dismissed, mounted, page, seen, web]);
 
-    if (!mounted || !card) return null;
+    if (!promosOn || !mounted || !card) return null;
 
     const close = () => {
         markPromoSeen(card.id);

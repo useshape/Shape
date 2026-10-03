@@ -1,0 +1,42 @@
+.wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    background: var(--surface-3, transparent);
+}
+
+.table {
+    width: 100%;
+    min-width: 12rem;
+    border-collapse: collapse;
+    text-align: start;
+}
+
+.th {
+    padding: 0.4rem 0.65rem;
+    font: inherit;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: start;
+    background: var(--surface-3);
+}
+
+.td {
+    padding: 0.45rem 0.65rem;
+    color: var(--text-secondary);
+    vertical-align: middle;
+}
+
+.tr + .tr .td {
+    border-top: 1px solid var(--border-subtle, color-mix(in srgb, currentColor 10%, transparent));
+}
+
+.cellInner {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.brand {
+    display: inline-flex;
+    flex-shrink: 0;
+}

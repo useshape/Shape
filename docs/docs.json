@@ -1,0 +1,61 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Shape",
+  "description": "Documentation for the Shape desktop IDE, agent, and account.",
+  "colors": {
+    "primary": "#111111",
+    "light": "#111111",
+    "dark": "#EDEDED"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": ["get-started/quickstart", "get-started/models"]
+      },
+      {
+        "group": "Agent",
+        "pages": ["agent/overview", "agent/plan", "agent/review", "agent/browser"]
+      },
+      {
+        "group": "Customize",
+        "pages": ["customize/plugins", "customize/mcp", "customize/slash-commands"]
+      },
+      {
+        "group": "Git",
+        "pages": ["git/commits", "git/github"]
+      },
+      {
+        "group": "Help",
+        "pages": [
+          "help/install",
+          "help/shortcuts",
+          "help/troubleshooting",
+          "help/faq",
+          "help/contact"
+        ]
+      },
+      {
+        "group": "Contributing",
+        "pages": [
+          "developing/overview",
+          "developing/architecture",
+          "developing/local-development",
+          "developing/agent-tools",
+          "developing/language-servers",
+          "developing/indexing-and-search",
+          "developing/client-trust",
+          "developing/tauri-ipc"
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      { "label": "Download", "href": "https://useshape.org/download" },
+      { "label": "Changelog", "href": "https://github.com/useshape/Shape/releases" }
+    ]
+  }
+}

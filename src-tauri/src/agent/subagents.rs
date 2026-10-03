@@ -146,18 +146,6 @@ pub fn take_parent_updates(conversation_id: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn push_parent_update(conversation_id: Option<&str>, text: String) {
-    let Some(id) = conversation_id.filter(|s| !s.is_empty()) else {
-        return;
-    };
-    if id.starts_with("mw-worker-") || id.starts_with("sub-run-") {
-        return;
-    }
-    if let Ok(mut g) = PARENT_UPDATES.lock() {
-        g.entry(id.to_string()).or_default().push(text);
-    }
-}
-
 fn emit_card(app: &AppHandle, payload: Value) {
     let _ = app.emit("agent-subagent", payload);
 }
@@ -273,7 +261,11 @@ pub fn spawn(
                 }),
             );
         }
-        push_parent_update(parent_conversation_id.as_deref(), clipped);
+        crate::agent::parent_resume::notify_parent_finished(
+            &app,
+            parent_conversation_id.as_deref(),
+            clipped,
+        );
     });
 
     id

@@ -33,6 +33,7 @@ import { parseWebSearchHits, WebSearchBlock, WebSearchTrail } from "./search";
 import { countChangedLines } from "@/lib/ui/diff-count";
 import { ChatEditDiff } from "./chat-diff";
 import { ActionLine, splitActionLabel } from "./action-line";
+import { joinThoughtLines } from "@/lib/chat/thought-text";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
@@ -243,7 +244,7 @@ function ThoughtStep({
     content: string;
     isActive?: boolean;
 }) {
-    const trimmed = content.trim();
+    const trimmed = joinThoughtLines(content).trim();
     if (!trimmed) return null;
     if (isActive) return <ActionLine action="Thinking" shimmer />;
 

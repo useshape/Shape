@@ -6,6 +6,7 @@ pub mod paths;
 pub mod process;
 pub mod result;
 pub mod state;
+pub mod webview_recovery;
 pub mod website_url;
 #[cfg(windows)]
 pub mod windows_notifications;

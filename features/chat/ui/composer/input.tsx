@@ -77,6 +77,7 @@ import {
 import type { BrowserPickedElement } from "@/lib/backend/types";
 import { registerElementMention } from "@/lib/chat/element-mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
+import { revealComposerCaret, syncComposerOverlayScroll } from "@/lib/chat/composer-scroll";
 import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
 import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins/api";
 import { PluginLogo } from "@/components/ui/plugin-logo";
@@ -95,6 +96,8 @@ import { MultiworkAgentChips, getWorkers, isMultiworkMode, subscribeMultiwork } 
 import { commands } from "@/lib/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
+import { ReasoningEffortSlider, effortDisplayLabel } from "./reasoning-effort";
+export type { ReasoningEffort } from "./reasoning-effort";
 
 type ChatInputProps = {
     inputValue: string;
@@ -140,21 +143,6 @@ type ChatInputProps = {
     variant?: "default" | "empty";
 };
 
-export type ReasoningEffort = "low" | "high" | "ultra" | "max";
-
-const EFFORT_OPTIONS: { id: ReasoningEffort; label: string }[] = [
-    { id: "low", label: "Low" },
-    { id: "high", label: "Medium" },
-    { id: "ultra", label: "High" },
-    { id: "max", label: "Max" },
-];
-
-function effortLabel(id: ReasoningEffort): string {
-    return EFFORT_OPTIONS.find((o) => o.id === id)?.label ?? "Low";
-}
-
-
-
 function formatContextWindow(raw?: string): string {
     const t = (raw ?? "").trim();
     if (!t) return "";
@@ -179,7 +167,7 @@ const ModelTooltip = ({
 }) => {
     const isAuto = model.id === "auto" || model.id === "openrouter/auto";
     const ctx = formatContextWindow(model.contextWindow);
-    const effortName = effortLabel(effort).toLowerCase();
+    const effortName = effortDisplayLabel(effort).toLowerCase();
 
     return (
         <div className="flex flex-col gap-1 min-w-[220px] max-w-[280px] p-3 select-none">
@@ -1025,6 +1013,9 @@ export function ChatInput({
         if (!textarea) return;
         textarea.style.height = "24px";
         textarea.style.overflowY = "hidden";
+        textarea.style.overflowX = "auto";
+        revealComposerCaret(textarea);
+        syncComposerOverlayScroll(textarea, mentionOverlayRef.current);
     }, [inputValue]);
 
     React.useEffect(() => {
@@ -1210,7 +1201,7 @@ export function ChatInput({
         multiSelectModels && workerExtra.length > 0
             ? `${modelNameBase} +${workerExtra.length}`
             : modelNameBase;
-    const modelTriggerLabel = [modelName, effortLabel(reasoningEffort), fastMode ? "Fast" : null]
+    const modelTriggerLabel = [modelName, effortDisplayLabel(reasoningEffort), fastMode ? "Fast" : null]
         .filter(Boolean)
         .join(" ");
     const providerOrder = React.useMemo(() => {
@@ -1541,7 +1532,7 @@ export function ChatInput({
                         <div
                             ref={mentionOverlayRef}
                             aria-hidden
-                            className="pointer-events-none absolute inset-0 z-0 flex items-center overflow-hidden whitespace-pre text-sm font-medium leading-6 text-text-primary no-scrollbar"
+                            className="pointer-events-none absolute inset-0 z-0 overflow-x-auto overflow-y-hidden whitespace-pre text-sm font-medium leading-6 text-text-primary no-scrollbar"
                         >
                             {(() => {
                                 const mentionRs = mentionRanges(inputValue);
@@ -1609,8 +1600,7 @@ export function ChatInput({
                                         }
                                     }}
                                     onScroll={(e) => {
-                                        const overlay = mentionOverlayRef.current;
-                                        if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
+                                        syncComposerOverlayScroll(e.currentTarget, mentionOverlayRef.current);
                                     }}
                                     placeholder=""
                                     aria-label={
@@ -1619,7 +1609,7 @@ export function ChatInput({
                                             : COMPOSER_HINTS[0]
                                     }
                                     rows={1}
-                                    className="relative z-[1] h-6 min-h-6 w-full flex-1 resize-none overflow-hidden border-none bg-transparent text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-nowrap"
+                                    className="relative z-[1] h-6 min-h-6 w-full flex-1 resize-none overflow-x-auto overflow-y-hidden border-none bg-transparent text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-nowrap no-scrollbar"
                                     style={{ caretColor: "var(--text-primary)" }}
                                 />
                             </ContextMenuTrigger>
@@ -1769,7 +1759,7 @@ export function ChatInput({
                                         {isApiModel(modelInfo) ? (
                                             <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
                                         ) : null}
-                                        <SwapText value={effortLabel(reasoningEffort)} />
+                                        <SwapText value={effortDisplayLabel(reasoningEffort)} />
                                         <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60 icon-md" />
                                     </div>
                                 </Button>
@@ -1779,25 +1769,15 @@ export function ChatInput({
                                     <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
                                         <span className="text-sm text-text-primary">Effort</span>
                                         <span className="flex min-w-0 items-center gap-1 text-sm text-text-muted">
-                                            <SwapText value={effortLabel(reasoningEffort)} />
+                                            <SwapText value={effortDisplayLabel(reasoningEffort)} />
                                         </span>
                                     </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-40">
-                                        {EFFORT_OPTIONS.map((opt) => (
-                                            <DropdownMenuItem
-                                                key={opt.id}
-                                                onClick={() => setReasoningEffort(opt.id)}
-                                                className={cn(
-                                                    "flex cursor-pointer items-center",
-                                                    reasoningEffort === opt.id && "bg-panel-hover",
-                                                )}
-                                            >
-                                                <span className="flex-1 text-sm">{opt.label}</span>
-                                                {reasoningEffort === opt.id ? (
-                                                    <Icon icon={Checkmark20Regular} />
-                                                ) : null}
-                                            </DropdownMenuItem>
-                                        ))}
+                                    <DropdownMenuSubContent className="w-[280px] p-2">
+                                        <ReasoningEffortSlider
+                                            modelName={modelName}
+                                            value={reasoningEffort}
+                                            onCommit={setReasoningEffort}
+                                        />
                                     </DropdownMenuSubContent>
                                 </DropdownMenuSub>
 

@@ -13,7 +13,7 @@ import { Icon } from "@/components/ui/icon";
 
 import { Tooltip } from "@/components/ui/tooltip";
 import { commands, useProjectState } from "@/lib/backend";
-import { cn } from "@/lib/utils";
+import { useRuntimeFlag } from "@/lib/runtime/store";
 import { isWebProject } from "@/features/detection/lib/lib";
 import { DesignInspectOverlay } from "../design/inspect-bar";
 import {
@@ -50,6 +50,7 @@ export default function PreviewPanel({
     const { project_path } = useProjectState();
     const [webProject, setWebProject] = useState<boolean | null>(null);
     const [designLocal, setDesignLocal] = useState(false);
+    const designModeFlag = useRuntimeFlag("design_mode", true);
     const designOn = design ?? designLocal;
     const setDesignOn = useCallback(
         (next: boolean | ((prev: boolean) => boolean)) => {
@@ -83,9 +84,10 @@ export default function PreviewPanel({
     }, [project_path]);
 
     const localSite = isLocalPreviewUrl(currentUrl);
-    const designReady = webProject === true && localSite;
-    const designTooltip =
-        webProject === false
+    const designReady = designModeFlag && webProject === true && localSite;
+    const designTooltip = !designModeFlag
+        ? "Design mode is off."
+        : webProject === false
             ? "Design mode is for websites. This project doesn't look like a web app."
             : !localSite
               ? "Open the running local site in Browser to use Design mode."
@@ -288,7 +290,7 @@ export default function PreviewPanel({
                                     ? "text-accent"
                                     : "text-text-muted hover:text-text-primary",
                             )}
-                            disabled={!designReady}
+                            disabled={!designReady || !designModeFlag}
                             onClick={() => setDesignOn((v) => !v)}
                             aria-label={designTooltip}
                         >
