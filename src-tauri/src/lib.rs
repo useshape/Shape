@@ -133,6 +133,7 @@ pub fn run() {
             #[cfg(windows)]
             crate::core::windows_notifications::init();
             crate::core::mic::allow_microphone(app.handle());
+            crate::core::webview_recovery::install(app.handle());
             crate::browser::surface::install(app.handle());
 
             // Initialize menu

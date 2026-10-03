@@ -40,7 +40,6 @@ import {
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
 import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat/mentions";
 import { buildPlanBuildMessage } from "@/lib/chat/continue-action";
-import { isolatePlanBranch } from "@/lib/plan/branch";
 import { listProjectRuleFiles, loadProjectRules } from "@/lib/workspace/rules";
 import { isWorkspaceTrusted } from "@/lib/workspace/trust";
 import { clearAllDesignPreviewSessions } from "@/lib/agent-preview/store";
@@ -1141,19 +1140,13 @@ export function useChatSession() {
             if (!custom.detail?.path) return;
             if (isLoadingRef.current) return;
             setSelectedMode("Code");
-            void (async () => {
-                const branch = await isolatePlanBranch(project_path, custom.detail.title);
-                const extra = branch
-                    ? `\n\nStay on git branch \`${branch}\`. Keep this work isolated there.`
-                    : "";
-                void handleSendMessageRef.current(
-                    `${buildPlanBuildMessage(custom.detail.path, custom.detail.title)}${extra}`,
-                );
-            })();
+            void handleSendMessageRef.current(
+                buildPlanBuildMessage(custom.detail.path, custom.detail.title),
+            );
         };
         window.addEventListener("shape-build-plan", handleBuildPlan);
         return () => window.removeEventListener("shape-build-plan", handleBuildPlan);
-    }, [project_path]);
+    }, []);
 
     React.useEffect(() => {
         const handleInsertPrompt = (e: Event) => {
@@ -1376,6 +1369,28 @@ export function useChatSession() {
                 else unlisteners.push(fn);
             });
         };
+
+        register(
+            listen<{ conversationId?: string; message?: string }>("parent_resume", (event) => {
+                const cid = event.payload?.conversationId?.trim();
+                const message = event.payload?.message;
+                if (!cid || !message) return;
+                void (async () => {
+                    if (conversationIdRef.current !== cid) {
+                        try {
+                            await commands.loadConversation(cid);
+                            setConversationId(cid);
+                            setCurrentConversationId(cid);
+                            setActiveChatTabId(cid);
+                        } catch {
+                            return;
+                        }
+                    }
+                    if (isLoadingRef.current) return;
+                    await handleSendMessageRef.current(message);
+                })();
+            }),
+        );
 
         register(
             listen<{ title?: string; conversationId?: string }>("chat_title", (event) => {

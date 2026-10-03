@@ -18,7 +18,7 @@
 
 pub fn resolve(original_text: &str, code_edit_text: &str) -> Result<String, String> {
     let original_text = original_text.replace("\r\n", "\n");
-    let code_edit_text = code_edit_text.replace("\r\n", "\n");
+    let code_edit_text = strip_edit_fences(&code_edit_text.replace("\r\n", "\n"));
 
     let blocks = parse_blocks(&code_edit_text);
     if blocks.is_empty() {
@@ -221,6 +221,18 @@ struct EditBlock<'a> {
     replace: Vec<&'a str>,
 }
 
+fn strip_edit_fences(edit_text: &str) -> String {
+    let trimmed = edit_text.trim();
+    let mut lines: Vec<&str> = trimmed.lines().collect();
+    if lines.first().is_some_and(|l| l.trim_start().starts_with("```")) {
+        lines.remove(0);
+    }
+    if lines.last().is_some_and(|l| l.trim() == "```") {
+        lines.pop();
+    }
+    lines.join("\n")
+}
+
 fn parse_blocks<'a>(edit_text: &'a str) -> Vec<EditBlock<'a>> {
     let mut blocks = Vec::new();
     let lines: Vec<&str> = edit_text.lines().collect();
@@ -344,5 +356,14 @@ mod tests {
         assert!(!has_incomplete_search_blocks(
             "<<<<<<< SEARCH\nfoo\n=======\nbar\n>>>>>>> REPLACE\n"
         ));
+    }
+
+    #[test]
+    fn incomplete_block_does_not_apply() {
+        let orig = "{\n  \"name\": \"isolated-app\"\n}\n";
+        let edit = "<<<<<<< SEARCH\n  \"name\": \"isolated-app\"\n=======\n  \"name\": \"changed\"\n";
+        assert!(resolve(orig, edit).is_err());
+        assert_eq!(resolve(orig, edit).unwrap_err().contains("Incomplete"), true);
+        assert!(!has_incomplete_search_blocks("no markers here"));
     }
 }

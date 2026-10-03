@@ -25,6 +25,11 @@ export function setChatGenerating(chatId: string | null | undefined, generating:
     }
 }
 
+export function resetGeneratingChatsForTests() {
+    generatingIds.clear();
+    emit();
+}
+
 function subscribe(cb: () => void) {
     listeners.add(cb);
     return () => {
@@ -51,22 +56,22 @@ export function useIsChatGenerating(chatId: string | null | undefined): boolean 
     return ids.has(chatId);
 }
 
+export function isChatGenerating(chatId: string | null | undefined): boolean {
+    if (!chatId) return false;
+    return generatingIds.has(chatId);
+}
+
 export function hasGeneratingChats(): boolean {
     return generatingIds.size > 0;
 }
 
-/** Keep the active chat's generating flag in sync with session loading. */
+/** Optimistic: mark generating while this chat is streaming. Clears come from chat_complete. */
 export function useSyncChatGenerating(
     chatId: string | null | undefined,
     isLoading: boolean,
 ) {
     useEffect(() => {
-        if (!chatId) return;
-        setChatGenerating(chatId, isLoading);
-        return () => {
-            // Only clear when leaving a non-loading chat. If we unmount mid-generation
-            // (project switch / remount), chat_complete / chat_started own the flag.
-            if (!isLoading) setChatGenerating(chatId, false);
-        };
+        if (!chatId || !isLoading) return;
+        setChatGenerating(chatId, true);
     }, [chatId, isLoading]);
 }

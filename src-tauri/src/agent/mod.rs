@@ -7,6 +7,7 @@ pub mod media_stash;
 pub mod model_router;
 pub mod models;
 pub mod multiwork;
+pub mod parent_resume;
 pub mod prompts;
 pub mod search;
 pub mod security;

@@ -38,3 +38,21 @@ pub fn family_prompt(family: ModelFamily) -> &'static str {
         ModelFamily::Other => FAMILY_DEFAULT_MD,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plan_md_stops_after_save() {
+        assert!(PLAN_MD.contains("Do not say the user wants you to continue"));
+        assert!(PLAN_MD.contains("Wait until they click **Build**"));
+    }
+
+    #[test]
+    fn system_md_forbids_weakening_tests() {
+        assert!(SYSTEM_MD.contains("Never delete, skip, ignore, or weaken tests"));
+        assert!(SYSTEM_MD.contains("Do not create a git branch unprompted"));
+        assert!(SYSTEM_MD.contains("Never `Stop-Process -Name node`"));
+    }
+}

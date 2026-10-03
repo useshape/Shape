@@ -16,6 +16,7 @@ import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
 import { displayPlanName, parsePlanMarkdown, splitPlanDocument, type PlanPreview } from "@/lib/plan/preview";
 import { ChatMarkdown } from "@/features/chat/ui/md/view";
+import { freezeActiveSteps, todoCountLabel } from "@/lib/chat/planning-block";
 import { Button } from "@/components/ui/button";
 import { Collapse } from "./collapse";
 import { CalendarCheckmark24Filled } from "@fluentui/react-icons";
@@ -35,12 +36,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
 }) {
     const [isOpen, setIsOpen] = React.useState(totalCount <= 5);
     const displaySteps = React.useMemo(
-        () =>
-            steps.map((step) =>
-                !isGenerating && step.status === "active"
-                    ? { ...step, status: "pending" as const }
-                    : step,
-            ),
+        () => freezeActiveSteps(steps, isGenerating),
         [steps, isGenerating],
     );
     const active = displaySteps.find((s) => s.status === "active");
@@ -63,24 +59,25 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
                 <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
                     <Icon icon={TaskListSquareLtr20Regular} className="icon-sm" />
                 </span>
-                <span className="truncate text-sm font-medium text-text-primary">
-                    {completedCount} of {totalCount} done
+                <span className="truncate text-sm font-medium text-text-primary">To-dos</span>
+                <span className="ms-auto shrink-0 text-sm tabular-nums text-text-muted">
+                    {todoCountLabel(completedCount, totalCount)}
                 </span>
             </button>
 
             <Collapse open={visibleSteps.length > 0}>
-                <div className="flex flex-col gap-1 px-2 pb-2">
+                <div className="flex flex-col px-2 pb-2">
                     {visibleSteps.map((step, i) => (
-                        <div key={`${step.label}-${i}`} className="flex items-center gap-2">
+                        <div key={`${step.label}-${i}`} className="flex h-7 items-center gap-2">
                             <span className="flex size-4 shrink-0 items-center justify-center">
                             {step.status === "done" ? (
-                                <Icon icon={CheckmarkCircle20Filled} className="icon-sm text-success" />
+                                <Icon icon={CheckmarkCircle20Filled} className="size-4 text-success" />
                             ) : step.status === "active" ? (
-                                <span className="size-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+                                <span className="size-4 rounded-full border-2 border-accent border-t-transparent animate-spin" />
                             ) : step.status === "cancelled" ? (
-                                <Icon icon={Dismiss20Regular} className="icon-sm text-text-disabled" />
+                                <Icon icon={Dismiss20Regular} className="size-4 text-text-disabled" />
                             ) : (
-                                <span className="size-3.5 rounded-full border border-text-muted/55" />
+                                <span className="size-4 rounded-full border border-text-muted/55" />
                             )}
                             </span>
                             <span className={cn(

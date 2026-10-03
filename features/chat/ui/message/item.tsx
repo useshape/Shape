@@ -1,4 +1,4 @@
-import { ArrowUndo20Regular } from "@fluentui/react-icons/headless/svg/arrow-undo";
+import { ArrowShuffle24Regular } from "@fluentui/react-icons/headless/svg/arrow-shuffle";
 import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-fork";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
@@ -6,7 +6,6 @@ import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
-import { Person20Regular } from "@fluentui/react-icons/headless/svg/person";
 
 import React from "react";
 import { cn } from "@/lib/utils";
@@ -284,7 +283,7 @@ function MessageSentTime({ timestamp }: { timestamp: number }) {
         <Tooltip content={formatSentExact(timestamp)} side="top" delayDuration={200}>
             <time
                 dateTime={new Date(toTimestampMs(timestamp)).toISOString()}
-                className="cursor-default px-1 text-sm text-text-muted"
+                className="pointer-events-none cursor-default px-1 text-sm text-text-muted opacity-0 transition-opacity group-hover/msg:pointer-events-auto group-hover/msg:opacity-100"
             >
                 {formatSentClock(timestamp)}
             </time>
@@ -414,7 +413,7 @@ function ChatMessageItemInner({
             <ContextMenuTrigger asChild>
             <div
                 className={cn(
-                    "relative mb-2 flex w-full select-text justify-end",
+                    "group/msg relative mb-2 flex w-full select-text justify-end",
                     !fullWidthBubbles && "pl-10",
                 )}
                 tabIndex={0}
@@ -449,17 +448,17 @@ function ChatMessageItemInner({
                                 </div>
                             </div>
                         </UserMessageCard>
-                        <div className={cn("flex items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100", fullWidthBubbles && "justify-end")}>
+                        <div className="flex w-fit items-center gap-0.5 self-end select-none opacity-0 transition-opacity group-hover:opacity-100">
                             <MessageSentTime timestamp={timestamp} />
                             <Tooltip content="Copy Message" side="top">
-                                <button onClick={handleCopy} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon icon={Clipboard20Regular} />
-                                </button>
+                                <Button variant="ghost" size="icon" onClick={handleCopy}>
+                                    <Icon icon={Clipboard20Regular} className="icon-md" />
+                                </Button>
                             </Tooltip>
                             <Tooltip content="Restore to this checkpoint" side="top">
-                                <button onClick={() => onRestore?.(index)} className="rounded-md p-1 text-text-muted hover:text-text-primary">
-                                    <Icon icon={ArrowUndo20Regular} />
-                                </button>
+                                <Button variant="ghost" size="icon" onClick={() => onRestore?.(index)}>
+                                    <Icon icon={ArrowShuffle24Regular} className="icon-md" />
+                                </Button>
                             </Tooltip>
                         </div>
                     </div>
@@ -509,7 +508,7 @@ function ChatMessageItemInner({
         <ContextMenu>
         <ContextMenuTrigger asChild>
         <div
-            className="group relative z-10 mb-2 flex w-full select-text flex-col gap-1"
+            className="group/msg group relative z-10 mb-2 flex w-full select-text flex-col gap-1"
             tabIndex={0}
             onKeyDown={handleKeyDown}
         >
@@ -555,10 +554,7 @@ function ChatMessageItemInner({
                 </div>
             </div>
             {!isGenerating && (
-                <div className="flex items-center gap-0.5 select-none">
-                    <span className="ml-auto opacity-0 transition-opacity group-hover:opacity-100">
-                        <MessageSentTime timestamp={timestamp} />
-                    </span>
+                <div className="flex w-fit items-center gap-0.5 self-start select-none">
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
                             <Icon icon={Clipboard20Regular} />
@@ -682,6 +678,7 @@ function ChatMessageItemInner({
                         </DropdownMenuContent>
                     </DropdownMenu>
                     ) : null}
+                    <MessageSentTime timestamp={timestamp} />
                 </div>
             )}
         </div>

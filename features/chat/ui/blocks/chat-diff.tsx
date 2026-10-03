@@ -11,7 +11,7 @@ import {
 function DiffRows({ rows }: { rows: UnifiedDiffRow[] }) {
     if (rows.length === 0) return null;
     return (
-        <div className="mt-1 max-h-48 w-full overflow-auto font-mono text-sm leading-5">
+        <div className="relative mt-1 mb-1 max-h-56 w-full overflow-auto squircle-2xl border border-border-subtle bg-transparent px-1.5 py-2 font-mono text-sm leading-6">
             {rows.map((row, i) => {
                 if (row.type === "hunk") return null;
                 const num = row.type === "remove" ? row.oldNum : row.newNum ?? row.oldNum;

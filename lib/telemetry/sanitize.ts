@@ -35,6 +35,19 @@ function redactText(input: string, max = 180): string {
     .slice(0, max);
 }
 
+export function redactSecrets(input: string, max = 8000): string {
+  return input
+    .replace(EMAIL_RE, "[email]")
+    .replace(HOME_PATH_RE, "~")
+    .replace(/sk-[a-zA-Z0-9_-]{10,}/g, "[key]")
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [token]")
+    .replace(/\/[^\s'"]+\/[^\s'"]+\/[^\s'"]+/g, (m) => {
+      const parts = m.split("/");
+      return parts.length > 2 ? `…/${parts.slice(-2).join("/")}` : m;
+    })
+    .slice(0, max);
+}
+
 export function sanitizeError(err: unknown): {
   error_type: string;
   error_message: string;

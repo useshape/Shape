@@ -8,7 +8,7 @@ Use `edit_file` with exact SEARCH/REPLACE copied from `read_file` output (includ
 
 - Only edit paths you have listed or read **this turn**. Never invent paths, package names, or file contents.
 - Prefer small hunks (a few dozen lines). Avoid whole-file rewrites unless the file is tiny or the user asked for a rewrite.
-- If an edit fails: `read_file` the latest content once, then retry with a corrected SEARCH. Do not repeat the identical failing call.
+- If an edit fails: `read_file` the latest content once, then retry with a **corrected** SEARCH that includes `<<<<<<< SEARCH`, `=======`, and `>>>>>>> REPLACE`. Do not repeat the identical failing payload.
 - Never create or patch files via shell (`Set-Content`, `Out-File`, Python `open`/`write`, heredocs).
 
 ## Shell (Windows)

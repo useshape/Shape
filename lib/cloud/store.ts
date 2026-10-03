@@ -14,6 +14,7 @@ import {
 } from "./api";
 import type { ShapeAuthState, ShapeTier } from "./types";
 import { clearShapeCatalog, refreshShapeCatalog } from "@/lib/catalog/store";
+import { refreshShapeRuntime } from "@/lib/runtime/store";
 import { identifyTelemetryUser } from "@/lib/telemetry";
 
 const STORAGE_KEY = "shape-auth-token";
@@ -416,6 +417,7 @@ async function applyToken(token: string | null, allowRefresh = true) {
     );
     if (account.tier !== prevTier || !cached) {
       void refreshShapeCatalog(token).catch(() => undefined);
+      void refreshShapeRuntime({ userId: account.id, tier: account.tier }).catch(() => undefined);
     }
   } catch (err) {
     const isAuthError =
@@ -609,6 +611,7 @@ export async function initShapeAuth() {
     clearPendingOAuth();
   }
   void refreshShapeCatalog(token).catch(() => undefined);
+  void refreshShapeRuntime().catch(() => undefined);
   await applyToken(token);
 
   // Resume PKCE after rebuild/reload while the browser login is still in flight.

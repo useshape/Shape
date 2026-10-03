@@ -459,6 +459,21 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
+    crate::agent::parent_resume::set_parent_turn_active(conversation_id.as_deref(), true);
+    struct ParentTurnGuard<'a> {
+        app: &'a tauri::AppHandle,
+        id: Option<String>,
+    }
+    impl Drop for ParentTurnGuard<'_> {
+        fn drop(&mut self) {
+            crate::agent::parent_resume::set_parent_turn_active(self.id.as_deref(), false);
+            crate::agent::parent_resume::schedule_wake_if_idle(self.app, self.id.as_deref());
+        }
+    }
+    let _parent_guard = ParentTurnGuard {
+        app: config.app_handle,
+        id: conversation_id.clone(),
+    };
 
     'outer: loop {
         if config.cancel.is_cancelled() {
@@ -479,7 +494,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         config.proxy_ctx.refresh_request_id();
 
         if let Some(cid) = conversation_id.as_deref() {
-            let updates = crate::agent::subagents::take_parent_updates(cid);
+            let mut updates = crate::agent::subagents::take_parent_updates(cid);
+            updates.extend(crate::agent::parent_resume::take_pending(cid));
             if !updates.is_empty() {
                 let body = updates.join("\n\n");
                 config.api_messages.push(json!({
