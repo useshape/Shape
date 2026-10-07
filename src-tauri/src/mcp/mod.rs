@@ -293,6 +293,21 @@ impl McpState {
         if hits.is_empty() {
             return Ok("No connected MCP tools matched. Connect a server in Settings, or broaden the query.".into());
         }
+        let hints: HashMap<String, String> = {
+            let configs = self.configs.lock().map_err(|e| e.to_string())?;
+            configs
+                .iter()
+                .filter_map(|c| {
+                    let hint = c.skill_hint.as_ref()?.trim();
+                    if hint.is_empty() {
+                        None
+                    } else {
+                        Some((c.id.clone(), hint.to_string()))
+                    }
+                })
+                .collect()
+        };
+        let mut hinted = std::collections::HashSet::new();
         let mut out = String::new();
         for tool in hits {
             let schema = serde_json::to_string(&tool.input_schema).unwrap_or_else(|_| "{}".into());
@@ -302,9 +317,20 @@ impl McpState {
             } else {
                 schema
             };
+            let guidance = if hinted.insert(tool.server_id.clone()) {
+                hints
+                    .get(&tool.server_id)
+                    .map(|hint| format!("\nguidance: {hint}"))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
             out.push_str(&format!(
-                "name: {}\nserver: {}\n{}\nargs: {}\n---\n",
-                tool.qualified_name, tool.server_name, tool.description.trim(), schema
+                "name: {}\nserver: {}\n{}{guidance}\nargs: {}\n---\n",
+                tool.qualified_name,
+                tool.server_name,
+                tool.description.trim(),
+                schema
             ));
         }
         Ok(out)

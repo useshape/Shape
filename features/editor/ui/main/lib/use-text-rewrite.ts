@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import { commands } from "@/lib/backend/commands";
-import { getSettings } from "@/lib/settings";
 import { checkUsage } from "@/lib/cloud/api";
 import { getShapeAccessToken, refreshShapeAuth, useShapeAuth } from "@/lib/cloud/store";
 import { notificationStore } from "@/features/notifications";
@@ -58,19 +57,12 @@ export function useTextRewrite(model = "auto") {
             }
 
             const prompt = `${ACTION_PROMPTS[action]}\n\n${text}`;
-            const settings = getSettings();
             void captureTelemetry("ai_rewrite_started", {
                 action,
                 model,
                 selection_length_bucket: messageLengthBucket(text.length),
             });
-            const response = await commands.sendChatMessage(
-                prompt,
-                model,
-                "Ask",
-                settings.ai.customRules || undefined,
-                token,
-            );
+            const response = await commands.rewriteText(token, prompt);
 
             await refreshShapeAuth();
             void captureTelemetry("ai_rewrite_complete", { action, model });

@@ -16,6 +16,7 @@ pub struct DesignPreviewState {
 /// Live component examples waiting for the user to pick one (`render_design_previews`).
 #[derive(Debug, Clone)]
 pub struct PendingDesignPick {
+    #[allow(dead_code)]
     pub id: String,
     pub concepts: Vec<DesignPickConcept>,
 }
@@ -147,7 +148,7 @@ pub struct Conversation {
     /// Hidden from the sidebar; still opens from the command palette.
     #[serde(default)]
     pub archived: bool,
-    /// Regular chat vs Multiwork session.
+    /// Conversation surface. Legacy `"multiwork"` values are treated as `"chat"`.
     #[serde(default = "default_conversation_kind")]
     pub kind: String,
 }
@@ -227,7 +228,7 @@ pub struct AgentState {
     pub current_project: Mutex<Option<String>>,
     pub conversations: Mutex<HashMap<String, Vec<Conversation>>>,
     pub current_conversation_id: Mutex<Option<String>>,
-    /// `chat` or `multiwork` for the active conversation.
+    /// Active coding conversation kind (`chat`).
     pub conversation_kind: Mutex<Option<String>>,
     pub cancellation_token: Mutex<CancellationToken>,
     /// Per-conversation cancel tokens so Stop only ends the chat you are looking at.
@@ -271,9 +272,6 @@ pub struct AgentState {
     pub file_checkpoints: Mutex<Vec<TurnCheckpoint>>,
     /// When true, `list_chats` / `read_chat` tools are offered to the model.
     pub chat_memory_enabled: AtomicBool,
-    /// Optional user OpenRouter / OpenAI keys (BYOK). When set, chat skips the Shape proxy.
-    pub byok_openrouter_key: Mutex<Option<String>>,
-    pub byok_openai_key: Mutex<Option<String>>,
     /// Ephemeral chat: history is not written to disk.
     pub incognito: AtomicBool,
     /// User-allowed model ids for `spawn_subagent` (never inherit the parent chat model).
@@ -319,8 +317,6 @@ impl AgentState {
             design_preview: Mutex::new(DesignPreviewState::default()),
             file_checkpoints: Mutex::new(Vec::new()),
             chat_memory_enabled: AtomicBool::new(false),
-            byok_openrouter_key: Mutex::new(None),
-            byok_openai_key: Mutex::new(None),
             incognito: AtomicBool::new(false),
             subagent_models: Mutex::new(vec!["auto".to_string()]),
             subagent_default_model: Mutex::new("auto".to_string()),
@@ -341,30 +337,6 @@ impl AgentState {
 
     pub fn set_chat_memory_enabled(&self, enabled: bool) {
         self.chat_memory_enabled.store(enabled, Ordering::SeqCst);
-    }
-
-    pub fn set_byok_keys(&self, openrouter: Option<String>, openai: Option<String>) {
-        let clean = |v: Option<String>| {
-            v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-        };
-        if let Ok(mut g) = self.byok_openrouter_key.lock() {
-            *g = clean(openrouter);
-        }
-        if let Ok(mut g) = self.byok_openai_key.lock() {
-            *g = clean(openai);
-        }
-    }
-
-    /// Prefer a key that matches the model. OpenAI ids hit api.openai.com when that
-    /// key is set. Auto uses OpenRouter if present, otherwise OpenAI.
-    pub fn byok_provider_for_model(&self, model: &str) -> Option<crate::agent::commands::streaming::LlmProvider> {
-        let openrouter = self.byok_openrouter_key.lock().ok().and_then(|g| g.clone());
-        let openai = self.byok_openai_key.lock().ok().and_then(|g| g.clone());
-        crate::agent::commands::streaming::select_byok_provider(
-            openrouter.as_deref(),
-            openai.as_deref(),
-            model,
-        )
     }
 
     /// Claim this conversation's in-flight slot. Another chat may already be running.
@@ -938,10 +910,8 @@ impl AgentState {
         if let Ok(mut guard) = self.design_preview.lock() {
             guard.options = None;
             guard.gate_active = false;
-            if guard.sandbox_session_id.is_none() {
-                guard.sandbox_session_id = Some(uuid::Uuid::new_v4().to_string());
-            }
         }
+        let _ = self.ensure_design_sandbox_session();
     }
 
     pub fn design_gate_blocks_writes(&self) -> bool {

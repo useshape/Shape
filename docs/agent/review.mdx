@@ -1,7 +1,39 @@
 ---
 title: Review
-description: Find the problem, then make a small fix.
+description: Find the cause, then make a small fix.
 order: 3
 ---
 
-Review looks for the cause of a problem, then makes a small fix. Use it for a bug, a regression, or a pass over something that feels risky.
+Use Review when something is broken, or when a change feels risky and you want a second look. It is not for rewriting a feature.
+
+The Review mark in the composer is the purple mask icon. Debug uses the purple bug with the block mark.
+
+## What it does
+
+Review looks for the cause first, then proposes a small fix. You still keep or skip the diff.
+
+It works best when you give it a signal:
+
+- A stack trace from the terminal.
+- A failing test name.
+- `@` on the file that throws.
+- The last change you made, in one sentence.
+
+“It doesn’t work” is not enough. Shape will guess, and the guess is often the wrong file.
+
+## How to run it
+
+1. Switch the composer to **Review**.
+2. Paste the error or point at the file.
+3. Read the finding in the thread. It should name the cause, not only restyle the code.
+4. Keep the fix if it is small and correct. Skip it if it refactors past the bug.
+
+## After a large edit
+
+After a multi-file change, you can run Review on the same thread and ask it to list what is actually wrong. That still lands as diffs you can keep or skip.
+
+Do not use Review as a formatter. If you want tests written, say that in Code. If you want a second pass on a pull request, say which PR. See [GitHub](/docs/git/github).
+
+## When to use Debug instead
+
+Use Debug when you are stepping through a running failure and you already know the area. Use Review when you want the agent to hunt the cause and keep the patch small.

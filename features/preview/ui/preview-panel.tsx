@@ -10,6 +10,7 @@ import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
 
 import { Tooltip } from "@/components/ui/tooltip";
 import { commands, useProjectState } from "@/lib/backend";

@@ -515,9 +515,7 @@ export const commands = {
         },
         reasoningEffort?: string,
         serviceTier?: string | null,
-        byok?: { openRouterApiKey?: string | null; openaiApiKey?: string | null },
         displayMessage?: string | null,
-        /** Multiwork worker model pool (orchestrator uses `model`). */
         models?: string[],
         conversationKind?: "chat" | "multiwork",
         /** Models subagents may use (user settings). Never inherit the parent chat model. */
@@ -541,8 +539,6 @@ export const commands = {
             pluginAutoAllow: executionPolicy?.pluginAutoAllow ?? null,
             reasoningEffort: reasoningEffort ?? null,
             serviceTier: serviceTier ?? null,
-            openrouterApiKey: byok?.openRouterApiKey ?? null,
-            openaiApiKey: byok?.openaiApiKey ?? null,
             displayMessage: displayMessage ?? null,
             models: models ?? null,
             conversationKind: conversationKind ?? null,
@@ -697,6 +693,8 @@ export const commands = {
         }),
     rewriteOpenFile: (accessToken: string, path: string, instruction: string) =>
         invokeCommand<string>("rewrite_open_file", { accessToken, path, instruction }),
+    rewriteText: (accessToken: string, prompt: string) =>
+        invokeCommand<string>("rewrite_text", { accessToken, prompt }),
     summarizePullRequest: (
         owner: string,
         repo: string,
@@ -842,11 +840,6 @@ export const commands = {
         invokeCommand<void>("set_index_embeddings", { enabled }),
     setChatMemoryEnabled: (enabled: boolean) =>
         invokeCommand<void>("set_chat_memory_enabled", { enabled }),
-    setByokKeys: (openrouterApiKey: string | null, openaiApiKey: string | null) =>
-        invokeCommand<void>("set_byok_keys", {
-            openrouterApiKey,
-            openaiApiKey,
-        }),
     setDiagnostics: (path: string, diagnostics: unknown[]) => invokeCommand<void>("set_diagnostics", { path, diagnostics }),
     ptyAvailableShells: () =>
         invokeCommand<import("./types").TerminalShellProfile[]>("pty_available_shells"),

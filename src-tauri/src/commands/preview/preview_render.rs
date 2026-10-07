@@ -284,13 +284,21 @@ pub async fn capture_html_preview_inner(
 
     let bundle_path = preview_dir.join(design_sandbox::PREVIEW_BUNDLE_FILENAME);
     let bundle_src = asset_url_for_path(&bundle_path)?.to_string();
+    let tailwind_path = preview_dir.join(design_sandbox::PREVIEW_TAILWIND_FILENAME);
+    let tailwind_src = asset_url_for_path(&tailwind_path)?.to_string();
 
     let png_path = preview_dir.join(format!("{preview_id}.png"));
 
     let mut document = if req.full_document.unwrap_or(false) {
         req.html.clone()
+    } else if req.react_sandbox.unwrap_or(false) {
+        design_sandbox::build_react_sandbox_html(
+            &req.html,
+            req.project_path.as_deref(),
+            req.use_project_tokens.unwrap_or(true),
+        )
     } else {
-        wrap_preview_html(
+        wrap_preview_html_public(
             &req.html,
             req.project_path.as_deref(),
             req.use_project_tokens.unwrap_or(true),
@@ -299,8 +307,6 @@ pub async fn capture_html_preview_inner(
     if document.contains(r#"src="bundle.js""#) {
         document = document.replace(r#"src="bundle.js""#, &format!(r#"src="{bundle_src}""#));
     }
-    let tailwind_path = preview_dir.join(design_sandbox::PREVIEW_TAILWIND_FILENAME);
-    let tailwind_src = asset_url_for_path(&tailwind_path)?.to_string();
     if document.contains(r#"src="tailwind-browser.js""#) {
         document = document.replace(
             r#"src="tailwind-browser.js""#,
@@ -378,18 +384,6 @@ pub async fn capture_html_preview_inner(
     })
 }
 
-fn wrap_preview_html(
-    body_html: &str,
-    project_path: Option<&str>,
-    use_project_tokens: bool,
-) -> String {
-    let project_css = if use_project_tokens {
-        load_project_css(project_path)
-    } else {
-        String::new()
-    };
-    design_sandbox::build_static_preview_html(body_html, &project_css)
-}
 
 fn load_project_css(project_path: Option<&str>) -> String {
     let Some(root) = project_path else {

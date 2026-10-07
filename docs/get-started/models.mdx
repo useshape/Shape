@@ -1,35 +1,44 @@
 ---
-title: Models and credits
-description: Plans, and what a named model costs.
+title: Models
+description: Auto is included. Named models spend credits on a paid plan.
 order: 2
 ---
 
-Auto is included on every plan. A named model spends credits. Unused credits do not carry over. Usage is on the [usage page](/dashboard/settings/usage).
+Every message uses a model. You pick it from the model menu in chat.
 
-| Plan | Price | Credits / month | Models |
-| --- | --- | --- | --- |
-| Free | $0 | Auto only | Auto |
-| Plus | $15 | 450 | Auto and every model below |
-| Pro | $50 | 1,500 | Auto and every model below |
-| Max | $150 | 4,500 | Auto and every model below |
+## Auto
 
-Rates are credits per million tokens (provider USD × 1.4 margin ÷ $0.02 per credit).
+Auto is included on every plan, including Free. Use it unless you have a reason to pick a named model.
 
-| Model | Provider | Input | Cache read | Output | Context | Plan |
-| --- | --- | --- | --- | --- | --- | --- |
-| Claude Opus 5.5 | Anthropic | 280 | 14 | 1,400 | 1M | Plus+ |
-| Claude Sonnet 5.5 | Anthropic | 140 | 14 | 700 | 1M | Plus+ |
-| Claude Haiku 4.5 | Anthropic | 70 | 7 | 350 | 200K | Plus+ |
-| GPT-5.6 Sol | OpenAI | 140 | 14 | 700 | 1M | Plus+ |
-| GPT-5.4 | OpenAI | 175 | 17.5 | 1,050 | 1M | Plus+ |
-| GPT-5.4 Mini | OpenAI | 52.5 | 5.25 | 315 | 400K | Plus+ |
-| Gemini 3.1 Pro | Google | 140 | 14 | 840 | 1M | Plus+ |
-| Gemini 3.8 Flash | Google | 52.5 | 5.25 | 262.5 | 1M | Plus+ |
-| Grok 4.7 | xAI | 140 | 35 | 420 | 500K | Plus+ |
-| GLM 5.3 | Z.ai | 98 | 9.8 | 308 | 1M | Plus+ |
-| GLM 5.3 Flash | Z.ai | 1.84 | 0.79 | 63 | 1M | Plus+ |
-| Qwen3 Coder Plus | Qwen | 45.5 | 9.1 | 227.5 | 1M | Plus+ |
-| Qwen3.8 Flash | Qwen | 10.5 | 1.12 | 32.9 | 1M | Plus+ |
-| MiniMax M2.7 | MiniMax | 14.7 | 2.94 | 58.8 | 200K | Plus+ |
-| Kimi K2.7 Code | Moonshot | 46.98 | 12.6 | 234.5 | 256K | Plus+ |
-| DeepSeek V3.2 | DeepSeek | 19.6 | 1.96 | 29.4 | 164K | Plus+ |
+Auto is the default. Leave it there for most work.
+
+## Named models
+
+Paid plans can pick a named model. Named models spend credits. Harder tasks and longer threads spend more.
+
+Credits reset each month. Unused credits do not carry over.
+
+If a named model is greyed out, the current plan does not include it. Change the plan on [Billing](/dashboard/settings/billing).
+
+## Plans
+
+| Plan | Price | What you get |
+| --- | --- | --- |
+| Free | $0 | Auto |
+| Plus | $15 / month | Auto and named models, 450 credits |
+| Pro | $50 / month | Auto and named models, 1,500 credits |
+| Max | $150 / month | Auto and named models, 4,500 credits |
+
+Change your plan on [Billing](/dashboard/settings/billing). Usage for the current period is on the same page.
+
+## How to choose
+
+- Everyday edits: Auto.
+- A large refactor or a long plan: a named model on a paid plan.
+- You are out of credits: Auto still runs on paid plans according to the current period. If send fails, wait for the reset or change plan.
+
+## What a credit is not
+
+A credit is not one message. One turn can spend a fraction of a credit or several, depending on how much context and work the model does.
+
+The usage graph on the dashboard shows credits over recent days. It does not show a number on each slice of the model chart.

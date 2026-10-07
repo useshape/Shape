@@ -1,50 +1,43 @@
 ---
 title: Local development
-description: Run the desktop app locally and point it at Cloud.
+description: Run the desktop app on your machine.
 order: 2
-icon: ri-terminal-box-line
 ---
 
-## Prerequisites
+You need Node.js 18 or newer, and a current Rust toolchain for [Tauri 2](https://v2.tauri.app/start/prerequisites/).
 
-- Node.js 18+
-- Rust (stable), with targets required by [Tauri 2](https://v2.tauri.app/start/prerequisites/)
+This is how you run a local build. It is not how you use Shape day to day. For that, install the app from [download](/download).
 
-## Install and run
+## Install dependencies
 
 ```bash
 npm install
+```
+
+Run this at the repo root the README names for the desktop app. If the monorepo has more than one package, follow that README, not this page, for the exact folder.
+
+## Run the app
+
+```bash
 npm run tauri:dev
 ```
 
-## Which Cloud URL does the IDE use?
+That opens the desktop app against your local build. The first run compiles Rust and takes longer.
 
-| Mode | Cloud URL |
-| --- | --- |
-| `npm run tauri:dev` | `NEXT_PUBLIC_SHAPE_WEBSITE_URL` from `.env`, else `http://localhost:3000` |
-| `npm run tauri:build` / GitHub release | Always `https://www.useshape.org` (`.env` ignored) |
+## Cloud while developing
 
-Copy `.env.example` to `.env` to change the dev target.
+A local build can edit files. It cannot sign in to Shape Cloud. Use an official installer if you need chat against a real account.
 
-The website that hosts Shape Cloud is a separate product. You only need its public URL — not the website source — to develop the desktop app.
+Do not expect a forked build to pass sign-in. That is expected, not a setup bug.
 
-## Useful scripts
+## Tests
 
-| Script | Purpose |
-| --- | --- |
-| `npm run tauri:dev` | Desktop development |
-| `npm run tauri:build` | Production Tauri build |
-| `npm run test` | Vitest |
-| `npm run test:rust` | Cargo tests |
-| `npm run test:all` | Frontend and Rust tests |
-| `npm run docs:index` | Rebuild the docs search index |
+```bash
+npm run test
+```
 
-## Cloud AI while developing
+`npm run test:all` also runs the Rust tests. Run the suite that matches the files you touched.
 
-Official release builds can use Shape Cloud AI. A local build can still edit files. Cloud AI stays off until you use an official installer from [download](/download). See [Troubleshooting](/docs/help/troubleshooting).
+## Sending the change
 
-## Related
-
-- [Overview](/docs/developing/overview)
-- [Client trust](/docs/developing/client-trust)
-- [Contributing](https://github.com/useshape/Shape/blob/main/CONTRIBUTING.md)
+Commit on a branch and open a pull request against `main`. Keep the diff focused. See [Overview](/docs/developing/overview).

@@ -5,6 +5,7 @@ pub mod cdp;
 #[cfg(windows)]
 pub mod devtools_dock;
 pub mod surface;
+pub mod webview_debug;
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};

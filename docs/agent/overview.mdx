@@ -1,13 +1,55 @@
 ---
 title: Agent
-description: Chat with the project and let it do the work.
+description: Chat with the open folder. Shape reads, answers, and can edit files.
 order: 1
 ---
 
-Chat with your project and let it handle the work.
+Chat sits next to your files. You describe the work. Shape reads the open folder, answers in the thread, and can edit files when you ask it to.
 
-Ask is useful for getting familiar with a codebase. Code can make changes and run commands. Plan helps with larger changes. Visual is for UI, and Review is for tracking down a problem and making a small fix.
+You stay in control of what is kept. Every edit shows a diff. You still commit with Git when you want a commit.
 
-When a file changes, review the diff and keep or undo it.
+## Modes
 
-`@` adds a file to the message. `/` runs a [slash command](/docs/customize/slash-commands).
+Switch the mode on the composer before you send. The mode applies to that message.
+
+- **Code** edits files and can run commands. This is the default for building.
+- **Ask** answers without changing the project. Use it to read a file, compare options, or explain an error.
+- **Plan** writes the approach first and waits. See [Plan](/docs/agent/plan).
+- **Visual** works on UI. Describe the screen, or pair it with the in-app [browser](/docs/agent/browser).
+- **Review** looks for a bug and proposes a small fix. See [Review](/docs/agent/review).
+
+If you send a Code request that is actually a question, Shape may still try to edit. Switch to Ask when you do not want files to move.
+
+## Attach a file
+
+Type `@` and pick a file or folder. That path goes with the message.
+
+Use `@` when:
+
+- You already know the file.
+- The name is common (`button.tsx` exists in more than one place).
+- You want Shape to stay inside one package of a monorepo.
+
+You can attach more than one. Keep the set small. Extra files add noise.
+
+## Saved prompts
+
+Type `/` to run a [slash command](/docs/customize/slash-commands). Use this for work you repeat: a commit message, a PR checklist, a test pass.
+
+## After a change
+
+Every file edit shows a diff in the thread.
+
+1. Read the diff.
+2. Keep it, skip it, or say what to change.
+3. Repeat until the thread is done.
+
+Shape does not push to GitHub on its own. Open [source control](/docs/git/commits) when you want a commit.
+
+## New chat
+
+Start a new chat when the topic changes. A long thread about one bug will confuse a later request about a different feature. `Ctrl+Shift+L` opens a new chat.
+
+## Outside accounts
+
+Chat can use a connected plugin (GitHub, Slack, Linear, and similar) or a local [MCP](/docs/customize/mcp) server. Connect those first, then mention the task in the message.

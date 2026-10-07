@@ -1,31 +1,30 @@
 ---
 title: Overview
-description: How the Shape repository is laid out and where to look first.
+description: How to send a change.
 order: 1
-icon: ri-folder-line
 ---
 
-Shape is a Tauri 2 desktop app. The UI is a Next.js app exported as static assets. The Rust backend owns commands, files, Git, the agent, and terminals.
+This section is for people changing Shape itself. Product how-tos for using the app are under [Docs](/docs/get-started/quickstart).
 
-## Bird's-eye view
+Fork the repo, make a focused change, and open a pull request against `main`.
 
-| Path | Role |
-| --- | --- |
-| `app/` | Routes for the workbench, settings, agent, and popout windows |
-| `features/` | Product surfaces — editor, chat, explorer, Git, terminal, preview/design mode, settings |
-| `lib/` | Shared TypeScript: backend wrappers, settings, auth |
-| `components/ui/` | Shared UI primitives |
-| `src-tauri/` | Rust crate, Tauri config, agent, Git, PTY |
-| `docs/` | User and contributor MDX |
-| `scripts/` | Preview runtime, docs index, version sync, release notes |
-| `tests/` | Vitest suites |
+## What you can do from a fork
 
-## Where to go next
+A fork cannot sign in to Shape Cloud. Official builds can. You can still run the app and edit files locally. Chat against a real account needs an official installer from [download](/download).
 
-- [Local development](/docs/developing/local-development) — run and build locally
-- [Architecture](/docs/developing/architecture) — frontend, shell, and Rust layers
-- [Tauri IPC](/docs/developing/tauri-ipc) — commands and events
-- [Agent tools](/docs/developing/agent-tools) — how chat tools are defined and dispatched
-- [Language servers](/docs/developing/language-servers) — editor has none; CodeMirror packs only
-- [Indexing and search](/docs/developing/indexing-and-search) — codebase search
-- [Client trust](/docs/developing/client-trust) — Cloud AI and server-side usage
+## Pull requests
+
+1. Keep the change small. One problem per PR.
+2. Say what you changed and how you tried it.
+3. Do not mix formatting with a behavior change.
+4. Do not add files we did not ask for (extra READMEs, generated dumps, editor screenshots).
+
+If you cannot run the desktop app, say so in the PR and describe what you did run (`npm run test`, and so on).
+
+## What this does not cover
+
+Internal build signing, the full file tree, and how the agent is wired are out of scope here. You do not need those to send a pull request.
+
+## Next
+
+[Run the app locally](/docs/developing/local-development).

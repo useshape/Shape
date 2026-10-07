@@ -13,7 +13,6 @@ import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-o
 import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
-import { PeopleChat24Filled } from "@fluentui/react-icons";
 import { Pin20Regular } from "@fluentui/react-icons/headless/svg/pin";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Eclipse } from "loading-dev";
@@ -70,12 +69,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import {
-    getAllWorkers,
-    openWorker,
-    subscribeMultiwork,
-    type MultiworkWorker,
-} from "@/features/multiwork";
-import {
     applySubagentEvent,
     getSubagents,
     openSubagent,
@@ -87,14 +80,13 @@ import { ScrollArea } from "@/components/ui/scroll";
 import { COLLECTION_GLYPH, CollectionDialog } from "./collection-dialog";
 
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
-type ChatFilter = "all" | "pinned" | "unread" | "multiwork" | "collection";
+type ChatFilter = "all" | "pinned" | "unread" | "collection";
 
 const SORT_KEY = "shape-sidebar-chat-sort";
 const FILTER_OPTIONS: { value: ChatFilter; label: string }[] = [
     { value: "all", label: "All sessions" },
     { value: "pinned", label: "Pinned" },
     { value: "unread", label: "Unread" },
-    { value: "multiwork", label: "Multiwork" },
 ];
 
 const SORT_OPTIONS: { value: ChatSort; label: string }[] = [
@@ -149,6 +141,7 @@ function HeaderIconBtn({
 
 function nestedDot(status: string, column?: string): string {
     if (status === "error") return "bg-error";
+    if (status === "cancelled") return "bg-text-muted";
     if (status === "done" || column === "done") return "bg-success";
     if (column === "review") return "bg-warning";
     return "bg-accent";
@@ -161,9 +154,7 @@ function ChatRow({
     active,
     pinned,
     unread,
-    multiwork,
     color,
-    workers,
     subagents,
     edge = "none",
     selecting = false,
@@ -177,9 +168,7 @@ function ChatRow({
     active: boolean;
     pinned: boolean;
     unread: boolean;
-    multiwork: boolean;
     color: ChatColor | null;
-    workers: MultiworkWorker[];
     subagents: SubagentCard[];
     /** Where this row sits inside a collection stack. */
     edge?: "none" | "only" | "first" | "mid" | "last";
@@ -192,7 +181,7 @@ function ChatRow({
     const [renaming, setRenaming] = useState(false);
     const [draft, setDraft] = useState(title);
     const [expanded, setExpanded] = useState(false);
-    const nestedCount = workers.length + subagents.length;
+    const nestedCount = subagents.length;
     const workerCount = useRef(0);
     if (workerCount.current !== nestedCount) {
         const appeared = workerCount.current === 0 && nestedCount > 0;
@@ -361,13 +350,6 @@ function ChatRow({
                                     {unread ? (
                                         <span className="size-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
                                     ) : null}
-                                    {!generating && multiwork ? (
-                                        <Icon
-                                            icon={PeopleChat24Filled}
-                                            className="text-text-muted"
-                                            style={{ ["--icon-size" as string]: "16px" }}
-                                        />
-                                    ) : null}
                                 </span>
                                 <span className={cn(
                                     "pointer-events-none absolute z-10 flex items-center opacity-0 group-hover/chat:pointer-events-auto group-hover/chat:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
@@ -446,28 +428,6 @@ function ChatRow({
             </ContextMenu>
             {expanded && nestedCount > 0 ? (
                 <div className="flex flex-col">
-                    {workers.map((worker) => (
-                        <button
-                            key={`w-${worker.id}`}
-                            type="button"
-                            onClick={() => {
-                                clearChatUnread(id);
-                                window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
-                                openWorker(worker.id);
-                            }}
-                            className={cn(
-                                "flex h-8 items-center gap-2 pr-2 pl-7 text-left text-sm text-text-secondary",
-                                color
-                                    ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
-                                    : "hover:bg-panel-hover hover:text-text-primary",
-                            )}
-                        >
-                            <span className={cn("size-1.5 shrink-0 rounded-full", nestedDot(worker.status, worker.column))} aria-hidden />
-                            <span className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-1.5rem),transparent)]">
-                                {worker.title}
-                            </span>
-                        </button>
-                    ))}
                     {subagents.map((card) => (
                         <button
                             key={`s-${card.id}`}
@@ -503,7 +463,6 @@ function SessionRow({
     pinned,
     unread,
     color,
-    workers,
     subagents,
     edge = "none",
     selecting,
@@ -517,7 +476,6 @@ function SessionRow({
     pinned: boolean;
     unread: boolean;
     color: ChatColor | null;
-    workers: MultiworkWorker[];
     subagents: SubagentCard[];
     edge?: "none" | "only" | "first" | "mid" | "last";
     selecting: boolean;
@@ -533,9 +491,7 @@ function SessionRow({
             active={chat.id === activeId}
             pinned={pinned}
             unread={unread}
-            multiwork={chat.kind === "multiwork"}
             color={color}
-            workers={workers}
             subagents={subagents}
             edge={edge}
             selecting={selecting}
@@ -551,7 +507,7 @@ export function ChatList({
 }: {
     onNewChat: () => void;
     /** @deprecated unified Sessions list — ignored */
-    listKind?: "chat" | "multiwork";
+    listKind?: "chat";
 }) {
     const { project_path } = useProjectState();
     const [chats, setChats] = useState<Conversation[]>([]);
@@ -573,7 +529,6 @@ export function ChatList({
         getUnreadChatIdsServer,
     );
     const collections = useSyncExternalStore(subscribeCollections, getCollections, getCollectionsServer);
-    const allWorkers = useSyncExternalStore(subscribeMultiwork, getAllWorkers, getAllWorkers);
     const allSubagents = useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
 
     useEffect(() => {
@@ -685,7 +640,6 @@ export function ChatList({
     const filtered = useMemo(() => {
         if (filter === "pinned") return visible.filter((c) => pinnedIds.has(c.id));
         if (filter === "unread") return visible.filter((c) => unreadIds.has(c.id));
-        if (filter === "multiwork") return visible.filter((c) => c.kind === "multiwork");
         if (filter === "collection" && collectionFilter) {
             const ids = new Set(collections.find((c) => c.id === collectionFilter)?.chatIds ?? []);
             return visible.filter((c) => ids.has(c.id));
@@ -722,7 +676,6 @@ export function ChatList({
         unread: unreadIds.has(chat.id),
         color,
         edge,
-        workers: allWorkers.filter((worker) => worker.parentId === chat.id),
         subagents: allSubagents.filter((card) => card.parentId === chat.id),
         selecting: selectedIds.length > 0,
         selected: selected.has(chat.id),

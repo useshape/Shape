@@ -3,23 +3,15 @@
 import { GithubMark } from "@/components/ui/github-mark";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
-import { People20Regular } from "@fluentui/react-icons/headless/svg/people";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
 
-import { useSyncExternalStore } from "react";
 import { type IconGlyph, Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { useProjectState } from "@/lib/backend";
 import { useShapeAuth } from "@/lib/cloud/store";
-import {
-    isMultiworkMode,
-    resetMultiworkSession,
-    setMultiworkMode,
-    subscribeMultiwork,
-} from "@/features/multiwork";
 import { ChatList } from "./chats";
 import { AccountMenu, ProfileAvatar } from "./menu";
 import { ChatHistoryMenu } from "@/features/chat/ui/shell/history";
@@ -102,7 +94,6 @@ export function AgentSidebar({
     const shapeAuth = useShapeAuth();
     const { project_path } = useProjectState();
     const showHostedNav = Boolean(overlay);
-    const multiwork = useSyncExternalStore(subscribeMultiwork, isMultiworkMode, () => false);
 
     const displayName =
         (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
@@ -123,21 +114,6 @@ export function AgentSidebar({
 
     const items: { label: string; icon: IconGlyph; onClick: () => void; active?: boolean }[] = [
         {
-            label: "Multiwork",
-            icon: People20Regular,
-            active: multiwork,
-            onClick: () => {
-                if (multiwork) {
-                    // Deselect mode; leave background workers/sessions alone.
-                    setMultiworkMode(false);
-                    return;
-                }
-                setMultiworkMode(true);
-                window.dispatchEvent(new Event("shape-chat-new"));
-                window.dispatchEvent(new Event("shape-chat-focus-input"));
-            },
-        },
-        {
             label: "Options",
             icon: Settings20Regular,
             onClick: () => void openSettingsWindow(),
@@ -145,8 +121,6 @@ export function AgentSidebar({
     ];
 
     const newChat = () => {
-        // New Chat always returns to regular chat; Multiwork sessions keep running in the background.
-        setMultiworkMode(false);
         window.dispatchEvent(new Event("shape-chat-new"));
         window.dispatchEvent(new Event("shape-chat-focus-input"));
     };
@@ -266,12 +240,6 @@ export function AgentSidebar({
                         {expanded ? (
                             <ChatList
                                 onNewChat={() => {
-                                    if (multiwork) {
-                                        // New Multiwork session (stay in mode).
-                                        resetMultiworkSession();
-                                    } else {
-                                        setMultiworkMode(false);
-                                    }
                                     window.dispatchEvent(new Event("shape-chat-new"));
                                     window.dispatchEvent(new Event("shape-chat-focus-input"));
                                 }}

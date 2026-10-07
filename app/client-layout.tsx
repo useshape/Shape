@@ -2,7 +2,6 @@
 
 import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { ONBOARDING_CONFIG, isOnboardingComplete } from "@/features/onboarding/config";
 import Main from "@/components/layout/main";
 import { Titlebar } from "@/features/agent/workbench";
 import { LoadingProvider } from "@/features/loading/context";
@@ -50,10 +49,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             // MCP: sync user mcp.json so the agent sees tools without visiting Settings.
             void (async () => {
                 try {
-                    const { loadMcpServersFromFile } = await import("@/lib/mcp/config");
-                    const { commands } = await import("@/lib/backend");
-                    const servers = await loadMcpServersFromFile();
-                    if (servers.length > 0) await commands.syncMcpServers(servers);
+                    const { syncActiveMcpServers } = await import("@/lib/mcp/registry");
+                    await syncActiveMcpServers();
                 } catch {
                     /* ignore */
                 }
@@ -256,24 +253,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     );
 }
 
-function Content({ children }: { children: React.ReactNode }) {
-    const [showOnboarding, setShowOnboarding] = React.useState(false);
+function RequireShapeLogin() {
     const auth = useShapeAuth();
-    const needsLogin = !auth.loggedIn;
-    const showGate = (needsLogin && !auth.isLoading) || (!needsLogin && showOnboarding);
+    if (auth.loggedIn || auth.isLoading) return null;
+    return (
+        <div className="absolute inset-0 z-[80] bg-background">
+            <Onboarding />
+        </div>
+    );
+}
 
-    React.useEffect(() => {
-        const refresh = () => {
-            setShowOnboarding(ONBOARDING_CONFIG.enabled && !isOnboardingComplete());
-        };
-        refresh();
-        window.addEventListener("shape-onboarding-complete", refresh);
-        window.addEventListener("shape-onboarding-restart", refresh);
-        return () => {
-            window.removeEventListener("shape-onboarding-complete", refresh);
-            window.removeEventListener("shape-onboarding-restart", refresh);
-        };
-    }, []);
+function Content({ children }: { children: React.ReactNode }) {
+    const auth = useShapeAuth();
+    const needsLogin = !auth.loggedIn && !auth.isLoading;
 
     return (
         <div
@@ -283,7 +275,7 @@ function Content({ children }: { children: React.ReactNode }) {
             <div
                 className={cn(
                     "relative z-10 flex min-h-0 w-full flex-1 flex-col",
-                    showGate && "invisible",
+                    needsLogin && "invisible",
                 )}
             >
                 <Main>{children}</Main>
@@ -297,29 +289,10 @@ function Content({ children }: { children: React.ReactNode }) {
             <WebviewReconnect />
             {needsLogin ? (
                 <div className="absolute inset-0 z-[80] bg-background">
-                    {auth.isLoading ? null : (
-                        <Onboarding embedded loginOnly />
-                    )}
-                </div>
-            ) : showOnboarding ? (
-                <div className="absolute inset-0 z-[80] bg-background">
-                    <Onboarding
-                        embedded
-                        onComplete={() => setShowOnboarding(false)}
-                    />
+                    <Onboarding />
                 </div>
             ) : null}
             <div id="shape-overlays" />
-        </div>
-    );
-}
-
-function RequireShapeLogin() {
-    const auth = useShapeAuth();
-    if (auth.loggedIn) return null;
-    return (
-        <div className="absolute inset-0 z-[80] bg-background">
-            {auth.isLoading ? null : <Onboarding embedded loginOnly />}
         </div>
     );
 }

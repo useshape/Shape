@@ -2,6 +2,8 @@
 //! desktop window. Shape shows the screenshot and cursor in chat and in the
 //! Browser tab. This does not drive the rest of the desktop.
 
+#![allow(dead_code, unused_imports)]
+
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
@@ -55,7 +57,9 @@ pub async fn agent_browse_pointer(app: tauri::AppHandle, kind: String, x: f64, y
     let y = y.clamp(0.0, 100.0);
     let port = {
         let guard = SESSION.lock().unwrap_or_else(|p| p.into_inner());
-        guard.as_ref().map(|s| s.port).ok_or_else(|| "Browser is not running.".to_string())?
+        let port = guard.as_ref().map(|s| s.port).ok_or_else(|| "Browser is not running.".to_string())?;
+        crate::browser::note_live_port(port);
+        port
     };
     let ws = fetch_page_ws(port).await?;
     let _ = app.emit(

@@ -101,7 +101,7 @@ export interface ShapeSettings {
         workflows: AgentWorkflow[];
         /** Ask before the first Multiwork send. */
         multiworkConfirm: boolean;
-        /** Show worker chips on the composer during Multiwork. */
+        /** Show agent cards on the composer during Multiwork. */
         multiworkShowChips: boolean;
         /** Terminal command approval mode (Cursor-style run modes). */
         autoRunMode: AutoRunModeSetting;
@@ -122,10 +122,6 @@ export interface ShapeSettings {
          * Off by default — memories are never injected into every prompt.
          */
         chatMemoryEnabled: boolean;
-        /** OpenRouter API key — when set, non-OpenAI models call OpenRouter directly. */
-        openRouterApiKey: string;
-        /** OpenAI API key — OpenAI models call api.openai.com (not the Shape website). */
-        openaiApiKey: string;
     };
     files: {
         exclude: string;
@@ -282,8 +278,6 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         pluginDisabledActions: {},
         indexEmbeddings: true,
         chatMemoryEnabled: false,
-        openRouterApiKey: "",
-        openaiApiKey: "",
     },
     files: {
         exclude: "**/node_modules,**/.git,**/dist,**/build,**/.next",

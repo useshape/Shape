@@ -49,10 +49,6 @@ pub async fn send_chat_message(
     display_message: Option<String>,
     reasoning_effort: Option<String>,
     service_tier: Option<String>,
-    #[allow(unused_variables)]
-    openrouter_api_key: Option<String>,
-    #[allow(unused_variables)]
-    openai_api_key: Option<String>,
     models: Option<Vec<String>>,
     conversation_kind: Option<String>,
     subagent_models: Option<Vec<String>>,
@@ -139,14 +135,9 @@ pub async fn send_chat_message(
         "plan" => prompts::PLAN_MD,
         "visual" | "design" => prompts::DESIGN_MD,
         "review" => prompts::REVIEW_MD,
-        "multiwork" => prompts::MULTIWORK_MD,
         _ => "",
     };
-    let is_multiwork = mode_to_use.eq_ignore_ascii_case("multiwork")
-        || conversation_kind
-            .as_deref()
-            .map(|k| k.eq_ignore_ascii_case("multiwork"))
-            .unwrap_or(false);
+    let _ = conversation_kind;
     if matches!(
         mode_to_use.to_ascii_lowercase().as_str(),
         "visual" | "design"
@@ -182,9 +173,7 @@ pub async fn send_chat_message(
         }
     }
 
-    if is_multiwork {
-        *state.conversation_kind.lock()? = Some("multiwork".to_string());
-    } else if state.conversation_kind.lock()?.is_none() {
+    if state.conversation_kind.lock()?.is_none() {
         *state.conversation_kind.lock()? = Some("chat".to_string());
     }
 
@@ -229,13 +218,7 @@ pub async fn send_chat_message(
         guard.clone().expect("conversation id just ensured")
     };
 
-    if is_multiwork {
-        let mut pool = models.unwrap_or_default();
-        if pool.is_empty() {
-            pool.push(raw_model.clone());
-        }
-        crate::agent::multiwork::set_model_pool(&owned_conversation_id, pool);
-    }
+    let _ = models;
 
     crate::agent::subagents::set_policy(&state, subagent_models, subagent_default_model);
 
@@ -397,18 +380,14 @@ pub async fn send_chat_message(
         let tid = turn_id.clone();
         let cid = conversation_id.clone();
         async move {
-            if is_multiwork {
-                schema::SteerPacks::all_on()
-            } else {
-                crate::agent::tools::plugins::fetch_steer(
-                    &auth,
-                    &msg,
-                    &mode,
-                    Some(&tid),
-                    cid.as_deref(),
-                )
-                .await
-            }
+            crate::agent::tools::plugins::fetch_steer(
+                &auth,
+                &msg,
+                &mode,
+                Some(&tid),
+                cid.as_deref(),
+            )
+            .await
         }
     };
     let (steer, ctx_res) = tokio::join!(
@@ -543,11 +522,7 @@ pub async fn send_chat_message(
     turn_context.push_str(&crate::agent::subagents::policy_line(&state));
     messages::append_turn_context(&mut api_messages, &turn_context);
 
-    let tools = if is_multiwork {
-        schema::multiwork_orchestrator_tools(family)
-    } else {
-        schema::apply_steer_packs(schema::stable_tools(family), &steer)
-    };
+    let tools = schema::apply_steer_packs(schema::stable_tools(family), &steer);
     let mcp_tokens: u64 = 0;
 
     let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());

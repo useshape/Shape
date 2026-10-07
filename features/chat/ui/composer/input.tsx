@@ -12,7 +12,7 @@ import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { ChatMultiple20Filled, ChatMultiple20Regular } from "@fluentui/react-icons/headless/svg/chat-multiple";
 import { CalendarMultiple24Filled, CalendarMultiple24Regular } from "@fluentui/react-icons/headless/svg/calendar-multiple";
 import { ColorLine24Filled, ColorLine24Regular } from "@fluentui/react-icons/headless/svg/color-line";
-import { BugProhibited20Filled, BugProhibited20Regular } from "@fluentui/react-icons/headless/svg/bug-prohibited";
+import { Incognito24Filled } from "@fluentui/react-icons/headless/svg/incognito";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
@@ -92,12 +92,11 @@ import {
 import { microphoneConstraints, microphoneErrorMessage, useSettings, hasByokApiKeys } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
-import { MultiworkAgentChips, getWorkers, isMultiworkMode, subscribeMultiwork } from "@/features/multiwork";
 import { commands } from "@/lib/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
-import { ReasoningEffortSlider, effortDisplayLabel } from "./reasoning-effort";
-export type { ReasoningEffort } from "./reasoning-effort";
+import { ReasoningEffortSlider, effortDisplayLabel, type ReasoningEffort } from "./reasoning-effort";
+export type { ReasoningEffort };
 
 type ChatInputProps = {
     inputValue: string;
@@ -114,11 +113,9 @@ type ChatInputProps = {
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     selectedModel: string;
     setSelectedModel: (m: string) => void;
-    /** Extra worker models in Multiwork (checkbox multi-select). */
     selectedWorkerModels?: string[];
     setSelectedWorkerModels?: (models: string[]) => void;
     multiSelectModels?: boolean;
-    /** Hide Ask/Code/Visual mode picker (Multiwork orchestrator assigns worker modes). */
     hideModeSelect?: boolean;
     selectedMode: string;
     setSelectedMode: (m: string) => void;
@@ -322,7 +319,7 @@ const CHAT_MODES = [
     { id: "Ask", icon: ChatMultiple20Filled, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
     { id: "Plan", icon: CalendarMultiple24Filled, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
     { id: "Visual", icon: ColorLine24Filled, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
-    { id: "Review", icon: BugProhibited20Filled, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
+    { id: "Review", icon: Incognito24Filled, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
 ] as const;
 
 const COMPOSER_HINTS = [
@@ -885,13 +882,11 @@ export function ChatInput({
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
-    const multiwork = React.useSyncExternalStore(subscribeMultiwork, isMultiworkMode, () => false);
-    const multiworkWorkers = React.useSyncExternalStore(subscribeMultiwork, getWorkers, getWorkers);
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
     const allModels = resolveChatModels(getCatalogModels(), {
-        openaiKey: Boolean(settings.ai.openaiApiKey.trim()),
-        openRouterKey: Boolean(settings.ai.openRouterApiKey.trim()),
+        openaiKey: false,
+        openRouterKey: false,
         signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
     });
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -1283,8 +1278,7 @@ export function ChatInput({
         (pendingEdits?.length ?? 0) > 0 ||
         queuedMessages.length > 0 ||
         projectRuleFiles.length > 0 ||
-        taskItems.length > 0 ||
-        (multiwork && multiworkWorkers.length > 0);
+        taskItems.length > 0;
 
     const sendDisabled =
         needsSignIn ||
@@ -1335,9 +1329,6 @@ export function ChatInput({
                             </Tooltip>
                         ) : null}
                         {taskItems.length > 0 ? <ComposerTasksStrip items={taskItems} /> : null}
-                        {multiwork && multiworkWorkers.length > 0 && settings.ai.multiworkShowChips !== false ? (
-                            <MultiworkAgentChips />
-                        ) : null}
                     </div>
                 ) : null}
 
@@ -1345,7 +1336,7 @@ export function ChatInput({
                     ref={composerBoxRef}
                     className={cn(
                         "relative flex w-full flex-col border transition-colors rounded-full p-1.5",
-                        "border-border-subtle/20 bg-surface-4",
+                        "border-border-subtle/40 bg-surface-4",
                         uploadedFiles.length > 0 && "rounded-[22px]",
                         dragOver && "bg-surface-3/80",
                         needsSignIn && "cursor-default",

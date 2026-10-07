@@ -294,11 +294,7 @@ pub fn load_conversation(
     };
     state.set_title_meta(conv.title_locked, anchor);
     *state.current_conversation_id.lock()? = Some(id.clone());
-    *state.conversation_kind.lock()? = Some(if conv.kind == "multiwork" {
-        "multiwork".to_string()
-    } else {
-        "chat".to_string()
-    });
+    *state.conversation_kind.lock()? = Some("chat".to_string());
     state.clear_design_preview_state();
     state.replace_file_checkpoints(checkpoints::load_checkpoints(&id));
     state.set_incognito(false);

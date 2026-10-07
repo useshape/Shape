@@ -1,9 +1,63 @@
 ---
 title: Quickstart
-description: Open a folder and make one change.
+description: Install Shape, open a folder, and send one task.
 order: 1
 ---
 
-Download the installer from [useshape.org/download](https://useshape.org/download), sign in, and open a folder.
+Shape is a desktop app. You open a project folder, describe the work in chat, and review the edits before they stay.
 
-Ask is a good way to get familiar with the code. Code can make changes and run commands. When a file changes, review the diff and keep or undo it. Larger changes are easier to start in [Plan](/docs/agent/plan).
+## Install the app
+
+1. Go to [useshape.org/download](https://useshape.org/download).
+2. Run the installer.
+3. Open Shape from the Start menu.
+
+Shape needs Windows 10 or 11, 64-bit. If Windows SmartScreen appears, choose **More info**, then **Run anyway**.
+
+## Sign in
+
+Sign in with the account you use for chat and billing. You can still open files without signing in. You cannot send a message until you do.
+
+If the browser window never comes back to the app, close it, sign out from **Help**, and sign in again. See [troubleshooting](/docs/help/troubleshooting).
+
+## Open a folder
+
+Use **Open folder** (or `Ctrl+K` then `Ctrl+O`) and pick the project you want to work on.
+
+Shape stays in that folder until you open a different one. Chat, search, and Git all run against this folder. Open the repo root, not a nested package, unless you only want that package in context.
+
+## Send a first task
+
+Type in the composer at the bottom of chat. Start small so you can see how Shape edits files.
+
+Examples that work well:
+
+- “Rename the primary button on the home page to Get started.”
+- “Explain `app/page.tsx` in a few sentences.”
+- “Add a loading state to the settings save button.”
+
+Press Enter to send. Shape reads the project, answers in the thread, and may edit files.
+
+## Point it at a file
+
+Type `@` and pick a file. That file is attached to the message. Use this when you already know which file matters, instead of hoping Shape finds it.
+
+Type `/` to run a saved prompt. See [slash commands](/docs/customize/slash-commands).
+
+## Review the diff
+
+When Shape edits a file, the diff shows in the thread.
+
+- Keep the change if it matches what you asked.
+- Skip it if it is wrong or too broad.
+- Ask a follow-up if it is close.
+
+Nothing is committed for you. When you want a commit, use [source control](/docs/git/commits).
+
+## Pick a mode
+
+The composer has a mode switch. Use **Code** for edits. Use **Ask** when you only want an explanation. Use **Plan** for a larger change. Use **Review** when something is broken. Details are on [Agent](/docs/agent/overview).
+
+## If chat will not send
+
+Check the plan and remaining credits on [Billing](/dashboard/settings/billing). Free includes Auto only. Paid plans can pick a named model. See [Models](/docs/get-started/models).

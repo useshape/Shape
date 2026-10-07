@@ -236,7 +236,9 @@ export function WelcomeSshDialog({
             notify.error("Enter user@host");
             return;
         }
-        if (!/^[\w.@+-]+$/.test(trimmed)) {
+        const sshTarget = /^[\w.@+-]+(?::\d{1,5})?$/.exec(trimmed);
+        const port = sshTarget?.[0].includes(":") ? Number(sshTarget[0].split(":").pop()) : undefined;
+        if (!sshTarget || (port !== undefined && (port < 1 || port > 65535))) {
             notify.error("Invalid SSH target");
             return;
         }

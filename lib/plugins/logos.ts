@@ -205,6 +205,35 @@ export function humanizePluginActionName(slug: string, name?: string): string {
         .trim() || slug;
 }
 
+/** Favicon + brand mark candidates for a custom MCP server. */
+export function mcpServerBrandCandidates(name: string, url: string | undefined, dark: boolean): string[] {
+    const keys: string[] = [];
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    if (slug) keys.push(slug);
+    if (url) {
+        try {
+            const host = new URL(url).hostname.replace(/^www\./, "");
+            const first = host.split(".")[0] ?? host;
+            keys.push(first, host);
+        } catch {
+            /* ignore */
+        }
+    }
+    const out: string[] = [];
+    for (const key of keys) {
+        out.push(...pluginLogoCandidates(key, dark));
+    }
+    if (url) {
+        try {
+            out.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(url).hostname)}&sz=64`);
+        } catch {
+            /* ignore */
+        }
+    }
+    out.push("/integrations/logos/mcp.svg");
+    return [...new Set(out)];
+}
+
 export function cleanPluginActionDescription(raw: string): string {
     let s = raw.replace(/\s+/g, " ").trim();
     s = s.replace(/\s*Args:\s*\{[\s\S]*$/i, "").trim();

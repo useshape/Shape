@@ -2,7 +2,6 @@ import { commands } from "@/lib/backend";
 import { getShapeAccessToken } from "@/lib/cloud/store";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { redactChatForReport } from "@/lib/diagnostics/scrub";
-import { lastSentryEventId } from "@/lib/diagnostics/sentry";
 import type { Conversation } from "@/lib/backend/types";
 
 export const REPORT_CATEGORIES = [
@@ -49,7 +48,6 @@ export async function submitProblemReport(opts: {
       source: "desktop",
       page: typeof window !== "undefined" ? window.location.pathname : undefined,
       feature: "desktop-report",
-      eventId: lastSentryEventId(),
       linkedChat,
     }),
   });

@@ -200,8 +200,13 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
         let (locked, anchor) = state.title_meta();
         existing.title_locked = locked;
         existing.title_anchor_turns = anchor;
-        if existing.kind.trim().is_empty() || existing.kind == "chat" {
-            existing.kind = kind;
+        if existing.kind.trim().is_empty() || existing.kind == "chat" || existing.kind == "multiwork"
+        {
+            existing.kind = if kind == "multiwork" {
+                "chat".to_string()
+            } else {
+                kind
+            };
         }
         collapse_duplicate_assistants(&mut existing.history);
     } else {

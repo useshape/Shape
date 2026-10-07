@@ -53,6 +53,9 @@ pub struct McpServerConfig {
     /// Pre-registered OAuth client id when the auth server has no DCR.
     #[serde(default)]
     pub oauth_client_id: Option<String>,
+    /// Runtime-only guidance. Not written to mcp.json.
+    #[serde(default)]
+    pub skill_hint: Option<String>,
 }
 
 fn default_enabled() -> bool {
