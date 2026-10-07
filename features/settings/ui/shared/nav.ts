@@ -2,13 +2,13 @@
 
 import { Alert20Regular } from "@fluentui/react-icons/headless/svg/alert";
 import { AppsAddIn24Regular } from "@fluentui/react-icons/headless/svg/apps-add-in";
+import { PlugConnected24Regular } from "@fluentui/react-icons/headless/svg/plug-connected";
 import { ArrowDownload20Regular } from "@fluentui/react-icons/headless/svg/arrow-download";
 import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-fork";
 import { Bug20Regular } from "@fluentui/react-icons/headless/svg/bug";
 import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
 import { AgentsPerson24Regular } from "@fluentui/react-icons/headless/svg/agents-person";
 import { PersonChat24Regular } from "@fluentui/react-icons/headless/svg/person-chat";
-import { PeopleTeam24Regular } from "@fluentui/react-icons/headless/svg/people-team";
 import { DocumentData24Regular } from "@fluentui/react-icons/headless/svg/document-data";
 import { DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
 import { Keyboard20Regular } from "@fluentui/react-icons/headless/svg/keyboard";
@@ -57,12 +57,12 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         children: [
             { id: "ai-models", label: "Models", icon: AgentsPerson24Regular, targetId: "settings-ai-models" },
             { id: "ai-subagents", label: "Subagents", icon: PersonChat24Regular, targetId: "settings-ai-subagents" },
-            { id: "ai-multiwork", label: "Multiwork", icon: PeopleTeam24Regular, targetId: "settings-ai-multiwork" },
             { id: "ai-rules", label: "Instructions", icon: DocumentEdit24Regular, targetId: "settings-ai-rules" },
             { id: "ai-workflows", label: "Workflows", icon: ArrowClockwiseDashesSettings24Regular, targetId: "settings-ai-workflows" },
             { id: "ai-skills", label: "Skills", icon: DocumentData24Regular, targetId: "settings-skills" },
             { id: "ai-context", label: "Context", icon: ChatCursor24Regular, targetId: "settings-ai-context" },
             { id: "plugins", label: "Plugins", icon: AppsAddIn24Regular, targetId: "settings-ai-plugins" },
+            { id: "mcp", label: "MCP", icon: PlugConnected24Regular, targetId: "settings-mcp" },
         ],
     },
     {
@@ -100,7 +100,7 @@ export function allSettingsLeaves(): SettingsNavLeaf[] {
     return SETTINGS_NAV.flatMap((g) => g.children);
 }
 
-export const SETTINGS_PAGE_LEAF_IDS = new Set(["keyboard-shortcuts", "plugins"]);
+export const SETTINGS_PAGE_LEAF_IDS = new Set(["keyboard-shortcuts", "plugins", "mcp"]);
 
 export function findLeafByTarget(targetId: string): SettingsNavLeaf | undefined {
     return allSettingsLeaves().find((l) => l.targetId === targetId);
@@ -133,7 +133,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         id: "agents",
         label: "Agents",
         icon: Sparkle24Regular,
-        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context", "workflows", "commands", "multiwork", "subagent", "subagents"],
+        keywords: ["ai", "models", "mcp", "plugins", "slack", "rules", "context", "workflows", "commands", "subagent", "subagents"],
     },
     {
         id: "editor",

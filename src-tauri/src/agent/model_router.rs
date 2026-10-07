@@ -11,6 +11,9 @@
 /** Fast included model used for Auto and auxiliary work (titles, explore, etc.). */
 pub const MODEL_FAST: &str = "deepseek/deepseek-v4-flash";
 
+/// Cheap code-understanding model for the optional codebase overview tool.
+pub const MODEL_OVERVIEW: &str = MODEL_FAST;
+
 /// Cheap vision pass that *describes* images for [`MODEL_FAST`]. The website
 /// picks this slug when `X-Shape-Feature: caption` — do not send it from the client.
 pub const MODEL_IMAGE_CAPTION: &str = "google/gemini-2.5-flash-lite";
@@ -70,6 +73,7 @@ pub fn proxy_model_id(selected: &str) -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn normalize_model_with_images(model: &str, has_images: bool) -> String {
     let _ = has_images;
     // Auto always stays on the cheap text model. Images are captioned separately.
@@ -85,6 +89,7 @@ pub fn editor_rewrite_model() -> &'static str {
     "auto"
 }
 
+#[allow(dead_code)]
 pub fn mode_wants_vision(mode: &str) -> bool {
     matches!(
         mode.trim().to_ascii_lowercase().as_str(),

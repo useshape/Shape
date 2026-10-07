@@ -21,7 +21,7 @@ pub const MAX_TOOL_LOOPS_VISUAL: usize = 25;
 pub fn max_loops_for_mode(mode: &str) -> usize {
     match mode.to_ascii_lowercase().as_str() {
         "visual" | "design" => MAX_TOOL_LOOPS_VISUAL,
-        "code" | "agent" | "review" | "multiwork" => MAX_TOOL_LOOPS_CODE,
+        "code" | "agent" | "review" => MAX_TOOL_LOOPS_CODE,
         _ => MAX_TOOL_LOOPS,
     }
 }

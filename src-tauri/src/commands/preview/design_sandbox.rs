@@ -81,6 +81,7 @@ pub fn session_dir(session_id: &str) -> PathBuf {
     sandbox_root().join(sanitize_path_segment(session_id))
 }
 
+#[allow(dead_code)]
 pub fn ensure_session_dir(session_id: &str) -> Result<PathBuf, AppError> {
     let dir = session_dir(session_id);
     std::fs::create_dir_all(&dir)
@@ -89,10 +90,12 @@ pub fn ensure_session_dir(session_id: &str) -> Result<PathBuf, AppError> {
 }
 
 /// Escape so inlined JS cannot terminate the surrounding `<script>` tag.
+#[allow(dead_code)]
 fn escape_for_inline_script(source: &str) -> String {
     source.replace("</script>", "<\\/script>")
 }
 
+#[allow(dead_code)]
 fn replace_script_src_containing(html: &str, needle: &str, replacement: &str) -> String {
     let mut out = html.to_string();
     let mut search_from = 0;
@@ -115,6 +118,7 @@ fn replace_script_src_containing(html: &str, needle: &str, replacement: &str) ->
 /// Inline React + Tailwind browser bundles into the document.
 /// Required for live iframes on Windows: WebView2 often cannot load sibling
 /// `asset.localhost` script URLs from inside an iframe (`convertFileSrc` HTML).
+#[allow(dead_code)]
 pub fn inline_runtime_scripts(document: &str) -> String {
     let tw_tag = format!(
         "<script>\n{}\n</script>",
@@ -129,6 +133,7 @@ pub fn inline_runtime_scripts(document: &str) -> String {
 }
 
 /// Write a self-contained live preview HTML (scripts inlined) for gallery iframes.
+#[allow(dead_code)]
 pub fn write_live_preview_document(
     session_id: &str,
     concept_id: &str,
@@ -138,6 +143,7 @@ pub fn write_live_preview_document(
     write_concept_document(session_id, concept_id, &html)
 }
 
+#[allow(dead_code)]
 pub fn write_concept_document(
     session_id: &str,
     concept_id: &str,

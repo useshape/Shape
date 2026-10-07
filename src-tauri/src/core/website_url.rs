@@ -1,6 +1,8 @@
 #[cfg(not(debug_assertions))]
 const PRODUCTION_ORIGIN: &str = "https://www.useshape.org";
+#[cfg(debug_assertions)]
 const DEV_FALLBACK: &str = "http://localhost:3000";
+#[cfg(debug_assertions)]
 const COMPILED_WEBSITE_URL: Option<&str> = option_env!("NEXT_PUBLIC_SHAPE_WEBSITE_URL");
 
 /// Production: www.useshape.org (primary host; apex redirects without CORS).

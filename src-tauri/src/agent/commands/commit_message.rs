@@ -253,6 +253,40 @@ pub async fn rewrite_open_file(
     Ok(next)
 }
 
+/// One-shot rewrite for an editor selection. Does not touch the agent transcript.
+#[tauri::command]
+pub async fn rewrite_text(
+    access_token: Option<String>,
+    prompt: String,
+) -> Result<String, AppError> {
+    let prompt = prompt.trim().to_string();
+    if prompt.is_empty() {
+        return Err(AppError::Message("Nothing to rewrite.".to_string()));
+    }
+    let auth_token = access_token
+        .filter(|t| !t.trim().is_empty())
+        .ok_or_else(|| AppError::Env("Sign in to Shape to use AI chat.".to_string()))?;
+    let client = Client::new();
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    let ctx = streaming::ProxyContext::new("rewrite")
+        .with_provider(streaming::LlmProvider::Shape)
+        .with_turn(Some(turn_id), None);
+    let (message, _, _) = streaming::complete_chat_with_max_tokens(
+        &client,
+        &auth_token,
+        &prompt,
+        crate::agent::model_router::editor_rewrite_model(),
+        4000,
+        &ctx,
+    )
+    .await?;
+    let next = strip_model_fences(&message);
+    if next.trim().is_empty() {
+        return Err(AppError::Message("The rewrite came back empty.".to_string()));
+    }
+    Ok(next)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

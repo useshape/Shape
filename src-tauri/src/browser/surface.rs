@@ -636,7 +636,9 @@ pub(crate) fn inspector_url(item: &serde_json::Value) -> String {
         .and_then(|v| v.as_str())
         .unwrap_or("");
     if !id.is_empty() {
-        return format!("http://127.0.0.1:9333/devtools/inspector.html?ws=127.0.0.1:9333/devtools/page/{id}");
+        let base = crate::browser::webview_debug::base_url();
+        let host = base.trim_start_matches("http://");
+        return format!("{base}/devtools/inspector.html?ws={host}/devtools/page/{id}");
     }
     item.get("devtoolsFrontendUrl")
         .and_then(|v| v.as_str())
@@ -663,7 +665,7 @@ async fn iframe_targets() -> Result<Vec<serde_json::Value>, String> {
         .build()
         .map_err(|e| e.to_string())?;
     let list = client
-        .get("http://127.0.0.1:9333/json/list")
+        .get(format!("{}/json/list", crate::browser::webview_debug::base_url()))
         .send()
         .await
         .map_err(|_| "Restart Shape, then open developer tools for this page.".to_string())?
@@ -677,7 +679,7 @@ async fn iframe_targets() -> Result<Vec<serde_json::Value>, String> {
         return Ok(list);
     }
     let version = client
-        .get("http://127.0.0.1:9333/json/version")
+        .get(format!("{}/json/version", crate::browser::webview_debug::base_url()))
         .send()
         .await
         .map_err(|e| e.to_string())?
@@ -777,7 +779,7 @@ async fn session_call(target_id: &str, method: &str, params: &str) -> Result<(),
         .build()
         .map_err(|e| e.to_string())?;
     let version = client
-        .get("http://127.0.0.1:9333/json/version")
+        .get(format!("{}/json/version", crate::browser::webview_debug::base_url()))
         .send()
         .await
         .map_err(|_| "Restart Shape, then try again.".to_string())?

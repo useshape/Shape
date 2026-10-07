@@ -30,7 +30,6 @@ export function AgentOverlayView({
     useEffect(() => {
         if (overlay.type !== "settings") return;
         if (!overlay.category && !overlay.section) return;
-        if (overlay.section === "mcp" || overlay.section === "integrations") return;
         window.dispatchEvent(
             new CustomEvent("shape-settings-navigate", {
                 detail: {

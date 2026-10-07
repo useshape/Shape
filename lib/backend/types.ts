@@ -275,7 +275,6 @@ export interface Conversation {
     timestamp: number;
     /** Hidden from the sidebar; still opens from the command palette. */
     archived?: boolean;
-    /** Regular chat vs Multiwork session. */
     kind?: "chat" | "multiwork";
 }
 
@@ -371,6 +370,8 @@ export interface McpServerConfig {
     disabledTools?: string[];
     /** Pre-registered OAuth client id when the auth server has no DCR. */
     oauthClientId?: string;
+    /** Runtime-only. Fetched when the agent needs it. Never written to mcp.json. */
+    skillHint?: string;
 }
 
 export interface McpStatusEntry {

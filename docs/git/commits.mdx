@@ -1,9 +1,37 @@
 ---
 title: Commits
-description: Stage, commit, and push.
+description: Stage, commit, and push from Shape.
 order: 1
 ---
 
-Stage what you want to include, write a message, and commit. Push when you want the remote updated.
+Source control is in the sidebar. It works on the folder you have open.
 
-A GitHub login is only needed for the remote. [Pull requests](/docs/git/github) live there too.
+Chat can draft a message. You still press commit. Shape does not commit on its own when it edits a file.
+
+## See the diff
+
+Open the source control view (`Ctrl+Shift+G`). Changed files are listed. Click a file to read the diff.
+
+If a file is missing, it may be ignored, or you may have opened a subfolder instead of the repo root.
+
+## Commit
+
+1. Stage the files you want in the commit. Leave out debug noise and `.env` files.
+2. Write a message. Short and specific is enough: what changed and why.
+3. Commit.
+
+You can ask chat to draft the message from the staged diff. Read it before you use it.
+
+## Push and pull
+
+Push when you want the remote updated. Pull if the remote has commits you do not have yet.
+
+If push is rejected, pull (or rebase) first, then push again. Resolve conflicts in the files, then commit.
+
+## Remotes and GitHub
+
+A GitHub login is only needed for remotes hosted on GitHub, pull requests, issues, and Actions. Local commits work without it. See [GitHub](/docs/git/github).
+
+## After an agent edit
+
+Keep or skip the diffs in the chat thread first. Then commit what is actually in the working tree. Skipping a diff in chat and committing the same file from disk will still include that file if it is still changed on disk.

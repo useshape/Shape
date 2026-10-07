@@ -15,7 +15,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { openSettingsWindow } from "@/lib/window/open-settings";
-import { openMcpConfig } from "@/lib/mcp/config";
 import { notify } from "@/features/notifications";
 
 async function downloadDiagnostics() {
@@ -80,7 +79,9 @@ export function ChatMoreMenu() {
                 >
                     Configure Workflows
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void openMcpConfig()}>
+                <DropdownMenuItem
+                    onClick={() => void openSettingsWindow({ category: "agents", section: "mcp" })}
+                >
                     Configure MCP
                 </DropdownMenuItem>
             </DropdownMenuContent>

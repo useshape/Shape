@@ -1,10 +1,30 @@
 ---
 title: MCP
-description: Local tool servers.
+description: Add a local tool server Shape can call from chat.
 order: 2
 ---
 
-Local tool servers are configured in `mcp.json`. Configure MCP opens that file.
+MCP servers are tools Shape can call from chat. Add one in **Settings → MCP**, or keep a server in `mcp.json` if you want it in a file.
+
+Servers you add in Settings stay in Shape. They are not written into `mcp.json`. A server in `mcp.json` is picked up on its own. You do not have to add it again in Settings.
+
+Use MCP when the tool runs on your machine or at a URL you already have. Use a [plugin](/docs/customize/plugins) when the tool is an outside account.
+
+## Add a server in Settings
+
+Open **Settings → MCP** and choose **Add server**. Paste the server URL, or paste its JSON config. Shape shows the server, then connects. If the server asks you to sign in, finish that in the browser.
+
+Remove a server you added there with **Remove**. That does not change `mcp.json`.
+
+## Open the file
+
+On the MCP page, choose **Open mcp.json**.
+
+If the file does not exist yet, Shape creates it.
+
+## Add a server
+
+Use `command` when Shape should start the process. Use `url` if the server is already running.
 
 ```json
 {
@@ -17,4 +37,23 @@ Local tool servers are configured in `mcp.json`. Configure MCP opens that file.
 }
 ```
 
-Use `url` instead of `command` for an HTTP server.
+Save the file.
+
+Name the server something you will recognize in chat. The name is what you will refer to, not the package name.
+
+## Try it
+
+Send a message that needs the tool. If the server does not show up:
+
+1. Save `mcp.json`.
+2. Open Settings → MCP again. Shape reloads the file.
+3. Open the same folder again.
+4. Check that `command` is on your `PATH` when Shape starts. A tool that only works in your existing terminal session will fail here.
+
+## The file on this machine
+
+`mcp.json` lives in Shape’s data folder, not in the repo. Do not put API keys in it. Use env vars the server already reads.
+
+## Remove a server
+
+Delete the entry from `mcp.json` and save. Restart Shape if the tool still appears.

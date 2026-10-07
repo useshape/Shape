@@ -236,6 +236,25 @@ pub(super) async fn tool_search_codebase(args: &Value, ctx: &ToolCtx<'_>) -> Too
     }
 }
 
+pub(super) async fn tool_codebase_overview(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    match crate::agent::overview::answer_overview(args, ctx).await {
+        Ok(result) => {
+            let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            let ui = format!(
+                "\n<search_result query=\"{}\">\n{}\n</search_result>\n",
+                escape_xml_attr(query),
+                escape_xml_text(&clip(&result, 2500))
+            );
+            ToolOutcome {
+                tool_result: clip(&result, 8000),
+                ui_chunk: ui,
+                side_effect: None,
+            }
+        }
+        Err(e) => error_outcome("codebase_overview", &e),
+    }
+}
+
 fn plugin_call_ui(
     toolkit: &str,
     slug: &str,

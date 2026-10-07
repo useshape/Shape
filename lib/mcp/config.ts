@@ -60,6 +60,7 @@ export async function loadMcpServersFromFile(): Promise<McpServerConfig[]> {
     }
 }
 
+/** Writes mcp.json only. Servers added in Settings must not be passed here. */
 export async function saveMcpServers(servers: McpServerConfig[]): Promise<void> {
     await ensureMcpConfigFile();
     const mcpServers: Record<string, RawMcpEntry> = {};

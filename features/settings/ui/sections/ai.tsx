@@ -31,7 +31,6 @@ import {
     SettingSelect,
     SettingSwitch,
     SettingNumberSelect,
-    SettingVisualCard,
     SETTING_CONTROL_BTN,
     MAX_CONTEXT_PRESETS,
 } from "../shared/controls";
@@ -126,7 +125,7 @@ export function AiSettingsPanel({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context" | "multiwork" | "subagents";
+    page: "models" | "rules" | "workflows" | "context" | "subagents";
 }) {
     const a = settings.ai;
     const auth = useShapeAuth();
@@ -277,37 +276,12 @@ export function AiSettingsPanel({
 
     return (
         <>
-            {page === "multiwork" ? (
-                <>
-                    <SettingSection id="settings-ai-multiwork" title="Multiwork">
-                        <SettingCard>
-                            <SettingVisualCard
-                                title="Multiwork"
-                                subtitle="Several agents on one request."
-                                image="/marketing/multiwork.png"
-                            />
-                            <SettingRow title="Ask before starting">
-                                <SettingSwitch
-                                    checked={a.multiworkConfirm !== false}
-                                    onChange={(on) => updateSettingSection("ai", { multiworkConfirm: on })}
-                                />
-                            </SettingRow>
-                            <SettingRow title="Show worker chips">
-                                <SettingSwitch
-                                    checked={a.multiworkShowChips !== false}
-                                    onChange={(on) => updateSettingSection("ai", { multiworkShowChips: on })}
-                                />
-                            </SettingRow>
-                        </SettingCard>
-                    </SettingSection>
-                </>
-            ) : null}
             {page === "subagents" ? (
                 <>
                     <SettingSection
                         id="settings-ai-subagents"
                         title="Subagents"
-                        description="Background subagents use Auto unless you turn on other models here. They never inherit the chat model. Named models are skipped if you are out of credits — Auto (included monthly usage) is used instead."
+                        description="Background agents use Auto unless you pick other models here. Named models fall back to Auto if you run out of credits."
                     >
                         <SettingCard>
                             {displayedSubagentModels.map((model) => (
@@ -461,7 +435,7 @@ export function AiSettingsPanel({
                     />
                 </SettingRow>
                 <SettingCard>
-                    <SettingRow title="Semantic codebase index" description="Keyword search stays available.">
+                    <SettingRow title="Codebase index" description="This project is indexed for search. Always on.">
                         <span className="text-sm text-text-muted">Always on</span>
                     </SettingRow>
                     <SettingRow title="Semantic embeddings" description="Search by meaning, not only exact words.">

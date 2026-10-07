@@ -24,6 +24,7 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         read_file(),
         list_dir(),
         search_codebase(),
+        codebase_overview(),
         search_files(),
         grep(),
         web_search(),
@@ -84,6 +85,7 @@ fn ask_tools() -> Vec<Value> {
         read_file(),
         list_dir(),
         search_codebase(),
+        codebase_overview(),
         search_files(),
         grep(),
         web_search(),
@@ -236,7 +238,7 @@ fn tool_fn_name(tool: &Value) -> &str {
 
 fn steer_pack_for(name: &str) -> Option<&'static str> {
     match name {
-        "read_file" | "list_dir" | "search_codebase" | "search_files" | "grep"
+        "read_file" | "list_dir" | "search_codebase" | "codebase_overview" | "search_files" | "grep"
         | "create_directory" | "create_file" | "apply_patch" | "edit_file" | "delete_file"
         | "rename_file" | "read_lints" | "screenshot_page" | "inspect_runtime"
         | "design_review" | "render_design_previews" | "mcp_search" | "mcp_call" => Some("workspace"),
@@ -365,6 +367,21 @@ fn search_codebase() -> Value {
             "properties": {
                 "query": {"type": "string", "description": "Natural-language or keyword search query."},
                 "top_k": {"type": "integer", "description": "Max results to return (default 8, max 20)."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn codebase_overview() -> Value {
+    tool(
+        "codebase_overview",
+        "Ask a compact, stored map of this repository: major areas, entry points, and where a feature lives. Use when you need repo-wide orientation. Do not call on every turn.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What you need to locate or understand (e.g. 'Where is the chat sidebar implemented?')."}
             },
             "required": ["query"],
             "additionalProperties": false
@@ -818,137 +835,6 @@ fn spawn_subagent() -> Value {
             "additionalProperties": false
         }),
     )
-}
-
-fn spawn_worker() -> Value {
-    tool(
-        "spawn_worker",
-        "Start a full coding worker on the Multiwork board (max 6). Each worker gets an isolated git worktree and branch. Never merge those branches — leave them for the user to review. Prefer non-overlapping file scopes. Returns a worker id.",
-        json!({
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "Short card title."},
-                "task": {"type": "string", "description": "Concrete implementation task for the worker."},
-                "model": {"type": "string", "description": "Optional model id override for this worker."},
-                "files": {
-                    "description": "Optional file/path scope hints (string or array of paths).",
-                    "oneOf": [
-                        {"type": "string"},
-                        {"type": "array", "items": {"type": "string"}}
-                    ]
-                }
-            },
-            "required": ["task"],
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn message_worker() -> Value {
-    tool(
-        "message_worker",
-        "Send a message on the Multiwork session bus to one worker.",
-        json!({
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "content": {"type": "string"}
-            },
-            "required": ["id", "content"],
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn broadcast_workers() -> Value {
-    tool(
-        "broadcast_workers",
-        "Broadcast a message to all Multiwork workers on the session bus.",
-        json!({
-            "type": "object",
-            "properties": {
-                "content": {"type": "string"}
-            },
-            "required": ["content"],
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn set_worker_status() -> Value {
-    tool(
-        "set_worker_status",
-        "Move a worker card between board columns: running, review, or done.",
-        json!({
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "column": {"type": "string", "enum": ["running", "review", "done"]}
-            },
-            "required": ["id", "column"],
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn message_peer() -> Value {
-    tool(
-        "message_peer",
-        "Talk to another Multiwork worker (id or title) or the orchestrator. Use this to coordinate overlapping files, hand off findings, or ask a sibling to wait. The other worker receives a follow-up turn with your message.",
-        json!({
-            "type": "object",
-            "properties": {
-                "to": {"type": "string", "description": "Worker id, worker title, or \"orchestrator\"."},
-                "content": {"type": "string"}
-            },
-            "required": ["content"],
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn report_orchestrator() -> Value {
-    tool(
-        "report_orchestrator",
-        "Report progress or a blocker to the Multiwork orchestrator (updates your board card).",
-        json!({
-            "type": "object",
-            "properties": {
-                "content": {"type": "string"}
-            },
-            "required": ["content"],
-            "additionalProperties": false
-        }),
-    )
-}
-
-/// Tools for the Multiwork orchestrator turn (delegate-only; workers explore/implement).
-pub fn multiwork_orchestrator_tools(family: ModelFamily) -> Vec<Value> {
-    let _ = family;
-    vec![
-        spawn_worker(),
-        message_worker(),
-        broadcast_workers(),
-        set_worker_status(),
-        ask_user(),
-        finish(),
-    ]
-}
-
-/// Full code tools plus peer messaging for a Multiwork worker.
-pub fn multiwork_worker_tools(family: ModelFamily) -> Vec<Value> {
-    let mut tools = all_tools_for_family(family);
-    // Drop research-only subagent; workers get bus tools instead.
-    tools.retain(|t| {
-        let name = t
-            .get("function")
-            .and_then(|f| f.get("name"))
-            .and_then(|n| n.as_str());
-        name != Some("spawn_subagent") && name != Some("git_sync")
-    });
-    insert_before_finish(&mut tools, message_peer());
-    insert_before_finish(&mut tools, report_orchestrator());
-    tools
 }
 
 fn update_todos() -> Value {

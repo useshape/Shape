@@ -48,6 +48,7 @@ import { ShapeLogo } from "@/components/ui/shape-logo";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
 import { KeyboardShortcutsView } from "./sections/shortcuts";
 import { PluginsSettingsView } from "./sections/plugins";
+import { McpSettingsView } from "./sections/mcp";
 import { SkillsSettings } from "./sections/skills";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 import { useRouter } from "next/navigation";
@@ -64,6 +65,12 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    REPORT_CATEGORIES,
+    chatsInCurrentProject,
+    submitProblemReport,
+    type ReportCategory,
+} from "@/lib/feedback/report";
 
 function EditorSettings({ settings }: { settings: ShapeSettings }) {
     const e = settings.editor;
@@ -337,7 +344,7 @@ function AiSettings({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context" | "multiwork" | "subagents";
+    page: "models" | "rules" | "workflows" | "context" | "subagents";
 }) {
     return <AiSettingsPanel settings={settings} page={page} />;
 }
@@ -556,27 +563,14 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
 function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
     const dev = settings.developer;
 
-    const restartOnboarding = () => {
-        localStorage.removeItem("shape-onboarding-complete");
-        window.dispatchEvent(new CustomEvent("shape-onboarding-restart"));
-        window.dispatchEvent(new CustomEvent("shape-agent-overlay", { detail: null }));
-    };
-
     return (
         <>
             <SettingSection id="settings-developer" title="Developer">
-                <SettingRow title="Developer Tools in context menu">
+                <SettingRow title="Developer Tools in context menu" description="Inspect Shape itself from the right-click menu.">
                     <SettingSwitch
                         checked={dev.enableDevTools}
                         onChange={(v) => updateSettingSection("developer", { enableDevTools: v })}
                     />
-                </SettingRow>
-            </SettingSection>
-            <SettingSection title="Onboarding">
-                <SettingRow title="Restart onboarding">
-                    <Button size="sm" variant="secondary" onClick={restartOnboarding}>
-                        Restart onboarding
-                    </Button>
                 </SettingRow>
             </SettingSection>
         </>
@@ -722,7 +716,7 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
                 </SettingRow>
             </SettingSection>
             <SettingSection id="settings-privacy" title="Data Control">
-                <SettingRow title="Usage telemetry">
+                <SettingRow title="Usage telemetry" description="Anonymous product usage. Never includes chats or files.">
                     <SettingSwitch
                         checked={p.telemetryEnabled}
                         onChange={(v) => {
@@ -756,7 +750,7 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
                         Clear
                     </Button>
                 </SettingRow>
-                <SettingRow title="Skip checkpoint restore confirm">
+                <SettingRow title="Skip checkpoint restore confirm" description="Restore a checkpoint without asking first.">
                     <SettingSwitch
                         checked={p.skipCheckpointRestoreConfirm}
                         onChange={(v) => updateSettingSection("privacy", { skipCheckpointRestoreConfirm: v })}
@@ -792,34 +786,61 @@ function FeedbackSection() {
     const { project_path } = useProjectState();
     const [open, setOpen] = useState(false);
     const [message, setMessage] = useState("");
-    const [category, setCategory] = useState<(typeof import("@/lib/feedback/report").REPORT_CATEGORIES)[number]>("Agent / AI");
+    const [category, setCategory] = useState<ReportCategory>("Agent / AI");
     const [chats, setChats] = useState<{ id: string; title: string }[]>([]);
     const [linkedId, setLinkedId] = useState<string>("");
     const [sending, setSending] = useState(false);
     const [error, setError] = useState("");
+    const [sent, setSent] = useState(false);
 
     const close = (nextOpen: boolean) => {
+        if (sending) return;
         setOpen(nextOpen);
         if (!nextOpen) {
             setMessage("");
             setLinkedId("");
             setError("");
+            setSent(false);
         }
     };
 
     useEffect(() => {
         if (!open) return;
-        void import("@/lib/feedback/report").then(({ chatsInCurrentProject }) =>
-            chatsInCurrentProject(project_path).then((list) => {
-                setChats(list.filter((c) => !c.archived).map((c) => ({ id: c.id, title: c.title || "Untitled" })));
-            }),
-        );
+        void chatsInCurrentProject(project_path).then((list) => {
+            setChats(list.filter((c) => !c.archived).map((c) => ({ id: c.id, title: c.title || "Untitled" })));
+        }).catch(() => setChats([]));
     }, [open, project_path]);
+
+    async function send() {
+        const text = message.trim();
+        if (text.length < 5) {
+            setError("Write a bit more about what happened.");
+            return;
+        }
+        setSending(true);
+        setError("");
+        try {
+            const list = await chatsInCurrentProject(project_path);
+            const conversation = linkedId
+                ? list.find((c) => c.id === linkedId) ?? null
+                : null;
+            await submitProblemReport({
+                category,
+                message: text,
+                conversation,
+            });
+            setSent(true);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Send failed");
+        } finally {
+            setSending(false);
+        }
+    }
 
     return (
         <>
             <SettingSection title="Feedback">
-                <SettingRow title="Report a problem" description="Sends a Sentry report. Does not use AI credits. Optionally link one chat from this project.">
+                <SettingRow title="Report a problem" description="Sends to our team. Does not use AI credits. Optionally link one chat from this project.">
                     <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
                         Report
                     </Button>
@@ -827,80 +848,76 @@ function FeedbackSection() {
             </SettingSection>
             <AlertDialog open={open} onOpenChange={close}>
                 <AlertDialogContent sizeClassName="max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Report a problem</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Describe what went wrong. We attach app version, platform, and the latest Sentry event if one exists.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogBody>
-                        <label className="mb-1 block text-sm text-text-muted">Category</label>
-                        <select
-                            className="mb-3 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value as typeof category)}
-                        >
-                            {["Billing & payments","Account & login","Usage & credits","MCPs & Skills","Dashboard UI","Docs & help","Performance","Agent / AI","Misc"].map((c) => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                        <label className="mb-1 block text-sm text-text-muted">Link a chat (optional)</label>
-                        <select
-                            className="mb-3 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
-                            value={linkedId}
-                            onChange={(e) => setLinkedId(e.target.value)}
-                        >
-                            <option value="">None — do not attach a chat</option>
-                            {chats.map((c) => (
-                                <option key={c.id} value={c.id}>{c.title}</option>
-                            ))}
-                        </select>
-                        <Textarea
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            placeholder="What were you doing?"
-                            className="min-h-32"
-                            autoFocus
-                        />
-                        {error ? <p className="mt-2 text-sm text-error">{error}</p> : null}
-                    </AlertDialogBody>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel asChild>
-                            <Button type="button" variant="ghost" size="sm">
-                                Cancel
-                            </Button>
-                        </AlertDialogCancel>
-                        <AlertDialogAction asChild>
-                            <Button
-                                type="button"
-                                size="sm"
-                                disabled={!message.trim() || sending}
-                                onClick={() => {
-                                    setSending(true);
-                                    setError("");
-                                    void import("@/lib/feedback/report")
-                                        .then(async ({ submitProblemReport, chatsInCurrentProject }) => {
-                                            const list = await chatsInCurrentProject(project_path);
-                                            const conversation = linkedId
-                                                ? list.find((c) => c.id === linkedId) ?? null
-                                                : null;
-                                            await submitProblemReport({
-                                                category,
-                                                message: message.trim(),
-                                                conversation,
-                                            });
-                                        })
-                                        .then(() => close(false))
-                                        .catch((err: unknown) => {
-                                            setError(err instanceof Error ? err.message : "Send failed");
-                                        })
-                                        .finally(() => setSending(false));
-                                }}
-                            >
-                                {sending ? "Sending…" : "Send report"}
-                            </Button>
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
+                    {sent ? (
+                        <>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Report sent</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Thanks, we&apos;ll look into it.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <Button type="button" size="sm" onClick={() => close(false)}>
+                                    Close
+                                </Button>
+                            </AlertDialogFooter>
+                        </>
+                    ) : (
+                        <>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Report a problem</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Describe what went wrong. You can attach one chat from this project.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogBody>
+                                <label className="mb-1 block text-sm text-text-muted">Category</label>
+                                <select
+                                    className="mb-3 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                                    value={category}
+                                    onChange={(e) => setCategory(e.target.value as ReportCategory)}
+                                >
+                                    {REPORT_CATEGORIES.map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                                <label className="mb-1 block text-sm text-text-muted">Link a chat (optional)</label>
+                                <select
+                                    className="mb-3 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                                    value={linkedId}
+                                    onChange={(e) => setLinkedId(e.target.value)}
+                                >
+                                    <option value="">None — do not attach a chat</option>
+                                    {chats.map((c) => (
+                                        <option key={c.id} value={c.id}>{c.title}</option>
+                                    ))}
+                                </select>
+                                <Textarea
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    placeholder="What were you doing?"
+                                    className="min-h-32"
+                                    autoFocus
+                                />
+                                {error ? <p className="mt-2 text-sm text-error">{error}</p> : null}
+                            </AlertDialogBody>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel asChild>
+                                    <Button type="button" variant="ghost" size="sm" disabled={sending}>
+                                        Cancel
+                                    </Button>
+                                </AlertDialogCancel>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={!message.trim() || sending}
+                                    onClick={() => void send()}
+                                >
+                                    {sending ? "Sending…" : "Send report"}
+                                </Button>
+                            </AlertDialogFooter>
+                        </>
+                    )}
                 </AlertDialogContent>
             </AlertDialog>
         </>
@@ -1001,10 +1018,9 @@ export function SettingsView({
 
     const resolveTargetFromDeepLink = useCallback((category?: string | null, section?: string | null): string | null => {
         if (section === "plugins") return "settings-ai-plugins";
-        if (section === "mcp" || section === "integrations") return null;
+        if (section === "mcp" || section === "integrations") return "settings-mcp";
         if (section === "rules") return "settings-ai-rules";
         if (section === "workflows") return "settings-ai-workflows";
-        if (section === "multiwork") return "settings-ai-multiwork";
         if (section === "subagents" || section === "subagent") return "settings-ai-subagents";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
@@ -1084,7 +1100,6 @@ export function SettingsView({
         const hide = new Set<string>();
         if (!agentsOn) {
             hide.add("ai-subagents");
-            hide.add("ai-multiwork");
         }
         const q = query.trim().toLowerCase();
         return SETTINGS_NAV.map((group) => ({
@@ -1146,6 +1161,7 @@ export function SettingsView({
                                                             key={leaf.id}
                                                             type="button"
                                                             disabled={disabled}
+                                                            title={disabled ? "Sign in to manage plugins." : undefined}
                                                             onClick={() => onLeafClick(leaf)}
                                                             className={cn(
                                                                 "flex h-9 w-full items-center gap-1.5 rounded-lg px-2 text-left text-sm",
@@ -1194,6 +1210,10 @@ export function SettingsView({
                     <div className="absolute inset-0 min-h-0">
                         <PluginsSettingsView />
                     </div>
+                ) : activeLeafId === "mcp" ? (
+                    <div className="absolute inset-0 min-h-0">
+                        <McpSettingsView />
+                    </div>
                 ) : (
                     <div className="absolute inset-0 overflow-y-auto px-8 py-8">
                         <div className="mx-auto w-full max-w-4xl">
@@ -1203,7 +1223,6 @@ export function SettingsView({
                             {activeLeafId === "account-profile" ? <AccountSettingsPanel /> : null}
                             {activeLeafId === "ai-models" ? <AiSettings settings={settings} page="models" /> : null}
                             {activeLeafId === "ai-subagents" ? <AiSettings settings={settings} page="subagents" /> : null}
-                            {activeLeafId === "ai-multiwork" ? <AiSettings settings={settings} page="multiwork" /> : null}
                             {activeLeafId === "ai-rules" ? <AiSettings settings={settings} page="rules" /> : null}
                             {activeLeafId === "ai-workflows" ? <AiSettings settings={settings} page="workflows" /> : null}
                             {activeLeafId === "ai-skills" ? <SkillsSettings /> : null}

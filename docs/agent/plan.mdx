@@ -1,7 +1,38 @@
 ---
 title: Plan
-description: Agree on the approach before the project changes.
+description: Agree on the steps before Shape edits files.
 order: 2
 ---
 
-Plan writes the approach to `.shape/plans/` before it changes the project. Read it, edit it if you want, then continue to build it.
+Use Plan when the work is large enough that you want to see the steps first. A rename in one file does not need Plan. A new settings page across several files does.
+
+## What it writes
+
+Plan writes the approach into `.shape/plans/` and shows it in the thread. It does not start editing until you continue.
+
+The plan is a file you can read and change. If a step is wrong, fix it in the thread before you build.
+
+## How to run it
+
+1. Switch the composer to **Plan**.
+2. Describe the change in the same way you would in Code. Include the goal, the files you know about, and anything that must not change.
+3. Wait for the plan in the thread.
+4. Edit the plan if a step is off. Say which step and why.
+5. Continue when you want Shape to build it.
+
+If you already know the change is one file, skip Plan and use [Code](/docs/agent/overview).
+
+## What to put in the request
+
+Good Plan prompts name the outcome and the limits:
+
+- “Add a password field to account settings. Do not change billing.”
+- “Split the homepage hero into its own component. Keep the current copy.”
+
+Weak prompts skip the limit. Shape will fill in the blanks, and you will spend a turn undoing that.
+
+## After you continue
+
+Building uses the plan as the checklist. If the implementation drifts, say so in the same thread. Start a new Plan only if the goal itself changed.
+
+When the build is done, read the diffs the same way you would after Code. Keep or skip each file. Commit from [source control](/docs/git/commits) when you are ready.

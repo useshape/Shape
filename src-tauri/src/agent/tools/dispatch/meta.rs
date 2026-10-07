@@ -98,6 +98,17 @@ pub(super) fn tool_save_plan(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             "Pass a `todos` array of checklist items (kept outside the markdown). Example: [\"Add login route\", \"Wire session\"].",
         );
     }
+    let checklist = format!(
+        "## Todos\n{}",
+        todos
+            .iter()
+            .map(|t| format!("- [ ] {t}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    if let Err(e) = validate_plan_todos_section(&checklist) {
+        return error_outcome("save_plan", &e);
+    }
     let body = strip_todos_section(&content);
     let file_body = format_plan_file(&body, &todos);
     let slug = slugify_plan_title(&title);

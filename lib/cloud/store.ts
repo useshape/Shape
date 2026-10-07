@@ -22,7 +22,8 @@ const REFRESH_KEY = "shape-auth-refresh-token";
 const PROFILE_KEY = "shape-auth-profile";
 const PENDING_OAUTH_KEY = "shape-auth-pending-oauth";
 const REDIRECT_URI = "shape://auth/callback";
-const LOGIN_TIMEOUT_MS = 90 * 1000;
+/** Matches the website OAuth code lifetime so a slow browser sign-in still has its PKCE verifier. */
+const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 const LOGIN_POLL_BASE_MS = 1000;
 const LOGIN_POLL_MAX_MS = 8000;
 /** How often the IDE refreshes /api/account while signed in. Keep high to reduce Vercel Fluid CPU. */

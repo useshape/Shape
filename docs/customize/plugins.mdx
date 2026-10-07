@@ -1,9 +1,38 @@
 ---
 title: Plugins
-description: Let chat use an outside account.
+description: Connect an outside account so chat can use it.
 order: 1
 ---
 
-Plugins connect an account such as GitHub, Slack, or Linear so chat can use it. Sign in to connect one.
+Plugins let chat use GitHub, Slack, Linear, and similar accounts. You connect the account once, then mention the task in a message.
 
-Local tool servers are configured as [MCP](/docs/customize/mcp).
+A plugin is not a local tool. A tool that runs on your machine is [MCP](/docs/customize/mcp).
+
+## Connect an account
+
+1. Open plugins from the app.
+2. Pick the service.
+3. Sign in in the browser window and allow access.
+4. Return to Shape.
+
+You can disconnect from the same place. Disconnecting stops new chat turns from using that account. It does not delete past threads.
+
+## Use it in chat
+
+Say what you need in plain language. You do not need a special syntax.
+
+Examples:
+
+- “Open a pull request for this branch.”
+- “List my Linear issues tagged bug.”
+- “Post a summary of this diff to the engineering Slack channel.”
+
+If the plugin is not connected, Shape cannot call it. Connect it first, then send the message again.
+
+## GitHub in two places
+
+Signing in for [GitHub in the Git sidebar](/docs/git/github) loads pull requests, issues, and Actions for the open folder. A GitHub plugin is for chat. You may need both, depending on what you are doing.
+
+## If it fails
+
+Sign in again. Check that the account has access to the repo or workspace you named. Then send a shorter message that names the repo or channel.

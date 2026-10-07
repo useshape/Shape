@@ -366,52 +366,6 @@ fn would_warn_unknown_dom_prop(tag: &str, name: &str) -> bool {
     name.chars().any(|c| c.is_ascii_uppercase())
 }
 
-fn quoted_attribute(opening: &str, names: &[&str]) -> Option<String> {
-    for name in names {
-        let mut from = 0;
-        while let Some(found) = opening[from..].find(name) {
-            let idx = from + found;
-            let before_ok = idx == 0 || !opening.as_bytes()[idx - 1].is_ascii_alphanumeric();
-            let mut cursor = idx + name.len();
-            if !before_ok {
-                from = cursor;
-                continue;
-            }
-            while opening
-                .as_bytes()
-                .get(cursor)
-                .is_some_and(u8::is_ascii_whitespace)
-            {
-                cursor += 1;
-            }
-            if opening.as_bytes().get(cursor) != Some(&b'=') {
-                from = cursor;
-                continue;
-            }
-            cursor += 1;
-            while opening
-                .as_bytes()
-                .get(cursor)
-                .is_some_and(u8::is_ascii_whitespace)
-            {
-                cursor += 1;
-            }
-            let quote = *opening.as_bytes().get(cursor)?;
-            if quote != b'"' && quote != b'\'' {
-                from = cursor;
-                continue;
-            }
-            let start = cursor + 1;
-            let end = opening.as_bytes()[start..]
-                .iter()
-                .position(|b| *b == quote)
-                .map(|v| start + v)?;
-            return Some(opening[start..end].to_string());
-        }
-    }
-    None
-}
-
 fn merge_opening_attribute(opening: &str, name: &str, value: &str) -> Result<String, AppError> {
     let html_value = value.replace('"', "&quot;").replace('\n', " ");
     if let Some(idx) = attribute_index(opening, name) {

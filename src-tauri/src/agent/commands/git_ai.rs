@@ -80,7 +80,7 @@ pub async fn summarize_pull_request(
         }
     }
 
-    let mut prompt = format!("{}\n\n", prompts::PR_WALKTHROUGH_MD);
+    let mut prompt = format!("{}\n\n", prompts::PR_SUMMARY_MD);
     prompt.push_str(&format!(
         "## PR\n- Repo: {slug}\n- Number: #{number}\n- Author: {user}\n- State: {state}\n- Base â† Head: {base} â† {head}\n- Diffstat: +{additions} âˆ’{deletions}\n\n## Title\n{title}\n\n## Body\n{}\n\n## Files\n{}\n",
         truncate_for_prompt(body, 8_000),

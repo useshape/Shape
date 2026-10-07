@@ -7,7 +7,6 @@ mod discover;
 mod files;
 mod git;
 mod meta;
-mod multiwork;
 mod persona;
 mod subagent;
 mod terminal;
@@ -154,6 +153,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "search_files" => discover::tool_search_files(&args, ctx).await,
         "grep" => discover::tool_grep(&args, ctx).await,
         "search_codebase" => discover::tool_search_codebase(&args, ctx).await,
+        "codebase_overview" => discover::tool_codebase_overview(&args, ctx).await,
         "list_chats" => chats::tool_list_chats(&args, ctx),
         "read_chat" => chats::tool_read_chat(&args, ctx),
         "web_search" => discover::tool_web_search(&args, ctx).await,
@@ -191,12 +191,6 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "wait" => terminal::tool_wait(&args, ctx).await,
         "save_plan" => meta::tool_save_plan(&args, ctx),
         "spawn_subagent" => subagent::tool_spawn_subagent(&args, ctx).await,
-        "spawn_worker" => multiwork::tool_spawn_worker(&args, ctx).await,
-        "message_worker" => multiwork::tool_message_worker(&args, ctx).await,
-        "broadcast_workers" => multiwork::tool_broadcast_workers(&args, ctx).await,
-        "set_worker_status" => multiwork::tool_set_worker_status(&args, ctx).await,
-        "message_peer" => multiwork::tool_message_peer(&args, ctx).await,
-        "report_orchestrator" => multiwork::tool_report_orchestrator(&args, ctx).await,
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "browse" => blocked_outcome(

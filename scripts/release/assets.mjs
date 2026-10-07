@@ -113,7 +113,8 @@ function main() {
         copyFileSync(setupSig, sigDest);
         console.log(`Wrote ${sigDest}`);
     } else {
-        console.warn(`No updater signature at ${setupSig} (signing key missing?)`);
+        console.error(`No updater signature at ${setupSig}. Release builds must be signed.`);
+        process.exit(1);
     }
 
     const exe = findReleaseExe(releaseDir);

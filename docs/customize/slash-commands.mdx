@@ -1,7 +1,38 @@
 ---
 title: Slash commands
-description: A saved prompt you can run with /.
+description: Run a saved prompt with /.
 order: 3
 ---
 
-Type `/` in chat to run a workflow. Each one is a name and a prompt, defined under Workflows. A trigger phrase in the message runs it too.
+A slash command is a name plus a prompt you reuse. Type `/` in chat to pick one.
+
+Use this for work you do the same way every time: writing a commit message, checking a PR, generating tests in a fixed shape.
+
+## Add one
+
+1. Open **Workflows**.
+2. Give it a short name. That name is what you type after `/`.
+3. Write the prompt you want Shape to follow. Be specific about the output: a commit message, a list of risks, a test file, and so on.
+4. Save it.
+
+Keep the prompt as the instructions, not as a one-off about the current branch. The current project still comes from the open folder and the thread.
+
+## Run one
+
+Type `/` in the composer and choose the command. You can add extra text after it, such as `/commit focus on the billing page`.
+
+A trigger phrase in a normal message can run it too, if you set one on the command.
+
+## What to put in the prompt
+
+Write it like you would brief a person who has never seen this repo:
+
+- What to look at (`@` files, or “the diff in source control”).
+- What to produce.
+- What to avoid (“do not change snapshots”).
+
+Bad commands are one word. “Review” with no standard is not a command. The [Review](/docs/agent/review) mode already exists.
+
+## Edit or delete
+
+Open **Workflows** again. Change the prompt, or delete the command. Existing threads do not change.

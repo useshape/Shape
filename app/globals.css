@@ -241,7 +241,6 @@
   filter: invert(1) brightness(0.15);
 }
 
-/* Soft light chrome — keeps accent; flips surfaces/text. */
 [data-theme="light"] {
   color-scheme: light;
   --incognito: #f3e4f8;
@@ -251,11 +250,11 @@
   --surface-0: #F9F9F9;
   --surface-1: #F9F9F9;
   --surface-2: #f3f3f3;
-  --surface-3: #ffffff;
+  --surface-3: #f0f0f0;
   --surface-4: #f3f3f3;
   --settings-card: #f3f3f3;
   --chrome: #ffffff;
-  --sidebar: #f4f4f4;
+  --sidebar: #ffffff;
   --editor: #ffffff;
   --base: #141414;
   --background: var(--chrome);

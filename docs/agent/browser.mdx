@@ -1,9 +1,37 @@
 ---
 title: Browser
-description: Edit the running page. The source updates.
+description: Change the running page. The source updates with it.
 order: 4
 ---
 
-Design mode changes the running page and writes those changes into the source. It does not use a model. Visual mode in chat does.
+Use the in-app browser when you want to edit the live page instead of describing the UI in chat.
 
-Start the dev server and open the local URL. This works for Next.js, Astro, Vite, and Remix.
+This is not the same as Visual mode in the composer. Visual mode asks the agent to design. The browser lets you click the page in front of you.
+
+## Start the page
+
+1. Run your app the way you usually do (`npm run dev`, and so on).
+2. Copy the local URL (for example `http://localhost:3000`).
+3. Open that URL in Shape’s browser.
+
+This works with Next.js, Vite, Astro, and Remix. The app has to be running. Shape does not start it for you.
+
+If the preview cannot reach localhost, the dev server is not up, or it is bound to another host. See [troubleshooting](/docs/help/troubleshooting).
+
+## Edit the page
+
+Select an element and change it. Shape writes the same change into the source.
+
+You still review the diff in the thread. Keep it if the source matches what you changed on the page. Skip it if it touched the wrong file.
+
+## What to expect
+
+- Layout and copy changes map cleanly when the element is in one component.
+- Shared components update every screen that uses them. That is correct. Read the diff before you keep it.
+- Styles that come from a design token may change the token, not a one-off class.
+
+## Chat on the side
+
+You can still send a Visual or Code message while the browser is open. Say which screen you have open if the app has more than one route.
+
+When you are done, go back to [Code](/docs/agent/overview) for logic that is not on the page.

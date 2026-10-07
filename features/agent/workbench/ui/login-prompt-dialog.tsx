@@ -5,8 +5,8 @@ import { useShapeAuth } from "@/lib/cloud/store";
 import { getSettings, updateSettingSection } from "@/lib/settings";
 
 /**
- * When logged out on launch, open the onboarding login UI (not a modal).
- * Dispatches `shape-show-login` for Content to overlay Onboarding loginOnly.
+ * Logged-out launch used to raise a separate login overlay.
+ * The workbench already blocks on the sign-in screen, so this only records that the prompt ran.
  */
 export function LoginPromptDialog() {
     const auth = useShapeAuth();

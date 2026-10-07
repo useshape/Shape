@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { commands, Conversation, useProjectState } from "@/lib/backend";
 import { useChatStream } from "./chat-stream-store";
 import { NEW_CHAT_TAB_ID, DEMO_CHAT_TAB_ID, isEphemeralChatTabId, type ChatTab } from "../ui/shell/tabs";
-import { isDemoChatPinned, setDemoChatPinned } from "./demo-chat";
+import { buildDemoChatMessages, isDemoChatPinned, setDemoChatPinned } from "./demo-chat";
 import { openChatHistoryMenu } from "../ui/shell/history";
 import { parseMessageContent, type Chunk } from "../ui/md/renderer";
 import {
@@ -43,14 +43,6 @@ import { buildPlanBuildMessage } from "@/lib/chat/continue-action";
 import { listProjectRuleFiles, loadProjectRules } from "@/lib/workspace/rules";
 import { isWorkspaceTrusted } from "@/lib/workspace/trust";
 import { clearAllDesignPreviewSessions } from "@/lib/agent-preview/store";
-import {
-    applyBusEvent,
-    applyWorkerEvent,
-    confirmMultiworkStart,
-    isMultiworkMode,
-    resetMultiworkSession,
-    setMultiworkMode,
-} from "@/features/multiwork";
 import {
     createPendingAttachment,
     processAttachment,
@@ -93,7 +85,7 @@ function writePersistedChatTabs(
 ) {
     try {
         const persistable = tabs.filter(
-            (t) => !isEphemeralChatTabId(t.id) || t.id === NEW_CHAT_TAB_ID || t.id === DEMO_CHAT_TAB_ID,
+            (t) => t.id !== DEMO_CHAT_TAB_ID && (!isEphemeralChatTabId(t.id) || t.id === NEW_CHAT_TAB_ID),
         );
         const nextActive = persistable.some((tab) => tab.id === activeId)
             ? activeId
@@ -183,7 +175,6 @@ export function useChatSession() {
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
     const [openChatTabs, setOpenChatTabs] = React.useState<ChatTab[]>([
         { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-        { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
     ]);
     const [activeChatTabId, setActiveChatTabId] = React.useState<string>(NEW_CHAT_TAB_ID);
     const [selectedModel, setSelectedModel] = React.useState(
@@ -254,27 +245,23 @@ export function useChatSession() {
     React.useEffect(() => {
         let cancelled = false;
         setTabsReady(false);
-        const persistedNow = readPersistedChatTabs(project_path);
-        if (persistedNow?.activeId === DEMO_CHAT_TAB_ID) setDemoChatPinned(true);
         const key = chatTabsStorageKey(project_path);
         tabsHydratedForRef.current = key;
 
         void (async () => {
             const persisted = readPersistedChatTabs(project_path);
             if (persisted) {
-                const tabs = [...persisted.tabs];
-                if (!tabs.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
-                    tabs.push({ id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] });
-                }
+                const tabs = persisted.tabs.filter((t) => t.id !== DEMO_CHAT_TAB_ID);
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
                     tabs.unshift({ id: NEW_CHAT_TAB_ID, title: "New Chat" });
                 }
+                const activeId = persisted.activeId === DEMO_CHAT_TAB_ID ? NEW_CHAT_TAB_ID : persisted.activeId;
                 setOpenChatTabs(tabs);
-                setActiveChatTabId(persisted.activeId);
-                if (persisted.activeId !== NEW_CHAT_TAB_ID && !isEphemeralChatTabId(persisted.activeId)) {
+                setActiveChatTabId(activeId);
+                if (activeId !== NEW_CHAT_TAB_ID && !isEphemeralChatTabId(activeId)) {
                     try {
                         await commands.loadConversation(
-                            persisted.activeId,
+                            activeId,
                             project_path ?? undefined,
                         );
                         if (!cancelled) {
@@ -284,34 +271,13 @@ export function useChatSession() {
                     } catch (err) {
                         // Ephemeral / deleted tabs — fall back to a draft quietly.
                         if (!cancelled) {
-                            setOpenChatTabs([
-                                { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                                { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
-                            ]);
+                            setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
                             setActiveChatTabId(NEW_CHAT_TAB_ID);
                         }
                     }
-                } else if (persisted.activeId === DEMO_CHAT_TAB_ID) {
-                    setDemoChatPinned(true);
-                    // Demo is in-memory only — rebuild if the tab was persisted.
-                    const { buildDemoChatMessages } = await import("./demo-chat");
-                    if (!cancelled) {
-                        setMessages(buildDemoChatMessages());
-                        void import("@/features/agent/subagents/store").then(({ seedDemoSubagents }) => {
-                            seedDemoSubagents();
-                        });
-                        setOpenChatTabs((prev) => {
-                            if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) return prev;
-                            return [...prev, { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] }];
-                        });
-                        setActiveChatTabId(DEMO_CHAT_TAB_ID);
-                    }
                 }
             } else {
-                setOpenChatTabs([
-                    { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                    { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
-                ]);
+                setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
             }
             if (!cancelled) setTabsReady(true);
@@ -859,13 +825,6 @@ export function useChatSession() {
             return false;
         }
 
-        const multiwork = isMultiworkMode();
-        const isFirstMultiworkSend = multiwork && messagesRef.current.length === 0;
-        if (isFirstMultiworkSend) {
-            const ok = await confirmMultiworkStart();
-            if (!ok) return false;
-        }
-
         sendingInFlightRef.current = true;
 
         let userMsg = messageContent;
@@ -1026,7 +985,6 @@ export function useChatSession() {
 
             const modelToSend = selectedModelRef.current || "auto";
             const modeToSend = selectedModeRef.current;
-            const workerModels = multiwork ? [modelToSend] : undefined;
             const catalogIds = getCatalogModels().map((m) => m.id);
             const subagentSend = subagentModelsForSend(settings.ai.subagentModels, catalogIds, {
                 creditsRemaining: shapeAuth.creditsRemaining,
@@ -1037,7 +995,7 @@ export function useChatSession() {
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 modelToSend,
-                multiwork ? "Multiwork" : modeToSend,
+                modeToSend,
                 mergedRules,
                 token,
                 undefined,
@@ -1053,10 +1011,9 @@ export function useChatSession() {
                 },
                 reasoningEffort,
                 fastMode ? "priority" : null,
-                undefined,
                 userMsg,
-                workerModels,
-                multiwork ? "multiwork" : undefined,
+                undefined,
+                undefined,
                 subagentSend.models,
                 subagentSend.defaultModel,
             );
@@ -1415,6 +1372,29 @@ export function useChatSession() {
         };
     }, [syncOpenTabs]);
 
+    const openDemoChat = React.useCallback(() => {
+        setDemoChatPinned(true);
+        setSendError(null);
+        clearAllDesignPreviewSessions();
+        setContextSummarized(false);
+        setMessages(buildDemoChatMessages());
+        setChatTitle("Demo");
+        setConversationId(DEMO_CHAT_TAB_ID);
+        setCurrentConversationId(DEMO_CHAT_TAB_ID);
+        setActiveChatTabId(DEMO_CHAT_TAB_ID);
+        setOpenChatTabs((prev) => {
+            const others = prev.filter((tab) => tab.id !== DEMO_CHAT_TAB_ID && tab.id !== NEW_CHAT_TAB_ID);
+            return [{ id: DEMO_CHAT_TAB_ID, title: "Demo" }, ...others];
+        });
+        window.dispatchEvent(new Event("shape-chat-focus-input"));
+    }, [setMessages, setContextSummarized]);
+
+    React.useEffect(() => {
+        const onDemo = () => openDemoChat();
+        window.addEventListener("shape-demo-chat", onDemo);
+        return () => window.removeEventListener("shape-demo-chat", onDemo);
+    }, [openDemoChat]);
+
     const handleNewChat = async () => {
         try {
             // Do not stop background generation; only the Stop button cancels.
@@ -1426,10 +1406,6 @@ export function useChatSession() {
             setSendError(null);
             setMessages([]);
             setContextSummarized(false);
-            if (isMultiworkMode()) {
-                // New Multiwork session only (Sessions → new). Main New Chat turns mode off first.
-                resetMultiworkSession();
-            }
             void import("@/features/agent/subagents/store").then(({ resetSubagentsForParent }) => {
                 resetSubagentsForParent(conversationIdRef.current);
             });
@@ -1460,8 +1436,7 @@ export function useChatSession() {
             return;
         }
         if (tabId === DEMO_CHAT_TAB_ID) {
-            setDemoChatPinned(true);
-            window.dispatchEvent(new CustomEvent("shape-demo-chat"));
+            openDemoChat();
             return;
         }
         setDemoChatPinned(false);
@@ -1486,16 +1461,14 @@ export function useChatSession() {
     };
 
     const handleCloseChatTab = async (tabId: string) => {
+        if (tabId === DEMO_CHAT_TAB_ID) setDemoChatPinned(false);
         if (isIncognitoChat() && tabId === conversationIdRef.current) {
             await purgeIncognitoConversation(tabId);
             await setIncognitoChat(false);
         }
         const remaining = openChatTabs.filter((tab) => tab.id !== tabId);
         if (remaining.length === 0) {
-            setOpenChatTabs([
-                { id: NEW_CHAT_TAB_ID, title: "New Chat" },
-                { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
-            ]);
+            setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
             setActiveChatTabId(NEW_CHAT_TAB_ID);
             setMessages([]);
             setConversationId(null);
@@ -1573,12 +1546,6 @@ export function useChatSession() {
                 setContextSummarized(false);
                 const history = await commands.getChatHistory();
                 setMessages(history);
-                if (conv?.kind === "multiwork") {
-                    // Re-enter Multiwork without wiping background workers for this session.
-                    setMultiworkMode(true);
-                } else if (conv && isMultiworkMode()) {
-                    setMultiworkMode(false);
-                }
                 await refreshHistory(true);
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
@@ -1602,27 +1569,6 @@ export function useChatSession() {
     }, [handleLoadConversation]);
 
     React.useEffect(() => {
-        let cancelled = false;
-        const unlisteners: (() => void)[] = [];
-        void listen("multiwork-worker", (event) => {
-            applyWorkerEvent((event.payload ?? {}) as Parameters<typeof applyWorkerEvent>[0]);
-        }).then((fn) => {
-            if (cancelled) fn();
-            else unlisteners.push(fn);
-        });
-        void listen("multiwork-bus", (event) => {
-            applyBusEvent((event.payload ?? {}) as Parameters<typeof applyBusEvent>[0]);
-        }).then((fn) => {
-            if (cancelled) fn();
-            else unlisteners.push(fn);
-        });
-        return () => {
-            cancelled = true;
-            unlisteners.forEach((fn) => fn());
-        };
-    }, []);
-
-    React.useEffect(() => {
         const onRename = (e: Event) => {
             const detail = (e as CustomEvent<{ id?: string; title?: string }>).detail;
             const id = detail?.id?.trim();
@@ -1639,43 +1585,6 @@ export function useChatSession() {
         window.addEventListener("shape-chat-rename", onRename as EventListener);
         return () => window.removeEventListener("shape-chat-rename", onRename as EventListener);
     }, [syncOpenTabs]);
-
-    React.useEffect(() => {
-        const onDemo = () => {
-            void (async () => {
-                const { buildDemoChatMessages, setDemoChatPinned: pinDemo } = await import("./demo-chat");
-                pinDemo(true);
-                const demo = buildDemoChatMessages();
-                setMessages(demo);
-                setChatTitle("Feed warning jump");
-                void import("@/features/agent/subagents/store").then(({ seedDemoSubagents }) => {
-                    seedDemoSubagents();
-                });
-                window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "agents" }));
-                setInputValue("");
-                setSendError(null);
-                setOpenChatTabs((prev) => {
-                    if (prev.some((t) => t.id === DEMO_CHAT_TAB_ID)) {
-                        return prev.map((t) =>
-                            t.id === DEMO_CHAT_TAB_ID ? { ...t, title: "Feed warning jump", models: ["auto"] } : t,
-                        );
-                    }
-                    return [
-                        ...prev.filter((t) => t.id !== NEW_CHAT_TAB_ID),
-                        { id: DEMO_CHAT_TAB_ID, title: "Feed warning jump", models: ["auto"] },
-                    ];
-                });
-                setActiveChatTabId(DEMO_CHAT_TAB_ID);
-                setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-                }, 50);
-            })();
-        };
-        window.addEventListener("shape-demo-chat", onDemo);
-        return () => {
-            window.removeEventListener("shape-demo-chat", onDemo);
-        };
-    }, []);
 
     const handleViewAllHistory = React.useCallback(() => {
         openChatHistoryMenu();

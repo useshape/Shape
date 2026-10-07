@@ -45,29 +45,7 @@ pub fn run() {
     // Release GUI builds have no console; ConPTY needs a hidden one to inherit
     // or Windows pops a visible console window for every terminal/shell spawn.
     crate::core::process::ensure_hidden_console_for_conpty();
-    #[cfg(windows)]
-    {
-        const PORT: &str = "--remote-debugging-port=9333";
-        const ORIGINS: &str = "--remote-allow-origins=*";
-        const SITES: &str = "--site-per-process";
-        let mut existing = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
-        for flag in [PORT, ORIGINS, SITES] {
-            let present = if flag == PORT {
-                existing.contains("remote-debugging-port")
-            } else {
-                existing.split_whitespace().any(|part| part == flag)
-            };
-            if present {
-                continue;
-            }
-            if existing.trim().is_empty() {
-                existing = flag.to_string();
-            } else {
-                existing = format!("{existing} {flag}");
-            }
-        }
-        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", existing);
-    }
+    crate::browser::webview_debug::install_env();
 
     // Load env from src-tauri/ or shape/ (tauri dev cwd varies)
     let _ = dotenvy::from_filename(".env.local");
@@ -394,6 +372,7 @@ pub fn run() {
             agent::commands::approvals::apply_file_edit,
             agent::commands::commit_message::generate_commit_message,
             agent::commands::commit_message::rewrite_open_file,
+            agent::commands::commit_message::rewrite_text,
             agent::commands::git_ai::summarize_pull_request,
             agent::commands::git_ai::review_pull_request,
             agent::commands::git_ai::draft_pull_request,
@@ -414,7 +393,6 @@ pub fn run() {
             agent::commands::indexing::get_index_status,
             agent::commands::indexing::set_index_embeddings,
             agent::commands::indexing::set_chat_memory_enabled,
-            agent::commands::indexing::set_byok_keys,
             agent::commands::mcp_cmds::sync_mcp_servers,
             agent::commands::mcp_cmds::get_mcp_config_path,
             agent::commands::mcp_cmds::ensure_mcp_config,

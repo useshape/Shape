@@ -28,96 +28,30 @@ pub fn completions_url() -> String {
     format!("{}/api/ai/chat/completions", base)
 }
 
-const OPENROUTER_COMPLETIONS_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
-const OPENAI_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
-
-/// Where chat completions are sent. Shape = website proxy; others = direct BYOK.
+/// Chat completions go through the Shape website proxy.
 #[derive(Debug, Clone)]
 pub enum LlmProvider {
     Shape,
-    OpenRouter { api_key: String },
-    OpenAi { api_key: String },
 }
 
 impl LlmProvider {
     pub fn api_key<'a>(&'a self, shape_token: &'a str) -> &'a str {
         match self {
             Self::Shape => shape_token,
-            Self::OpenRouter { api_key } | Self::OpenAi { api_key } => api_key,
         }
     }
 
     pub fn completions_url(&self) -> String {
         match self {
             Self::Shape => completions_url(),
-            Self::OpenRouter { .. } => OPENROUTER_COMPLETIONS_URL.to_string(),
-            Self::OpenAi { .. } => OPENAI_COMPLETIONS_URL.to_string(),
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
             Self::Shape => "Shape",
-            Self::OpenRouter { .. } => "OpenRouter",
-            Self::OpenAi { .. } => "OpenAI",
         }
     }
-
-    pub fn is_direct(&self) -> bool {
-        !matches!(self, Self::Shape)
-    }
-}
-
-fn nonempty_key(key: Option<&str>) -> Option<&str> {
-    key.map(str::trim).filter(|s| !s.is_empty())
-}
-
-/// OpenAI Chat Completions ids (with or without `openai/` prefix). Auto is not included.
-pub fn is_openai_direct_model(model: &str) -> bool {
-    if crate::agent::model_router::is_auto_selection(model) {
-        return false;
-    }
-    let m = crate::agent::model_router::normalize_model(model);
-    if m.strip_prefix("openai/").is_some() {
-        return true;
-    }
-    m.starts_with("gpt-")
-        || m.starts_with("o1")
-        || m.starts_with("o3")
-        || m.starts_with("o4")
-        || m.starts_with("chatgpt-")
-}
-
-/// Pick OpenAI vs OpenRouter from saved keys and the selected model.
-/// OpenAI models use the OpenAI key when present (api.openai.com), not the website.
-/// Auto uses OpenRouter if that key exists, otherwise OpenAI (`gpt-4o-mini`).
-pub fn select_byok_provider(
-    openrouter_key: Option<&str>,
-    openai_key: Option<&str>,
-    model: &str,
-) -> Option<LlmProvider> {
-    let openrouter = nonempty_key(openrouter_key);
-    let openai = nonempty_key(openai_key);
-    if openrouter.is_none() && openai.is_none() {
-        return None;
-    }
-
-    let auto = crate::agent::model_router::is_auto_selection(model);
-    if let Some(api_key) = openai {
-        if is_openai_direct_model(model) || (auto && openrouter.is_none()) {
-            return Some(LlmProvider::OpenAi {
-                api_key: api_key.to_string(),
-            });
-        }
-    }
-    if let Some(api_key) = openrouter {
-        return Some(LlmProvider::OpenRouter {
-            api_key: api_key.to_string(),
-        });
-    }
-    openai.map(|api_key| LlmProvider::OpenAi {
-        api_key: api_key.to_string(),
-    })
 }
 
 fn llm_http_error(provider: &LlmProvider, status: reqwest::StatusCode, text: &str) -> String {
@@ -140,34 +74,6 @@ pub fn rewrite_model_for_provider(model: &str, provider: &LlmProvider) -> Result
                 return Ok(crate::agent::model_router::proxy_model_id(model));
             }
             Ok(m)
-        }
-        LlmProvider::OpenRouter { .. } => Ok(m),
-        LlmProvider::OpenAi { .. } => {
-            if m == crate::agent::model_router::MODEL_FAST
-                || crate::agent::model_router::is_auto_selection(model)
-            {
-                return Ok("gpt-4o-mini".to_string());
-            }
-            if m == crate::agent::model_router::MODEL_IMAGE_CAPTION
-                || m == crate::agent::model_router::MODEL_FAST_VISION
-            {
-                return Ok("gpt-4o-mini".to_string());
-            }
-            if let Some(rest) = m.strip_prefix("openai/") {
-                return Ok(rest.to_string());
-            }
-            if m.starts_with("gpt-")
-                || m.starts_with("o1")
-                || m.starts_with("o3")
-                || m.starts_with("o4")
-                || m.starts_with("chatgpt-")
-            {
-                return Ok(m);
-            }
-            Err(AppError::Message(
-                "OpenAI API keys only support OpenAI models (ids like openai/gpt-4o). Use an OpenRouter key for other providers, or pick an OpenAI model."
-                    .to_string(),
-            ))
         }
     }
 }
@@ -332,49 +238,39 @@ pub(crate) fn shape_proxy_request(
         .header("Authorization", format!("Bearer {}", bearer))
         .header("Content-Type", "application/json");
 
-    match &ctx.provider {
-        LlmProvider::Shape => {
-            builder = builder
-                .header("X-Shape-Feature", &ctx.feature)
-                .header(
-                    "X-Shape-Client-Version",
-                    crate::core::build_attestation::client_version(),
-                );
-            if let Some(turn_id) = &ctx.turn_id {
-                builder = builder.header("X-Shape-Turn-Id", turn_id);
-            }
-            if let Some(conv_id) = &ctx.conversation_id {
-                builder = builder.header("X-Shape-Conversation-Id", conv_id);
-            }
-            if let Some(request_id) = &ctx.request_id {
-                builder = builder.header("X-Shape-Request-Id", request_id);
-            }
-            if let Some(breakdown) = &ctx.context_breakdown {
-                // Keep header under common proxy limits; breakdown is a small JSON object.
-                if breakdown.len() < 8_000 {
-                    builder = builder.header("X-Shape-Context-Breakdown", breakdown);
-                }
-            }
-            let device_id = crate::commands::device_id::get_device_id()
-                .ok()
-                .filter(|id| !id.is_empty())
-                .unwrap_or_default();
-            if !device_id.is_empty() {
-                builder = builder.header("X-Shape-Device-Id", &device_id);
-            }
-            if let Some(attestation) =
-                crate::core::build_attestation::build_attestation_header(&device_id)
-            {
-                builder = builder.header("X-Shape-Build-Attestation", attestation);
+    if matches!(ctx.provider, LlmProvider::Shape) {
+        builder = builder
+            .header("X-Shape-Feature", &ctx.feature)
+            .header(
+                "X-Shape-Client-Version",
+                crate::core::build_attestation::client_version(),
+            );
+        if let Some(turn_id) = &ctx.turn_id {
+            builder = builder.header("X-Shape-Turn-Id", turn_id);
+        }
+        if let Some(conv_id) = &ctx.conversation_id {
+            builder = builder.header("X-Shape-Conversation-Id", conv_id);
+        }
+        if let Some(request_id) = &ctx.request_id {
+            builder = builder.header("X-Shape-Request-Id", request_id);
+        }
+        if let Some(breakdown) = &ctx.context_breakdown {
+            if breakdown.len() < 8_000 {
+                builder = builder.header("X-Shape-Context-Breakdown", breakdown);
             }
         }
-        LlmProvider::OpenRouter { .. } => {
-            // OpenRouter ranks/apps metadata — required for good attribution when BYOK.
-            builder = builder
-                .header("HTTP-Referer", "https://shape.dev")
-                .header("X-Title", "Shape");
+        let device_id = crate::commands::device_id::get_device_id()
+            .ok()
+            .filter(|id| !id.is_empty())
+            .unwrap_or_default();
+        if !device_id.is_empty() {
+            builder = builder.header("X-Shape-Device-Id", &device_id);
         }
-        LlmProvider::OpenAi { .. } => {}
+        if let Some(attestation) =
+            crate::core::build_attestation::build_attestation_header(&device_id)
+        {
+            builder = builder.header("X-Shape-Build-Attestation", attestation);
+        }
     }
     builder
 }
@@ -453,7 +349,6 @@ pub async fn stream_chat(
     logging::debug("stream", &format!("Using max_tokens={} for model={}", max_tokens, model));
 
     let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
-    let direct_openai = matches!(proxy_ctx.provider, LlmProvider::OpenAi { .. });
 
     let mut body = json!({
         "model": model,
@@ -466,7 +361,7 @@ pub async fn stream_chat(
     // OpenRouter reuse the cached prompt prefix across the many round-trips of a
     // single agent turn (system prompt + tool schemas + earlier messages), which is
     // the bulk of the input-token cost.
-    if !direct_openai {
+    {
         if let Some(session) = proxy_ctx
             .conversation_id
             .as_ref()
@@ -1394,18 +1289,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn openai_key_only_uses_openai_for_auto_and_gpt() {
-        let auto = select_byok_provider(None, Some("sk-test"), "auto").unwrap();
-        assert_eq!(auto.label(), "OpenAI");
-        assert_eq!(auto.completions_url(), OPENAI_COMPLETIONS_URL);
-
-        let gpt = select_byok_provider(None, Some("sk-test"), "openai/gpt-4o").unwrap();
-        assert_eq!(gpt.label(), "OpenAI");
-        assert_eq!(rewrite_model_for_provider("openai/gpt-4o", &gpt).unwrap(), "gpt-4o");
-        assert_eq!(rewrite_model_for_provider("auto", &gpt).unwrap(), "gpt-4o-mini");
-    }
-
-    #[test]
     fn shape_auto_stays_auto_for_cloud() {
         let shape = LlmProvider::Shape;
         assert_eq!(rewrite_model_for_provider("auto", &shape).unwrap(), "auto");
@@ -1413,25 +1296,5 @@ mod tests {
             rewrite_model_for_provider("openrouter/auto", &shape).unwrap(),
             "auto"
         );
-    }
-
-    #[test]
-    fn both_keys_send_gpt_to_openai_and_claude_to_openrouter() {
-        let gpt = select_byok_provider(Some("sk-or"), Some("sk-oa"), "openai/gpt-4o").unwrap();
-        assert_eq!(gpt.label(), "OpenAI");
-        let claude = select_byok_provider(
-            Some("sk-or"),
-            Some("sk-oa"),
-            "anthropic/claude-sonnet-4.6",
-        )
-        .unwrap();
-        assert_eq!(claude.label(), "OpenRouter");
-        let auto = select_byok_provider(Some("sk-or"), Some("sk-oa"), "auto").unwrap();
-        assert_eq!(auto.label(), "OpenRouter");
-    }
-
-    #[test]
-    fn no_keys_means_shape_proxy() {
-        assert!(select_byok_provider(None, None, "openai/gpt-4o").is_none());
     }
 }

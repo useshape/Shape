@@ -41,7 +41,8 @@ pub async fn inspector_for(want: &str) -> Result<String, String> {
     iframe_session_id(&page_ws, want).await?;
     let port = start_proxy(page_ws, want.to_string()).await?;
     Ok(format!(
-        "http://127.0.0.1:9333/devtools/inspector.html?ws=127.0.0.1:{port}/devtools/page/frame"
+        "{}/devtools/inspector.html?ws=127.0.0.1:{port}/devtools/page/frame",
+        crate::browser::webview_debug::base_url()
     ))
 }
 
@@ -76,7 +77,7 @@ async fn json_list() -> Result<Vec<Value>, String> {
         .build()
         .map_err(|e| e.to_string())?;
     client
-        .get("http://127.0.0.1:9333/json/list")
+        .get(format!("{}/json/list", crate::browser::webview_debug::base_url()))
         .send()
         .await
         .map_err(|_| RESTART.to_string())?

@@ -175,7 +175,7 @@ export async function exchangeOAuthCode(
       redirect_uri: redirectUri,
       client_id: "shape-desktop",
       code_verifier: codeVerifier,
-      device_id: deviceId,
+      ...(deviceId ? { device_id: deviceId } : {}),
     }),
   });
 }
