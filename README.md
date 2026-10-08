@@ -1,8 +1,8 @@
-<div align="center">
-  <img src="./public/logos/app.svg" alt="Shape logo" width="100" />
+<div align="start">
+  <img src="./public/logos/app.svg" alt="Shape logo" width="80" />
 </div>
 
-<div align="center">
+<div align="start">
 
 <h2>The desktop agent for anything</h2>
 
@@ -22,7 +22,7 @@
 
 </div>
 
-Shape brings your code, terminal, Git, chat, and browser together in one desktop app. An AI built into Shape can work directly in your project, understanding your code, making changes, running commands, and asking for your input when needed.
+Shape brings your workspace, terminal, commits, and agents together in one desktop app. With agents that can work directly in your project, understanding your code, making changes, running commands, testing and spawning subagents.
 
 ![Shape](./public/hero.png)
 
@@ -35,7 +35,7 @@ The easiest way to get started is the [Installer](https://useshape.org/download)
 For specific versions and previous releases, see:
 [Releases](https://github.com/useshape/Shape/releases)
 
-Stable and Nightly are update channels for this same app, not separate downloads. Stable tracks the latest GitHub release. Nightly tracks the latest prerelease. Switch them in Settings.
+Stable and Nightly are the available update channels. Stable provides tested releases, while Nightly includes the latest changes and may contain breaking changes.
 
 ---
 
@@ -57,8 +57,8 @@ Shape brings your coding environment into one workspace and gives the agent acce
 
 * **Agent**: Work with your code, files, terminal, Git, and more through chat.
 * **Workbench**: Editor, files, Git, terminal, and other tools in one workspace.
-* **Browser**: Browse and inspect local sites without leaving Shape.
-* **Design runtime**: Preview and work with HTML and React interfaces live.
+
+And more coming soon!
 
 For more, see the [user docs](https://useshape.org/docs/introduction/quick-start) or [developer reference](https://useshape.org/docs/developing/overview).
 
