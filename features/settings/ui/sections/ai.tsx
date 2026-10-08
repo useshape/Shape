@@ -16,13 +16,12 @@ import {
 } from "@/lib/catalog/store";
 
 import { getVisibleModels, isApiModel, isModelEnabled, isSubagentModelEnabled, resolveChatModels, resolveSubagentDefaultModel, sanitizeEnabledModels, sanitizeSubagentModels, type ModelInfo } from "@/lib/settings/models";
-import { useShapeAuth } from "@/lib/cloud/store";
+import { getShapeAccessToken } from "@/lib/cloud/store";
 import {
     type AutoRunModeSetting,
     type ShapeSettings,
     updateSettingSection,
 } from "@/lib/settings";
-import { getShapeAccessToken } from "@/lib/cloud/store";
 import { Textarea } from "@/components/ui/textarea";
 import {
     SettingSection,
@@ -128,13 +127,8 @@ export function AiSettingsPanel({
     page: "models" | "rules" | "workflows" | "context" | "subagents";
 }) {
     const a = settings.ai;
-    const auth = useShapeAuth();
     useShapeCatalog();
-    const allModels = resolveChatModels(getCatalogModels(), {
-        openaiKey: false,
-        openRouterKey: false,
-        signedIn: Boolean(auth.loggedIn && !auth.offline),
-    });
+    const allModels = resolveChatModels(getCatalogModels());
     const unavailableHint =
         "This model is not available on your plan.";
     const [showAllModels, setShowAllModels] = React.useState(false);

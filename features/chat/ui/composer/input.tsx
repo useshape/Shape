@@ -89,13 +89,13 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { microphoneConstraints, microphoneErrorMessage, useSettings, hasByokApiKeys } from "@/lib/settings";
+import { microphoneConstraints, microphoneErrorMessage, useSettings } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
 import { commands } from "@/lib/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
-import { ReasoningEffortSlider, effortDisplayLabel, type ReasoningEffort } from "./reasoning-effort";
+import { REASONING_EFFORTS, effortDisplayLabel, type ReasoningEffort } from "./reasoning-effort";
 export type { ReasoningEffort };
 
 type ChatInputProps = {
@@ -884,11 +884,7 @@ export function ChatInput({
     const settings = useSettings();
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
-    const allModels = resolveChatModels(getCatalogModels(), {
-        openaiKey: false,
-        openRouterKey: false,
-        signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
-    });
+    const allModels = resolveChatModels(getCatalogModels());
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const mentionOverlayRef = React.useRef<HTMLDivElement>(null);
     const composerBoxRef = React.useRef<HTMLDivElement>(null);
@@ -1223,8 +1219,7 @@ export function ChatInput({
             m.provider.toLowerCase().includes(modelSearch)
         );
     };
-    const needsSignIn =
-        !shapeAuth.isLoading && !shapeAuth.loggedIn && !hasByokApiKeys(settings.ai);
+    const needsSignIn = !shapeAuth.isLoading && !shapeAuth.loggedIn;
 
     const [plusPlugins, setPlusPlugins] = React.useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
     const [pluginQuery, setPluginQuery] = React.useState("");
@@ -1763,12 +1758,18 @@ export function ChatInput({
                                             <SwapText value={effortDisplayLabel(reasoningEffort)} />
                                         </span>
                                     </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-[280px] p-2">
-                                        <ReasoningEffortSlider
-                                            modelName={modelName}
-                                            value={reasoningEffort}
-                                            onCommit={setReasoningEffort}
-                                        />
+                                    <DropdownMenuSubContent className="w-44">
+                                        {REASONING_EFFORTS.map((stop) => (
+                                            <DropdownMenuItem
+                                                key={stop.value}
+                                                onClick={() => setReasoningEffort(stop.value)}
+                                            >
+                                                <span className="flex-1 text-sm">{stop.label}</span>
+                                                {reasoningEffort === stop.value ? (
+                                                    <Icon icon={Checkmark20Regular} className="shrink-0 opacity-60 icon-md" />
+                                                ) : null}
+                                            </DropdownMenuItem>
+                                        ))}
                                     </DropdownMenuSubContent>
                                 </DropdownMenuSub>
 

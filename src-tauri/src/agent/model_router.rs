@@ -11,7 +11,8 @@
 /** Fast included model used for Auto and auxiliary work (titles, explore, etc.). */
 pub const MODEL_FAST: &str = "deepseek/deepseek-v4-flash";
 
-/// Cheap code-understanding model for the optional codebase overview tool.
+/// Cheap code-understanding model reserved for overview helpers.
+#[allow(dead_code)]
 pub const MODEL_OVERVIEW: &str = MODEL_FAST;
 
 /// Cheap vision pass that *describes* images for [`MODEL_FAST`]. The website

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { normalizeColorTheme, resolveColorTheme, type ColorThemeId } from "./themes";
+import { normalizeColorTheme, type ColorThemeId } from "./themes";
 import type { AgentWorkflow } from "@/lib/chat/workflows";
 
 export type WordWrapSetting = "off" | "on" | "bounded";
@@ -10,7 +10,15 @@ export type LineNumbersSetting = "on" | "off" | "relative";
 export type RenderWhitespaceSetting = "none" | "selection" | "all";
 export type CursorStyleSetting = "line" | "block" | "underline";
 export type DefaultShellSetting = "auto" | "powershell" | "cmd" | "git-bash";
-export type UpdateChannel = "stable" | "pre";
+export type UpdateChannel = "stable" | "nightly";
+
+/** Map legacy channel names onto Nightly. Anything else stays Stable. */
+export function normalizeUpdateChannel(value: unknown): UpdateChannel {
+    if (value === "nightly" || value === "pre" || value === "preview" || value === "prerelease") {
+        return "nightly";
+    }
+    return "stable";
+}
 export type ColorThemeSetting = ColorThemeId;
 /** How agent terminal commands are approved: ask for everything, safe-list
  * auto-runs (default), or run everything except hard-blocked commands. */
@@ -199,7 +207,7 @@ export interface ShapeSettings {
     updates: {
         /** Poll for updates automatically. */
         autoUpdate: boolean;
-        /** Stable = latest non-prerelease; pre = GitHub prereleases. */
+        /** Stable = latest GitHub release. Nightly = latest GitHub prerelease. */
         channel: UpdateChannel;
     };
     appearance: {
@@ -348,7 +356,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         channel: "stable",
     },
     appearance: {
-        colorTheme: "auto",
+        colorTheme: "dark",
     },
 };
 
@@ -471,7 +479,14 @@ function mergeSettings(base: ShapeSettings, patch: Partial<ShapeSettings>): Shap
         },
         developer: { ...DEFAULT_SETTINGS.developer, ...base.developer, ...patch.developer },
         workspace: { ...DEFAULT_SETTINGS.workspace, ...base.workspace, ...patch.workspace },
-        updates: { ...DEFAULT_SETTINGS.updates, ...base.updates, ...patch.updates },
+        updates: {
+            ...DEFAULT_SETTINGS.updates,
+            ...base.updates,
+            ...patch.updates,
+            channel: normalizeUpdateChannel(
+                patch.updates?.channel ?? base.updates?.channel ?? DEFAULT_SETTINGS.updates.channel,
+            ),
+        },
         appearance: {
             ...DEFAULT_SETTINGS.appearance,
             ...base.appearance,
@@ -577,7 +592,9 @@ function loadFromLocalStorage() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw) as Partial<ShapeSettings>;
+            const rawChannel = parsed.updates?.channel;
             currentSettings = mergeSettings(DEFAULT_SETTINGS, parsed);
+            if (rawChannel && rawChannel !== currentSettings.updates.channel) persist();
         }
     } catch {
         currentSettings = { ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor }, terminal: { ...DEFAULT_SETTINGS.terminal }, git: { ...DEFAULT_SETTINGS.git }, ai: { ...DEFAULT_SETTINGS.ai }, files: { ...DEFAULT_SETTINGS.files }, eslint: { ...DEFAULT_SETTINGS.eslint }, prettier: { ...DEFAULT_SETTINGS.prettier }, lsp: { ...DEFAULT_SETTINGS.lsp }, node: { ...DEFAULT_SETTINGS.node }, python: { ...DEFAULT_SETTINGS.python } };
@@ -621,10 +638,6 @@ export async function initSettings(): Promise<void> {
             /* desktop bridge may not be ready yet */
         });
     });
-}
-
-export function hasByokApiKeys(_ai?: ShapeSettings["ai"]): boolean {
-    return false;
 }
 
 export function getSettings(): ShapeSettings {
@@ -698,16 +711,7 @@ export function subscribeSettings(listener: () => void) {
     return () => listeners.delete(listener);
 }
 
-let schemeMql: MediaQueryList | null = null;
-let schemeListener: ((event: MediaQueryListEvent) => void) | null = null;
-
-function paintResolvedTheme(resolved: "dark" | "light") {
-    if (resolved === "light") {
-        document.documentElement.dataset.theme = "light";
-        document.documentElement.style.colorScheme = "light";
-        document.documentElement.classList.remove("dark");
-        return;
-    }
+function paintDarkTheme() {
     delete document.documentElement.dataset.theme;
     document.documentElement.style.colorScheme = "dark";
     document.documentElement.classList.add("dark");
@@ -718,20 +722,7 @@ export function applyAppearanceSettings(settings: ShapeSettings) {
     document.documentElement.style.setProperty("--editor-font-family", settings.editor.fontFamily);
     document.documentElement.style.setProperty("--editor-font-size", `${settings.editor.fontSize}px`);
     document.documentElement.style.setProperty("--font-mono", settings.editor.fontFamily);
-
-    const theme = normalizeColorTheme(settings.appearance.colorTheme);
-    paintResolvedTheme(resolveColorTheme(theme));
-
-    if (schemeMql && schemeListener) {
-        schemeMql.removeEventListener("change", schemeListener);
-    }
-    schemeMql = null;
-    schemeListener = null;
-    if (theme === "auto" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
-        schemeMql = window.matchMedia("(prefers-color-scheme: light)");
-        schemeListener = () => paintResolvedTheme(resolveColorTheme("auto"));
-        schemeMql.addEventListener("change", schemeListener);
-    }
+    paintDarkTheme();
 }
 
 export function getEditorOptionsFromSettings(settings: ShapeSettings = getSettings()) {

@@ -54,6 +54,16 @@ describe("isWebProject", () => {
         vi.mocked(commands.lsDir).mockRejectedValue(new Error("fail"));
         expect(await isWebProject("C:/p")).toBe(true);
     });
+
+    it("treats a missing folder as not a web project", async () => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.mocked(commands.lsDir).mockRejectedValue(
+            new Error("IO error: The system cannot find the path specified. (os error 3)"),
+        );
+        expect(await isWebProject("C:/missing")).toBe(false);
+        expect(error).not.toHaveBeenCalled();
+        error.mockRestore();
+    });
 });
 
 describe("pickDevScript", () => {
@@ -119,5 +129,15 @@ describe("detectDevCommand", () => {
             script: "dev",
             urlHint: "http://localhost:3000/",
         });
+    });
+
+    it("returns null when the project folder is gone", async () => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.mocked(commands.lsDir).mockRejectedValue(
+            new Error("IO error: The system cannot find the path specified. (os error 3)"),
+        );
+        expect(await detectDevCommand("C:/missing")).toBeNull();
+        expect(error).not.toHaveBeenCalled();
+        error.mockRestore();
     });
 });

@@ -110,8 +110,19 @@ type ChatMessageItemProps = {
     fullWidthBubbles?: boolean;
 };
 
-function SentAttachmentPill({ att }: { att: ParsedUserAttachment }) {
-    return <MessageAttachmentPill kind={att.kind} name={att.name} />;
+function SentAttachment({ att }: { att: ParsedUserAttachment }) {
+    if (att.kind === "image" && att.dataUrl) {
+        return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+                src={att.dataUrl}
+                alt={att.name}
+                title={att.name}
+                className="max-h-40 max-w-52 rounded-xl object-cover"
+            />
+        );
+    }
+    return <MessageAttachmentPill name={att.name} />;
 }
 
 function MentionRichText({ text }: { text: string }) {
@@ -436,9 +447,9 @@ function ChatMessageItemInner({
                             >
                                 <div ref={bodyRef} className="min-w-0 wrap-break-word select-text">
                                     {userParts.attachments.length > 0 && (
-                                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                                        <div className="mb-2 flex flex-wrap items-end gap-1.5">
                                             {userParts.attachments.map((att, i) => (
-                                                <SentAttachmentPill key={`${att.name}-${i}`} att={att} />
+                                                <SentAttachment key={`${att.name}-${i}`} att={att} />
                                             ))}
                                         </div>
                                     )}

@@ -467,8 +467,7 @@ impl AgentState {
                 .lock()
                 .map(|l| *l)
                 .unwrap_or(0.0);
-            let bytes = in_flight.partial_content.len();
-            let should_save = now - last_ts > 2.0 || (bytes > 0 && bytes % 8192 < chunk.len());
+            let should_save = now - last_ts > 12.0;
             (
                 should_save,
                 in_flight.conversation_id.clone(),
@@ -487,7 +486,9 @@ impl AgentState {
                 .and_then(|g| g.clone());
             let owns_live = owner_conv_id.is_some() && owner_conv_id == current_id;
             if owns_live {
-                let _ = crate::agent::commands::history::save_current_conversation(self, path);
+                let _ = crate::agent::commands::history::save_current_conversation_checkpoint(
+                    self, path,
+                );
             } else if let Some(conv_id) = owner_conv_id.as_deref() {
                 // Background turn: persist partial onto the owning conversation only.
                 let mut hist = {

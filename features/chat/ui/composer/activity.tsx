@@ -28,6 +28,7 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
 
     const active = items.find((i) => i.status === "running") ?? items[0];
     const done = items.filter((i) => i.status === "done").length;
+    const allDone = items.length > 0 && items.every((i) => i.status === "done");
 
     return (
         <DropdownMenu>
@@ -42,8 +43,10 @@ export function ComposerTasksStrip({ items }: { items: ComposerTaskItem[] }) {
                             <span className="t-spin-check" data-state="spin">
                                 <span className="t-spin-check__ring" />
                             </span>
-                        ) : (
+                        ) : allDone ? (
                             <Icon icon={Checkmark20Regular} className="icon-sm text-success" />
+                        ) : (
+                            <span className="size-3.5 rounded-full border border-text-muted/55" />
                         )}
                     </span>
                     <span className="truncate">{active.label}</span>

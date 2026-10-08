@@ -21,9 +21,7 @@ import {
     updateUiMcpServer,
     type ListedMcpServer,
 } from "@/lib/mcp/registry";
-import { useSettings } from "@/lib/settings";
 import type { McpServerConfig } from "@/lib/settings";
-import { isDarkColorTheme, normalizeColorTheme } from "@/lib/settings/themes";
 import { mcpServerBrandCandidates } from "@/lib/plugins/logos";
 import { cn } from "@/lib/utils";
 import {
@@ -47,9 +45,8 @@ function statusLabel(status: McpStatusEntry["status"] | undefined): string {
 }
 
 function ServerMark({ name, url }: { name: string; url?: string }) {
-    const dark = isDarkColorTheme(normalizeColorTheme(useSettings().appearance.colorTheme));
     const [failedAt, setFailedAt] = useState(0);
-    const candidates = mcpServerBrandCandidates(name, url, dark);
+    const candidates = mcpServerBrandCandidates(name, url, true);
     const src = candidates[Math.min(failedAt, candidates.length - 1)] ?? "/integrations/logos/mcp.svg";
     return (
         // eslint-disable-next-line @next/next/no-img-element

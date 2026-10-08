@@ -21,7 +21,6 @@ import { ArrowClockwiseDashesSettings24Regular } from "@fluentui/react-icons/hea
 import { Shield20Regular } from "@fluentui/react-icons/headless/svg/shield";
 import { Sparkle24Regular } from "@fluentui/react-icons/headless/svg/sparkle";
 import { CodeText16Regular } from "@fluentui/react-icons/headless/svg/code-text";
-import { LayoutRowTwoFocusTopSettings32Filled } from "@fluentui/react-icons/headless/svg/layout-row-two-focus-top-settings";
 import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
 import type { IconGlyph } from "@/components/ui/icon";
 
@@ -70,7 +69,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Editor",
         children: [
             { id: "editor-font", label: "Editor", icon: CodeText16Regular, targetId: "settings-editor-font" },
-            { id: "appearance", label: "Appearance", icon: LayoutRowTwoFocusTopSettings32Filled, targetId: "settings-appearance" },
         ],
     },
     {

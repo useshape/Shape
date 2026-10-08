@@ -92,6 +92,7 @@
     "remark-gfm": "^4.0.1",
     "sucrase": "^3.35.1",
     "tailwind-merge": "^3.4.1",
+    "thesvg": "^3.3.12",
     "transform-to-tailwindcss-core": "^0.0.43",
     "typescript": "^6.0.3"
   },

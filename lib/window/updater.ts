@@ -95,6 +95,10 @@ export async function checkForAppUpdates(options?: {
 
   try {
     const channel = options?.channel ?? settings.channel;
+    if (options?.channel) {
+      dismissedVersion = null;
+      persistDismissedVersion(null);
+    }
     const update = await check({
       headers: {
         "X-Shape-Update-Channel": channel,

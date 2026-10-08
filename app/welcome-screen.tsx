@@ -16,7 +16,6 @@ import {
     type RepoHistoryEntry,
 } from "@/lib/workspace/repo-history";
 import { openSettingsWindow } from "@/lib/window/open-settings";
-import { openShapeBilling } from "@/lib/cloud/store";
 import { cn } from "@/lib/utils";
 
 function parentDir(path: string): string {

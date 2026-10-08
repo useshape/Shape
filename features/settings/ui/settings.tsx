@@ -42,7 +42,6 @@ import { applyTelemetryPreference } from "@/lib/telemetry";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
-import { COLOR_THEME_ORDER, COLOR_THEMES, normalizeColorTheme } from "@/lib/settings/themes";
 import { Icon } from "@/components/ui/icon";
 import { ShapeLogo } from "@/components/ui/shape-logo";
 import { SETTINGS_NAV, allSettingsLeaves, type SettingsNavLeaf } from "./shared/nav";
@@ -637,7 +636,7 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
                     <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium text-text-primary">Updater</div>
                         <div className="text-xs text-text-muted">
-                            {u.autoUpdate ? "Checks in the background." : "Manual checks only."} Channel: {u.channel === "pre" ? "pre-release" : "stable"}.
+                            {u.autoUpdate ? "Checks in the background." : "Manual checks only."} Channel: {u.channel === "nightly" ? "Nightly" : "Stable"}.
                         </div>
                     </div>
                 </div>
@@ -653,13 +652,15 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
                     value={u.channel}
                     options={[
                         { value: "stable", label: "Stable" },
-                        { value: "pre", label: "Pre-release" },
+                        { value: "nightly", label: "Nightly" },
                     ]}
-                    onChange={(v) =>
-                        updateSettingSection("updates", {
-                            channel: v as ShapeSettings["updates"]["channel"],
-                        })
-                    }
+                    onChange={(v) => {
+                        const channel = v as ShapeSettings["updates"]["channel"];
+                        updateSettingSection("updates", { channel });
+                        void import("@/lib/window/updater").then(({ checkForAppUpdates }) =>
+                            checkForAppUpdates({ force: true, silent: true, channel }),
+                        );
+                    }}
                 />
             </SettingRow>
         </SettingSection>
@@ -1038,7 +1039,7 @@ export function SettingsView({
             case "git":
                 return "settings-git";
             case "appearance":
-                return "settings-appearance";
+                return "settings-editor-font";
             case "advanced":
             case "application":
                 return "settings-updates";
@@ -1228,22 +1229,6 @@ export function SettingsView({
                             {activeLeafId === "ai-skills" ? <SkillsSettings /> : null}
                             {activeLeafId === "ai-context" ? <AiSettings settings={settings} page="context" /> : null}
                             {activeLeafId === "editor-font" ? <EditorSettings settings={settings} /> : null}
-                            {activeLeafId === "appearance" ? (
-                                <SettingSection id="settings-appearance" title="Appearance">
-                                    <SettingRow title="Theme">
-                                        <SettingSelect
-                                            value={normalizeColorTheme(settings.appearance.colorTheme)}
-                                            options={COLOR_THEME_ORDER.map((id) => ({
-                                                value: id,
-                                                label: COLOR_THEMES[id].label,
-                                            }))}
-                                            onChange={(id) =>
-                                                updateSettingSection("appearance", { colorTheme: id })
-                                            }
-                                        />
-                                    </SettingRow>
-                                </SettingSection>
-                            ) : null}
                             {activeLeafId === "terminal" ? <TerminalSettings settings={settings} /> : null}
                             {activeLeafId === "microphone" ? <MicrophoneSettings /> : null}
                             {activeLeafId === "git" ? <GitSettings settings={settings} /> : null}

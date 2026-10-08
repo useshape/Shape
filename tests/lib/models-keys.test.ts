@@ -21,30 +21,8 @@ const list: ModelInfo[] = [
 ];
 
 describe("resolveChatModels", () => {
-    it("lists the catalog whether or not you are signed in", () => {
-        const ids = resolveChatModels(list, {
-            openaiKey: false,
-            openRouterKey: false,
-            signedIn: false,
-        }).map((m) => m.id);
-        expect(ids).toEqual(["auto", "openai/gpt-4o", "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-5"]);
-    });
-
-    it("API keys do not add models that are not in the catalog", () => {
-        const ids = resolveChatModels(list, {
-            openaiKey: true,
-            openRouterKey: true,
-            signedIn: true,
-        }).map((m) => m.id);
-        expect(ids).toEqual(["auto", "openai/gpt-4o", "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-5"]);
-    });
-
-    it("signed in keeps Shape-hosted models including viaApi rows", () => {
-        const ids = resolveChatModels(list, {
-            openaiKey: false,
-            openRouterKey: false,
-            signedIn: true,
-        }).map((m) => m.id);
+    it("lists the catalog, including API rows, without adding models that are not in it", () => {
+        const ids = resolveChatModels(list).map((m) => m.id);
         expect(ids).toEqual(["auto", "openai/gpt-4o", "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-5"]);
     });
 });

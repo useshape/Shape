@@ -76,6 +76,32 @@ function hasWebExtension(name: string): boolean {
     return /\.(html?|css|scss|sass|less|jsx?|tsx?|vue|svelte|astro|mjs|cjs)$/i.test(name);
 }
 
+function errorText(error: unknown): string {
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message;
+    if (error && typeof error === "object" && "message" in error) {
+        const message = (error as { message: unknown }).message;
+        if (typeof message === "string") return message;
+    }
+    return "";
+}
+
+/**
+ * A saved project folder that is no longer on disk.
+ * Same idea as the editor's file service: FileNotFound is a result, not a failure.
+ */
+export function isMissingPathError(error: unknown): boolean {
+    const text = errorText(error).toLowerCase();
+    return (
+        text.includes("os error 2")
+        || text.includes("os error 3")
+        || text.includes("enoent")
+        || text.includes("no such file")
+        || text.includes("cannot find the path")
+        || text.includes("cannot find the file")
+    );
+}
+
 /**
  * Detect whether `path` is a web / frontend project.
  * Scans the root (and common monorepo child folders) for package markers,
@@ -104,6 +130,7 @@ export async function isWebProject(path: string): Promise<boolean> {
 
         return false;
     } catch (e) {
+        if (isMissingPathError(e)) return false;
         console.error("Failed to detect project type:", e);
         return true;
     }
@@ -322,6 +349,7 @@ export async function detectDevCommand(path: string): Promise<DevCommandInfo | n
             urlHint: guessUrlHint(pkg, key, scripts),
         };
     } catch (e) {
+        if (isMissingPathError(e)) return null;
         console.error("Failed to detect run command:", e);
         return null;
     }

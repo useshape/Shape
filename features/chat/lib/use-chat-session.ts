@@ -1272,11 +1272,7 @@ export function useChatSession() {
     React.useEffect(() => {
         if (!catalog) return;
         const ai = getSettings().ai;
-        const keyed = resolveChatModels(getCatalogModels(), {
-            openaiKey: false,
-            openRouterKey: false,
-            signedIn: Boolean(shapeAuth.loggedIn && !shapeAuth.offline),
-        });
+        const keyed = resolveChatModels(getCatalogModels());
         const enabled = sanitizeEnabledModels(
             ai.enabledModels,
             keyed.map((m) => m.id),
@@ -1296,7 +1292,7 @@ export function useChatSession() {
         } else if (visible.length > 0) {
             setSelectedModel(visible[0]!.id);
         }
-    }, [catalog, shapeAuth.loggedIn, shapeAuth.offline]);
+    }, [catalog]);
 
     React.useEffect(() => {
         let disposed = false;

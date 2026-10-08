@@ -53,16 +53,22 @@ pub fn load_conversations(proj_path: &str) -> Vec<Conversation> {
 }
 
 pub fn save_conversations(proj_path: &str, convs: &[Conversation]) {
-    save_conversations_inner(proj_path, convs, &[]);
+    save_conversations_inner(proj_path, convs, &[], true);
+}
+
+/// Mid-turn checkpoint: write memory as-is. Skip re-reading the whole JSON file
+/// so long chats do not hitch every few seconds on parse + serialize.
+pub fn save_conversations_checkpoint(proj_path: &str, convs: &[Conversation]) {
+    save_conversations_inner(proj_path, convs, &[], false);
 }
 
 /// Write the project chat file, merging with whatever another window already saved.
 /// `removed` ids are deleted even if they still exist on disk.
 pub fn save_conversations_removing(proj_path: &str, convs: &[Conversation], removed: &str) {
-    save_conversations_inner(proj_path, convs, &[removed]);
+    save_conversations_inner(proj_path, convs, &[removed], true);
 }
 
-fn save_conversations_inner(proj_path: &str, convs: &[Conversation], removed: &[&str]) {
+fn save_conversations_inner(proj_path: &str, convs: &[Conversation], removed: &[&str], merge_disk: bool) {
     let file_path = get_chat_history_path(proj_path);
     let mut lock_path = file_path.clone();
     lock_path.set_extension("lock");
@@ -74,7 +80,15 @@ fn save_conversations_inner(proj_path: &str, convs: &[Conversation], removed: &[
             .open(&lock_path)
         {
             Ok(_lock) => {
-                let merged = merge_with_disk(proj_path, convs, removed);
+                let merged = if merge_disk {
+                    merge_with_disk(proj_path, convs, removed)
+                } else {
+                    let mut out = convs.to_vec();
+                    for id in removed {
+                        out.retain(|c| c.id != *id);
+                    }
+                    out
+                };
                 if let Ok(content) = serde_json::to_string(&merged) {
                     let _ = std::fs::write(&file_path, content);
                     logging::debug("history", &format!("Saved {} conversations", merged.len()));
@@ -161,6 +175,21 @@ pub fn find_conversation_by_id(id: &str, preferred_proj: Option<&str>) -> Option
 }
 
 pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<(), AppError> {
+    save_current_conversation_inner(state, proj_path, true)
+}
+
+pub fn save_current_conversation_checkpoint(
+    state: &AgentState,
+    proj_path: &str,
+) -> Result<(), AppError> {
+    save_current_conversation_inner(state, proj_path, false)
+}
+
+fn save_current_conversation_inner(
+    state: &AgentState,
+    proj_path: &str,
+    merge_disk: bool,
+) -> Result<(), AppError> {
     if state.incognito() {
         return Ok(());
     }
@@ -227,7 +256,11 @@ pub fn save_current_conversation(state: &AgentState, proj_path: &str) -> Result<
         }
     }
 
-    save_conversations(proj_path, list);
+    if merge_disk {
+        save_conversations(proj_path, list);
+    } else {
+        save_conversations_checkpoint(proj_path, list);
+    }
     logging::debug("history", "Current conversation saved");
 
     Ok(())

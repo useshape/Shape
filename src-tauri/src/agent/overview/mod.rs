@@ -1,4 +1,4 @@
-//! Incremental codebase overview for the main coding agent.
+//! Fast local map of the repo for the coding agent. No extra model calls.
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -7,8 +7,6 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
-use crate::agent::commands::streaming::{self, ProxyContext};
-use crate::agent::model_router;
 use crate::agent::tools::dispatch::ToolCtx;
 
 const SKIP_DIRS: &[&str] = &[
@@ -29,6 +27,8 @@ const SKIP_DIRS: &[&str] = &[
 const INDEXABLE: &[&str] = &[
     "rs", "ts", "tsx", "js", "jsx", "py", "go", "java", "c", "cpp", "h", "md", "json",
 ];
+
+const MAX_FILES: usize = 6_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct OverviewStore {
@@ -118,12 +118,16 @@ fn area_name(rel: &str) -> String {
 fn collect_files(project_path: &str) -> HashMap<String, Vec<(String, u64)>> {
     let root = PathBuf::from(project_path);
     let mut areas: HashMap<String, Vec<(String, u64)>> = HashMap::new();
+    let mut counted = 0usize;
     for entry in WalkDir::new(&root)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| !should_skip(e.path(), &root))
         .flatten()
     {
+        if counted >= MAX_FILES {
+            break;
+        }
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -146,6 +150,7 @@ fn collect_files(project_path: &str) -> HashMap<String, Vec<(String, u64)>> {
         }
         let area = area_name(&rel);
         areas.entry(area).or_default().push((rel, stamp(path)));
+        counted += 1;
     }
     areas
 }
@@ -156,80 +161,45 @@ fn area_changed(store: &OverviewStore, files: &[(String, u64)]) -> bool {
         .any(|(path, hash)| store.file_stamps.get(path) != Some(hash))
 }
 
-fn excerpt_area(project_path: &str, files: &[(String, u64)]) -> String {
-    let root = PathBuf::from(project_path);
-    let mut buf = String::new();
-    for (rel, _) in files.iter().take(24) {
-        let path = root.join(rel);
-        let content = std::fs::read_to_string(&path).unwrap_or_default();
-        let snippet: String = content.chars().take(900).collect();
-        buf.push_str(&format!("### {rel}\n{snippet}\n\n"));
-        if buf.len() > 14_000 {
-            break;
-        }
-    }
-    buf
+fn looks_like_entry(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    matches!(
+        name.as_str(),
+        "mod.rs"
+            | "lib.rs"
+            | "main.rs"
+            | "main.ts"
+            | "main.tsx"
+            | "index.ts"
+            | "index.tsx"
+            | "index.js"
+            | "app.tsx"
+            | "page.tsx"
+            | "layout.tsx"
+    ) || name.starts_with("main.")
 }
 
-async fn summarize_area(
-    ctx: &ToolCtx<'_>,
-    name: &str,
-    files: &[(String, u64)],
-) -> Option<AreaDigest> {
-    let listing = files
+fn local_digest(name: &str, files: &[(String, u64)]) -> AreaDigest {
+    let mut entries: Vec<String> = files
         .iter()
-        .take(40)
-        .map(|(p, _)| format!("- {p}"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let body = excerpt_area(ctx.project_path, files);
-    let prompt = format!(
-        "Summarize this codebase area for another coding agent. Return JSON only with keys: purpose (string), entry_points (string array of paths), important_files (string array), related (string array of sibling areas).\n\nArea: {name}\nFiles:\n{listing}\n\nExcerpts:\n{body}"
-    );
-    let proxy = ProxyContext::new("overview")
-        .with_turn(ctx.turn_id.clone(), ctx.conversation_id.clone())
-        .with_project_path(Some(ctx.project_path.to_string()));
-    let (text, _, _) = streaming::complete_chat_with_max_tokens(
-        ctx.client,
-        ctx.api_key,
-        &prompt,
-        model_router::MODEL_OVERVIEW,
-        700,
-        &proxy,
-    )
-    .await
-    .ok()?;
-    let json_text = text
-        .find('{')
-        .and_then(|start| text.rfind('}').map(|end| &text[start..=end]))
-        .unwrap_or(&text);
-    let value: serde_json::Value = serde_json::from_str(json_text).ok()?;
-    Some(AreaDigest {
+        .filter(|(p, _)| looks_like_entry(p))
+        .map(|(p, _)| p.clone())
+        .take(8)
+        .collect();
+    if entries.is_empty() {
+        entries = files.iter().take(4).map(|(p, _)| p.clone()).collect();
+    }
+    let important: Vec<String> = files.iter().take(10).map(|(p, _)| p.clone()).collect();
+    AreaDigest {
         name: name.to_string(),
-        purpose: value
-            .get("purpose")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
-        entry_points: string_list(&value, "entry_points"),
-        important_files: string_list(&value, "important_files"),
-        related: string_list(&value, "related"),
-    })
+        purpose: format!("{} files under `{name}/`.", files.len()),
+        entry_points: entries,
+        important_files: important,
+        related: Vec::new(),
+    }
 }
 
-fn string_list(value: &serde_json::Value, key: &str) -> Vec<String> {
-    value
-        .get(key)
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-async fn ensure_overview(ctx: &ToolCtx<'_>) -> OverviewStore {
+fn ensure_overview(ctx: &ToolCtx<'_>) -> OverviewStore {
     let mut store = load_store(ctx.project_path);
     let areas = collect_files(ctx.project_path);
     let mut next_stamps = HashMap::new();
@@ -239,25 +209,13 @@ async fn ensure_overview(ctx: &ToolCtx<'_>) -> OverviewStore {
             next_stamps.insert(path.clone(), *hash);
         }
         let existing = store.areas.iter().find(|a| a.name == *name).cloned();
-        if existing.is_some() && !area_changed(&store, files) {
-            if let Some(area) = existing {
+        if let Some(area) = existing {
+            if !area_changed(&store, files) {
                 next_areas.push(area);
                 continue;
             }
         }
-        if let Some(digest) = summarize_area(ctx, name, files).await {
-            next_areas.push(digest);
-        } else if let Some(area) = existing {
-            next_areas.push(area);
-        } else {
-            next_areas.push(AreaDigest {
-                name: name.clone(),
-                purpose: format!("Source under `{name}/`."),
-                entry_points: files.iter().take(4).map(|(p, _)| p.clone()).collect(),
-                important_files: files.iter().take(8).map(|(p, _)| p.clone()).collect(),
-                related: Vec::new(),
-            });
-        }
+        next_areas.push(local_digest(name, files));
     }
     next_areas.sort_by(|a, b| a.name.cmp(&b.name));
     store.areas = next_areas;
@@ -324,6 +282,6 @@ pub async fn answer_overview(args: &serde_json::Value, ctx: &ToolCtx<'_>) -> Res
     if query.is_empty() {
         return Err("query is required.".to_string());
     }
-    let store = ensure_overview(ctx).await;
+    let store = ensure_overview(ctx);
     Ok(query_overview(&store, query))
 }

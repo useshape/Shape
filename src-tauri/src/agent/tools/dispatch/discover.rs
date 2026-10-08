@@ -241,9 +241,8 @@ pub(super) async fn tool_codebase_overview(args: &Value, ctx: &ToolCtx<'_>) -> T
         Ok(result) => {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
             let ui = format!(
-                "\n<search_result query=\"{}\">\n{}\n</search_result>\n",
-                escape_xml_attr(query),
-                escape_xml_text(&clip(&result, 2500))
+                "\n<status>Mapped the repo for {}</status>\n",
+                escape_xml_attr(query)
             );
             ToolOutcome {
                 tool_result: clip(&result, 8000),

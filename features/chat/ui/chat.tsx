@@ -129,11 +129,12 @@ export default function Chat({
             items.push({
                 id: t.id || t.label,
                 label: t.label,
-                status: t.status === "active" ? "running" : "pending",
+                status:
+                    t.status === "active" && session.isLoading ? "running" : "pending",
             });
         }
         return items;
-    }, [session.messages]);
+    }, [session.messages, session.isLoading]);
 
     const newChatRef = React.useRef(session.handleNewChat);
     newChatRef.current = session.handleNewChat;
