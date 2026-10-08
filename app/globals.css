@@ -232,52 +232,8 @@
   --focus-border: transparent;
 }
 
-/* White product mark: keep light on dark; invert on light chrome. */
 .logo-invert {
   filter: brightness(1);
-}
-
-[data-theme="light"] .logo-invert {
-  filter: invert(1) brightness(0.15);
-}
-
-[data-theme="light"] {
-  color-scheme: light;
-  --incognito: #f3e4f8;
-  --incognito-fg: #3b1248;
-  --incognito-muted: #6b3a78;
-  --incognito-send: #7d4698;
-  --surface-0: #F9F9F9;
-  --surface-1: #F9F9F9;
-  --surface-2: #f3f3f3;
-  --surface-3: #f0f0f0;
-  --surface-4: #f3f3f3;
-  --settings-card: #f3f3f3;
-  --chrome: #ffffff;
-  --sidebar: #ffffff;
-  --editor: #ffffff;
-  --base: #141414;
-  --background: var(--chrome);
-  --foreground: var(--base);
-  --panel: #ffffff;
-  --panel-secondary: var(--surface-2);
-  --panel-active: rgba(0, 0, 0, 0.06);
-  --panel-hover: rgba(0, 0, 0, 0.04);
-  --menu-bg: var(--surface-1);
-  --menu-shadow:
-    0 3px 8px color-mix(in srgb, #00000083 12%, transparent),
-    0 1px 2px color-mix(in srgb, #000 6%, transparent);
-  --titlebar: var(--chrome);
-  --text-primary: #141414;
-  --text-secondary: #525252;
-  --text-muted: #737373;
-  --text-disabled: #a3a3a3;
-  --text-active: #0a0a0a;
-  --border: rgba(0, 0, 0, 0.12);
-  --border-subtle: rgba(0, 0, 0, 0.08);
-  --border-secondary: rgba(0, 0, 0, 0.14);
-  --input-bg: #ffffff;
-  --window-stroke: rgba(0, 0, 0, 0.14);
 }
 
 @theme inline {

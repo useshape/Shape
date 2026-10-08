@@ -1,15 +1,6 @@
-/// Handles SSE streaming from OpenRouter and non-streaming completions.
-///
-/// This module owns the wire format between the agent and the LLM provider. It speaks
-/// OpenAI-style chat completions with native function calling: the request includes a
-/// `tools` array (see `tools::schema`), and the response can contain both text content
-/// and structured `tool_calls`. The dispatcher (`tools::dispatch`) handles the calls and
-/// the result is pushed back into the conversation as `role: "tool"` messages.
-///
-/// Reasoning tokens (`reasoning_content` / `reasoning` deltas) are streamed to the UI
-/// wrapped in `<think>` tags but are deliberately NOT echoed back into the next request —
-/// the model regenerates its own thinking each turn, matching Anthropic's ephemeral
-/// thinking contract and eliminating the duplicate-think-block bug.
+/// SSE streaming for chat completions through the Shape website proxy.
+/// Reasoning deltas are shown in the UI as `<think>` blocks and attached to the
+/// assistant message so the next request in the same turn can continue from them.
 
 use futures::StreamExt;
 use reqwest::Client;
@@ -1240,8 +1231,7 @@ fn get_model_max_tokens(model: &str) -> u32 {
     }
 }
 
-/// Normalize UI effort (`fast` | `high` | `ultra`) → OpenRouter effort string.
-/// Higher effort must never map to a cheaper provider setting than a lower one.
+/// UI effort (`low` | `high` | `ultra` | `max`) → OpenRouter effort string.
 fn openrouter_effort(user_effort: Option<&str>) -> &'static str {
     match user_effort.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
         Some("max") | Some("ultra") | Some("xhigh") => "xhigh",

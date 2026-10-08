@@ -13,7 +13,7 @@ fn main() {
             println!("cargo:rustc-env=SHAPE_CLOUD_BUILD_SECRET={}", secret);
         }
     }
-    // Bake website origin into release binaries (defaults to https://useshape.org).
+    // Debug builds can read this. Release binaries use www.useshape.org.
     println!("cargo:rerun-if-env-changed=NEXT_PUBLIC_SHAPE_WEBSITE_URL");
     if let Ok(url) = env::var("NEXT_PUBLIC_SHAPE_WEBSITE_URL") {
         if !url.is_empty() {

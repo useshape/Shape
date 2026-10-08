@@ -286,14 +286,13 @@ export function ComposerFileTile({
     );
 }
 
-/** Sent-message chip: icon, name, nothing else. */
-export function MessageAttachmentPill({ kind, name }: { kind: AttachmentKind; name: string }) {
+/** Sent-message chip: filename only. */
+export function MessageAttachmentPill({ name }: { kind?: AttachmentKind; name: string }) {
     return (
         <span
-            className="inline-flex h-7 max-w-52 items-center gap-1.5 rounded-full border border-border-subtle bg-surface-3 px-2 text-xs text-text-primary"
+            className="inline-flex h-7 max-w-52 items-center rounded-full bg-surface-1 px-2.5 text-xs text-text-primary"
             title={name}
         >
-            <KindIcon kind={kind} name={name} />
             <span className="min-w-0 truncate">{name}</span>
         </span>
     );

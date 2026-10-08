@@ -152,7 +152,7 @@ jobs:
       - name: Detect prerelease
         id: meta
         run: |
-          # Zed-style prerelease tags: v0.2.1-pre (any tag with a hyphen after the version)
+          # Stable tags are vX.Y.Z. Nightly tags are hyphenated (vX.Y.Z-nightly) and publish as GitHub prereleases.
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else

@@ -18,6 +18,7 @@ const TOOL_LABELS: Record<string, string> = {
     grep: "Searching",
     search_files: "Finding files",
     search_codebase: "Searching codebase",
+    codebase_overview: "Mapping codebase",
     edit_file: "Editing file",
     run_terminal: "Running command",
     wait: "Waiting",

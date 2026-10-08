@@ -1,8 +1,26 @@
-<img src="./public/logos/logo.svg" alt="Shape logo" width="68" />
+<div align="center">
+  <img src="./public/logos/app.svg" alt="Shape logo" width="100" />
+</div>
 
-## The desktop IDE for agentic software
+<div align="center">
 
-![](https://api.iconify.design/lucide:globe.svg?color=%233B82F6) [Website](https://useshape.org) · ![](https://api.iconify.design/lucide:book-open.svg?color=%233B82F6) [Documentation](https://useshape.org/docs/introduction/quick-start) · ![](https://api.iconify.design/lucide:download.svg?color=%233B82F6) [Download](https://useshape.org/download) · ![](https://api.iconify.design/simple-icons:discord.svg?color=%233B82F6) [Discord](https://discord.gg/MMCEDVZKYf)
+<h2>The desktop agent for anything</h2>
+
+<p>
+  <img src="https://api.iconify.design/lucide:globe.svg?color=%233B82F6" width="16">
+  <a href="https://useshape.org">Website</a>
+  ·
+  <img src="https://api.iconify.design/lucide:book-open.svg?color=%233B82F6" width="16">
+  <a href="https://useshape.org/docs/introduction/quick-start">Documentation</a>
+  ·
+  <img src="https://api.iconify.design/lucide:download.svg?color=%233B82F6" width="16">
+  <a href="https://useshape.org/download">Download</a>
+  ·
+  <img src="https://api.iconify.design/simple-icons:discord.svg?color=%233B82F6" width="16">
+  <a href="https://discord.gg/MMCEDVZKYf">Discord</a>
+</p>
+
+</div>
 
 Shape brings your code, terminal, Git, chat, and browser together in one desktop app. An AI built into Shape can work directly in your project, understanding your code, making changes, running commands, and asking for your input when needed.
 
@@ -16,6 +34,8 @@ The easiest way to get started is the [Installer](https://useshape.org/download)
 
 For specific versions and previous releases, see:
 [Releases](https://github.com/useshape/Shape/releases)
+
+Stable and Nightly are update channels for this same app, not separate downloads. Stable tracks the latest GitHub release. Nightly tracks the latest prerelease. Switch them in Settings.
 
 ---
 
