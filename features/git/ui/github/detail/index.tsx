@@ -518,7 +518,7 @@ export function GitHubDetailPane({
         setWalkthroughLoading(true);
         setTab("overview");
         try {
-            const text = await commands.summarizePullRequest(
+            const text = await commands.walkthroughPullRequest(
                 owner,
                 repo,
                 item.number,

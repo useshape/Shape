@@ -55,7 +55,7 @@ describe("notification popups", () => {
         expect(toast?.textContent).toContain("Open a project to write these edits to source.");
     });
 
-    it("sits at the bottom above the status bar, not the screen center", () => {
+    it("sits at the top center, not over the whole screen", () => {
         act(() => {
             notify.success("Applied to source", "page.tsx");
         });
@@ -63,9 +63,8 @@ describe("notification popups", () => {
         const stack = document.querySelector("[data-toast-stack]");
         expect(stack).toBeTruthy();
         expect(stack?.className).toBe(TOAST_STACK_CLASS);
-        expect(stack?.className).toContain("bottom-4");
-        expect(stack?.className).toContain("right-4");
-        expect(stack?.className).not.toContain("items-center");
+        expect(stack?.className).toContain("top-3");
+        expect(stack?.className).toContain("left-1/2");
         expect(stack?.className).not.toContain("inset-0");
     });
 

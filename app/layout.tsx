@@ -7,6 +7,11 @@ import ClientLayout from "@/app/client-layout";
 export const metadata: Metadata = {
   title: "Shape",
   description: "Agent workspace",
+  icons: {
+    icon: "/logos/app_icon.svg",
+    shortcut: "/logos/app_icon.svg",
+    apple: "/logos/app_icon.svg",
+  },
 };
 
 export default function RootLayout({

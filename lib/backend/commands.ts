@@ -695,6 +695,18 @@ export const commands = {
         invokeCommand<string>("rewrite_open_file", { accessToken, path, instruction }),
     rewriteText: (accessToken: string, prompt: string) =>
         invokeCommand<string>("rewrite_text", { accessToken, prompt }),
+    walkthroughPullRequest: (
+        owner: string,
+        repo: string,
+        number: number,
+        accessToken?: string,
+    ) =>
+        invokeCommand<string>("walkthrough_pull_request", {
+            owner,
+            repo,
+            number,
+            accessToken: accessToken ?? null,
+        }),
     summarizePullRequest: (
         owner: string,
         repo: string,

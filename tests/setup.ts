@@ -3,6 +3,7 @@ import { randomFillSync } from "node:crypto";
 import { clearMocks, mockWindows } from "@tauri-apps/api/mocks";
 
 beforeAll(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     Object.defineProperty(window, "crypto", {
         value: {
             getRandomValues: <T extends ArrayBufferView>(buffer: T): T => {
