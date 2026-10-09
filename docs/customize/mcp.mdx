@@ -4,7 +4,7 @@ description: Add a local tool server Shape can call from chat.
 order: 2
 ---
 
-MCP servers are tools Shape can call from chat. Add one in **Settings → MCP**, or keep a server in `mcp.json` if you want it in a file.
+MCP servers are tools Shape can call from chat. Add one in **Settings → Agents → MCP**, or keep a server in `mcp.json` if you want it in a file.
 
 Servers you add in Settings stay in Shape. They are not written into `mcp.json`. A server in `mcp.json` is picked up on its own. You do not have to add it again in Settings.
 
@@ -12,7 +12,7 @@ Use MCP when the tool runs on your machine or at a URL you already have. Use a [
 
 ## Add a server in Settings
 
-Open **Settings → MCP** and choose **Add server**. Paste the server URL, or paste its JSON config. Shape shows the server, then connects. If the server asks you to sign in, finish that in the browser.
+Open **Settings → Agents → MCP** and choose **Add server**. Paste the server URL, or paste its JSON config. Shape shows the server, then connects. If the server asks you to sign in, finish that in the browser.
 
 Remove a server you added there with **Remove**. That does not change `mcp.json`.
 
@@ -46,7 +46,7 @@ Name the server something you will recognize in chat. The name is what you will 
 Send a message that needs the tool. If the server does not show up:
 
 1. Save `mcp.json`.
-2. Open Settings → MCP again. Shape reloads the file.
+2. Open **Settings → Agents → MCP** again. Shape reloads the file.
 3. Open the same folder again.
 4. Check that `command` is on your `PATH` when Shape starts. A tool that only works in your existing terminal session will fail here.
 

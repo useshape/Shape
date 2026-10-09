@@ -4,32 +4,28 @@ description: Pull requests, issues, and Actions for the open repo.
 order: 2
 ---
 
-Sign in with GitHub to load pull requests, issues, and Actions for the folder you have open. This login is separate from the account you use for chat.
+Sign in with GitHub when the open folder has a `github.com` remote. This login is separate from the account you use for chat.
 
-You need a `github.com` remote on that folder. A local-only repo has nothing to load.
+A local-only repo has nothing to load from GitHub.
 
 ## Sign in
 
-Open the GitHub view and sign in. Finish the browser step, then return to Shape.
+Open a pull request from the workspace, or ask chat after you connect the [GitHub plugin](/customize/plugins). Finish the browser step, then return to Shape.
 
 If data is missing, sign in again, and confirm the open folder is the repo you think it is (`git remote -v` in the terminal).
 
 ## Open a pull request
 
-1. Commit and push the branch. See [Commits](/docs/git/commits).
-2. Open a pull request from Shape.
+1. Commit and push the branch. See [Commits](/git/commits).
+2. Open a pull request from Shape, or ask chat to open one if the GitHub plugin is connected.
 3. Read the title and body. Shape can draft them from the branch. You confirm before it is published.
 
 Do not publish a PR for a folder that is not the repo you meant to open.
 
-## Issues and Actions
+## Chat vs GitHub login
 
-Issues and workflow runs for the current repo show in the same GitHub view. They follow the GitHub account you signed in with, including which orgs that account can see.
-
-## Chat vs this view
-
-Asking chat to “open a PR” uses a [plugin](/docs/customize/plugins) if you connected one. The GitHub view is the in-app list and the confirm step for a PR on the current branch. Use whichever matches the task.
+Asking chat to “open a PR” uses a [plugin](/customize/plugins) if you connected one. GitHub login is for the open folder’s github.com remote. Use whichever matches the task.
 
 ## Sign out
 
-Sign out of GitHub from the same view when you are done with this machine. Chat sign-in is unchanged.
+Sign out of GitHub from the same place you signed in. Chat sign-in is unchanged.
