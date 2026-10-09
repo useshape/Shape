@@ -1,8 +1,4 @@
-<div align="start">
-  <img src="./public/logos/app.svg" alt="Shape logo" width="80" />
-</div>
-
-<div align="start">
+![Shape](./public/readme.png)
 
 <h2>The desktop agent for anything</h2>
 
@@ -24,7 +20,7 @@
 
 Shape brings your workspace, terminal, commits, and agents together in one desktop app. With agents that can work directly in your project, understanding your code, making changes, running commands, testing and spawning subagents.
 
-![Shape](./public/hero.png)
+
 
 # Installation
 
