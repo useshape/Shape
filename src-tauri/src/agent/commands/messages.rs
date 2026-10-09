@@ -184,6 +184,8 @@ pub fn push_page_screenshot_followup(api_messages: &mut Vec<Value>, tag: &str, m
 }
 
 const CLEARED_TOOL_RESULT: &str = "[cleared to save context — re-call the tool only if you still need this]";
+const CLEARED_SCREENSHOT_RESULT: &str =
+    "[screenshot omitted to save context. Do not call screenshot_page again for this page. Continue from the capture you already used.]";
 const TRIMMED_TOOL_RESULT_SUFFIX: &str =
     "\n[middle omitted to save context — re-read only the specific lines you still need]";
 
@@ -320,6 +322,7 @@ pub fn clear_old_tool_results(api_messages: &mut [Value]) -> bool {
             };
             if content.len() <= TOOL_RESULT_TRIM_CHARS
                 || content == CLEARED_TOOL_RESULT
+                || content == CLEARED_SCREENSHOT_RESULT
                 || content.ends_with(TRIMMED_TOOL_RESULT_SUFFIX)
             {
                 continue;
@@ -346,12 +349,14 @@ pub fn clear_old_tool_results(api_messages: &mut [Value]) -> bool {
         if msg.get("role").and_then(|r| r.as_str()) == Some("tool") {
             let len = content_len(msg);
             let was_read = is_read(msg);
+            let note = if msg.get("name").and_then(|n| n.as_str()) == Some("screenshot_page") {
+                CLEARED_SCREENSHOT_RESULT
+            } else {
+                CLEARED_TOOL_RESULT
+            };
             if let Some(obj) = msg.as_object_mut() {
-                obj.insert(
-                    "content".to_string(),
-                    Value::String(CLEARED_TOOL_RESULT.to_string()),
-                );
-                total = total.saturating_sub(len) + CLEARED_TOOL_RESULT.len();
+                obj.insert("content".to_string(), Value::String(note.to_string()));
+                total = total.saturating_sub(len) + note.len();
                 pruned_read |= was_read;
             }
         }
@@ -654,5 +659,29 @@ mod tests {
         let text = api[0]["content"].as_str().unwrap();
         assert!(text.contains("cannot see image"));
         assert!(!serde_json::to_string(&api).unwrap().contains("image_url"));
+    }
+
+    #[test]
+    fn cleared_screenshot_does_not_ask_for_another_capture() {
+        let mut api = vec![
+            json!({"role":"assistant","tool_calls":[{"id":"1"}]}),
+            json!({
+                "role": "tool",
+                "name": "screenshot_page",
+                "content": "Captured http://localhost:5173/ ".repeat(40)
+            }),
+        ];
+        for i in 0..8 {
+            api.push(json!({"role":"assistant","tool_calls":[{"id": format!("a{i}")}]}));
+            api.push(json!({
+                "role": "tool",
+                "name": "read_file",
+                "content": "y".repeat(30_000)
+            }));
+        }
+        clear_old_tool_results(&mut api);
+        let shot = api[1]["content"].as_str().unwrap();
+        assert!(shot.contains("Do not call screenshot_page again"));
+        assert!(!shot.contains("re-call the tool"));
     }
 }

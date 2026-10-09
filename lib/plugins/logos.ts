@@ -1,87 +1,17 @@
-/** Brand marks via Simple Icons. Prefer these over Composio’s generic/wrong logos. */
-export type PluginLogoSpec = {
-    slug: string;
-    color: string;
-    invertInDark?: boolean;
-};
+import marks from "./thesvg.json";
 
-export const PLUGIN_LOGO_SPECS: Record<string, PluginLogoSpec> = {
-    slack: { slug: "slack", color: "4A154B" },
-    github: { slug: "github", color: "181717", invertInDark: true },
-    gitlab: { slug: "gitlab", color: "FC6D26" },
-    linear: { slug: "linear", color: "5E6AD2" },
-    notion: { slug: "notion", color: "000000", invertInDark: true },
-    figma: { slug: "figma", color: "F24E1E" },
-    vercel: { slug: "vercel", color: "000000", invertInDark: true },
-    supabase: { slug: "supabase", color: "3FCF8E" },
-    stripe: { slug: "stripe", color: "635BFF" },
-    discord: { slug: "discord", color: "5865F2" },
-    jira: { slug: "jira", color: "0052CC" },
-    asana: { slug: "asana", color: "F06A6A" },
-    clickup: { slug: "clickup", color: "7B68EE" },
-    trello: { slug: "trello", color: "0052CC" },
-    monday: { slug: "mondaydotcom", color: "FF3D57" },
-    notioncalendar: { slug: "notion", color: "000000", invertInDark: true },
-    hackernews: { slug: "ycombinator", color: "FF6600" },
-    airtable: { slug: "airtable", color: "18BFFF" },
-    hubspot: { slug: "hubspot", color: "FF7A59" },
-    salesforce: { slug: "salesforce", color: "00A1E0" },
-    intercom: { slug: "intercom", color: "6AFDEF" },
-    googledrive: { slug: "googledrive", color: "4285F4" },
-    googlecalendar: { slug: "googlecalendar", color: "4285F4" },
-    googlesheets: { slug: "googlesheets", color: "34A853" },
-    googledocs: { slug: "googledocs", color: "4285F4" },
-    dropbox: { slug: "dropbox", color: "0061FF" },
-    twitter: { slug: "x", color: "000000", invertInDark: true },
-    linkedin: { slug: "linkedin", color: "0A66C2" },
-    zoom: { slug: "zoom", color: "0B5CFF" },
-    calendly: { slug: "calendly", color: "006BFF" },
-    sentry: { slug: "sentry", color: "362D59" },
-    datadog: { slug: "datadog", color: "632CA6" },
-    pagerduty: { slug: "pagerduty", color: "06AC38" },
-    shopify: { slug: "shopify", color: "7AB55C" },
-    confluence: { slug: "confluence", color: "172B4D" },
-    bitbucket: { slug: "bitbucket", color: "0052CC" },
-    firebase: { slug: "firebase", color: "FFCA28" },
-    outlook: { slug: "microsoftoutlook", color: "0078D4" },
-    microsoftteams: { slug: "microsoftteams", color: "6264A7" },
-    microsoft_teams: { slug: "microsoftteams", color: "6264A7" },
-    todoist: { slug: "todoist", color: "E44332" },
-    webflow: { slug: "webflow", color: "4353FF" },
-    cloudflare: { slug: "cloudflare", color: "F38020" },
-    heroku: { slug: "heroku", color: "430098" },
-    digitalocean: { slug: "digitalocean", color: "0080FF" },
-    posthog: { slug: "posthog", color: "000000", invertInDark: true },
-    mixpanel: { slug: "mixpanel", color: "7856FF" },
-    reddit: { slug: "reddit", color: "FF4500" },
-    youtube: { slug: "youtube", color: "FF0000" },
-    twilio: { slug: "twilio", color: "F22F46" },
-    sendgrid: { slug: "sendgrid", color: "1A82E2" },
-    netlify: { slug: "netlify", color: "00C7B7" },
-    railway: { slug: "railway", color: "0B0D0E", invertInDark: true },
-    render: { slug: "render", color: "46E3B7" },
-    flyio: { slug: "flydotio", color: "7B3FF2" },
-    awsamplify: { slug: "awsamplify", color: "FF9900" },
-    framer: { slug: "framer", color: "0055FF" },
-    circleci: { slug: "circleci", color: "343434", invertInDark: true },
-    attio: { slug: "attio", color: "000000", invertInDark: true },
-    gmail: { slug: "gmail", color: "EA4335" },
-    googlemeet: { slug: "googlemeet", color: "00832D" },
-    onedrive: { slug: "microsoftonedrive", color: "0078D4" },
-    one_drive: { slug: "microsoftonedrive", color: "0078D4" },
-    excel: { slug: "microsoftexcel", color: "217346" },
-    microsoftexcel: { slug: "microsoftexcel", color: "217346" },
-    miro: { slug: "miro", color: "FFD02F" },
-    canva: { slug: "canva", color: "00C4CC" },
-    loom: { slug: "loom", color: "625DF5" },
-    zendesk: { slug: "zendesk", color: "03363D" },
-    mailchimp: { slug: "mailchimp", color: "FFE01B" },
-    box: { slug: "box", color: "0061D5" },
-    amplitude: { slug: "amplitude", color: "1D1D1F", invertInDark: true },
-    snowflake: { slug: "snowflake", color: "29B5E8" },
-    mongodb: { slug: "mongodb", color: "47A248" },
-    docker: { slug: "docker", color: "2496ED" },
-};
+type Mark = { slug: string; variants: string[] };
+
+const MARKS = marks as Record<string, Mark>;
+
+/** theSVG mark. Dark variant when the glyph would disappear on a dark surface. */
+function thesvgLogoUrl(toolkit: string, dark: boolean): string | null {
+    const raw = toolkit.trim().toLowerCase();
+    const mark = MARKS[raw.replace(/_/g, "")] ?? MARKS[raw];
+    if (!mark) return null;
+    const variant = dark && mark.variants.includes("dark") ? "dark" : "default";
+    return `https://thesvg.org/icons/${mark.slug}/${variant}.svg`;
+}
 
 const PLUGIN_DOMAINS: Record<string, string> = {
     slack: "slack.com",
@@ -169,11 +99,8 @@ export function pluginLogoSrc(toolkit: string, dark: boolean, fallback?: string 
 export function pluginLogoCandidates(toolkit: string, dark: boolean, fallback?: string | null): string[] {
     const key = toolkit.trim().toLowerCase();
     const out: string[] = [];
-    const spec = PLUGIN_LOGO_SPECS[key];
-    if (spec) {
-        const color = spec.invertInDark && dark ? "ffffff" : spec.color;
-        out.push(`https://cdn.simpleicons.org/${spec.slug}/${color}`);
-    }
+    const svg = thesvgLogoUrl(key, dark);
+    if (svg) out.push(svg);
     if (fallback) out.push(fallback);
     const domain = PLUGIN_DOMAINS[key];
     if (domain) out.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`);

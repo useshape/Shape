@@ -192,6 +192,10 @@ fn make_callbacks(
                     &app_out,
                     json!({ "type": "data", "data": data.replace('\n', "\r\n") }),
                 );
+                let _ = app_out.emit(
+                    "pty-output",
+                    json!({ "id": session_id, "data": data }),
+                );
             }
         }),
         on_exit: Arc::new(move |session_id, exit_code| {
@@ -208,6 +212,10 @@ fn make_callbacks(
                 emit_panel_event(
                     &app_exit,
                     json!({ "type": "finish", "exitCode": exit_code }),
+                );
+                let _ = app_exit.emit(
+                    "pty-exit",
+                    json!({ "id": session_id, "exit_code": exit_code }),
                 );
             }
         }),
@@ -257,16 +265,6 @@ pub async fn run_agent_command(
             "sessionId": session_id,
             "kind": "start",
             "command": command,
-        }),
-    );
-    emit_panel_event(
-        app,
-        json!({
-            "type": "start",
-            "command": command,
-            "interactive": is_pty,
-            "sessionId": if is_pty { Some(session_id) } else { None },
-            "commandId": command_id,
         }),
     );
 
@@ -330,6 +328,17 @@ pub async fn run_agent_command(
         // Still running: hand it to the background. Deliberately NOT killed —
         // the session keeps streaming and `wait`/`read_terminal` track it.
         // Keep session registered so Stop can still kill it.
+        // Open a real terminal tab now so the user can read it and close it.
+        emit_panel_event(
+            app,
+            json!({
+                "type": "start",
+                "command": command,
+                "interactive": true,
+                "sessionId": session_id,
+                "commandId": command_id,
+            }),
+        );
         emit_chat_stream(
             app,
             json!({

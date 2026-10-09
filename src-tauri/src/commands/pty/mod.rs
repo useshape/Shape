@@ -1431,14 +1431,31 @@ pub async fn pty_write(
     id: u32,
     data: String,
 ) -> Result<(), AppError> {
-    let mut sessions = state.sessions.lock()?;
-    let session = sessions
-        .get_mut(&id)
+    {
+        let mut sessions = state.sessions.lock()?;
+        if let Some(session) = sessions.get_mut(&id) {
+            let mut writer = session
+                .writer
+                .lock()
+                .map_err(|e| AppError::Message(format!("PTY writer lock poisoned: {e}")))?;
+            writer
+                .write_all(data.as_bytes())
+                .map_err(|e| AppError::Io(e))?;
+            writer.flush().map_err(|e| AppError::Io(e))?;
+            return Ok(());
+        }
+    }
+    let piped = state.piped_sessions.lock()?;
+    let session = piped
+        .get(&id)
         .ok_or(AppError::Message("Session not found".to_string()))?;
-    let mut writer = session
-        .writer
+    let mut stdin = session
+        .stdin
         .lock()
-        .map_err(|e| AppError::Message(format!("PTY writer lock poisoned: {e}")))?;
+        .map_err(|e| AppError::Message(format!("Piped stdin lock poisoned: {e}")))?;
+    let writer = stdin
+        .as_mut()
+        .ok_or(AppError::Message("Session stdin is closed".to_string()))?;
     writer
         .write_all(data.as_bytes())
         .map_err(|e| AppError::Io(e))?;

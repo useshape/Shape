@@ -1,0 +1,497 @@
+{
+  "slack": {
+    "slug": "slack",
+    "variants": [
+      "default",
+      "wordmark"
+    ]
+  },
+  "github": {
+    "slug": "github",
+    "variants": [
+      "default",
+      "mono",
+      "light",
+      "dark",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "gitlab": {
+    "slug": "gitlab",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "linear": {
+    "slug": "linear",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "notion": {
+    "slug": "notion",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "figma": {
+    "slug": "figma",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "vercel": {
+    "slug": "vercel",
+    "variants": [
+      "default",
+      "mono",
+      "light",
+      "dark",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "supabase": {
+    "slug": "supabase",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "stripe": {
+    "slug": "stripe",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "discord": {
+    "slug": "discord",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "jira": {
+    "slug": "jira",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "asana": {
+    "slug": "asana",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "clickup": {
+    "slug": "clickup",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "trello": {
+    "slug": "trello",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "monday": {
+    "slug": "monday",
+    "variants": [
+      "default",
+      "light",
+      "mono"
+    ]
+  },
+  "airtable": {
+    "slug": "airtable",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "hubspot": {
+    "slug": "hubspot",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "salesforce": {
+    "slug": "salesforce",
+    "variants": [
+      "default"
+    ]
+  },
+  "intercom": {
+    "slug": "intercom",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "googledrive": {
+    "slug": "google-drive",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "googlecalendar": {
+    "slug": "google-calendar",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "googlesheets": {
+    "slug": "google-sheets",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "dropbox": {
+    "slug": "dropbox",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "twitter": {
+    "slug": "x",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "linkedin": {
+    "slug": "linkedin",
+    "variants": [
+      "default",
+      "wordmark"
+    ]
+  },
+  "zoom": {
+    "slug": "zoom",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "calendly": {
+    "slug": "calendly",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "sentry": {
+    "slug": "sentry",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "datadog": {
+    "slug": "datadog",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "pagerduty": {
+    "slug": "pagerduty",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "shopify": {
+    "slug": "shopify",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "confluence": {
+    "slug": "confluence",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "bitbucket": {
+    "slug": "bitbucket",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "attio": {
+    "slug": "attio",
+    "variants": [
+      "default"
+    ]
+  },
+  "googledocs": {
+    "slug": "google-docs",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "outlook": {
+    "slug": "microsoft-outlook",
+    "variants": [
+      "default"
+    ]
+  },
+  "gmail": {
+    "slug": "gmail",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "microsoftteams": {
+    "slug": "microsoft-teams",
+    "variants": [
+      "default"
+    ]
+  },
+  "todoist": {
+    "slug": "todoist",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "webflow": {
+    "slug": "webflow",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "miro": {
+    "slug": "miro",
+    "variants": [
+      "default",
+      "mono",
+      "dark",
+      "light",
+      "wordmark",
+      "wordmarkLight"
+    ]
+  },
+  "canva": {
+    "slug": "canva",
+    "variants": [
+      "default",
+      "wordmark",
+      "wordmarkDark",
+      "wordmarkLight"
+    ]
+  },
+  "onedrive": {
+    "slug": "microsoft-onedrive",
+    "variants": [
+      "default"
+    ]
+  },
+  "zendesk": {
+    "slug": "zendesk",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "cloudflare": {
+    "slug": "cloudflare",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "digitalocean": {
+    "slug": "digitalocean",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "posthog": {
+    "slug": "posthog",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "mixpanel": {
+    "slug": "mixpanel",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "reddit": {
+    "slug": "reddit",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "youtube": {
+    "slug": "youtube",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "twilio": {
+    "slug": "twilio",
+    "variants": [
+      "default",
+      "wordmark"
+    ]
+  },
+  "box": {
+    "slug": "box",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "basecamp": {
+    "slug": "basecamp",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "coda": {
+    "slug": "coda",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "contentful": {
+    "slug": "contentful",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "grafana": {
+    "slug": "grafana",
+    "variants": [
+      "default",
+      "mono",
+      "wordmark"
+    ]
+  },
+  "neon": {
+    "slug": "neon",
+    "variants": [
+      "default"
+    ]
+  },
+  "resend": {
+    "slug": "resend",
+    "variants": [
+      "default",
+      "mono",
+      "light",
+      "dark",
+      "wordmark",
+      "wordmarkLight",
+      "wordmarkDark"
+    ]
+  },
+  "shortcut": {
+    "slug": "shortcut",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "front": {
+    "slug": "front",
+    "variants": [
+      "default"
+    ]
+  },
+  "amplitude": {
+    "slug": "amplitude",
+    "variants": [
+      "default"
+    ]
+  },
+  "mailgun": {
+    "slug": "mailgun",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "wordpress": {
+    "slug": "wordpress",
+    "variants": [
+      "default",
+      "mono"
+    ]
+  },
+  "pipedrive": {
+    "slug": "pipedrive",
+    "variants": [
+      "default"
+    ]
+  }
+}

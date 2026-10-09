@@ -193,10 +193,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "spawn_subagent" => subagent::tool_spawn_subagent(&args, ctx).await,
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
-        "browse" => blocked_outcome(
-            "browse",
-            "The in-app browser was removed. Use web_search and visit_url instead.",
-        ),
+        "browse" => crate::agent::tools::browse::tool_browse(&args, ctx).await,
         "design_review" => persona::tool_design_review(&args, ctx).await,
         "mcp_search" => meta::tool_mcp_search(&args, ctx).await,
         "mcp_call" => meta::tool_mcp_call_named(&args, ctx).await,

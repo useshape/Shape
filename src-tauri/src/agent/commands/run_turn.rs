@@ -91,6 +91,7 @@ const DEDUPED_READONLY_TOOLS: &[&str] = &[
     "plugin_tools",
     "list_terminals",
     "read_lints",
+    "screenshot_page",
 ];
 
 /// Tools that can change files on disk, so earlier reads may be stale afterwards.
@@ -124,6 +125,15 @@ fn tool_invalidates_reads(name: &str, tool_result: &str) -> bool {
 const MAX_WAIT_CALLS_PER_TURN: usize = 6;
 
 fn duplicate_call_key(name: &str, arguments: &str) -> String {
+    if name == "screenshot_page" {
+        if let Ok(args) = serde_json::from_str::<Value>(arguments) {
+            let url = args.get("url").and_then(|v| v.as_str());
+            let path = args.get("path").and_then(|v| v.as_str());
+            if let Ok(resolved) = crate::agent::tools::page_shot::resolve_page_url(url, path) {
+                return format!("screenshot_page\u{1}{resolved}");
+            }
+        }
+    }
     format!("{}\u{1}{}", name, arguments.trim())
 }
 
@@ -158,6 +168,9 @@ fn parse_read_result_range(tool_result: &str) -> Option<(usize, usize)> {
 }
 
 fn duplicate_call_message(name: &str) -> String {
+    if name == "screenshot_page" {
+        return "DUPLICATE CALL BLOCKED: this page was already captured this turn. Do not call screenshot_page again. Use the earlier capture and continue.".to_string();
+    }
     format!(
         "DUPLICATE CALL BLOCKED: you already called {} with these exact arguments this turn and the result has not changed. \
          Do not repeat it. Use the earlier result, try a different tool or different arguments, or answer the user.",

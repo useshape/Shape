@@ -511,20 +511,18 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                     />
                                 </div>
                             ) : project_path ? (
-                                <>
-                                    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                                        <Chat
-                                            key={project_path.replace(/\//g, "\\").toLowerCase()}
-                                            className="bg-transparent"
-                                        />
-                                    </div>
-                                    <TerminalDock />
-                                </>
+                                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                                    <Chat
+                                        key={project_path.replace(/\//g, "\\").toLowerCase()}
+                                        className="bg-transparent"
+                                    />
+                                </div>
                             ) : (
                                 <div className="h-full overflow-hidden bg-transparent" data-tauri-drag-region>
                                     {children}
                                 </div>
                             )}
+                            {project_path ? <TerminalDock /> : null}
                     </div>
                 </div>
                 {showWorkspace && project_path ? (

@@ -48,7 +48,7 @@ const SCAFFOLD_ITEMS: QuickPickItem[] = DESIGN_SCAFFOLDS.map((item) => ({
     ),
 }));
 
-type CloneKind = "git" | "github" | "gitlab" | "bitbucket" | "azure";
+export type CloneKind = "git" | "github" | "gitlab" | "bitbucket" | "azure";
 
 async function pickDirectory(title: string): Promise<string | null> {
     const { open: pick } = await import("@tauri-apps/plugin-dialog");
@@ -64,7 +64,7 @@ function openProject(path: string) {
     window.dispatchEvent(new CustomEvent("shape-open-project", { detail: { path } }));
 }
 
-function toCloneUrl(kind: CloneKind, value: string): string | null {
+export function toCloneUrl(kind: CloneKind, value: string): string | null {
     const raw = value.trim();
     if (!raw) return null;
     if (/^git@/i.test(raw) || /^https?:\/\//i.test(raw) || /^ssh:\/\//i.test(raw)) {
@@ -98,7 +98,7 @@ function toCloneUrl(kind: CloneKind, value: string): string | null {
     return raw;
 }
 
-const CLONE_PLACEHOLDER: Record<CloneKind, string> = {
+export const CLONE_PLACEHOLDER: Record<CloneKind, string> = {
     git: "Paste a git URL and press Enter",
     github: "owner/repo",
     gitlab: "group/project",

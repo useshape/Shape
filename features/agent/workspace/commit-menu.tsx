@@ -2,10 +2,11 @@
 
 import { GithubMark } from "@/components/ui/github-mark";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { commands, type GitFileParams } from "@/lib/backend";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,20 @@ import { FileIcon } from "@/components/ui/file-icon";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/features/notifications";
 import { GenerateStarButton } from "@/features/git/ui/shared/generate-star";
-import { discoverGitRepos, pickDefaultRepo } from "@/lib/git/repos";
+import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
+import {
+    AzureDevOpsMark,
+    BitbucketMark,
+    GitHubMark,
+    GitLabMark,
+    GitUrlMark,
+} from "@/features/chat/ui/shell/brand-marks";
+import {
+    CLONE_PLACEHOLDER,
+    toCloneUrl,
+    type CloneKind,
+} from "@/features/chat/ui/shell/project-pick";
+import { discoverGitRepos, invalidateGitRepoCache, pickDefaultRepo } from "@/lib/git/repos";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { getShapeAccessToken } from "@/lib/cloud/store";
 import { getSettings } from "@/lib/settings";
@@ -48,6 +62,168 @@ function fileName(path: string) {
 function parentFolder(path: string) {
     const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
     return parts.length > 1 ? parts[parts.length - 2]! : "";
+}
+
+async function pickDirectory(title: string): Promise<string | null> {
+    const { open: pick } = await import("@tauri-apps/plugin-dialog");
+    const selected = await pick({ directory: true, multiple: false, title });
+    return typeof selected === "string" ? selected : null;
+}
+
+function hostMark(node: ReactNode) {
+    return <span className="flex size-4 items-center justify-center">{node}</span>;
+}
+
+function GitSetupPick({
+    open,
+    onOpenChange,
+    projectPath,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    projectPath: string;
+}) {
+    const [step, setStep] = useState<"setup" | "clone">("setup");
+    const [cloneKind, setCloneKind] = useState<CloneKind>("git");
+    const [query, setQuery] = useState("");
+
+    useEffect(() => {
+        if (!open) {
+            setStep("setup");
+            setQuery("");
+        }
+    }, [open]);
+
+    const close = () => onOpenChange(false);
+
+    const initialize = async () => {
+        if (!projectPath) {
+            notify.error("Git", "Open a folder first.");
+            return;
+        }
+        try {
+            await commands.gitInit(projectPath);
+            invalidateGitRepoCache();
+            window.dispatchEvent(new Event("shape-git-refresh"));
+            notify.success("Git", "Repository initialized.");
+            close();
+        } catch (err) {
+            notify.gitError(err, "Failed to initialize repository");
+        }
+    };
+
+    const cloneFromUrl = async (repoUrl: string) => {
+        const parent = await pickDirectory("Select folder to clone into");
+        if (!parent) return;
+        notify.info("Git", "Cloning repository…");
+        try {
+            const clonedPath = await commands.gitClone(repoUrl, parent);
+            invalidateGitRepoCache();
+            window.dispatchEvent(new Event("shape-git-refresh"));
+            notify.success("Git", "Repository cloned.");
+            close();
+            window.dispatchEvent(new CustomEvent("shape-open-project", { detail: { path: clonedPath } }));
+        } catch (err) {
+            notify.error("Git", err instanceof Error ? err.message : String(err));
+        }
+    };
+
+    const setupItems: QuickPickItem[] = [
+        {
+            id: "init",
+            label: "Initialize repository",
+            description: projectPath || "Open a folder first",
+            icon: Branch20Regular,
+        },
+        {
+            id: "git",
+            label: "Git URL",
+            description: "Clone from any git remote",
+            iconNode: hostMark(<GitUrlMark />),
+        },
+        {
+            id: "github",
+            label: "GitHub repository",
+            description: "Clone GitHub owner/repo",
+            iconNode: hostMark(<GitHubMark />),
+        },
+        {
+            id: "gitlab",
+            label: "GitLab repository",
+            description: "Clone group/project",
+            iconNode: hostMark(<GitLabMark />),
+        },
+        {
+            id: "bitbucket",
+            label: "Bitbucket repository",
+            description: "Clone workspace/repo",
+            iconNode: hostMark(<BitbucketMark />),
+        },
+        {
+            id: "azure",
+            label: "Azure DevOps repository",
+            description: "Clone org/project/repo",
+            iconNode: hostMark(<AzureDevOpsMark />),
+        },
+    ];
+
+    if (!open) return null;
+
+    if (step === "clone") {
+        return (
+            <QuickPick
+                open={open}
+                onOpenChange={(next) => {
+                    if (next) return;
+                    setStep("setup");
+                    setQuery("");
+                }}
+                title="Clone repository"
+                placeholder={CLONE_PLACEHOLDER[cloneKind]}
+                query={query}
+                onQueryChange={setQuery}
+                items={[]}
+                emptyText="Press Enter to clone."
+                onSelect={() => undefined}
+                onSubmitQuery={(value) => {
+                    const url = toCloneUrl(cloneKind, value);
+                    if (!url) {
+                        notify.error("Git", `Use ${CLONE_PLACEHOLDER[cloneKind]}`);
+                        return;
+                    }
+                    void cloneFromUrl(url);
+                }}
+            />
+        );
+    }
+
+    const q = query.trim().toLowerCase();
+    return (
+        <QuickPick
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Set up Git"
+            placeholder="Initialize this folder or clone a repository…"
+            query={query}
+            onQueryChange={setQuery}
+            items={setupItems.filter((item) => {
+                if (!q) return true;
+                return (
+                    item.label.toLowerCase().includes(q) ||
+                    (item.description ?? "").toLowerCase().includes(q)
+                );
+            })}
+            onSelect={(item) => {
+                if (item.id === "init") {
+                    void initialize();
+                    return;
+                }
+                setQuery("");
+                setCloneKind(item.id as CloneKind);
+                setStep("clone");
+            }}
+        />
+    );
 }
 
 function statusLetter(status: string) {
@@ -85,13 +261,25 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
     const [behind, setBehind] = useState(0);
     const [branch, setBranch] = useState("");
     const [publishOpen, setPublishOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [setupOpen, setSetupOpen] = useState(false);
     const github = useGitHubAuth();
 
     const refresh = useCallback(async () => {
         try {
             const repos = await discoverGitRepos(projectPath);
-            const path = pickDefaultRepo(projectPath, repos) ?? projectPath;
+            const path = pickDefaultRepo(projectPath, repos);
             setRepo(path);
+            if (!path) {
+                setFiles([]);
+                setStats({});
+                setLastMessage("");
+                setHasRemote(false);
+                setAhead(0);
+                setBehind(0);
+                setBranch("");
+                return;
+            }
             const list = await commands.gitStatus(path);
             setFiles(list);
             try {
@@ -112,6 +300,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
             setBehind(sync?.behind ?? 0);
             setBranch(current || "");
         } catch {
+            setRepo(null);
             setFiles([]);
             setStats({});
             setLastMessage("");
@@ -337,7 +526,27 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
 
     return (
         <>
-        <DropdownMenu>
+        <DropdownMenu
+            open={menuOpen}
+            onOpenChange={(next) => {
+                if (!next) {
+                    setMenuOpen(false);
+                    return;
+                }
+                void (async () => {
+                    const repos = await discoverGitRepos(projectPath).catch(() => []);
+                    const found = pickDefaultRepo(projectPath, repos);
+                    if (!found) {
+                        setRepo(null);
+                        setMenuOpen(false);
+                        setSetupOpen(true);
+                        return;
+                    }
+                    setRepo(found);
+                    setMenuOpen(true);
+                })();
+            }}
+        >
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="outline"
@@ -506,6 +715,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                 void refresh();
             }}
         />
+        <GitSetupPick open={setupOpen} onOpenChange={setSetupOpen} projectPath={projectPath} />
         </>
     );
 }
