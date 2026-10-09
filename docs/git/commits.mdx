@@ -1,36 +1,28 @@
 ---
 title: Commits
-description: Stage, commit, and push from Shape.
+description: Commit from chat, the terminal, or the graph.
 order: 1
 ---
 
-Source control is in the sidebar. It works on the folder you have open.
+Shape does not commit when it edits a file. You keep or skip the diff in chat first. Then you commit what is actually on disk.
 
-Chat can draft a message. You still press commit. Shape does not commit on its own when it edits a file.
+## From chat
 
-## See the diff
+In **Code** mode, ask it to commit. Name the files if you only want some of them. Read the message it drafts before you let it run.
 
-Open the source control view (`Ctrl+Shift+G`). Changed files are listed. Click a file to read the diff.
+This uses the open folder’s git repo. Open the repo root, not a nested package, unless that package is its own repo.
 
-If a file is missing, it may be ignored, or you may have opened a subfolder instead of the repo root.
+## From the terminal
 
-## Commit
+Open the terminal (`Ctrl+``) and run `git` the way you usually do. Stage, commit, and push from there if you prefer.
 
-1. Stage the files you want in the commit. Leave out debug noise and `.env` files.
-2. Write a message. Short and specific is enough: what changed and why.
-3. Commit.
+## Commit graph
 
-You can ask chat to draft the message from the staged diff. Read it before you use it.
-
-## Push and pull
-
-Push when you want the remote updated. Pull if the remote has commits you do not have yet.
-
-If push is rejected, pull (or rebase) first, then push again. Resolve conflicts in the files, then commit.
+**View → Git Manager** opens the commit graph in the workspace. Use it to see history on the current folder.
 
 ## Remotes and GitHub
 
-A GitHub login is only needed for remotes hosted on GitHub, pull requests, issues, and Actions. Local commits work without it. See [GitHub](/docs/git/github).
+A GitHub login is only needed for remotes hosted on GitHub, pull requests, issues, and Actions. Local commits work without it. See [GitHub](/git/github).
 
 ## After an agent edit
 
