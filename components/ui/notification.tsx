@@ -87,7 +87,12 @@ function ToastCard({
             tabIndex={clickable ? 0 : undefined}
         >
             <div className="flex items-center gap-2 pr-8">
-                <p className="min-w-0 flex-1 truncate text-sm text-text-primary">{notification.message}</p>
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-text-primary">{notification.message}</p>
+                    {notification.description ? (
+                        <p className="text-sm text-text-muted">{notification.description}</p>
+                    ) : null}
+                </div>
                 {notification.code != null ? (
                     <span className="shrink-0 text-sm text-text-muted">Error {notification.code}</span>
                 ) : null}

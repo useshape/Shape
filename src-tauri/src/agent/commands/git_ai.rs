@@ -33,6 +33,47 @@ pub async fn summarize_pull_request(
     repo: String,
     number: u64,
 ) -> Result<String, AppError> {
+    complete_pull_request_prompt(
+        access_token,
+        owner,
+        repo,
+        number,
+        prompts::PR_SUMMARY_MD,
+        "pr_summary",
+        "Failed to summarize pull request",
+    )
+    .await
+}
+
+/// Orientation walkthrough for a pull request (not a findings review).
+#[tauri::command]
+pub async fn walkthrough_pull_request(
+    access_token: Option<String>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> Result<String, AppError> {
+    complete_pull_request_prompt(
+        access_token,
+        owner,
+        repo,
+        number,
+        prompts::PR_WALKTHROUGH_MD,
+        "pr_walkthrough",
+        "Failed to walk through pull request",
+    )
+    .await
+}
+
+async fn complete_pull_request_prompt(
+    access_token: Option<String>,
+    owner: String,
+    repo: String,
+    number: u64,
+    prompt_md: &str,
+    purpose: &str,
+    empty_message: &str,
+) -> Result<String, AppError> {
     let auth_token = require_shape_token(access_token)?;
     let client = Client::new();
     let model = MODEL_TITLE_GEN;
@@ -80,7 +121,7 @@ pub async fn summarize_pull_request(
         }
     }
 
-    let mut prompt = format!("{}\n\n", prompts::PR_SUMMARY_MD);
+    let mut prompt = format!("{prompt_md}\n\n");
     prompt.push_str(&format!(
         "## PR\n- Repo: {slug}\n- Number: #{number}\n- Author: {user}\n- State: {state}\n- Base â† Head: {base} â† {head}\n- Diffstat: +{additions} âˆ’{deletions}\n\n## Title\n{title}\n\n## Body\n{}\n\n## Files\n{}\n",
         truncate_for_prompt(body, 8_000),
@@ -92,12 +133,12 @@ pub async fn summarize_pull_request(
     ));
 
     let turn_id = uuid::Uuid::new_v4().to_string();
-    let ctx = streaming::ProxyContext::new("pr_summary").with_turn(Some(turn_id), None);
+    let ctx = streaming::ProxyContext::new(purpose).with_turn(Some(turn_id), None);
     let (message, _, _) =
         streaming::complete_chat_with_max_tokens(&client, &auth_token, &prompt, model, 700, &ctx)
             .await?;
     if message.trim().is_empty() {
-        return Err(AppError::Message("Failed to summarize pull request".into()));
+        return Err(AppError::Message(empty_message.into()));
     }
     Ok(message)
 }
