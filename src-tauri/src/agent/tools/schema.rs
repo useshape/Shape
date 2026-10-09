@@ -65,6 +65,7 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         read_lints(),
         spawn_subagent(),
         update_todos(),
+        browse(),
         screenshot_page(),
         inspect_runtime(),
         design_review(),
@@ -1151,15 +1152,40 @@ fn save_media() -> Value {
     )
 }
 
+fn browse() -> Value {
+    tool(
+        "browse",
+        "Open a page in the in-app browser and drive it. Use this when the user asks you to navigate, click through, or visually test a site, including the local app you just started. \
+Each action shows a screenshot in the chat. A written description is not a substitute. \
+Start with action open and a full url (http://localhost:PORT/path or https://…). \
+Then action act with the element id from the last result. Also: click, type, scroll, shot, stop. \
+Do not call observe between moves. If an element has an href, open that URL instead of clicking it.",
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "open, act, click, type, scroll, shot, or stop."},
+                "url": {"type": "string", "description": "Full URL for action open."},
+                "target": {"type": "string", "description": "Element id from the last browse result, for action act."},
+                "method": {"type": "string", "description": "For action act: click (default) or type."},
+                "text": {"type": "string", "description": "Text to type, for action type."},
+                "x": {"type": "number", "description": "Horizontal position, 0–100, for click or scroll."},
+                "y": {"type": "number", "description": "Vertical position, 0–100, for click or scroll."},
+                "dy": {"type": "number", "description": "Scroll delta in pixels."}
+            },
+            "required": ["action"],
+            "additionalProperties": false
+        }),
+    )
+}
+
 fn screenshot_page() -> Value {
     tool(
         "screenshot_page",
-        "Capture a screenshot of the running local website preview and show it in your chat reply. \
-Website/UI tasks only — never for CLIs, APIs, tests, or anything that has no webpage. \
-Do NOT call on every edit. Call once after a new site/page first comes up, or after a large layout/structure change (new page, rebuilt hero, major grid/nav change). \
-Skip copy tweaks, color/spacing nits, hover states, and small component polish. \
-Pass `path` or `url` for the specific route you changed (e.g. /pricing, /login) — never assume the homepage if you worked on another page. \
-If capture is impossible (no preview, not a website), skip it and continue. At most one screenshot per turn unless you changed two distinct routes.",
+        "Capture a screenshot of a local website and show that image in your chat reply. \
+If the user asked you to screenshot the app or a page, you must call this. Do not answer with a file tree or a route list instead. \
+Pass url as the full local address you are serving (http://localhost:PORT/login). Call it once per page they asked to see. \
+Without an explicit request, call it only after a new page first comes up or a large layout change, not for copy or spacing tweaks. \
+Never use it for CLIs, APIs, or tests. If nothing is being served, start the dev server first, then capture.",
         json!({
             "type": "object",
             "properties": {
@@ -1326,6 +1352,7 @@ mod tests {
         assert!(names.contains(&"plugin_run".to_string()));
         assert!(names.contains(&"plugin_list".to_string()));
         assert!(names.contains(&"screenshot_page".to_string()));
+        assert!(names.contains(&"browse".to_string()));
         assert!(names.contains(&"generate_svg".to_string()));
         assert!(names.contains(&"generate_image".to_string()));
         assert!(names.contains(&"save_media".to_string()));

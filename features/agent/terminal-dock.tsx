@@ -1,6 +1,8 @@
 "use client";
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useProjectState } from "@/lib/backend/project-state";
+import { registerBoundTerminalTab } from "@/features/terminal/session";
 import { cn } from "@/lib/utils";
 
 const Terminal = lazy(() => import("@/features/terminal/ui/terminal"));
@@ -17,6 +19,9 @@ function clearBodyResize() {
 }
 
 export function TerminalDock() {
+    const { project_path } = useProjectState();
+    const cwdRef = useRef(project_path);
+    cwdRef.current = project_path;
     const [open, setOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [height, setHeight] = useState(DEFAULT_H);
@@ -57,6 +62,41 @@ export function TerminalDock() {
         }
         window.dispatchEvent(new CustomEvent("shape-terminal-open", { detail: { open: next } }));
     }, []);
+
+    useEffect(() => {
+        let unlisten: (() => void) | undefined;
+        let cancelled = false;
+        void import("@tauri-apps/api/event").then(({ listen }) =>
+            listen<{ type: string; command?: string; sessionId?: number }>(
+                "shape-terminal-ai-action",
+                (event) => {
+                    if (cancelled) return;
+                    if (event.payload.type !== "start" || event.payload.sessionId == null) return;
+                    const cwd = cwdRef.current || "global";
+                    const title =
+                        (event.payload.command || "Agent").replace(/\s+/g, " ").trim().slice(0, 48) ||
+                        "Agent";
+                    registerBoundTerminalTab({
+                        title,
+                        cwd,
+                        shell: "ai",
+                        boundPtyId: event.payload.sessionId,
+                    });
+                    window.dispatchEvent(
+                        new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),
+                    );
+                    persistOpen(true);
+                },
+            ).then((fn) => {
+                if (cancelled) fn();
+                else unlisten = fn;
+            }),
+        );
+        return () => {
+            cancelled = true;
+            unlisten?.();
+        };
+    }, [persistOpen]);
 
     useEffect(() => {
         const onToggle = (e: Event) => {

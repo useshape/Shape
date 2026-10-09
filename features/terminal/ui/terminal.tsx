@@ -690,55 +690,6 @@ export default function Terminal({
         return availableShells[0]?.id ?? preferred;
     }, [availableShells]);
 
-    useEffect(() => {
-        const unlistenPromise = import("@tauri-apps/api/event").then(({ listen }) => {
-            return listen<{ type: string; command?: string; data?: string; exitCode?: number; interactive?: boolean; sessionId?: number }>("shape-terminal-ai-action", (e) => {
-                if (e.payload.type === "start") {
-                    const interactive = e.payload.interactive && e.payload.sessionId != null;
-                    globalTerminalStore.setTabs(tabs => {
-                        if (interactive) {
-                            const existing = tabs.find(
-                                t => t.boundPtyId === e.payload.sessionId && t.cwd === safeCwd,
-                            );
-                            if (existing) {
-                                setTimeout(() => setActiveTerminalId(existing.id), 0);
-                                return tabs;
-                            }
-                            const id = createTabId();
-                            setTimeout(() => setActiveTerminalId(id), 0);
-                            const shell = resolveAvailableDefaultShell();
-                            return [
-                                ...tabs,
-                                createTerminalTab(
-                                    shell,
-                                    "Agent Command",
-                                    safeCwd,
-                                    id,
-                                    e.payload.sessionId,
-                                ),
-                            ];
-                        }
-
-                        const existing = tabs.find(t => t.shell === "ai" && t.cwd === safeCwd && t.boundPtyId === undefined);
-                        if (existing) {
-                            setTimeout(() => setActiveTerminalId(existing.id), 0);
-                            return tabs;
-                        }
-                        const id = createTabId();
-                        setTimeout(() => setActiveTerminalId(id), 0);
-                        return [...tabs, createTerminalTab("ai", "Agent Action", safeCwd, id)];
-                    });
-
-                    // Fire layout event to make sure terminal split is open
-                    window.dispatchEvent(new CustomEvent("shape-layout-toggle", {
-                        detail: { id: "panel", value: true }
-                    }));
-                }
-            });
-        });
-        return () => { unlistenPromise.then(u => u()).catch(() => { }); };
-    }, [safeCwd, setActiveTerminalId, resolveAvailableDefaultShell]);
-
     const closeTab = useCallback((id: string) => {
         globalTerminalStore.setTabs(prev => {
             const closing = prev.find((t) => t.id === id);
@@ -747,11 +698,12 @@ export default function Terminal({
             const left = projectTabs.filter((t) => (t.group ?? "left") === "left");
             const right = projectTabs.filter((t) => t.group === "right");
             const inst = globalTerminalStore.instances.get(id);
+            const killId = inst && inst.ptyId >= 0 ? inst.ptyId : closing?.boundPtyId;
+            if (typeof killId === "number" && killId >= 0) {
+                import("@tauri-apps/api/core").then(({ invoke }) => invoke("pty_kill", { id: killId }).catch(() => { }));
+            }
             if (inst) {
                 inst.unlistenOutput();
-                if (inst.ptyId >= 0) {
-                    import("@tauri-apps/api/core").then(({ invoke }) => invoke("pty_kill", { id: inst.ptyId }).catch(() => { }));
-                }
                 (inst.term as unknown as { _themeObserver?: MutationObserver })._themeObserver?.disconnect();
                 inst.term.dispose();
                 globalTerminalStore.instances.delete(id);
