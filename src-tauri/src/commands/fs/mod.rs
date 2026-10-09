@@ -223,15 +223,56 @@ fn is_ignored_path(path: &Path) -> bool {
     })
 }
 
-static FILE_WATCHER: OnceLock<Mutex<Option<notify::RecommendedWatcher>>> = OnceLock::new();
+/// Windows opens one watch buffer per directory. A recursive watch of
+/// `node_modules` or `target` holds several gigabytes. Stay under this cap.
+const MAX_WATCH_DIRS: usize = 4_000;
+
+enum WatchCmd {
+    Add(PathBuf),
+    Stop,
+}
+
+struct WatchSession {
+    tx: std::sync::mpsc::Sender<WatchCmd>,
+}
+
+impl Drop for WatchSession {
+    fn drop(&mut self) {
+        let _ = self.tx.send(WatchCmd::Stop);
+    }
+}
+
+static FILE_WATCHER: OnceLock<Mutex<Option<WatchSession>>> = OnceLock::new();
+
+fn collect_watch_dirs(root: &Path, out: &mut Vec<PathBuf>) {
+    if out.len() >= MAX_WATCH_DIRS || is_ignored_path(root) {
+        return;
+    }
+    out.push(root.to_path_buf());
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if out.len() >= MAX_WATCH_DIRS {
+            return;
+        }
+        let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() && !is_ignored_path(&path) {
+            collect_watch_dirs(&path, out);
+        }
+    }
+}
 
 fn start_watcher(app: AppHandle, path: &str) {
     let mut watcher_guard = FILE_WATCHER.get_or_init(|| Mutex::new(None)).lock().unwrap();
     *watcher_guard = None;
 
     let app_clone = app.clone();
-    let pending_paths: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+    let pending_paths: std::sync::Arc<std::sync::Mutex<HashSet<String>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(HashSet::new()));
     let pending_for_emit = pending_paths.clone();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
@@ -269,27 +310,64 @@ fn start_watcher(app: AppHandle, path: &str) {
         }
     });
 
+    let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<WatchCmd>();
     let tx_clone = tx.clone();
+    let cmd_for_events = cmd_tx.clone();
     let pending_for_watch = pending_paths.clone();
-    if let Ok(mut watcher) = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-        if let Ok(event) = res {
-            let mut any_interesting = false;
-            if let Ok(mut set) = pending_for_watch.lock() {
-                for p in &event.paths {
-                    if !is_ignored_path(p) {
-                        set.insert(p.to_string_lossy().into_owned());
-                        any_interesting = true;
+    let root = PathBuf::from(path);
+
+    std::thread::Builder::new()
+        .name("shape-fs-watch".into())
+        .spawn(move || {
+            let mut watcher = match notify::recommended_watcher(
+                move |res: Result<Event, notify::Error>| {
+                    let Ok(event) = res else {
+                        return;
+                    };
+                    let mut any_interesting = false;
+                    if let Ok(mut set) = pending_for_watch.lock() {
+                        for p in &event.paths {
+                            if is_ignored_path(p) {
+                                continue;
+                            }
+                            set.insert(p.to_string_lossy().into_owned());
+                            any_interesting = true;
+                            if event.kind.is_create() && p.is_dir() {
+                                let _ = cmd_for_events.send(WatchCmd::Add(p.clone()));
+                            }
+                        }
+                    }
+                    if any_interesting {
+                        let _ = tx_clone.send(());
+                    }
+                },
+            ) {
+                Ok(watcher) => watcher,
+                Err(_) => return,
+            };
+
+            let mut dirs = Vec::new();
+            collect_watch_dirs(&root, &mut dirs);
+            for dir in dirs {
+                let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
+            }
+
+            while let Ok(cmd) = cmd_rx.recv() {
+                match cmd {
+                    WatchCmd::Stop => break,
+                    WatchCmd::Add(path) => {
+                        let mut dirs = Vec::new();
+                        collect_watch_dirs(&path, &mut dirs);
+                        for dir in dirs {
+                            let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
+                        }
                     }
                 }
             }
-            if any_interesting {
-                let _ = tx_clone.send(());
-            }
-        }
-    }) {
-        let _ = watcher.watch(Path::new(path), RecursiveMode::Recursive);
-        *watcher_guard = Some(watcher);
-    }
+        })
+        .ok();
+
+    *watcher_guard = Some(WatchSession { tx: cmd_tx });
 }
 
 pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
@@ -1581,4 +1659,37 @@ pub fn close_all_files_helper(app: &AppHandle) -> Result<(), AppError> {
     state.active_file = None;
     let _ = app.emit("project-state-update", &*state);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn watch_dirs_skip_dependency_trees() {
+        let root = std::env::temp_dir().join(format!("shape-watch-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::create_dir_all(root.join("node_modules").join("leftpad")).unwrap();
+        fs::create_dir_all(root.join("src-tauri").join("target").join("debug")).unwrap();
+        fs::create_dir_all(root.join(".next").join("server")).unwrap();
+
+        let mut dirs = Vec::new();
+        collect_watch_dirs(&root, &mut dirs);
+        let rel: Vec<String> = dirs
+            .iter()
+            .map(|p| {
+                p.strip_prefix(&root)
+                    .unwrap_or(p)
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert!(rel.iter().any(|n| n == "src"));
+        assert!(rel.iter().all(|n| !n.contains("node_modules")));
+        assert!(rel.iter().all(|n| !n.contains("target")));
+        assert!(rel.iter().all(|n| !n.contains(".next")));
+        let _ = fs::remove_dir_all(&root);
+    }
 }
