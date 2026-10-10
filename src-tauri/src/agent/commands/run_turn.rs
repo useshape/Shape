@@ -11,6 +11,7 @@ use crate::agent::tools::page_shot;
 use crate::agent::tools::dispatch::{self, SideEffect, ToolCtx, ToolOutcome};
 use crate::commands::pty::PtyState;
 use crate::core::error::AppError;
+use crate::core::ram_debug;
 
 pub const MAX_TOOL_LOOPS: usize = 50;
 /// Code/Review: Cursor-scale room for long builds. Soft Continue-style stop only
@@ -28,6 +29,29 @@ pub fn max_loops_for_mode(mode: &str) -> usize {
 /// Soft cap per file; a successful read_file on that path resets the counter so
 /// iterative fix-ups can continue instead of dead-ending after three edits.
 const MAX_EDITS_PER_FILE_PER_TURN: usize = 6;
+/// Drop the largest cached file contents once this turn's cache exceeds the cap.
+pub(crate) const MAX_FILE_CACHE_BYTES: usize = 32 * 1024 * 1024;
+
+pub(crate) fn file_cache_insert(cache: &mut HashMap<String, String>, path: String, content: String) {
+    cache.insert(path.clone(), content);
+    loop {
+        let total: usize = cache.values().map(|s| s.len()).sum();
+        if total <= MAX_FILE_CACHE_BYTES || cache.len() <= 1 {
+            break;
+        }
+        let victim = cache
+            .iter()
+            .filter(|(k, _)| k.as_str() != path)
+            .max_by_key(|(_, v)| v.len())
+            .map(|(k, _)| k.clone());
+        match victim {
+            Some(key) => {
+                cache.remove(&key);
+            }
+            None => break,
+        }
+    }
+}
 /// After this many consecutive failed edits on one file without a re-read, block
 /// further edit_file calls until the model reads the file again.
 const MAX_CONSECUTIVE_EDIT_FAILURES: usize = 3;
@@ -488,6 +512,39 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         id: conversation_id.clone(),
     };
 
+    ram_debug::snapshot(
+        "turn_start",
+        &format!(
+            "mode={} max_loops={} {}",
+            config.mode,
+            config.max_loops,
+            ram_debug::digest_messages(config.api_messages)
+        ),
+    );
+    let ram_stop = tokio_util::sync::CancellationToken::new();
+    if ram_debug::enabled() {
+        let stop = ram_stop.clone();
+        tokio::spawn(async move {
+            let mut sec = 0u64;
+            loop {
+                tokio::select! {
+                    _ = stop.cancelled() => break,
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                        sec += 1;
+                        ram_debug::snapshot("sampler", &format!("sec={sec} agent_turn_alive=1"));
+                    }
+                }
+            }
+        });
+    }
+    struct RamSamplerGuard(tokio_util::sync::CancellationToken);
+    impl Drop for RamSamplerGuard {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+    let _ram_sampler_guard = RamSamplerGuard(ram_stop.clone());
+
     'outer: loop {
         if config.cancel.is_cancelled() {
             logging::info("chat", "Cancelled by user");
@@ -505,6 +562,18 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         }
         loop_count += 1;
         config.proxy_ctx.refresh_request_id();
+        ram_debug::snapshot(
+            "turn_loop",
+            &format!(
+                "loop={}/{} readonly_streak={} final_resp_chars={} {} {}",
+                loop_count,
+                config.max_loops,
+                consecutive_readonly_rounds,
+                final_full_response.len(),
+                ram_debug::digest_messages(config.api_messages),
+                ram_debug::digest_file_cache(&file_cache),
+            ),
+        );
 
         if let Some(cid) = conversation_id.as_deref() {
             let mut updates = crate::agent::subagents::take_parent_updates(cid);
@@ -861,7 +930,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 if let Some(SideEffect::FileRead { path, content }) = &tool_outcome.side_effect {
                     let abs = resolve_abs(path, config.project_path);
                     read_paths.insert(abs.clone());
-                    file_cache.insert(abs.clone(), content.clone());
+                    file_cache_insert(&mut file_cache, abs.clone(), content.clone());
                     edit_counts.remove(&abs);
                     edit_fail_counts.remove(&abs);
                     needs_reread.remove(&abs);
@@ -1228,7 +1297,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     SideEffect::FileRead { path, content: file_content } => {
                         let abs = resolve_abs(&path, config.project_path);
                         read_paths.insert(abs.clone());
-                        file_cache.insert(abs.clone(), file_content);
+                        file_cache_insert(&mut file_cache, abs.clone(), file_content);
                         // Re-reading unlocks another edit budget for this file.
                         edit_counts.remove(&abs);
                         edit_fail_counts.remove(&abs);
@@ -1238,7 +1307,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         wrote_files = true;
                         let abs = resolve_abs(&path, config.project_path);
                         read_paths.insert(abs.clone());
-                        file_cache.insert(abs.clone(), file_content);
+                        file_cache_insert(&mut file_cache, abs.clone(), file_content);
                         edit_fail_counts.remove(&abs);
                         needs_reread.remove(&abs);
                     }
@@ -1247,7 +1316,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         for (path, file_content) in files {
                             let abs = resolve_abs(&path, config.project_path);
                             read_paths.insert(abs.clone());
-                            file_cache.insert(abs.clone(), file_content);
+                            file_cache_insert(&mut file_cache, abs.clone(), file_content);
                             edit_fail_counts.remove(&abs);
                             needs_reread.remove(&abs);
                         }
@@ -1364,6 +1433,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
     // `chat_complete` (with stats) is emitted from `send_chat_message` after the turn returns.
 
+    ram_debug::snapshot(
+        "turn_end",
+        &format!(
+            "loops={loop_count} wrote_files={wrote_files} resp_chars={} {} {}",
+            final_full_response.len(),
+            ram_debug::digest_messages(config.api_messages),
+            ram_debug::digest_file_cache(&file_cache),
+        ),
+    );
+
     Ok(AgentTurnOutcome {
         response_text: final_full_response,
         loop_count,
@@ -1373,6 +1452,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 }
 
 fn push_tool_result(api_messages: &mut Vec<Value>, id: &str, name: &str, content: &str) {
+    ram_debug::tool(name, id, content.len(), &content.chars().take(80).collect::<String>());
     api_messages.push(json!({
         "role": "tool",
         "tool_call_id": id,
@@ -1558,4 +1638,22 @@ fn clip_text(text: &str, limit: usize) -> String {
         trimmed,
         text.chars().count()
     )
+}
+
+#[cfg(test)]
+mod file_cache_tests {
+    use super::*;
+
+    #[test]
+    fn file_cache_drops_largest_when_over_cap() {
+        let mut cache = HashMap::new();
+        let big = "a".repeat(MAX_FILE_CACHE_BYTES / 2 + 1024);
+        file_cache_insert(&mut cache, "a.rs".into(), big.clone());
+        file_cache_insert(&mut cache, "b.rs".into(), big.clone());
+        file_cache_insert(&mut cache, "c.rs".into(), "tiny".into());
+        let total: usize = cache.values().map(|s| s.len()).sum();
+        assert!(total <= MAX_FILE_CACHE_BYTES);
+        assert!(cache.contains_key("c.rs"));
+        assert!(cache.len() <= 2);
+    }
 }

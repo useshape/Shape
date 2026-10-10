@@ -38,6 +38,7 @@ const SKIP_DIRS: &[&str] = &[
     "__pycache__",
     ".venv",
     "venv",
+    "out",
 ];
 
 const PROGRESS_EVERY_N_FILES: usize = 15;
@@ -90,9 +91,20 @@ impl IndexManager {
 
         let manifest = Manifest::load(&manifest_path);
         let index = if index_path.exists() {
+            let disk = std::fs::metadata(&index_path).map(|m| m.len()).unwrap_or(0);
+            crate::core::ram_debug::snapshot(
+                "index_load",
+                &format!("index_bin_bytes={disk} path={}", index_path.display()),
+            );
             std::fs::read(&index_path)
                 .ok()
-                .and_then(|bytes| bincode::deserialize(&bytes).ok())
+                .and_then(|bytes| {
+                    crate::core::ram_debug::snapshot(
+                        "index_loaded_bytes",
+                        &format!("vec_bytes={}", bytes.len()),
+                    );
+                    bincode::deserialize(&bytes).ok()
+                })
                 .unwrap_or_default()
         } else {
             Bm25Index::default()
@@ -581,12 +593,7 @@ impl IndexState {
                     return f(manager);
                 }
             }
-            let emb = self.inner.embeddings_enabled.load(Ordering::SeqCst);
-            let ctx = self.inner.api_context();
-            let manager =
-                IndexManager::for_project_with_opts(project_path, emb, ctx)
-                    .map_err(|e| e.to_string())?;
-            return f(&manager);
+            return Err("Index is being rebuilt".to_string());
         }
 
         self.ensure_loaded(project_path)?;

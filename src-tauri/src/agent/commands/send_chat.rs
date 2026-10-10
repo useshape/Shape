@@ -126,6 +126,21 @@ pub async fn send_chat_message(
             message.len()
         ),
     );
+    let hist_bytes = state
+        .history
+        .lock()
+        .ok()
+        .map(|h| h.iter().map(|m| m.content.len()).sum::<usize>())
+        .unwrap_or(0);
+    let hist_len = state.history.lock().ok().map(|h| h.len()).unwrap_or(0);
+    crate::core::ram_debug::snapshot(
+        "send_chat_start",
+        &format!(
+            "mode={mode_to_use} model={model_to_use} msg_len={} hist_msgs={hist_len} hist_bytes={hist_bytes} project={:?}",
+            message.len(),
+            current_proj_path
+        ),
+    );
 
     let family = model_router::model_family(&model_to_use);
     let family_prompt = prompts::family_prompt(family);
@@ -851,6 +866,15 @@ pub async fn send_chat_message(
 
     state.clear_in_flight_if(&turn_id);
     journals::clear_turn_journal(&owned_conversation_id, &turn_id);
+
+    crate::core::ram_debug::snapshot(
+        "send_chat_end",
+        &format!(
+            "response_chars={} hist_msgs={}",
+            final_full_response.len(),
+            state.history.lock().ok().map(|h| h.len()).unwrap_or(0)
+        ),
+    );
 
     Ok(final_full_response)
 }

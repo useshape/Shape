@@ -337,4 +337,51 @@ mod tests {
         assert!(!out.contains("line5"));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// Mock model script: create / read / list real files the way an agent turn would.
+    #[test]
+    fn mock_agent_tool_loop_stays_on_real_files() {
+        let dir = std::env::temp_dir().join(format!("shape-mock-agent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("node_modules").join("left-pad")).unwrap();
+        let root = dir.to_str().unwrap();
+
+        let script: Vec<(&str, String)> = (0..40)
+            .map(|i| {
+                (
+                    "create_file",
+                    format!("src/mod{i}.rs"),
+                )
+            })
+            .collect();
+
+        for (i, (_tool, path)) in script.iter().enumerate() {
+            create_file(path, &format!("pub fn n{i}() {{}}\n"), root).unwrap();
+            let body = read_file(path, root).unwrap();
+            assert!(body.contains(&format!("n{i}")));
+            if i % 5 == 0 {
+                create_dir(&format!("src/pkg{i}"), root).unwrap();
+            }
+        }
+
+        let listing = list_files("src", root).unwrap();
+        assert!(listing.contains("mod0.rs"));
+        let noisy = list_files(".", root).unwrap();
+        assert!(noisy.contains("node_modules"));
+        assert!(noisy.contains("generated"));
+
+        let cache_total: usize = (0..40)
+            .map(|i| {
+                read_file(&format!("src/mod{i}.rs"), root)
+                    .unwrap()
+                    .len()
+            })
+            .sum();
+        assert!(
+            cache_total < 512_000,
+            "mock turn file reads should stay small, got {cache_total}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

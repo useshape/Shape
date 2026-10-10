@@ -217,19 +217,57 @@ fn is_ignored_path(path: &Path) -> bool {
                 || s == "venv"
                 || s == ".venv"
                 || s == "__pycache__"
+                || s == "out"
         } else {
             false
         }
     })
 }
 
-/// Windows opens one watch buffer per directory. A recursive watch of
-/// `node_modules` or `target` holds several gigabytes. Stay under this cap.
-const MAX_WATCH_DIRS: usize = 4_000;
+/// One recursive `ReadDirectoryChangesW` handle per top-level source folder.
+/// Walking every subdirectory and attaching a non-recursive watch to each is
+/// what blows RAM on Windows (~16 KiB buffer + kernel state per directory).
+const MAX_RECURSIVE_WATCH_ROOTS: usize = 64;
 
 enum WatchCmd {
     Add(PathBuf),
     Stop,
+}
+
+pub(crate) fn collect_watch_roots(project_root: &Path) -> Vec<(PathBuf, RecursiveMode)> {
+    let mut out = vec![(project_root.to_path_buf(), RecursiveMode::NonRecursive)];
+    let Ok(entries) = fs::read_dir(project_root) else {
+        return out;
+    };
+    let mut recursive = 0usize;
+    for entry in entries.flatten() {
+        if recursive >= MAX_RECURSIVE_WATCH_ROOTS {
+            break;
+        }
+        let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() && !is_ignored_path(&path) {
+            out.push((path, RecursiveMode::Recursive));
+            recursive += 1;
+        }
+    }
+    out
+}
+
+pub(crate) fn should_watch_created_dir(
+    project_root: &Path,
+    created: &Path,
+    recursive_roots: usize,
+) -> bool {
+    if recursive_roots >= MAX_RECURSIVE_WATCH_ROOTS {
+        return false;
+    }
+    if is_ignored_path(created) {
+        return false;
+    }
+    created.parent() == Some(project_root)
 }
 
 struct WatchSession {
@@ -243,28 +281,6 @@ impl Drop for WatchSession {
 }
 
 static FILE_WATCHER: OnceLock<Mutex<Option<WatchSession>>> = OnceLock::new();
-
-fn collect_watch_dirs(root: &Path, out: &mut Vec<PathBuf>) {
-    if out.len() >= MAX_WATCH_DIRS || is_ignored_path(root) {
-        return;
-    }
-    out.push(root.to_path_buf());
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        if out.len() >= MAX_WATCH_DIRS {
-            return;
-        }
-        let path = entry.path();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-        if file_type.is_dir() && !is_ignored_path(&path) {
-            collect_watch_dirs(&path, out);
-        }
-    }
-}
 
 fn start_watcher(app: AppHandle, path: &str) {
     let mut watcher_guard = FILE_WATCHER.get_or_init(|| Mutex::new(None)).lock().unwrap();
@@ -336,6 +352,7 @@ fn start_watcher(app: AppHandle, path: &str) {
                                 let _ = cmd_for_events.send(WatchCmd::Add(p.clone()));
                             }
                         }
+                        crate::core::ram_debug::note_watch_event(set.len());
                     }
                     if any_interesting {
                         let _ = tx_clone.send(());
@@ -346,20 +363,26 @@ fn start_watcher(app: AppHandle, path: &str) {
                 Err(_) => return,
             };
 
-            let mut dirs = Vec::new();
-            collect_watch_dirs(&root, &mut dirs);
-            for dir in dirs {
-                let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
+            let roots = collect_watch_roots(&root);
+            let mut recursive_roots = roots
+                .iter()
+                .filter(|(_, mode)| *mode == RecursiveMode::Recursive)
+                .count();
+            crate::core::ram_debug::note_watch_dirs(roots.len());
+            for (dir, mode) in roots {
+                let _ = watcher.watch(&dir, mode);
             }
 
             while let Ok(cmd) = cmd_rx.recv() {
                 match cmd {
                     WatchCmd::Stop => break,
                     WatchCmd::Add(path) => {
-                        let mut dirs = Vec::new();
-                        collect_watch_dirs(&path, &mut dirs);
-                        for dir in dirs {
-                            let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
+                        if !should_watch_created_dir(&root, &path, recursive_roots) {
+                            continue;
+                        }
+                        if watcher.watch(&path, RecursiveMode::Recursive).is_ok() {
+                            recursive_roots += 1;
+                            crate::core::ram_debug::note_watch_dirs(recursive_roots + 1);
                         }
                     }
                 }
@@ -1666,19 +1689,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn watch_dirs_skip_dependency_trees() {
+    fn watch_roots_skip_dependency_trees() {
         let root = std::env::temp_dir().join(format!("shape-watch-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("src")).unwrap();
+        fs::create_dir_all(root.join("src").join("deep").join("nested")).unwrap();
+        fs::create_dir_all(root.join("app")).unwrap();
         fs::create_dir_all(root.join("node_modules").join("leftpad")).unwrap();
         fs::create_dir_all(root.join("src-tauri").join("target").join("debug")).unwrap();
         fs::create_dir_all(root.join(".next").join("server")).unwrap();
+        fs::create_dir_all(root.join("out").join("static")).unwrap();
 
-        let mut dirs = Vec::new();
-        collect_watch_dirs(&root, &mut dirs);
-        let rel: Vec<String> = dirs
+        let roots = collect_watch_roots(&root);
+        let rel: Vec<String> = roots
             .iter()
-            .map(|p| {
+            .map(|(p, _)| {
                 p.strip_prefix(&root)
                     .unwrap_or(p)
                     .to_string_lossy()
@@ -1686,10 +1710,48 @@ mod tests {
             })
             .collect();
 
+        assert!(rel.iter().any(|n| n.is_empty() || *n == "."));
         assert!(rel.iter().any(|n| n == "src"));
-        assert!(rel.iter().all(|n| !n.contains("node_modules")));
-        assert!(rel.iter().all(|n| !n.contains("target")));
-        assert!(rel.iter().all(|n| !n.contains(".next")));
+        assert!(rel.iter().any(|n| n == "app"));
+        assert!(rel.iter().all(|n| *n != "node_modules" && !n.contains("node_modules")));
+        assert!(rel.iter().all(|n| *n != ".next" && *n != "out"));
+        assert!(
+            roots.len() <= 8,
+            "too many watch roots for a small tree: {} {:?}",
+            roots.len(),
+            rel
+        );
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn watch_roots_stay_bounded_when_dependency_tree_is_huge() {
+        let root = std::env::temp_dir().join(format!("shape-watch-huge-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src")).unwrap();
+        for i in 0..400 {
+            fs::create_dir_all(root.join("node_modules").join(format!("pkg{i}")).join("dist")).unwrap();
+        }
+        let roots = collect_watch_roots(&root);
+        assert!(
+            roots.len() <= 4,
+            "expected a handful of recursive roots, got {}",
+            roots.len()
+        );
+        assert!(roots.iter().all(|(p, _)| !is_ignored_path(p) || p == &root));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn created_dirs_do_not_add_watches_under_existing_roots() {
+        let root = PathBuf::from("C:/proj");
+        assert!(should_watch_created_dir(&root, &root.join("vendor"), 0));
+        assert!(!should_watch_created_dir(
+            &root,
+            &root.join("src").join("components"),
+            0
+        ));
+        assert!(!should_watch_created_dir(&root, &root.join("node_modules"), 0));
+        assert!(!should_watch_created_dir(&root, &root.join("vendor"), MAX_RECURSIVE_WATCH_ROOTS));
     }
 }

@@ -391,6 +391,17 @@ pub async fn stream_chat(
         // The turn loop executes every returned call before the next request.
     }
 
+    let body_bytes = serde_json::to_vec(&body).map(|b| b.len()).unwrap_or(0);
+    crate::core::ram_debug::snapshot(
+        "stream_request",
+        &format!(
+            "model={model} body_bytes={body_bytes} body_mb={:.2} tools={} {}",
+            body_bytes as f64 / (1024.0 * 1024.0),
+            tools.len(),
+            crate::core::ram_debug::digest_messages(messages)
+        ),
+    );
+
     let mut retry_strategy = backoff::ExponentialBackoff::default();
     retry_strategy.max_elapsed_time = Some(std::time::Duration::from_secs(30));
 

@@ -46,6 +46,7 @@ pub fn run() {
     // or Windows pops a visible console window for every terminal/shell spawn.
     crate::core::process::ensure_hidden_console_for_conpty();
     crate::browser::webview_debug::install_env();
+    crate::core::ram_debug::init();
 
     // Load env from src-tauri/ or shape/ (tauri dev cwd varies)
     let _ = dotenvy::from_filename(".env.local");
