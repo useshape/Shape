@@ -127,7 +127,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
             <div className="pointer-events-none min-w-0 flex-1" aria-hidden />
 
             <div className="titlebar-right relative z-20 flex h-full shrink-0 items-center gap-0.5 px-1" data-no-drag>
-                {!isCompact && !isFocus ? <TitlebarUpdateButton /> : null}
+                {isFocus ? null : <TitlebarUpdateButton />}
                 <WindowControls
                     isMaximized={isMaximized}
                     onMinimize={minimize}

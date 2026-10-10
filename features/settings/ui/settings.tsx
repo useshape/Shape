@@ -41,6 +41,14 @@ import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
+import {
+    checkForAppUpdates,
+    describeUpdateStatus,
+    downloadAndInstallUpdate,
+    getUpdateStatus,
+    relaunchToApplyUpdate,
+    subscribeUpdateStatus,
+} from "@/lib/window/updater";
 import { HostedSidebarBack } from "@/features/agent/sidebar/hosted-nav";
 import { Icon } from "@/components/ui/icon";
 import { ShapeLogo } from "@/components/ui/shape-logo";
@@ -579,39 +587,42 @@ function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
 function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
     const u = settings.updates;
     const [version, setVersion] = useState("0.0.1");
-    const [checking, setChecking] = useState(false);
-    const [statusLine, setStatusLine] = useState("Shape is up to date.");
+    const [busy, setBusy] = useState(false);
+    const status = React.useSyncExternalStore(subscribeUpdateStatus, getUpdateStatus, getUpdateStatus);
 
     useEffect(() => {
         void import("@tauri-apps/api/app")
             .then(({ getVersion }) => getVersion())
             .then(setVersion)
             .catch(() => {});
-    }, []);
+        void (async () => {
+            const next = await checkForAppUpdates({ force: true, silent: true });
+            if (next.kind === "available" && u.autoUpdate) {
+                await downloadAndInstallUpdate();
+            }
+        })();
+    }, [u.autoUpdate]);
 
-    const checkNow = async () => {
-        setChecking(true);
+    const statusLine = describeUpdateStatus(status);
+
+    const runAction = async (kind: "check" | "install" | "restart") => {
+        setBusy(true);
         try {
-            const { checkForAppUpdates, getUpdateStatus } = await import("@/lib/window/updater");
-            await checkForAppUpdates({ force: true, silent: false });
-            const status = getUpdateStatus();
-            if (status.kind === "upToDate" || status.kind === "idle") {
-                setStatusLine("Shape is up to date.");
-            } else if (status.kind === "available") {
-                setStatusLine(`Version ${status.version} is ready to install.`);
-            } else if (status.kind === "ready") {
-                setStatusLine(`Version ${status.version} downloaded.`);
-            } else if (status.kind === "error") {
-                setStatusLine(status.message);
-            } else if (status.kind === "checking") {
-                setStatusLine("Checking…");
+            if (kind === "check") {
+                await checkForAppUpdates({ force: true, silent: false });
+            } else if (kind === "install") {
+                await downloadAndInstallUpdate();
+            } else {
+                await relaunchToApplyUpdate();
             }
         } catch {
-            setStatusLine("Could not check for updates.");
+            /* status is already set on the updater */
         } finally {
-            setChecking(false);
+            setBusy(false);
         }
     };
+
+    const downloading = status.kind === "downloading" || status.kind === "checking";
 
     return (
         <SettingSection id="settings-updates" title="About Shape">
@@ -623,28 +634,59 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
                             Current version is v{version}. {statusLine}
                         </div>
                     </div>
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={checking}
-                        onClick={() => void checkNow()}
-                    >
-                        {checking ? "Checking…" : "Check for updates"}
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-2">
+                        {status.kind === "available" ? (
+                            <Button
+                                size="sm"
+                                disabled={busy || downloading}
+                                onClick={() => void runAction("install")}
+                            >
+                                Install {status.version}
+                            </Button>
+                        ) : null}
+                        {status.kind === "ready" ? (
+                            <Button
+                                size="sm"
+                                disabled={busy}
+                                onClick={() => void runAction("restart")}
+                            >
+                                Restart now
+                            </Button>
+                        ) : null}
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy || downloading}
+                            onClick={() => void runAction("check")}
+                        >
+                            {status.kind === "checking" ? "Checking…" : "Check for updates"}
+                        </Button>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3 px-3.5 py-3">
                     <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium text-text-primary">Updater</div>
                         <div className="text-xs text-text-muted">
-                            {u.autoUpdate ? "Checks in the background." : "Manual checks only."} Channel: {u.channel === "nightly" ? "Nightly" : "Stable"}.
+                            {u.autoUpdate
+                                ? "Downloads in the background. Restart to finish."
+                                : "Manual checks only."}{" "}
+                            Channel: {u.channel === "nightly" ? "Nightly" : "Stable"}.
                         </div>
                     </div>
                 </div>
             </SettingCard>
-            <SettingRow title="Automatic updates" description="Download new versions when they ship.">
+            <SettingRow title="Automatic updates" description="Download new versions when they ship. Restart to apply them.">
                 <SettingSwitch
                     checked={u.autoUpdate}
-                    onChange={(v) => updateSettingSection("updates", { autoUpdate: v })}
+                    onChange={(v) => {
+                        updateSettingSection("updates", { autoUpdate: v });
+                        if (v) {
+                            void (async () => {
+                                const next = await checkForAppUpdates({ force: true, silent: true });
+                                if (next.kind === "available") await downloadAndInstallUpdate();
+                            })();
+                        }
+                    }}
                 />
             </SettingRow>
             <SettingRow title="Update channel">
@@ -657,9 +699,10 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
                     onChange={(v) => {
                         const channel = v as ShapeSettings["updates"]["channel"];
                         updateSettingSection("updates", { channel });
-                        void import("@/lib/window/updater").then(({ checkForAppUpdates }) =>
-                            checkForAppUpdates({ force: true, silent: true, channel }),
-                        );
+                        void (async () => {
+                            const next = await checkForAppUpdates({ force: true, silent: true, channel });
+                            if (next.kind === "available" && u.autoUpdate) await downloadAndInstallUpdate();
+                        })();
                     }}
                 />
             </SettingRow>
