@@ -19,6 +19,7 @@ type Listener = () => void;
 let status: UpdateStatus = { kind: "idle" };
 let pendingUpdate: Update | null = null;
 let checking = false;
+let installing = false;
 let dismissedVersion: string | null = null;
 const DISMISS_KEY = "shape-update-dismissed-version";
 const listeners = new Set<Listener>();
@@ -55,6 +56,25 @@ function setStatus(next: UpdateStatus) {
 
 export function getUpdateStatus(): UpdateStatus {
   return status;
+}
+
+/** Copy for Settings / dialogs. Never call an undownloaded update "ready to install". */
+export function describeUpdateStatus(next: UpdateStatus): string {
+  switch (next.kind) {
+    case "checking":
+      return "Checking…";
+    case "available":
+      return `${next.version} is available. Install it, then restart.`;
+    case "downloading":
+      return `Downloading ${next.version}… ${next.progress}%`;
+    case "ready":
+      return `${next.version} is downloaded. Restart Shape to finish.`;
+    case "upToDate":
+    case "idle":
+      return "You're on the latest version.";
+    case "error":
+      return next.message;
+  }
 }
 
 export function subscribeUpdateStatus(listener: Listener): () => void {
@@ -140,6 +160,8 @@ export async function checkForAppUpdates(options?: {
 }
 
 export async function downloadAndInstallUpdate(): Promise<void> {
+  if (installing) return;
+  installing = true;
   try {
     if (!pendingUpdate) {
       await checkForAppUpdates({ force: true });
@@ -173,6 +195,8 @@ export async function downloadAndInstallUpdate(): Promise<void> {
     void import("@/lib/errors/catalog").then(({ notifyCatalogError, SHAPE_ERRORS }) => {
       notifyCatalogError(SHAPE_ERRORS.UPDATE_FAILED, message);
     });
+  } finally {
+    installing = false;
   }
 }
 
@@ -197,7 +221,12 @@ export function startAutoUpdateChecks(): () => void {
   const run = () => {
     const settings = getSettings().updates;
     if (!settings.autoUpdate) return;
-    void checkForAppUpdates({ silent: true });
+    void (async () => {
+      const next = await checkForAppUpdates({ silent: true });
+      if (next.kind === "available") {
+        await downloadAndInstallUpdate();
+      }
+    })();
   };
 
   run();
