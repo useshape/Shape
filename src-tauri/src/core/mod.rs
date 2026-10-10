@@ -4,6 +4,7 @@ pub mod git_bin;
 pub mod mic;
 pub mod paths;
 pub mod process;
+pub mod ram_debug;
 pub mod result;
 pub mod state;
 pub mod webview_recovery;

@@ -26,9 +26,11 @@ That opens the desktop app against your local build. The first run compiles Rust
 
 ## Cloud while developing
 
-A local build can edit files. It cannot sign in to Shape Cloud. Use an official installer if you need chat against a real account.
+Point `NEXT_PUBLIC_SHAPE_WEBSITE_URL` at `http://localhost:3000` and run the website locally. Localhost Cloud AI does not require an official-build attestation. Production `useshape.org` still does.
 
-Do not expect a forked build to pass sign-in. That is expected, not a setup bug.
+A **release** binary also honors that env var when it is loopback (`http://localhost:3000` or `http://127.0.0.1:3000`). Set it in the shell before launching the `.exe` if you need Cloud AI against a local website. Other hosts stay on `https://www.useshape.org`.
+
+Optional: `SHAPE_RAM_DEBUG=1` writes process memory samples to `%LOCALAPPDATA%\shape\ram-debug.log`.
 
 ## Tests
 

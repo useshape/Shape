@@ -19,8 +19,9 @@ pub fn base_url() -> String {
 }
 
 /// Must run before the Tauri webview is created.
+/// Remote-debugging flags stay debug-only — WebView2 docs warn not to ship them.
 pub fn install_env() {
-    #[cfg(windows)]
+    #[cfg(all(windows, debug_assertions))]
     {
         let port = port();
         if port == 0 {
