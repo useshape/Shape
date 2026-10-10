@@ -1,3 +1,5 @@
+If you're using version 1.0.0, we recommend manually updating to 1.0.1 for fixed performance and a fix for the updater.
+
 ![Shape](./public/readme.png)
 
 <h2>The desktop agent for anything</h2>
