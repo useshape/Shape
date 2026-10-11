@@ -1,5 +1,7 @@
-//! Optional RAM instrumentation. Off unless `SHAPE_RAM_DEBUG=1`.
-//! File: `%LOCALAPPDATA%\shape\ram-debug.log` (Windows).
+//! Always-on memory log. One line every 10s while idle, plus agent-turn
+//! snapshots. Covers this process and the WebView2 processes it owns.
+//! File: `%LOCALAPPDATA%\shape\ram-debug.log` (Windows). Set
+//! `SHAPE_RAM_DEBUG=0` to turn it off.
 
 use serde_json::Value;
 use std::collections::HashMap;
@@ -22,10 +24,14 @@ pub fn enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         std::env::var("SHAPE_RAM_DEBUG")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes"))
-            .unwrap_or(false)
+            .map(|v| !(v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off")))
+            .unwrap_or(true)
     })
 }
+
+/// Truncate the log once it passes this so idle sampling never fills a disk.
+const MAX_LOG_BYTES: u64 = 8 * 1024 * 1024;
+const IDLE_SAMPLE_SECS: u64 = 10;
 
 fn elapsed_s() -> f64 {
     STARTED
@@ -125,12 +131,143 @@ mod win {
             line
         }
     }
+
+    #[repr(C)]
+    struct ProcessEntry32W {
+        dw_size: u32,
+        cnt_usage: u32,
+        th32_process_id: u32,
+        th32_default_heap_id: usize,
+        th32_module_id: u32,
+        cnt_threads: u32,
+        th32_parent_process_id: u32,
+        pc_pri_class_base: i32,
+        dw_flags: u32,
+        sz_exe_file: [u16; 260],
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateToolhelp32Snapshot(flags: u32, pid: u32) -> *mut c_void;
+        fn Process32FirstW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
+        fn Process32NextW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+        fn GetProcessHandleCount(process: *mut c_void, count: *mut u32) -> i32;
+    }
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetGuiResources(process: *mut c_void, flags: u32) -> u32;
+    }
+
+    const TH32CS_SNAPPROCESS: u32 = 0x2;
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const INVALID_HANDLE: *mut c_void = -1isize as *mut c_void;
+
+    /// Handles + GDI/USER objects for this process. A GDI leak blacks out
+    /// windows at 10k objects, which is what a frozen idle app looks like.
+    pub fn resources_line() -> String {
+        unsafe {
+            let me = GetCurrentProcess();
+            let mut handles = 0u32;
+            GetProcessHandleCount(me, &mut handles);
+            let gdi = GetGuiResources(me, 0);
+            let user = GetGuiResources(me, 1);
+            format!("handles={handles} gdi={gdi} user={user}")
+        }
+    }
+
+    /// Working set of every descendant process (WebView2 browser, renderers,
+    /// GPU, headless Chromium the agent spawned, PTY shells).
+    pub fn children_line() -> String {
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == INVALID_HANDLE || snapshot.is_null() {
+                return "children=?".into();
+            }
+            let mut entries: Vec<(u32, u32, String)> = Vec::new();
+            let mut entry = std::mem::zeroed::<ProcessEntry32W>();
+            entry.dw_size = std::mem::size_of::<ProcessEntry32W>() as u32;
+            if Process32FirstW(snapshot, &mut entry) != 0 {
+                loop {
+                    let len = entry
+                        .sz_exe_file
+                        .iter()
+                        .position(|&c| c == 0)
+                        .unwrap_or(entry.sz_exe_file.len());
+                    let name = String::from_utf16_lossy(&entry.sz_exe_file[..len]);
+                    entries.push((entry.th32_process_id, entry.th32_parent_process_id, name));
+                    if Process32NextW(snapshot, &mut entry) == 0 {
+                        break;
+                    }
+                }
+            }
+            CloseHandle(snapshot);
+
+            let root = std::process::id();
+            let mut owned = vec![root];
+            let mut i = 0;
+            while i < owned.len() {
+                let parent = owned[i];
+                for (pid, ppid, _) in &entries {
+                    if *ppid == parent && !owned.contains(pid) {
+                        owned.push(*pid);
+                    }
+                }
+                i += 1;
+            }
+
+            let mut total_ws = 0u64;
+            let mut total_private = 0u64;
+            let mut by_name: std::collections::BTreeMap<String, (usize, u64)> =
+                std::collections::BTreeMap::new();
+            for pid in owned.iter().skip(1) {
+                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, *pid);
+                if handle.is_null() {
+                    continue;
+                }
+                let mut counters = std::mem::zeroed::<ProcessMemoryCountersEx>();
+                counters.cb = std::mem::size_of::<ProcessMemoryCountersEx>() as u32;
+                if GetProcessMemoryInfo(handle, &mut counters, counters.cb) != 0 {
+                    total_ws += counters.working_set_size as u64;
+                    total_private += counters.private_usage as u64;
+                    let name = entries
+                        .iter()
+                        .find(|(p, _, _)| p == pid)
+                        .map(|(_, _, n)| n.clone())
+                        .unwrap_or_else(|| "?".into());
+                    let slot = by_name.entry(name).or_insert((0, 0));
+                    slot.0 += 1;
+                    slot.1 += counters.private_usage as u64;
+                }
+                CloseHandle(handle);
+            }
+            let detail = by_name
+                .iter()
+                .map(|(name, (count, private))| format!("{name}x{count}={:.0}MB", mb(*private)))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "children={} children_ws_mb={:.0} children_private_mb={:.0} [{detail}]",
+                owned.len() - 1,
+                mb(total_ws),
+                mb(total_private)
+            )
+        }
+    }
 }
 
 #[cfg(not(windows))]
 mod win {
     pub fn process_line() -> String {
         "ws=? (non-windows)".into()
+    }
+    pub fn resources_line() -> String {
+        String::new()
+    }
+    pub fn children_line() -> String {
+        String::new()
     }
 }
 
@@ -152,7 +289,14 @@ pub fn init() {
     }
     STARTED.get_or_init(Instant::now);
     let path = log_path();
-    match File::create(&path) {
+    // Append so a crash log survives the next launch; trim when it gets big.
+    let too_big = std::fs::metadata(&path).map(|m| m.len() > MAX_LOG_BYTES).unwrap_or(false);
+    let opened = if too_big {
+        File::create(&path)
+    } else {
+        OpenOptions::new().create(true).append(true).open(&path)
+    };
+    match opened {
         Ok(file) => {
             if let Ok(mut guard) = FILE.lock() {
                 *guard = Some(file);
@@ -163,23 +307,32 @@ pub fn init() {
     snapshot(
         "init",
         &format!(
-            "pid={} log={}",
+            "pid={} version={} log={}",
             std::process::id(),
+            env!("CARGO_PKG_VERSION"),
             path.display()
         ),
     );
-    eprintln!(
-        "[ram] DETAILED RAM LOG FILE (paste this file after the agent lags):\n{}",
-        path.display()
-    );
+    std::thread::Builder::new()
+        .name("shape-ram-sampler".into())
+        .spawn(|| loop {
+            std::thread::sleep(std::time::Duration::from_secs(IDLE_SAMPLE_SECS));
+            snapshot("idle", &format!("{} {}", win::resources_line(), win::children_line()));
+        })
+        .ok();
 }
 
 fn write_line(line: &str) {
-    eprintln!("{line}");
+    if cfg!(debug_assertions) {
+        eprintln!("{line}");
+    }
     if let Ok(mut guard) = FILE.lock() {
         if let Some(file) = guard.as_mut() {
             let _ = writeln!(file, "{line}");
             let _ = file.flush();
+            if file.metadata().map(|m| m.len() > MAX_LOG_BYTES).unwrap_or(false) {
+                let _ = file.set_len(0);
+            }
         }
     }
 }

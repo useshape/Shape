@@ -11,6 +11,7 @@ fn trim_origin(value: &str) -> String {
 
 /// Loopback Cloud AI — allowed in release so a production binary can hit a local
 /// website without shipping a special build. Public hosts stay on useshape.org.
+#[cfg_attr(debug_assertions, allow(dead_code))]
 pub fn is_loopback_origin(url: &str) -> bool {
     let Ok(parsed) = url::Url::parse(url) else {
         return false;

@@ -30,7 +30,7 @@ Point `NEXT_PUBLIC_SHAPE_WEBSITE_URL` at `http://localhost:3000` and run the web
 
 A **release** binary also honors that env var when it is loopback (`http://localhost:3000` or `http://127.0.0.1:3000`). Set it in the shell before launching the `.exe` if you need Cloud AI against a local website. Other hosts stay on `https://www.useshape.org`.
 
-Optional: `SHAPE_RAM_DEBUG=1` writes process memory samples to `%LOCALAPPDATA%\shape\ram-debug.log`.
+Every build (including release) writes a memory sample every 10 seconds to `%LOCALAPPDATA%\shape\ram-debug.log`: this process, its WebView2 children, handle and GDI counts. It is capped at 8 MB. Set `SHAPE_RAM_DEBUG=0` to turn it off. If Shape eats RAM, that file is what to send.
 
 ## Tests
 
