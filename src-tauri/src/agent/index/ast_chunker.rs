@@ -160,10 +160,11 @@ fn sliding_window_chunks(path: &str, content: &str) -> Vec<Chunk> {
         if end >= lines.len() {
             break;
         }
-        start = end.saturating_sub(LINE_OVERLAP);
-        if start >= lines.len() {
-            break;
-        }
+        // Overlap the next window with the tail of this one, but always move
+        // forward. With long lines a window can hold fewer than LINE_OVERLAP
+        // lines, and stepping back by the full overlap looped here forever.
+        let overlapped = end.saturating_sub(LINE_OVERLAP);
+        start = if overlapped > start { overlapped } else { end };
     }
 
     chunks
@@ -228,5 +229,36 @@ fn other() {
         let src = "# Title\n\nSome prose.\n";
         let chunks = chunk_file_ast("readme.md", src);
         assert!(!chunks.is_empty());
+    }
+
+    /// Lines long enough that a chunk holds fewer than LINE_OVERLAP of them.
+    /// The old window stepped back further than it moved forward and never
+    /// finished — that was the idle 40 GB in the installed build.
+    #[test]
+    fn long_lines_still_terminate() {
+        let line = "x".repeat(400);
+        let src = std::iter::repeat(line.as_str())
+            .take(60)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let chunks = sliding_window_chunks("data.sql", &src);
+        assert!(chunks.len() < 60, "got {} chunks", chunks.len());
+        assert_eq!(chunks.first().unwrap().start_line, 1);
+        assert_eq!(chunks.last().unwrap().end_line, 60);
+        for pair in chunks.windows(2) {
+            assert!(pair[1].start_line > pair[0].start_line);
+        }
+    }
+
+    #[test]
+    fn json_without_chunk_roots_terminates() {
+        let mut src = String::from("{\n");
+        for i in 0..40 {
+            src.push_str(&format!("  \"key{i}\": \"{}\",\n", "v".repeat(300)));
+        }
+        src.push_str("  \"end\": true\n}\n");
+        let chunks = chunk_file_ast("package.json", &src);
+        assert!(!chunks.is_empty());
+        assert!(chunks.len() < 42);
     }
 }

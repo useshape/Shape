@@ -535,7 +535,9 @@ impl IndexState {
         }
 
         let inner = self.inner.clone();
-        std::thread::spawn(move || {
+        let spawned = std::thread::Builder::new()
+            .name("shape-index".into())
+            .spawn(move || {
             let emb = inner.embeddings_enabled.load(Ordering::SeqCst);
             let ctx = inner.api_context();
             let run = || -> Result<(IndexManager, IndexStatus), String> {
@@ -571,6 +573,10 @@ impl IndexState {
             }
         });
 
+        if spawned.is_err() {
+            self.inner.indexing.store(false, Ordering::SeqCst);
+            return false;
+        }
         true
     }
 
