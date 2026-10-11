@@ -19,10 +19,6 @@ export type PromoCardDef = {
     action: PromoAction;
 };
 
-export type PromoCardsFile = {
-    cards: PromoCardDef[];
-};
-
 const SEEN_KEY = "shape-promo-seen";
 
 export function loadSeenPromoIds(): string[] {

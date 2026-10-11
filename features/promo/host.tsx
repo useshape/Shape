@@ -14,14 +14,12 @@ import { Icon } from "@/components/ui/icon";
 import { useProjectState } from "@/lib/backend";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { isWebProject } from "@/features/detection/lib/lib";
-import catalog from "@/content/promo-cards.json";
 import { useRuntimeFlag } from "@/lib/runtime/store";
 import {
     loadSeenPromoIds,
     markPromoSeen,
     pageMatchesTrigger,
     type PromoCardDef,
-    type PromoCardsFile,
 } from "./types";
 import { Button } from "@/components/ui/button";
 
@@ -57,7 +55,8 @@ export function PromoCardHost() {
     const [seen, setSeen] = useState<string[]>([]);
     const [dismissed, setDismissed] = useState<string | null>(null);
 
-    const [remoteCards, setRemoteCards] = useState<PromoCardDef[] | null>(null);
+    // Only what the CMS publishes. No bundled fallback — an empty feed means no card.
+    const [cards, setCards] = useState<PromoCardDef[]>([]);
 
     useEffect(() => {
         setMounted(true);
@@ -65,7 +64,10 @@ export function PromoCardHost() {
         void fetch(`${SHAPE_API_BASE}/api/promos`)
             .then((res) => (res.ok ? res.json() : null))
             .then((data: { cards?: PromoCardDef[] } | null) => {
-                if (data?.cards?.length) setRemoteCards(data.cards);
+                const next = (data?.cards ?? []).filter(
+                    (c) => c && typeof c.id === "string" && typeof c.title === "string" && c.image,
+                );
+                setCards(next);
             })
             .catch(() => {});
     }, []);
@@ -85,7 +87,6 @@ export function PromoCardHost() {
     }, [project_path]);
 
     const page = currentPage(pathname);
-    const cards = remoteCards ?? (catalog as PromoCardsFile).cards ?? [];
 
     const card = useMemo(() => {
         if (!mounted) return null;
