@@ -19,13 +19,13 @@ import { useOverlayRoot } from "@/lib/ui/overlay-root";
  */
 
 const itemClasses =
-    "group relative flex cursor-default select-none items-center gap-2 squircle-2xl px-2! py-1 text-sm outline-none transition-[background-color,color,transform] duration-[var(--transition-fast)] ease-[var(--ease-out)] focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
+    "group relative flex cursor-default select-none items-center gap-2 squircle-2xl px-4! py-1.5 text-sm outline-none transition-[background-color,color,transform] duration-[var(--transition-fast)] ease-[var(--ease-out)] focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
 const containerClasses =
-    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border-secondary bg-surface-4/80 backdrop-blur-sm text-text-primary shadow-md";
+    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border-secondary bg-sidebar text-text-primary shadow-md";
 const shortcutClasses =
     "ml-auto shrink-0 pr-1 text-sm text-text-muted group-focus:text-text-primary";
 /** Inset so rows and the panel sit off the edges. */
-const menuInsetClasses = "p-1";
+const menuInsetClasses = "p-1.5";
 const menuCollisionPadding = 8;
 
 /** Overflow scrim — GitLab-style fade when the panel can scroll. */
@@ -34,7 +34,7 @@ function DropdownScrollScrim({ side, visible }: { side: "up" | "down"; visible: 
         <div
             className={cn(
                 "pointer-events-none absolute inset-x-0 z-20 h-6 transition-opacity duration-200",
-                side === "up" ? "top-0 bg-linear-to-b from-surface-3 to-transparent" : "bottom-0 bg-linear-to-t from-surface-3 to-transparent",
+                side === "up" ? "top-0 bg-linear-to-b from-sidebar to-transparent" : "bottom-0 bg-linear-to-t from-sidebar to-transparent",
                 visible ? "opacity-100" : "opacity-0",
             )}
             aria-hidden

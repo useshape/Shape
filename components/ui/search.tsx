@@ -77,8 +77,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
             <div
                 data-dropdown-search={fade ? "" : undefined}
                 className={cn(
-                    "relative flex min-w-0 items-center",
-                    fade && "dropdown-search-sticky",
+                    "relative flex min-w-0 items-center border-b border-border -mx-1.5 mb-1",
                     !borderless && "h-chrome",
                     className,
                 )}

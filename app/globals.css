@@ -134,7 +134,7 @@
   --space-xl: 24px;
 
   --icon-size: 19px;
-  --icon-stroke: 0.5px;
+  --icon-stroke: 0.3px;
   --icon-sm: 14px;
   --icon-md: 16px;
   --icon-lg: 20px;
@@ -172,7 +172,7 @@
   --line-height-base: 18px;
   --line-height-lg: 20px;
 
-  --chat-text: var(--text-base);
+  --chat-text: 15px;
   --chat-text-lh: var(--leading);
   --conversation-text-font-size: var(--text-base);
   --conversation-tool-font-size: var(--text-base);
@@ -1309,7 +1309,7 @@ body[data-resizing] .xterm {
   position: sticky;
   top: 0;
   z-index: 6;
-  background: color-mix(in srgb, var(--surface-4) 94%, transparent);
+  background: color-mix(in srgb, var(--sidebar) 94%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -1325,8 +1325,8 @@ body[data-resizing] .xterm {
   z-index: 6;
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--surface-4) 88%, transparent) 0%,
-    color-mix(in srgb, var(--surface-4) 40%, transparent) 45%,
+    color-mix(in srgb, var(--sidebar) 88%, transparent) 0%,
+    color-mix(in srgb, var(--sidebar) 40%, transparent) 45%,
     transparent 100%
   );
 }
