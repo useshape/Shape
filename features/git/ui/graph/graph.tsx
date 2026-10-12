@@ -105,6 +105,8 @@ export default function Graph({
     const [scrollTop, setScrollTop] = useState(cached?.scrollTop || 0);
     const [containerHeight, setContainerHeight] = useState(600);
     const scrollRafRef = useRef<number | null>(null);
+    const scrollTopRef = useRef(cached?.scrollTop || 0);
+    const windowRef = useRef({ start: -1, end: -1 });
     const hasRestoredScroll = useRef(false);
 
     const { startLoading, stopLoading } = useLoading();
@@ -121,10 +123,10 @@ export default function Graph({
                 logs,
                 expanded: expandedCommits,
                 filesCache: commitFilesCache,
-                scrollTop: scrollTop,
+                scrollTop: scrollTopRef.current,
             };
         }
-    }, [cacheKey, gitLogs, expandedCommits, commitFilesCache, scrollTop]);
+    }, [cacheKey, gitLogs, expandedCommits, commitFilesCache]);
 
     useEffect(() => {
         if (scrollContainerRef.current && cached?.scrollTop && gitLogs.length > 0 && !hasRestoredScroll.current) {
@@ -457,6 +459,10 @@ export default function Graph({
     }, [gitLogs, selectedHash, headIndex, mutedHashes, scrollToIndex]);
 
     const totalHeight = rowLayout.totalHeight;
+    const rowLayoutRef = useRef(rowLayout);
+    rowLayoutRef.current = rowLayout;
+    const heightRef = useRef(containerHeight);
+    heightRef.current = containerHeight;
 
     const { startIdx, endIdx } = useMemo(
         () => computeVisibleRange(rowLayout, scrollTop, containerHeight, OVERSCAN_PX),
@@ -505,11 +511,24 @@ export default function Graph({
     // Throttle scroll updates to one RAF per frame (not per event)
     const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
         const { scrollTop: st, scrollHeight, clientHeight } = e.currentTarget;
-        if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = requestAnimationFrame(() => {
-            setScrollTop(st);
-            scrollRafRef.current = null;
-        });
+        scrollTopRef.current = st;
+        if (scrollRafRef.current === null) {
+            scrollRafRef.current = requestAnimationFrame(() => {
+                scrollRafRef.current = null;
+                const range = computeVisibleRange(
+                    rowLayoutRef.current,
+                    scrollTopRef.current,
+                    heightRef.current,
+                    OVERSCAN_PX,
+                );
+                const prev = windowRef.current;
+                if (range.startIdx === prev.start && range.endIdx === prev.end) return;
+                windowRef.current = { start: range.startIdx, end: range.endIdx };
+                const cachedEntry = cacheKey ? graphCache[cacheKey] : undefined;
+                if (cachedEntry) cachedEntry.scrollTop = scrollTopRef.current;
+                setScrollTop(scrollTopRef.current);
+            });
+        }
 
         if (
             st + clientHeight > scrollHeight - 1500
@@ -525,7 +544,7 @@ export default function Graph({
                 if (gen === streamGenRef.current) setIsLoadingNext(false);
             });
         }
-    }, [isLoadingNext, appendLogs]);
+    }, [isLoadingNext, appendLogs, cacheKey]);
 
     // Keep viewport height accurate on resize (sidebar drag, manager split).
     useEffect(() => {
@@ -665,16 +684,26 @@ export default function Graph({
                                     selected={selectedHash === log.hash}
                                     onSelect={handleSelectCommit}
                                     onRefActivate={rich ? handleRefActivate : undefined}
+                                    compact={hideHeader}
                                 />
                             </div>
                         );
                     })}
                 </div>
-            ) : !isInitialLoading ? (
+            ) : isInitialLoading ? (
+                <div className="flex flex-col gap-2 px-3 py-3" aria-hidden>
+                    {Array.from({ length: 8 }, (_, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                            <span className="size-5 shrink-0 animate-pulse rounded-full bg-panel-hover" />
+                            <span className="h-3 flex-1 animate-pulse rounded-md bg-panel-hover" style={{ maxWidth: `${70 - (i % 3) * 12}%` }} />
+                        </div>
+                    ))}
+                </div>
+            ) : (
                 <div className="flex h-full flex-1 items-center justify-center text-xs text-text-muted">
                     No commits found
                 </div>
-            ) : null}
+            )}
         </div>
     );
 
@@ -908,6 +937,18 @@ export default function Graph({
             />
             )}
 
+            {hideHeader ? (
+                <div className="shrink-0 px-2 pb-1 pt-2">
+                    <input
+                        value={localSearch}
+                        onChange={(event) => setLocalSearch(event.target.value)}
+                        placeholder="Search commits"
+                        aria-label="Search commits"
+                        className="h-8 w-full rounded-lg bg-panel-hover px-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                    />
+                </div>
+            ) : null}
+
             <div
                 className="shrink-0 pointer-events-none relative z-10 transition-opacity duration-200"
                 style={{
@@ -926,12 +967,12 @@ export default function Graph({
             ref={rootRef}
             className={cn(
                 "flex h-full w-full relative flex-col select-none",
-                surface === "editor" ? "bg-editor" : "bg-panel",
+                surface === "editor" ? "bg-editor" : hideHeader ? "bg-transparent" : "bg-panel",
                 className,
             )}
             style={{
                 ["--graph-surface" as string]:
-                    surface === "editor" ? "var(--color-editor)" : "var(--color-panel)",
+                    surface === "editor" ? "var(--color-editor)" : hideHeader ? "var(--color-sidebar)" : "var(--color-panel)",
             }}
         >
             {rich ? (

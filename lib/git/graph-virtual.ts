@@ -1,6 +1,6 @@
 export const GRAPH_ROW_HEIGHT = 26;
 export const GRAPH_FILE_ROW_HEIGHT = 22;
-export const GRAPH_OVERSCAN_PX = 400;
+export const GRAPH_OVERSCAN_PX = 104;
 
 /** Soft cap for streamed commits kept in memory / UI. Deep history stays on disk. */
 export const GRAPH_LOG_SOFT_CAP = 8_000;

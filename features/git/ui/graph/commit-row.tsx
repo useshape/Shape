@@ -9,7 +9,6 @@ import {
     ContextMenuTrigger,
     ContextMenuContent,
     ContextMenuItem,
-    ContextMenuSeparator,
 } from "@/components/ui/context";
 import { cn } from "@/lib/utils";
 import { FileIcon } from "@/components/ui/file-icon";
@@ -40,6 +39,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
     matchHighlight = false,
     blendTop = false,
     blendBottom = false,
+    compact = false,
 }: {
     log: GitLogEntry; node: GraphNode; repoPath: string | null;
     index: number; total: number; isExpanded: boolean;
@@ -63,6 +63,8 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
     /** Adjacent commit above/below is a match — fade mute into it. */
     blendTop?: boolean;
     blendBottom?: boolean;
+    /** Workspace graph: names and avatars, no lane lines or branch pills. */
+    compact?: boolean;
 }) {
     const isManager = surface === "editor";
     const isHead = commitIsHead(log.refs);
@@ -96,8 +98,9 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
     const visibleRefs = useMemo(() => {
         const preferred = allRefs.filter((r) => r.label.toLowerCase() !== "head" && r.label !== "origin/head");
         const list = preferred.length > 0 ? preferred : allRefs;
+        if (compact) return list.filter((r) => r.isTag).slice(0, 2);
         return list.slice(0, 3);
-    }, [allRefs]);
+    }, [allRefs, compact]);
     const extraRefCount = Math.max(0, allRefs.filter((r) => r.label.toLowerCase() !== "head").length - visibleRefs.length);
 
     const triggerFileLoad = useCallback(() => {
@@ -144,6 +147,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
             data-blend-top={muted && blendTop ? "1" : undefined}
             data-blend-bottom={muted && blendBottom ? "1" : undefined}
         >
+            <div className={cn(isExpanded && "overflow-hidden rounded-lg bg-panel-active")}>
             <ContextMenu>
                 <ContextMenuTrigger asChild>
                     <div
@@ -151,10 +155,9 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                         aria-selected={selected}
                         tabIndex={-1}
                         className={cn(
-                            "relative z-0 flex items-center rounded-lg cursor-pointer group outline-none whitespace-nowrap",
-                            "hover:bg-panel-hover",
-                            selected && "bg-panel-active",
-                            isExpanded && "bg-panel-active",
+                            "relative z-0 flex cursor-pointer items-center whitespace-nowrap outline-none group",
+                            isExpanded ? "rounded-none bg-transparent" : "rounded-lg hover:bg-panel-hover",
+                            !isExpanded && selected && "bg-panel-active",
                         )}
                         style={{ height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` }}
                         onClick={(e) => {
@@ -163,8 +166,13 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                             onToggleExpand(log.hash);
                             if (!filesLoaded && repoPath && !isExpanded) triggerFileLoad();
                         }}
-                        onPointerEnter={triggerFileLoad}
                     >
+                        {compact ? (
+                            laneAvatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={laneAvatarUrl} alt="" className="ml-2 size-5 shrink-0 rounded-full object-cover" />
+                            ) : null
+                        ) : (
                         <GraphSvgRow
                             node={node}
                             isFirst={isFirst}
@@ -174,7 +182,8 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                             avatarUrl={laneAvatarUrl}
                             avatarKey={log.hash}
                         />
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden pr-2 @container">
+                        )}
+                        <div className={cn("flex min-w-0 flex-1 items-center overflow-hidden pr-2 @container", compact ? "gap-2" : "gap-1.5", compact && !laneAvatarUrl && "pl-2")}>
                             {visibleRefs.map((refInfo) => (
                                 <RefPill
                                     key={refInfo.label}
@@ -185,7 +194,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     onActivate={isManager ? onRefActivate : undefined}
                                 />
                             ))}
-                            {extraRefCount > 0 && (
+                            {!compact && extraRefCount > 0 && (
                                 isManager ? (
                                     <span
                                         className="text-xs text-text-muted shrink-0 tabular-nums cursor-default"
@@ -223,7 +232,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     </Tooltip>
                                 )
                             )}
-                            {isMerge && <Icon icon={BranchRequest20Regular} className="text-text-primary shrink-0 opacity-80" />}
+                            {!compact && isMerge && <Icon icon={BranchRequest20Regular} className="text-text-primary shrink-0 opacity-80" />}
                             {isManager ? (
                                 <span
                                     className={cn(
@@ -240,7 +249,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                     if (!open && isDraggingRef.current) return;
                                     setTooltipOpen(open);
                                 }}
-                                side="right"
+                                side={compact ? "top" : "right"}
                                 align="center"
                                 sideOffset={10}
                                 delayDuration={200}
@@ -249,7 +258,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                 content={
                                     <div
                                         id={`tooltip-content-${log.hash}`}
-                                        className="flex p-0.5 flex-col gap-2 min-w-[300px] max-w-[500px]"
+                                        className="flex max-w-[240px] flex-col gap-2 p-0.5"
                                         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                         onPointerDown={() => {
                                             isDraggingRef.current = true;
@@ -268,7 +277,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                                             if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
                                         }}
                                     >
-                                        <div className="flex items-center gap-1 text-sm text-text-secondary whitespace-nowrap pointer-events-auto">
+                                        <div className="flex flex-wrap items-center gap-1 text-sm text-text-secondary pointer-events-auto">
                                             <span
                                                 className="font-medium text-text-primary cursor-pointer hover:underline hover:text-accent"
                                                 onClick={handleOpenAuthorEmail}
@@ -353,7 +362,6 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                     <ContextMenuItem onClick={() => { navigator.clipboard.writeText(log.author); notify.success("Copied", "Author copied"); }}>
                         Copy Author Name
                     </ContextMenuItem>
-                    <ContextMenuSeparator />
                     <ContextMenuItem onClick={async () => {
                         if (!repoPath) return;
                         try {
@@ -363,7 +371,6 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                     }}>
                         Open All Changes
                     </ContextMenuItem>
-                    <ContextMenuSeparator />
                     {showBranchInput ? (
                         <CreateBranchFromCommitInline
                             hash={log.hash}
@@ -391,7 +398,6 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                     }}>
                         Checkout This Commit...
                     </ContextMenuItem>
-                    <ContextMenuSeparator />
                     <ContextMenuItem onClick={async () => {
                         if (!repoPath) return;
                         const ok = await confirm(
@@ -467,7 +473,6 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                     }}>
                         Hard Reset to Here...
                     </ContextMenuItem>
-                    <ContextMenuSeparator />
                     <ContextMenuItem onClick={async () => {
                         if (!repoPath) return;
                         const name = window.prompt("Tag name", `v-${log.hash.slice(0, 7)}`);
@@ -480,28 +485,15 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                     }}>
                         Create Tag Here...
                     </ContextMenuItem>
-                    <ContextMenuSeparator />
                     <ContextMenuItem onClick={handleOpenGitHub}>
                         Open in GitHub
                     </ContextMenuItem>
                 </ContextMenuContent>
             </ContextMenu>
 
-            {/* Expanded file list — keep same left inset as SVG so lanes don't jump */}
             <div className={isExpanded ? "block" : "hidden"}>
-                <div className="overflow-hidden relative rounded-b-lg mb-0.5 bg-black/[0.06] dark:bg-white/[0.06]">
-                    {!isLast && node.paths.filter(p => p.type === 'passthrough' || p.type === 'outgoing').map((p, pi) => (
-                        <div
-                            key={`cont-${pi}`}
-                            className={cn("graph-lane-cont absolute top-0 bottom-0 pointer-events-none")}
-                            style={{
-                                left: p.toX * LANE_WIDTH + LANE_WIDTH / 2 + 4 - 1,
-                                width: 2,
-                                backgroundColor: p.color,
-                            }}
-                        />
-                    ))}
-                    <div style={{ paddingLeft: Math.max((rowMaxLane + 1) * LANE_WIDTH, 28) }} className="pr-1 py-0.5 space-y-0 relative z-10">
+                <div className="relative">
+                    <div style={{ paddingLeft: compact ? 8 : Math.max((rowMaxLane + 1) * LANE_WIDTH, 28) }} className="pr-1 py-0.5 space-y-0 relative z-10">
                         {files.length > 0 ? (
                             files.map((file: GitFileParams, i: number) => {
                                 const name = file.path.split(/[\\\/]/).pop() || "";
@@ -576,6 +568,7 @@ export const GraphCommitRow = React.memo(function GraphCommitRow({
                         )}
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );
