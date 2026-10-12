@@ -58,7 +58,13 @@ export function ProfileAvatar({
     );
 }
 
-export function AccountMenu({ children }: { children: ReactNode }) {
+export function AccountMenu({
+    children,
+    side = "bottom",
+}: {
+    children: ReactNode;
+    side?: "top" | "bottom";
+}) {
     const shapeAuth = useShapeAuth();
     const githubAuth = useGitHubAuth();
     const { project_path } = useProjectState();
@@ -76,7 +82,7 @@ export function AccountMenu({ children }: { children: ReactNode }) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="bottom" className="w-56">
+            <DropdownMenuContent align="start" side={side} className="w-56">
                 <div className="flex items-center gap-2.5 px-2 py-1.5">
                     <ProfileAvatar
                         size={22}

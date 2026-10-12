@@ -10,11 +10,9 @@ import { type IconGlyph, Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
-import { useProjectState } from "@/lib/backend";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { ChatList } from "./chats";
 import { AccountMenu, ProfileAvatar } from "./menu";
-import { ChatHistoryMenu } from "@/features/chat/ui/shell/history";
 import { ChatUsageButton } from "@/features/chat/ui/composer/usage";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -92,7 +90,6 @@ export function AgentSidebar({
 }) {
     const github = useGitHubAuth();
     const shapeAuth = useShapeAuth();
-    const { project_path } = useProjectState();
     const showHostedNav = Boolean(overlay);
 
     const displayName =
@@ -114,7 +111,7 @@ export function AgentSidebar({
 
     const items: { label: string; icon: IconGlyph; onClick: () => void; active?: boolean }[] = [
         {
-            label: "Options",
+            label: "Settings",
             icon: Settings20Regular,
             onClick: () => void openSettingsWindow(),
         },
@@ -222,7 +219,7 @@ export function AgentSidebar({
                             ) : (
                                 <>
                                     <NavItem label="New Chat" icon={Compose20Regular} onClick={newChat} collapsed />
-                                    <NavItem label="Search" icon={Search20Regular} onClick={onSearch} collapsed />
+                                    <NavItem label="Command Palette" icon={Search20Regular} onClick={onSearch} collapsed />
                                 </>
                             )}
                             {items.map((item) => (
@@ -271,12 +268,6 @@ export function AgentSidebar({
                                 </Button>
                             ) : null}
                             <div className="flex items-center gap-0.5 px-1 pb-0.5">
-                                <ChatHistoryMenu
-                                    projectPath={project_path}
-                                    variant="icon"
-                                    tooltip="Chat history"
-                                    align="start"
-                                />
                                 <ChatUsageButton />
                             </div>
                         </>
