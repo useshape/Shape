@@ -1,7 +1,6 @@
 "use client";
 
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
-import { Bookmark20Regular } from "@fluentui/react-icons/headless/svg/bookmark";
 import { Checkmark } from "@/components/ui/checkmark";
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
@@ -13,6 +12,7 @@ import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-o
 import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { Pin20Filled } from "@fluentui/react-icons/headless/svg/pin";
 import { Pin20Regular } from "@fluentui/react-icons/headless/svg/pin";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Eclipse } from "loading-dev";
@@ -42,11 +42,7 @@ import {
     getUnreadChatIdsServer,
     markChatUnread,
     CHAT_COLOR_HEX,
-    deleteCollection,
-    getCollections,
-    getCollectionsServer,
     setChatPinned,
-    subscribeCollections,
     type ChatColor,
     subscribePinnedChats,
     subscribeUnreadChats,
@@ -77,10 +73,8 @@ import {
 } from "@/features/agent/subagents/store";
 import { listen } from "@tauri-apps/api/event";
 import { ScrollArea } from "@/components/ui/scroll";
-import { COLLECTION_GLYPH, CollectionDialog } from "./collection-dialog";
-
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
-type ChatFilter = "all" | "pinned" | "unread" | "collection";
+type ChatFilter = "all" | "pinned" | "unread";
 
 const SORT_KEY = "shape-sidebar-chat-sort";
 const FILTER_OPTIONS: { value: ChatFilter; label: string }[] = [
@@ -160,7 +154,6 @@ function ChatRow({
     selecting = false,
     selected = false,
     onToggleSelect,
-    onCollect,
 }: {
     id: string;
     title: string;
@@ -175,7 +168,6 @@ function ChatRow({
     selecting?: boolean;
     selected?: boolean;
     onToggleSelect?: () => void;
-    onCollect?: () => void;
 }) {
     const generating = useIsChatGenerating(id);
     const [renaming, setRenaming] = useState(false);
@@ -239,7 +231,6 @@ function ChatRow({
 
     const actions: { key: string; label: string; icon: IconGlyph; run: () => void; danger?: boolean; sep?: boolean }[] = [
         { key: "open", label: "Open", icon: Open20Regular, run: openChat },
-        { key: "collect", label: "Add to collection", icon: Bookmark20Regular, run: () => onCollect?.() },
         { key: "pin", label: pinned ? "Unpin" : "Pin", icon: Pin20Regular, run: () => setChatPinned(id, !pinned) },
         { key: "rename", label: "Rename", icon: Edit20Regular, run: startRename },
         { key: "new", label: "New Chat", icon: Add20Regular, run: () => window.dispatchEvent(new CustomEvent("shape-chat-new")) },
@@ -265,7 +256,7 @@ function ChatRow({
             </Fragment>
         ));
 
-    const fade = nestedCount > 0 ? "9rem" : "7.25rem";
+    const fade = "1.25rem";
 
     return (
         <div
@@ -334,10 +325,9 @@ function ChatRow({
                                         </span>
                                     </span>
                                     <span
-                                        className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-normal text-text-primary [--title-fade:1.25rem] group-hover/chat:[--title-fade:var(--title-fade-hover)] group-has-[[data-state=open]]/chat:[--title-fade:var(--title-fade-hover)]"
+                                        className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-normal text-text-primary"
                                         style={{
-                                            ["--title-fade-hover" as string]: fade,
-                                            maskImage: "linear-gradient(to right, #000 0, #000 calc(100% - var(--title-fade)), transparent)",
+                                            maskImage: `linear-gradient(to right, #000 0, #000 calc(100% - ${fade}), transparent)`,
                                         }}
                                     >
                                         {title}
@@ -351,33 +341,21 @@ function ChatRow({
                                         <span className="size-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
                                     ) : null}
                                 </span>
-                                <span className={cn(
-                                    "pointer-events-none absolute z-10 flex items-center opacity-0 group-hover/chat:pointer-events-auto group-hover/chat:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
-                                    nestedCount > 0 ? "right-7" : "right-1",
-                                )}>
-                                    <Tooltip content="Add to collection" side="bottom">
+                                <span className="flex shrink-0 items-center">
+                                    <span className="grid grid-cols-[0fr] overflow-hidden transition-[grid-template-columns] duration-150 ease-[var(--ease-out)] group-hover/chat:grid-cols-[1fr] group-has-[[data-state=open]]/chat:grid-cols-[1fr]">
+                                    <span className="flex min-w-0 overflow-hidden">
+                                    {pinned ? null : (
+                                    <Tooltip content="Pin" side="bottom">
                                         <button
                                             type="button"
-                                            aria-label="Add to collection"
-                                            onClick={() => onCollect?.()}
+                                            aria-label="Pin"
+                                            onClick={() => setChatPinned(id, true)}
                                             className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
                                         >
-                                            <Icon icon={Bookmark20Regular} className="icon-sm" />
+                                            <Icon icon={Pin20Regular} className="icon-sm" />
                                         </button>
                                     </Tooltip>
-                                    <Tooltip content={pinned ? "Unpin" : "Pin"} side="bottom">
-                                        <button
-                                            type="button"
-                                            aria-label={pinned ? "Unpin" : "Pin"}
-                                        onClick={() => setChatPinned(id, !pinned)}
-                                        className={cn(
-                                            "flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary",
-                                            pinned && "text-text-primary",
-                                        )}
-                                    >
-                                        <Icon icon={Pin20Regular} className="icon-sm" />
-                                    </button>
-                                    </Tooltip>
+                                    )}
                                     <DropdownMenu modal={false}>
                                         <Tooltip content="Chat actions" side="bottom">
                                         <DropdownMenuTrigger asChild>
@@ -397,6 +375,20 @@ function ChatRow({
                                             )}
                                         </DropdownMenuContent>
                                     </DropdownMenu>
+                                    </span>
+                                    </span>
+                                    {pinned ? (
+                                        <Tooltip content="Unpin" side="bottom">
+                                            <button
+                                                type="button"
+                                                aria-label="Unpin"
+                                                onClick={() => setChatPinned(id, false)}
+                                                className="flex size-6 items-center justify-center rounded-md text-text-primary"
+                                            >
+                                                <Icon icon={Pin20Filled} className="icon-sm" />
+                                            </button>
+                                        </Tooltip>
+                                    ) : null}
                                 </span>
                                 {nestedCount > 0 ? (
                                     <button
@@ -468,7 +460,6 @@ function SessionRow({
     selecting,
     selected,
     onToggleSelect,
-    onCollect,
 }: {
     chat: Conversation;
     projectPath: string;
@@ -481,7 +472,6 @@ function SessionRow({
     selecting: boolean;
     selected: boolean;
     onToggleSelect: () => void;
-    onCollect: () => void;
 }) {
     return (
         <ChatRow
@@ -497,7 +487,6 @@ function SessionRow({
             selecting={selecting}
             selected={selected}
             onToggleSelect={onToggleSelect}
-            onCollect={onCollect}
         />
     );
 }
@@ -513,9 +502,7 @@ export function ChatList({
     const [chats, setChats] = useState<Conversation[]>([]);
     const [sort, setSort] = useState<ChatSort>("recent");
     const [filter, setFilter] = useState<ChatFilter>("all");
-    const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [collect, setCollect] = useState<{ ids: string[]; editId?: string } | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
 
     const pinnedIds = useSyncExternalStore(
@@ -528,7 +515,6 @@ export function ChatList({
         getUnreadChatIds,
         getUnreadChatIdsServer,
     );
-    const collections = useSyncExternalStore(subscribeCollections, getCollections, getCollectionsServer);
     const allSubagents = useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
 
     useEffect(() => {
@@ -640,47 +626,26 @@ export function ChatList({
     const filtered = useMemo(() => {
         if (filter === "pinned") return visible.filter((c) => pinnedIds.has(c.id));
         if (filter === "unread") return visible.filter((c) => unreadIds.has(c.id));
-        if (filter === "collection" && collectionFilter) {
-            const ids = new Set(collections.find((c) => c.id === collectionFilter)?.chatIds ?? []);
-            return visible.filter((c) => ids.has(c.id));
-        }
         return visible;
-    }, [visible, filter, collectionFilter, pinnedIds, unreadIds, collections]);
-
-    const collected = new Set(collections.flatMap((collection) => collection.chatIds));
-    const byId = new Map(filtered.map((chat) => [chat.id, chat]));
-    const collectionGroups = collections
-        .map((collection) => ({
-            collection,
-            chats: collection.chatIds
-                .map((id) => byId.get(id))
-                .filter((chat): chat is Conversation => Boolean(chat)),
-        }))
-        .filter((group) => group.chats.length > 0);
-    const plainPinned = filtered.filter((c) => pinnedIds.has(c.id) && !collected.has(c.id));
-    const plainChats = filtered.filter((c) => !pinnedIds.has(c.id) && !collected.has(c.id));
+    }, [visible, filter, pinnedIds, unreadIds]);
 
     const selected = new Set(selectedIds);
     const toggleSelect = (id: string) => {
         setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
     };
-    const openCollect = (id: string) => {
-        setCollect({ ids: selectedIds.includes(id) ? [...selectedIds] : [id] });
-    };
 
-    const rowProps = (chat: Conversation, color: ChatColor | null, edge: "none" | "only" | "first" | "mid" | "last") => ({
+    const rowProps = (chat: Conversation) => ({
         chat,
         projectPath: project_path || "",
         activeId,
         pinned: pinnedIds.has(chat.id),
         unread: unreadIds.has(chat.id),
-        color,
-        edge,
+        color: null as ChatColor | null,
+        edge: "none" as const,
         subagents: allSubagents.filter((card) => card.parentId === chat.id),
         selecting: selectedIds.length > 0,
         selected: selected.has(chat.id),
         onToggleSelect: () => toggleSelect(chat.id),
-        onCollect: () => openCollect(chat.id),
     });
 
     const openCommandPalette = () => {
@@ -714,16 +679,8 @@ export function ChatList({
                         <DropdownMenuContent align="end" className="min-w-40">
                             <DropdownMenuLabel>Show</DropdownMenuLabel>
                             <DropdownMenuRadioGroup
-                                value={filter === "collection" && collectionFilter ? `collection:${collectionFilter}` : filter}
-                                onValueChange={(value) => {
-                                    if (value.startsWith("collection:")) {
-                                        setFilter("collection");
-                                        setCollectionFilter(value.slice("collection:".length));
-                                        return;
-                                    }
-                                    setFilter(value as ChatFilter);
-                                    setCollectionFilter(null);
-                                }}
+                                value={filter}
+                                onValueChange={(value) => setFilter(value as ChatFilter)}
                             >
                                 {FILTER_OPTIONS.map((opt) => (
                                     <DropdownMenuRadioItem key={opt.value} value={opt.value}>
@@ -731,31 +688,6 @@ export function ChatList({
                                     </DropdownMenuRadioItem>
                                 ))}
                             </DropdownMenuRadioGroup>
-                            {collections.length > 0 ? (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuLabel>Collections</DropdownMenuLabel>
-                                    <DropdownMenuRadioGroup
-                                        value={filter === "collection" && collectionFilter ? `collection:${collectionFilter}` : filter}
-                                        onValueChange={(value) => {
-                                            if (!value.startsWith("collection:")) return;
-                                            setFilter("collection");
-                                            setCollectionFilter(value.slice("collection:".length));
-                                        }}
-                                    >
-                                        {collections.map((collection) => (
-                                            <DropdownMenuRadioItem key={collection.id} value={`collection:${collection.id}`}>
-                                                <Icon
-                                                    icon={COLLECTION_GLYPH[collection.icon]}
-                                                    className="icon-sm"
-                                                    style={{ color: CHAT_COLOR_HEX[collection.color] }}
-                                                />
-                                                {collection.name}
-                                            </DropdownMenuRadioItem>
-                                        ))}
-                                    </DropdownMenuRadioGroup>
-                                </>
-                            ) : null}
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel>Sort</DropdownMenuLabel>
                             <DropdownMenuRadioGroup
@@ -797,91 +729,12 @@ export function ChatList({
                     </button>
                 ) : (
                     <div className="space-y-0.5">
-                        {plainPinned.map((c) => (
-                            <SessionRow key={c.id} {...rowProps(c, null, "none")} />
-                        ))}
-                        {collectionGroups.map((group) => {
-                            const hex = CHAT_COLOR_HEX[group.collection.color];
-                            return (
-                                <div key={group.collection.id} className="squircle-[20px] flex flex-col overflow-hidden">
-                                    <div
-                                        className="group/col relative flex h-8 items-center gap-1.5 bg-[color-mix(in_oklch,var(--chat-tint)_22%,transparent)] px-2 text-text-primary"
-                                        style={{ ["--chat-tint" as string]: hex }}
-                                    >
-                                        <Icon
-                                            icon={COLLECTION_GLYPH[group.collection.icon]}
-                                            className="icon-sm shrink-0"
-                                            style={{ color: hex }}
-                                        />
-                                        <span
-                                            className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm [--title-fade:0.75rem] group-hover/col:[--title-fade:3.5rem]"
-                                            style={{ maskImage: "linear-gradient(to right, #000 0, #000 calc(100% - var(--title-fade)), transparent)" }}
-                                        >
-                                            {group.collection.name}
-                                        </span>
-                                        <span className="pointer-events-none absolute right-1 z-10 flex items-center opacity-0 group-hover/col:pointer-events-auto group-hover/col:opacity-100">
-                                            <Tooltip content="Edit collection" side="bottom">
-                                            <button
-                                                type="button"
-                                                aria-label="Edit collection"
-                                                onClick={() =>
-                                                    setCollect({
-                                                        ids: group.collection.chatIds,
-                                                        editId: group.collection.id,
-                                                    })
-                                                }
-                                                className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
-                                            >
-                                                <Icon icon={Edit20Regular} className="icon-sm" />
-                                            </button>
-                                            </Tooltip>
-                                            <Tooltip content="Ungroup" side="bottom">
-                                            <button
-                                                type="button"
-                                                aria-label="Ungroup collection"
-                                                onClick={() => {
-                                                    deleteCollection(group.collection.id);
-                                                    if (collectionFilter === group.collection.id) {
-                                                        setFilter("all");
-                                                        setCollectionFilter(null);
-                                                    }
-                                                }}
-                                                className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
-                                            >
-                                                <Icon icon={Delete20Filled} className="icon-sm" />
-                                            </button>
-                                            </Tooltip>
-                                        </span>
-                                    </div>
-                                    {group.chats.map((c, index) => (
-                                        <SessionRow
-                                            key={c.id}
-                                            {...rowProps(
-                                                c,
-                                                group.collection.color,
-                                                index === group.chats.length - 1 ? "last" : "mid",
-                                            )}
-                                        />
-                                    ))}
-                                </div>
-                            );
-                        })}
-                        {plainChats.map((c) => (
-                            <SessionRow key={c.id} {...rowProps(c, null, "none")} />
+                        {filtered.map((c) => (
+                            <SessionRow key={c.id} {...rowProps(c)} />
                         ))}
                     </div>
                 )}
             </ScrollArea>
-            {collect ? (
-                <CollectionDialog
-                    chatIds={collect.ids}
-                    existing={collections.find((collection) => collection.id === collect.editId) ?? null}
-                    onClose={() => {
-                        setCollect(null);
-                        setSelectedIds([]);
-                    }}
-                />
-            ) : null}
         </div>
     );
 }
