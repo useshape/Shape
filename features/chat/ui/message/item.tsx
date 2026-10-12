@@ -2,6 +2,7 @@ import { ArrowShuffle24Regular } from "@fluentui/react-icons/headless/svg/arrow-
 import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-fork";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+import { SelectAllOn20Regular } from "@fluentui/react-icons/headless/svg/select-all-on";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
@@ -41,9 +42,6 @@ import { useSettings } from "@/lib/settings";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { WebSourcesMenu } from "../blocks/search";
 import { Button } from "@/components/ui/button";
-import { useGitHubAuth } from "@/lib/github/store";
-import { useShapeAuth } from "@/lib/cloud/store";
-import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { UserMessageCard } from "./bubble";
 import { ContextChip, MentionChipIcon, WorkflowChipIcon } from "./context-chip";
 import { GeneratingIndicator } from "../blocks/generating";
@@ -63,33 +61,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-function UserMessageAvatar() {
-    const github = useGitHubAuth();
-    const auth = useShapeAuth();
-    const [failed, setFailed] = React.useState(false);
-
-    // Hide identity when not connected to Shape (offline / signed out).
-    if (!auth.loggedIn || auth.offline) return null;
-
-    const src =
-        (github.loggedIn && github.avatarUrl ? github.avatarUrl : null)
-        ?? (auth.userId ? `${SHAPE_API_BASE}/api/avatar/${auth.userId}` : null);
-
-    if (!src || failed) return null;
-
-    return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-            src={src}
-            alt=""
-            width={28}
-            height={28}
-            className="mt-0.5 size-7 shrink-0 rounded-full object-cover"
-            onError={() => setFailed(true)}
-        />
-    );
-}
 
 type ChatMessageItemProps = {
     role: string;
@@ -117,8 +88,7 @@ function SentAttachment({ att }: { att: ParsedUserAttachment }) {
             <img
                 src={att.dataUrl}
                 alt={att.name}
-                title={att.name}
-                className="max-h-40 max-w-52 rounded-xl object-cover"
+                className="max-h-44 max-w-56 rounded-lg border border-border-subtle object-contain"
             />
         );
     }
@@ -325,7 +295,6 @@ function ChatMessageItemInner({
     onRestore,
     onFork,
     isFileEditResolved,
-    fullWidthBubbles,
 }: ChatMessageItemProps) {
     const [expanded, setExpanded] = React.useState(false);
     const [forkOpen, setForkOpen] = React.useState(false);
@@ -423,16 +392,13 @@ function ChatMessageItemInner({
             <ContextMenu>
             <ContextMenuTrigger asChild>
             <div
-                className={cn(
-                    "group/msg relative mb-2 flex w-full select-text justify-end",
-                    !fullWidthBubbles && "pl-10",
-                )}
+                className="group/msg relative mb-2 flex w-full select-text"
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
-                <div className={cn("group inline-flex items-start gap-2", fullWidthBubbles ? "w-full max-w-none" : "max-w-[min(100%,36rem)]")}>
-                    <div className={cn("flex min-w-0 flex-col gap-1", fullWidthBubbles ? "w-full items-stretch" : "items-end")}>
-                        <UserMessageCard className={fullWidthBubbles ? "max-w-none w-full" : undefined}>
+                <div className="group flex w-full min-w-0 items-start">
+                    <div className="flex w-full min-w-0 flex-col gap-1">
+                        <UserMessageCard>
                             <div
                                 role={isLong ? "button" : undefined}
                                 tabIndex={isLong ? 0 : undefined}
@@ -473,17 +439,18 @@ function ChatMessageItemInner({
                             </Tooltip>
                         </div>
                     </div>
-                    {fullWidthBubbles ? null : <UserMessageAvatar />}
                 </div>
             </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
                 <ContextMenuItem onClick={handleCopy}>
+                    <Icon icon={Clipboard20Regular} />
                     Copy
                     <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={handleSelectAll}>
+                    <Icon icon={SelectAllOn20Regular} />
                     Select All
                     <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
                 </ContextMenuItem>
@@ -696,11 +663,13 @@ function ChatMessageItemInner({
         </ContextMenuTrigger>
         <ContextMenuContent>
             <ContextMenuItem onClick={handleCopy}>
+                <Icon icon={Clipboard20Regular} />
                 Copy
                 <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={handleSelectAll}>
+                <Icon icon={SelectAllOn20Regular} />
                 Select All
                 <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
             </ContextMenuItem>

@@ -153,9 +153,7 @@ export function Waveform({
 }
 
 export async function processAttachment(att: ComposerAttachment): Promise<ComposerAttachment> {
-    const started = Date.now();
-    const minMs = 1800;
-    try {
+        try {
         let result: ComposerAttachment;
         if (att.kind === "image") {
             const { dataUrl, mimeType } = await compressImageFile(att.file);
@@ -172,12 +170,8 @@ export async function processAttachment(att: ComposerAttachment): Promise<Compos
         } else {
             result = { ...att, status: "ready" };
         }
-        const wait = minMs - (Date.now() - started);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
         return result;
     } catch (err) {
-        const wait = minMs - (Date.now() - started);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
         return {
             ...att,
             status: "error",
@@ -234,17 +228,10 @@ function RemoveButton({ name, onRemove }: { name: string; onRemove: () => void }
     );
 }
 
-function fileMark(kind: AttachmentKind, name: string): string | null {
-    if (kind !== "audio") return null;
-    const ext = getFileExtension(name);
-    return (ext || "audio").slice(0, 4).toUpperCase();
-}
-
-/** Composer tile. Photos show the picture; everything else is a small card with a mark and the name. */
+/** Composer chip: icon and filename, same treatment for photos and other files. */
 export function ComposerFileTile({
     kind,
     name,
-    src,
     busy,
     failed,
 }: {
@@ -254,34 +241,20 @@ export function ComposerFileTile({
     busy?: boolean;
     failed?: boolean;
 }) {
-    const mark = fileMark(kind, name);
     return (
         <div
             className={cn(
-                "relative h-16 w-28 overflow-hidden squircle-xl bg-surface-3",
-                failed && "ring-1 ring-error",
+                "inline-flex h-7 max-w-56 items-center gap-1.5 rounded-md bg-surface-1 px-2 text-sm text-text-primary",
+                failed && "text-error",
             )}
             title={name}
         >
-            {kind === "image" && src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt="" className="size-full object-cover" draggable={false} />
+            {busy ? (
+                <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
             ) : (
-                <div className="flex h-full flex-col justify-between p-2">
-                    <span className="flex h-4 items-center text-2xs font-medium uppercase tracking-wide text-text-muted">
-                        {busy ? (
-                            <span className="size-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                        ) : mark ? (
-                            mark
-                        ) : (
-                            <KindIcon kind={kind} name={name} />
-                        )}
-                    </span>
-                    <span className={cn("truncate text-xs text-text-primary", failed && "text-error")}>
-                        {failed ? "Failed" : name}
-                    </span>
-                </div>
+                <KindIcon kind={kind} name={name} />
             )}
+            <span className="min-w-0 truncate">{failed ? "Failed" : name}</span>
         </div>
     );
 }
@@ -335,7 +308,7 @@ export function ComposerAttachments({
     if (attachments.length === 0) return null;
 
     return (
-        <div className="flex flex-wrap gap-3 overflow-visible px-3 pt-3">
+        <div className="flex flex-wrap gap-1.5 overflow-visible px-3 pt-2">
             {attachments.map((att) => (
                 <AttachmentPill
                     key={att.id}

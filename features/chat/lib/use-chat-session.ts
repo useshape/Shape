@@ -101,7 +101,7 @@ function writePersistedChatTabs(
 
 const COMPOSER_PREFS_KEY = "shape-composer";
 
-type ComposerEffort = "low" | "high" | "ultra" | "max";
+type ComposerEffort = "low" | "high" | "ultra" | "max" | "super";
 type ComposerPrefs = { model?: string; effort?: ComposerEffort; fast?: boolean };
 
 function readComposerPrefs(): ComposerPrefs {
@@ -111,7 +111,7 @@ function readComposerPrefs(): ComposerPrefs {
         if (!raw) return {};
         const parsed = JSON.parse(raw) as ComposerPrefs;
         const effort = parsed.effort;
-        const known = effort === "low" || effort === "high" || effort === "ultra" || effort === "max";
+        const known = effort === "low" || effort === "high" || effort === "ultra" || effort === "max" || effort === "super";
         return {
             model: typeof parsed.model === "string" ? parsed.model : undefined,
             effort: known ? effort : undefined,
@@ -120,6 +120,13 @@ function readComposerPrefs(): ComposerPrefs {
     } catch {
         return {};
     }
+}
+
+/** Priority routing when credits are healthy. Low balances stay on standard. */
+function priorityTierForCredits(remaining: number, included: number): string | null {
+    if (!Number.isFinite(remaining) || remaining <= 0) return null;
+    if (included > 0 && remaining / included < 0.2) return null;
+    return "priority";
 }
 
 function writeComposerPrefs(prefs: ComposerPrefs) {
@@ -143,6 +150,8 @@ export function useChatSession() {
             });
         }
     }, []);
+    const uploadedFilesRef = React.useRef(uploadedFiles);
+    uploadedFilesRef.current = uploadedFiles;
     const [inputValue, setInputValue] = React.useState(() => {
         try {
             return localStorage.getItem("shape-chat-input") || "";
@@ -821,13 +830,7 @@ export function useChatSession() {
         ) {
             return false;
         }
-        if (uploadedFiles.some((a) => a.status === "processing")) {
-            return false;
-        }
-
         sendingInFlightRef.current = true;
-
-        let userMsg = messageContent;
         setInputValue("");
         editingQueueIdRef.current = null;
         try {
@@ -835,27 +838,22 @@ export function useChatSession() {
         } catch {
             /* ignore */
         }
-        setSendError(null);
-        appendUserOptimistic(userMsg);
 
-        try {
-            if (!shapeAuth.loggedIn || !shapeAuth.accessToken) {
-                setSendError("Sign in to Shape to chat.");
-                setMessages((prev) => {
-                    const last = prev[prev.length - 1];
-                    if (last?.role === "assistant" && !last.content.trim()) {
-                        return prev.slice(0, -1);
-                    }
-                    return prev;
-                });
-                return false;
+        const waitForAttachments = async () => {
+            const deadline = Date.now() + 8000;
+            while (Date.now() < deadline) {
+                const files = uploadedFilesRef.current;
+                if (!files.some((a) => a.status === "processing")) return files;
+                await new Promise((r) => setTimeout(r, 40));
             }
+            return uploadedFilesRef.current;
+        };
+        const readyFiles = await waitForAttachments();
 
-            const token = shapeAuth.accessToken ?? undefined;
-            const attachmentBlocks: string[] = [];
-
-            for (const att of uploadedFiles) {
-                if (att.status !== "ready") continue;
+        let userMsg = messageContent;
+        const attachmentBlocks: string[] = [];
+        for (const att of readyFiles) {
+            if (att.status !== "ready") continue;
                 const ext = att.name.split(".").pop()?.toLowerCase() || "";
                 const CODE_LIKE_EXT = new Set([
                     "ts", "tsx", "js", "jsx", "rs", "py", "go", "java", "c", "cpp", "h", "hpp",
@@ -925,22 +923,31 @@ export function useChatSession() {
             }
 
             if (attachmentBlocks.length > 0) {
-                const attachmentContext = attachmentBlocks.join("\n\n");
-                userMsg = `${attachmentContext}\n\n${userMsg}`;
-                setMessages((prev) => {
-                    const userIdx = prev.length - 2;
-                    if (userIdx < 0 || prev[userIdx]?.role !== "user") return prev;
-                    const updated = [...prev];
-                    updated[userIdx] = { ...updated[userIdx], content: userMsg };
-                    return updated;
-                });
+                userMsg = `${attachmentBlocks.join("\n\n")}\n\n${userMsg}`;
             }
 
-            setUploadedFiles([]);
+        setSendError(null);
+        appendUserOptimistic(userMsg);
+        setUploadedFiles([]);
+
+        try {
+            if (!shapeAuth.loggedIn || !shapeAuth.accessToken) {
+                setSendError("Sign in to Shape to chat.");
+                setMessages((prev) => {
+                    const last = prev[prev.length - 1];
+                    if (last?.role === "assistant" && !last.content.trim()) {
+                        return prev.slice(0, -1);
+                    }
+                    return prev;
+                });
+                return false;
+            }
+
+            const token = shapeAuth.accessToken ?? undefined;
 
             const attachmentKinds = [
                 ...new Set(
-                    uploadedFiles.map((f) => {
+                    readyFiles.map((f) => {
                         if (f.kind === "image") return "image";
                         if (f.kind === "audio") return "audio";
                         if (f.mimeType.startsWith("text/")) return "text";
@@ -953,7 +960,7 @@ export function useChatSession() {
                 mode: selectedMode,
                 model: selectedModel,
                 message_length_bucket: messageLengthBucket(userMsg.length),
-                attachment_count: uploadedFiles.length,
+                attachment_count: readyFiles.length,
                 attachment_kinds: attachmentKinds,
             });
 
@@ -1010,7 +1017,7 @@ export function useChatSession() {
                     pluginAutoAllow,
                 },
                 reasoningEffort,
-                fastMode ? "priority" : null,
+                priorityTierForCredits(shapeAuth.creditsRemaining, shapeAuth.creditsIncluded),
                 userMsg,
                 undefined,
                 undefined,
@@ -1260,6 +1267,25 @@ export function useChatSession() {
         },
         [refreshHistory, setMessages, setConversationId, setCurrentConversationId, setChatTitle, setViewingConversation, syncOpenTabs],
     );
+
+    React.useEffect(() => {
+        const onFork = (event: Event) => {
+            const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+            if (id && id !== conversationIdRef.current) return;
+            const msgs = messagesRef.current;
+            let idx = -1;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                if (msgs[i]?.role === "user") {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0) return;
+            void handleForkChat(idx);
+        };
+        window.addEventListener("shape-chat-fork", onFork);
+        return () => window.removeEventListener("shape-chat-fork", onFork);
+    }, [handleForkChat]);
 
     React.useEffect(() => {
         writeComposerPrefs({

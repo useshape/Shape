@@ -19,7 +19,7 @@ export function UserMessageCard({
     return (
         <div
             className={cn(
-                "relative max-w-[min(100%,36rem)] squircle-2xl bg-surface-3 p-3 chat-text text-text-primary",
+                "relative w-full max-w-none squircle-2xl border border-border-subtle bg-surface-3 p-3 chat-text text-text-primary",
                 className,
             )}
         >
