@@ -386,9 +386,11 @@ interface BreadcrumbProps {
     isDiff?: boolean;
     isImage?: boolean;
     className?: string;
+    /** Short path only: repo, parent, file. No symbol chain. */
+    compact?: boolean;
 }
 
-export function Breadcrumbs({ path, projectPath, isDiff, isImage, className }: BreadcrumbProps) {
+export function Breadcrumbs({ path, projectPath, isDiff, isImage, className, compact = false }: BreadcrumbProps) {
     const { outlineResponse, cursorPos } = useBreadcrumbOutline(path, !isImage);
     const [gitStatuses, setGitStatuses] = useState<Map<string, string>>(new Map());
     const [gitModifiedDirs, setGitModifiedDirs] = useState<Map<string, string>>(new Map());
@@ -448,7 +450,16 @@ export function Breadcrumbs({ path, projectPath, isDiff, isImage, className }: B
         parts = realPath.split(/[\\/]/).filter(Boolean);
     }
 
-    const symbolChain = !isImage && outlineResponse ? findSymbolChain(outlineResponse.symbols, cursorPos.line, cursorPos.col) : [];
+    const symbolChain = !compact && !isImage && outlineResponse ? findSymbolChain(outlineResponse.symbols, cursorPos.line, cursorPos.col) : [];
+    const crumbParts = compact && parts.length > 3
+        ? [
+            { part: parts[0], index: 0 },
+            { part: "…", index: -1 },
+            { part: parts[parts.length - 2], index: parts.length - 2 },
+            { part: parts[parts.length - 1], index: parts.length - 1 },
+        ]
+        : parts.map((part, index) => ({ part, index }));
+    const crumbCap = compact ? "max-w-[9rem]" : "max-w-[250px]";
 
     return (
         <Menubar className={cn(
@@ -456,17 +467,25 @@ export function Breadcrumbs({ path, projectPath, isDiff, isImage, className }: B
             isImage && "bg-editor",
             className
         )}>
-            {parts.slice(0, -1).map((part, index) => {
+            {crumbParts.slice(0, -1).map(({ part, index }) => {
+                if (index < 0) {
+                    return (
+                        <React.Fragment key="crumb-ellipsis">
+                            <span className="px-1 text-text-muted">…</span>
+                            <Icon icon={ChevronRight20Regular} className="text-text-muted shrink-0" />
+                        </React.Fragment>
+                    );
+                }
                 const folderPath = projectPath ? joinProjectFolder(projectPath, parts, index) : null;
                 const nextPartName = parts[index + 1];
 
                 return (
                     <React.Fragment key={`dir-${index}`}>
                         <div className="flex items-center">
-                            {folderPath ? (
+                            {folderPath && !compact ? (
                                 <BreadcrumbFolderItem part={part} folderPath={folderPath} nextPartName={nextPartName} gitStatuses={gitStatuses} gitModifiedDirs={gitModifiedDirs} />
                             ) : (
-                                <span className="truncate max-w-[250px] px-1.5">{part}</span>
+                                <span className={cn("truncate px-1.5", crumbCap)}>{part}</span>
                             )}
                         </div>
                         <Icon icon={ChevronRight20Regular} className="text-text-muted shrink-0" />
@@ -476,11 +495,11 @@ export function Breadcrumbs({ path, projectPath, isDiff, isImage, className }: B
 
             {parts.length > 0 && (() => {
                 const fileName = parts[parts.length - 1];
-                if (isImage) {
+                if (isImage || compact) {
                     return (
                         <div className="flex items-center gap-1.5 px-1.5 text-text-primary">
                             <FileIcon name={fileName} className="w-3.5 h-3.5 shrink-0 opacity-80" />
-                            <span className="truncate max-w-[250px]">{fileName}</span>
+                            <span className={cn("truncate", crumbCap)}>{fileName}</span>
                         </div>
                     );
                 }

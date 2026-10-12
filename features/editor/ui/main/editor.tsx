@@ -28,7 +28,7 @@ import { isPlanFilePath } from "@/lib/plan/file";
 import { parsePlanMarkdown } from "@/lib/plan/preview";
 
 // Main file viewer component handling various file types (text, image, markdown)
-export default function FileViewer({ path, group: _group = "left" }: { path: string; group?: EditorGroupId }) {
+export default function FileViewer({ path, group: _group = "left", variant = "editor" }: { path: string; group?: EditorGroupId; variant?: "editor" | "workspace" }) {
     const { getViewMode, setViewMode } = useEditorView();
     // getFileExtension handles diff: prefixes and display-name suffixes like " (abc1234)"
     const ext = useMemo(() => getFileExtension(path), [path]);
@@ -337,6 +337,8 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         };
     }, [isMarkdown, mode, path, content, setContent]);
 
+    const workspace = variant === "workspace";
+
     if (error) {
         return <ErrorView error={error} />;
     }
@@ -348,9 +350,11 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
     if (showImagePreview) {
         return (
             <div className="flex h-full min-h-0 w-full flex-col bg-editor overflow-hidden relative">
+                {workspace ? null : (
                 <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0 gap-1 bg-editor">
                     <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} isImage className="flex-1 min-w-0" />
                 </div>
+                )}
                 <div className="relative min-h-0 w-full flex-1 overflow-hidden">
                     <ImageView
                         path={path}
@@ -398,7 +402,9 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
             return (
                 <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
                     <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
+                        {workspace ? <span className="min-w-0 flex-1" /> : (
                         <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
+                        )}
                         <div className="flex items-center gap-1 shrink-0">
                             <div className="flex items-center gap-2 pl-2 border-l border-border-subtle h-[28px] shrink-0">
                                 <div className="flex items-center gap-1.5 font-sans text-xs font-medium mr-1">
@@ -468,6 +474,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
         }
         return (
             <div className="flex flex-col w-full h-full min-h-0 bg-editor overflow-hidden relative">
+                {workspace ? null : (
                 <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
                     <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
                     {isMarkdown && !isPlanFile ? (
@@ -477,6 +484,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                         />
                     ) : null}
                 </div>
+                )}
                 <div className="flex-1 w-full min-h-0 overflow-hidden relative">
                     <CodeMirrorEditor
                         path={path}
@@ -521,7 +529,7 @@ export default function FileViewer({ path, group: _group = "left" }: { path: str
                         raw={false}
                         onRawChange={(next) => setViewMode(path, next ? "raw" : "preview")}
                     />
-                ) : (
+                ) : workspace ? null : (
                     <div className="flex w-full items-center justify-between pr-2 min-h-[28px] shrink-0">
                         <Breadcrumbs path={path} projectPath={project_path} isDiff={isDiff} className="flex-1 min-w-0" />
                         <MarkdownViewSwitch
