@@ -31,6 +31,7 @@ const PROJECT = "/home/dev/demo";
 /** localStorage key used by lib/chat/skills.ts. */
 const SKILLS_KEY = "shape-skills";
 
+/** A non-directory listing entry for `dir/name`. */
 function fileEntry(dir: string, name: string): Entry {
     return { name, path: `${dir}/${name}`, is_dir: false };
 }
