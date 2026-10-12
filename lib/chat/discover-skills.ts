@@ -32,6 +32,13 @@ const DISCOVERY_DIRS: ReadonlyArray<{ dir: string; extensions: readonly string[]
     { dir: ".claude", extensions: [".mdc"] },
 ];
 
+/** One scan's findings together with the project they were read from. */
+export type SkillScan = {
+    /** Project the scan read, or null when no project was open. */
+    projectPath: string | null;
+    items: DiscoveredSkill[];
+};
+
 /** Prefix for the per-project localStorage key holding dismissed files. */
 const DISMISSED_KEY_PREFIX = "shape-dismissed-discovered:";
 
@@ -88,11 +95,12 @@ let nextScanGen = 0; // generation counter to discard stale concurrent scans
  *
  * Files are matched to saved skills by the same slug `addSkill` persists, so a
  * file that would replace an existing skill is reported as "changed" instead
- * of being offered as a fresh import.
+ * of being offered as a fresh import. The result carries the project that was
+ * read, so callers never show one project's files as another's.
  */
-export async function discoverSkills(): Promise<DiscoveredSkill[]> {
+export async function discoverSkills(): Promise<SkillScan> {
     const projectPath = getProjectPath();
-    if (!projectPath) return [];
+    if (!projectPath) return { projectPath: null, items: [] };
 
     const scanGen = ++nextScanGen;
 
@@ -116,7 +124,7 @@ export async function discoverSkills(): Promise<DiscoveredSkill[]> {
                 if (!hasSupportedExtension(fileName, extensions)) continue;
 
                 // Stop early if a newer scan started — prevents stale results
-                if (scanGen !== nextScanGen) return [];
+                if (scanGen !== nextScanGen) return { projectPath, items: [] };
 
                 const relPath = `${dir}/${fileName}`;
                 if (dismissed.has(relPath)) continue;
@@ -150,5 +158,5 @@ export async function discoverSkills(): Promise<DiscoveredSkill[]> {
         }
     }
 
-    return discovered;
+    return { projectPath, items: discovered };
 }
