@@ -40,10 +40,12 @@ function serve(files: Record<string, string>) {
     mocks.readFileFromDisk.mockImplementation(async (path: string) => files[path.slice(PROJECT.length + 1)]);
 }
 
+/** The button carrying `aria-label`, if it is rendered. */
 function buttonWithLabel(host: HTMLElement, label: string): HTMLButtonElement | undefined {
     return Array.from(host.querySelectorAll("button")).find((node) => node.getAttribute("aria-label") === label);
 }
 
+/** Every per-file Dismiss button currently rendered. */
 function dismissButtons(host: HTMLElement): HTMLButtonElement[] {
     return Array.from(host.querySelectorAll("button")).filter((node) =>
         (node.getAttribute("aria-label") ?? "").startsWith("Dismiss ")
@@ -71,6 +73,7 @@ describe("skills settings", () => {
         host.remove();
     });
 
+    /** Render the panel and let the mount scan settle. */
     async function mount() {
         await act(async () => {
             root.render(<SkillsSettings />);
