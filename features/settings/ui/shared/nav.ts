@@ -13,7 +13,6 @@ import { DocumentData24Regular } from "@fluentui/react-icons/headless/svg/docume
 import { DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
 import { Keyboard20Regular } from "@fluentui/react-icons/headless/svg/keyboard";
 import { ChatCursor24Regular } from "@fluentui/react-icons/headless/svg/chat-cursor";
-import { MicrophoneChat24Regular } from "@fluentui/react-icons/headless/svg/microphone-chat";
 import { BranchCompare24Regular } from "@fluentui/react-icons/headless/svg/branch-compare";
 import { Settings24Regular } from "@fluentui/react-icons/headless/svg/settings";
 import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
@@ -76,7 +75,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Features",
         children: [
             { id: "terminal", label: "Terminal", icon: WindowConsole20Regular, targetId: "settings-terminal" },
-            { id: "microphone", label: "Microphone", icon: MicrophoneChat24Regular, targetId: "settings-microphone" },
             { id: "git", label: "Git", icon: BranchCompare24Regular, targetId: "settings-git" },
         ],
     },

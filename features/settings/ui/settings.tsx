@@ -36,7 +36,6 @@ import {
     AUTO_FETCH_INTERVAL_PRESETS,
 } from "./shared/controls";
 import { AiSettingsPanel } from "./sections/ai";
-import { MicrophoneSettings } from "./sections/microphone";
 import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
@@ -1273,7 +1272,6 @@ export function SettingsView({
                             {activeLeafId === "ai-context" ? <AiSettings settings={settings} page="context" /> : null}
                             {activeLeafId === "editor-font" ? <EditorSettings settings={settings} /> : null}
                             {activeLeafId === "terminal" ? <TerminalSettings settings={settings} /> : null}
-                            {activeLeafId === "microphone" ? <MicrophoneSettings /> : null}
                             {activeLeafId === "git" ? <GitSettings settings={settings} /> : null}
                             {activeLeafId === "updates" ? <UpdatesSettings settings={settings} /> : null}
                             {activeLeafId === "notifications" ? <PrivacySettings settings={settings} part="notifications" /> : null}
