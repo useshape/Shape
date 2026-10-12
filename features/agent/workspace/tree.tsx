@@ -19,6 +19,16 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context";
 
+function gitMark(status: string | undefined): { letter: string; className: string } | null {
+    const raw = (status ?? "").trim().toUpperCase();
+    if (!raw) return null;
+    if (raw.includes("?")) return { letter: "U", className: "text-warning" };
+    if (raw.includes("A")) return { letter: "A", className: "text-success" };
+    if (raw.includes("D")) return { letter: "D", className: "text-error" };
+    if (raw.includes("M") || raw.includes("R")) return { letter: "M", className: "text-success" };
+    return { letter: raw[0] ?? "", className: "text-text-muted" };
+}
+
 function sortEntries(list: FileEntry[]) {
     return [...list].sort((a, b) => {
         if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
@@ -32,12 +42,14 @@ function TreeNode({
     activePath,
     query,
     onOpenFile,
+    statusFor,
 }: {
     entry: FileEntry;
     depth: number;
     activePath: string | null;
     query: string;
     onOpenFile: (path: string) => void;
+    statusFor: (path: string) => string | undefined;
 }) {
     const [open, setOpen] = useState(false);
     const [children, setChildren] = useState<FileEntry[] | null>(null);
@@ -59,7 +71,8 @@ function TreeNode({
         if (query.trim() && entry.is_dir) setOpen(true);
     }, [query, entry.is_dir]);
 
-    const pad = 6 + depth * 14;
+    const pad = 8 + depth * 12;
+    const mark = gitMark(statusFor(entry.path));
     const needle = query.trim().toLowerCase();
 
     const reveal = () => {
@@ -84,14 +97,14 @@ function TreeNode({
                 <button
                     type="button"
                     onClick={() => setOpen((v) => !v)}
-                    className="flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                    className="flex h-6 w-full items-center gap-1 rounded-md pr-2 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                     style={{ paddingLeft: pad }}
                 >
                     <Icon
                         icon={open ? ChevronDown20Regular : ChevronRight20Regular}
                         className="icon-sm shrink-0 text-text-muted"
                     />
-                    <span className="min-w-0 truncate">{entry.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                 </button>
                     </ContextMenuTrigger>
                     <ContextMenuContent className="min-w-40">
@@ -101,12 +114,7 @@ function TreeNode({
                     </ContextMenuContent>
                 </ContextMenu>
                 {open ? (
-                    <div className="relative">
-                        <span
-                            className="pointer-events-none absolute bottom-0 top-0 w-px bg-border-subtle"
-                            style={{ left: pad + 7 }}
-                            aria-hidden
-                        />
+                    <div>
                         {visibleChildren?.map((child) => (
                         <TreeNode
                             key={child.path}
@@ -115,6 +123,7 @@ function TreeNode({
                             activePath={activePath}
                             query={query}
                             onOpenFile={onOpenFile}
+                            statusFor={statusFor}
                         />
                         ))}
                     </div>
@@ -136,15 +145,18 @@ function TreeNode({
             type="button"
             onClick={() => onOpenFile(entry.path)}
             className={cn(
-                "flex h-7 w-full items-center gap-1.5 rounded-md pr-2 text-left text-sm",
+                "flex h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left text-sm",
                 active
-                    ? "bg-panel-active text-text-primary ring-1 ring-accent"
+                    ? "bg-panel-active text-text-primary"
                     : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
             )}
             style={{ paddingLeft: pad }}
         >
             <FileIcon name={entry.name} className="size-4 shrink-0" />
-            <span className="min-w-0 truncate">{entry.name}</span>
+            <span className={cn("min-w-0 flex-1 truncate", mark?.className)}>{entry.name}</span>
+            {mark ? (
+                <span className={cn("shrink-0 text-xs font-medium", mark.className)}>{mark.letter}</span>
+            ) : null}
         </button>
             </ContextMenuTrigger>
             <ContextMenuContent className="min-w-40">
@@ -178,6 +190,7 @@ export function FileTree({
     const [roots, setRoots] = useState<FileEntry[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [query, setQuery] = useState("");
+    const [statusByPath, setStatusByPath] = useState<Map<string, string>>(() => new Map());
     const title = projectPath.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || projectPath;
     const shown = useMemo(() => {
         const needle = query.trim().toLowerCase();
@@ -206,20 +219,47 @@ export function FileTree({
         };
     }, [projectPath]);
 
+    useEffect(() => {
+        let cancelled = false;
+        void commands.gitStatus(projectPath).then((files) => {
+            if (cancelled) return;
+            const next = new Map<string, string>();
+            const root = projectPath.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+            for (const file of files) {
+                const rel = file.path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
+                next.set(rel, file.status);
+                next.set(`${root}/${rel}`, file.status);
+            }
+            setStatusByPath(next);
+        }).catch(() => {
+            if (!cancelled) setStatusByPath(new Map());
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [projectPath]);
+
+    const statusFor = useCallback((path: string) => {
+        const key = path.replace(/\\/g, "/").toLowerCase();
+        return statusByPath.get(key);
+    }, [statusByPath]);
+
     // Padding on the wrapper (not margin on the island) keeps the flex parent
     // from shifting — the island sits inset without pushing layout sideways.
     return (
-        <div className="box-border flex h-full min-h-0 w-full flex-col bg-panel">
+        <div className="box-border flex h-full min-h-0 w-full flex-col bg-transparent">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex h-9 shrink-0 items-center gap-2 px-2">
-                    <Icon icon={Search20Regular} className="icon-sm shrink-0 text-text-muted" />
-                    <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Search files"
-                        aria-label="Search files"
-                        className="h-7 min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-                    />
+                <div className="px-2 pb-1 pt-2">
+                    <div className="flex h-8 items-center gap-2 rounded-lg bg-panel-hover px-2">
+                        <Icon icon={Search20Regular} className="icon-sm shrink-0 text-text-muted" />
+                        <input
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="Filter files..."
+                            aria-label="Filter files"
+                            className="h-7 min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+                        />
+                    </div>
                     <span className="sr-only">{title}</span>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2 custom-scrollbar">
@@ -232,6 +272,7 @@ export function FileTree({
                             activePath={activePath}
                             query={query}
                             onOpenFile={onOpenFile}
+                            statusFor={statusFor}
                         />
                     ))}
                 </div>

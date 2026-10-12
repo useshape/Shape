@@ -487,19 +487,20 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 <SidebarPeek shown={sidebarFlyout} onEnter={openSidebarFlyout} onLeave={closeSidebarFlyout} />
             )}
 
-            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel rounded-xl border-l border-border">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel rounded-xl border-l border-border">
+                <AgentChrome
+                    rightOpen={rightExpanded}
+                    onToggleRight={toggleWorkspace}
+                    canToggleRight={Boolean(project_path) && !overlayOpen}
+                    showRightToggle={!overlayOpen}
+                    padWindowControls
+                    sidebarOpen={sidebarOpen}
+                    onToggleSidebar={toggleSidebar}
+                    onSidebarHoverStart={openSidebarFlyout}
+                    onSidebarHoverEnd={closeSidebarFlyout}
+                />
+                <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-                    <AgentChrome
-                        rightOpen={rightExpanded}
-                        onToggleRight={toggleWorkspace}
-                        canToggleRight={Boolean(project_path) && !overlayOpen}
-                        showRightToggle={!overlayOpen}
-                        padWindowControls={!rightExpanded}
-                        sidebarOpen={sidebarOpen}
-                        onToggleSidebar={toggleSidebar}
-                        onSidebarHoverStart={openSidebarFlyout}
-                        onSidebarHoverEnd={closeSidebarFlyout}
-                    />
                     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                             {overlay ? (
                                 <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -544,33 +545,37 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                 document.body.style.userSelect = "none";
                             }}
                         >
-                            <div className="absolute inset-y-0 -left-1.5 w-3 cursor-col-resize" />
-                            <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-border-subtle transition-colors group-hover:bg-border-secondary group-active:bg-text-muted" />
+                            <div className="absolute inset-y-3 -left-1.5 w-3 cursor-col-resize" />
                         </div>
                         <div
                             style={{
-                                width: rightExpanded ? workspaceWidth : 0,
+                                width: rightExpanded ? workspaceWidth + 12 : 0,
                                 flex: "0 0 auto",
                             }}
                             className={cn(
-                                "h-full overflow-hidden border-l border-border-subtle bg-panel",
+                                "h-full min-w-0 overflow-hidden",
+                                rightExpanded ? "py-2 pr-2" : "pointer-events-none p-0",
                                 !isResizing &&
                                     "transition-[width] duration-200 ease-[var(--ease-out)]",
                             )}
+                            aria-hidden={!rightExpanded}
                         >
-                            <div
-                                style={{ width: workspaceWidth }}
-                                className="flex h-full bg-panel"
-                            >
-                                <AgentWorkspace
-                                    projectPath={project_path}
-                                    expanded
-                                    onExpand={() => persistWorkspace(true)}
-                                />
-                            </div>
+                            {rightExpanded ? (
+                                <div
+                                    style={{ width: workspaceWidth }}
+                                    className="relative flex h-full overflow-hidden rounded-xl bg-sidebar border border-border-subtle"
+                                >
+                                    <AgentWorkspace
+                                        projectPath={project_path}
+                                        expanded
+                                        onExpand={() => persistWorkspace(true)}
+                                    />
+                                </div>
+                            ) : null}
                         </div>
                     </>
                 ) : null}
+                </div>
             </div>
             <WindowControls
                 isMaximized={isMaximized}

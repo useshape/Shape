@@ -9,5 +9,5 @@ export function FileEditor({ path }: { path: string }) {
         return <BrowserView />;
     }
 
-    return <FileViewer path={path} />;
+    return <FileViewer path={path} variant="workspace" />;
 }

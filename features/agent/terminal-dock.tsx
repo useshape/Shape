@@ -185,36 +185,40 @@ export function TerminalDock() {
     return (
         <div
             className={cn(
-                "relative z-20 flex shrink-0 flex-col overflow-hidden bg-panel",
-                "transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                resizing && "transition-none",
-                open ? "border-t border-border-subtle" : "pointer-events-none border-0",
+                "relative z-20 shrink-0 border border-border m-3 squircle-2xl",
+                open ? "px-2 pb-2" : "pointer-events-none",
             )}
-            style={{ height: open ? height : 0 }}
             aria-hidden={!open}
         >
-            {open ? (
-                <div
-                    role="separator"
-                    aria-orientation="horizontal"
-                    aria-label="Resize terminal"
-                    className="group absolute inset-x-0 -top-1 z-10 h-2 cursor-row-resize"
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        dragging.current = true;
-                        setResizing(true);
-                        document.body.style.cursor = "row-resize";
-                        document.body.style.userSelect = "none";
-                        document.body.classList.add("resizing-vertical");
-                    }}
-                >
-                    <div className="pointer-events-none absolute inset-x-0 top-1 h-px bg-border-subtle transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] group-hover:bg-border-secondary" />
+            <div
+                className={cn(
+                    "relative flex flex-col overflow-hidden rounded-xl bg-sidebar",
+                    "transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    resizing && "transition-none",
+                )}
+                style={{ height: open ? height : 0 }}
+            >
+                {open ? (
+                    <div
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label="Resize terminal"
+                        className="group absolute inset-x-0 top-0 z-10 h-2 cursor-row-resize"
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            dragging.current = true;
+                            setResizing(true);
+                            document.body.style.cursor = "row-resize";
+                            document.body.style.userSelect = "none";
+                            document.body.classList.add("resizing-vertical");
+                        }}
+                    />
+                ) : null}
+                <div className={cn("min-h-0 flex-1 overflow-hidden", resizing && "pointer-events-none")}>
+                    <Suspense fallback={<div className="h-full w-full bg-sidebar" />}>
+                        <Terminal terminalOnly isOpen={open} onClose={() => persistOpen(false)} />
+                    </Suspense>
                 </div>
-            ) : null}
-            <div className={cn("min-h-0 flex-1 overflow-hidden", resizing && "pointer-events-none")}>
-                <Suspense fallback={<div className="h-full w-full bg-panel" />}>
-                    <Terminal terminalOnly isOpen={open} onClose={() => persistOpen(false)} />
-                </Suspense>
             </div>
         </div>
     );

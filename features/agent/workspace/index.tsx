@@ -8,11 +8,19 @@ import { FileEditor } from "./editor";
 import { FileTree } from "./tree";
 import { SingleFileDiffEditor, type FileDiffTabInfo } from "./file-diff";
 import Graph from "@/features/git/ui/graph/graph";
-import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
 import { PullRequestsPanel } from "@/features/chat/ui/prs/view";
 import { subscribePrUi, getPrUi } from "@/features/chat/ui/prs/store";
 import { isBrowserTab } from "@/lib/window/browser-tab";
 import { WorkspaceTabs } from "./tabs";
+import { FileBar } from "./file-bar";
+import type { CSSProperties } from "react";
+
+const SIDEBAR_SURFACE = {
+    "--panel": "var(--sidebar)",
+    "--color-panel": "var(--sidebar)",
+    "--editor": "var(--sidebar)",
+    "--color-editor": "var(--sidebar)",
+} as CSSProperties;
 import {
     DEFAULT_TABS,
     uid,
@@ -249,8 +257,8 @@ export function AgentWorkspace({
     }
 
     return (
-        <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-panel">
-            <div className="flex h-titlebar shrink-0 items-stretch" data-tauri-drag-region>
+        <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-sidebar">
+            <div className="flex h-titlebar shrink-0 items-stretch">
                 <WorkspaceTabs
                     className="min-w-0 flex-1 bg-transparent"
                     tabs={tabs}
@@ -263,9 +271,6 @@ export function AgentWorkspace({
                     onNew={(kind) => addTab(kind, { expand: true })}
                     onReorder={(next) => commitTabs(next, activeIdRef.current)}
                 />
-                <div className="shrink-0" data-no-drag>
-                    <WindowControlsSpacer />
-                </div>
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -278,28 +283,37 @@ export function AgentWorkspace({
                             onOpenFile={openFile}
                         />
                     ) : active?.kind === "prs" ? (
-                        <PullRequestsPanel pane="full" />
+                        <div className="h-full min-h-0 bg-sidebar" style={SIDEBAR_SURFACE}>
+                            <PullRequestsPanel pane="full" />
+                        </div>
                     ) : active?.kind === "plan" && (active.path || active.markdown) ? (
-                        <PlanTabView path={active.path || ""} markdown={active.markdown} />
+                        <div className="h-full min-h-0 bg-sidebar" style={SIDEBAR_SURFACE}>
+                            <PlanTabView path={active.path || ""} markdown={active.markdown} />
+                        </div>
                     ) : active?.kind === "file" && active.path ? (
                         <EditorViewProvider>
                             <EditorSplitProvider>
-                                <div className="flex h-full min-h-0">
-                                    <div className="min-w-0 flex-1">
-                                        <FileEditor path={active.path} />
-                                    </div>
-                                    <div className="w-64 shrink-0 border-l border-border">
-                                        <FileTree
-                                            projectPath={projectPath}
-                                            activePath={active.path}
-                                            onOpenFile={openFile}
-                                        />
+                                <div className="flex h-full min-h-0 flex-col">
+                                    <FileBar path={active.path} />
+                                    <div className="flex min-h-0 flex-1">
+                                        <div className="min-h-0 min-w-0 flex-1 bg-sidebar" style={SIDEBAR_SURFACE}>
+                                            <FileEditor path={active.path} />
+                                        </div>
+                                        <div className="w-64 shrink-0">
+                                            <FileTree
+                                                projectPath={projectPath}
+                                                activePath={active.path}
+                                                onOpenFile={openFile}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </EditorSplitProvider>
                         </EditorViewProvider>
                     ) : active?.kind === "diff" && active.diff ? (
-                        <SingleFileDiffEditor tab={active.diff} />
+                        <div className="h-full min-h-0 bg-sidebar" style={SIDEBAR_SURFACE}>
+                            <SingleFileDiffEditor tab={active.diff} />
+                        </div>
                     ) : null}
                 </div>
             </div>
