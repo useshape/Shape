@@ -2737,13 +2737,73 @@ fn validate_clone_url(url: &str) -> Result<(), AppError> {
 }
 
 fn clone_folder_name(url: &str) -> String {
-    let trimmed = url.trim().trim_end_matches(".git");
-    if let Some(idx) = trimmed.rfind('/') {
-        trimmed[idx + 1..].to_string()
-    } else if let Some(idx) = trimmed.rfind(':') {
-        trimmed[idx + 1..].to_string()
+    let mut s = url.trim().to_string();
+    if let Some(cut) = s.find(['?', '#']) {
+        s.truncate(cut);
+    }
+    while s.ends_with('/') || s.ends_with('\\') {
+        s.pop();
+    }
+    if let Some(stripped) = s.strip_suffix(".git") {
+        s = stripped.to_string();
+        while s.ends_with('/') || s.ends_with('\\') {
+            s.pop();
+        }
+    }
+    let name = if let Some(idx) = s.rfind(['/', '\\']) {
+        s[idx + 1..].to_string()
+    } else if let Some(idx) = s.rfind(':') {
+        s[idx + 1..].to_string()
     } else {
+        String::new()
+    };
+    let name = name.trim();
+    if name.is_empty() || name == "." || name == ".." {
         "repository".to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+#[cfg(test)]
+mod clone_folder_name_tests {
+    use super::clone_folder_name;
+
+    #[test]
+    fn github_https_with_trailing_slash() {
+        assert_eq!(
+            clone_folder_name("https://github.com/useshape/Shape/"),
+            "Shape"
+        );
+    }
+
+    #[test]
+    fn github_https_git_suffix() {
+        assert_eq!(
+            clone_folder_name("https://github.com/useshape/Shape.git"),
+            "Shape"
+        );
+    }
+
+    #[test]
+    fn github_https_git_suffix_and_slash() {
+        assert_eq!(
+            clone_folder_name("https://github.com/useshape/Shape.git/"),
+            "Shape"
+        );
+    }
+
+    #[test]
+    fn ssh_style() {
+        assert_eq!(clone_folder_name("git@github.com:useshape/Shape.git"), "Shape");
+    }
+
+    #[test]
+    fn query_string_is_ignored() {
+        assert_eq!(
+            clone_folder_name("https://github.com/useshape/Shape/?tab=readme-ov-file"),
+            "Shape"
+        );
     }
 }
 
