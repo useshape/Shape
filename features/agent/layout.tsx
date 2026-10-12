@@ -19,11 +19,21 @@ import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use
 import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
 
 const MIN_WORKSPACE = 360;
+const MIN_WORKSPACE_SOFT = 280;
 const MIN_CHAT = 380;
 const SIDEBAR_EXPANDED = 304;
+const WORKSPACE_GUTTER = 12;
+const WINDOW_MIN_HEIGHT = 500;
+const WINDOW_MIN_WIDTH = 1000;
 const MAX_WORKSPACE_RATIO = 0.72;
 const MAX_WORKSPACE_PX = 1200;
 const SPLASH_KEY = "shape-agent-splash-seen";
+
+function layoutMinWidth(sidebarOpen: boolean, workspaceOpen: boolean) {
+    const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : 0;
+    const workspace = workspaceOpen ? MIN_WORKSPACE + WORKSPACE_GUTTER : 0;
+    return Math.max(WINDOW_MIN_WIDTH, sidebar + MIN_CHAT + workspace);
+}
 
 function isFlyoutUiTarget(target: EventTarget | null) {
     if (!(target instanceof Element)) return false;
@@ -98,6 +108,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const [workspaceOpen, setWorkspaceOpen] = useState(true);
     const [overlay, setOverlay] = useState<AgentOverlay>(null);
     const [workspaceWidth, setWorkspaceWidth] = useState(560);
+    const [workspaceFits, setWorkspaceFits] = useState(true);
     const [splash, setSplash] = useState(false);
     const [splashVisible, setSplashVisible] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
@@ -190,11 +201,11 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const clampWorkspace = useCallback(
         (x: number, winW = typeof window === "undefined" ? 1280 : window.innerWidth) => {
             const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : 0;
-            const maxByChat = Math.max(0, winW - sidebar - MIN_CHAT);
+            const maxByChat = Math.max(0, winW - sidebar - MIN_CHAT - WORKSPACE_GUTTER);
             const maxByRatio = Math.min(MAX_WORKSPACE_PX, Math.floor(winW * MAX_WORKSPACE_RATIO));
             const max = Math.min(maxByChat, maxByRatio);
-            if (max < MIN_WORKSPACE) return 0;
-            return Math.min(max, Math.max(MIN_WORKSPACE, x));
+            if (max < MIN_WORKSPACE_SOFT) return 0;
+            return Math.min(max, Math.max(MIN_WORKSPACE_SOFT, x));
         },
         [sidebarOpen],
     );
@@ -356,7 +367,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         const onMove = (e: MouseEvent) => {
             if (!dragging.current) return;
             const next = clampWorkspace(window.innerWidth - e.clientX);
-            if (next < MIN_WORKSPACE) return;
+            if (next < MIN_WORKSPACE_SOFT) return;
             widthRef.current = next;
             setWorkspaceWidth(next);
         };
@@ -383,19 +394,55 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const apply = () => {
             const next = clampWorkspace(widthRef.current);
-            if (next === 0) {
-                persistWorkspace(false);
-                return;
-            }
-            if (next !== widthRef.current) {
-                widthRef.current = next;
-                setWorkspaceWidth(next);
+            setWorkspaceFits(next > 0);
+            if (next > 0) {
+                setWorkspaceWidth((prev) => (prev === next ? prev : next));
             }
         };
         apply();
         window.addEventListener("resize", apply);
-        return () => window.removeEventListener("resize", apply);
-    }, [clampWorkspace, persistWorkspace, sidebarOpen]);
+        let unlisten: (() => void) | undefined;
+        let cancelled = false;
+        void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+            const stop = await getCurrentWindow().listen("tauri://resize", apply);
+            if (cancelled) {
+                stop();
+                return;
+            }
+            unlisten = stop;
+        });
+        return () => {
+            cancelled = true;
+            window.removeEventListener("resize", apply);
+            unlisten?.();
+        };
+    }, [clampWorkspace, sidebarOpen]);
+
+    useEffect(() => {
+        const wantWorkspace = workspaceOpen && Boolean(project_path);
+        const minWidth = layoutMinWidth(sidebarOpen, wantWorkspace);
+        let cancelled = false;
+        void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+            const { LogicalSize } = await import("@tauri-apps/api/dpi");
+            const win = getCurrentWindow();
+            await win.setMinSize(new LogicalSize(minWidth, WINDOW_MIN_HEIGHT));
+            if (cancelled) return;
+            const maximized = await win.isMaximized().catch(() => false);
+            if (cancelled || maximized) return;
+            const factor = await win.scaleFactor();
+            const inner = await win.innerSize();
+            const logicalW = inner.width / factor;
+            const logicalH = inner.height / factor;
+            if (logicalW + 1 < minWidth) {
+                await win.setSize(new LogicalSize(minWidth, logicalH));
+            }
+        }).catch(() => {
+            /* browser / tests */
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [project_path, sidebarOpen, workspaceOpen]);
 
     useEffect(() => {
         const onOpenFiles = () => {
@@ -439,7 +486,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
 
     const overlayOpen = overlay != null;
     const showWorkspace = Boolean(project_path) && !overlayOpen;
-    const rightExpanded = workspaceOpen && showWorkspace;
+    const rightExpanded = workspaceOpen && showWorkspace && workspaceFits;
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
