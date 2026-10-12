@@ -1,51 +1,49 @@
 # Contributing to Shape
 
-Thanks for contributing.
+Shape is a desktop agent. Chat, files, Git, and a terminal live in one Windows app. It is not an IDE you live in all day.
 
-By participating you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Code you submit is licensed under [BUSL-1.1](./LICENSE), same as the rest of the repo.
+By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Code you send is licensed under [BUSL-1.1](./LICENSE).
 
-## What helps most
+## What helps
 
-Shape is a full IDE. Most useful contributions are small and concrete:
+Small, concrete work:
 
-- Docs fixes and missing pages under `docs/`
-- Bug fixes with clear reproduction
-- Narrow improvements to something that already exists (editor, Git, agent, terminal, LSP, settings)
-- Keybindings, polish, and platform gaps
+- Docs under `docs/`
+- Bug fixes with a way to reproduce
+- Narrow changes to something that already exists (agent, Git, editor, terminal, LSP, settings)
+- Keybindings, polish, platform gaps
 
-Big new features need an issue first. Describe the problem and the intended behavior before opening a PR. Unsolicited large features usually don't land.
+File an issue before a large feature. Say the problem and the intended behavior. Unsolicited large features do not land.
 
 ## Pull requests
 
-Open a PR for bugfixes and small changes. We'll review when we can — pinging maintainers does not jump the queue.
-
-To keep review tractable:
+Open a PR for bugfixes and small changes. Review happens when someone has time. Pinging does not jump the queue.
 
 - One concern per PR
-- Say what you fixed and how to check it
-- Add or update tests when the change is non-trivial (`npm run test:all`)
-- Screenshots or a short clip for UI changes
-- Confirm features with an issue before building them
+- Say what you changed and how you checked it
+- Run `npm run test:all` when the change is non-trivial
+- A screenshot or a short clip for UI
+- An issue before new features
 
-Prefer finishing one PR before stacking more. A pile of open branches against `main` goes stale fast.
+Finish one PR before stacking more. Open branches against `main` go stale.
 
-## What we usually decline
+## What we decline
 
 - Broad refactors with no product outcome
-- Style-only diffs that don't change behavior
-- Features whose complexity outweighs who they help
-- Changes the author can't explain
+- Style-only diffs
+- Features whose cost outweighs who they help
+- Changes the author cannot explain
 - Unattended agent PRs
 
-## Using AI while contributing
+## Using a model while contributing
 
-LLMs are fine as a tool. You still own the result: understand the diff, write the PR description yourself, and reply to review in your own words.
+You still own the result. Read the diff. Write the PR description. Reply to review in your own words.
 
-If you paste model output into a discussion, quote it, say it came from a model, and add what you think it means.
+If you paste model output into a thread, quote it, say a model wrote it, and add what you think it means.
 
-## Getting the app running
+## Run the app
 
-Install Node.js 18+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/), then:
+Node.js 18+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/):
 
 ```bash
 npm install
@@ -53,7 +51,7 @@ cp .env.example .env   # optional
 npm run tauri:dev
 ```
 
-Cloud URL details: [Local development](./docs/developing/local-development.mdx).
+Cloud URLs: [Local development](./docs/developing/local-development.mdx).
 
 ```bash
 npm run test          # Vitest
@@ -61,20 +59,22 @@ npm run test:rust     # Cargo
 npm run test:all      # Both
 ```
 
+A fork cannot sign in to Shape Cloud. Official builds can. Chat against a real account needs an installer from [download](https://useshape.org/download).
+
 ## Where things live
 
 | Path | What it is |
 | --- | --- |
-| `app/` | Next.js routes (workbench, settings, git, stats windows) |
-| `features/` | Product UI — editor, chat, explorer, Git, terminal |
-| `lib/` | Shared TypeScript (IPC wrappers, settings, auth) |
+| `app/` | Next.js routes (agent, settings, git, extra windows) |
+| `features/` | Product UI — chat, editor, explorer, Git, terminal |
+| `lib/` | Shared TypeScript (IPC, settings, auth) |
 | `components/ui/` | Shared UI primitives |
 | `src-tauri/` | Rust / Tauri — commands, agent, Git, PTY, LSP |
 | `docs/` | Product and contributor docs (MDX) |
 | `scripts/` | Build and release helpers |
 | `tests/` | Vitest |
 
-More architecture detail: [docs/developing](./docs/developing/overview.mdx).
+More: [docs/developing](./docs/developing/overview.mdx).
 
 ## Commits
 
@@ -84,8 +84,10 @@ Release notes group by area. Prefer:
 area: short summary
 ```
 
-Examples: `editor: …`, `git: …`, `agent: …`, `docs: …`. Keep `package.json`, Tauri, and Cargo versions in sync with `npm run sync-version` when you bump the app version.
+Examples: `agent: …`, `git: …`, `docs: …`. If the change closes a GitHub issue, put `Closes #N` in the body. See [COMMIT.md](./COMMIT.md).
+
+Keep `package.json`, Tauri, and Cargo versions in sync with `npm run sync-version` when you bump the app.
 
 ## Security
 
-Private reports only — see [SECURITY.md](./SECURITY.md).
+Private reports only. [SECURITY.md](./SECURITY.md).
