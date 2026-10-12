@@ -42,6 +42,15 @@ hint: Updates were rejected`;
         expect(result.message).toContain("admin access");
     });
 
+    it("maps checkout conflicts to a stash/commit hint", () => {
+        const result = formatGitError(
+            "Git error: 318 conflicts prevent checkout;\nclass=Checkout (20); code=Conflict (-13)",
+        );
+        expect(result.title).toBe("Uncommitted changes");
+        expect(result.message).toContain("318 files");
+        expect(result.hint).toContain("stash");
+    });
+
     it("maps in-progress log messages", () => {
         const result = formatCommandError(
             "job 88532738715 is still in progress; logs will be available when it is complete",

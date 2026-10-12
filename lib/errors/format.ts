@@ -69,6 +69,22 @@ export function formatCommandError(raw: unknown, fallbackTitle = "Error"): Forma
         };
     }
 
+    if (
+        lower.includes("conflicts prevent checkout")
+        || lower.includes("would be overwritten by checkout")
+        || lower.includes("would be overwritten by merge")
+        || (lower.includes("checkout") && lower.includes("conflict"))
+    ) {
+        const count = text.match(/(\d+)\s+conflicts? prevent checkout/i)?.[1];
+        return {
+            title: "Uncommitted changes",
+            message: count
+                ? `${count} files have local changes that would be overwritten by checkout.`
+                : "Local changes would be overwritten by checkout.",
+            hint: "Commit, stash, or discard those files, then try again.",
+        };
+    }
+
     const errors = extractLines(text, "error");
     const fatals = extractLines(text, "fatal");
     const hints = extractLines(text, "hint");

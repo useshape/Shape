@@ -22,6 +22,17 @@ fn open_git_repo(path: &str) -> Result<Repository, AppError> {
         .map_err(AppError::Git)
 }
 
+fn checkout_conflict_err(err: git2::Error) -> AppError {
+    let msg = err.message();
+    if err.code() == git2::ErrorCode::Conflict || msg.contains("conflicts prevent checkout") {
+        AppError::Message(format!(
+            "Uncommitted changes would be overwritten. Commit, stash, or discard them first. ({msg})"
+        ))
+    } else {
+        AppError::Git(err)
+    }
+}
+
 #[derive(Serialize, Clone)]
 pub struct GitRepoInfo {
     pub path: String,
@@ -1033,7 +1044,7 @@ pub fn git_switch_branch(repo_path: String, branch_name: String) -> Result<(), A
         .map_err(|e| AppError::Git(e))?;
 
     repo.checkout_tree(&object, None)
-        .map_err(|e| AppError::Git(e))?;
+        .map_err(checkout_conflict_err)?;
 
     match reference {
         Some(ref r) => repo
