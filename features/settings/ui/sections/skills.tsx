@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { addSkill, listSkills, removeSkill, subscribeSkills, type Skill } from "@/lib/chat/skills";
 import { discoverSkills, dismissDiscoveredFile, type DiscoveredSkill } from "@/lib/chat/discover-skills";
 import { SettingActionRow, SettingCard, SettingRow, SettingSection } from "../shared/controls";
@@ -19,29 +19,45 @@ import {
 } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 
+/**
+ * Settings → Skills. Lists the saved skills and scans the project's `.agents/`
+ * and `.claude/` directories for skill files that can be imported.
+ */
 export function SkillsSettings() {
     const [skills, setSkills] = useState<Skill[]>(() => listSkills());
     const [discovered, setDiscovered] = useState<DiscoveredSkill[]>([]);
-    const [scanning, setScanning] = useState(false);
+    // A scan runs on mount, so the panel starts in the scanning state and the
+    // mount effect never needs to set state synchronously.
+    const [scanning, setScanning] = useState(true);
     const inputRef = useRef<HTMLInputElement>(null);
-    let scanGen = 0;
+    const scanGen = useRef(0);
 
     useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
 
-    async function scan() {
-        const gen = ++scanGen;
-        setScanning(true);
-        try {
-            const result = await discoverSkills();
-            if (gen === scanGen) setDiscovered(result);
-        } catch {
-            if (gen === scanGen) setDiscovered([]);
-        } finally {
-            if (gen === scanGen) setScanning(false);
-        }
-    }
+    /** Apply scan results, ignoring results from a superseded scan. */
+    const applyScan = useCallback((token: number, result: DiscoveredSkill[]) => {
+        if (token !== scanGen.current) return;
+        setDiscovered(result);
+        setScanning(false);
+    }, []);
 
-    useEffect(() => { void scan(); }, []);
+    /** Rescan the project for skill files (refresh button). */
+    const refresh = useCallback(async () => {
+        setScanning(true);
+        const token = ++scanGen.current;
+        try {
+            applyScan(token, await discoverSkills());
+        } catch {
+            applyScan(token, []);
+        }
+    }, [applyScan]);
+
+    useEffect(() => {
+        const token = ++scanGen.current;
+        void discoverSkills()
+            .then((result) => applyScan(token, result))
+            .catch(() => applyScan(token, []));
+    }, [applyScan]);
 
     return (
         <SettingSection
@@ -52,7 +68,7 @@ export function SkillsSettings() {
             <input
                 ref={inputRef}
                 type="file"
-                accept=".md,.markdown,text/markdown,text/plain"
+                accept=".md,.markdown,.mdc,text/markdown"
                 className="hidden"
                 onChange={(event) => {
                     const file = event.target.files?.[0];
@@ -86,60 +102,60 @@ export function SkillsSettings() {
                         </DropdownMenu>
                     </SettingRow>
                 ))}
-                {discovered.length > 0 && (
-                    <>
-                        <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-text-muted uppercase">
-                            <span>Discovered</span>
-                            <span className="text-text-muted">&middot;</span>
-                            <span className="text-xs font-normal normal-case">From .agents and .claude</span>
+                <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-text-muted uppercase">
+                    <span>Discovered</span>
+                    <span className="text-text-muted">&middot;</span>
+                    <span className="text-xs font-normal normal-case">From .agents and .claude</span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 ml-auto"
+                        aria-label="Scan for new skills"
+                        disabled={scanning}
+                        onClick={() => void refresh()}
+                    >
+                        <Icon icon={ArrowSync20Regular} className={cn(scanning && "animate-spin")} />
+                    </Button>
+                </div>
+                {discovered.length === 0 ? (
+                    <div className="px-3.5 pb-2.5 text-xs text-text-muted">
+                        {scanning ? "Scanning for skill files…" : "No skill files found in .agents or .claude."}
+                    </div>
+                ) : discovered.map((d) => (
+                    <SettingRow
+                        key={d.relPath}
+                        icon={Document20Regular}
+                        title={d.name}
+                        description={d.relPath + "  —  " + (d.status === "changed" ? "Already imported — reimport to replace" : "Not yet imported")}
+                    >
+                        <div className="flex items-center gap-1.5">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs"
+                                aria-label={d.status === "changed" ? ("Update " + d.name) : ("Import " + d.name)}
+                                onClick={() => {
+                                    addSkill(d.name, d.body);
+                                    setDiscovered((current) => current.filter((item) => item.relPath !== d.relPath));
+                                }}
+                            >
+                                {d.status === "changed" ? "Update" : "Import"}
+                            </Button>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-7 ml-auto"
-                                aria-label="Scan for new skills"
-                                disabled={scanning}
-                                onClick={() => void scan()}
+                                className="size-7"
+                                aria-label={"Dismiss " + d.name}
+                                onClick={() => {
+                                    dismissDiscoveredFile(d.projectPath, d.relPath);
+                                    setDiscovered((current) => current.filter((item) => item.relPath !== d.relPath));
+                                }}
                             >
-                                <Icon icon={ArrowSync20Regular} className={cn(scanning && "animate-spin")} />
+                                <Icon icon={Dismiss20Regular} />
                             </Button>
                         </div>
-                        {discovered.map((d) => (
-                            <SettingRow
-                                key={d.fileName}
-                                icon={Document20Regular}
-                                title={d.name}
-                                description={d.sourceDir + "/" + d.fileName + "  —  " + (d.status === "changed" ? "Updated on disk — reimport to apply" : "Not yet imported")}
-                            >
-                                <div className="flex items-center gap-1.5">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-xs"
-                                        aria-label={d.status === "changed" ? ("Update " + d.name) : ("Import " + d.name)}
-                                        onClick={() => {
-                                            addSkill(d.name, d.body);
-                                            setDiscovered(discovered.filter((x) => x.fileName !== d.fileName));
-                                        }}
-                                    >
-                                        {d.status === "changed" ? "Update" : "Import"}
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="size-7"
-                                        aria-label={"Dismiss " + d.name}
-                                        onClick={() => {
-                                            dismissDiscoveredFile(d.fileName);
-                                            setDiscovered(discovered.filter((x) => x.fileName !== d.fileName));
-                                        }}
-                                    >
-                                        <Icon icon={Dismiss20Regular} />
-                                    </Button>
-                                </div>
-                            </SettingRow>
-                        ))}
-                    </>
-                )}
+                    </SettingRow>
+                ))}
                 <SettingActionRow title="Add skill" icon={Add20Regular} onClick={() => inputRef.current?.click()} />
             </SettingCard>
         </SettingSection>
