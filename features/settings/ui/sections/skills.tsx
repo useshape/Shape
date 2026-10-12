@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjectState } from "@/lib/backend/project-state";
 import { addSkill, listSkills, removeSkill, subscribeSkills, type Skill } from "@/lib/chat/skills";
-import { discoverSkills, dismissDiscoveredFile, type SkillScan } from "@/lib/chat/discover-skills";
+import {
+    discoverSkills,
+    dismissDiscoveredFile,
+    reconcileImportedRow,
+    type SkillScan,
+} from "@/lib/chat/discover-skills";
 import { SettingActionRow, SettingCard, SettingRow, SettingSection } from "../shared/controls";
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
@@ -48,11 +53,20 @@ export function SkillsSettings() {
         setRefreshing(false);
     }, []);
 
-    /** Drop one discovered row after an Import or Dismiss, without rescanning. */
+    /** Drop one discovered row after a Dismiss, without rescanning. */
     const removeDiscoveredRow = useCallback((relPath: string) => {
         setScan((current) =>
             current ? { ...current, items: current.items.filter((item) => item.relPath !== relPath) } : current
         );
+    }, []);
+
+    /**
+     * Discard a scan that is still in flight. Its snapshot was taken before the
+     * action the user just took, so applying it would restore that row.
+     */
+    const discardPendingScan = useCallback(() => {
+        scanGen.current += 1;
+        setRefreshing(false);
     }, []);
 
     /** Rescan the open project for skill files (refresh button). */
@@ -159,8 +173,15 @@ export function SkillsSettings() {
                                 className="text-xs"
                                 aria-label={d.status === "changed" ? ("Update " + d.name) : ("Import " + d.name)}
                                 onClick={() => {
-                                    addSkill(d.name, d.body);
-                                    removeDiscoveredRow(d.relPath);
+                                    const saved = addSkill(d.name, d.body);
+                                    discardPendingScan();
+                                    // Other files with this skill ID are now updates,
+                                    // not fresh imports.
+                                    setScan((current) =>
+                                        current
+                                            ? { ...current, items: reconcileImportedRow(current.items, d.relPath, saved) }
+                                            : current
+                                    );
                                 }}
                             >
                                 {d.status === "changed" ? "Update" : "Import"}
@@ -172,6 +193,7 @@ export function SkillsSettings() {
                                 aria-label={"Dismiss " + d.name}
                                 onClick={() => {
                                     dismissDiscoveredFile(d.projectPath, d.relPath);
+                                    discardPendingScan();
                                     removeDiscoveredRow(d.relPath);
                                 }}
                             >
