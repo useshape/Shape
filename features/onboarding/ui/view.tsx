@@ -1,5 +1,6 @@
 "use client";
 
+import { ShapeLogo } from "@/components/ui/shape-logo";
 import { LoginPanel } from "./login-panel";
 import { OnboardingWindowChrome } from "./window-chrome";
 
@@ -13,13 +14,11 @@ export default function Onboarding() {
             <OnboardingWindowChrome />
             <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 py-10">
                 <div className="flex w-full max-w-sm flex-col items-center text-center">
-                    <h1 className="font-brand text-3xl font-medium tracking-tight text-text-primary">
-                        Sign in to Shape
+                    <ShapeLogo size={44} />
+                    <h1 className="mt-6 text-3xl font-normal tracking-tight text-text-primary">
+                        Continue to use shape
                     </h1>
-                    <p className="mt-2 text-sm text-text-muted">
-                        An account is required. Models, usage, and billing run through Shape.
-                    </p>
-                    <div className="mt-8 w-full">
+                    <div className="w-full">
                         <LoginPanel finishing={false} onSignedIn={() => {}} />
                     </div>
                 </div>

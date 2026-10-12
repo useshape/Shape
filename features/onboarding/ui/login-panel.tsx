@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Button, type ButtonStatus } from "@/components/ui/button";
 import { loginShape, useShapeAuth } from "@/lib/cloud/store";
+import { commands } from "@/lib/backend";
+import { SHAPE_API_BASE } from "@/lib/cloud/api";
 
 export function LoginPanel({
     finishing,
@@ -40,25 +42,21 @@ export function LoginPanel({
 
     return (
         <div className="flex w-full flex-col items-center text-center">
-            <Image
-                src="/logos/logo.svg"
-                alt="Shape"
-                width={20}
-                height={20}
-                priority
-                style={{ width: 20, height: "auto" }}
-                className="logo-invert"
-            />
-            <Button
+            <button
                 type="button"
-                size="lg"
-                className="mt-8 w-full"
+                className="mt-8 h-12 w-full rounded-full bg-white text-black hover:bg-white/90 font-normal"
                 disabled={busy || shapeAuth.loggedIn}
-                status={continueStatus}
                 onClick={() => void start()}
             >
-                Continue with Shape
-            </Button>
+                Sign in with shape
+            </button>
+            <button
+                type="button"
+                className="mt-5 text-sm font-light text-text-muted underline-offset-2 underline hover:text-text-primary hover:underline"
+                onClick={() => void commands.openUrlExternal(`${SHAPE_API_BASE}/signup`)}
+            >
+                Sign up
+            </button>
             {authError && !cancelled && !busy ? (
                 <p className="mt-3 text-sm text-error">{authError}</p>
             ) : null}
