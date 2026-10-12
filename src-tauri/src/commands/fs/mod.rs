@@ -676,7 +676,23 @@ fn windows_gui_exe(name: &str) -> String {
         "cursor" => "Cursor.exe",
         "code" => "Code.exe",
         "zed" => "Zed.exe",
-        _ => return name.to_string(),
+        "windsurf" => "Windsurf.exe",
+        "subl" => "sublime_text.exe",
+        "idea" => "idea64.exe",
+        "webstorm" => "webstorm64.exe",
+        "pycharm" => "pycharm64.exe",
+        "goland" => "goland64.exe",
+        "rider" => "rider64.exe",
+        "fleet" => "Fleet.exe",
+        "studio" => "studio64.exe",
+        "trae" => "Trae.exe",
+        "antigravity" => "Antigravity.exe",
+        "lapce" => "lapce.exe",
+        "nvim" => "nvim.exe",
+        "hx" => "hx.exe",
+        "emacs" => "emacs.exe",
+        "vim" => "vim.exe",
+        _ => "",
     };
     let output = Command::new("where").arg(name).output();
     let Ok(output) = output else {
@@ -688,14 +704,16 @@ fn windows_gui_exe(name: &str) -> String {
         if path.extension().and_then(|ext| ext.to_str()) == Some("exe") && path.is_file() {
             return path.to_string_lossy().to_string();
         }
-        let mut dir = path.parent();
-        for _ in 0..5 {
-            let Some(folder) = dir else { break };
-            let candidate = folder.join(exe_name);
-            if candidate.is_file() {
-                return candidate.to_string_lossy().to_string();
+        if !exe_name.is_empty() {
+            let mut dir = path.parent();
+            for _ in 0..5 {
+                let Some(folder) = dir else { break };
+                let candidate = folder.join(exe_name);
+                if candidate.is_file() {
+                    return candidate.to_string_lossy().to_string();
+                }
+                dir = folder.parent();
             }
-            dir = folder.parent();
         }
     }
     name.to_string()
@@ -724,26 +742,42 @@ pub async fn open_in_app(app: String, path: String) -> Result<(), AppError> {
         }
 
         let exe = match key.as_str() {
-            "cursor" => "cursor",
-            "vscode" | "code" => "code",
-            "zed" => "zed",
-            _ => {
-                return Err(AppError::Message(format!("Unknown app: {app}")));
-            }
+            "vscode" => "code",
+            other => other,
         };
 
         #[cfg(target_os = "macos")]
         {
             let bundle = match key.as_str() {
-                "cursor" => "Cursor",
-                "vscode" | "code" => "Visual Studio Code",
-                "zed" => "Zed",
-                _ => exe,
+                "cursor" => Some("Cursor"),
+                "vscode" | "code" => Some("Visual Studio Code"),
+                "zed" => Some("Zed"),
+                "windsurf" => Some("Windsurf"),
+                "subl" => Some("Sublime Text"),
+                "idea" => Some("IntelliJ IDEA"),
+                "webstorm" => Some("WebStorm"),
+                "pycharm" => Some("PyCharm"),
+                "goland" => Some("GoLand"),
+                "rider" => Some("Rider"),
+                "fleet" => Some("Fleet"),
+                "studio" => Some("Android Studio"),
+                "trae" => Some("Trae"),
+                "lapce" => Some("Lapce"),
+                "emacs" => Some("Emacs"),
+                "vim" => Some("MacVim"),
+                _ => None,
             };
-            Command::new("open")
-                .args(["-a", bundle, &path])
-                .spawn()
-                .map_err(|e| AppError::Io(e))?;
+            if let Some(bundle) = bundle {
+                Command::new("open")
+                    .args(["-a", bundle, &path])
+                    .spawn()
+                    .map_err(|e| AppError::Io(e))?;
+            } else {
+                Command::new(exe)
+                    .arg(&path)
+                    .spawn()
+                    .map_err(|e| AppError::Io(e))?;
+            }
             return Ok::<(), AppError>(());
         }
 
