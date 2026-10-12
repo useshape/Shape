@@ -128,6 +128,78 @@ describe("skills settings", () => {
         expect(host.textContent).toContain(".claude/guide.mdc");
     });
 
+    it("does not let a pending refresh bring back a row the user imported", async () => {
+        serve({ ".agents/guide.md": "guide body" });
+        await mount();
+        expect(buttonWithLabel(host, "Import guide")).toBeDefined();
+
+        // A refresh starts, but its result is only released after the import.
+        let releaseRefresh: (entries: { name: string; path: string; is_dir: boolean }[]) => void = () => {};
+        mocks.lsDir.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    releaseRefresh = resolve;
+                })
+        );
+        await act(async () => {
+            buttonWithLabel(host, "Scan for new skills")?.click();
+        });
+        await act(async () => {
+            buttonWithLabel(host, "Import guide")?.click();
+        });
+
+        expect(listSkills().map((skill) => skill.id)).toEqual(["guide"]);
+        await act(async () => {
+            releaseRefresh([{ name: "guide.md", path: `${PROJECT}/.agents/guide.md`, is_dir: false }]);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        expect(buttonWithLabel(host, "Import guide")).toBeUndefined();
+        expect(host.textContent).not.toContain(".agents/guide.md");
+    });
+
+    it("does not let a pending refresh bring back a dismissed row", async () => {
+        serve({ ".agents/guide.md": "guide body" });
+        await mount();
+
+        let releaseRefresh: (entries: { name: string; path: string; is_dir: boolean }[]) => void = () => {};
+        mocks.lsDir.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    releaseRefresh = resolve;
+                })
+        );
+        await act(async () => {
+            buttonWithLabel(host, "Scan for new skills")?.click();
+        });
+        await act(async () => {
+            buttonWithLabel(host, "Dismiss guide")?.click();
+        });
+        expect(buttonWithLabel(host, "Dismiss guide")).toBeUndefined();
+
+        await act(async () => {
+            releaseRefresh([{ name: "guide.md", path: `${PROJECT}/.agents/guide.md`, is_dir: false }]);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        expect(buttonWithLabel(host, "Dismiss guide")).toBeUndefined();
+        expect(host.textContent).not.toContain(".agents/guide.md");
+    });
+
+    it("offers the other file with the same skill ID as an update after import", async () => {
+        serve({ ".agents/guide.md": "agent body", ".claude/guide.mdc": "claude body" });
+        await mount();
+
+        await act(async () => {
+            buttonWithLabel(host, "Import guide")?.click();
+        });
+
+        expect(listSkills().map((skill) => skill.id)).toEqual(["guide"]);
+        expect(host.textContent).toContain(".claude/guide.mdc");
+        expect(buttonWithLabel(host, "Import guide")).toBeUndefined();
+        expect(buttonWithLabel(host, "Update guide")).toBeDefined();
+    });
+
     it("never offers rows for a project other than the one the panel shows", async () => {
         // The panel renders for OTHER_PROJECT while discovery still resolves
         // rows for the project the scanner reads.
