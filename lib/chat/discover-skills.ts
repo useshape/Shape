@@ -2,7 +2,7 @@
 
 import { commands } from "@/lib/backend/commands";
 import { getProjectPath } from "@/lib/backend/project-state";
-import { listSkills, skillIdFromName, skillTitle } from "@/lib/chat/skills";
+import { listSkills, skillIdFromName, skillTitle, type Skill } from "@/lib/chat/skills";
 
 export type DiscoveredSkill = {
     name: string;
@@ -42,10 +42,20 @@ export type SkillScan = {
 /** Prefix for the per-project localStorage key holding dismissed files. */
 const DISMISSED_KEY_PREFIX = "shape-dismissed-discovered:";
 
-/** Get the localStorage key that stores dismissed paths for one project. */
+/** Windows paths are case-insensitive; POSIX ones (Linux) are not. */
+function isCaseInsensitivePath(projectPath: string): boolean {
+    return projectPath.includes("\\") || /^[a-zA-Z]:/.test(projectPath);
+}
+
+/**
+ * Get the localStorage key that stores dismissed paths for one project. The
+ * path keeps its case everywhere except case-insensitive filesystems, so
+ * `/home/dev/Repo` and `/home/dev/repo` do not share dismissals on Linux.
+ */
 function dismissedKey(projectPath: string): string {
     // Scope by project path so dismissals don't leak between repos
-    return DISMISSED_KEY_PREFIX + projectPath.replace(/[\\/]+$/, "").toLowerCase();
+    const scoped = projectPath.replace(/[\\/]+$/, "");
+    return DISMISSED_KEY_PREFIX + (isCaseInsensitivePath(scoped) ? scoped.toLowerCase() : scoped);
 }
 
 /** Path separator used by the given project path. */
@@ -99,10 +109,12 @@ let nextScanGen = 0; // generation counter to discard stale concurrent scans
  * read, so callers never show one project's files as another's.
  */
 export async function discoverSkills(): Promise<SkillScan> {
+    // Supersede any scan still in flight, including when there is no project:
+    // closing a project must discard results the old project was reading.
+    const scanGen = ++nextScanGen;
+
     const projectPath = getProjectPath();
     if (!projectPath) return { projectPath: null, items: [] };
-
-    const scanGen = ++nextScanGen;
 
     const savedBySkillId = new Map<string, string>();
     for (const skill of listSkills()) {
@@ -158,5 +170,25 @@ export async function discoverSkills(): Promise<SkillScan> {
         }
     }
 
+    // The last read may have resolved after a newer scan started.
+    if (scanGen !== nextScanGen) return { projectPath, items: [] };
+
     return { projectPath, items: discovered };
+}
+
+/**
+ * Rows left after importing one of them: the imported row is gone, and rows
+ * that share its skill ID become updates (or disappear when they already match
+ * the body that was just saved), matching what a rescan would report.
+ */
+export function reconcileImportedRow(
+    items: DiscoveredSkill[],
+    relPath: string,
+    saved: Pick<Skill, "id" | "body">
+): DiscoveredSkill[] {
+    return items.flatMap((item) => {
+        if (item.relPath === relPath) return [];
+        if (skillIdFromName(item.fileName) !== saved.id) return [item];
+        return item.body === saved.body ? [] : [{ ...item, status: "changed" as const }];
+    });
 }

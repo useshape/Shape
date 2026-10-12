@@ -19,7 +19,7 @@ vi.mock("@/lib/backend/project-state", () => ({
     getProjectPath: mocks.getProjectPath,
 }));
 
-import { dismissDiscoveredFile, discoverSkills } from "@/lib/chat/discover-skills";
+import { dismissDiscoveredFile, discoverSkills, reconcileImportedRow } from "@/lib/chat/discover-skills";
 import { addSkill, listSkills, skillIdFromName } from "@/lib/chat/skills";
 
 /** Rows from a scan of the default project. */
@@ -37,16 +37,19 @@ function fileEntry(dir: string, name: string): Entry {
 }
 
 /** Serve directory listings and file bodies from a `.agents`/`.claude` fixture. */
-function serve(files: Record<string, string>) {
+function serve(files: Record<string, string>, project = PROJECT) {
     const dirs = [".agents", ".claude"];
+    const sep = project.includes("\\") ? "\\" : "/";
     mocks.lsDir.mockImplementation(async (path: string) => {
-        const dir = dirs.find((name) => path === `${PROJECT}/${name}`);
+        const dir = dirs.find((name) => path === `${project}${sep}${name}`);
         if (!dir) throw new Error(`no such directory: ${path}`);
         return Object.keys(files)
             .filter((file) => file.startsWith(`${dir}/`))
-            .map((file) => fileEntry(`${PROJECT}/${dir}`, file.slice(dir.length + 1)));
+            .map((file) => fileEntry(`${project}${sep}${dir}`, file.slice(dir.length + 1)));
     });
-    mocks.readFileFromDisk.mockImplementation(async (path: string) => files[path.slice(PROJECT.length + 1)]);
+    mocks.readFileFromDisk.mockImplementation(async (path: string) =>
+        files[path.slice(project.length + 1).replace(/\\/g, "/")]
+    );
 }
 
 beforeEach(() => {
@@ -135,6 +138,30 @@ describe("discoverSkills", () => {
         await expect(discoverItems()).resolves.toHaveLength(1);
     });
 
+    it("keeps case-sensitive project paths apart in dismissal keys", async () => {
+        serve({ ".agents/guide.md": "agent body" });
+        // /home/dev/DEMO is a different directory from /home/dev/demo on Linux.
+        dismissDiscoveredFile("/home/dev/DEMO", ".agents/guide.md");
+
+        await expect(discoverItems()).resolves.toHaveLength(1);
+    });
+
+    it("treats Windows project paths case-insensitively for dismissals", async () => {
+        mocks.getProjectPath.mockReturnValue("c:\\work\\demo");
+        serve({ ".agents/guide.md": "agent body" }, "c:\\work\\demo");
+        dismissDiscoveredFile("C:\\Work\\Demo", ".agents/guide.md");
+
+        await expect(discoverItems()).resolves.toEqual([]);
+    });
+
+    it("does not leak dismissals between projects onto case-insensitive setups", async () => {
+        mocks.getProjectPath.mockReturnValue("c:\\work\\other");
+        serve({ ".agents/guide.md": "agent body" }, "c:\\work\\other");
+        dismissDiscoveredFile("C:\\Work\\Demo", ".agents/guide.md");
+
+        await expect(discoverItems()).resolves.toHaveLength(1);
+    });
+
     it("skips unreadable and empty files", async () => {
         serve({ ".agents/empty.md": "   \n", ".agents/locked.md": "locked" });
         mocks.readFileFromDisk.mockImplementation(async (path: string) => {
@@ -158,6 +185,31 @@ describe("discoverSkills", () => {
 
         expect(discovered).toMatchObject({ relPath: ".agents/guide.md", body: "windows body" });
         expect(mocks.readFileFromDisk).toHaveBeenCalledWith(`${windowsProject}\\.agents\\guide.md`);
+    });
+
+    it("discards results when a newer scan starts during a file read", async () => {
+        let releaseRead: (body: string) => void = () => {};
+        let readStarted: () => void = () => {};
+        const started = new Promise<void>((resolve) => {
+            readStarted = resolve;
+        });
+        serve({ ".agents/guide.md": "guide body" });
+        mocks.readFileFromDisk.mockImplementation(
+            () =>
+                new Promise<string>((resolve) => {
+                    releaseRead = resolve;
+                    readStarted();
+                })
+        );
+
+        const stale = discoverSkills();
+        await started;
+        // Closing the project while the read is in flight supersedes the scan.
+        mocks.getProjectPath.mockReturnValue(null);
+        await expect(discoverSkills()).resolves.toEqual({ projectPath: null, items: [] });
+        releaseRead("guide body");
+
+        await expect(stale).resolves.toEqual({ projectPath: PROJECT, items: [] });
     });
 
     it("discards results from a scan that was superseded", async () => {
@@ -185,6 +237,39 @@ describe("discoverSkills", () => {
         serve({ ".agents/guide.md": "body" });
 
         await expect(discoverItems()).resolves.toHaveLength(1);
+    });
+});
+
+describe("reconcileImportedRow", () => {
+    /** A discovered row for `dir/file` with the given body. */
+    const row = (relPath: string, body: string, status: "new" | "changed" = "new") => ({
+        name: relPath.split("/")[1].replace(/\..*$/, ""),
+        body,
+        fileName: relPath.split("/")[1],
+        sourceDir: relPath.split("/")[0],
+        relPath,
+        projectPath: PROJECT,
+        status,
+    });
+
+    it("drops the imported row and reclassifies files that share its skill ID", () => {
+        const items = [
+            row(".agents/guide.md", "imported body"),
+            row(".claude/guide.mdc", "other body"),
+            row(".agents/notes.md", "notes"),
+        ];
+
+        const remaining = reconcileImportedRow(items, ".agents/guide.md", { id: "guide", body: "imported body" });
+
+        expect(remaining.map((item) => item.relPath)).toEqual([".claude/guide.mdc", ".agents/notes.md"]);
+        expect(remaining[0].status).toBe("changed");
+        expect(remaining[1].status).toBe("new");
+    });
+
+    it("drops files that already match the saved body", () => {
+        const items = [row(".claude/guide.mdc", "imported body")];
+
+        expect(reconcileImportedRow(items, ".agents/guide.md", { id: "guide", body: "imported body" })).toEqual([]);
     });
 });
 
