@@ -43,7 +43,7 @@ function save(next: Skill[]) {
 
 export function addSkill(name: string, body: string): Skill {
     const trimmed = body.trim();
-    const title = name.replace(/\.md$/i, "").trim() || "Skill";
+    const title = name.replace(/\.(md|mdc|txt)$/i, "").trim() || "Skill";
     const id = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
