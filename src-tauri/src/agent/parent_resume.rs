@@ -123,6 +123,8 @@ fn schedule_wake(app: AppHandle, id: String) {
 mod tests {
     use super::*;
 
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
     fn reset() {
         ACTIVE.lock().unwrap().clear();
         PENDING.lock().unwrap().clear();
@@ -131,6 +133,7 @@ mod tests {
 
     #[test]
     fn queues_while_parent_turn_is_active() {
+        let _lock = TEST_LOCK.lock().unwrap();
         reset();
         set_parent_turn_active(Some("abc"), true);
         enqueue_parent_message("abc", "done".into());
@@ -142,6 +145,7 @@ mod tests {
 
     #[test]
     fn ignores_worker_conversation_ids() {
+        let _lock = TEST_LOCK.lock().unwrap();
         reset();
         enqueue_parent_message("mw-worker-1", "x".into());
         enqueue_parent_message("sub-run-9", "y".into());
@@ -151,6 +155,7 @@ mod tests {
 
     #[test]
     fn coalesces_multiple_updates() {
+        let _lock = TEST_LOCK.lock().unwrap();
         reset();
         enqueue_parent_message("boss", "one".into());
         enqueue_parent_message("boss", "two".into());
