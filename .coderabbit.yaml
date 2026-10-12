@@ -1,0 +1,49 @@
+# https://docs.coderabbit.ai/getting-started/yaml-configuration
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  review_details: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+  path_filters:
+    - "!**/Cargo.lock"
+    - "!**/package-lock.json"
+    - "!src-tauri/runtime/**"
+    - "!src-tauri/target/**"
+    - "!**/*.tsbuildinfo"
+  path_instructions:
+    - path: "**/*.{ts,tsx,css}"
+      instructions: |
+        Shape is a Tauri + Next.js desktop agent. Dark-only. Copy existing UI.
+
+        Use `@/components/ui/*`. Fluent `Icon` from `@/components/ui/icon` (glyph component, not a string, not Lucide).
+        Semantic tokens only (`text-text-primary`, `bg-panel`, `border-border-subtle`). No shadcn, no raw gray/zinc classes.
+        Do not restyle dropdown/context menu shells at the call site.
+        Flag debug labels, cloud URLs, or env names in shipped UI.
+    - path: "src-tauri/**/*.rs"
+      instructions: |
+        Prefer small, tested command handlers. Do not invent IPC. Match existing error types in `src-tauri/src/core/error.rs`.
+        Call out panics on request paths and unwraps on user input.
+    - path: "**/*.{md,mdx}"
+      instructions: |
+        Shape is a desktop agent, not an IDE. Short, specific sentences. No filler.
+  slop_detection:
+    enabled: true
+    include_all_authors: true
+chat:
+  auto_reply: true
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    file_patterns:
+      - "AGENTS.md"
+      - ".cursor/rules/**/*.mdc"
+      - "CONTRIBUTING.md"
