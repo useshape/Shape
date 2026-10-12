@@ -421,15 +421,29 @@ pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
     .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))?
 }
 
+/// Canonicalize a path and re-check the resolved target against the credential
+/// policy, so a symlink inside a project (`.agents/notes.md` → `~/.ssh/id_rsa`)
+/// cannot alias a blocked file behind an innocuous name.
+fn resolve_allowed_target(path: &str) -> Result<PathBuf, AppError> {
+    let resolved = PathBuf::from(path).canonicalize().map_err(AppError::Io)?;
+    crate::agent::security::paths::assert_ipc_path_allowed(&resolved.to_string_lossy())?;
+    Ok(resolved)
+}
+
+/// Read a text file for the IDE. Paths are checked before and after resolving
+/// symlinks, so a link cannot smuggle in a credential file.
 pub async fn read_file(path: String) -> Result<String, AppError> {
     crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
-    let bytes = tokio::fs::read(&path).await.map_err(AppError::Io)?;
+    let resolved = resolve_allowed_target(&path)?;
+    let bytes = tokio::fs::read(&resolved).await.map_err(AppError::Io)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// Read raw bytes for the IDE (images, previews) under the same path policy.
 pub async fn read_file_bytes(path: String) -> Result<Vec<u8>, AppError> {
     crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
-    tokio::fs::read(&path).await.map_err(AppError::Io)
+    let resolved = resolve_allowed_target(&path)?;
+    tokio::fs::read(&resolved).await.map_err(AppError::Io)
 }
 
 pub async fn create_file(path: String) -> Result<(), AppError> {
