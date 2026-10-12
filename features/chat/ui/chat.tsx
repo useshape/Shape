@@ -292,8 +292,6 @@ export default function Chat({
             setSelectedMode={session.setSelectedMode}
             reasoningEffort={session.reasoningEffort}
             setReasoningEffort={session.setReasoningEffort}
-            fastMode={session.fastMode}
-            setFastMode={session.setFastMode}
             pendingEdits={session.pendingEdits}
             onAcceptAllEdits={() => void session.handleAcceptAll()}
             onRejectAllEdits={() => void session.handleRejectAll()}
@@ -367,7 +365,7 @@ export default function Chat({
                     }}
                     className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto no-scrollbar select-text", insetX)}
                 >
-                    <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-8 pt-5" : "pb-48 pt-12")}>
+                    <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-16 pt-5" : "pb-80 pt-12")}>
                         <ChatMessageList
                             messageGroups={session.messageGroups}
                             messages={session.messages}
@@ -384,8 +382,7 @@ export default function Chat({
                     </div>
                 </div>
                 <div
-                    className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-linear-to-b from-panel/50 to-transparent transition-opacity duration-200"
-                    style={{ opacity: session.scrolledFromTop ? 1 : 0 }}
+                    className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-linear-to-b from-panel to-transparent"
                     aria-hidden
                 />
                 {turnCount >= 2 && !embedded ? (

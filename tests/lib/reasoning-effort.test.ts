@@ -3,6 +3,7 @@ import { effortDisplayLabel } from "@/features/chat/ui/composer/reasoning-effort
 
 describe("reasoning effort labels", () => {
     it("maps Extra High to max", () => {
+        expect(effortDisplayLabel("super")).toBe("Super");
         expect(effortDisplayLabel("max")).toBe("Extra High");
         expect(effortDisplayLabel("ultra")).toBe("High");
         expect(effortDisplayLabel("high")).toBe("Medium");

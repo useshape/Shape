@@ -1,0 +1,92 @@
+.rainbow {
+  background-image: linear-gradient(
+    90deg,
+    #4cc9f0 0%,
+    #80ed99 10%,
+    #ffb703 20%,
+    #ff4d6d 30%,
+    #c77dff 40%,
+    #4cc9f0 50%,
+    #80ed99 60%,
+    #ffb703 70%,
+    #ff4d6d 80%,
+    #c77dff 90%,
+    #4cc9f0 100%
+  );
+  background-size: 200% 100%;
+  animation: rainbow 2.8s linear infinite;
+}
+
+.particle {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 999px;
+  background: #fff;
+  opacity: 0;
+  animation: fly 1.7s linear infinite;
+}
+
+.particleB {
+  width: 2px;
+  height: 2px;
+  animation-duration: 2.2s;
+  animation-delay: 0.45s;
+}
+
+.particleC {
+  animation-duration: 1.35s;
+  animation-delay: 0.9s;
+}
+
+/* 35px thumb centered on the 6px track. */
+.range {
+  appearance: none;
+  background: transparent;
+  height: 6px;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 35px;
+  height: 35px;
+  margin-top: calc((6px - 35px) / 2);
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.range::-moz-range-track {
+  height: 6px;
+  background: transparent;
+  border: none;
+}
+
+.range::-moz-range-thumb {
+  width: 35px;
+  height: 35px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes rainbow {
+  from { background-position: 0% 0; }
+  to { background-position: 100% 0; }
+}
+
+@keyframes fly {
+  0% { left: 0; opacity: 0; }
+  18% { opacity: 0.95; }
+  100% { left: calc(100% - 3px); opacity: 0; }
+}

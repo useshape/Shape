@@ -1242,10 +1242,10 @@ fn get_model_max_tokens(model: &str) -> u32 {
     }
 }
 
-/// UI effort (`low` | `high` | `ultra` | `max`) → OpenRouter effort string.
+/// UI effort (`low` | `high` | `ultra` | `max` | `super`) → OpenRouter effort string.
 fn openrouter_effort(user_effort: Option<&str>) -> &'static str {
     match user_effort.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
-        Some("max") | Some("ultra") | Some("xhigh") => "xhigh",
+        Some("super") | Some("max") | Some("ultra") | Some("xhigh") => "xhigh",
         Some("high") | Some("medium") => "high",
         // fast / low / missing
         _ => "low",
@@ -1257,11 +1257,16 @@ fn openrouter_effort(user_effort: Option<&str>) -> &'static str {
 fn reasoning_config_for_model(model: &str, user_effort: Option<&str>) -> Option<Value> {
     let m = model.to_lowercase();
     let effort = openrouter_effort(user_effort);
-    // Gemini uses token budget instead of effort strings.
-    let gemini_budget = match effort {
-        "xhigh" => 24576,
-        "high" => 16384,
-        _ => 4096,
+    let raw = user_effort.map(|s| s.trim().to_ascii_lowercase());
+    // Gemini uses token budget instead of effort strings. Super asks for a larger budget.
+    let gemini_budget = if raw.as_deref() == Some("super") {
+        32768
+    } else {
+        match effort {
+            "xhigh" => 24576,
+            "high" => 16384,
+            _ => 4096,
+        }
     };
     if m.contains("gemini") {
         Some(json!({ "max_tokens": gemini_budget }))

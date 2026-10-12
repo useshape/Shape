@@ -92,6 +92,7 @@ pub async fn send_chat_message(
         .filter(|s| !s.is_empty())
         .unwrap_or("low");
     let effort_norm = match effort_raw.to_ascii_lowercase().as_str() {
+        "super" => "super",
         "max" => "max",
         "ultra" => "ultra",
         "high" | "medium" => "high",

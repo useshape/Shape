@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { ArrowUp20Regular } from "@fluentui/react-icons/headless/svg/arrow-up";
@@ -21,7 +21,6 @@ import { Connected24Filled, Connected24Regular } from "@fluentui/react-icons/hea
 import { DocumentEdit24Filled, DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
 import { MoviesAndTv24Filled, MoviesAndTv24Regular } from "@fluentui/react-icons/headless/svg/movies-and-tv";
 import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
-import { Mic20Regular } from "@fluentui/react-icons/headless/svg/mic";
 
 
 
@@ -89,13 +88,11 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { microphoneConstraints, microphoneErrorMessage, useSettings } from "@/lib/settings";
+import { useSettings } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
-import { notify } from "@/features/notifications";
-import { commands } from "@/lib/backend";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SearchInput } from "@/components/ui/search";
-import { REASONING_EFFORTS, effortDisplayLabel, type ReasoningEffort } from "./reasoning-effort";
+import { effortDisplayLabel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
+import { ThinkingEffortControl } from "./thinking-bar";
 export type { ReasoningEffort };
 
 type ChatInputProps = {
@@ -121,9 +118,6 @@ type ChatInputProps = {
     setSelectedMode: (m: string) => void;
     reasoningEffort: ReasoningEffort;
     setReasoningEffort: (e: ReasoningEffort) => void;
-    /** OpenRouter priority / Fast — independent of reasoning effort. */
-    fastMode: boolean;
-    setFastMode: (v: boolean) => void;
     pendingEdits?: { id: string; file: string; original: string; replacement: string; baseline?: string }[];
     onAcceptAllEdits?: () => void;
     onRejectAllEdits?: () => void;
@@ -353,8 +347,7 @@ function SwapText({
         const measureNew = measureNewRef.current;
         if (!wrap || !measureNew) return;
         const wNew = measureNew.getBoundingClientRect().width;
-        const wOld = measureOldRef.current?.getBoundingClientRect().width ?? 0;
-        const natural = leaving ? Math.max(wOld, wNew) : wNew;
+        const natural = wNew;
 
         let constraint: HTMLElement | null = wrap.parentElement;
         let maxInner = Number.POSITIVE_INFINITY;
@@ -472,7 +465,7 @@ function RotatingComposerHint({ paused }: { paused: boolean }) {
     }, [paused]);
 
     return (
-        <div className="t-composer-hint" aria-hidden>
+        <div className="t-composer-hint pl-3" aria-hidden>
             <span className="text-sm text-text-muted" data-phase={phase}>
                 {COMPOSER_HINTS[index]}
             </span>
@@ -532,317 +525,6 @@ function ModeMenu({
     );
 }
 
-type SpeechRec = {
-    continuous: boolean;
-    interimResults: boolean;
-    lang: string;
-    start: () => void;
-    stop: () => void;
-    onresult: ((event: SpeechResultEvent) => void) | null;
-    onerror: ((event: { error?: string }) => void) | null;
-    onend: (() => void) | null;
-};
-
-type SpeechResultEvent = {
-    resultIndex: number;
-    results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
-};
-
-function speechRecognition(): (new () => SpeechRec) | null {
-    if (typeof window === "undefined") return null;
-    const host = window as Window & {
-        SpeechRecognition?: new () => SpeechRec;
-        webkitSpeechRecognition?: new () => SpeechRec;
-    };
-    return host.SpeechRecognition || host.webkitSpeechRecognition || null;
-}
-
-function WaveIcon() {
-    return (
-        <span className="flex h-3.5 items-center gap-0.5" aria-hidden>
-            {[0, 1, 2, 3].map((i) => (
-                <span
-                    key={i}
-                    className="t-wave-bar h-3.5 w-0.5 rounded-full bg-current"
-                    style={{ animationDelay: `${i * 0.12}s` }}
-                />
-            ))}
-        </span>
-    );
-}
-
-const DICTATION_RATE = 16000;
-
-function resampleLinear(samples: Float32Array, fromRate: number, toRate: number): Float32Array {
-    if (fromRate === toRate || samples.length === 0) return samples;
-    const outLen = Math.max(1, Math.round((samples.length * toRate) / fromRate));
-    const out = new Float32Array(outLen);
-    const step = fromRate / toRate;
-    for (let i = 0; i < outLen; i++) {
-        const pos = i * step;
-        const left = Math.floor(pos);
-        const right = Math.min(left + 1, samples.length - 1);
-        const frac = pos - left;
-        const a = samples[left] ?? 0;
-        const b = samples[right] ?? 0;
-        out[i] = a + (b - a) * frac;
-    }
-    return out;
-}
-
-function wavPcm(samples: Float32Array, rate: number): number[] {
-    const dataSize = samples.length * 2;
-    const buffer = new ArrayBuffer(44 + dataSize);
-    const view = new DataView(buffer);
-    const write = (offset: number, text: string) => {
-        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
-    };
-    write(0, "RIFF");
-    view.setUint32(4, 36 + dataSize, true);
-    write(8, "WAVE");
-    write(12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, rate, true);
-    view.setUint32(28, rate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    write(36, "data");
-    view.setUint32(40, dataSize, true);
-    let offset = 44;
-    for (let i = 0; i < samples.length; i++) {
-        const sample = Math.max(-1, Math.min(1, samples[i] ?? 0));
-        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-        offset += 2;
-    }
-    return Array.from(new Uint8Array(buffer));
-}
-
-/** Records the page microphone and hands short clips to the system recognizer. */
-function startMicCapture(deviceId: string, onClip: (wav: number[]) => void): () => void {
-    let stopped = false;
-    let chunks: Float32Array[] = [];
-    let voiced = 0;
-    let quiet = 0;
-    const pending: Promise<void>[] = [];
-    let processor: ScriptProcessorNode | null = null;
-    let stream: MediaStream | null = null;
-    let ctx: AudioContext | null = null;
-
-    const flush = (rate: number) => {
-        if (voiced < rate * 0.3) {
-            chunks = [];
-            voiced = 0;
-            quiet = 0;
-            return;
-        }
-        const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-        const merged = new Float32Array(total);
-        let at = 0;
-        for (const chunk of chunks) {
-            merged.set(chunk, at);
-            at += chunk.length;
-        }
-        chunks = [];
-        voiced = 0;
-        quiet = 0;
-        const speech = resampleLinear(merged, rate, DICTATION_RATE);
-        pending.push(Promise.resolve(onClip(wavPcm(speech, DICTATION_RATE))));
-    };
-
-    void navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints(deviceId) }).then((next) => {
-        if (stopped) {
-            next.getTracks().forEach((track) => track.stop());
-            return;
-        }
-        stream = next;
-        ctx = new AudioContext();
-        void ctx.resume();
-        const rate = ctx.sampleRate || 48000;
-        const source = ctx.createMediaStreamSource(next);
-        const mute = ctx.createGain();
-        mute.gain.value = 0;
-        processor = ctx.createScriptProcessor(4096, 1, 1);
-        processor.onaudioprocess = (event) => {
-            if (stopped) return;
-            const input = event.inputBuffer.getChannelData(0);
-            let energy = 0;
-            for (let i = 0; i < input.length; i++) energy += (input[i] ?? 0) * (input[i] ?? 0);
-            const rms = Math.sqrt(energy / input.length);
-            if (rms > 0.02) {
-                chunks.push(new Float32Array(input));
-                voiced += input.length;
-                quiet = 0;
-            } else if (voiced > 0) {
-                quiet += input.length;
-                if (quiet > rate * 0.65) flush(rate);
-            }
-            if (voiced > rate * 6) flush(rate);
-        };
-        source.connect(processor);
-        processor.connect(mute);
-        mute.connect(ctx.destination);
-    }).catch((err) => {
-        notify.warn(microphoneErrorMessage(err));
-        onClip([]);
-    });
-
-    return () => {
-        stopped = true;
-        if (ctx) flush(ctx.sampleRate || 48000);
-        processor?.disconnect();
-        stream?.getTracks().forEach((track) => track.stop());
-        void ctx?.close();
-    };
-}
-
-/** Dictates into the composer. Interim text is replaced as the phrase settles. */
-function VoiceInputButton({
-    disabled,
-    value,
-    onChange,
-}: {
-    disabled?: boolean;
-    value: string;
-    onChange: (next: string) => void;
-}) {
-    const [listening, setListening] = React.useState(false);
-    const recRef = React.useRef<SpeechRec | null>(null);
-    const unlistenRef = React.useRef<UnlistenFn[]>([]);
-    const captureStop = React.useRef<(() => void) | null>(null);
-    const baseRef = React.useRef("");
-    const finalRef = React.useRef("");
-    const deviceId = useSettings().voice.deviceId;
-
-    const stopNative = () => {
-        captureStop.current?.();
-        captureStop.current = null;
-        unlistenRef.current.forEach((unlisten) => unlisten());
-        unlistenRef.current = [];
-        void commands.dictationStop().catch(() => undefined);
-    };
-
-    React.useEffect(() => {
-        return () => {
-            recRef.current?.stop();
-            stopNative();
-        };
-    }, []);
-
-    const write = (spoken: string) => {
-        const base = baseRef.current;
-        const gap = base && spoken && !/\s$/.test(base) ? " " : "";
-        onChange(base + gap + spoken);
-    };
-
-    const toggle = () => {
-        if (listening) {
-            recRef.current?.stop();
-            stopNative();
-            setListening(false);
-            return;
-        }
-        baseRef.current = value;
-        finalRef.current = "";
-        void (async () => {
-            try {
-                const onText = await listen<string>("dictation-text", (event) => {
-                    const piece = event.payload.trim();
-                    if (!piece) return;
-                    if (piece.startsWith("ERR ")) {
-                        notify.warn(piece.slice(4));
-                        return;
-                    }
-                    finalRef.current = finalRef.current ? `${finalRef.current} ${piece}` : piece;
-                    write(finalRef.current);
-                });
-                const onError = await listen<string>("dictation-error", (event) => {
-                    notify.warn(event.payload || "Dictation couldn't start.");
-                    stopNative();
-                    setListening(false);
-                });
-                unlistenRef.current = [onText, onError];
-                await commands.dictationStart();
-                captureStop.current = startMicCapture(deviceId, (wav) => {
-                    if (wav.length < 64) {
-                        stopNative();
-                        setListening(false);
-                        return;
-                    }
-                    void commands.dictationPush(wav).catch(() => undefined);
-                });
-                setListening(true);
-                return;
-            } catch (err) {
-                stopNative();
-                const message = typeof err === "string" ? err : err instanceof Error ? err.message : "Dictation couldn't start.";
-                if (!/isn't available/i.test(message)) {
-                    notify.warn(message);
-                    return;
-                }
-            }
-            startWebSpeech();
-        })();
-    };
-
-    const startWebSpeech = () => {
-        const Ctor = speechRecognition();
-        if (!Ctor) {
-            notify.warn("Speech to text isn't available in this window.");
-            return;
-        }
-        const rec = new Ctor();
-        rec.continuous = true;
-        rec.interimResults = true;
-        rec.lang = navigator.language || "en-US";
-        baseRef.current = value;
-        finalRef.current = "";
-        rec.onresult = (event) => {
-            let interim = "";
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const piece = event.results[i]?.[0]?.transcript ?? "";
-                if (event.results[i]?.isFinal) finalRef.current += piece;
-                else interim += piece;
-            }
-            write(finalRef.current + interim);
-        };
-        rec.onerror = (event) => {
-            if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-                notify.warn("Allow microphone access to dictate.");
-            } else if (event.error && event.error !== "aborted" && event.error !== "no-speech") {
-                notify.warn("Speech recognition isn't available in this window.");
-            }
-            setListening(false);
-        };
-        rec.onend = () => setListening(false);
-        try {
-            rec.start();
-        } catch {
-            notify.warn("Dictation couldn't start.");
-            return;
-        }
-        recRef.current = rec;
-        setListening(true);
-    };
-
-    return (
-        <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            disabled={disabled}
-            onClick={toggle}
-            aria-label={listening ? "Stop dictation" : "Dictate"}
-            className={cn(
-                "size-8 shrink-0 text-text-muted hover:text-text-primary",
-                listening && "text-accent hover:text-accent",
-            )}
-        >
-            {listening ? <WaveIcon /> : <Icon icon={Mic20Regular} />}
-        </Button>
-    );
-}
 
 export function ChatInput({
     inputValue,
@@ -864,8 +546,6 @@ export function ChatInput({
     setSelectedMode,
     reasoningEffort,
     setReasoningEffort,
-    fastMode,
-    setFastMode,
     pendingEdits = [],
     onAcceptAllEdits,
     onRejectAllEdits,
@@ -999,12 +679,27 @@ export function ChatInput({
         onKeyDown(e);
     }, [mentionOpen, slashOpen, onKeyDown]);
 
+    const [composerTall, setComposerTall] = React.useState(false);
+
+    React.useEffect(() => {
+        if (reasoningEffort === "super" && !modelSupportsSuperThinking(selectedModel)) {
+            setReasoningEffort("max");
+        }
+    }, [reasoningEffort, selectedModel, setReasoningEffort]);
+
     React.useEffect(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-        textarea.style.height = "24px";
-        textarea.style.overflowY = "hidden";
-        textarea.style.overflowX = "auto";
+        const line = 24;
+        const max = 220;
+        textarea.style.height = "0px";
+        const content = textarea.scrollHeight;
+        const tall = content > line + 2 || inputValue.includes("\n");
+        const next = tall ? Math.min(Math.max(content, line), max) : line;
+        textarea.style.height = `${next}px`;
+        textarea.style.overflowY = content > max ? "auto" : "hidden";
+        textarea.style.overflowX = "hidden";
+        setComposerTall(tall);
         revealComposerCaret(textarea);
         syncComposerOverlayScroll(textarea, mentionOverlayRef.current);
     }, [inputValue]);
@@ -1192,9 +887,6 @@ export function ChatInput({
         multiSelectModels && workerExtra.length > 0
             ? `${modelNameBase} +${workerExtra.length}`
             : modelNameBase;
-    const modelTriggerLabel = [modelName, effortDisplayLabel(reasoningEffort), fastMode ? "Fast" : null]
-        .filter(Boolean)
-        .join(" ");
     const providerOrder = React.useMemo(() => {
         const seen = new Set<string>();
         const order: string[] = [];
@@ -1330,9 +1022,9 @@ export function ChatInput({
                 <div
                     ref={composerBoxRef}
                     className={cn(
-                        "relative flex w-full flex-col border transition-colors rounded-full p-1.5",
+                        "relative flex w-full flex-col border transition-colors p-1.5",
                         "border-border-subtle/40 bg-surface-4",
-                        uploadedFiles.length > 0 && "rounded-[22px]",
+                        composerTall || uploadedFiles.length > 0 ? "rounded-xl" : "rounded-full",
                         dragOver && "bg-surface-3/80",
                         needsSignIn && "cursor-default",
                     )}
@@ -1366,7 +1058,7 @@ export function ChatInput({
                             setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
                         }
                     />
-                    <div className="relative flex h-11 min-h-11 items-center gap-1 pl-1.5 pr-1.5">
+                    <div className={cn("relative flex gap-1 px-1.5", composerTall ? "items-end" : "h-11 items-center")}>
                         <input
                             type="file"
                             id="chat-media-upload"
@@ -1398,7 +1090,7 @@ export function ChatInput({
                             <DropdownMenuTrigger asChild>
                                 <button
                                     className={cn(
-                                        "size-9 shrink-0 p-0 mr-2",
+                                        "size-9 shrink-0 p-0",
                                         "text-text-muted hover:text-text-primary",
                                         "rounded-full bg-panel-hover hover:bg-panel-active",
                                     )}
@@ -1507,18 +1199,18 @@ export function ChatInput({
                                 </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <div className="relative h-6 min-w-0 flex-1">
+                        <div className="relative min-h-6 min-w-0 flex-1">
                         {!needsSignIn && !inputValue ? (
                             <RotatingComposerHint paused={false} />
                         ) : needsSignIn && !inputValue ? (
-                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center text-sm font-medium leading-6 text-text-muted">
+                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-6 text-text-muted">
                                 Sign in to use the chat
                             </div>
                         ) : null}
                         <div
                             ref={mentionOverlayRef}
                             aria-hidden
-                            className="pointer-events-none absolute inset-0 z-0 overflow-x-auto overflow-y-hidden whitespace-pre text-sm font-medium leading-6 text-text-primary no-scrollbar"
+                            className="pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words pl-3 text-sm font-medium leading-6 text-text-primary"
                         >
                             {(() => {
                                 const mentionRs = mentionRanges(inputValue);
@@ -1595,7 +1287,7 @@ export function ChatInput({
                                             : COMPOSER_HINTS[0]
                                     }
                                     rows={1}
-                                    className="relative z-[1] h-6 min-h-6 w-full flex-1 resize-none overflow-x-auto overflow-y-hidden border-none bg-transparent text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-nowrap no-scrollbar"
+                                    className="relative z-[1] block h-6 min-h-6 w-full resize-none overflow-x-hidden border-none bg-transparent py-0 pl-3 text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-pre-wrap break-words"
                                     style={{ caretColor: "var(--text-primary)" }}
                                 />
                             </ContextMenuTrigger>
@@ -1646,39 +1338,6 @@ export function ChatInput({
                             </ContextMenuContent>
                         </ContextMenu>
                         </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="xs"
-                                    className="h-8 shrink-0 px-2 font-medium text-text-primary hover:bg-transparent"
-                                    aria-label="Fast"
-                                    disabled={needsSignIn}
-                                >
-                                    <span className="text-sm">{fastMode ? "Fast" : "Standard"}</span>
-                                    <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60 icon-md" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
-                                <DropdownMenuItem onClick={() => setFastMode(true)}>
-                                    <span className="flex-1 text-sm">Fast</span>
-                                    {fastMode ? <Icon icon={Checkmark20Regular} /> : null}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFastMode(false)}>
-                                    <span className="flex-1 text-sm">Standard</span>
-                                    {!fastMode ? <Icon icon={Checkmark20Regular} /> : null}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <VoiceInputButton
-                            disabled={needsSignIn}
-                            value={inputValue}
-                            onChange={(next) =>
-                                onInputChange({
-                                    target: { value: next },
-                                } as React.ChangeEvent<HTMLTextAreaElement>)
-                            }
-                        />
                         <button
                             type="button"
                             onClick={() => {
@@ -1736,8 +1395,8 @@ export function ChatInput({
                                 <Button
                                     variant="ghost"
                                     size="xs"
-                                    className="h-8 max-w-[260px] px-2 font-medium text-text-primary hover:text-text-primary"
-                                    aria-label={modelTriggerLabel}
+                                    className="h-8 max-w-[220px] px-2 font-normal text-text-muted hover:text-text-primary hover:bg-transparent"
+                                    aria-label={modelName}
                                 >
                                     <div className="flex min-w-0 items-center gap-1.5 text-sm">
                                         {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
@@ -1745,42 +1404,10 @@ export function ChatInput({
                                         {isApiModel(modelInfo) ? (
                                             <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
                                         ) : null}
-                                        <SwapText value={effortDisplayLabel(reasoningEffort)} />
-                                        <Icon icon={ChevronDown20Regular} className="shrink-0 opacity-60 icon-md" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-[200px]">
-                                <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
-                                        <span className="text-sm text-text-primary">Effort</span>
-                                        <span className="flex min-w-0 items-center gap-1 text-sm text-text-muted">
-                                            <SwapText value={effortDisplayLabel(reasoningEffort)} />
-                                        </span>
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-44">
-                                        {REASONING_EFFORTS.map((stop) => (
-                                            <DropdownMenuItem
-                                                key={stop.value}
-                                                onClick={() => setReasoningEffort(stop.value)}
-                                            >
-                                                <span className="flex-1 text-sm">{stop.label}</span>
-                                                {reasoningEffort === stop.value ? (
-                                                    <Icon icon={Checkmark20Regular} className="shrink-0 opacity-60 icon-md" />
-                                                ) : null}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-
-                                <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5">
-                                        <span className="text-sm text-text-primary">Model</span>
-                                        <span className="min-w-0 truncate text-sm text-text-muted">
-                                            {selectedModel === "auto" ? "Auto" : modelInfo.name}
-                                        </span>
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-60">
+                            <DropdownMenuContent align="end" className="w-70">
                                         <SearchInput
                                             borderless
                                             placeholder="Search models"
@@ -1899,10 +1526,14 @@ export function ChatInput({
                                                 </div>
                                             ) : null}
                                         </div>
-                                    </DropdownMenuSubContent>
-                                </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        <ThinkingEffortControl
+                            effort={reasoningEffort}
+                            modelId={selectedModel}
+                            onChange={setReasoningEffort}
+                            disabled={needsSignIn}
+                        />
                     </div>
                 </div>
             </div>
