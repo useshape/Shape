@@ -229,8 +229,13 @@ Continue with other files or answer from what you already have.",
 
 /// Model often narrates the next step ("Let me try the edit again") as plain text
 /// and then the turn ends because text-without-tools is treated as completion.
+/// Only the tail counts — a finished answer that mentions "I'll implement…" mid-body
+/// is not unfinished, and nudging it makes the model repeat the whole reply.
 fn looks_like_incomplete_work(content: &str) -> bool {
-    let lower = content.to_lowercase();
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
     const MARKERS: &[&str] = &[
         "let me ",
         "i'll ",
@@ -262,7 +267,49 @@ fn looks_like_incomplete_work(content: &str) -> bool {
         "one sec",
         "give me a moment",
     ];
-    MARKERS.iter().any(|m| lower.contains(m))
+    let last_line = trimmed
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or(trimmed)
+        .trim()
+        .to_lowercase();
+    if !MARKERS.iter().any(|m| last_line.contains(m)) {
+        return false;
+    }
+    // A long finished write-up can mention "I'll implement…" in a step. Only treat
+    // it as unfinished when the last line is a short next-step pledge.
+    let chars = trimmed.chars().count();
+    let ends_complete = matches!(trimmed.as_bytes().last(), Some(b'.' | b'!' | b'?' | b'`'));
+    if chars >= 280 && ends_complete && last_line.chars().count() >= 80 {
+        return false;
+    }
+    true
+}
+
+/// True when `incoming` is the same user-facing prose we already showed.
+fn is_repeat_prose(existing: &str, incoming: &str) -> bool {
+    let incoming = strip_tool_markup(incoming);
+    if incoming.chars().count() < 48 {
+        return false;
+    }
+    let existing = strip_tool_markup(existing);
+    if existing.contains(&incoming) {
+        return true;
+    }
+    let prefix: String = incoming.chars().take(240).collect();
+    prefix.chars().count() >= 80 && existing.contains(&prefix)
+}
+
+/// After a real answer, skip the "nothing more to do / answer is up above" reprise.
+fn is_redundant_coda(existing: &str, incoming: &str) -> bool {
+    if !has_substantive_text(existing) {
+        return false;
+    }
+    let lower = strip_tool_markup(incoming).to_lowercase();
+    lower.contains("nothing more to do")
+        || lower.contains("the answer is up above")
+        || lower.contains("that was a question, not a change request")
 }
 
 fn tool_result_looks_failed(result: &str) -> bool {
@@ -376,6 +423,9 @@ async fn force_text_response(
     if config.cancel.is_cancelled() {
         return;
     }
+    if has_substantive_text(final_full_response) {
+        return;
+    }
     config.proxy_ctx.refresh_request_id();
     config.api_messages.push(json!({
         "role": "user",
@@ -398,7 +448,10 @@ async fn force_text_response(
             record_usage(config, outcome.input_tokens, outcome.output_tokens);
             *total_input_tokens += outcome.input_tokens;
             *total_output_tokens += outcome.output_tokens;
-            if !outcome.content.trim().is_empty() {
+            if !outcome.content.trim().is_empty()
+                && !is_repeat_prose(final_full_response, &outcome.content)
+                && !is_redundant_coda(final_full_response, &outcome.content)
+            {
                 final_full_response.push_str(&outcome.content);
             } else if outcome.content.trim().is_empty() {
                 // fall through to synthesize below
@@ -659,12 +712,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             // Final answers always land in the reply. Brief mid-tool checkpoints
             // (Cursor-style sanity notes) also surface; long essays stay API-only.
             if outcome.tool_calls.is_empty() || streaming::is_brief_checkpoint(&outcome.content) {
-                if !outcome.tool_calls.is_empty() && !final_full_response.ends_with('\n') {
-                    final_full_response.push('\n');
-                }
-                final_full_response.push_str(&outcome.content);
-                if !outcome.tool_calls.is_empty() {
-                    final_full_response.push_str("\n\n");
+                if !is_repeat_prose(&final_full_response, &outcome.content)
+                    && !is_redundant_coda(&final_full_response, &outcome.content)
+                {
+                    if !outcome.tool_calls.is_empty() && !final_full_response.ends_with('\n') {
+                        final_full_response.push('\n');
+                    }
+                    final_full_response.push_str(&outcome.content);
+                    if !outcome.tool_calls.is_empty() {
+                        final_full_response.push_str("\n\n");
+                    }
                 }
             }
         }
@@ -964,14 +1021,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         consecutive_readonly_rounds
                     ),
                 );
-                force_text_response(
-                    &mut config,
-                    &mut final_full_response,
-                    &mut total_input_tokens,
-                    &mut total_output_tokens,
-                    NUDGE_CONCISE_USER_REPLY,
-                )
-                .await;
+                if !has_substantive_text(&final_full_response) {
+                    force_text_response(
+                        &mut config,
+                        &mut final_full_response,
+                        &mut total_input_tokens,
+                        &mut total_output_tokens,
+                        NUDGE_CONCISE_USER_REPLY,
+                    )
+                    .await;
+                }
                 break 'outer;
             }
             if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {
@@ -1373,14 +1432,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                         consecutive_readonly_rounds
                     ),
                 );
-                force_text_response(
-                    &mut config,
-                    &mut final_full_response,
-                    &mut total_input_tokens,
-                    &mut total_output_tokens,
-                    NUDGE_CONCISE_USER_REPLY,
-                )
-                .await;
+                if !has_substantive_text(&final_full_response) {
+                    force_text_response(
+                        &mut config,
+                        &mut final_full_response,
+                        &mut total_input_tokens,
+                        &mut total_output_tokens,
+                        NUDGE_CONCISE_USER_REPLY,
+                    )
+                    .await;
+                }
                 break;
             }
             if consecutive_readonly_rounds >= readonly_nudge_after(config.mode) && !explore_nudge_sent {
@@ -1655,5 +1716,41 @@ mod file_cache_tests {
         assert!(total <= MAX_FILE_CACHE_BYTES);
         assert!(cache.contains_key("c.rs"));
         assert!(cache.len() <= 2);
+    }
+}
+
+#[cfg(test)]
+mod reply_dedupe_tests {
+    use super::*;
+
+    #[test]
+    fn finished_howto_with_ill_is_not_incomplete() {
+        let body = "\
+This IDE has a few modes, and design work lives in Visual mode.\n\
+1. Switch modes via the mode selector.\n\
+2. In Visual mode, design-adjacent things become available.\n\
+3. Tell me what you want changed and I'll implement it following your existing UI patterns, then you can see it in the preview.";
+        assert!(!looks_like_incomplete_work(body));
+    }
+
+    #[test]
+    fn trailing_let_me_is_incomplete() {
+        assert!(looks_like_incomplete_work("Found the bug. Let me try the edit again"));
+    }
+
+    #[test]
+    fn restated_answer_is_repeat_prose() {
+        let first = "Design mode lives in Visual mode. Switch with the mode selector.";
+        let again = "Design mode lives in Visual mode. Switch with the mode selector.\n\nNothing more to do here.";
+        assert!(is_repeat_prose(first, first));
+        assert!(is_repeat_prose(again, first));
+    }
+
+    #[test]
+    fn coda_after_answer_is_redundant() {
+        let first = "Design mode lives in Visual mode. Switch with the mode selector.";
+        let coda = "Nothing more to do here — that was a question, not a change request. The answer is up above.";
+        assert!(is_redundant_coda(first, coda));
+        assert!(!is_redundant_coda("", coda));
     }
 }
