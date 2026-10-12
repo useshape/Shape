@@ -5,7 +5,7 @@ If you're using version 1.0.0 or 1.0.1, we recommend manually updating to 1.0.2 
 
 <img src="./docs/logo/icon.svg" width="36" alt="Shape">
 
-A desktop agent. Open a folder and describe the work. Keep or skip the diffs.
+A desktop agent for all your coding needs, plus so much more.
 
 [Website](https://useshape.org) · [Docs](https://useshape.org/docs) · [Download](https://useshape.org/download) · [Discord](https://discord.gg/MMCEDVZKYf)
 
