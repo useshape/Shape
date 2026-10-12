@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const MAX_TICKS = 40;
 const LOCK_MS = 480;
@@ -55,7 +56,7 @@ export function ChatHistoryStepper({
     return (
         <div
             className={cn(
-                "flex h-full min-h-0 w-4 flex-col items-end justify-center gap-1 select-none",
+                "flex h-full min-h-0 w-4 flex-col items-end justify-center gap-2.5 select-none",
                 className,
             )}
             role="navigation"
@@ -65,23 +66,23 @@ export function ChatHistoryStepper({
                 const active = turnIdx === activeIndex;
                 const label = truncateTurnLabel(turnLabels?.[turnIdx] || `Turn ${turnIdx + 1}`);
                 return (
-                    <button
-                        key={turnIdx}
-                        type="button"
-                        title={label}
-                        aria-label={label}
-                        aria-current={active ? "true" : undefined}
-                        onClick={() => onSelect(turnIdx)}
-                        className="flex h-1 w-4 shrink-0 items-center justify-end"
-                    >
-                        <span
-                            className={cn(
-                                "block h-px rounded-full",
-                                active ? "bg-text-primary" : "bg-text-muted/45 hover:bg-text-muted",
-                            )}
-                            style={{ width: active ? W_ACTIVE : W_IDLE }}
-                        />
-                    </button>
+                    <Tooltip key={turnIdx} content={label} shortcut="" side="left" delayDuration={180}>
+                        <button
+                            type="button"
+                            aria-label={label}
+                            aria-current={active ? "true" : undefined}
+                            onClick={() => onSelect(turnIdx)}
+                            className="flex h-1 w-4 shrink-0 items-center justify-end"
+                        >
+                            <span
+                                className={cn(
+                                    "block h-px rounded-full",
+                                    active ? "bg-text-primary" : "bg-text-muted/45 hover:bg-text-muted",
+                                )}
+                                style={{ width: active ? W_ACTIVE : W_IDLE }}
+                            />
+                        </button>
+                    </Tooltip>
                 );
             })}
         </div>
