@@ -44,7 +44,7 @@ export function ChatMessageList({
                         <div
                             key={`turn-${group[0]?.msg.timestamp ?? groupIdx}`}
                             data-chat-turn={groupIdx}
-                            className="relative mb-3 flex flex-col gap-2 first:mt-2 scroll-mt-4"
+                            className="relative mb-3 flex flex-col gap-2 first:mt-2 last:mb-10 scroll-mt-4"
                         >
                             {group.map(({ msg, msgIdx }) => {
                                 const isGen =
@@ -79,7 +79,7 @@ export function ChatMessageList({
                     ))}
                 </>
             )}
-            <div ref={messagesEndRef} className="h-10 shrink-0" aria-hidden />
+            <div ref={messagesEndRef} className="h-28 shrink-0" aria-hidden />
         </>
     );
 }
