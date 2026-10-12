@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useProjectState } from "@/lib/backend/project-state";
 import { addSkill, listSkills, removeSkill, subscribeSkills, type Skill } from "@/lib/chat/skills";
-import { discoverSkills, dismissDiscoveredFile, type DiscoveredSkill } from "@/lib/chat/discover-skills";
+import { discoverSkills, dismissDiscoveredFile, type SkillScan } from "@/lib/chat/discover-skills";
 import { SettingActionRow, SettingCard, SettingRow, SettingSection } from "../shared/controls";
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
@@ -19,45 +20,64 @@ import {
 } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 
+/** Scan result for a project with no rows (a scan that failed, or none open). */
+function emptyScan(projectPath: string | null): SkillScan {
+    return { projectPath, items: [] };
+}
+
 /**
  * Settings → Skills. Lists the saved skills and scans the project's `.agents/`
  * and `.claude/` directories for skill files that can be imported.
  */
 export function SkillsSettings() {
+    const { project_path: projectPath } = useProjectState();
     const [skills, setSkills] = useState<Skill[]>(() => listSkills());
-    const [discovered, setDiscovered] = useState<DiscoveredSkill[]>([]);
-    // A scan runs on mount, so the panel starts in the scanning state and the
-    // mount effect never needs to set state synchronously.
-    const [scanning, setScanning] = useState(true);
+    const [scan, setScan] = useState<SkillScan | null>(null);
+    // Spinner for manual refreshes. A project change does not need one: its
+    // rows stop matching `projectPath`, so the panel scans again on its own.
+    const [refreshing, setRefreshing] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const scanGen = useRef(0);
 
     useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
 
-    /** Apply scan results, ignoring results from a superseded scan. */
-    const applyScan = useCallback((token: number, result: DiscoveredSkill[]) => {
+    /** Record a scan, ignoring results from a superseded scan. */
+    const applyScan = useCallback((token: number, result: SkillScan) => {
         if (token !== scanGen.current) return;
-        setDiscovered(result);
-        setScanning(false);
+        setScan(result);
+        setRefreshing(false);
     }, []);
 
-    /** Rescan the project for skill files (refresh button). */
+    /** Drop one discovered row after an Import or Dismiss, without rescanning. */
+    const removeDiscoveredRow = useCallback((relPath: string) => {
+        setScan((current) =>
+            current ? { ...current, items: current.items.filter((item) => item.relPath !== relPath) } : current
+        );
+    }, []);
+
+    /** Rescan the open project for skill files (refresh button). */
     const refresh = useCallback(async () => {
-        setScanning(true);
+        setRefreshing(true);
         const token = ++scanGen.current;
         try {
             applyScan(token, await discoverSkills());
         } catch {
-            applyScan(token, []);
+            applyScan(token, emptyScan(projectPath));
         }
-    }, [applyScan]);
+    }, [applyScan, projectPath]);
 
     useEffect(() => {
+        // Reruns when the open project changes, and the token invalidates any
+        // scan still in flight for the previous one.
         const token = ++scanGen.current;
         void discoverSkills()
             .then((result) => applyScan(token, result))
-            .catch(() => applyScan(token, []));
-    }, [applyScan]);
+            .catch(() => applyScan(token, emptyScan(projectPath)));
+    }, [applyScan, projectPath]);
+
+    // Rows are only offered for the project the scan actually read.
+    const discovered = scan && scan.projectPath === projectPath ? scan.items : [];
+    const scanning = refreshing || !scan || scan.projectPath !== projectPath;
 
     return (
         <SettingSection
@@ -119,7 +139,11 @@ export function SkillsSettings() {
                 </div>
                 {discovered.length === 0 ? (
                     <div className="px-3.5 pb-2.5 text-xs text-text-muted">
-                        {scanning ? "Scanning for skill files…" : "No skill files found in .agents or .claude."}
+                        {scanning
+                            ? "Scanning for skill files…"
+                            : projectPath
+                              ? "No skill files found in .agents or .claude."
+                              : "Open a folder to discover skills."}
                     </div>
                 ) : discovered.map((d) => (
                     <SettingRow
@@ -136,7 +160,7 @@ export function SkillsSettings() {
                                 aria-label={d.status === "changed" ? ("Update " + d.name) : ("Import " + d.name)}
                                 onClick={() => {
                                     addSkill(d.name, d.body);
-                                    setDiscovered((current) => current.filter((item) => item.relPath !== d.relPath));
+                                    removeDiscoveredRow(d.relPath);
                                 }}
                             >
                                 {d.status === "changed" ? "Update" : "Import"}
@@ -148,7 +172,7 @@ export function SkillsSettings() {
                                 aria-label={"Dismiss " + d.name}
                                 onClick={() => {
                                     dismissDiscoveredFile(d.projectPath, d.relPath);
-                                    setDiscovered((current) => current.filter((item) => item.relPath !== d.relPath));
+                                    removeDiscoveredRow(d.relPath);
                                 }}
                             >
                                 <Icon icon={Dismiss20Regular} />

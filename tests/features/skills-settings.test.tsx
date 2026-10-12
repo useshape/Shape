@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
     lsDir: vi.fn(),
     readFileFromDisk: vi.fn(),
     getProjectPath: vi.fn(),
+    projectState: vi.fn(),
 }));
 
 vi.mock("@/lib/backend/commands", () => ({
@@ -17,12 +18,14 @@ vi.mock("@/lib/backend/commands", () => ({
 
 vi.mock("@/lib/backend/project-state", () => ({
     getProjectPath: mocks.getProjectPath,
+    useProjectState: mocks.projectState,
 }));
 
 import { SkillsSettings } from "@/features/settings/ui/sections/skills";
 import { listSkills } from "@/lib/chat/skills";
 
 const PROJECT = "/home/dev/demo";
+const OTHER_PROJECT = "/home/dev/other";
 
 /** Serve `.agents`/`.claude` listings and file bodies from a fixture. */
 function serve(files: Record<string, string>) {
@@ -56,6 +59,8 @@ describe("skills settings", () => {
         mocks.readFileFromDisk.mockReset();
         mocks.getProjectPath.mockReset();
         mocks.getProjectPath.mockReturnValue(PROJECT);
+        mocks.projectState.mockReset();
+        mocks.projectState.mockReturnValue({ project_path: PROJECT, open_files: [], active_file: null });
         host = document.createElement("div");
         document.body.appendChild(host);
         root = createRoot(host);
@@ -118,5 +123,27 @@ describe("skills settings", () => {
         expect(dismissButtons(host)).toHaveLength(1);
         expect(host.textContent).not.toContain(".agents/guide.md");
         expect(host.textContent).toContain(".claude/guide.mdc");
+    });
+
+    it("never offers rows for a project other than the one the panel shows", async () => {
+        // The panel renders for OTHER_PROJECT while discovery still resolves
+        // rows for the project the scanner reads.
+        mocks.projectState.mockReturnValue({ project_path: OTHER_PROJECT, open_files: [], active_file: null });
+        serve({ ".agents/guide.md": "guide body" });
+        await mount();
+
+        expect(mocks.lsDir).toHaveBeenCalledWith(`${PROJECT}/.agents`);
+        expect(host.textContent).not.toContain(".agents/guide.md");
+        expect(buttonWithLabel(host, "Import guide")).toBeUndefined();
+    });
+
+    it("asks for a folder when no project is open", async () => {
+        mocks.projectState.mockReturnValue({ project_path: null, open_files: [], active_file: null });
+        mocks.getProjectPath.mockReturnValue(null);
+        serve({});
+        await mount();
+
+        expect(host.textContent).toContain("Open a folder to discover skills.");
+        expect(buttonWithLabel(host, "Scan for new skills")).toBeDefined();
     });
 });
