@@ -25,7 +25,7 @@ tauri = { version = "2.11.1", features = ["protocol-asset", "unstable", "devtool
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 portable-pty = "0.9.0"
-git2 = "0.19"
+git2 = "0.20"
 regex = "1"
 fsindex = "0.3.1"
 fst = "0.4.7"
