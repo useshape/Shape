@@ -2,7 +2,7 @@
 
 Shape is a desktop agent. You get chat, files, Git, and a terminal in one Windows app. Contributors keep the app in that shape.
 
-By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). [BUSL-1.1](./LICENSE) covers code you send.
+By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). See [BUSL-1.1](./LICENSE) for the project's license.
 
 ## What helps
 
@@ -21,7 +21,7 @@ A change counts as large when it does any of these:
 
 - Adds a new product surface
 - Rewrites an existing flow
-- Spreads across several of chat, Git, the editor, the terminal, and the Rust agent
+- Spreads across several of chat, Git, the editor, the terminal, LSP, settings, and the Rust agent
 
 ## CI, release, and repo policy
 
