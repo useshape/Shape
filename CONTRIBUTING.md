@@ -17,7 +17,9 @@ File an issue before a large feature. Say the problem and the intended behavior.
 
 ## Pull requests
 
-Open a PR for bugfixes and small changes. Review happens when someone has time. Pinging does not jump the queue.
+`main` is protected. Open a PR. Direct pushes are rejected.
+
+CodeRabbit reviews every PR. CI runs `npm run test:all`. Address both before merge.
 
 - One concern per PR
 - Say what you changed and how you checked it
@@ -84,7 +86,7 @@ Release notes group by area. Prefer:
 area: short summary
 ```
 
-Examples: `agent: …`, `git: …`, `docs: …`. If the change closes a GitHub issue, put `Closes #N` in the body. See [COMMIT.md](./COMMIT.md).
+Examples: `agent: …`, `git: …`, `docs: …`. If the change closes a GitHub issue, put `Closes #N` in the body. See [AGENTS.md](./AGENTS.md).
 
 Keep `package.json`, Tauri, and Cargo versions in sync with `npm run sync-version` when you bump the app.
 

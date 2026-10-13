@@ -159,7 +159,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // fs
             commands::ipc::filesystem::ls_dir,
+            commands::ipc::filesystem::home_dir,
             commands::ipc::filesystem::read_file,
+            commands::ipc::filesystem::read_file_within,
+            commands::ipc::filesystem::ensure_path_within,
             commands::ipc::filesystem::read_file_bytes,
             commands::ipc::filesystem::create_file,
             commands::ipc::filesystem::create_dir,
