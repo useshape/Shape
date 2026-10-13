@@ -12,6 +12,9 @@ pub struct IndexedChunk {
     pub text: String,
     pub term_freqs: HashMap<String, u32>,
     pub length: usize,
+    /// Stable id sent to the website. Zero means this chunk has never been uploaded.
+    #[serde(default)]
+    pub remote_id: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -56,17 +59,28 @@ impl Bm25Index {
         self.avg_doc_len = total as f64 / self.chunks.len() as f64;
     }
 
-    pub fn remove_paths(&mut self, paths: &std::collections::HashSet<String>) {
+    pub fn remove_paths(&mut self, paths: &std::collections::HashSet<String>) -> Vec<u32> {
         if paths.is_empty() {
-            return;
+            return Vec::new();
         }
+        let mut removed_ids = Vec::new();
         let kept: Vec<IndexedChunk> = self
             .chunks
             .drain(..)
-            .filter(|c| !paths.contains(&c.path))
+            .filter(|c| {
+                if paths.contains(&c.path) {
+                    if c.remote_id != 0 {
+                        removed_ids.push(c.remote_id);
+                    }
+                    false
+                } else {
+                    true
+                }
+            })
             .collect();
         self.chunks = kept;
         self.rebuild_inverted();
+        removed_ids
     }
 
     pub fn rebuild_inverted(&mut self) {
@@ -154,7 +168,13 @@ pub fn tokenize(text: &str) -> Vec<String> {
     terms
 }
 
-pub fn build_indexed_chunk(path: &str, start_line: usize, end_line: usize, text: &str) -> IndexedChunk {
+pub fn build_indexed_chunk(
+    path: &str,
+    start_line: usize,
+    end_line: usize,
+    text: &str,
+    remote_id: u32,
+) -> IndexedChunk {
     let terms = tokenize(text);
     let mut term_freqs: HashMap<String, u32> = HashMap::new();
     for t in terms {
@@ -167,6 +187,7 @@ pub fn build_indexed_chunk(path: &str, start_line: usize, end_line: usize, text:
         text: text.to_string(),
         length: term_freqs.values().sum::<u32>() as usize,
         term_freqs,
+        remote_id,
     }
 }
 

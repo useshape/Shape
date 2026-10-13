@@ -2,10 +2,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Bump when index.bin can no longer be read. A mismatch forces a local rebuild.
+pub const INDEX_FORMAT: u32 = 2;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct IndexManifest {
     pub files: HashMap<String, u64>,
     pub last_indexed_at: Option<f64>,
+    #[serde(default)]
+    pub format: u32,
+    #[serde(default)]
+    pub next_remote_id: u32,
+    /// True until the website has accepted one full upload of the current ids.
+    #[serde(default)]
+    pub needs_full_sync: bool,
 }
 
 impl IndexManifest {

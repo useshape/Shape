@@ -26,7 +26,7 @@ pub struct RemoteSearchHit {
     pub score: f32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncChunkPayload {
     pub chunk_index: usize,
@@ -42,6 +42,8 @@ struct SyncBody {
     project_key: String,
     full_replace: bool,
     chunks: Vec<SyncChunkPayload>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    remove_chunk_indices: Vec<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -146,8 +148,9 @@ impl RemoteIndexClient {
         &self,
         chunks: Vec<SyncChunkPayload>,
         full_replace: bool,
+        remove_chunk_indices: Vec<u32>,
     ) -> Result<usize, String> {
-        if chunks.is_empty() && !full_replace {
+        if chunks.is_empty() && remove_chunk_indices.is_empty() && !full_replace {
             return Ok(0);
         }
         if !self.is_available() {
@@ -159,6 +162,7 @@ impl RemoteIndexClient {
             project_key: self.project_key.clone(),
             full_replace,
             chunks,
+            remove_chunk_indices,
         };
 
         let resp = self
