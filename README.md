@@ -1,5 +1,5 @@
 
-If you're using version 1.0.0 or 1.0.1, we recommend manually updating to 1.0.2 for fixed performance and a fix for the updater.
+If you're using version 1.0.0, 1.0.1, or 1.0.2, we recommend manually updating to 1.0.3.
 
 # Shape
 
