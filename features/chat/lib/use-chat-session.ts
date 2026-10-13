@@ -4,8 +4,7 @@ import React from "react";
 import { listen } from "@tauri-apps/api/event";
 import { commands, Conversation, useProjectState } from "@/lib/backend";
 import { useChatStream } from "./chat-stream-store";
-import { NEW_CHAT_TAB_ID, DEMO_CHAT_TAB_ID, isEphemeralChatTabId, type ChatTab } from "../ui/shell/tabs";
-import { buildDemoChatMessages, isDemoChatPinned, setDemoChatPinned } from "./demo-chat";
+import { NEW_CHAT_TAB_ID, isEphemeralChatTabId, type ChatTab } from "../ui/shell/tabs";
 import { openChatHistoryMenu } from "../ui/shell/history";
 import { parseMessageContent, type Chunk } from "../ui/md/renderer";
 import {
@@ -85,7 +84,7 @@ function writePersistedChatTabs(
 ) {
     try {
         const persistable = tabs.filter(
-            (t) => t.id !== DEMO_CHAT_TAB_ID && (!isEphemeralChatTabId(t.id) || t.id === NEW_CHAT_TAB_ID),
+            (t) => !isEphemeralChatTabId(t.id) || t.id === NEW_CHAT_TAB_ID,
         );
         const nextActive = persistable.some((tab) => tab.id === activeId)
             ? activeId
@@ -260,11 +259,11 @@ export function useChatSession() {
         void (async () => {
             const persisted = readPersistedChatTabs(project_path);
             if (persisted) {
-                const tabs = persisted.tabs.filter((t) => t.id !== DEMO_CHAT_TAB_ID);
+                const tabs = persisted.tabs.filter((t) => t.id !== "__demo_chat__");
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
                     tabs.unshift({ id: NEW_CHAT_TAB_ID, title: "New Chat" });
                 }
-                const activeId = persisted.activeId === DEMO_CHAT_TAB_ID ? NEW_CHAT_TAB_ID : persisted.activeId;
+                const activeId = persisted.activeId === "__demo_chat__" ? NEW_CHAT_TAB_ID : persisted.activeId;
                 setOpenChatTabs(tabs);
                 setActiveChatTabId(activeId);
                 if (activeId !== NEW_CHAT_TAB_ID && !isEphemeralChatTabId(activeId)) {
@@ -646,7 +645,6 @@ export function useChatSession() {
 
     const refreshHistory = React.useCallback(
         async (reloadConversation = false) => {
-            if (activeChatTabIdRef.current === DEMO_CHAT_TAB_ID || isDemoChatPinned()) return;
             if (isLoadingRef.current && !reloadConversation) {
                 await syncFromBackend();
                 await refreshMetadata();
@@ -1394,33 +1392,9 @@ export function useChatSession() {
         };
     }, [syncOpenTabs]);
 
-    const openDemoChat = React.useCallback(() => {
-        setDemoChatPinned(true);
-        setSendError(null);
-        clearAllDesignPreviewSessions();
-        setContextSummarized(false);
-        setMessages(buildDemoChatMessages());
-        setChatTitle("Demo");
-        setConversationId(DEMO_CHAT_TAB_ID);
-        setCurrentConversationId(DEMO_CHAT_TAB_ID);
-        setActiveChatTabId(DEMO_CHAT_TAB_ID);
-        setOpenChatTabs((prev) => {
-            const others = prev.filter((tab) => tab.id !== DEMO_CHAT_TAB_ID && tab.id !== NEW_CHAT_TAB_ID);
-            return [{ id: DEMO_CHAT_TAB_ID, title: "Demo" }, ...others];
-        });
-        window.dispatchEvent(new Event("shape-chat-focus-input"));
-    }, [setMessages, setContextSummarized]);
-
-    React.useEffect(() => {
-        const onDemo = () => openDemoChat();
-        window.addEventListener("shape-demo-chat", onDemo);
-        return () => window.removeEventListener("shape-demo-chat", onDemo);
-    }, [openDemoChat]);
-
     const handleNewChat = async () => {
         try {
             // Do not stop background generation; only the Stop button cancels.
-            setDemoChatPinned(false);
             startDraftChat();
             await commands.newChat();
             if (!isIncognitoChat()) void captureTelemetry("chat_new");
@@ -1457,11 +1431,6 @@ export function useChatSession() {
             await handleNewChat();
             return;
         }
-        if (tabId === DEMO_CHAT_TAB_ID) {
-            openDemoChat();
-            return;
-        }
-        setDemoChatPinned(false);
         if (resumeLiveConversation(tabId)) {
             setConversationId(tabId);
             setCurrentConversationId(tabId);
@@ -1483,7 +1452,6 @@ export function useChatSession() {
     };
 
     const handleCloseChatTab = async (tabId: string) => {
-        if (tabId === DEMO_CHAT_TAB_ID) setDemoChatPinned(false);
         if (isIncognitoChat() && tabId === conversationIdRef.current) {
             await purgeIncognitoConversation(tabId);
             await setIncognitoChat(false);
@@ -1543,7 +1511,6 @@ export function useChatSession() {
 
     const handleLoadConversation = React.useCallback(
         async (id: string, options?: { force?: boolean }) => {
-            if (id !== DEMO_CHAT_TAB_ID) setDemoChatPinned(false);
             const isSameConversation = id === conversationIdRef.current;
             const hasVisibleMessages = messagesRef.current.length > 0;
             if (resumeLiveConversation(id)) {

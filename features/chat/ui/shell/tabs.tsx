@@ -42,11 +42,8 @@ export type ChatTab = {
 /** Draft / unsaved conversation sentinel — still used by the chat session store. */
 export const NEW_CHAT_TAB_ID = "__new_chat__";
 
-/** In-memory demo conversation (not persisted to disk). */
-export const DEMO_CHAT_TAB_ID = "__demo_chat__";
-
 export function isEphemeralChatTabId(id: string): boolean {
-    return id === NEW_CHAT_TAB_ID || id === DEMO_CHAT_TAB_ID;
+    return id === NEW_CHAT_TAB_ID;
 }
 
 function SortableChatTab({
