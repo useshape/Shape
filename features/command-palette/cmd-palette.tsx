@@ -53,6 +53,9 @@ interface EditorAction {
     archive?: () => void;
 }
 
+type PaletteGroup = Pick<EditorAction, "id" | "label" | "section" | "model" | "meta"> & { group: true };
+type PaletteRow = EditorAction | PaletteGroup;
+
 type PaletteFilter = "all" | "files";
 
 const PALETTE_TAB_QUERIES = new Set(["all", "agents", "files", "actions", "settings"]);
@@ -188,7 +191,7 @@ export function CommandPalette() {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [actions, setActions] = useState<EditorAction[]>([]);
-    const [agentActions, setAgentActions] = useState<EditorAction[]>([]);
+    const [agentActions, setAgentActions] = useState<PaletteRow[]>([]);
     const [fileActions, setFileActions] = useState<EditorAction[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [mode, setMode] = useState<string>("");
@@ -274,7 +277,7 @@ export function CommandPalette() {
                 import("@/features/agent/subagents/store"),
             ]).then(([convs, sub]) => {
                 const live = sub.getSubagents();
-                const actions: EditorAction[] = [];
+                const actions: PaletteRow[] = [];
                 const ordered = [
                     ...convs.filter((c) => !c.archived).slice(0, 12),
                     ...convs.filter((c) => c.archived).slice(0, 8),
@@ -350,10 +353,9 @@ export function CommandPalette() {
                         {
                             id: "agent:live-parent",
                             label: "Current chat",
-                            shortcut: "",
                             section: "Recent Agents",
                             model: "auto",
-                            run: () => {},
+                            group: true,
                         },
                         ...leftover.map((child) => ({
                             id: `agent:live-parent:sub:${child.id}`,
@@ -507,7 +509,7 @@ export function CommandPalette() {
                 .map((entry) => entry.action);
         }
 
-        let pool: EditorAction[] = [];
+        let pool: PaletteRow[] = [];
         if (filterTab === "all") {
             const fileSlice = fileActions.slice(0, activeFileBias ? 6 : 8);
             const actionSlice = query.trim()
@@ -553,6 +555,11 @@ export function CommandPalette() {
         query,
     ]);
 
+    const selectableActions = useMemo(
+        () => filtered.filter((row): row is EditorAction => "run" in row),
+        [filtered],
+    );
+
     useEffect(() => {
         setSelectedIndex(0);
     }, [filterTab, query, open]);
@@ -577,7 +584,7 @@ export function CommandPalette() {
     const onInputKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "ArrowDown") {
             e.preventDefault();
-            setSelectedIndex((idx) => Math.min(idx + 1, Math.max(filtered.length - 1, 0)));
+            setSelectedIndex((idx) => Math.min(idx + 1, Math.max(selectableActions.length - 1, 0)));
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
             setSelectedIndex((idx) => Math.max(idx - 1, 0));
@@ -595,8 +602,8 @@ export function CommandPalette() {
                 }));
                 return;
             }
-            if (filtered.length > 0 && selectedIndex < filtered.length) {
-                runAction(filtered[selectedIndex]);
+            if (selectableActions.length > 0 && selectedIndex < selectableActions.length) {
+                runAction(selectableActions[selectedIndex]);
             }
         }
     };
@@ -646,10 +653,28 @@ export function CommandPalette() {
                                       : "No matching results"}
                             </div>
                         )}
-                        {filtered.map((action, idx) => {
+                        {filtered.map((action) => {
                             const section = showSections ? action.section : undefined;
                             const showHeader = Boolean(section && section !== lastSection);
                             if (section) lastSection = section;
+                            if (!("run" in action)) {
+                                return (
+                                    <React.Fragment key={action.id}>
+                                        {showHeader ? (
+                                            <div className="px-3 pb-1 pt-2 text-sm font-medium text-text-muted">
+                                                {section}
+                                            </div>
+                                        ) : null}
+                                        <div className="mx-1 flex min-w-0 items-center gap-2 rounded-md px-3 py-1.5 text-text-secondary">
+                                            <span className="flex size-4 shrink-0 items-center justify-center">
+                                                {providerIcon(action.model || "auto", 14)}
+                                            </span>
+                                            <span className="min-w-0 truncate text-sm">{action.label}</span>
+                                        </div>
+                                    </React.Fragment>
+                                );
+                            }
+                            const idx = selectableActions.indexOf(action);
                             return (
                                 <React.Fragment key={action.id}>
                                     {showHeader ? (
