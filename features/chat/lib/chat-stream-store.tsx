@@ -5,9 +5,9 @@ import { listen } from "@tauri-apps/api/event";
 import { commands } from "@/lib/backend";
 import type { ChatMessage } from "@/lib/backend/types";
 import { setChatGenerating } from "./generating-chats";
-import { isDemoChatPinned } from "./demo-chat";
 import { NEW_CHAT_TAB_ID } from "../ui/shell/tabs";
 import { upsertTaggedBlockInContent } from "./upsert-stream-blocks";
+
 function isForeignConversation(id?: string | null) {
     return Boolean(id && id.startsWith("mw-worker-"));
 }
@@ -198,14 +198,12 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
     }, [applyLive]);
 
     const syncFromBackend = React.useCallback(async () => {
-        if (isDemoChatPinned()) return;
         try {
             const [history, gen, convId] = await Promise.all([
                 commands.getChatHistory(),
                 commands.getChatGenerationState(),
                 commands.getCurrentConversationId().catch(() => null),
             ]);
-            if (isDemoChatPinned()) return;
             viewingIdRef.current = convId ?? null;
 
             if (gen.isGenerating && gen.conversationId && !ignoredIdsRef.current.has(gen.conversationId)) {

@@ -346,20 +346,14 @@ export function CommandPalette() {
                     (c) => !actions.some((a) => a.id.endsWith(`:sub:${c.id}`)),
                 );
                 if (leftover.length > 0) {
-                    const parentLabel =
-                        leftover[0]?.parentId === "__demo_chat__" ? "Demo" : "Current chat";
                     actions.unshift(
                         {
                             id: "agent:live-parent",
-                            label: parentLabel,
+                            label: "Current chat",
                             shortcut: "",
                             section: "Recent Agents",
                             model: "auto",
-                            run: () => {
-                                if (leftover[0]?.parentId === "__demo_chat__") {
-                                    window.dispatchEvent(new CustomEvent("shape-demo-chat"));
-                                }
-                            },
+                            run: () => {},
                         },
                         ...leftover.map((child) => ({
                             id: `agent:live-parent:sub:${child.id}`,
@@ -369,9 +363,6 @@ export function CommandPalette() {
                             model: child.model || "auto",
                             reply: true,
                             run: () => {
-                                if (child.parentId === "__demo_chat__") {
-                                    window.dispatchEvent(new CustomEvent("shape-demo-chat"));
-                                }
                                 window.setTimeout(() => {
                                     window.dispatchEvent(
                                         new CustomEvent("shape-open-subagent", {
@@ -806,19 +797,6 @@ function getAppCommands(): EditorAction[] {
                 window.dispatchEvent(
                     new CustomEvent("shape-command-palette", { detail: { mode: "files" } }),
                 ),
-        },
-        {
-            id: "app.chat.openDemo",
-            label: "Chat: Open Demo",
-            shortcut: "",
-            run: () => {
-                window.dispatchEvent(
-                    new CustomEvent("shape-layout-toggle", {
-                        detail: { id: "secondary-sidebar", value: true },
-                    }),
-                );
-                window.dispatchEvent(new CustomEvent("shape-demo-chat"));
-            },
         },
         {
             id: "app.file.recentFiles",
