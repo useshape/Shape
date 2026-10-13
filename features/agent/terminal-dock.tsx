@@ -185,18 +185,16 @@ export function TerminalDock() {
     return (
         <div
             className={cn(
-                "relative z-20 shrink-0 border border-border m-3 squircle-2xl",
-                open ? "px-2 pb-2" : "pointer-events-none",
+                "relative z-20 shrink-0 overflow-hidden",
+                "transition-[height,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                open ? "m-3" : "pointer-events-none m-0",
+                resizing && "transition-none",
             )}
+            style={{ height: open ? height + 10 : 0 }}
             aria-hidden={!open}
         >
             <div
-                className={cn(
-                    "relative flex flex-col overflow-hidden rounded-xl bg-sidebar",
-                    "transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                    resizing && "transition-none",
-                )}
-                style={{ height: open ? height : 0 }}
+                className="relative flex h-full flex-col overflow-hidden rounded-xl squircle-2xl border border-border bg-panel px-2 pb-2"
             >
                 {open ? (
                     <div
@@ -215,7 +213,7 @@ export function TerminalDock() {
                     />
                 ) : null}
                 <div className={cn("min-h-0 flex-1 overflow-hidden", resizing && "pointer-events-none")}>
-                    <Suspense fallback={<div className="h-full w-full bg-sidebar" />}>
+                    <Suspense fallback={<div className="h-full w-full bg-panel" />}>
                         <Terminal terminalOnly isOpen={open} onClose={() => persistOpen(false)} />
                     </Suspense>
                 </div>
