@@ -66,6 +66,8 @@ npm install
 npm run tauri:dev
 ```
 
+[CONTRIBUTING.md](./CONTRIBUTING.md) and [local development](https://useshape.org/docs/developing/local-development).
+
 ```bash
 npm run test          # Vitest
 npm run test:rust     # Cargo
@@ -74,12 +76,8 @@ npm run test:all      # Both
 
 TypeScript, React, Next.js App Router, Tauri 2, Rust.
 
-## Contributing
-
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you open a pull request. A large feature, and any change to CI or the release pipeline, needs an issue a maintainer has accepted.
-
 ## License
 
-[Business Source License 1.1](./LICENSE). The same license covers code you send.
+[Business Source License 1.1](./LICENSE). Code you send is under the same license.
 
 Copyright © 2026 Shape.
