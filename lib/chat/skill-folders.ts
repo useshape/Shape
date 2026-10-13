@@ -36,9 +36,21 @@ export function removeCustomSkillFolder(folder: string): string[] {
     return listCustomSkillFolders();
 }
 
-/** Subscribe to changes in the custom skill folder list. */
+/**
+ * Subscribe to changes in the custom skill folder list. Ordinary settings
+ * changes are ignored: only a different list of folders can change which files
+ * a scan finds, and the scan itself walks the filesystem.
+ */
 export function subscribeCustomSkillFolders(listener: () => void): () => void {
-    return subscribeSettings(listener);
+    let previous = listCustomSkillFolders();
+    return subscribeSettings(() => {
+        const next = listCustomSkillFolders();
+        if (next.length === previous.length && next.every((folder, index) => folder === previous[index])) {
+            return;
+        }
+        previous = next;
+        listener();
+    });
 }
 
 /** Resolve the user's home directory once per session. */
