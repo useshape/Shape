@@ -106,6 +106,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.11",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "^16.4.0",
     "gray-matter": "^4.0.3",
