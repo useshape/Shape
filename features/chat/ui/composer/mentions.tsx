@@ -34,7 +34,8 @@ import { listDesignPreviewSessions, trySelectPendingDesignConcept } from "@/lib/
 import { hostnameOf } from "@/lib/ui/favicon";
 import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins/api";
-import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
+import { listSkills, skillIdFromName, subscribeSkills, type Skill } from "@/lib/chat/skills";
+import { ensureFreshScan, useSkillIndex } from "@/lib/chat/skill-index";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 
 type CategoryId = "files" | "code" | "docs" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "plugins" | "skills" | "design" | null;
@@ -92,6 +93,8 @@ export function MentionPicker({
     const [mcpServers, setMcpServers] = useState<{ id: string; name: string }[]>([]);
     const [plugins, setPlugins] = useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
     const [skills, setSkills] = useState<Skill[]>(() => listSkills());
+    const { scan } = useSkillIndex();
+    const scanItems = scan?.items ?? [];
     const [activeCategory, setActiveCategory] = useState<CategoryId>(null);
     const [highlight, setHighlight] = useState(0);
     const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
@@ -219,6 +222,10 @@ export function MentionPicker({
     }, [open]);
 
     useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
+    // Find skills sitting in the project's or the user's skill folders.
+    useEffect(() => {
+        if (open) ensureFreshScan();
+    }, [open]);
 
     const designItems: ChatMention[] = useMemo(() => {
         const tokens: ChatMention[] = DESIGN_TOKEN_MENTIONS.map((t) => ({
@@ -295,7 +302,7 @@ export function MentionPicker({
         }
         if (activeCategory === "plugins") return pluginMentions;
         if (activeCategory === "skills") {
-            return skills
+            const installed = skills
                 .filter((skill) => !q || skill.name.toLowerCase().includes(q) || skill.id.includes(q))
                 .map((skill) => ({
                     kind: "skill" as const,
@@ -303,6 +310,18 @@ export function MentionPicker({
                     path: skill.id,
                     label: skill.name,
                 }));
+            // Skills found in `.claude/skills`, `.agents/skills`, and the user's
+            // own folders can be mentioned without importing them first.
+            const installedIds = new Set(skills.map((skill) => skill.id));
+            const rows: ChatMention[] = [...installed];
+            for (const item of scanItems) {
+                if (item.projectPath !== (project_path ?? "")) continue;
+                const id = skillIdFromName(item.name);
+                if (installedIds.has(id)) continue;
+                if (q && !item.name.toLowerCase().includes(q) && !id.includes(q)) continue;
+                rows.push({ kind: "skill", id, path: id, label: item.name + " · on disk" });
+            }
+            return rows;
         }
         if (activeCategory === "chats") {
             return chats
@@ -358,7 +377,7 @@ export function MentionPicker({
             return items;
         }
         return [];
-    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, skills, q, filter]);
+    }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, skills, scanItems, project_path, q, filter]);
 
     const rootItems = useMemo(() => {
         if (activeCategory) return categoryItems;

@@ -432,6 +432,12 @@ fn resolve_allowed_target(path: &str) -> Result<PathBuf, AppError> {
 
 /// Read a text file for the IDE. Paths are checked before and after resolving
 /// symlinks, so a link cannot smuggle in a credential file.
+/// Absolute path of the signed-in user's home directory. Used to resolve
+/// user-level skill folders (`~/.claude/skills`, `~/.agents/skills`).
+pub fn home_dir() -> Option<String> {
+    dirs::home_dir().map(|path| path.to_string_lossy().into_owned())
+}
+
 pub async fn read_file(path: String) -> Result<String, AppError> {
     crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     let resolved = resolve_allowed_target(&path)?;

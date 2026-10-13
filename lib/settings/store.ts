@@ -214,9 +214,16 @@ export interface ShapeSettings {
         /** Color theme. */
         colorTheme: ColorThemeSetting;
     };
+    skills: {
+        /** Extra folders scanned for skill files, in the order the user added them. */
+        folders: string[];
+    };
 }
 
 export const DEFAULT_SETTINGS: ShapeSettings = {
+    skills: {
+        folders: [],
+    },
     editor: {
         fontFamily: "'IBM Plex Mono', 'Cascadia Code', Consolas, monospace",
         fontSize: 14,
@@ -446,6 +453,16 @@ function mergeSettings(base: ShapeSettings, patch: Partial<ShapeSettings>): Shap
             },
         },
         ai: mergeAiSettings(base.ai, aiPatch),
+        skills: {
+            ...DEFAULT_SETTINGS.skills,
+            ...base.skills,
+            ...patch.skills,
+            folders: Array.isArray(patch.skills?.folders)
+                ? patch.skills.folders
+                : Array.isArray(base.skills?.folders)
+                  ? base.skills.folders
+                  : DEFAULT_SETTINGS.skills.folders,
+        },
         files: { ...DEFAULT_SETTINGS.files, ...base.files, ...patch.files },
         eslint: { ...DEFAULT_SETTINGS.eslint, ...base.eslint, ...patch.eslint },
         prettier: { ...DEFAULT_SETTINGS.prettier, ...base.prettier, ...patch.prettier },
