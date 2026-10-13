@@ -38,7 +38,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const isBranch = pathMatches(pathname, "/branch") || pathMatches(pathname, "/git");
 
     const isPopout = pathMatches(pathname, "/popout");
-    const isPlayground = pathMatches(pathname, "/playground");
 
     useEffect(() => {
         const bootstrap = async () => {
@@ -73,7 +72,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }, []);
 
     useEffect(() => {
-        if (isOnboarding || isSettings || isBranch || isPopout || isPlayground) return;
+        if (isOnboarding || isSettings || isBranch || isPopout) return;
         let unlisten: (() => void) | undefined;
         let cancelled = false;
 
@@ -130,7 +129,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             cancelled = true;
             unlisten?.();
         };
-    }, [isOnboarding, isSettings, isBranch, isPopout, isPlayground]);
+    }, [isOnboarding, isSettings, isBranch, isPopout]);
 
     // Block the native WebView context menu without breaking Radix menus.
     // Must be bubble phase: Radix opens on the target first; capture+preventDefault
@@ -204,14 +203,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     </GlobalContextMenu>
                 </NotificationProvider>
             </LoadingProvider>
-        );
-    }
-
-    if (isPlayground) {
-        return (
-            <div className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary">
-                <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
-            </div>
         );
     }
 
