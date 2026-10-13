@@ -5,7 +5,8 @@ import { lookupMentionToken, registerMentionToken } from "@/lib/chat/mention-reg
 import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { DESIGN_TOKEN_MENTIONS, designTokenById } from "@/lib/chat/design-mentions";
 import { elementMentionBlock, lookupElementMention } from "@/lib/chat/element-mentions";
-import { skillBySlug } from "@/lib/chat/skills";
+import { skillBySlug, skillIdFromName } from "@/lib/chat/skills";
+import { resolveDiscoveredSkill } from "@/lib/chat/skill-index";
 
 export type MentionKind =
     | "file"
@@ -460,11 +461,30 @@ async function readMentionContext(
     projectPath: string | null,
 ): Promise<string | null> {
     if (mention.kind === "skill") {
-        const skill = skillBySlug(mention.id || mention.path || mention.label);
-        if (!skill) {
-            return `<mention_context type="skill" id="${escapeXmlAttr(mention.path || mention.label)}">The user referenced a skill that is not installed.</mention_context>`;
+        const slug = mention.id || mention.path || mention.label;
+        const installed = skillBySlug(slug);
+        if (installed) {
+            return `<mention_context type="skill" id="${escapeXmlAttr(installed.id)}" name="${escapeXmlAttr(installed.name)}">Follow this skill for the rest of the turn.\n${installed.body}\n</mention_context>`;
         }
-        return `<mention_context type="skill" id="${escapeXmlAttr(skill.id)}" name="${escapeXmlAttr(skill.name)}">Follow this skill for the rest of the turn.\n${skill.body}\n</mention_context>`;
+
+        // Not in the Shape library — fall back to a skill file on disk, read
+        // fresh, so skills living in `.claude/skills` work without importing.
+        const onDisk = await resolveDiscoveredSkill(skillIdFromName(slug));
+        if (!onDisk) {
+            return `<mention_context type="skill" id="${escapeXmlAttr(slug)}">The user referenced a skill that is not installed.</mention_context>`;
+        }
+        const attributes = [
+            `type="skill"`,
+            `id="${escapeXmlAttr(skillIdFromName(onDisk.name))}"`,
+            `name="${escapeXmlAttr(onDisk.name)}"`,
+            `source="${escapeXmlAttr(onDisk.relPath)}"`,
+        ];
+        if (onDisk.description) attributes.push(`description="${escapeXmlAttr(onDisk.description)}"`);
+        const folderNote =
+            onDisk.scope === "project"
+                ? ""
+                : `\nThe skill folder is ${onDisk.folder} — resolve any relative paths in this skill against it.`;
+        return `<mention_context ${attributes.join(" ")}>Follow this skill for the rest of the turn.${folderNote}\n${onDisk.body}\n</mention_context>`;
     }
 
     if (mention.kind === "codebase") {

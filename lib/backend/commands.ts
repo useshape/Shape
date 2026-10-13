@@ -63,6 +63,7 @@ export const commands = {
     },
     getCachedFileContent: (path: string): string | undefined => fileContentCache.get(path),
     lsDir: (path: string) => invokeCommand<FileEntry[]>("ls_dir", { path }),
+    homeDir: () => invokeCommand<string | null>("home_dir"),
     createFile: (path: string) => invokeCommand("create_file", { path }),
     createDir: (path: string) => invokeCommand("create_dir", { path }),
     deletePath: (path: string) => invokeCommand("delete_path", { path }),

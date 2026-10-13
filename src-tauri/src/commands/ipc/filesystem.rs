@@ -11,6 +11,11 @@ pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
 }
 
 #[tauri::command]
+pub fn home_dir() -> Option<String> {
+    service::home_dir()
+}
+
+#[tauri::command]
 pub async fn read_file(path: String) -> Result<String, AppError> {
     service::read_file(path).await
 }

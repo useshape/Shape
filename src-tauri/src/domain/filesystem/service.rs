@@ -9,6 +9,10 @@ pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
     fs::ls_dir(path).await
 }
 
+pub fn home_dir() -> Option<String> {
+    fs::home_dir()
+}
+
 pub async fn read_file(path: String) -> Result<String, AppError> {
     fs::read_file(path).await
 }
