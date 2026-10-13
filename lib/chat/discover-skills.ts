@@ -184,7 +184,9 @@ function isDismissed(dismissed: Set<string>, relPath: string): boolean {
  * carries the project that was read, so callers never show one project's files
  * as another's.
  */
-export async function discoverSkills(options: { ignoreDismissals?: boolean } = {}): Promise<SkillScan> {
+export async function discoverSkills(
+    options: { ignoreDismissals?: boolean; includeUnchanged?: boolean } = {}
+): Promise<SkillScan> {
     // Supersede any scan still in flight, including when there is no project:
     // closing a project must discard results the old project was reading.
     const scanGen = ++nextScanGen;
@@ -221,6 +223,14 @@ export async function discoverSkills(options: { ignoreDismissals?: boolean } = {
             continue; // root doesn't exist or is unreadable
         }
 
+        if (root.scope === "project" && projectPath) {
+            try {
+                await commands.ensurePathWithin(root.path, projectPath);
+            } catch {
+                continue; // the folder is a link that leaves the project
+            }
+        }
+
         for (const file of files) {
             if (isSuperseded(scanGen)) return { projectPath, items: [] };
 
@@ -232,9 +242,9 @@ export async function discoverSkills(options: { ignoreDismissals?: boolean } = {
 
             let raw: string;
             try {
-                raw = await commands.readFileFromDisk(file.filePath);
+                raw = await commands.readFileWithin(file.filePath, root.path);
             } catch {
-                continue; // unreadable file
+                continue; // unreadable, or a symlink that leaves this root
             }
 
             const fallbackName = skillTitle(
@@ -256,7 +266,7 @@ export async function discoverSkills(options: { ignoreDismissals?: boolean } = {
                 continue;
             }
 
-            if (existingBody === parsed.body) continue;
+            if (existingBody === parsed.body && !options.includeUnchanged) continue;
 
             const row: DiscoveredSkill = {
                 name: parsed.name,

@@ -5,6 +5,8 @@ import { resetSettings } from "../helpers/settings";
 const mocks = vi.hoisted(() => ({
     lsDir: vi.fn(),
     readFileFromDisk: vi.fn(),
+    readFileWithin: vi.fn(),
+    ensurePathWithin: vi.fn(),
     homeDir: vi.fn(),
     getProjectPath: vi.fn(),
 }));
@@ -14,6 +16,8 @@ vi.mock("@/lib/backend/commands", () => ({
     commands: {
         lsDir: mocks.lsDir,
         readFileFromDisk: mocks.readFileFromDisk,
+        readFileWithin: mocks.readFileWithin,
+        ensurePathWithin: mocks.ensurePathWithin,
         homeDir: mocks.homeDir,
         searchProjectFiles: vi.fn(async () => []),
         getConversations: vi.fn(async () => []),
@@ -26,7 +30,7 @@ vi.mock("@/lib/backend/project-state", () => ({
     subscribeProjectState: vi.fn(() => () => {}),
 }));
 
-import { buildMessageWithMentions } from "@/lib/chat/mentions";
+import { buildMessageWithMentions, formatMentionToken } from "@/lib/chat/mentions";
 import { resetHomeDirCache } from "@/lib/chat/skill-folders";
 import { resetSkillIndex } from "@/lib/chat/skill-index";
 import { addSkill, listSkills } from "@/lib/chat/skills";
@@ -49,6 +53,8 @@ beforeEach(() => {
     resetHomeDirCache();
     mocks.lsDir.mockReset();
     mocks.readFileFromDisk.mockReset();
+    mocks.readFileWithin.mockReset();
+    mocks.ensurePathWithin.mockReset();
     mocks.homeDir.mockReset();
     mocks.getProjectPath.mockReset();
     mocks.getProjectPath.mockReturnValue(PROJECT);
@@ -110,6 +116,25 @@ describe("skill mentions", () => {
         const message = await buildMessageWithMentions("use @skill:pdf-processing", PROJECT);
 
         expect(message).toContain("Disk body.");
+    });
+
+    it("uses the picked file when two skills share a name", async () => {
+        serve({
+            [`${PROJECT}/.claude/skills/pdf/SKILL.md`]: skillFile("pdf", "Claude.", "Claude body."),
+            [`${PROJECT}/.agents/skills/pdf/SKILL.md`]: skillFile("pdf", "Agents.", "Agents body."),
+        });
+        const token = formatMentionToken({
+            kind: "skill",
+            id: "pdf",
+            path: ".agents/skills/pdf/SKILL.md",
+            label: "pdf · .agents/skills",
+        });
+
+        const message = await buildMessageWithMentions(`use ${token}`, PROJECT);
+
+        expect(message).toContain("Agents body.");
+        expect(message).toContain('source=".agents/skills/pdf/SKILL.md"');
+        expect(message).not.toContain("Claude body.");
     });
 
     it("reports a skill that exists nowhere as not installed", async () => {
