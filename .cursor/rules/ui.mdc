@@ -1,0 +1,23 @@
+---
+description: Shape UI — copy nearest component, semantic tokens, Fluent icons
+globs: "**/*.{tsx,css}"
+alwaysApply: false
+---
+
+# UI
+
+Copy the nearest existing component. Do not guess.
+
+Primitives: `@/components/ui/*` (`button`, `input`, `textarea`, `icon`, `dropdown`, `context`, `tooltip`, `switch`, `collapsible`, `scroll`, `search`, `tabs`). `cn()` from `@/lib/utils`.
+
+Icons: `Icon` from `@/components/ui/icon` with a Fluent glyph component. Not Lucide. Not Remix string names. Not a hand-rolled `<svg>` unless it is a brand asset.
+
+Tokens only: `text-text-primary` / `secondary` / `muted`, `bg-panel` / `panel-hover` / `panel-active`, `bg-surface-1`–`3`, `bg-accent`, `border-border-subtle`. Never `text-gray-*`, `bg-zinc-*`, `text-foreground`, `bg-muted`.
+
+Type: `text-sm` is the default. `text-xs` for metadata. `font-normal` in sidebars. `font-medium` on setting titles. No `font-semibold` on general chrome.
+
+Buttons: `<Button>`. Do not style a raw `<button>`. Selects: `DropdownMenu` like `SettingSelect` in `features/settings/ui/setting-controls.tsx`. Tooltips: `<Tooltip content={…}>`. Collapsible: `CollapsibleSection`.
+
+Do not put `rounded-*` / `shadow-*` / `bg-*` / `p-*` on `DropdownMenuContent`.
+
+Heights: `h-chrome` (28px) for controls. File rows `h-[20px]`. Panel header matches chat tabs (`h-[36px]`, `text-sm`).
