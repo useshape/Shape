@@ -197,7 +197,7 @@ async function currentScan(): Promise<DiscoveredSkill[]> {
 export async function readDiscoveredSkill(item: DiscoveredSkill): Promise<DiscoveredSkill | null> {
     let raw: string;
     try {
-        raw = await commands.readFileWithin(joinSkillPath(item.folder, item.fileName), item.folder);
+        raw = await commands.readFileWithin(joinSkillPath(item.folder, item.fileName), item.rootPath);
     } catch {
         return null;
     }

@@ -17,6 +17,8 @@ export type DiscoveredSkill = {
     fileName: string;
     /** Folder the skill lives in — the base for relative `scripts/` and `references/` paths. */
     folder: string;
+    /** Root that advertised this file. Later reads must stay inside it. */
+    rootPath: string;
     /**
      * Stable identity for React keys, dismissal storage, and list removal:
      * project-relative (`.claude/skills/pdf/SKILL.md`), `~/…` for user-level
@@ -276,6 +278,7 @@ export async function discoverSkills(
                 body: parsed.body,
                 fileName: file.fileName,
                 folder: file.folder,
+                rootPath: root.path,
                 relPath,
                 projectPath: projectPath ?? "",
                 scope: root.scope,
