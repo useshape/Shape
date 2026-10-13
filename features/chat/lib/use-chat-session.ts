@@ -47,6 +47,7 @@ import {
     processAttachment,
     type ComposerAttachment,
 } from "@/features/chat/ui/composer/attachments";
+import type { ReasoningEffort } from "../ui/composer/reasoning-effort";
 
 function chatTabsStorageKey(projectPath: string | null | undefined) {
     const norm = (projectPath || "").replace(/\\/g, "/").toLowerCase();
@@ -100,8 +101,7 @@ function writePersistedChatTabs(
 
 const COMPOSER_PREFS_KEY = "shape-composer";
 
-type ComposerEffort = "low" | "high" | "ultra" | "max" | "super";
-type ComposerPrefs = { model?: string; effort?: ComposerEffort; fast?: boolean };
+type ComposerPrefs = { model?: string; effort?: ReasoningEffort; fast?: boolean };
 
 function readComposerPrefs(): ComposerPrefs {
     if (typeof window === "undefined") return {};
@@ -195,7 +195,7 @@ export function useChatSession() {
     const [selectedMode, setSelectedMode] = React.useState("Code");
     const selectedModeRef = React.useRef(selectedMode);
     selectedModeRef.current = selectedMode;
-    const [reasoningEffort, setReasoningEffort] = React.useState<"low" | "high" | "ultra" | "max">(
+    const [reasoningEffort, setReasoningEffort] = React.useState<ReasoningEffort>(
         () => readComposerPrefs().effort || "low",
     );
     const [fastMode, setFastMode] = React.useState(() => readComposerPrefs().fast ?? true);
