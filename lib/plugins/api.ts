@@ -24,8 +24,44 @@ type PluginsCache = {
 };
 
 const TTL_MS = 10 * 60 * 1000;
+/** How often the plugins page re-reads the server while it is open. */
+export const PLUGINS_PAGE_REFRESH_MS = 5_000;
 let pluginsCache: PluginsCache | null = null;
 const toolsCache = new Map<string, { tools: PluginToolHint[]; at: number }>();
+const listeners = new Set<() => void>();
+let catalogWatchStarted = false;
+/** Latest catalog request. Older responses must not replace a newer snapshot. */
+let fetchSeq = 0;
+
+function emitPlugins() {
+    for (const listener of listeners) listener();
+}
+
+/** Re-render surfaces that show `connected` after a catalog fetch. */
+export function subscribePlugins(listener: () => void): () => void {
+    listeners.add(listener);
+    watchPluginCatalog();
+    return () => {
+        listeners.delete(listener);
+    };
+}
+
+/**
+ * Drop the catalog when the window comes back. A plugin linked on the website
+ * otherwise stays stale for the cache TTL until something calls `force`.
+ */
+export function watchPluginCatalog() {
+    if (catalogWatchStarted || typeof window === "undefined") return;
+    catalogWatchStarted = true;
+    const drop = () => {
+        if (document.visibilityState === "hidden") return;
+        invalidatePluginsCache();
+        if (!getShapeAccessToken()) return;
+        void fetchPlugins({ force: true }).catch(() => {});
+    };
+    window.addEventListener("focus", drop);
+    document.addEventListener("visibilitychange", drop);
+}
 
 function tokenOrThrow(): string {
     const token = getShapeAccessToken();
@@ -40,6 +76,7 @@ export function peekPluginsCache(): { plugins: PluginRow[]; configured: boolean 
 
 export function invalidatePluginsCache(toolkit?: string) {
     pluginsCache = null;
+    fetchSeq += 1;
     if (toolkit) toolsCache.delete(toolkit.toLowerCase());
     else toolsCache.clear();
 }
@@ -52,10 +89,13 @@ export async function fetchPlugins(opts?: { force?: boolean }): Promise<{
     if (!opts?.force && pluginsCache && now - pluginsCache.at < TTL_MS) {
         return { plugins: pluginsCache.plugins, configured: pluginsCache.configured };
     }
+    const seq = ++fetchSeq;
     const data = await shapeApiFetch<{ plugins: PluginRow[]; configured: boolean }>("/plugins", {
         token: tokenOrThrow(),
     });
-    pluginsCache = { plugins: data.plugins, configured: data.configured, at: now };
+    if (seq !== fetchSeq) return peekPluginsCache() ?? data;
+    pluginsCache = { plugins: data.plugins, configured: data.configured, at: Date.now() };
+    emitPlugins();
     return data;
 }
 
