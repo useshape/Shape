@@ -561,11 +561,12 @@ export function PluginsSettingsView() {
             }
             try {
                 const data = await fetchPlugins({ force });
-                setPlugins(mergeCatalog(data.plugins));
-                setConfigured(data.configured);
+                const latest = peekPluginsCache() ?? data;
+                setPlugins(mergeCatalog(latest.plugins));
+                setConfigured(latest.configured);
                 setBusy((current) => {
                     if (!current) return current;
-                    if (data.plugins.some((p) => p.toolkit === current && p.connected)) return null;
+                    if (latest.plugins.some((p) => p.toolkit === current && p.connected)) return null;
                     return current;
                 });
             } catch (err) {
@@ -594,6 +595,7 @@ export function PluginsSettingsView() {
     useEffect(() => {
         if (!pluginsAvailable) return;
         const id = window.setInterval(() => {
+            if (document.visibilityState === "hidden") return;
             void load(true, true);
         }, PLUGINS_PAGE_REFRESH_MS);
         return () => window.clearInterval(id);
