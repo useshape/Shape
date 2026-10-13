@@ -39,6 +39,7 @@ import {
     refreshSkillIndex,
     getSkillIndex,
     resetSkillIndex,
+    readDiscoveredSkill,
     resolveDiscoveredSkill,
     resolveDiscoveredSkillBySource,
 } from "@/lib/chat/skill-index";
@@ -150,7 +151,12 @@ describe("skill index", () => {
 
         const resolved = await resolveDiscoveredSkill("pdf-processing");
 
-        expect(resolved).toMatchObject({ name: "pdf-processing", body: "First body.", folder: `${PROJECT}/.claude/skills/pdf` });
+        expect(resolved).toMatchObject({
+            name: "pdf-processing",
+            body: "First body.",
+            folder: `${PROJECT}/.claude/skills/pdf`,
+            rootPath: `${PROJECT}/.claude/skills`,
+        });
 
         // The file changed on disk since the scan: mentions must see the new text.
         serve({ [`${PROJECT}/.claude/skills/pdf/SKILL.md`]: skillFile("pdf-processing", "PDFs.", "Edited body.") });
@@ -186,6 +192,21 @@ describe("skill index", () => {
 
         expect(getCurrentProjectDiscoveries()).toHaveLength(1);
         expect(getSkillIndex().error).toBe("Could not scan skill folders.");
+    });
+
+    it("refuses a skill folder that has left the root that advertised it", async () => {
+        serve({ [`${PROJECT}/.claude/skills/pdf/SKILL.md`]: skillFile("pdf-processing", "PDFs.", "Body.") });
+        const resolved = await resolveDiscoveredSkill("pdf-processing");
+        expect(resolved?.rootPath).toBe(`${PROJECT}/.claude/skills`);
+
+        serve({
+            [`${PROJECT}/.claude/skills/pdf/SKILL.md`]: skillFile("pdf-processing", "PDFs.", "Body."),
+            "/tmp/elsewhere/SKILL.md": skillFile("pdf-processing", "PDFs.", "Escaped body."),
+        });
+
+        await expect(
+            readDiscoveredSkill({ ...resolved!, folder: "/tmp/elsewhere" })
+        ).resolves.toBeNull();
     });
 
     it("returns null for a skill that does not exist on disk", async () => {
