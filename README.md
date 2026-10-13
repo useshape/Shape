@@ -1,29 +1,53 @@
+<p align="center">
+  <a href="https://useshape.org">
+    <img src="./public/hero.png" alt="Chat next to the open folder" width="880">
+  </a>
+</p>
 
-If you're using version 1.0.0, 1.0.1, or 1.0.2, we recommend manually updating to 1.0.3.
+<p align="center">
+  <a href="https://github.com/useshape/Shape/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/useshape/Shape?style=flat-square"></a>
+  <a href="https://github.com/useshape/Shape/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/useshape/Shape/ci.yml?style=flat-square&branch=main&label=ci"></a>
+  <a href="https://discord.gg/MMCEDVZKYf"><img alt="Discord" src="https://img.shields.io/discord/1517927888240906330?style=flat-square&label=discord"></a>
+</p>
 
-# Shape
+<p align="center">
+  <a href="https://useshape.org">Website</a> ·
+  <a href="https://useshape.org/docs">Docs</a> ·
+  <a href="https://useshape.org/download">Download</a> ·
+  <a href="https://discord.gg/MMCEDVZKYf">Discord</a>
+</p>
 
-<img src="./docs/logo/icon.svg" width="36" alt="Shape">
+Shape is a Windows desktop agent. You open a folder you work in. Chat sits beside the files, Git, and a terminal. You describe the change. Shape reads the project, answers in the thread, and edits files when you ask. Shape shows a diff for each edit. You commit when you want a commit.
 
-A desktop agent for all your coding needs, plus so much more.
+## Work from the composer
 
-[Website](https://useshape.org) · [Docs](https://useshape.org/docs) · [Download](https://useshape.org/download) · [Discord](https://discord.gg/MMCEDVZKYf)
+Pick a mode before you send.
 
-![Chat next to the open folder](./public/hero.png)
+- **Code** edits files and can run commands.
+- **Ask** reads the project and leaves files alone.
+- **Plan** writes the approach and waits.
+- **Visual** works on UI. Pair it with the in-app browser to see the screen.
+- **Review** looks for a bug and proposes a small fix.
+
+Type `@` to attach a file or folder. Type `/` to run a saved prompt.
+
+[Agent](https://useshape.org/docs/agent/overview)
 
 ## Models
 
-Suport for many models.
+Auto is included on Free. Paid plans add Claude, GPT, Gemini, Grok, DeepSeek, Qwen, and the rest of the catalog. You spend credits when you pick a named model.
 
 ![Claude, GPT, Gemini, Grok, DeepSeek, Qwen](./docs/images/readme/models.svg)
 
-[Models](https://useshape.org/docs/get-started/models).
+[Models](https://useshape.org/docs/get-started/models)
 
 ## Plugins
 
-Connect over 20+ plugins the agent can use.
+Connect GitHub, Figma, Linear, Slack, Notion, Stripe, Supabase, Vercel, and other accounts. You sign in once under Settings, then ask in the thread: open a pull request, list Linear bugs, post a diff summary to Slack.
 
 ![GitHub, Figma, Linear, Slack, Notion, Stripe, Supabase, Vercel](./docs/images/readme/plugins.svg)
+
+A plugin is a connected account. A tool that runs on your machine is [MCP](https://useshape.org/docs/customize/mcp).
 
 [Plugins](https://useshape.org/docs/customize/plugins)
 
@@ -31,7 +55,7 @@ Connect over 20+ plugins the agent can use.
 
 Windows 10 or 11, 64-bit. [Installer](https://useshape.org/download). Older builds: [Releases](https://github.com/useshape/Shape/releases).
 
-Stable is the tested channel. Nightly ships latest and can break.
+Stable is the tested channel. On nightly you get the newest installer, and that installer can break.
 
 ## Build from source
 

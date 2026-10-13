@@ -1,8 +1,8 @@
 # Contributing to Shape
 
-Shape is a desktop agent. Chat, files, Git, and a terminal live in one Windows app. It is not an IDE you live in all day.
+Shape is a desktop agent. You get chat, files, Git, and a terminal in one Windows app. Contributors keep the app in that shape.
 
-By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Code you send is licensed under [BUSL-1.1](./LICENSE).
+By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). See [BUSL-1.1](./LICENSE) for the project's license.
 
 ## What helps
 
@@ -10,10 +10,30 @@ Small, concrete work:
 
 - Docs under `docs/`
 - Bug fixes with a way to reproduce
-- Narrow changes to something that already exists (agent, Git, editor, terminal, LSP, settings)
+- Narrow changes to something in the app (agent, Git, editor, terminal, LSP, settings)
 - Keybindings, polish, platform gaps
 
-File an issue before a large feature. Say the problem and the intended behavior. Unsolicited large features do not land.
+## Large changes
+
+Open an issue before you write the code. Name the problem and the behavior you want. Wait until a maintainer says the work should happen. Maintainers close a large feature that arrives without that agreement.
+
+A change counts as large when it does any of these:
+
+- Adds a new product surface
+- Rewrites an existing flow
+- Spreads across several of chat, Git, the editor, the terminal, LSP, settings, and the Rust agent
+
+## CI, release, and repo policy
+
+Leave the pipeline alone unless a maintainer accepted an issue that names the exact change. That covers:
+
+- `.github/workflows/`
+- `scripts/release/`
+- Version files (`package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`)
+- Signing, the updater, and publish steps
+- `lefthook.yml` and branch-protection docs
+
+A CI or release pull request must say which failure it fixes, how you checked it, and how to roll it back. Maintainers close drive-by workflow edits. Do not change CI to make a failing test pass.
 
 ## Pull requests
 
@@ -36,6 +56,8 @@ Finish one PR before stacking more. Open branches against `main` go stale.
 - Features whose cost outweighs who they help
 - Changes the author cannot explain
 - Unattended agent PRs
+- Large features opened before a maintainer accepted the issue
+- CI, release, signing, or version-bump edits without that same agreement
 
 ## Using a model while contributing
 
@@ -68,10 +90,10 @@ A fork cannot sign in to Shape Cloud. Official builds can. Chat against a real a
 | Path | What it is |
 | --- | --- |
 | `app/` | Next.js routes (agent, settings, git, extra windows) |
-| `features/` | Product UI — chat, editor, explorer, Git, terminal |
+| `features/` | Product UI: chat, editor, explorer, Git, terminal |
 | `lib/` | Shared TypeScript (IPC, settings, auth) |
 | `components/ui/` | Shared UI primitives |
-| `src-tauri/` | Rust / Tauri — commands, agent, Git, PTY, LSP |
+| `src-tauri/` | Rust / Tauri: commands, agent, Git, PTY, LSP |
 | `docs/` | Product and contributor docs (MDX) |
 | `scripts/` | Build and release helpers |
 | `tests/` | Vitest |
