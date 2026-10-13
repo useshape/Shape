@@ -1,0 +1,13 @@
+---
+description: PRs, commits, CodeRabbit, tests — always on
+alwaysApply: true
+---
+
+# Git and reviews
+
+- Never `git push` to `main`. Create a focused branch, open a PR, merge after CI and CodeRabbit.
+- One concern per PR. Do not stack a second change on the same branch.
+- Commit as `area: concrete change`. `Closes #N` in the body only when the user named a real issue.
+- After opening a PR: wait for CI (`Test`) and CodeRabbit. Fix what they flag. Repeat until CI is green and CodeRabbit has no new blocking comments.
+- Run `npm run test:all` before you say the work is done.
+- Read `AGENTS.md` (short). If `COMMIT.md` exists locally, follow it for commit wording.

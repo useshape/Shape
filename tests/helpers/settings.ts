@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, getSettings, updateSettingSection, type ShapeSettings
 export function resetSettings() {
     localStorage.setItem("shape-settings-v1", JSON.stringify(DEFAULT_SETTINGS));
     updateSettingSection("editor", { ...DEFAULT_SETTINGS.editor });
+    updateSettingSection("skills", { ...DEFAULT_SETTINGS.skills });
 }
 
 export function withSettings(patch: Partial<ShapeSettings>) {

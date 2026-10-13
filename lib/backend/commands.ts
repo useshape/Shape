@@ -63,6 +63,7 @@ export const commands = {
     },
     getCachedFileContent: (path: string): string | undefined => fileContentCache.get(path),
     lsDir: (path: string) => invokeCommand<FileEntry[]>("ls_dir", { path }),
+    homeDir: () => invokeCommand<string | null>("home_dir"),
     createFile: (path: string) => invokeCommand("create_file", { path }),
     createDir: (path: string) => invokeCommand("create_dir", { path }),
     deletePath: (path: string) => invokeCommand("delete_path", { path }),
@@ -100,6 +101,14 @@ export const commands = {
         rememberFileContent(path, content);
         return content;
     },
+    /** Read `path` only when it canonicalizes inside `root`. Skill scans use this. */
+    readFileWithin: async (path: string, root: string) => {
+        fileContentCache.delete(path);
+        return invokeCommand<string>("read_file_within", { path, root });
+    },
+    /** Reject a skill root whose canonical path leaves `root` (project symlink). */
+    ensurePathWithin: (path: string, root: string) =>
+        invokeCommand<void>("ensure_path_within", { path, root }),
     primeFileCache: (path: string, content: string) => {
         rememberFileContent(path, content);
     },

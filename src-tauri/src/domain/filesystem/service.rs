@@ -9,8 +9,20 @@ pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
     fs::ls_dir(path).await
 }
 
+pub fn home_dir() -> Option<String> {
+    fs::home_dir()
+}
+
 pub async fn read_file(path: String) -> Result<String, AppError> {
     fs::read_file(path).await
+}
+
+pub async fn read_file_within(path: String, root: String) -> Result<String, AppError> {
+    fs::read_file_within(path, root).await
+}
+
+pub fn ensure_path_within(path: String, root: String) -> Result<(), AppError> {
+    fs::ensure_path_within(path, root)
 }
 
 pub async fn read_file_bytes(path: String) -> Result<Vec<u8>, AppError> {
