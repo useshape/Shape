@@ -59,7 +59,6 @@ export function SkillsSettings() {
     const [skills, setSkills] = useState<Skill[]>(() => listSkills());
     const [folders, setFolders] = useState<string[]>(() => listCustomSkillFolders());
     const [homeDir, setHomeDir] = useState<string | null>(null);
-    const [dismissedCount, setDismissedCount] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Discoveries are cached in a shared index; this keeps them in step with
@@ -80,9 +79,10 @@ export function SkillsSettings() {
         [scan, projectPath]
     );
 
-    useEffect(() => {
-        setDismissedCount(countDismissedFiles(projectPath ?? ""));
-    }, [projectPath, rows]);
+    // Counted during render rather than stored: the panel re-renders whenever a
+    // scan finishes or the project changes, which is exactly when the stored
+    // dismissals can have changed.
+    const dismissedCount = countDismissedFiles(projectPath ?? "");
 
     async function pickFolder() {
         const { open } = await import("@tauri-apps/plugin-dialog");
@@ -214,7 +214,6 @@ export function SkillsSettings() {
                         icon={ArrowSync20Regular}
                         onClick={() => {
                             restoreDismissedFiles(projectPath ?? "");
-                            setDismissedCount(0);
                             void refreshSkillIndex();
                         }}
                     />

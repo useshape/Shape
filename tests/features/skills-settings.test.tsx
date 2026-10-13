@@ -27,7 +27,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: mocks.pickFolder }));
 import { SkillsSettings } from "@/features/settings/ui/sections/skills";
 import { refreshSkillIndex, resetSkillIndex } from "@/lib/chat/skill-index";
 import { listSkills } from "@/lib/chat/skills";
-import { getSettings } from "@/lib/settings";
+import { getSettings, updateSettingSection } from "@/lib/settings";
 import { resetHomeDirCache } from "@/lib/chat/skill-folders";
 import { resetSettings } from "../helpers/settings";
 
@@ -46,6 +46,13 @@ function serve(files: Record<string, string>) {
 /** The button carrying `aria-label`, if it is rendered. */
 function buttonWithLabel(host: HTMLElement, label: string): HTMLButtonElement | undefined {
     return Array.from(host.querySelectorAll("button")).find((node) => node.getAttribute("aria-label") === label);
+}
+
+/** The button that restores every dismissed file, if it is rendered. */
+function restoreButton(host: HTMLElement): HTMLButtonElement | undefined {
+    return Array.from(host.querySelectorAll("button")).find((node) =>
+        (node.textContent ?? "").includes("Restore")
+    );
 }
 
 /** Every per-file Dismiss button currently rendered. */
@@ -173,8 +180,37 @@ describe("skills settings", () => {
         });
 
         expect(dismissButtons(host)).toHaveLength(0);
-        const restore = Array.from(host.querySelectorAll("*")).find((node) => (node.textContent ?? "").includes("Restore 1 dismissed"));
-        expect(restore).toBeDefined();
+        expect(restoreButton(host)?.textContent).toContain("Restore 1 dismissed");
+    });
+
+    it("clears the restore row as soon as the user restores", async () => {
+        serve({ [`${PROJECT}/.agents/guide.md`]: "agent body" });
+        await mount();
+        await act(async () => {
+            dismissButtons(host)[0].click();
+        });
+
+        await act(async () => {
+            restoreButton(host)?.click();
+        });
+
+        expect(restoreButton(host)).toBeUndefined();
+        expect(buttonWithLabel(host, "Import guide")).toBeDefined();
+    });
+
+    it("does not rescan for settings that cannot change the folder list", async () => {
+        serve({ [`${PROJECT}/.agents/guide.md`]: "agent body" });
+        await mount();
+        const scansBefore = mocks.lsDir.mock.calls.length;
+
+        await act(async () => {
+            updateSettingSection("editor", { fontSize: 15 });
+        });
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        expect(mocks.lsDir.mock.calls.length).toBe(scansBefore);
     });
 
     it("adds a skill folder the user picks and scans it", async () => {
