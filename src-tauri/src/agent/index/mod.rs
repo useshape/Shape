@@ -11,7 +11,7 @@ pub use hybrid::{HybridOptions, RetrievalHit};
 
 use bm25::build_indexed_chunk;
 use chunker::chunk_file;
-use manifest::IndexManifest as Manifest;
+use manifest::{IndexManifest as Manifest, INDEX_FORMAT};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,7 +42,7 @@ const SKIP_DIRS: &[&str] = &[
 ];
 
 const PROGRESS_EVERY_N_FILES: usize = 15;
-const EMBED_BATCH: usize = 32;
+const EMBED_BATCH: usize = 64;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,8 +89,8 @@ impl IndexManager {
         let manifest_path = index_dir.join("manifest.json");
         let index_path = index_dir.join("index.bin");
 
-        let manifest = Manifest::load(&manifest_path);
-        let index = if index_path.exists() {
+        let mut manifest = Manifest::load(&manifest_path);
+        let mut index = if index_path.exists() {
             let disk = std::fs::metadata(&index_path).map(|m| m.len()).unwrap_or(0);
             crate::core::ram_debug::snapshot(
                 "index_load",
@@ -109,6 +109,17 @@ impl IndexManager {
         } else {
             Bm25Index::default()
         };
+
+        if manifest.format != INDEX_FORMAT {
+            index = Bm25Index::default();
+            manifest.files.clear();
+            manifest.format = INDEX_FORMAT;
+            manifest.needs_full_sync = true;
+            manifest.next_remote_id = 1;
+        } else if index.chunks.is_empty() && !manifest.files.is_empty() {
+            manifest.files.clear();
+            manifest.needs_full_sync = true;
+        }
 
         let mut embeddings = EmbeddingStore::default();
         embeddings.enabled = embeddings_enabled;
@@ -225,12 +236,14 @@ impl IndexManager {
             .filter(|p| !current_files.contains_key(*p))
             .cloned()
             .collect();
+        let mut removed_ids = Vec::new();
         if !removed.is_empty() {
-            self.index.remove_paths(&removed);
+            removed_ids.extend(self.index.remove_paths(&removed));
         }
 
         let total_to_index = to_index.len();
-        let mut pending_embed: Vec<(usize, String, usize, usize, String)> = Vec::new();
+        use crate::agent::index::embeddings::SyncChunkPayload;
+        let mut pending_embed: Vec<SyncChunkPayload> = Vec::new();
 
         for (i, path) in to_index.into_iter().enumerate() {
             if let Ok(content) = std::fs::read_to_string(&path) {
@@ -243,30 +256,27 @@ impl IndexManager {
                     .to_string_lossy()
                     .replace('\\', "/");
 
-                self.index.remove_paths(&HashSet::from([rel.clone()]));
+                removed_ids.extend(self.index.remove_paths(&HashSet::from([rel.clone()])));
 
                 for chunk in chunk_file(&rel, &content) {
-                    let doc_id = self.index.chunks.len();
+                    let remote_id = self.alloc_remote_id();
                     self.index.add_chunk(build_indexed_chunk(
                         &chunk.path,
                         chunk.start_line,
                         chunk.end_line,
                         &chunk.text,
+                        remote_id,
                     ));
                     if self.embeddings_enabled {
-                        pending_embed.push((
-                            doc_id,
-                            chunk.path.clone(),
-                            chunk.start_line,
-                            chunk.end_line,
-                            chunk.text,
-                        ));
+                        pending_embed.push(SyncChunkPayload {
+                            chunk_index: remote_id as usize,
+                            file_path: chunk.path,
+                            start_line: chunk.start_line,
+                            end_line: chunk.end_line,
+                            text: chunk.text,
+                        });
                     }
                 }
-            }
-
-            if pending_embed.len() >= EMBED_BATCH {
-                self.flush_embeddings(&mut pending_embed);
             }
 
             if i % PROGRESS_EVERY_N_FILES == 0 || i + 1 == total_to_index {
@@ -280,10 +290,14 @@ impl IndexManager {
             }
         }
 
-        self.flush_embeddings(&mut pending_embed);
-
-        if self.embeddings_enabled && (!removed.is_empty() || total_to_index > 0) {
+        if self.embeddings_enabled && self.manifest.needs_full_sync {
             if let Ok(vectors) = self.sync_all_chunks_to_server(true) {
+                self.embeddings.server_vectors = vectors;
+                self.manifest.needs_full_sync = false;
+            }
+        } else if self.embeddings_enabled && (!pending_embed.is_empty() || !removed_ids.is_empty())
+        {
+            if let Ok(vectors) = self.sync_incremental(&pending_embed, &removed_ids) {
                 self.embeddings.server_vectors = vectors;
             }
         }
@@ -303,27 +317,34 @@ impl IndexManager {
         Ok(self.status(false))
     }
 
-    fn flush_embeddings(&mut self, pending: &mut Vec<(usize, String, usize, usize, String)>) {
-        if !self.embeddings_enabled || pending.is_empty() {
-            pending.clear();
-            return;
-        }
+    fn alloc_remote_id(&mut self) -> u32 {
+        let id = self.manifest.next_remote_id.max(1);
+        self.manifest.next_remote_id = id.saturating_add(1);
+        id
+    }
 
-        use crate::agent::index::embeddings::SyncChunkPayload;
-        let chunks: Vec<SyncChunkPayload> = pending
-            .drain(..)
-            .map(|(chunk_index, file_path, start_line, end_line, text)| SyncChunkPayload {
-                chunk_index,
-                file_path,
-                start_line,
-                end_line,
-                text,
-            })
-            .collect();
-
-        if let Ok(vectors) = self.remote.sync_chunks(chunks, false) {
-            self.embeddings.server_vectors = vectors;
+    fn sync_incremental(
+        &self,
+        pending: &[crate::agent::index::embeddings::SyncChunkPayload],
+        removed_ids: &[u32],
+    ) -> Result<usize, String> {
+        let mut vectors = 0usize;
+        let mut sent_removals = false;
+        for batch in pending.chunks(EMBED_BATCH) {
+            let removals = if sent_removals {
+                Vec::new()
+            } else {
+                sent_removals = true;
+                removed_ids.to_vec()
+            };
+            vectors = self.remote.sync_chunks(batch.to_vec(), false, removals)?;
         }
+        if !sent_removals && !removed_ids.is_empty() {
+            vectors = self
+                .remote
+                .sync_chunks(Vec::new(), false, removed_ids.to_vec())?;
+        }
+        Ok(vectors)
     }
 
     fn sync_all_chunks_to_server(&self, full_replace: bool) -> Result<usize, String> {
@@ -335,24 +356,30 @@ impl IndexManager {
         let mut vectors = 0usize;
         let mut batch: Vec<SyncChunkPayload> = Vec::with_capacity(EMBED_BATCH);
 
-        for (chunk_index, chunk) in self.index.chunks.iter().enumerate() {
+        for chunk in &self.index.chunks {
+            if chunk.remote_id == 0 {
+                continue;
+            }
             batch.push(SyncChunkPayload {
-                chunk_index,
+                chunk_index: chunk.remote_id as usize,
                 file_path: chunk.path.clone(),
                 start_line: chunk.start_line,
                 end_line: chunk.end_line,
                 text: chunk.text.clone(),
             });
             if batch.len() >= EMBED_BATCH {
-                vectors = self.remote.sync_chunks(batch, full_replace && vectors == 0)?;
-                batch = Vec::with_capacity(EMBED_BATCH);
+                vectors = self
+                    .remote
+                    .sync_chunks(std::mem::take(&mut batch), full_replace && vectors == 0, Vec::new())?;
             }
         }
 
         if !batch.is_empty() {
-            vectors = self.remote.sync_chunks(batch, full_replace && vectors == 0)?;
-        } else if full_replace {
-            vectors = self.remote.sync_chunks(vec![], true)?;
+            vectors = self
+                .remote
+                .sync_chunks(batch, full_replace && vectors == 0, Vec::new())?;
+        } else if full_replace && vectors == 0 {
+            vectors = self.remote.sync_chunks(vec![], true, Vec::new())?;
         }
 
         Ok(vectors)
