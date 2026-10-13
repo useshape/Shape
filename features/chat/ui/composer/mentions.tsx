@@ -318,8 +318,8 @@ export function MentionPicker({
                 if (item.projectPath !== (project_path ?? "")) continue;
                 const id = skillIdFromName(item.name);
                 if (installedIds.has(id)) continue;
-                if (q && !item.name.toLowerCase().includes(q) && !id.includes(q)) continue;
-                rows.push({ kind: "skill", id, path: id, label: item.name + " · on disk" });
+                if (q && !item.name.toLowerCase().includes(q) && !id.includes(q) && !item.relPath.toLowerCase().includes(q)) continue;
+                rows.push({ kind: "skill", id, path: item.relPath, label: `${item.name} · ${item.rootLabel}` });
             }
             return rows;
         }

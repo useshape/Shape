@@ -101,6 +101,14 @@ export const commands = {
         rememberFileContent(path, content);
         return content;
     },
+    /** Read `path` only when it canonicalizes inside `root`. Skill scans use this. */
+    readFileWithin: async (path: string, root: string) => {
+        fileContentCache.delete(path);
+        return invokeCommand<string>("read_file_within", { path, root });
+    },
+    /** Reject a skill root whose canonical path leaves `root` (project symlink). */
+    ensurePathWithin: (path: string, root: string) =>
+        invokeCommand<void>("ensure_path_within", { path, root }),
     primeFileCache: (path: string, content: string) => {
         rememberFileContent(path, content);
     },

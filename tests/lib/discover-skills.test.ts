@@ -4,12 +4,21 @@ import { serveSkillFs } from "../helpers/skill-fs";
 const mocks = vi.hoisted(() => ({
     lsDir: vi.fn(),
     readFileFromDisk: vi.fn(),
+    readFileWithin: vi.fn(),
+    ensurePathWithin: vi.fn(),
     homeDir: vi.fn(),
     getProjectPath: vi.fn(),
     listCustomSkillFolders: vi.fn(),
 }));
 
-vi.mock("@/lib/backend/commands", () => ({ commands: { lsDir: mocks.lsDir, readFileFromDisk: mocks.readFileFromDisk } }));
+vi.mock("@/lib/backend/commands", () => ({
+    commands: {
+        lsDir: mocks.lsDir,
+        readFileFromDisk: mocks.readFileFromDisk,
+        readFileWithin: mocks.readFileWithin,
+        ensurePathWithin: mocks.ensurePathWithin,
+    },
+}));
 
 vi.mock("@/lib/backend/project-state", () => ({ getProjectPath: mocks.getProjectPath }));
 
@@ -48,6 +57,8 @@ function serve(files: Record<string, string>) {
 beforeEach(() => {
     mocks.lsDir.mockReset();
     mocks.readFileFromDisk.mockReset();
+    mocks.readFileWithin.mockReset();
+    mocks.ensurePathWithin.mockReset();
     mocks.homeDir.mockReset();
     mocks.getProjectPath.mockReset();
     mocks.listCustomSkillFolders.mockReset();
@@ -231,7 +242,7 @@ describe("discoverSkills", () => {
             [`${PROJECT}/.agents/skills/locked/SKILL.md`]: "locked",
             [`${PROJECT}/.agents/skills/notes/readme.md`]: "no SKILL.md here",
         });
-        mocks.readFileFromDisk.mockImplementation(async (path: string) => {
+        mocks.readFileWithin.mockImplementation(async (path: string) => {
             if (path.includes("locked")) throw new Error("denied");
             return "   \n";
         });
@@ -269,7 +280,7 @@ describe("discoverSkills", () => {
             readStarted = resolve;
         });
         serve({ [`${PROJECT}/.agents/guide.md`]: "guide body" });
-        mocks.readFileFromDisk.mockImplementation(
+        mocks.readFileWithin.mockImplementation(
             () =>
                 new Promise<string>((resolve) => {
                     releaseRead = resolve;
@@ -285,6 +296,13 @@ describe("discoverSkills", () => {
         releaseRead("guide body");
 
         await expect(stale).resolves.toEqual({ projectPath: PROJECT, items: [] });
+    });
+
+    it("skips a project skill root that does not stay inside the project", async () => {
+        serve({ [`${PROJECT}/.agents/guide.md`]: "agent body" });
+        mocks.ensurePathWithin.mockRejectedValue(new Error("outside"));
+
+        await expect(discoverItems()).resolves.toEqual([]);
     });
 
     it("survives stored skills without a name", async () => {

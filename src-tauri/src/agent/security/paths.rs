@@ -263,6 +263,26 @@ pub fn assert_ipc_path_allowed(path: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Canonicalize `path` and reject credential targets.
+pub fn canonicalize_ipc_path(path: &str) -> Result<PathBuf, AppError> {
+    let resolved = PathBuf::from(path).canonicalize().map_err(AppError::Io)?;
+    assert_ipc_path_allowed(&resolved.to_string_lossy())?;
+    Ok(resolved)
+}
+
+/// `path` must already be canonical. Rejects siblings that only share a prefix
+/// (`…/skills-extra` is not inside `…/skills`).
+pub fn assert_resolved_within(path: &Path, root: &Path) -> Result<(), AppError> {
+    if path.starts_with(root) {
+        return Ok(());
+    }
+    Err(AppError::Message(format!(
+        "Access denied: '{}' is outside '{}'.",
+        path.display(),
+        root.display()
+    )))
+}
+
 /// Validate a path for read operations. Ensures it's within project and not sensitive.
 pub fn validate_read_path(user_path: &str, project_root: &str) -> Result<PathBuf, AppError> {
     let resolved = resolve_safe_path(user_path, project_root)?;
@@ -348,6 +368,42 @@ mod tests {
         assert!(is_sensitive_path(Path::new("/project/.VsCode/Settings.JSON")));
         assert!(!is_sensitive_path(Path::new("/project/app/settings.json")));
         assert!(is_sensitive_path(Path::new("/project/.git/hooks/pre-commit")));
+    }
+
+    #[test]
+    fn resolved_file_must_stay_inside_its_root() {
+        let temp = std::env::temp_dir().join(format!(
+            "shape-skill-root-{}",
+            std::process::id()
+        ));
+        let root = temp.join("skills");
+        let sibling = temp.join("skills-extra");
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&sibling).unwrap();
+        let inside = root.join("notes.md");
+        let outside = sibling.join("notes.md");
+        std::fs::write(&inside, "skill").unwrap();
+        std::fs::write(&outside, "other").unwrap();
+
+        let root_real = root.canonicalize().unwrap();
+        assert!(assert_resolved_within(&inside.canonicalize().unwrap(), &root_real).is_ok());
+        assert!(assert_resolved_within(&outside.canonicalize().unwrap(), &root_real).is_err());
+
+        let link = root.join("linked.md");
+        #[cfg(windows)]
+        let linked = std::os::windows::fs::symlink_file(&outside, &link);
+        #[cfg(not(windows))]
+        let linked = std::os::unix::fs::symlink(&outside, &link);
+        if linked.is_ok() {
+            let resolved = link.canonicalize().unwrap();
+            assert!(
+                assert_resolved_within(&resolved, &root_real).is_err(),
+                "a symlink inside the skill root must not resolve outside it"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&temp);
     }
 
     #[test]

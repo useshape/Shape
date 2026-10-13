@@ -63,7 +63,7 @@ export function SkillsSettings() {
 
     // Discoveries are cached in a shared index; this keeps them in step with
     // the open project, the folder list, and anything the user dismissed.
-    const { scan, scanning: busy } = useSkillIndex();
+    const { scan, scanning: busy, error } = useSkillIndex();
 
     useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
     useEffect(() => subscribeCustomSkillFolders(() => setFolders(listCustomSkillFolders())), []);
@@ -171,7 +171,10 @@ export function SkillsSettings() {
                         <Icon icon={ArrowSync20Regular} className={cn(busy && "animate-spin")} />
                     </Button>
                 </div>
-                {rows.length === 0 ? (
+                {error && !busy ? (
+                    <div className="px-3.5 pb-2.5 text-xs text-text-muted">{error}</div>
+                ) : null}
+                {rows.length === 0 && !error ? (
                     <div className="px-3.5 pb-2.5 text-xs text-text-muted">
                         {busy
                             ? "Scanning for skill files…"

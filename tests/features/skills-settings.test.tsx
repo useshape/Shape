@@ -6,6 +6,8 @@ import { serveSkillFs } from "../helpers/skill-fs";
 const mocks = vi.hoisted(() => ({
     lsDir: vi.fn(),
     readFileFromDisk: vi.fn(),
+    readFileWithin: vi.fn(),
+    ensurePathWithin: vi.fn(),
     homeDir: vi.fn(),
     getProjectPath: vi.fn(),
     projectState: vi.fn(),
@@ -13,7 +15,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/backend/commands", () => ({
-    commands: { lsDir: mocks.lsDir, readFileFromDisk: mocks.readFileFromDisk, homeDir: mocks.homeDir },
+    commands: {
+        lsDir: mocks.lsDir,
+        readFileFromDisk: mocks.readFileFromDisk,
+        readFileWithin: mocks.readFileWithin,
+        ensurePathWithin: mocks.ensurePathWithin,
+        homeDir: mocks.homeDir,
+    },
 }));
 
 vi.mock("@/lib/backend/project-state", () => ({
@@ -80,6 +88,8 @@ describe("skills settings", () => {
         resetSettings();
         mocks.lsDir.mockReset();
         mocks.readFileFromDisk.mockReset();
+        mocks.readFileWithin.mockReset();
+        mocks.ensurePathWithin.mockReset();
         mocks.homeDir.mockReset();
         mocks.getProjectPath.mockReset();
         mocks.projectState.mockReset();

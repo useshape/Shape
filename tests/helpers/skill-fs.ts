@@ -3,6 +3,8 @@ import type { Mock } from "vitest";
 export type SkillFsMocks = {
     lsDir: Mock;
     readFileFromDisk: Mock;
+    readFileWithin?: Mock;
+    ensurePathWithin?: Mock;
     homeDir?: Mock;
 };
 
@@ -49,10 +51,27 @@ export function serveSkillFs(mocks: SkillFsMocks, files: Record<string, string>,
         return entries.sort((a, b) => a.name.localeCompare(b.name));
     });
 
-    mocks.readFileFromDisk.mockImplementation(async (path: string) => {
+    const read = async (path: string) => {
         const body = normalized.get(normalize(path));
         if (body === undefined) throw new Error(`no such file: ${path}`);
         return body;
+    };
+
+    mocks.readFileFromDisk.mockImplementation(read);
+
+    const inside = (child: string, parent: string) => {
+        const file = normalize(child).toLowerCase();
+        const root = normalize(parent).toLowerCase();
+        return file === root || file.startsWith(`${root}/`);
+    };
+
+    mocks.readFileWithin?.mockImplementation(async (path: string, root: string) => {
+        if (!inside(path, root)) throw new Error(`outside root: ${path}`);
+        return read(path);
+    });
+
+    mocks.ensurePathWithin?.mockImplementation(async (path: string, root: string) => {
+        if (!inside(path, root)) throw new Error(`outside root: ${path}`);
     });
 
     if (mocks.homeDir) {

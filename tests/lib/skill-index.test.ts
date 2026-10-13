@@ -4,12 +4,21 @@ import { serveSkillFs } from "../helpers/skill-fs";
 const mocks = vi.hoisted(() => ({
     lsDir: vi.fn(),
     readFileFromDisk: vi.fn(),
+    readFileWithin: vi.fn(),
+    ensurePathWithin: vi.fn(),
     homeDir: vi.fn(),
     getProjectPath: vi.fn(),
     listCustomSkillFolders: vi.fn(),
 }));
 
-vi.mock("@/lib/backend/commands", () => ({ commands: { lsDir: mocks.lsDir, readFileFromDisk: mocks.readFileFromDisk } }));
+vi.mock("@/lib/backend/commands", () => ({
+    commands: {
+        lsDir: mocks.lsDir,
+        readFileFromDisk: mocks.readFileFromDisk,
+        readFileWithin: mocks.readFileWithin,
+        ensurePathWithin: mocks.ensurePathWithin,
+    },
+}));
 
 vi.mock("@/lib/backend/project-state", () => ({
     getProjectPath: mocks.getProjectPath,
@@ -28,8 +37,10 @@ import {
     importDiscoveredSkill,
     isSkillIndexScanning,
     refreshSkillIndex,
+    getSkillIndex,
     resetSkillIndex,
     resolveDiscoveredSkill,
+    resolveDiscoveredSkillBySource,
 } from "@/lib/chat/skill-index";
 import { dismissDiscoveredFile } from "@/lib/chat/discover-skills";
 import { listSkills } from "@/lib/chat/skills";
@@ -49,6 +60,8 @@ beforeEach(() => {
     resetSkillIndex();
     mocks.lsDir.mockReset();
     mocks.readFileFromDisk.mockReset();
+    mocks.readFileWithin.mockReset();
+    mocks.ensurePathWithin.mockReset();
     mocks.homeDir.mockReset();
     mocks.getProjectPath.mockReset();
     mocks.listCustomSkillFolders.mockReset();
@@ -149,6 +162,30 @@ describe("skill index", () => {
         dismissDiscoveredFile(PROJECT, ".claude/skills/pdf/SKILL.md");
 
         expect((await resolveDiscoveredSkill("pdf-processing"))?.body).toBe("Body.");
+    });
+
+    it("resolves the file the user picked when another skill shares the name", async () => {
+        serve({
+            [`${PROJECT}/.claude/skills/pdf/SKILL.md`]: skillFile("pdf", "Claude.", "Claude body."),
+            [`${PROJECT}/.agents/skills/pdf/SKILL.md`]: skillFile("pdf", "Agents.", "Agents body."),
+        });
+
+        const picked = await resolveDiscoveredSkillBySource(".agents/skills/pdf/SKILL.md");
+
+        expect(picked?.body).toBe("Agents body.");
+        expect(picked?.relPath).toBe(".agents/skills/pdf/SKILL.md");
+        expect((await resolveDiscoveredSkill("pdf"))?.body).toBe("Claude body.");
+    });
+
+    it("keeps the previous rows when a rescan throws", async () => {
+        serve({ [`${PROJECT}/.claude/skills/pdf/SKILL.md`]: skillFile("pdf", "PDFs.", "Body.") });
+        await refreshSkillIndex();
+
+        mocks.homeDir.mockRejectedValue(new Error("no home"));
+        await refreshSkillIndex();
+
+        expect(getCurrentProjectDiscoveries()).toHaveLength(1);
+        expect(getSkillIndex().error).toBe("Could not scan skill folders.");
     });
 
     it("returns null for a skill that does not exist on disk", async () => {
