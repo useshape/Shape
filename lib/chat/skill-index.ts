@@ -23,9 +23,11 @@ import { addSkill, skillIdFromName, type Skill } from "@/lib/chat/skills";
 export type SkillIndexSnapshot = {
     scan: SkillScan | null;
     scanning: boolean;
+    /** Set when a scan throws. An empty list alone is a successful scan. */
+    error: string | null;
 };
 
-const EMPTY: SkillIndexSnapshot = { scan: null, scanning: false };
+const EMPTY: SkillIndexSnapshot = { scan: null, scanning: false, error: null };
 
 let snapshot: SkillIndexSnapshot = EMPTY;
 let inFlight: Promise<void> | null = null;
@@ -86,12 +88,17 @@ export function refreshSkillIndex(): Promise<void> {
         .then((result) => {
             if (token !== generation) return;
             runningFor = undefined;
-            emit({ scan: result, scanning: false });
+            emit({ scan: result, scanning: false, error: null });
         })
         .catch(() => {
             if (token !== generation) return;
             runningFor = undefined;
-            emit({ scan: { projectPath, items: [] }, scanning: false });
+            const previous = snapshot.scan?.projectPath === projectPath ? snapshot.scan : { projectPath, items: [] };
+            emit({
+                scan: previous,
+                scanning: false,
+                error: "Could not scan skill folders.",
+            });
         });
     return inFlight;
 }
@@ -115,6 +122,7 @@ export function importDiscoveredSkill(item: DiscoveredSkill): Skill {
     emit({
         scan: scan ? { ...scan, items: reconcileImportedRow(scan.items, item.relPath, saved) } : scan,
         scanning: false,
+        error: snapshot.error,
     });
     return saved;
 }
@@ -128,6 +136,7 @@ export function dismissSkillRow(item: DiscoveredSkill): void {
     emit({
         scan: scan ? { ...scan, items: scan.items.filter((row) => row.relPath !== item.relPath) } : scan,
         scanning: false,
+        error: snapshot.error,
     });
 }
 
@@ -143,6 +152,22 @@ export async function resolveDiscoveredSkill(skillId: string): Promise<Discovere
 }
 
 /**
+ * Resolve the skill file the user picked. `relPath` is the discovery identity
+ * (`.claude/skills/pdf/SKILL.md`), not the shared slug, so a later row with the
+ * same name does not read an earlier file.
+ */
+export async function resolveDiscoveredSkillBySource(relPath: string): Promise<DiscoveredSkill | null> {
+    const scan = await currentScan();
+    let row = scan.find((item) => item.relPath === relPath);
+    if (!row) {
+        const full = await discoverSkills({ ignoreDismissals: true, includeUnchanged: true });
+        row = full.items.find((item) => item.relPath === relPath);
+    }
+    if (!row) return null;
+    return readDiscoveredSkill(row);
+}
+
+/**
  * Find a discovered row for `skillId`, preferring the highest-precedence root.
  * `includeUnchanged` keeps skills whose body already matches the library, which
  * `@skill:` resolution needs but the panel hides.
@@ -153,7 +178,7 @@ async function findDiscoveredSkill(skillId: string, options: { includeUnchanged:
     if (match) return match;
     if (!options.includeUnchanged) return null;
 
-    const full = await discoverSkills({ ignoreDismissals: true });
+    const full = await discoverSkills({ ignoreDismissals: true, includeUnchanged: true });
     return full.items.find((item) => skillIdFromName(item.name) === skillId) ?? null;
 }
 
@@ -172,7 +197,7 @@ async function currentScan(): Promise<DiscoveredSkill[]> {
 export async function readDiscoveredSkill(item: DiscoveredSkill): Promise<DiscoveredSkill | null> {
     let raw: string;
     try {
-        raw = await commands.readFileFromDisk(joinSkillPath(item.folder, item.fileName));
+        raw = await commands.readFileWithin(joinSkillPath(item.folder, item.fileName), item.folder);
     } catch {
         return null;
     }

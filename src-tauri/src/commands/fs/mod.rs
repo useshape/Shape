@@ -421,28 +421,45 @@ pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
     .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))?
 }
 
-/// Canonicalize a path and re-check the resolved target against the credential
-/// policy, so a symlink inside a project (`.agents/notes.md` → `~/.ssh/id_rsa`)
-/// cannot alias a blocked file behind an innocuous name.
-fn resolve_allowed_target(path: &str) -> Result<PathBuf, AppError> {
-    let resolved = PathBuf::from(path).canonicalize().map_err(AppError::Io)?;
-    crate::agent::security::paths::assert_ipc_path_allowed(&resolved.to_string_lossy())?;
-    Ok(resolved)
-}
-
-/// Read a text file for the IDE. Paths are checked before and after resolving
-/// symlinks, so a link cannot smuggle in a credential file.
 /// Absolute path of the signed-in user's home directory. Used to resolve
 /// user-level skill folders (`~/.claude/skills`, `~/.agents/skills`).
 pub fn home_dir() -> Option<String> {
     dirs::home_dir().map(|path| path.to_string_lossy().into_owned())
 }
 
+fn resolve_allowed_target(path: &str) -> Result<PathBuf, AppError> {
+    crate::agent::security::paths::canonicalize_ipc_path(path)
+}
+
+/// Read a text file for the IDE. Paths are checked before and after resolving
+/// symlinks, so a link cannot smuggle in a credential file.
 pub async fn read_file(path: String) -> Result<String, AppError> {
     crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
     let resolved = resolve_allowed_target(&path)?;
     let bytes = tokio::fs::read(&resolved).await.map_err(AppError::Io)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Read a skill file only when its canonical path stays inside `root`.
+/// A symlink such as `.agents/notes.md` → `~/Documents/notes.txt` is rejected.
+pub async fn read_file_within(path: String, root: String) -> Result<String, AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
+    crate::agent::security::paths::assert_ipc_path_allowed(&root)?;
+    let resolved_root = resolve_allowed_target(&root)?;
+    let resolved = resolve_allowed_target(&path)?;
+    crate::agent::security::paths::assert_resolved_within(&resolved, &resolved_root)?;
+    let bytes = tokio::fs::read(&resolved).await.map_err(AppError::Io)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Confirm a directory's canonical path stays inside `root`. Used to drop a
+/// project skill folder that is a symlink out of the project.
+pub fn ensure_path_within(path: String, root: String) -> Result<(), AppError> {
+    crate::agent::security::paths::assert_ipc_path_allowed(&path)?;
+    crate::agent::security::paths::assert_ipc_path_allowed(&root)?;
+    let resolved_root = resolve_allowed_target(&root)?;
+    let resolved = resolve_allowed_target(&path)?;
+    crate::agent::security::paths::assert_resolved_within(&resolved, &resolved_root)
 }
 
 /// Read raw bytes for the IDE (images, previews) under the same path policy.

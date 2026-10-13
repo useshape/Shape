@@ -6,7 +6,8 @@ import { getPreviewCurrentUrl } from "@/features/preview/store";
 import { DESIGN_TOKEN_MENTIONS, designTokenById } from "@/lib/chat/design-mentions";
 import { elementMentionBlock, lookupElementMention } from "@/lib/chat/element-mentions";
 import { skillBySlug, skillIdFromName } from "@/lib/chat/skills";
-import { resolveDiscoveredSkill } from "@/lib/chat/skill-index";
+import type { DiscoveredSkill } from "@/lib/chat/discover-skills";
+import { resolveDiscoveredSkill, resolveDiscoveredSkillBySource } from "@/lib/chat/skill-index";
 
 export type MentionKind =
     | "file"
@@ -157,7 +158,8 @@ export function formatMentionToken(mention: ChatMention): string {
     } else if (mention.kind === "plugin") {
         token = `@plugin:${slugifyMentionLabel(mention.id || mention.path || mention.label || "plugin")}`;
     } else if (mention.kind === "skill") {
-        token = `@skill:${slugifyMentionLabel(mention.id || mention.path || mention.label || "skill")}`;
+        const source = skillMentionSource(mention.path);
+        token = `@skill:${slugifyMentionLabel(source || mention.id || mention.path || mention.label || "skill")}`;
     } else if (mention.kind === "element") {
         token = `@${(mention.id || "element:element").replace(/^@/, "")}`;
     } else {
@@ -456,35 +458,56 @@ export function resolveDesignSelectionFromProse(text: string): ChatMention | nul
   return null;
 }
 
+/** A discovery path (`…/SKILL.md`, `~/…`), not a skill slug. */
+function skillMentionSource(path: string | undefined): string | null {
+    const value = path?.trim();
+    if (!value) return null;
+    if (value.includes("/") || value.includes("\\") || value.startsWith("~")) return value;
+    return null;
+}
+
+function skillMentionBlock(onDisk: DiscoveredSkill): string {
+    const attributes = [
+        `type="skill"`,
+        `id="${escapeXmlAttr(skillIdFromName(onDisk.name))}"`,
+        `name="${escapeXmlAttr(onDisk.name)}"`,
+        `source="${escapeXmlAttr(onDisk.relPath)}"`,
+    ];
+    if (onDisk.description) attributes.push(`description="${escapeXmlAttr(onDisk.description)}"`);
+    const folderNote =
+        onDisk.scope === "project"
+            ? ""
+            : `\nThe skill folder is ${onDisk.folder} — resolve any relative paths in this skill against it.`;
+    return `<mention_context ${attributes.join(" ")}>Follow this skill for the rest of the turn.${folderNote}\n${onDisk.body}\n</mention_context>`;
+}
+
 async function readMentionContext(
     mention: ChatMention,
     projectPath: string | null,
 ): Promise<string | null> {
     if (mention.kind === "skill") {
-        const slug = mention.id || mention.path || mention.label;
-        const installed = skillBySlug(slug);
+        const slug = mention.id || mention.label;
+        const source = skillMentionSource(mention.path);
+        // A picker row stores the file path. That file wins over another skill
+        // that happens to share the slug.
+        if (source) {
+            const picked = await resolveDiscoveredSkillBySource(source);
+            if (picked) return skillMentionBlock(picked);
+        }
+
+        const installed = skillBySlug(slug || mention.path || "");
         if (installed) {
             return `<mention_context type="skill" id="${escapeXmlAttr(installed.id)}" name="${escapeXmlAttr(installed.name)}">Follow this skill for the rest of the turn.\n${installed.body}\n</mention_context>`;
         }
 
-        // Not in the Shape library — fall back to a skill file on disk, read
-        // fresh, so skills living in `.claude/skills` work without importing.
-        const onDisk = await resolveDiscoveredSkill(skillIdFromName(slug));
+        // Typed `@skill:name` with no file: library first, then the
+        // highest-precedence file on disk.
+        const onDisk = await resolveDiscoveredSkill(skillIdFromName(slug || mention.path || ""));
         if (!onDisk) {
-            return `<mention_context type="skill" id="${escapeXmlAttr(slug)}">The user referenced a skill that is not installed.</mention_context>`;
+            const missing = slug || mention.path || mention.label || "skill";
+            return `<mention_context type="skill" id="${escapeXmlAttr(missing)}">The user referenced a skill that is not installed.</mention_context>`;
         }
-        const attributes = [
-            `type="skill"`,
-            `id="${escapeXmlAttr(skillIdFromName(onDisk.name))}"`,
-            `name="${escapeXmlAttr(onDisk.name)}"`,
-            `source="${escapeXmlAttr(onDisk.relPath)}"`,
-        ];
-        if (onDisk.description) attributes.push(`description="${escapeXmlAttr(onDisk.description)}"`);
-        const folderNote =
-            onDisk.scope === "project"
-                ? ""
-                : `\nThe skill folder is ${onDisk.folder} — resolve any relative paths in this skill against it.`;
-        return `<mention_context ${attributes.join(" ")}>Follow this skill for the rest of the turn.${folderNote}\n${onDisk.body}\n</mention_context>`;
+        return skillMentionBlock(onDisk);
     }
 
     if (mention.kind === "codebase") {

@@ -7,6 +7,8 @@ import { resetSettings } from "../helpers/settings";
 const mocks = vi.hoisted(() => ({
     lsDir: vi.fn(),
     readFileFromDisk: vi.fn(),
+    readFileWithin: vi.fn(),
+    ensurePathWithin: vi.fn(),
     homeDir: vi.fn(),
     getProjectPath: vi.fn(),
     searchProjectFiles: vi.fn(),
@@ -19,6 +21,8 @@ vi.mock("@/lib/backend/commands", () => ({
     commands: {
         lsDir: mocks.lsDir,
         readFileFromDisk: mocks.readFileFromDisk,
+        readFileWithin: mocks.readFileWithin,
+        ensurePathWithin: mocks.ensurePathWithin,
         homeDir: mocks.homeDir,
         searchProjectFiles: mocks.searchProjectFiles,
         getConversations: mocks.getConversations,
@@ -84,6 +88,8 @@ describe("mention picker: skills", () => {
         resetHomeDirCache();
         mocks.lsDir.mockReset();
         mocks.readFileFromDisk.mockReset();
+        mocks.readFileWithin.mockReset();
+        mocks.ensurePathWithin.mockReset();
         mocks.homeDir.mockReset();
         mocks.getProjectPath.mockReset();
         mocks.searchProjectFiles.mockReset();
@@ -129,7 +135,7 @@ describe("mention picker: skills", () => {
 
         await openCategory("Skills");
 
-        expect(rowLabels().some((label) => label.includes("pdf-processing · on disk"))).toBe(true);
+        expect(rowLabels().some((label) => label.includes("pdf-processing · .claude/skills"))).toBe(true);
     });
 
     it("marks personal skills as on disk too", async () => {
@@ -138,7 +144,7 @@ describe("mention picker: skills", () => {
 
         await openCategory("Skills");
 
-        expect(rowLabels().some((label) => label.includes("commit-messages · on disk"))).toBe(true);
+        expect(rowLabels().some((label) => label.includes("commit-messages · ~/.agents/skills"))).toBe(true);
     });
 
     it("lists a saved skill once, without the on-disk suffix", async () => {
@@ -150,7 +156,7 @@ describe("mention picker: skills", () => {
 
         const rows = rowLabels().filter((label) => label.startsWith("pdf-processing"));
         expect(rows).toHaveLength(1);
-        expect(rows[0]).not.toContain("on disk");
+        expect(rows[0]).not.toContain(".claude/skills");
     });
 
     it("inserts an @skill: token for a skill picked from disk", async () => {
@@ -174,11 +180,11 @@ describe("mention picker: skills", () => {
 
         await act(async () => {
             buttons()
-                .find((button) => button.textContent?.includes("pdf-processing · on disk"))
+                .find((button) => button.textContent?.includes("pdf-processing · .claude/skills"))
                 ?.click();
         });
 
-        expect(picked).toEqual(["@skill:pdf-processing "]);
+        expect(picked).toEqual(["@skill:.claude/skills/pdf/SKILL.md "]);
     });
 
     it("never lists another project's skill files", async () => {
