@@ -185,11 +185,13 @@ function isDismissed(dismissed: Set<string>, relPath: string): boolean {
  * as another's.
  */
 export async function discoverSkills(
-    options: { ignoreDismissals?: boolean; includeUnchanged?: boolean } = {}
+    options: { ignoreDismissals?: boolean; includeUnchanged?: boolean; supersede?: boolean } = {}
 ): Promise<SkillScan> {
-    // Supersede any scan still in flight, including when there is no project:
-    // closing a project must discard results the old project was reading.
-    const scanGen = ++nextScanGen;
+    // Only panel refreshes opt into supersession. A mention lookup must not
+    // discard the refresh that is already reading, or be discarded by one.
+    const tracked = options.supersede === true;
+    const scanGen = tracked ? ++nextScanGen : nextScanGen;
+    const superseded = () => tracked && isSuperseded(scanGen);
 
     const projectPath = getProjectPath();
     const homeDir = await getHomeDir();
@@ -214,7 +216,7 @@ export async function discoverSkills(
     const seenPaths = new Set<string>();
 
     for (const root of roots) {
-        if (isSuperseded(scanGen)) return { projectPath, items: [] };
+        if (superseded()) return { projectPath, items: [] };
 
         let files: SkillFile[];
         try {
@@ -232,7 +234,7 @@ export async function discoverSkills(
         }
 
         for (const file of files) {
-            if (isSuperseded(scanGen)) return { projectPath, items: [] };
+            if (superseded()) return { projectPath, items: [] };
 
             const relPath = displaySkillPath(file.filePath, projectPath, homeDir);
             const normalizedFile = normalizeSkillPath(file.filePath);
@@ -287,7 +289,7 @@ export async function discoverSkills(
     }
 
     // The last read may have resolved after a newer scan started.
-    if (isSuperseded(scanGen)) return { projectPath, items: [] };
+    if (superseded()) return { projectPath, items: [] };
 
     return { projectPath, items: discovered };
 }

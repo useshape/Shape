@@ -84,7 +84,7 @@ export function refreshSkillIndex(): Promise<void> {
     const projectPath = getProjectPath();
     runningFor = projectPath;
     emit({ ...snapshot, scanning: true });
-    inFlight = discoverSkills()
+    inFlight = discoverSkills({ supersede: true })
         .then((result) => {
             if (token !== generation) return;
             runningFor = undefined;

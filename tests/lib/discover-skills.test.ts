@@ -264,9 +264,9 @@ describe("discoverSkills", () => {
             return served(path);
         });
 
-        const stale = discoverSkills();
+        const stale = discoverSkills({ supersede: true });
         await new Promise((resolve) => setTimeout(resolve, 0)); // stale scan is parked
-        const fresh = discoverSkills();
+        const fresh = discoverSkills({ supersede: true });
         expect((await fresh).items).toHaveLength(1);
 
         releaseStale!([{ name: "guide.md", path: `${PROJECT}/.agents/guide.md`, is_dir: false }]);
@@ -288,14 +288,26 @@ describe("discoverSkills", () => {
                 })
         );
 
-        const stale = discoverSkills();
+        const stale = discoverSkills({ supersede: true });
         await started;
         // Closing the project while the read is in flight supersedes the scan.
         mocks.getProjectPath.mockReturnValue(null);
-        await expect(discoverSkills()).resolves.toEqual({ projectPath: null, items: [] });
+        await expect(discoverSkills({ supersede: true })).resolves.toEqual({ projectPath: null, items: [] });
         releaseRead("guide body");
 
         await expect(stale).resolves.toEqual({ projectPath: PROJECT, items: [] });
+    });
+
+    it("does not let a mention lookup cancel another scan", async () => {
+        serve({ [`${PROJECT}/.agents/guide.md`]: "guide body" });
+
+        const [panel, lookup] = await Promise.all([
+            discoverSkills({ supersede: true }),
+            discoverSkills({ includeUnchanged: true }),
+        ]);
+
+        expect(panel.items).toHaveLength(1);
+        expect(lookup.items).toHaveLength(1);
     });
 
     it("skips a project skill root that does not stay inside the project", async () => {
