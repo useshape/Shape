@@ -26,7 +26,10 @@ import {
     fetchPlugins,
     invalidatePluginsCache,
     peekPluginsCache,
+    PLUGINS_PAGE_REFRESH_MS,
     startPluginConnect,
+    subscribePlugins,
+    watchPluginCatalog,
     type PluginRow,
     type PluginToolHint,
 } from "@/lib/plugins/api";
@@ -551,21 +554,23 @@ export function PluginsSettingsView() {
     const [openToolkit, setOpenToolkit] = useState<string | null>(null);
 
     const load = useCallback(
-        async (force = false) => {
+        async (force = false, quiet = false) => {
             if (!pluginsAvailable) {
                 setLoading(false);
                 return;
             }
             try {
                 const data = await fetchPlugins({ force });
-                setPlugins(mergeCatalog(data.plugins));
-                setConfigured(data.configured);
+                const latest = peekPluginsCache() ?? data;
+                setPlugins(mergeCatalog(latest.plugins));
+                setConfigured(latest.configured);
                 setBusy((current) => {
                     if (!current) return current;
-                    if (data.plugins.some((p) => p.toolkit === current && p.connected)) return null;
+                    if (latest.plugins.some((p) => p.toolkit === current && p.connected)) return null;
                     return current;
                 });
             } catch (err) {
+                if (quiet) return;
                 const message = err instanceof ShapeApiError ? err.message : "Could not load plugins.";
                 notify.error(message);
             } finally {
@@ -576,8 +581,25 @@ export function PluginsSettingsView() {
     );
 
     useEffect(() => {
-        void load(false);
+        watchPluginCatalog();
+        void load(true);
     }, [load]);
+
+    useEffect(() => subscribePlugins(() => {
+        const cached = peekPluginsCache();
+        if (!cached) return;
+        setPlugins(mergeCatalog(cached.plugins));
+        setConfigured(cached.configured);
+    }), []);
+
+    useEffect(() => {
+        if (!pluginsAvailable) return;
+        const id = window.setInterval(() => {
+            if (document.visibilityState === "hidden") return;
+            void load(true, true);
+        }, PLUGINS_PAGE_REFRESH_MS);
+        return () => window.clearInterval(id);
+    }, [pluginsAvailable, load]);
 
     useEffect(() => {
         if (!busy) return;
