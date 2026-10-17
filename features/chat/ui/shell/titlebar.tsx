@@ -16,6 +16,7 @@ import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
 import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
 import { CommitMenu } from "@/features/agent/workspace/commit-menu";
+import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -162,6 +163,7 @@ export function ChatTitlebar({
 
     const actions = (
         <div className="flex items-center gap-2">
+            {project_path ? <WorkspaceBranchSwitch /> : null}
             {project_path ? <CommitMenu projectPath={project_path} /> : null}
             <Tooltip content={terminalOpen ? "Hide terminal" : "Show terminal"}>
                 <button

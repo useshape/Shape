@@ -231,6 +231,71 @@ function statusLetter(status: string) {
     return code || "M";
 }
 
+type CheckDot = "ok" | "bad" | "wait" | "idle";
+
+type BranchPr = {
+    number: number;
+    url: string;
+    label: string;
+    tone: "ok" | "warn" | "bad" | "muted";
+    dots: CheckDot[];
+    additions: number;
+    deletions: number;
+};
+
+function githubSlug(remote: string): { owner: string; repo: string } | null {
+    const match = remote.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/i);
+    if (!match) return null;
+    return { owner: match[1]!, repo: match[2]! };
+}
+
+function compareUrlFor(remote: string, branch: string): string | null {
+    const slug = githubSlug(remote);
+    if (!slug || !branch) return null;
+    const head = branch.split("/").map(encodeURIComponent).join("/");
+    return `https://github.com/${slug.owner}/${slug.repo}/compare/${head}?expand=1`;
+}
+
+function dotFromCheck(run: { status?: string; conclusion?: string | null }): CheckDot {
+    if (run.status !== "completed") return "wait";
+    if (run.conclusion === "success" || run.conclusion === "neutral") return "ok";
+    if (run.conclusion === "failure" || run.conclusion === "timed_out" || run.conclusion === "action_required") {
+        return "bad";
+    }
+    return "idle";
+}
+
+function prTone(
+    detail: { draft?: boolean; mergeable_state?: string },
+    dots: CheckDot[],
+): { label: string; tone: BranchPr["tone"] } {
+    if (detail.draft) return { label: "Draft", tone: "muted" };
+    const state = detail.mergeable_state || "";
+    if (state === "dirty") return { label: "Merge conflicts", tone: "bad" };
+    if (dots.some((dot) => dot === "bad")) return { label: "Checks failing", tone: "bad" };
+    if (state === "blocked") return { label: "Review required", tone: "warn" };
+    if (dots.some((dot) => dot === "wait") || state === "unstable") return { label: "Checks pending", tone: "warn" };
+    if (state === "clean") return { label: "Ready to merge", tone: "ok" };
+    return { label: "Open", tone: "muted" };
+}
+
+const PILL =
+    "h-7 rounded-full px-2.5 font-normal [corner-shape:unset]";
+
+const DOT_CLASS: Record<CheckDot, string> = {
+    ok: "bg-success",
+    bad: "bg-error",
+    wait: "bg-warning",
+    idle: "bg-text-disabled",
+};
+
+const TONE_CLASS: Record<BranchPr["tone"], string> = {
+    ok: "text-success",
+    warn: "text-warning",
+    bad: "text-error",
+    muted: "text-text-secondary",
+};
+
 function parseDiffFileStats(raw: string): Record<string, { plus: number; minus: number }> {
     const stats: Record<string, { plus: number; minus: number }> = {};
     let current: string | null = null;
@@ -248,7 +313,13 @@ function parseDiffFileStats(raw: string): Record<string, { plus: number; minus: 
     return stats;
 }
 
-export function CommitMenu({ projectPath }: { projectPath: string }) {
+export function CommitMenu({
+    projectPath,
+    part = "commit",
+}: {
+    projectPath: string;
+    part?: "commit" | "pr";
+}) {
     const [repo, setRepo] = useState<string | null>(null);
     const [files, setFiles] = useState<GitFileParams[]>([]);
     const [stats, setStats] = useState<Record<string, { plus: number; minus: number }>>({});
@@ -263,6 +334,8 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
     const [publishOpen, setPublishOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [setupOpen, setSetupOpen] = useState(false);
+    const [branchPr, setBranchPr] = useState<BranchPr | null>(null);
+    const [compareUrl, setCompareUrl] = useState<string | null>(null);
     const github = useGitHubAuth();
 
     const refresh = useCallback(async () => {
@@ -318,18 +391,88 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
         return () => window.removeEventListener("shape-git-refresh", on);
     }, [refresh]);
 
+    useEffect(() => {
+        if (!repo || !branch) {
+            setBranchPr(null);
+            setCompareUrl(null);
+            return;
+        }
+        let cancelled = false;
+        void (async () => {
+            try {
+                const remote = await commands.gitRemoteUrl(repo);
+                const slug = githubSlug(remote || "");
+                const nextCompare = compareUrlFor(remote || "", branch);
+                if (cancelled) return;
+                setCompareUrl(nextCompare);
+                if (!slug || !github.loggedIn) {
+                    setBranchPr(null);
+                    return;
+                }
+                const listed = JSON.parse(
+                    await commands.githubApiGet(
+                        `/repos/${slug.owner}/${slug.repo}/pulls?head=${encodeURIComponent(`${slug.owner}:${branch}`)}&state=open&per_page=1`,
+                    ),
+                ) as { number?: number; head?: { sha?: string }; html_url?: string }[];
+                const first = Array.isArray(listed) ? listed[0] : undefined;
+                if (!first?.number) {
+                    if (!cancelled) setBranchPr(null);
+                    return;
+                }
+                const detail = JSON.parse(
+                    await commands.githubApiGet(`/repos/${slug.owner}/${slug.repo}/pulls/${first.number}`),
+                ) as {
+                    draft?: boolean;
+                    mergeable_state?: string;
+                    html_url?: string;
+                    additions?: number;
+                    deletions?: number;
+                    head?: { sha?: string };
+                };
+                const sha = detail.head?.sha || first.head?.sha;
+                let dots: CheckDot[] = [];
+                if (sha) {
+                    try {
+                        const checks = JSON.parse(
+                            await commands.githubApiGet(
+                                `/repos/${slug.owner}/${slug.repo}/commits/${sha}/check-runs?per_page=8`,
+                            ),
+                        ) as { check_runs?: { status?: string; conclusion?: string | null }[] };
+                        const runs = Array.isArray(checks.check_runs) ? checks.check_runs : [];
+                        dots = runs.slice(0, 4).map(dotFromCheck);
+                    } catch {
+                        dots = [];
+                    }
+                }
+                if (cancelled) return;
+                const tone = prTone(detail, dots);
+                setBranchPr({
+                    number: first.number,
+                    url: detail.html_url || first.html_url || "",
+                    label: tone.label,
+                    tone: tone.tone,
+                    dots,
+                    additions: Number(detail.additions ?? 0),
+                    deletions: Number(detail.deletions ?? 0),
+                });
+            } catch {
+                if (!cancelled) setBranchPr(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [repo, branch, github.loggedIn]);
+
     const totals = useMemo(() => {
         let plus = 0;
         let minus = 0;
-        for (const file of files) {
-            const key = file.path.replace(/\\/g, "/");
-            const row = stats[key];
-            if (!row) continue;
+        for (const row of Object.values(stats)) {
             plus += row.plus;
             minus += row.minus;
         }
         return { plus, minus };
-    }, [files, stats]);
+    }, [stats]);
 
     const messageBody = () => {
         const head = title.trim();
@@ -523,6 +666,107 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
             setBusy(false);
         }
     };
+
+    const toneClass = branchPr ? TONE_CLASS[branchPr.tone] : "";
+    const prPill = branchPr ? (
+            <Button
+                variant="outline"
+                size="xs"
+                className={cn(PILL, toneClass)}
+                onClick={() => {
+                    if (branchPr.url) void commands.openUrlExternal(branchPr.url);
+                }}
+            >
+                <span className={cn("size-1.5 rounded-full", DOT_CLASS[branchPr.tone === "ok" ? "ok" : branchPr.tone === "bad" ? "bad" : branchPr.tone === "warn" ? "wait" : "idle"])} />
+                <span>#{branchPr.number}</span>
+                <span>{branchPr.label}</span>
+            </Button>
+        ) : compareUrl ? (
+            <Button
+                variant="outline"
+                size="sm"
+                className={cn(PILL, "text-text-primary bg-panel-hover px-3 py-4! text-md border-border-subtle border")}
+                onClick={() => {
+                    void commands.openUrlExternal(compareUrl);
+                }}
+            >
+                Create PR
+            </Button>
+        ) : null;
+
+    const plus = totals.plus > 0 ? totals.plus : branchPr?.additions ?? 0;
+    const minus = totals.minus > 0 ? totals.minus : branchPr?.deletions ?? 0;
+    const changeSquares = files.slice(0, 4).map((file) => {
+        const letter = statusLetter(file.status);
+        const row = stats[file.path.replace(/\\/g, "/")];
+        if (letter === "D" || (row != null && row.minus > row.plus && row.plus === 0)) return "bad" as const;
+        if (letter === "A" || letter === "U") return "ok" as const;
+        if (row != null && row.minus > row.plus) return "bad" as const;
+        return "ok" as const;
+    });
+    const changesPill = files.length > 0 || plus > 0 || minus > 0 ? (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(PILL, "text-text-primary bg-panel-hover px-3 py-4! text-md border-border-subtle border")}
+                    aria-label="Changes"
+                >
+                    {plus > 0 ? <span className="tabular-nums text-success">+{plus}</span> : null}
+                    {minus > 0 ? <span className="tabular-nums text-error">−{minus}</span> : null}
+                    {changeSquares.length > 0 ? (
+                        <span className="flex items-center gap-0.5" aria-hidden>
+                            {changeSquares.map((kind, index) => (
+                                <span
+                                    key={`${kind}-${index}`}
+                                    className={cn(
+                                        "size-2 shrink-0 rounded-[2px]",
+                                        kind === "ok" ? "bg-success" : "bg-error",
+                                    )}
+                                />
+                            ))}
+                        </span>
+                    ) : null}
+                    <Icon
+                        icon={ChevronDown20Regular}
+                        style={{ color: "var(--text-muted)", width: 14, height: 14 }}
+                    />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+                {files.length === 0 ? (
+                    <div className="px-2 py-2 text-sm text-text-muted">No changes</div>
+                ) : (
+                    files.slice(0, 12).map((file) => {
+                        const letter = statusLetter(file.status);
+                        return (
+                            <DropdownMenuItem key={`${file.path}-${file.staged}`} className="gap-2">
+                                <span
+                                    className={cn(
+                                        "size-2 shrink-0 rounded-[2px]",
+                                        letter === "D" ? "bg-error" : "bg-success",
+                                    )}
+                                />
+                                <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
+                                <span className={cn("text-sm", letter === "D" ? "text-error" : "text-success")}>{letter}</span>
+                            </DropdownMenuItem>
+                        );
+                    })
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    ) : null;
+
+    if (part === "pr") {
+        if (!prPill && !changesPill) return null;
+        return (
+            <div className="flex items-center gap-1.5">
+                {prPill}
+                {changesPill}
+            </div>
+        );
+    }
 
     return (
         <>
