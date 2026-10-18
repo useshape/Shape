@@ -778,6 +778,7 @@
     --ui-fm-hole-2: #b84322;
 }
 
+/* Composer rotating empty-state hint (fade up). Centered on the one-line row. */
 .t-composer-hint {
   position: absolute;
   inset: 0;
@@ -791,7 +792,7 @@
   color: var(--text-muted);
   font-size: 0.875rem;
   font-weight: 500;
-  line-height: 1.5rem;
+  line-height: 1.25rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

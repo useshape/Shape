@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 
 
+import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search";
 import {
     DropdownMenu,
@@ -19,10 +20,17 @@ import {
 import { commands, useProjectState } from "@/lib/backend";
 import { useGitRepos } from "@/lib/git/repos";
 import { useGitBranch } from "@/features/agent/workbench/hooks/use-git-branch";
+import { cn } from "@/lib/utils";
 
 const MAX_VISIBLE = 40;
 
-export function WorkspaceBranchSwitch() {
+export function WorkspaceBranchSwitch({
+    pill = false,
+    align = "start",
+}: {
+    pill?: boolean;
+    align?: "start" | "center" | "end";
+} = {}) {
     const { project_path } = useProjectState();
     const { scmRepoPath } = useGitRepos(project_path);
     const repoPath = scmRepoPath ?? project_path;
@@ -77,16 +85,30 @@ export function WorkspaceBranchSwitch() {
             }}
         >
             <DropdownMenuTrigger asChild disabled={!repoPath}>
-                <button
-                    type="button"
-                    disabled={!repoPath}
-                    className="inline-flex max-w-40 items-center gap-1 rounded-md px-1.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled"
-                >
-                    <Icon icon={Branch20Regular} className="shrink-0 text-text-muted" />
-                    <span className="truncate">{branch ?? "Branch"}</span>
-                </button>
+                {pill ? (
+                    <Button
+                        variant="outline"
+                        size="xs"
+                        disabled={!repoPath}
+                        className="h-7 max-w-48 rounded-full px-2.5 font-normal text-text-primary [corner-shape:unset]"
+                    >
+                        <Icon icon={Branch20Regular} className="shrink-0 text-text-muted" />
+                        <span className="truncate">{branch ?? "Branch"}</span>
+                    </Button>
+                ) : (
+                    <button
+                        type="button"
+                        disabled={!repoPath}
+                        className={cn(
+                            "inline-flex max-w-40 items-center gap-1 rounded-md px-1.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled",
+                        )}
+                    >
+                        <Icon icon={Branch20Regular} className="shrink-0 text-text-muted" />
+                        <span className="truncate">{branch ?? "Branch"}</span>
+                    </button>
+                )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64 p-0">
+            <DropdownMenuContent align={align} className="w-64 p-0">
                 <SearchInput
                     borderless
                     stickyFade

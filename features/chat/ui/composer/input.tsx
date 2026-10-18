@@ -56,7 +56,7 @@ import {
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { MentionPicker } from "./mentions";
 import { PendingEditsPanel } from "./edits";
-import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
+import { composerGhost, loadComposerPrompts, rememberComposerPrompt } from "@/lib/chat/composer-complete";
 import {
     ComposerTasksStrip,
     type ComposerTaskItem,
@@ -88,6 +88,8 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
+import { useProjectState } from "@/lib/backend";
+import { CommitMenu } from "@/features/agent/workspace/commit-menu";
 import { useSettings } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { SearchInput } from "@/components/ui/search";
@@ -302,15 +304,7 @@ function isAllowedFile(file: File): boolean {
 }
 
 function ComposerContextHighlight({ text }: { text: string }) {
-    return (
-        <span className="relative">
-            <span
-                aria-hidden
-                className="absolute inset-y-0 -inset-x-0.5 rounded-md bg-accent-text-bg"
-            />
-            <span className="relative text-accent-text">{text}</span>
-        </span>
-    );
+    return <span className="text-accent-text">{text}</span>;
 }
 
 const CHAT_MODES = [
@@ -471,7 +465,7 @@ function RotatingComposerHint({ paused }: { paused: boolean }) {
 
     return (
         <div className="t-composer-hint pl-3" aria-hidden>
-            <span className="text-sm text-text-muted" data-phase={phase}>
+            <span className="text-md font-normal text-text-muted" data-phase={phase}>
                 {COMPOSER_HINTS[index]}
             </span>
         </div>
@@ -505,7 +499,7 @@ function ModeMenu({
                     </div>
                 </Button>
             </DropdownMenuTrigger >
-            <DropdownMenuContent align="start" className="w-100">
+            <DropdownMenuContent align="end" className="w-100">
                 {CHAT_MODES.map((mode) => (
                     <DropdownMenuItem
                         key={mode.id}
@@ -568,6 +562,7 @@ export function ChatInput({
 
     const settings = useSettings();
     const shapeAuth = useShapeAuth();
+    const { project_path } = useProjectState();
     const { catalog } = useShapeCatalog();
     const allModels = resolveChatModels(getCatalogModels());
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -676,15 +671,41 @@ export function ChatInput({
         requestAnimationFrame(() => textarea.focus());
     }, [inputValue, onInputChange]);
 
+    const [composerTall, setComposerTall] = React.useState(false);
+    const [prompts, setPrompts] = React.useState<string[]>(() => loadComposerPrompts());
+    const [caret, setCaret] = React.useState(0);
+
+    const rememberPrompt = React.useCallback((text: string) => {
+        rememberComposerPrompt(text);
+        setPrompts(loadComposerPrompts());
+    }, []);
+
+    const ghost = composerGhost(inputValue, caret, prompts);
+
     const onComposerKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if ((mentionOpen || slashOpen) && (e.key === "Enter" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape")) {
             e.preventDefault();
             return;
         }
+        const el = e.currentTarget;
+        const atEnd = el.selectionStart === el.selectionEnd && el.selectionStart === inputValue.length;
+        if (ghost && atEnd && !mentionOpen && !slashOpen && (e.key === "Tab" || e.key === "ArrowRight")) {
+            e.preventDefault();
+            const next = inputValue + ghost;
+            onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
+            setCaret(next.length);
+            requestAnimationFrame(() => {
+                el.focus();
+                el.setSelectionRange(next.length, next.length);
+            });
+            return;
+        }
+        if (e.key === "Enter" && !e.shiftKey && inputValue.trim()) {
+            rememberPrompt(inputValue);
+        }
+        setCaret(el.selectionStart ?? inputValue.length);
         onKeyDown(e);
-    }, [mentionOpen, slashOpen, onKeyDown]);
-
-    const [composerTall, setComposerTall] = React.useState(false);
+    }, [mentionOpen, slashOpen, onKeyDown, ghost, inputValue, onInputChange, rememberPrompt]);
 
     React.useEffect(() => {
         if (reasoningEffort === "super" && !modelSupportsSuperThinking(selectedModel)) {
@@ -695,14 +716,23 @@ export function ChatInput({
     React.useEffect(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-        const line = 24;
         const max = 220;
-        textarea.style.height = "0px";
+        textarea.style.paddingTop = "0px";
+        textarea.style.paddingBottom = "0px";
+        textarea.style.lineHeight = "1";
+        textarea.style.height = "auto";
         const content = textarea.scrollHeight;
-        const tall = content > line + 2 || inputValue.includes("\n");
-        const next = tall ? Math.min(Math.max(content, line), max) : line;
-        textarea.style.height = `${next}px`;
-        textarea.style.overflowY = content > max ? "auto" : "hidden";
+        const tall = inputValue.includes("\n") || content > 28;
+        if (!tall) {
+            textarea.style.height = "";
+            textarea.style.lineHeight = "1";
+            textarea.style.overflowY = "hidden";
+        } else {
+            const next = Math.min(Math.max(content, 24), max);
+            textarea.style.lineHeight = "24px";
+            textarea.style.height = `${next}px`;
+            textarea.style.overflowY = content > max ? "auto" : "hidden";
+        }
         textarea.style.overflowX = "hidden";
         setComposerTall(tall);
         revealComposerCaret(textarea);
@@ -989,6 +1019,11 @@ export function ChatInput({
             )}
         >
             <div className="relative z-10 flex w-full flex-col gap-1.5">
+                {project_path ? (
+                    <div className="flex min-w-0 items-center gap-1.5 px-1">
+                        <CommitMenu projectPath={project_path} part="pr" />
+                    </div>
+                ) : null}
                 {hasContextStrip ? (
                     <div className="flex min-w-0 items-center gap-1 px-1">
                         {pendingEdits.length > 0 ? (
@@ -1095,7 +1130,7 @@ export function ChatInput({
                             <DropdownMenuTrigger asChild>
                                 <button
                                     className={cn(
-                                        "size-9 shrink-0 p-0",
+                                        "inline-flex size-8 shrink-0 items-center justify-center p-0",
                                         "text-text-muted hover:text-text-primary",
                                         "rounded-full bg-panel-hover hover:bg-panel-active",
                                     )}
@@ -1204,18 +1239,21 @@ export function ChatInput({
                                 </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <div className="relative min-h-6 min-w-0 flex-1">
+                        <div className={cn("relative min-w-0 flex-1", composerTall ? "min-h-6" : "flex h-11 items-center")}>
                         {!needsSignIn && !inputValue ? (
                             <RotatingComposerHint paused={false} />
                         ) : needsSignIn && !inputValue ? (
-                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-6 text-text-muted">
+                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-5 text-text-muted">
                                 Sign in to use the chat
                             </div>
                         ) : null}
                         <div
                             ref={mentionOverlayRef}
                             aria-hidden
-                            className="pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words pl-3 text-sm font-medium leading-6 text-text-primary"
+                            className={cn(
+                                "pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-medium text-text-primary",
+                                composerTall ? "whitespace-pre-wrap break-words py-0 leading-6" : "flex items-center whitespace-pre leading-5",
+                            )}
                         >
                             {(() => {
                                 const mentionRs = mentionRanges(inputValue);
@@ -1230,8 +1268,16 @@ export function ChatInput({
                                     if (prev && r.start < prev.end) continue;
                                     merged.push(r);
                                 }
+                                const ghostNode = ghost ? (
+                                    <span className="text-text-muted opacity-40">{ghost}</span>
+                                ) : null;
                                 if (merged.length === 0) {
-                                    return inputValue || "\u00a0";
+                                    return (
+                                        <>
+                                            {inputValue || "\u00a0"}
+                                            {ghostNode}
+                                        </>
+                                    );
                                 }
                                 const nodes: React.ReactNode[] = [];
                                 let cursor = 0;
@@ -1250,6 +1296,7 @@ export function ChatInput({
                                 if (cursor < inputValue.length) {
                                     nodes.push(inputValue.slice(cursor));
                                 }
+                                nodes.push(ghostNode);
                                 return nodes;
                             })()}
                         </div>
@@ -1258,18 +1305,23 @@ export function ChatInput({
                                 <textarea
                                     ref={textareaRef}
                                     value={inputValue}
-                                    onChange={handleInputChangeWithMentions}
+                                    onChange={(e) => {
+                                        setCaret(e.target.selectionStart ?? e.target.value.length);
+                                        handleInputChangeWithMentions(e);
+                                    }}
+                                    onKeyUp={(e) => setCaret(e.currentTarget.selectionStart ?? inputValue.length)}
                                     onKeyDown={onComposerKeyDown}
                                     onPaste={handlePaste}
                                     onSelect={(e) => {
-                                        if (!mentionOpen && !slashOpen) return;
                                         const el = e.currentTarget;
-                                        const caret = el.selectionStart ?? 0;
-                                        const before = el.value.slice(0, caret);
+                                        const caretPos = el.selectionStart ?? 0;
+                                        setCaret(caretPos);
+                                        if (!mentionOpen && !slashOpen) return;
+                                        const before = el.value.slice(0, caretPos);
                                         const atMatch = before.match(/@([\w./:-]*)$/);
                                         const slashMatch = before.match(/(?:^|\s)(\/[^\s]*)$/);
                                         if (atMatch) {
-                                            setMentionCaret(caret - atMatch[0].length);
+                                            setMentionCaret(caretPos - atMatch[0].length);
                                             setMentionQuery(atMatch[1] ?? "");
                                             setMentionOpen(true);
                                             setSlashOpen(false);
@@ -1292,7 +1344,10 @@ export function ChatInput({
                                             : COMPOSER_HINTS[0]
                                     }
                                     rows={1}
-                                    className="relative z-[1] block h-6 min-h-6 w-full resize-none overflow-x-hidden border-none bg-transparent py-0 pl-3 text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-pre-wrap break-words"
+                                    className={cn(
+                                        "relative z-[1] box-border block w-full resize-none overflow-x-hidden border-0 bg-transparent p-0 pl-3 text-sm font-medium text-transparent outline-none selection:bg-accent/30 whitespace-pre-wrap break-words",
+                                        composerTall ? "leading-6" : "leading-none",
+                                    )}
                                     style={{ caretColor: "var(--text-primary)" }}
                                 />
                             </ContextMenuTrigger>
@@ -1343,54 +1398,7 @@ export function ChatInput({
                             </ContextMenuContent>
                         </ContextMenu>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (isLoading && inputValue.trim()) {
-                                    onSendMessage();
-                                } else if (isLoading) {
-                                    onStopMessage();
-                                } else {
-                                    onSendMessage();
-                                }
-                            }}
-                            disabled={sendDisabled}
-                            className={cn(
-                                "flex size-8 shrink-0 items-center justify-center rounded-full text-white transition-all disabled:opacity-40",
-                                sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted",
-                            )}
-                            aria-label={
-                                isLoading && inputValue.trim()
-                                    ? "Queue message"
-                                    : isLoading
-                                      ? "Stop"
-                                      : "Send"
-                            }
-                        >
-                            {isLoading && !inputValue.trim() ? (
-                                <span role="status" aria-label="Generating" className="text-white">
-                                    <Arc size={16} />
-                                </span>
-                            ) : (
-                                <Icon icon={ArrowUp20Regular} />
-                            )}
-                        </button>
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-2 px-1">
-                    <div className="flex min-w-0 items-center gap-0.5">
-                        {hideModeSelect ? null : (
-                            <ModeMenu
-                                selectedMode={selectedMode}
-                                setSelectedMode={setSelectedMode}
-                                disabled={needsSignIn}
-                            />
-                        )}
-                        <WorkspaceBranchSwitch />
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-0.5">
+                        <div className="flex shrink-0 items-center">
                         <DropdownMenu
                             onOpenChange={(open) => {
                                 if (!open) setModelQuery("");
@@ -1539,14 +1547,63 @@ export function ChatInput({
                                                 </div>
                                             ) : null}
                                         </div>
+                                        <DropdownMenuSub>
+                                            <DropdownMenuSubTrigger>
+                                                Thinking
+                                            </DropdownMenuSubTrigger>
+                                            <DropdownMenuSubContent className="w-66">
+                                                <ThinkingEffortControl
+                                                    embedded
+                                                    effort={reasoningEffort}
+                                                    modelId={selectedModel}
+                                                    onChange={setReasoningEffort}
+                                                    disabled={needsSignIn}
+                                                />
+                                            </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <ThinkingEffortControl
-                            effort={reasoningEffort}
-                            modelId={selectedModel}
-                            onChange={setReasoningEffort}
-                            disabled={needsSignIn}
-                        />
+                        {hideModeSelect ? null : (
+                            <ModeMenu
+                                selectedMode={selectedMode}
+                                setSelectedMode={setSelectedMode}
+                                disabled={needsSignIn}
+                            />
+                        )}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (inputValue.trim()) rememberPrompt(inputValue);
+                                if (isLoading && inputValue.trim()) {
+                                    onSendMessage();
+                                } else if (isLoading) {
+                                    onStopMessage();
+                                } else {
+                                    onSendMessage();
+                                }
+                            }}
+                            disabled={sendDisabled}
+                            className={cn(
+                                "flex size-8 shrink-0 items-center justify-center rounded-full text-white transition-all disabled:opacity-40",
+                                sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted",
+                            )}
+                            aria-label={
+                                isLoading && inputValue.trim()
+                                    ? "Queue message"
+                                    : isLoading
+                                      ? "Stop"
+                                      : "Send"
+                            }
+                        >
+                            {isLoading && !inputValue.trim() ? (
+                                <span role="status" aria-label="Generating" className="text-white">
+                                    <Arc size={16} />
+                                </span>
+                            ) : (
+                                <Icon icon={ArrowUp20Regular} />
+                            )}
+                        </button>
                     </div>
                 </div>
             </div>

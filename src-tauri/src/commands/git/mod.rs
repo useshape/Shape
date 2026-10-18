@@ -729,6 +729,16 @@ pub fn git_commit_amend(repo_path: String, message: String) -> Result<(), AppErr
     result
 }
 
+fn push_patch_line(output: &mut String, line: &git2::DiffLine<'_>) {
+    let origin = line.origin();
+    if origin == '+' || origin == '-' || origin == ' ' {
+        output.push(origin);
+    }
+    if let Ok(text) = std::str::from_utf8(line.content()) {
+        output.push_str(text);
+    }
+}
+
 pub fn git_diff(repo_path: String) -> Result<String, AppError> {
     let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
     let mut output = String::new();
@@ -742,9 +752,7 @@ pub fn git_diff(repo_path: String) -> Result<String, AppError> {
 
     staged_diff
         .print(DiffFormat::Patch, |_delta, _hunk, line| {
-            if let Ok(text) = str::from_utf8(line.content()) {
-                output.push_str(text);
-            }
+            push_patch_line(&mut output, &line);
             true
         })
         .map_err(|e| AppError::Git(e))?;
@@ -761,9 +769,7 @@ pub fn git_diff(repo_path: String) -> Result<String, AppError> {
 
     unstaged_diff
         .print(DiffFormat::Patch, |_delta, _hunk, line| {
-            if let Ok(text) = str::from_utf8(line.content()) {
-                output.push_str(text);
-            }
+            push_patch_line(&mut output, &line);
             true
         })
         .map_err(|e| AppError::Git(e))?;

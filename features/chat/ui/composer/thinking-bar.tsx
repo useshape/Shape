@@ -53,11 +53,13 @@ export function ThinkingEffortControl({
     modelId,
     onChange,
     disabled,
+    embedded = false,
 }: {
     effort: ReasoningEffort;
     modelId: string;
     onChange: (effort: ReasoningEffort) => void;
     disabled?: boolean;
+    embedded?: boolean;
 }) {
     const options = effortsForModel(modelId);
     const selected = options.some((stop) => stop.value === effort) ? effort : options[options.length - 1]!.value;
@@ -88,24 +90,7 @@ export function ThinkingEffortControl({
         else setDragPos(null);
     };
 
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="xs"
-                    disabled={disabled}
-                    className="h-8 pl-0 font-normal text-text-muted hover:text-text-primary hover:bg-transparent"
-                    aria-label={`Thinking ${effortDisplayLabel(selected)}`}
-                >
-                    <span className="text-sm">{effortDisplayLabel(selected)}</span>
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-                align="end"
-                className="w-66"
-                onCloseAutoFocus={(event) => event.preventDefault()}
-            >
+    const panel = (
                 <div
                     className="flex flex-col gap-3 px-2.5 pb-5 pt-1"
                     onPointerDown={(event) => event.stopPropagation()}
@@ -167,11 +152,34 @@ export function ThinkingEffortControl({
                                     commit(Number(event.currentTarget.value));
                                 }
                             }}
-                            onBlur={(event) => commit(Number(event.currentTarget.value))}
+                            onBlur={(event) => commit(Number(event.target.value))}
                             className={`${styles.range} absolute inset-x-0 top-1/2 w-full -translate-x-0.5 -translate-y-1/2 cursor-pointer`}
                         />
                     </div>
                 </div>
+    );
+
+    if (embedded) return panel;
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={disabled}
+                    className="h-8 pl-0 font-normal text-text-muted hover:text-text-primary hover:bg-transparent"
+                    aria-label={`Thinking ${effortDisplayLabel(selected)}`}
+                >
+                    <span className="text-sm">{effortDisplayLabel(selected)}</span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                align="end"
+                className="w-66"
+                onCloseAutoFocus={(event) => event.preventDefault()}
+            >
+                {panel}
             </DropdownMenuContent>
         </DropdownMenu>
     );
