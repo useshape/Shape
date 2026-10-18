@@ -1,8 +1,6 @@
 "use client";
 
-import { CheckmarkCircle20Filled } from "@fluentui/react-icons/headless/svg/checkmark-circle";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
-import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { TaskListSquareLtr20Regular } from "@fluentui/react-icons/headless/svg/task-list-square-ltr";
 
 
@@ -19,6 +17,7 @@ import { ChatMarkdown } from "@/features/chat/ui/md/view";
 import { freezeActiveSteps, todoCountLabel } from "@/lib/chat/planning-block";
 import { Button } from "@/components/ui/button";
 import { Collapse } from "./collapse";
+import { ProgressTracker } from "./progress-tracker";
 import { CalendarCheckmark24Filled } from "@fluentui/react-icons";
 
 type PlanStep = {
@@ -67,30 +66,15 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
 
             <Collapse open={visibleSteps.length > 0}>
                 <div className="flex flex-col px-2 pb-2">
-                    {visibleSteps.map((step, i) => (
-                        <div key={`${step.label}-${i}`} className="flex h-7 items-center gap-2">
-                            <span className="flex size-4 shrink-0 items-center justify-center">
-                            {step.status === "done" ? (
-                                <Icon icon={CheckmarkCircle20Filled} className="size-4 text-success" />
-                            ) : step.status === "active" ? (
-                                <span className="size-4 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                            ) : step.status === "cancelled" ? (
-                                <Icon icon={Dismiss20Regular} className="size-4 text-text-disabled" />
-                            ) : (
-                                <span className="size-4 rounded-full border border-text-muted/55" />
-                            )}
-                            </span>
-                            <span className={cn(
-                                "text-sm leading-snug",
-                                step.status === "done" && "text-text-muted",
-                                step.status === "active" && "text-text-primary",
-                                step.status === "pending" && "text-text-muted",
-                                step.status === "cancelled" && "text-text-disabled",
-                            )}>
-                                {step.label}
-                            </span>
-                        </div>
-                    ))}
+                    <ProgressTracker
+                        title="Tasks"
+                        steps={visibleSteps.map((step, i) => ({
+                            id: `${step.label}-${i}`,
+                            label: step.label,
+                            done: step.status === "done",
+                            active: step.status === "active",
+                        }))}
+                    />
                 </div>
             </Collapse>
         </div>
@@ -226,16 +210,13 @@ export function PlanSavedBlock({
                     ) : null}
 
                     {todoCount > 0 ? (
-                        <ul className="flex flex-col gap-1">
-                            {todos.map((todo, i) => (
-                                <li key={`${todo}-${i}`} className="flex items-start gap-2">
-                                    <span className="flex size-4 shrink-0 items-center justify-center">
-                                        <span className="size-3.5 rounded-full border border-text-muted/55" />
-                                    </span>
-                                    <span className="text-sm text-text-primary leading-snug">{todo}</span>
-                                </li>
-                            ))}
-                        </ul>
+                        <ProgressTracker
+                            title="Tasks"
+                            steps={todos.map((todo, i) => ({
+                                id: `${todo}-${i}`,
+                                label: todo,
+                            }))}
+                        />
                     ) : null}
 
                     <div className="flex justify-end">

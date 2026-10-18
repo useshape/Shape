@@ -45,6 +45,8 @@ export async function openProjectFile(filePath: string, displayName?: string): P
 
     try {
         await commands.openFile(resolved, name);
+        window.dispatchEvent(new CustomEvent("shape-center-view", { detail: "editor" }));
+        window.dispatchEvent(new CustomEvent("shape-open-workspace-file", { detail: { path: resolved } }));
         return true;
     } catch (e) {
         notify.error("Failed to open", e instanceof Error ? e.message : String(e));

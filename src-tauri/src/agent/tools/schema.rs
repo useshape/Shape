@@ -29,6 +29,7 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         grep(),
         web_search(),
         visit_url(),
+        show_images(),
         plugin_list(),
         plugin_search(),
         plugin_tools(),
@@ -91,6 +92,7 @@ fn ask_tools() -> Vec<Value> {
         grep(),
         web_search(),
         visit_url(),
+        show_images(),
         plugin_list(),
         plugin_search(),
         plugin_tools(),
@@ -186,6 +188,77 @@ pub struct SteerPacks {
 }
 
 impl SteerPacks {
+    pub fn is_all_on(&self) -> bool {
+        self.workspace
+            && self.plugins
+            && self.browse
+            && self.web
+            && self.git
+            && self.terminal
+            && self.media
+    }
+
+    /// Chat with no coding packs: a short system prompt is enough.
+    pub fn is_chat_only(&self) -> bool {
+        !self.workspace && !self.plugins && !self.browse && !self.git && !self.terminal && !self.media
+    }
+
+    /// Local skill pick used when the remote router fails open and sends every tool.
+    pub fn infer(message: &str, mode: &str) -> Self {
+        let text = message.to_lowercase();
+        let mode = mode.to_ascii_lowercase();
+        let has = |words: &[&str]| words.iter().any(|w| text.contains(w));
+        let coding_mode = matches!(mode.as_str(), "code" | "agent" | "review" | "visual" | "design");
+        let asks_code = has(&[
+            "file", "bug", "fix", "implement", "refactor", "function", "component", "error",
+            "compile", "test", "edit", "code", "typescript", "rust", "css", "button", "page",
+        ]);
+        let git = has(&["git", "commit", "branch", "pull request", "merge"]);
+        let terminal = has(&["npm", "cargo", "pnpm", "terminal", "install", "build", "script"]);
+        let web = has(&["search", "look up", "lookup", "http", "docs", "what is", "who ", "cite", "source"]);
+        let visual = has(&["photo", "picture", "image of", "looks like", "look like"]);
+        let visual_hint = "When the user wants pictures, call show_images with the subject they named. Do not show a map. Do not describe photos you did not retrieve.";
+        let browse = has(&["browser", "website", "localhost", "open the page", "screenshot"]);
+        let media = has(&["image", "svg", "draw", "icon", "audio", "picture", "logo"]);
+        let plugins = has(&["slack", "plugin", "linear", "notion", "discord"]);
+        let short = message.trim().chars().count() < 420;
+        let chat = short && !asks_code && !git && !terminal && !media && !plugins && !browse;
+
+        if chat {
+            return Self {
+                workspace: false,
+                plugins: false,
+                browse: false,
+                web: web || visual || text.contains('?'),
+                git: false,
+                terminal: false,
+                media: false,
+                hint: if visual {
+                    visual_hint.to_string()
+                } else {
+                    "This turn is a conversation. Use tools only if the user asked for something outside this chat. When you use web search, cite claims with [1], [2] matching source order. Do not cite when you did not search.".to_string()
+                },
+            };
+        }
+
+        Self {
+            workspace: coding_mode || asks_code,
+            plugins,
+            browse,
+            web: web || visual || text.contains('?'),
+            git,
+            terminal: terminal || coding_mode,
+            media,
+            hint: if visual {
+                visual_hint.to_string()
+            } else if web {
+                "When a claim comes from web search, cite it with [1], [2] in source order. Skip citations when you did not search.".to_string()
+            } else {
+                String::new()
+            },
+        }
+    }
+
     pub fn all_on() -> Self {
         Self {
             workspace: true,
@@ -239,13 +312,13 @@ fn tool_fn_name(tool: &Value) -> &str {
 
 fn steer_pack_for(name: &str) -> Option<&'static str> {
     match name {
-        "read_file" | "list_dir" | "search_codebase" | "codebase_overview" | "search_files" | "grep"
-        | "create_directory" | "create_file" | "apply_patch" | "edit_file" | "delete_file"
-        | "rename_file" | "read_lints" | "screenshot_page" | "inspect_runtime"
+        "create_directory" | "create_file" | "apply_patch" | "edit_file" | "delete_file"
+        | "rename_file" | "read_lints" | "codebase_overview"
         | "design_review" | "render_design_previews" | "mcp_search" | "mcp_call" => Some("workspace"),
         "plugin_search" | "plugin_run" => Some("plugins"),
         "plugin_list" | "plugin_tools" => Some("browse"),
-        "web_search" | "visit_url" => None,
+        "web_search" | "visit_url" => Some("web"),
+        "browse" | "screenshot_page" | "inspect_runtime" => Some("browse"),
         "git_status" | "git_fetch" | "git_log" | "git_stage" | "git_commit" | "git_diff"
         | "git_branches" | "git_create_branch" | "git_switch" | "git_sync" | "git_worktree" => {
             Some("git")
@@ -403,6 +476,21 @@ fn grep() -> Value {
                 "context": {"type": "integer", "description": "Lines of context before/after each match (0–3, default 0). Keep low to save tokens."},
                 "case_sensitive": {"type": "boolean", "description": "If true, disable ignore-case (default false)."},
                 "head_limit": {"type": "integer", "description": "Max matching lines to return (default 80, max 200)."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn show_images() -> Value {
+    tool(
+        "show_images",
+        "Show photos in the chat. Use when the user asks what something looks like, or for pictures of a place, dish, product, animal, or landmark. The chat renders the photos.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to show, e.g. 'Borough Market London' or 'red panda'."}
             },
             "required": ["query"],
             "additionalProperties": false
@@ -1418,10 +1506,12 @@ mod tests {
         assert!(names.contains(&"finish".to_string()));
         assert!(names.contains(&"ask_user".to_string()));
         assert!(names.contains(&"decide".to_string()));
-        assert!(!names.contains(&"read_file".to_string()));
+        assert!(names.contains(&"read_file".to_string()));
+        assert!(!names.contains(&"edit_file".to_string()));
+        assert!(!names.contains(&"apply_patch".to_string()));
         assert!(!names.contains(&"run_terminal".to_string()));
-        assert!(names.contains(&"web_search".to_string()));
-        assert!(names.contains(&"visit_url".to_string()));
+        assert!(!names.contains(&"web_search".to_string()));
+        assert!(!names.contains(&"visit_url".to_string()));
         assert!(!names.contains(&"git_status".to_string()));
         assert!(!names.contains(&"generate_image".to_string()));
     }

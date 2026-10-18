@@ -22,6 +22,7 @@ import { ReviewDebatePanel } from '../blocks/debate';
 import { PersonaReviewPanel } from '../blocks/persona-review';
 import { BrowseChatCard } from '../blocks/browse-frame';
 import { ChartBlock, InsightCard } from '../blocks/chart';
+import { ShownImages } from '../blocks/place-map';
 import { QuestionsCard, parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
 
@@ -120,7 +121,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
     content?: string;
     file?: string;
     query?: string;
@@ -524,6 +525,8 @@ function unescapeXml(s: string): string {
             { type: 'plan_saved', start: '<plan_saved', end: '</plan_saved>' },
             { type: 'todos', start: '<todos', end: '</todos>' },
             { type: 'web_result', start: '<web_result', end: '</web_result>' },
+            { type: 'place_map', start: '<place_map', end: '</place_map>' },
+            { type: 'shown_images', start: '<shown_images', end: '</shown_images>' },
             { type: 'web_visit', start: '<web_visit', end: '</web_visit>' },
             { type: 'generated_svg', start: '<generated_svg', end: '</generated_svg>' },
             { type: 'generated_svg', start: '<recraft_svg', end: '</recraft_svg>' },
@@ -1119,10 +1122,7 @@ export function MessageRenderer({
             return (
                 <div
                     key={`text-${index}`}
-                    className={cn(
-                        "text-sm font-medium text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
-                        isGenerating && isLastSegment && "animate-in fade-in duration-300",
-                    )}
+                    className="text-sm font-medium text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown"
                 >
                     <ChatMarkdown content={text} isGenerating={isGenerating} isLast={isLastSegment} />
                 </div>
@@ -1176,6 +1176,12 @@ export function MessageRenderer({
                     isGenerating={isGenerating}
                 />
             );
+        }
+        if (chunk.type === 'place_map') {
+            return null;
+        }
+        if (chunk.type === 'shown_images') {
+            return <ShownImages key={`photos-${index}`} content={chunk.content} />;
         }
         if (chunk.type === 'chart') {
             return <ChartBlock key={`chart-${index}`} content={chunk.content} />;
@@ -1302,9 +1308,12 @@ export function MessageRenderer({
     return (
         <div className="flex flex-col gap-0 overflow-hidden">
             {renderedSegments}
-            {showStatusLine && (
-                <GeneratingIndicator label={statusLabel} />
-            )}
+            {showStatusLine && !segments.some((segment) => segment.kind === "workflow") ? (
+                <div className="flex items-center gap-2 py-0.5">
+                    <GeneratingIndicator label={statusLabel} />
+                    {statusLabel ? <span className="chat-text text-text-muted">{statusLabel}</span> : null}
+                </div>
+            ) : null}
         </div>
     );
 }

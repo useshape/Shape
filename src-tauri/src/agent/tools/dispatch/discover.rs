@@ -517,3 +517,204 @@ pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         },
     }
 }
+
+const VISUAL_UA: &str = "ShapeDesktop/1.0 (chat)";
+
+fn plain_label(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| *c != '<' && *c != '>')
+        .take(120)
+        .collect()
+}
+
+async fn geocode(query: &str) -> Option<(f64, f64, String)> {
+    let resp = reqwest::Client::new()
+        .get("https://nominatim.openstreetmap.org/search")
+        .header("User-Agent", VISUAL_UA)
+        .header("Accept", "application/json")
+        .query(&[("format", "jsonv2"), ("limit", "1"), ("q", query)])
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let rows: Vec<Value> = resp.json().await.ok()?;
+    let hit = rows.first()?;
+    let lat = hit.get("lat")?.as_str()?.parse().ok()?;
+    let lng = hit.get("lon")?.as_str()?.parse().ok()?;
+    let label = hit
+        .get("display_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(query)
+        .split(',')
+        .next()
+        .unwrap_or(query);
+    Some((lat, lng, plain_label(label)))
+}
+
+fn photo_matches(query: &str, title: &str) -> bool {
+    let letters = |value: &str| {
+        value
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .flat_map(|c| c.to_lowercase())
+            .collect::<String>()
+    };
+    let query = letters(query);
+    let title = letters(title);
+    query.len() >= 4 && title.contains(&query)
+}
+
+struct WikiPhoto {
+    title: String,
+    url: String,
+    source: String,
+}
+
+async fn wiki_thumbs(query: &str, limit: usize) -> Vec<WikiPhoto> {
+    let limit_s = limit.clamp(1, 8).to_string();
+    let resp = match reqwest::Client::new()
+        .get("https://en.wikipedia.org/w/api.php")
+        .header("User-Agent", VISUAL_UA)
+        .header("Accept", "application/json")
+        .query(&[
+            ("action", "query"),
+            ("format", "json"),
+            ("generator", "search"),
+            ("gsrsearch", query),
+            ("gsrlimit", limit_s.as_str()),
+            ("prop", "pageimages|info"),
+            ("inprop", "url"),
+            ("piprop", "thumbnail|original"),
+            ("pithumbsize", "960"),
+            ("pilimit", limit_s.as_str()),
+        ])
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => resp,
+        _ => return Vec::new(),
+    };
+    let data: Value = match resp.json().await {
+        Ok(data) => data,
+        Err(_) => return Vec::new(),
+    };
+    let Some(pages) = data.pointer("/query/pages").and_then(|v| v.as_object()) else {
+        return Vec::new();
+    };
+    let mut images = Vec::new();
+    for page in pages.values() {
+        let thumb = page.pointer("/thumbnail/source").and_then(|v| v.as_str()).unwrap_or("");
+        let original = page.pointer("/original/source").and_then(|v| v.as_str()).unwrap_or("");
+        let url = if thumb.is_empty() { original } else { thumb };
+        if url.is_empty() {
+            continue;
+        }
+        let title = page
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or(query);
+        if !photo_matches(query, title) {
+            continue;
+        }
+        let page_url = page.get("fullurl").and_then(|v| v.as_str()).unwrap_or("");
+        let source = if !original.is_empty() {
+            original
+        } else if !page_url.is_empty() {
+            page_url
+        } else {
+            url
+        };
+        images.push(WikiPhoto {
+            title: plain_label(title),
+            url: url.to_string(),
+            source: source.to_string(),
+        });
+        if images.len() >= limit {
+            break;
+        }
+    }
+    images
+}
+
+pub(super) async fn tool_show_map(args: &Value, _ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let query = match get_str(args, "query") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("show_map", &e),
+    };
+    let mut names: Vec<String> = args
+        .get("places")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .take(6)
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    if names.is_empty() {
+        names.push(query.clone());
+    }
+
+    let mut places = Vec::new();
+    for (index, name) in names.iter().enumerate() {
+        if index > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+        }
+        let Some((lat, lng, label)) = geocode(name).await else {
+            continue;
+        };
+        let photo = wiki_thumbs(name, 1).await.into_iter().next();
+        places.push(json!({
+            "name": if label.is_empty() { plain_label(name) } else { label },
+            "lat": lat,
+            "lng": lng,
+            "image": photo.as_ref().map(|photo| photo.url.clone()),
+            "imageSource": photo.as_ref().map(|photo| photo.source.clone()),
+        }));
+    }
+
+    if places.is_empty() {
+        return ToolOutcome {
+            tool_result: format!("Could not place \"{query}\" on a map."),
+            ui_chunk: String::new(),
+            side_effect: None,
+        };
+    }
+
+    let body = json!({ "query": plain_label(&query), "places": places });
+    ToolOutcome {
+        tool_result: format!("Showed a map for {query} with {} pin(s).", places.len()),
+        ui_chunk: format!("\n<place_map>\n{body}\n</place_map>\n"),
+        side_effect: None,
+    }
+}
+
+pub(super) async fn tool_show_images(args: &Value, _ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let query = match get_str(args, "query") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("show_images", &e),
+    };
+    let images = wiki_thumbs(&query, 8).await;
+    if images.is_empty() {
+        return ToolOutcome {
+            tool_result: format!("No photos found for \"{query}\"."),
+            ui_chunk: String::new(),
+            side_effect: None,
+        };
+    }
+    let body = json!({
+        "query": plain_label(&query),
+        "images": images.iter().map(|photo| json!({ "title": photo.title, "url": photo.url, "source": photo.source })).collect::<Vec<_>>(),
+    });
+    ToolOutcome {
+        tool_result: format!("Showed {} photo(s) for {query}.", images.len()),
+        ui_chunk: format!("\n<shown_images>\n{body}\n</shown_images>\n"),
+        side_effect: None,
+    }
+}

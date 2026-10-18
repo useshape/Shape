@@ -235,7 +235,12 @@ const ModelItem = ({
                 )}
             >
                 <div className="flex items-center gap-1.5 w-full">
-                    {providerIcon(model.id, 16)}
+                    {providerIcon(
+                        model.provider === "Auto" || model.id === "auto" || model.id === "openrouter/auto" || model.name.toLowerCase() === "auto"
+                            ? "auto"
+                            : model.id,
+                        16,
+                    )}
                     <span className="flex-1 font-regular text-sm text-text-primary group-hover:text-text-primary transition-colors">
                         {model.name}
                     </span>
@@ -1399,7 +1404,15 @@ export function ChatInput({
                                     aria-label={modelName}
                                 >
                                     <div className="flex min-w-0 items-center gap-1.5 text-sm">
-                                        {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
+                                        {providerIcon(
+                                            selectedModel === "auto"
+                                            || selectedModel === "openrouter/auto"
+                                            || modelInfo.provider === "Auto"
+                                            || modelInfo.name.toLowerCase() === "auto"
+                                                ? "auto"
+                                                : modelInfo.id,
+                                            18,
+                                        )}
                                         <span className="min-w-0 truncate">{modelName}</span>
                                         {isApiModel(modelInfo) ? (
                                             <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
@@ -1499,7 +1512,7 @@ export function ChatInput({
                                                                         }}
                                                                     >
                                                                         <span className="flex min-w-0 items-center gap-1.5">
-                                                                            {providerIcon(m.id, 14)}
+                                                                            {providerIcon(m.id, 18)}
                                                                             <span className="truncate">{m.name}</span>
                                                                         </span>
                                                                     </DropdownMenuCheckboxItem>

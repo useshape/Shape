@@ -387,7 +387,11 @@ pub async fn send_chat_message(
         .with_reasoning_effort(Some(effort_norm.clone()))
         .with_service_tier(tier_norm.clone());
 
-    let context_opts = context_options_for_query(message.clone(), (*index_state).clone());
+    let local_packs = schema::SteerPacks::infer(&message, &mode_to_use);
+    let mut context_opts = context_options_for_query(message.clone(), (*index_state).clone());
+    context_opts.include_repo_map = local_packs.workspace;
+    context_opts.include_diagnostics = local_packs.workspace;
+    context_opts.include_git_status = local_packs.git || local_packs.workspace;
     // Steer and workspace context are independent; overlapping them hid ~2s from first token.
     let steer_fut = {
         let auth = auth_token.clone();
@@ -411,6 +415,7 @@ pub async fn send_chat_message(
         build_context_with_options(&app_state, context_opts)
     );
     let (context_string, _active_file, _project_root) = ctx_res?;
+    let steer = if steer.is_all_on() { local_packs } else { steer };
     logging::debug(
         "chat",
         &format!(
@@ -420,7 +425,12 @@ pub async fn send_chat_message(
     );
     logging::debug("chat", &format!("Context built: {} chars", context_string.len()));
 
-    let mut prompt_parts = vec![prompts::SYSTEM_MD.to_string()];
+    let system_md = if steer.is_chat_only() {
+        prompts::CHAT_MD
+    } else {
+        prompts::SYSTEM_MD
+    };
+    let mut prompt_parts = vec![system_md.to_string()];
     if !family_prompt.trim().is_empty() {
         prompt_parts.push(format!("\n{}", family_prompt.trim()));
     }
@@ -545,7 +555,7 @@ pub async fn send_chat_message(
     let conversation_json =
         serde_json::to_string(&messages::build_api_history(&history_snapshot)).unwrap_or_default();
     let mut breakdown = build_context_breakdown(
-        prompts::SYSTEM_MD,
+        system_md,
         family_prompt,
         &merged_rules,
         mode_prompt,

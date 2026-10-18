@@ -1,12 +1,9 @@
 "use client";
 
-import { Eclipse } from "loading-dev";
 import { cn } from "@/lib/utils";
+import { FrostMark } from "@/components/ui/frost-mark";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { formatMessageModelLabel, isAutoModelId } from "@/lib/chat/usage-display";
-
-/** Model id used for Auto UI mark (backend still routes via MODEL_FAST). */
-export const AUTO_DISPLAY_MODEL = "deepseek/deepseek-v4-flash";
 
 /** Grey rounded card for user messages (no blue, no iMessage tail). */
 export function UserMessageCard({
@@ -19,7 +16,7 @@ export function UserMessageCard({
     return (
         <div
             className={cn(
-                "relative w-full max-w-none squircle-2xl border border-border-subtle bg-surface-3 p-3 chat-text text-text-primary",
+                "relative w-fit max-w-[min(100%,32rem)] squircle-2xl border border-border-subtle bg-surface-3 p-3 chat-text text-text-primary",
                 className,
             )}
         >
@@ -28,23 +25,47 @@ export function UserMessageCard({
     );
 }
 
-/** Circular spinner while the assistant is typing. */
-export function TypingDots({ className }: { className?: string }) {
+/** Frost face while the assistant is typing, with the chosen model in the corner. */
+export function AssistantMark({
+    model,
+    size = 35,
+    className,
+}: {
+    model?: string;
+    size?: number;
+    className?: string;
+}) {
+    const showModel = !!model && !isAutoModelId(model);
+    const badge = Math.max(10, Math.round(size * 0.42));
     return (
-        <span className={className} role="status" aria-label="Typing">
-            <Eclipse size={14} className="text-text-muted" />
+        <span className={cn("relative inline-flex shrink-0", className)} style={{ width: size, height: size }} role="status" aria-label="Typing">
+            <FrostMark size={size} live />
+            {showModel ? (
+                <span className="absolute -right-1 -bottom-1" style={{ width: badge, height: badge }}>
+                    <span
+                        className="absolute -inset-[3px] animate-spin rounded-full border-[1.5px] border-transparent border-t-accent border-r-accent/40"
+                        aria-hidden
+                    />
+                    <span className="relative flex size-full items-center justify-center rounded-full bg-panel">
+                        {providerIcon(model, Math.max(8, badge - 4))}
+                    </span>
+                </span>
+            ) : null}
         </span>
     );
 }
 
-/** Compact spinner for sidebar / chat tabs. */
-export function WorkingDots({ className }: { className?: string }) {
-    return (
-        <Eclipse size={12} className={cn("text-text-muted", className)} aria-hidden />
-    );
+/** Circular spinner while the assistant is typing. */
+export function TypingDots({ className, model }: { className?: string; model?: string }) {
+    return <AssistantMark model={model} size={56} className={className} />;
 }
 
-/** Stack of provider icons — Auto shows DeepSeek only (not a multi-grid). */
+/** Compact spinner for sidebar / chat tabs. */
+export function WorkingDots({ className }: { className?: string }) {
+    return <FrostMark size={22} live className={className} label="" />;
+}
+
+/** Model mark. Auto uses the frost face. */
 export function ModelAvatarStack({
     models,
     size = 16,
@@ -56,7 +77,7 @@ export function ModelAvatarStack({
 }) {
     const raw = models.filter(Boolean);
     const isAuto = raw.length === 0 || raw.every((m) => isAutoModelId(m));
-    const id = isAuto ? AUTO_DISPLAY_MODEL : raw[0]!;
+    const id = isAuto ? "auto" : raw[0]!;
 
     return (
         <span

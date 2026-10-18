@@ -158,6 +158,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "read_chat" => chats::tool_read_chat(&args, ctx),
         "web_search" => discover::tool_web_search(&args, ctx).await,
         "visit_url" => discover::tool_visit_url(&args, ctx).await,
+        "show_map" => discover::tool_show_map(&args, ctx).await,
+        "show_images" => discover::tool_show_images(&args, ctx).await,
         "plugin_list" => discover::tool_plugin_list(ctx).await,
         "plugin_search" => discover::tool_plugin_search(&args, ctx).await,
         "plugin_tools" => discover::tool_plugin_tools(&args, ctx).await,

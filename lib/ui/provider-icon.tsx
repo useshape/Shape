@@ -14,7 +14,7 @@ import mistral from "thesvg/mistral-ai";
 import meta from "thesvg/meta";
 import cohere from "thesvg/cohere";
 import zhipu from "thesvg/zhipu";
-import { ShapeLogo } from "@/components/ui/shape-logo";
+import { FrostMark } from "@/components/ui/frost-mark";
 
 type Provider =
     | "shape"
@@ -79,10 +79,10 @@ export function ShapeAutoIcon({
     size?: number;
     className?: string;
 }) {
-    return <ShapeLogo size={size} className={className} />;
+    return <FrostMark size={size} live className={className} label="Auto" />;
 }
 
-export function providerIcon(modelId: string, size = 16): React.ReactNode {
+export function providerIcon(modelId: string, size = 18): React.ReactNode {
     const provider = providerFromModelId(modelId);
     if (provider === "shape") return <ShapeAutoIcon size={size} />;
     return <BrandIcon icon={BRANDS[provider]} size={size} />;

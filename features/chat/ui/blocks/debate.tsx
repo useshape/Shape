@@ -5,7 +5,6 @@ import { ChatMarkdown } from "../md/view";
 import { Collapse } from "./collapse";
 import { ActionLine } from "./action-line";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { AUTO_DISPLAY_MODEL } from "../message/bubble";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 
 function formatReviewContent(raw: string): string | null {
@@ -75,8 +74,7 @@ export function ReviewDebatePanel({
 }) {
     const [open, setOpen] = useState(false);
     const display = useMemo(() => formatReviewContent(content), [content]);
-    const iconModel =
-        model && !isAutoModelId(model) ? model : AUTO_DISPLAY_MODEL;
+    const iconModel = model && !isAutoModelId(model) ? model : "auto";
 
     if (!display?.trim()) return null;
 

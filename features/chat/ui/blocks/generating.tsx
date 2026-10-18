@@ -1,18 +1,16 @@
 "use client";
 
-import { Eclipse } from "loading-dev";
+import { AssistantMark } from "../message/bubble";
 
-/** Live status — animated icon only. */
+/** Face sits on the tool row. The spinner ring is on the model badge, not the face. */
 export function GeneratingIndicator({
     label: _label,
+    model,
 }: {
     label?: string;
     showTimer?: boolean;
     variantSeed?: string;
+    model?: string;
 }) {
-    return (
-        <div className="flex items-center py-1 text-text-muted">
-            <Eclipse size={14} className="shrink-0 text-text-muted" />
-        </div>
-    );
+    return <AssistantMark model={model} />;
 }

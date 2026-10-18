@@ -33,6 +33,7 @@ import { parseWebSearchHits, WebSearchBlock, WebSearchTrail } from "./search";
 import { countChangedLines } from "@/lib/ui/diff-count";
 import { ChatEditDiff } from "./chat-diff";
 import { ActionLine, splitActionLabel } from "./action-line";
+import { GeneratingIndicator } from "./generating";
 import { joinThoughtLines } from "@/lib/chat/thought-text";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ApprovalCard } from "./approval";
@@ -53,11 +54,19 @@ function fileName(path: string): string {
 function GroupActionLabel({
     action,
     detail,
+    path,
 }: {
     action: string;
     detail?: string | null;
+    path?: string;
 }) {
-    return <ActionLine action={action} detail={detail} />;
+    return (
+        <ActionLine
+            action={action}
+            detail={detail}
+            onClick={path ? () => void openProjectFile(path) : undefined}
+        />
+    );
 }
 
 function groupDetail(names: string[]): string | null {
@@ -237,6 +246,20 @@ function computeTurnStats(blocks: Chunk[]) {
     };
 }
 
+function ThoughtScroller({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="relative mt-1 max-h-28">
+            <div className="max-h-28 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="whitespace-pre-wrap py-3 chat-text leading-relaxed text-text-muted">
+                    {children}
+                </div>
+            </div>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-background to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-background to-transparent" />
+        </div>
+    );
+}
+
 function ThoughtStep({
     content,
     isActive,
@@ -246,17 +269,15 @@ function ThoughtStep({
 }) {
     const trimmed = joinThoughtLines(content).trim();
     if (!trimmed) return null;
-    if (isActive) return <ActionLine action="Thinking" shimmer />;
+    if (isActive) {
+        return <ActionLine action="Thinking" shimmer />;
+    }
 
     const expandable = trimmed.length >= 80;
     const detail = trimmed.length < 40 ? "briefly" : `${estimateThoughtSeconds(trimmed)}s`;
     return (
         <ActionLine action="Thought" detail={detail}>
-            {expandable ? (
-                <div className="mt-1 w-full min-w-0 whitespace-pre-wrap chat-text leading-relaxed text-text-muted">
-                    {trimmed}
-                </div>
-            ) : null}
+            {expandable ? <ThoughtScroller>{trimmed}</ThoughtScroller> : null}
         </ActionLine>
     );
 }
@@ -713,12 +734,14 @@ export function TurnWorkflowSummary({
     isActive,
     showHeader = true,
     activityLabel,
+    model,
     children,
 }: {
     blocks: Chunk[];
     isActive?: boolean;
     durationMs?: number;
     activityLabel?: string | null;
+    model?: string;
     /** When false, only the step pile is shown (for interleaved mid-turn groups). */
     showHeader?: boolean;
     children?: React.ReactNode;
@@ -783,6 +806,7 @@ export function TurnWorkflowSummary({
                     del={stats.linesRemoved}
                     favicons={marks.urls}
                     shimmer={Boolean(isActive)}
+                    icon={isActive ? <GeneratingIndicator model={model} /> : undefined}
                     open={open}
                     onOpenChange={setOpen}
                     extra={
@@ -819,6 +843,7 @@ export function TurnWorkflowSummary({
                                                 key={`reads-${i}`}
                                                 action="Explored"
                                                 detail={groupDetail(row.files.map((f) => f.path))}
+                                                path={row.files[0]?.path}
                                             />
                                         );
                                     }
@@ -837,6 +862,7 @@ export function TurnWorkflowSummary({
                                                 key={`writes-${i}`}
                                                 action="Edited"
                                                 detail={groupDetail(row.paths)}
+                                                path={row.paths[0]}
                                             />
                                         );
                                     }

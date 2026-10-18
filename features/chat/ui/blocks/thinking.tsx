@@ -34,18 +34,21 @@ export function ThinkingBlock({ content, isActive }: { content: string; isActive
                 )}
             </button>
 
-            {isOpen && (
-                <div className="mt-1 flex w-full min-w-0 flex-col gap-1 text-sm leading-relaxed text-text-muted">
-                    {lines.map((line, i) => (
-                        <span key={i} className={cn(
-                            "block",
-                            isActive && i === lines.length - 1 && "animate-pulse text-text-secondary"
-                        )}>
-                            {line}
-                        </span>
-                    ))}
+            {isOpen && lines.length > 0 ? (
+                <div className="relative mt-1 max-h-28">
+                    <div className="max-h-28 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <div className="flex flex-col gap-1 py-3 text-sm leading-relaxed text-text-muted">
+                            {lines.map((line, i) => (
+                                <span key={i} className={cn(isActive && i === lines.length - 1 && "text-text-secondary")}>
+                                    {line}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="pointer-events-none absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-background to-transparent" />
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-background to-transparent" />
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }

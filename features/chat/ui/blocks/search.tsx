@@ -19,8 +19,6 @@ import {
 } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { WebSearchResultItem } from "../md/renderer";
-import { GeneratingIndicator } from "./generating";
-
 type WebSearchResult = WebSearchResultItem;
 
 export function parseWebSearchHits(content: string): WebSearchResult[] {
@@ -305,7 +303,7 @@ export function WebSearchTrail({
         if (!isActive) return null;
         return (
             <div className="flex items-center gap-1.5 py-0.5 chat-text text-text-muted">
-                <GeneratingIndicator label="Searching" showTimer={false} />
+                <span className="text-text-secondary">Searching</span>
             </div>
         );
     }
@@ -324,7 +322,6 @@ export function WebSearchTrail({
             {steps.map((step, index) => (
                 <TrailStepRow key={`${step.kind}-${step.query}-${index}`} step={step} />
             ))}
-            {isActive ? <GeneratingIndicator label="Searching" showTimer={false} /> : null}
         </div>
     );
 }
