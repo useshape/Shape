@@ -1,6 +1,7 @@
 "use client";
 
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
+import { Calendar20Regular } from "@fluentui/react-icons/headless/svg/calendar";
 import { Checkmark } from "@/components/ui/checkmark";
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
@@ -73,6 +74,23 @@ import {
 } from "@/features/agent/subagents/store";
 import { listen } from "@tauri-apps/api/event";
 import { ScrollArea } from "@/components/ui/scroll";
+import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
+import { TALK_CONVERSATION_STORE } from "@/lib/chat/conversation-store";
+import {
+    armNextChat,
+    chatLane,
+    chatMark,
+    clearNextChat,
+    getLaneSnapshot,
+    getLaneSnapshotServer,
+    lastLaneChat,
+    nextWorkerColor,
+    rememberLaneChat,
+    subscribeChatLanes,
+    type WorkerShape,
+} from "@/lib/sidebar/chat-lanes";
+import { CreateWorkerDialog, WorkerMark } from "./worker-mark";
+import { upsertRoutine } from "@/lib/cowork/routines";
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
 type ChatFilter = "all" | "pinned" | "unread";
 
@@ -133,6 +151,34 @@ function HeaderIconBtn({
     );
 }
 
+function formatWhen(timestamp: number): string {
+    if (!timestamp) return "";
+    const ms = timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000;
+    const date = new Date(ms);
+    if (Number.isNaN(date.getTime())) return "";
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function previewLine(chat: Conversation): string {
+    const history = chat.history || [];
+    for (let i = history.length - 1; i >= 0; i--) {
+        const text = (history[i]?.content || "")
+            .replace(/```[\s\S]*?```/g, " ")
+            .replace(/[#>*_`[\]]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        if (text) return text;
+    }
+    return "No messages yet";
+}
+
 function nestedDot(status: string, column?: string): string {
     if (status === "error") return "bg-error";
     if (status === "cancelled") return "bg-text-muted";
@@ -154,6 +200,10 @@ function ChatRow({
     selecting = false,
     selected = false,
     onToggleSelect,
+    mark = null,
+    when = "",
+    preview = "",
+    onNew,
 }: {
     id: string;
     title: string;
@@ -168,6 +218,10 @@ function ChatRow({
     selecting?: boolean;
     selected?: boolean;
     onToggleSelect?: () => void;
+    mark?: { shape: WorkerShape; color: string } | null;
+    when?: string;
+    preview?: string;
+    onNew?: () => void;
 }) {
     const generating = useIsChatGenerating(id);
     const [renaming, setRenaming] = useState(false);
@@ -233,7 +287,38 @@ function ChatRow({
         { key: "open", label: "Open", icon: Open20Regular, run: openChat },
         { key: "pin", label: pinned ? "Unpin" : "Pin", icon: Pin20Regular, run: () => setChatPinned(id, !pinned) },
         { key: "rename", label: "Rename", icon: Edit20Regular, run: startRename },
-        { key: "new", label: "New Chat", icon: Add20Regular, run: () => window.dispatchEvent(new CustomEvent("shape-chat-new")) },
+        { key: "new", label: "New Chat", icon: Add20Regular, run: () => (onNew ? onNew() : window.dispatchEvent(new CustomEvent("shape-chat-new"))) },
+        ...(mark
+            ? [{
+                key: "loop",
+                label: "Loop into current chat",
+                icon: Compose20Regular,
+                run: () => {
+                    const stored = chatMark(id);
+                    window.dispatchEvent(
+                        new CustomEvent("shape-loop-worker", {
+                            detail: { name: title, job: stored?.taught || stored?.job },
+                        }),
+                    );
+                },
+            }, {
+                key: "routine",
+                label: "Run daily at 9:00",
+                icon: Calendar20Regular,
+                run: () => {
+                    const stored = chatMark(id);
+                    upsertRoutine({
+                        id: `daily-${id}`,
+                        workerId: id,
+                        instruction: stored?.taught || stored?.job || "Do your job.",
+                        weekday: "daily",
+                        time: "09:00",
+                        lastRun: 0,
+                        lastError: null,
+                    });
+                },
+            }]
+            : []),
         { key: "copy", label: "Copy Title", icon: Copy20Regular, sep: true, run: () => void navigator.clipboard.writeText(title) },
         ...(path
             ? [{ key: "reveal", label: "Reveal Folder", icon: FolderOpen20Regular, run: () => void commands.revealPath(path).catch(() => {}) }]
@@ -271,8 +356,9 @@ function ChatRow({
                 <ContextMenuTrigger asChild>
                     <div
                         className={cn(
-                            "group/chat relative flex h-10 w-full items-center gap-1 px-2 text-sm",
-                            !color && "squircle-2xl",
+                            "group/chat relative flex w-full gap-1 text-sm",
+                            mark ? "items-start squircle-2xl px-2 py-2" : "h-10 items-center px-",
+                            !mark && !color && "squircle-2xl",
                             "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                             !color && (active ? "bg-panel-hover text-text-primary" : "text-text-primary hover:bg-panel-hover"),
                             color && "text-text-primary hover:bg-[color-mix(in_oklch,var(--chat-tint)_12%,transparent)]",
@@ -309,7 +395,10 @@ function ChatRow({
                                         }
                                         openChat();
                                     }}
-                                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                    className={cn(
+                                        "flex min-w-0 flex-1 text-left",
+                                        mark ? "items-start gap-2.5" : "items-center gap-2",
+                                    )}
                                 >
                                     <span
                                         className={cn(
@@ -324,6 +413,16 @@ function ChatRow({
                                             />
                                         </span>
                                     </span>
+                                    {mark ? <WorkerMark shape={mark.shape} color={mark.color} size={32} /> : null}
+                                    {mark ? (
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex items-baseline gap-2">
+                                                <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{title}</span>
+                                                {when ? <span className="shrink-0 text-xs text-text-muted">{when}</span> : null}
+                                            </span>
+                                            <span className="mt-0.5 block truncate text-xs text-text-muted">{preview}</span>
+                                        </span>
+                                    ) : (
                                     <span
                                         className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-normal text-text-primary"
                                         style={{
@@ -332,6 +431,7 @@ function ChatRow({
                                     >
                                         {title}
                                     </span>
+                                    )}
                                 </button>
                                 <span className="flex shrink-0 items-center gap-1">
                                     {generating ? (
@@ -342,8 +442,8 @@ function ChatRow({
                                     ) : null}
                                 </span>
                                 <span className="flex shrink-0 items-center">
-                                    <span className="grid grid-cols-[0fr] overflow-hidden transition-[grid-template-columns] duration-150 ease-[var(--ease-out)] group-hover/chat:grid-cols-[1fr] group-has-[[data-state=open]]/chat:grid-cols-[1fr]">
-                                    <span className="flex min-w-0 overflow-hidden">
+                                    <span className="grid grid-cols-[0fr] px-2 overflow-hidden transition-[grid-template-columns] duration-100 ease-[var(--ease-out)] group-hover/chat:grid-cols-[1fr] group-has-[[data-state=open]]/chat:grid-cols-[1fr]">
+                                    <span className="flex min-w-0 gap-1 overflow-hidden">
                                     {pinned ? null : (
                                     <Tooltip content="Pin" side="bottom">
                                         <button
@@ -352,7 +452,7 @@ function ChatRow({
                                             onClick={() => setChatPinned(id, true)}
                                             className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
                                         >
-                                            <Icon icon={Pin20Regular} className="icon-sm" />
+                                            <Icon icon={Pin20Regular} className="icon-lg" />
                                         </button>
                                     </Tooltip>
                                     )}
@@ -364,7 +464,7 @@ function ChatRow({
                                                 aria-label="Chat actions"
                                                 className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
                                             >
-                                                <Icon icon={MoreHorizontal20Regular} className="icon-sm" />
+                                                <Icon icon={MoreHorizontal20Regular} className="icon-lg" />
                                             </button>
                                         </DropdownMenuTrigger>
                                         </Tooltip>
@@ -383,9 +483,9 @@ function ChatRow({
                                                 type="button"
                                                 aria-label="Unpin"
                                                 onClick={() => setChatPinned(id, false)}
-                                                className="flex size-6 items-center justify-center rounded-md text-text-primary"
+                                                className="flex size-6 pr-3 items-center justify-center rounded-md text-text-primary"
                                             >
-                                                <Icon icon={Pin20Filled} className="icon-sm" />
+                                                <Icon icon={Pin20Filled} className="icon-lg" />
                                             </button>
                                         </Tooltip>
                                     ) : null}
@@ -460,6 +560,10 @@ function SessionRow({
     selecting,
     selected,
     onToggleSelect,
+    mark = null,
+    when = "",
+    preview = "",
+    onNew,
 }: {
     chat: Conversation;
     projectPath: string;
@@ -472,6 +576,10 @@ function SessionRow({
     selecting: boolean;
     selected: boolean;
     onToggleSelect: () => void;
+    mark?: { shape: WorkerShape; color: string } | null;
+    when?: string;
+    preview?: string;
+    onNew?: () => void;
 }) {
     return (
         <ChatRow
@@ -487,6 +595,10 @@ function SessionRow({
             selecting={selecting}
             selected={selected}
             onToggleSelect={onToggleSelect}
+            mark={mark}
+            when={when}
+            preview={preview}
+            onNew={onNew}
         />
     );
 }
@@ -499,7 +611,12 @@ export function ChatList({
     listKind?: "chat";
 }) {
     const { project_path } = useProjectState();
+    const mode = useWorkspaceMode();
+    const laneSnap = useSyncExternalStore(subscribeChatLanes, getLaneSnapshot, getLaneSnapshotServer);
+    const [workerOpen, setWorkerOpen] = useState(false);
+    const [workerQuery, setWorkerQuery] = useState("");
     const [chats, setChats] = useState<Conversation[]>([]);
+    const [chatsReady, setChatsReady] = useState(false);
     const [sort, setSort] = useState<ChatSort>("recent");
     const [filter, setFilter] = useState<ChatFilter>("all");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -541,16 +658,31 @@ export function ChatList({
     }, []);
 
     const loadChats = useCallback(async () => {
-        if (!project_path) {
-            setChats([]);
-            return;
-        }
         try {
-            setChats(await commands.getConversations(project_path));
+            if (isTalkWorkspace(mode)) {
+                const [talk, extra] = await Promise.all([
+                    commands.getConversations(TALK_CONVERSATION_STORE),
+                    project_path ? commands.getConversations(project_path) : Promise.resolve([]),
+                ]);
+                const seen = new Set<string>();
+                const merged: Conversation[] = [];
+                for (const chat of [...talk, ...extra]) {
+                    if (seen.has(chat.id)) continue;
+                    seen.add(chat.id);
+                    merged.push(chat);
+                }
+                setChats(merged);
+            } else if (!project_path) {
+                setChats([]);
+            } else {
+                setChats(await commands.getConversations(project_path));
+            }
         } catch {
             setChats([]);
+        } finally {
+            setChatsReady(true);
         }
-    }, [project_path]);
+    }, [project_path, mode]);
 
     useEffect(() => {
         void loadChats();
@@ -570,7 +702,10 @@ export function ChatList({
             const id = (e as CustomEvent<{ id?: string }>).detail?.id;
             const next = id && id !== NEW_CHAT_TAB_ID ? id : null;
             setActiveId(next);
-            if (next) clearChatUnread(next);
+            if (next) {
+                clearChatUnread(next);
+                rememberLaneChat(chatLane(next), next);
+            }
         };
         window.addEventListener("shape-chat-active", onActive as EventListener);
         return () => window.removeEventListener("shape-chat-active", onActive as EventListener);
@@ -601,7 +736,7 @@ export function ChatList({
     }, [project_path]);
 
     const visible = useMemo(() => {
-        const live = chats.filter((c) => !c.archived);
+        const live = chats.filter((c) => !c.archived && chatLane(c.id) === mode);
         const sorted = [...live];
         sorted.sort((a, b) => {
             const aPin = pinnedIds.has(a.id);
@@ -621,32 +756,112 @@ export function ChatList({
             return sort === "oldest" ? delta : -delta;
         });
         return sorted;
-    }, [chats, sort, pinnedIds]);
+    }, [chats, sort, pinnedIds, mode, laneSnap]);
 
     const filtered = useMemo(() => {
-        if (filter === "pinned") return visible.filter((c) => pinnedIds.has(c.id));
-        if (filter === "unread") return visible.filter((c) => unreadIds.has(c.id));
-        return visible;
-    }, [visible, filter, pinnedIds, unreadIds]);
+        let next = visible;
+        if (filter === "pinned") next = next.filter((c) => pinnedIds.has(c.id));
+        if (filter === "unread") next = next.filter((c) => unreadIds.has(c.id));
+        const q = workerQuery.trim().toLowerCase();
+        if (q && (mode === "Cowork" || mode === "GTM")) {
+            next = next.filter((c) => (c.title || "").toLowerCase().includes(q));
+        }
+        return next;
+    }, [visible, filter, pinnedIds, unreadIds, workerQuery, mode]);
 
     const selected = new Set(selectedIds);
     const toggleSelect = (id: string) => {
         setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
     };
 
-    const rowProps = (chat: Conversation) => ({
-        chat,
-        projectPath: project_path || "",
-        activeId,
-        pinned: pinnedIds.has(chat.id),
-        unread: unreadIds.has(chat.id),
-        color: null as ChatColor | null,
-        edge: "none" as const,
-        subagents: allSubagents.filter((card) => card.parentId === chat.id),
-        selecting: selectedIds.length > 0,
-        selected: selected.has(chat.id),
-        onToggleSelect: () => toggleSelect(chat.id),
-    });
+    const startLaneChat = () => {
+        if (mode === "Cowork") {
+            setWorkerOpen(true);
+            return;
+        }
+        if (mode === "GTM") {
+            armNextChat({ mode: "GTM", shape: "circle", color: nextWorkerColor("GTM") });
+        } else {
+            armNextChat({ mode });
+        }
+        onNewChat();
+    };
+
+    const alignedMode = useRef<string | null>(null);
+    const switchingLane = useRef(false);
+    useEffect(() => {
+        if (!chatsReady) return;
+        if (mode === "Code" && !project_path) {
+            if (alignedMode.current === mode) return;
+            alignedMode.current = mode;
+            switchingLane.current = true;
+            window.dispatchEvent(new Event("shape-chat-new"));
+            return;
+        }
+        if (switchingLane.current) {
+            if (!activeId || chatLane(activeId) === mode) switchingLane.current = false;
+            else return;
+        }
+        if (alignedMode.current === mode && (!activeId || chatLane(activeId) === mode)) return;
+        if (activeId && chatLane(activeId) === mode) {
+            alignedMode.current = mode;
+            return;
+        }
+        if (!activeId && alignedMode.current == null) return;
+        alignedMode.current = mode;
+        switchingLane.current = true;
+        const known = chats.filter((chat) => !chat.archived && chatLane(chat.id) === mode);
+        const remembered = lastLaneChat(mode);
+        const target = known.find((chat) => chat.id === remembered) ?? known[0];
+        if (target) {
+            clearNextChat();
+            window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id: target.id } }));
+            return;
+        }
+        if (mode === "GTM") {
+            armNextChat({ mode: "GTM", shape: "circle", color: nextWorkerColor("GTM") });
+        } else if (mode === "Cowork") {
+            armNextChat({
+                mode: "Cowork",
+                shape: "circle",
+                color: "#3b82f6",
+                title: "Manager",
+                job: "Coordinate teammates and keep work moving.",
+            });
+        } else {
+            armNextChat({ mode });
+        }
+        window.dispatchEvent(new Event("shape-chat-new"));
+    }, [mode, activeId, chatsReady, project_path, chats]);
+
+    const rowProps = (chat: Conversation) => {
+        const stored = chatMark(chat.id);
+        const mark = mode === "Code" || mode === "Chat"
+            ? null
+            : {
+                shape: (mode === "GTM" ? "circle" : stored?.shape || "circle") as WorkerShape,
+                color: stored?.color || (mode === "GTM" ? "#8b5cf6" : "#3b82f6"),
+            };
+        return {
+            chat,
+            projectPath: project_path || "",
+            activeId,
+            pinned: pinnedIds.has(chat.id),
+            unread: unreadIds.has(chat.id),
+            color: null as ChatColor | null,
+            edge: "none" as const,
+            subagents: allSubagents.filter((card) => card.parentId === chat.id),
+            selecting: selectedIds.length > 0,
+            selected: selected.has(chat.id),
+            onToggleSelect: () => toggleSelect(chat.id),
+            mark,
+            when: mode === "Code" || mode === "Chat" ? "" : formatWhen(chat.timestamp),
+            preview: mode === "Code" || mode === "Chat" ? "" : previewLine(chat),
+            onNew: startLaneChat,
+        };
+    };
+
+    const pending = laneSnap.draft?.title && laneSnap.draft.mode === mode ? laneSnap.draft : null;
 
     const openCommandPalette = () => {
         window.dispatchEvent(
@@ -659,7 +874,22 @@ export function ChatList({
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between pl-3 pr-1 pb-1 pt-3">
-                <span className="text-sm font-medium text-text-muted">Sessions</span>
+                {mode === "Cowork" ? (
+                    <div className="relative min-w-0 flex-1 pr-1">
+                        <Icon icon={Search20Regular} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
+                        <input
+                            value={workerQuery}
+                            onChange={(event) => setWorkerQuery(event.target.value)}
+                            placeholder="Search"
+                            className="h-8 w-full rounded-lg bg-panel-hover pl-8 pr-2 text-sm text-text-primary outline-none"
+                        />
+                    </div>
+                ) : (
+                <span className="text-sm font-regular text-text-muted">
+                    {mode === "Chat" ? "Chats" : mode === "GTM" ? "Chats" : "Sessions"}
+                </span>
+                )}
+                {mode === "Cowork" ? null : (
                 <div className="flex items-center">
                     <HeaderIconBtn label="Search" onClick={openCommandPalette}>
                         <Icon icon={Search20Regular} />
@@ -702,39 +932,52 @@ export function ChatList({
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <HeaderIconBtn label="New chat" onClick={onNewChat}>
-                        <Icon icon={Compose20Regular} />
-                    </HeaderIconBtn>
                 </div>
+                )}
             </div>
 
             <ScrollArea fadeFrom="from-sidebar" className="min-h-0 flex-1 px-1.5 pb-2">
-                {!project_path ? (
+                {mode === "Code" && !project_path ? (
                     <button
                         type="button"
-                        onClick={() => window.dispatchEvent(new Event("shape-new-project"))}
+                        onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
                         className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                     >
                         <Icon icon={FolderOpen20Regular} />
-                        New project
-                    </button>
-                ) : filtered.length === 0 ? (
-                    <button
-                        type="button"
-                        onClick={onNewChat}
-                        className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
-                    >
-                        <Icon icon={Compose20Regular} className="shrink-0" />
-                        <span>New chat</span>
+                        Open a folder
                     </button>
                 ) : (
                     <div className="space-y-0.5">
+                        {pending ? (
+                            <div className="flex items-start gap-2.5 squircle-2xl bg-panel-hover px-2 py-2">
+                                <WorkerMark
+                                    shape={pending.shape || "circle"}
+                                    color={pending.color || "#3b82f6"}
+                                    size={32}
+                                />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm text-text-primary">
+                                        {pending.title || "New chat"}
+                                    </span>
+                                    <span className="mt-0.5 block truncate text-xs text-text-muted">No messages yet</span>
+                                </span>
+                            </div>
+                        ) : null}
                         {filtered.map((c) => (
                             <SessionRow key={c.id} {...rowProps(c)} />
                         ))}
+                        <button
+                            type="button"
+                            onClick={startLaneChat}
+                            className="mt-1 flex w-full items-center gap-1 squircle-2xl px-1 h-10 font-regular text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
+                        >
+                            <Icon icon={Compose20Regular} className="shrink-0 icon-lg" />
+                            <span>{mode === "Cowork" ? "New worker" : "New chat"}</span>
+                        </button>
                     </div>
                 )}
             </ScrollArea>
+            <CreateWorkerDialog open={workerOpen} onOpenChange={setWorkerOpen} />
         </div>
     );
 }

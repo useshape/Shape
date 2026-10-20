@@ -9,6 +9,8 @@ import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
 import { ChatErrorDialog } from "./blocks/error";
 import { ChatEmptyState } from "./shell/empty";
+import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
+import { chatMark } from "@/lib/sidebar/chat-lanes";
 import { parseMessageContent } from "./md/renderer";
 import type { ComposerTaskItem } from "./composer/activity";
 import { AGENT_TABS_SLOT } from "@/features/agent/chrome";
@@ -47,6 +49,21 @@ export default function Chat({
     embedWindowControls?: React.ReactNode;
 }) {
     const session = useChatSession();
+    const workspaceModeId = useWorkspaceMode();
+    const talk = isTalkWorkspace(workspaceModeId);
+    const storedMark = session.conversationId ? chatMark(session.conversationId) : null;
+    const talkMark =
+        talk && workspaceModeId !== "Chat"
+            ? {
+                shape: (workspaceModeId === "GTM" ? "circle" : storedMark?.shape || "circle") as
+                    | "circle"
+                    | "square"
+                    | "triangle"
+                    | "cloud",
+                color: storedMark?.color || (workspaceModeId === "GTM" ? "#8b5cf6" : "#3b82f6"),
+            }
+            : null;
+    const talkName = workspaceModeId === "Chat" ? "Shape" : session.chatTitle || "Shape";
     const activeSubagent = React.useSyncExternalStore(subscribeSubagents, getActiveSubagent, getActiveSubagent);
 
     React.useEffect(() => {
@@ -287,7 +304,9 @@ export default function Chat({
             setSelectedModel={session.setSelectedModel}
             selectedWorkerModels={session.selectedWorkerModels}
             setSelectedWorkerModels={session.setSelectedWorkerModels}
-            hideModeSelect={false}
+            hideModeSelect={talk}
+            talkSurface={talk}
+            talkName={talkName}
             selectedMode={session.selectedMode}
             setSelectedMode={session.setSelectedMode}
             reasoningEffort={session.reasoningEffort}
@@ -307,6 +326,7 @@ export default function Chat({
                 void session.handleNewChat();
             }}
             variant={embedded || !isEmpty ? "default" : "empty"}
+            folderLocked={workspaceModeId === "Code" && !session.project_path}
         />
     );
 
@@ -326,7 +346,7 @@ export default function Chat({
         >
             <div
                 ref={emptyStackRef}
-                className={cn("relative flex w-full shrink-0 flex-col items-center gap-5", columnWidth)}
+                className={cn("relative z-10 flex w-full shrink-0 flex-col items-center gap-5", columnWidth)}
                 style={{
                     marginTop: emptyTop,
                     transition: emptyTopMotion.current
@@ -334,12 +354,7 @@ export default function Chat({
                         : "none",
                 }}
             >
-                <ChatEmptyState
-                    onSelectMode={(mode) => {
-                        session.setSelectedMode(mode);
-                        window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
-                    }}
-                />
+                <ChatEmptyState />
                 <div className="w-full">
                     {composer}
                 </div>
@@ -378,6 +393,9 @@ export default function Chat({
                             isFileEditResolved={session.isEditResolved}
                             activeChatTabId={session.activeChatTabId}
                             fullWidthBubbles={false}
+                            surface={talk ? "talk" : "code"}
+                            talkMark={talkMark}
+                            talkName={talkName}
                         />
                     </div>
                 </div>

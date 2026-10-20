@@ -1295,6 +1295,144 @@ pub async fn search_project_files(
     .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))?
 }
 
+const LOCAL_SEARCH_SKIP: &[&str] = &[
+    "node_modules",
+    ".git",
+    "AppData",
+    "Application Data",
+    ".cache",
+    "target",
+    "dist",
+    ".next",
+    "Library",
+    "__pycache__",
+    ".venv",
+    "venv",
+];
+
+fn local_search_skip(name: &str) -> bool {
+    LOCAL_SEARCH_SKIP
+        .iter()
+        .any(|skip| name.eq_ignore_ascii_case(skip))
+        || name.starts_with('.')
+}
+
+fn walk_local_matches(
+    root: &Path,
+    home: &Path,
+    query: &str,
+    depth: usize,
+    max_depth: usize,
+    max_results: usize,
+    out: &mut Vec<SearchResult>,
+) {
+    if out.len() >= max_results || depth > max_depth {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if out.len() >= max_results {
+            return;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if local_search_skip(&name) {
+            continue;
+        }
+        let path = entry.path();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        let hay = name.to_ascii_lowercase();
+        if query.is_empty() || hay.contains(query) {
+            let rel = path
+                .strip_prefix(home)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| path.to_string_lossy().replace('\\', "/"));
+            let mut score = if hay.starts_with(query) { 200 } else { 40 };
+            if is_dir {
+                score += 10;
+            }
+            out.push(SearchResult {
+                name: if is_dir { format!("{name}/") } else { name.clone() },
+                path: path.to_string_lossy().into_owned(),
+                relative_path: if is_dir { format!("{rel}/") } else { rel },
+                score,
+            });
+        }
+        if is_dir && depth < max_depth {
+            walk_local_matches(&path, home, query, depth + 1, max_depth, max_results, out);
+        }
+    }
+}
+
+/// Search the user's home / Documents / Desktop / Downloads for @-mention paths.
+pub async fn search_local_files(
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<SearchResult>, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let home = dirs::home_dir().ok_or_else(|| {
+            AppError::Message("Could not resolve the home directory.".to_string())
+        })?;
+        let max_results = limit.unwrap_or(40).clamp(1, 80);
+        let query_trimmed = query.trim().replace('\\', "/");
+        let query_lower = query_trimmed.to_ascii_lowercase();
+        let mut roots = vec![home.clone()];
+        for folder in ["Documents", "Desktop", "Downloads", "OneDrive"] {
+            let path = home.join(folder);
+            if path.is_dir() {
+                roots.push(path);
+            }
+        }
+        let mut results = Vec::new();
+        if query_trimmed.contains('/') {
+            let direct = if Path::new(&query_trimmed).is_absolute() {
+                PathBuf::from(&query_trimmed)
+            } else if query_trimmed.starts_with("~/") {
+                home.join(&query_trimmed[2..])
+            } else {
+                home.join(&query_trimmed)
+            };
+            if direct.exists() {
+                let is_dir = direct.is_dir();
+                let name = direct
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let rel = direct
+                    .strip_prefix(&home)
+                    .map(|p| p.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_else(|_| direct.to_string_lossy().replace('\\', "/"));
+                results.push(SearchResult {
+                    name: if is_dir { format!("{name}/") } else { name },
+                    path: direct.to_string_lossy().into_owned(),
+                    relative_path: if is_dir { format!("{rel}/") } else { rel },
+                    score: 500,
+                });
+                if is_dir {
+                    walk_local_matches(&direct, &home, "", 0, 2, max_results, &mut results);
+                }
+            }
+        }
+        for root in roots {
+            walk_local_matches(
+                &root,
+                &home,
+                &query_lower,
+                0,
+                if query_lower.is_empty() { 1 } else { 3 },
+                max_results,
+                &mut results,
+            );
+        }
+        results.sort_unstable_by(|a, b| b.score.cmp(&a.score).then_with(|| a.name.cmp(&b.name)));
+        results.truncate(max_results);
+        Ok(results)
+    })
+    .await
+    .map_err(|e| AppError::Message(format!("Worker thread panicked: {}", e)))?
+}
+
 pub async fn search_content(
     state: State<'_, AppState>,
     query: String,

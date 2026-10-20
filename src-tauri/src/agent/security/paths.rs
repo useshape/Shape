@@ -283,9 +283,58 @@ pub fn assert_resolved_within(path: &Path, root: &Path) -> Result<(), AppError> 
     )))
 }
 
-/// Validate a path for read operations. Ensures it's within project and not sensitive.
+fn expand_user_path(user_path: &str) -> PathBuf {
+    let trimmed = user_path.trim();
+    if let Some(rest) = trimmed.strip_prefix("~/").or_else(|| trimmed.strip_prefix("~\\")) {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest);
+        }
+    }
+    if trimmed == "~" {
+        if let Some(home) = dirs::home_dir() {
+            return home;
+        }
+    }
+    PathBuf::from(trimmed)
+}
+
+/// Absolute local reads (Chat / Cowork / GTM @ mentions) — still block secrets.
+pub fn validate_user_read_path(user_path: &str) -> Result<PathBuf, AppError> {
+    let expanded = expand_user_path(user_path);
+    if !expanded.is_absolute() {
+        if let Some(home) = dirs::home_dir() {
+            let joined = home.join(expanded);
+            return canonicalize_ipc_path(&joined.to_string_lossy());
+        }
+        return Err(AppError::Message(
+            "No project is open. Use an absolute path or a home-relative path.".to_string(),
+        ));
+    }
+    canonicalize_ipc_path(&expanded.to_string_lossy())
+}
+
+/// Validate a path for read operations. Project-relative when a folder is open;
+/// otherwise an absolute or home-relative path the user referenced.
 pub fn validate_read_path(user_path: &str, project_root: &str) -> Result<PathBuf, AppError> {
-    let resolved = resolve_safe_path(user_path, project_root)?;
+    let project_ok = if !project_root.is_empty() {
+        resolve_safe_path(user_path, project_root)
+    } else {
+        Err(AppError::Message("No project is open.".to_string()))
+    };
+
+    let resolved = match project_ok {
+        Ok(path) => path,
+        Err(err) => {
+            let looks_external = Path::new(user_path).is_absolute()
+                || user_path.starts_with('~')
+                || project_root.is_empty();
+            if looks_external {
+                validate_user_read_path(user_path)?
+            } else {
+                return Err(err);
+            }
+        }
+    };
 
     if is_sensitive_path(&resolved) {
         return Err(AppError::Message(format!(

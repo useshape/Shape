@@ -40,6 +40,12 @@ import { PluginLogo } from "@/components/ui/plugin-logo";
 
 type CategoryId = "files" | "code" | "docs" | "terminals" | "chats" | "branch" | "browser" | "mcp" | "plugins" | "skills" | "design" | null;
 
+const IMAGE_MODELS = [
+    { token: "@klein", label: "Klein", line: "New images · about $0.014" },
+    { token: "@klein9", label: "Klein 9", line: "Edits that keep a person or layout · about $0.015" },
+    { token: "@mini", label: "Mini", line: "Cheap drafts and instruction edits · from $0.005" },
+] as const;
+
 const CATEGORIES: {
     id: Exclude<CategoryId, null>;
     label: string;
@@ -140,14 +146,28 @@ export function MentionPicker({
     }, [open]);
 
     useEffect(() => {
-        if (!open || !project_path) return;
+        if (!open) return;
         let cancelled = false;
         void (async () => {
             try {
-                const results = await commands.searchProjectFiles(filter || "", 40);
-                if (!cancelled) {
-                    setFiles(results.map((r) => (r.relative_path || r.path).replace(/\\/g, "/")));
+                const [projectHits, localHits] = await Promise.all([
+                    project_path
+                        ? commands.searchProjectFiles(filter || "", 40).catch(() => [])
+                        : Promise.resolve([]),
+                    commands.searchLocalFiles(filter || "", 40).catch(() => []),
+                ]);
+                if (cancelled) return;
+                const seen = new Set<string>();
+                const merged: string[] = [];
+                for (const hit of [...projectHits, ...localHits]) {
+                    const abs = hit.path.replace(/\\/g, "/");
+                    const key = abs.toLowerCase();
+                    if (!abs || seen.has(key)) continue;
+                    seen.add(key);
+                    const folder = hit.name.endsWith("/") || abs.endsWith("/");
+                    merged.push(folder && !abs.endsWith("/") ? `${abs}/` : abs);
                 }
+                setFiles(merged);
             } catch {
                 if (!cancelled) setFiles([]);
             }
@@ -162,10 +182,10 @@ export function MentionPicker({
         let cancelled = false;
         void (async () => {
             try {
-                const list = await commands.getConversations(project_path ?? undefined);
+                const list = await commands.getConversations(undefined, true);
                 if (!cancelled) {
                     setChats(
-                        list.slice(0, 20).map((c) => ({
+                        list.slice(0, 40).map((c) => ({
                             id: c.id,
                             title: c.title || "Chat",
                         })),
@@ -178,7 +198,7 @@ export function MentionPicker({
         return () => {
             cancelled = true;
         };
-    }, [open, project_path]);
+    }, [open]);
 
     useEffect(() => {
         if (!open) return;
@@ -379,6 +399,16 @@ export function MentionPicker({
         return [];
     }, [activeCategory, fileMentions, files, chats, designItems, mcpServers, pluginMentions, skills, scanItems, project_path, q, filter]);
 
+    const modelItems = useMemo(() => {
+        return IMAGE_MODELS.filter(
+            (item) =>
+                !q
+                || item.token.includes(q)
+                || item.label.toLowerCase().includes(q)
+                || item.line.toLowerCase().includes(q),
+        );
+    }, [q]);
+
     const rootItems = useMemo(() => {
         if (activeCategory) return categoryItems;
         return fileMentions.slice(0, 8);
@@ -524,7 +554,28 @@ export function MentionPicker({
                     )
                 ) : (
                     <>
-                {rootItems.length === 0 && (activeCategory || !showCategories) ? (
+                {mode === "mention" && !activeCategory && modelItems.length > 0 ? (
+                    <div className="px-2 pt-1.5 pb-1 text-xs font-medium text-text-muted">Models</div>
+                ) : null}
+                {mode === "mention" && !activeCategory
+                    ? modelItems.map((item) => (
+                        <button
+                            key={item.token}
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-text-primary hover:bg-panel-hover"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                                onPick(`${item.token} `);
+                                onClose();
+                            }}
+                        >
+                            <span className="min-w-0 flex-1 truncate font-medium">{item.token}</span>
+                            <span className="max-w-[60%] truncate text-xs text-text-muted">{item.line}</span>
+                        </button>
+                    ))
+                    : null}
+
+                {rootItems.length === 0 && (activeCategory || !showCategories) && modelItems.length === 0 ? (
                     <div className="px-2.5 py-2 text-sm text-text-muted">No matches</div>
                 ) : null}
 

@@ -3,12 +3,17 @@
 import { useEffect, useState } from "react";
 import type { Window } from "@tauri-apps/api/window";
 
-/**
- * Close behavior:
- * - Main → close secondary windows, then quit the app.
- * - Other secondary windows → close that window only.
- */
-async function closeAppOrWindow(appWindow: Window) {
+/** Hide the main window to the tray. Agents and routines keep running. */
+async function hideMainWindow(appWindow: Window) {
+    try {
+        await appWindow.hide();
+    } catch {
+        await appWindow.close();
+    }
+}
+
+/** Explicit quit from File → Exit. */
+async function quitApp(appWindow: Window) {
     try {
         if (appWindow.label === "main") {
             const { getAllWindows } = await import("@tauri-apps/api/window");
@@ -73,10 +78,13 @@ export function useWindowControls() {
             setIsMaximized(!maximized);
         },
         close: () => {
-            if (appWindow) void closeAppOrWindow(appWindow);
+            if (appWindow) void hideMainWindow(appWindow);
         },
         closeWindow: () => {
-            if (appWindow) void closeAppOrWindow(appWindow);
+            if (appWindow) void hideMainWindow(appWindow);
+        },
+        quit: () => {
+            if (appWindow) void quitApp(appWindow);
         },
     };
 }

@@ -190,6 +190,14 @@ pub async fn search_project_files(
 }
 
 #[tauri::command]
+pub async fn search_local_files(
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<SearchResult>, AppError> {
+    service::search_local_files(query, limit).await
+}
+
+#[tauri::command]
 pub async fn search_content(
     state: State<'_, AppState>,
     query: String,

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { OverlayRootProvider } from "@/lib/ui/overlay-root";
 import { AgentSidebar, AGENT_SIDEBAR_NAV_SLOT } from "./sidebar";
 import { ChatList } from "./sidebar/chats";
+import { RoutinesHost } from "./sidebar/routines-host";
 import { AgentChrome } from "./chrome";
 import { AgentWorkspace } from "./workspace";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
@@ -16,6 +17,7 @@ import { TerminalDock } from "./terminal-dock";
 import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
 import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-terminal-notify";
 import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
+import { useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
 
 const MIN_WORKSPACE = 360;
@@ -485,13 +487,15 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [openWorkspaceTerminal]);
 
     const overlayOpen = overlay != null;
-    const showWorkspace = Boolean(project_path) && !overlayOpen;
+    const codeWorkspace = useWorkspaceMode() === "Code";
+    const showWorkspace = codeWorkspace && Boolean(project_path) && !overlayOpen;
     const rightExpanded = workspaceOpen && showWorkspace && workspaceFits;
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
         <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-sidebar">
             <DevRunHost />
+            <RoutinesHost />
             <ProjectQuickPickHost />
             {splash ? (
                 <div
@@ -534,19 +538,19 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 <SidebarPeek shown={sidebarFlyout} onEnter={openSidebarFlyout} onLeave={closeSidebarFlyout} />
             )}
 
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel rounded-xl border-l border-border">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-sidebar">
                 <AgentChrome
                     rightOpen={rightExpanded}
                     onToggleRight={toggleWorkspace}
                     canToggleRight={Boolean(project_path) && !overlayOpen}
-                    showRightToggle={!overlayOpen}
+                    showRightToggle={codeWorkspace && !overlayOpen}
                     padWindowControls
                     sidebarOpen={sidebarOpen}
                     onToggleSidebar={toggleSidebar}
                     onSidebarHoverStart={openSidebarFlyout}
                     onSidebarHoverEnd={closeSidebarFlyout}
                 />
-                <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <div className="relative m-1.5 mt-0 flex min-h-0 min-w-0 flex-1 overflow-hidden squircle-2xl border border-border-subtle bg-panel">
                 <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
                     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                             {overlay ? (
@@ -558,19 +562,13 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                         sidebarExpanded={sidebarOpen}
                                     />
                                 </div>
-                            ) : project_path ? (
-                                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                                    <Chat
-                                        key={project_path.replace(/\//g, "\\").toLowerCase()}
-                                        className="bg-transparent"
-                                    />
-                                </div>
                             ) : (
-                                <div className="h-full overflow-hidden bg-transparent" data-tauri-drag-region>
-                                    {children}
+                                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                                    <Chat className="bg-transparent" />
                                 </div>
                             )}
-                            {project_path ? <TerminalDock /> : null}
+                            <div className="hidden">{children}</div>
+                            {codeWorkspace && project_path ? <TerminalDock /> : null}
                     </div>
                 </div>
                 {showWorkspace && project_path ? (
@@ -629,7 +627,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 onMinimize={minimize}
                 onToggleMaximize={() => void toggleMaximize()}
                 onClose={close}
-                surface="panel"
+                surface="sidebar"
                 spacer={false}
             />
         </div>

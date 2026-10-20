@@ -37,6 +37,10 @@ import {
     setIncognitoChat,
 } from "@/lib/chat/incognito";
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
+import { chatMark, clearNextChat, ensureDraftForCurrentMode, sealNextChat } from "@/lib/sidebar/chat-lanes";
+import { getWorkspaceMode, isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
+import { conversationStorePath } from "@/lib/chat/conversation-store";
+import { getSelectedTalkMediaId } from "@/lib/chat/talk-media";
 import { buildMessageWithMentions, type SelectionSnapshot } from "@/lib/chat/mentions";
 import { buildPlanBuildMessage } from "@/lib/chat/continue-action";
 import { listProjectRuleFiles, loadProjectRules } from "@/lib/workspace/rules";
@@ -245,6 +249,8 @@ export function useChatSession() {
     const [resolveRevision, setResolveRevision] = React.useState(0);
 
     const { project_path } = useProjectState();
+    const workspaceModeId = useWorkspaceMode();
+    const storePath = conversationStorePath(workspaceModeId, project_path);
     const shapeAuth = useShapeAuth();
     const { catalog } = useShapeCatalog();
     const [tabsReady, setTabsReady] = React.useState(false);
@@ -253,11 +259,11 @@ export function useChatSession() {
     React.useEffect(() => {
         let cancelled = false;
         setTabsReady(false);
-        const key = chatTabsStorageKey(project_path);
+        const key = chatTabsStorageKey(storePath);
         tabsHydratedForRef.current = key;
 
         void (async () => {
-            const persisted = readPersistedChatTabs(project_path);
+            const persisted = readPersistedChatTabs(storePath);
             if (persisted) {
                 const tabs = persisted.tabs.filter((t) => t.id !== "__demo_chat__");
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
@@ -268,11 +274,15 @@ export function useChatSession() {
                 setActiveChatTabId(activeId);
                 if (activeId !== NEW_CHAT_TAB_ID && !isEphemeralChatTabId(activeId)) {
                     try {
-                        await commands.loadConversation(
-                            activeId,
-                            project_path ?? undefined,
-                        );
+                        if (!resumeLiveConversation(activeId)) {
+                            await commands.loadConversation(
+                                activeId,
+                                storePath ?? undefined,
+                            );
+                        }
                         if (!cancelled) {
+                            setConversationId(activeId);
+                            setCurrentConversationId(activeId);
                             clearAllDesignPreviewSessions();
                             setContextSummarized(false);
                         }
@@ -294,7 +304,7 @@ export function useChatSession() {
         return () => {
             cancelled = true;
         };
-    }, [project_path, setContextSummarized]);
+    }, [storePath, setContextSummarized]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -312,8 +322,8 @@ export function useChatSession() {
 
     React.useEffect(() => {
         if (!tabsReady) return;
-        writePersistedChatTabs(project_path, openChatTabs, activeChatTabId);
-    }, [tabsReady, project_path, openChatTabs, activeChatTabId]);
+        writePersistedChatTabs(storePath, openChatTabs, activeChatTabId);
+    }, [tabsReady, storePath, openChatTabs, activeChatTabId]);
 
     React.useEffect(() => {
         window.dispatchEvent(
@@ -625,7 +635,9 @@ export function useChatSession() {
 
     const refreshMetadata = React.useCallback(async () => {
         try {
-            const convs = await commands.getConversations(project_path ?? undefined);
+            const convs = isTalkWorkspace(workspaceModeId)
+                ? await commands.getConversations(undefined, true)
+                : await commands.getConversations(storePath ?? undefined);
             const title = await commands.getChatTitle();
             const convId = await commands.getCurrentConversationId();
             setRecentConvs(convs);
@@ -636,11 +648,21 @@ export function useChatSession() {
         } catch (err) {
             console.error("Failed to refresh chat metadata:", err);
         }
-    }, [project_path, syncOpenTabs]);
+    }, [storePath, workspaceModeId, syncOpenTabs]);
 
     const conversationIdRef = React.useRef(conversationId);
     React.useEffect(() => {
         conversationIdRef.current = conversationId;
+    }, [conversationId]);
+
+    React.useEffect(() => {
+        if (!conversationId) return;
+        const title = sealNextChat(conversationId);
+        if (!title) return;
+        void commands.renameConversation(conversationId, title).then(() => {
+            setChatTitle(title);
+            window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
+        }).catch(() => {});
     }, [conversationId]);
 
     const refreshHistory = React.useCallback(
@@ -651,7 +673,9 @@ export function useChatSession() {
                 return;
             }
             try {
-                const convs = await commands.getConversations(project_path ?? undefined);
+                const convs = isTalkWorkspace(workspaceModeId)
+                    ? await commands.getConversations(undefined, true)
+                    : await commands.getConversations(storePath ?? undefined);
                 const title = await commands.getChatTitle();
                 const convId = await commands.getCurrentConversationId();
 
@@ -673,7 +697,7 @@ export function useChatSession() {
                 console.error("Failed to load chat history:", err);
             }
         },
-        [project_path, refreshMetadata, syncFromBackend, syncOpenTabs],
+        [storePath, workspaceModeId, refreshMetadata, syncFromBackend, syncOpenTabs],
     );
 
     React.useEffect(() => {
@@ -789,6 +813,10 @@ export function useChatSession() {
     const forceSendRef = React.useRef(false);
 
     const handleSendMessage = async (overrideContent?: string): Promise<boolean> => {
+        if (getWorkspaceMode() === "Code" && !project_path) {
+            window.dispatchEvent(new Event("shape-open-project-pick"));
+            return false;
+        }
         const messageContent = typeof overrideContent === "string" ? overrideContent : inputValue;
         const fromQueue = typeof overrideContent === "string";
 
@@ -997,10 +1025,17 @@ export function useChatSession() {
                 defaultModel: settings.ai.subagentDefaultModel,
             });
 
+            const workspace = getWorkspaceMode();
+            const mark = conversationIdRef.current ? chatMark(conversationIdRef.current) : null;
+            const loop = (window as unknown as { __shapeLoopWorker?: { name: string; job?: string } }).__shapeLoopWorker;
+            if (loop) delete (window as unknown as { __shapeLoopWorker?: unknown }).__shapeLoopWorker;
+            const talkName =
+                loop?.name
+                || (workspace === "Chat" ? "Shape" : isTalkWorkspace(workspace) ? chatTitle : undefined);
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 modelToSend,
-                modeToSend,
+                isTalkWorkspace(workspace) ? "Ask" : modeToSend,
                 mergedRules,
                 token,
                 undefined,
@@ -1021,6 +1056,10 @@ export function useChatSession() {
                 undefined,
                 subagentSend.models,
                 subagentSend.defaultModel,
+                workspace,
+                talkName,
+                loop?.job || mark?.taught || mark?.job || undefined,
+                getSelectedTalkMediaId(),
             );
             await refreshMetadata();
             return true;
@@ -1050,6 +1089,45 @@ export function useChatSession() {
     React.useEffect(() => {
         handleSendMessageRef.current = handleSendMessage;
     });
+
+    React.useEffect(() => {
+        const onRetry = (event: Event) => {
+            const detail = (event as CustomEvent<{ prompt?: string; model?: string; mediaId?: string }>).detail;
+            if (!detail?.prompt) return;
+            const model = detail.model ? ` model ${detail.model}` : "";
+            const id = detail.mediaId ? ` media_id=${detail.mediaId}` : "";
+            void handleSendMessageRef.current(
+                `Retry the failed image with the same prompt${model}.${id} Prompt: ${detail.prompt}`,
+            );
+        };
+        const onLoop = (event: Event) => {
+            const detail = (event as CustomEvent<{ name?: string; job?: string }>).detail;
+            if (!detail?.name) return;
+            (window as unknown as { __shapeLoopWorker?: { name: string; job?: string } }).__shapeLoopWorker = {
+                name: detail.name,
+                job: detail.job,
+            };
+        };
+        const onFlush = () => {
+            void commands.flushChatHistory().catch(() => {});
+        };
+        const onSendText = (event: Event) => {
+            const text = (event as CustomEvent<{ text?: string }>).detail?.text;
+            if (!text?.trim()) return;
+            void handleSendMessageRef.current(text);
+        };
+        window.addEventListener("shape-retry-image", onRetry as EventListener);
+        window.addEventListener("shape-loop-worker", onLoop as EventListener);
+        window.addEventListener("shape-chat-send-text", onSendText as EventListener);
+        window.addEventListener("beforeunload", onFlush);
+        return () => {
+            window.removeEventListener("shape-retry-image", onRetry as EventListener);
+            window.removeEventListener("shape-loop-worker", onLoop as EventListener);
+            window.removeEventListener("shape-chat-send-text", onSendText as EventListener);
+            window.removeEventListener("beforeunload", onFlush);
+            onFlush();
+        };
+    }, []);
 
     React.useEffect(() => {
         if (isLoading) return;
@@ -1394,6 +1472,7 @@ export function useChatSession() {
 
     const handleNewChat = async () => {
         try {
+            ensureDraftForCurrentMode();
             // Do not stop background generation; only the Stop button cancels.
             startDraftChat();
             await commands.newChat();
@@ -1511,6 +1590,7 @@ export function useChatSession() {
 
     const handleLoadConversation = React.useCallback(
         async (id: string, options?: { force?: boolean }) => {
+            clearNextChat();
             const isSameConversation = id === conversationIdRef.current;
             const hasVisibleMessages = messagesRef.current.length > 0;
             if (resumeLiveConversation(id)) {

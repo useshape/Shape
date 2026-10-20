@@ -79,46 +79,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         void (async () => {
             try {
                 const { getCurrentWindow } = await import("@tauri-apps/api/window");
-                const { confirm } = await import("@tauri-apps/plugin-dialog");
                 const win = getCurrentWindow();
                 if (win.label !== "main") return;
 
                 unlisten = await win.onCloseRequested(async (event) => {
-                    const { hasGeneratingChats } = await import("@/features/chat/lib/generating-chats");
-                    if (hasGeneratingChats()) {
-                        event.preventDefault();
-                        await win.hide();
-                        return;
-                    }
-                    const { getProjectSnapshot, commands } = await import("@/lib/backend");
-                    const dirty = getProjectSnapshot().open_files.filter((f) => f.is_dirty);
-                    if (dirty.length === 0) return;
-
                     event.preventDefault();
-                    const save = await confirm(
-                        dirty.length === 1
-                            ? `Save changes to ${dirty[0].name || dirty[0].path} before closing?`
-                            : `Save changes to ${dirty.length} files before closing?`,
-                        {
-                            title: "Unsaved changes",
-                            kind: "warning",
-                            okLabel: "Save",
-                            cancelLabel: "Don't save",
-                        },
-                    );
-
-                    if (save) {
-                        window.dispatchEvent(new Event("save-all-request"));
-                        // Give save-all a moment; then close.
-                        await new Promise((r) => setTimeout(r, 400));
-                    } else {
-                        const { clearDirtyBuffer } = await import("@/lib/workspace/dirty-buffers");
-                        for (const f of dirty) {
-                            clearDirtyBuffer(f.path);
-                            void commands.markFileDirty(f.path, false);
-                        }
-                    }
-                    if (!cancelled) await win.destroy();
+                    if (!cancelled) await win.hide();
                 });
             } catch {
                 /* browser / non-tauri */

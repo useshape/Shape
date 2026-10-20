@@ -12,4 +12,5 @@ export type MenuActionContext = {
     openFiles: { path: string; is_dirty: boolean }[];
     readLatestContent: (path: string) => Promise<string>;
     closeWindow: () => void;
+    quitApp: () => void;
 };

@@ -481,6 +481,8 @@ export const commands = {
         invokeCommand<OutlineResponse>("get_outline", { filePath, content, extension, version }),
     searchProjectFiles: (query: string, limit?: number) =>
         invokeCommand<FileSearchResult[]>("search_project_files", { query, limit }),
+    searchLocalFiles: (query: string, limit?: number) =>
+        invokeCommand<FileSearchResult[]>("search_local_files", { query, limit }),
     searchContent: (query: string, options: SearchOptions) =>
         invokeCommand<ContentSearchResult[]>("search_content", { query, options }),
     replaceContent: (
@@ -530,6 +532,10 @@ export const commands = {
         /** Models subagents may use (user settings). Never inherit the parent chat model. */
         subagentModels?: string[],
         subagentDefaultModel?: string,
+        workspaceMode?: string,
+        workerName?: string | null,
+        workerJob?: string | null,
+        selectedMediaId?: string | null,
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -553,7 +559,14 @@ export const commands = {
             conversationKind: conversationKind ?? null,
             subagentModels: subagentModels ?? null,
             subagentDefaultModel: subagentDefaultModel ?? null,
+            workspaceMode: workspaceMode ?? null,
+            workerName: workerName ?? null,
+            workerJob: workerJob ?? null,
+            selectedMediaId: selectedMediaId ?? null,
         }),
+    flushChatHistory: () => invokeCommand<void>("flush_chat_history"),
+    setOpenAtLogin: (enabled: boolean) => invokeCommand<boolean>("set_open_at_login", { enabled }),
+    getOpenAtLogin: () => invokeCommand<boolean>("get_open_at_login"),
     captureHtmlPreview: (options: {
         html: string;
         width: number;
@@ -680,7 +693,13 @@ export const commands = {
         invokeCommand<ChatGenerationState>("get_chat_generation_state"),
     getChatTitle: () => invokeCommand<string>("get_chat_title"),
     getCurrentConversationId: () => invokeCommand<string | null>("get_current_conversation_id"),
-    getConversations: (projectPath?: string) => invokeCommand<Conversation[]>("get_conversations", { projectPath: projectPath ?? null }),
+    getConversations: (projectPath?: string, all?: boolean) =>
+        invokeCommand<Conversation[]>("get_conversations", {
+            projectPath: projectPath ?? null,
+            all: all ?? null,
+        }),
+    getConversation: (id: string, projectPath?: string | null) =>
+        invokeCommand<Conversation>("get_conversation", { id, projectPath: projectPath ?? null }),
     clearChatHistory: () => invokeCommand<void>("clear_chat_history"),
     newChat: () => invokeCommand<void>("new_chat"),
     setChatIncognito: (enabled: boolean) =>

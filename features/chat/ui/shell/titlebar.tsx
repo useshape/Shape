@@ -15,8 +15,8 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
 import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
-import { CommitMenu } from "@/features/agent/workspace/commit-menu";
 import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
+import { useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -121,6 +121,7 @@ export function ChatTitlebar({
     const { project_path } = useProjectState();
     const repo = project_path ? getRepoName(project_path) : null;
     const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
+    const workspaceModeId = useWorkspaceMode();
     const [terminalOpen, setTerminalOpen] = useState(false);
     useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
     const subagents = chatSubagents(conversationId, extractedSubagents);
@@ -163,8 +164,8 @@ export function ChatTitlebar({
 
     const actions = (
         <div className="flex items-center gap-2">
-            {project_path ? <WorkspaceBranchSwitch /> : null}
-            {project_path ? <CommitMenu projectPath={project_path} /> : null}
+            {workspaceModeId === "Code" && project_path ? <WorkspaceBranchSwitch /> : null}
+            {workspaceModeId === "Code" ? (
             <Tooltip content={terminalOpen ? "Hide terminal" : "Show terminal"}>
                 <button
                     type="button"
@@ -177,6 +178,7 @@ export function ChatTitlebar({
                     <Icon icon={PanelBottom20Filled} />
                 </button>
             </Tooltip>
+            ) : null}
         </div>
     );
 
@@ -187,7 +189,7 @@ export function ChatTitlebar({
                     <button
                         type="button"
                         className={cn(
-                            "-mx-1 flex min-w-0 max-w-[220px] items-center gap-0.5 rounded-md px-1 py-0.5 text-left text-sm whitespace-nowrap",
+                            "flex h-7 min-w-0 max-w-[220px] items-center gap-0.5 rounded-md px-1 py-0 text-left text-sm leading-none whitespace-nowrap",
                             subagentTitle
                                 ? "text-text-tertiary hover:bg-background-primary-hover hover:text-text-secondary"
                                 : "text-text-secondary",
@@ -217,26 +219,29 @@ export function ChatTitlebar({
             </DropdownMenu>
         </li>
     ) : subagentTitle ? (
-        <BreadcrumbItem onClick={() => onCloseSubagent?.()} className="min-w-0 truncate">
+        <BreadcrumbItem onClick={() => onCloseSubagent?.()} className="h-7 min-w-0 truncate py-0 text-sm leading-none">
             {title}
         </BreadcrumbItem>
     ) : (
-        <BreadcrumbItem current className="min-w-0 truncate">
+        <BreadcrumbItem current className="h-7 min-w-0 truncate py-0 text-sm leading-none">
             {title}
         </BreadcrumbItem>
     );
 
     return (
-        <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1">
-            <Breadcrumb className="w-auto min-w-0 max-w-full overflow-hidden" aria-label="Project">
-                {repo ? (
-                    <BreadcrumbItem onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}>
+        <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden leading-none">
+            <Breadcrumb className="h-7 w-auto min-w-0 max-w-full items-center overflow-hidden leading-none" aria-label="Project">
+                {workspaceModeId === "Code" && repo ? (
+                    <BreadcrumbItem
+                        onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
+                        className="h-7 py-0 text-sm leading-none"
+                    >
                         {repo}
                     </BreadcrumbItem>
                 ) : null}
                 {chatCrumb}
                 {subagentTitle ? (
-                    <BreadcrumbItem current className="min-w-0 max-w-[24rem]">
+                    <BreadcrumbItem current className="h-7 min-w-0 max-w-[24rem] py-0 text-sm leading-none">
                         <span className="flex min-w-0 items-center gap-1.5">
                             <Icon icon={People20Filled} className="shrink-0 text-text-muted" />
                             <span className="min-w-0 truncate">{subagentTitle}</span>

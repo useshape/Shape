@@ -26,32 +26,10 @@ pub fn get_current_conversation_id(state: tauri::State<'_, AgentState>) -> Resul
 #[tauri::command]
 pub fn get_chat_history(
     state: tauri::State<'_, AgentState>,
-    app_state: tauri::State<'_, AppState>,
+    _app_state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ChatMessage>, AppError> {
-    let proj_path = app_state.0.lock()?.project_path.clone();
-    let mut current_project_lock = state.current_project.lock()?;
-
-    if !history::project_paths_equal(&proj_path, &*current_project_lock) {
-        logging::info(
-            "chat",
-            &format!(
-                "Switching chat project from {:?} to {:?}",
-                current_project_lock, proj_path
-            ),
-        );
-
-        if let Some(old_path) = current_project_lock.as_ref() {
-            let _ = history::save_current_conversation(&state, old_path);
-        }
-
-        state.history.lock()?.clear();
-        state.title.lock()?.take();
-        state.reset_title_meta();
-        *state.history_summary.lock()? = None;
-        *state.current_conversation_id.lock()? = None;
-        *current_project_lock = proj_path;
-    }
-
+    // Opening or closing a coding folder must not wipe the live conversation.
+    // Persistence store is owned by load/new/send, not by the workspace path.
     Ok(state.merge_in_flight_into_history(state.history.lock()?.clone()))
 }
 
@@ -67,13 +45,17 @@ pub fn get_conversations(
     _state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     project_path: Option<String>,
+    all: Option<bool>,
 ) -> Result<Vec<crate::agent::models::Conversation>, AppError> {
     let mut path = dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     path.push("Shape");
     path.push("chat_history");
 
-    let filter_path =
-        project_path.or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()));
+    let filter_path = if all.unwrap_or(false) {
+        None
+    } else {
+        project_path.or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+    };
 
     let mut all_convs = Vec::new();
     if let Ok(entries) = std::fs::read_dir(path) {
@@ -91,11 +73,8 @@ pub fn get_conversations(
     }
 
     if let Some(ref fp) = filter_path {
-        let normalized = fp.replace('\\', "/").to_lowercase();
-        all_convs.retain(|c| {
-            let conv_normalized = c.project_path.replace('\\', "/").to_lowercase();
-            conv_normalized == normalized
-        });
+        let normalized = history::normalize_project_path(fp);
+        all_convs.retain(|c| history::normalize_project_path(&c.project_path) == normalized);
     }
 
     all_convs.sort_by(|a, b| {
@@ -104,6 +83,16 @@ pub fn get_conversations(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     Ok(all_convs)
+}
+
+#[tauri::command]
+pub fn get_conversation(
+    id: String,
+    project_path: Option<String>,
+) -> Result<crate::agent::models::Conversation, AppError> {
+    history::find_conversation_by_id(&id, project_path.as_deref())
+        .map(|(_, conv)| conv)
+        .ok_or_else(|| AppError::Message("Conversation not found".to_string()))
 }
 
 #[tauri::command]
@@ -224,12 +213,12 @@ pub fn new_chat(
 
     if let Some(path) = active_proj {
         let _ = history::save_current_conversation(&state, &path);
+    } else if let Some(path) = app_state.0.lock()?.project_path.clone() {
+        let _ = history::save_current_conversation(&state, &path);
+        *state.current_project.lock()? = Some(path);
     } else {
-        let proj_path = app_state.0.lock()?.project_path.clone();
-        if let Some(path) = proj_path {
-            let _ = history::save_current_conversation(&state, &path);
-            *state.current_project.lock()? = Some(path);
-        }
+        let _ = history::save_current_conversation(&state, history::TALK_STORE);
+        *state.current_project.lock()? = Some(history::TALK_STORE.to_string());
     }
 
     state.history.lock()?.clear();
@@ -327,13 +316,11 @@ pub fn rename_conversation(
     if title.is_empty() {
         return Err(AppError::Message("Title cannot be empty".to_string()));
     }
-    let proj_path = app_state
-        .0
-        .lock()?
-        .project_path
-        .clone()
+    let proj_path = history::find_conversation_by_id(&id, state.current_project.lock().ok().and_then(|p| p.clone()).as_deref())
+        .map(|(path, _)| path)
         .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
-        .unwrap_or_default();
+        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+        .unwrap_or_else(|| history::TALK_STORE.to_string());
     let current = state.current_conversation_id.lock()?.clone();
     if current.as_deref() == Some(id.as_str()) {
         *state.title.lock()? = Some(title.clone());
@@ -366,13 +353,14 @@ pub fn set_conversation_archived(
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let proj_path = app_state
-        .0
-        .lock()?
-        .project_path
-        .clone()
-        .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
-        .unwrap_or_default();
+    let proj_path = history::find_conversation_by_id(
+        &id,
+        state.current_project.lock().ok().and_then(|p| p.clone()).as_deref(),
+    )
+    .map(|(path, _)| path)
+    .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
+    .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+    .unwrap_or_else(|| history::TALK_STORE.to_string());
     let mut convs = state.conversations.lock()?;
     if !convs.contains_key(&proj_path) {
         convs.insert(proj_path.clone(), history::load_conversations(&proj_path));
@@ -392,7 +380,14 @@ pub fn delete_conversation(
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let proj_path = app_state.0.lock()?.project_path.clone().unwrap_or_default();
+    let proj_path = history::find_conversation_by_id(
+        &id,
+        state.current_project.lock().ok().and_then(|p| p.clone()).as_deref(),
+    )
+    .map(|(path, _)| path)
+    .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
+    .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+    .unwrap_or_else(|| history::TALK_STORE.to_string());
     let mut convs = state.conversations.lock()?;
     if !convs.contains_key(&proj_path) {
         convs.insert(proj_path.clone(), history::load_conversations(&proj_path));
@@ -427,12 +422,12 @@ pub fn fork_conversation(
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, AppError> {
-    let proj_path = app_state
-        .0
+    let proj_path = state
+        .current_project
         .lock()?
-        .project_path
         .clone()
-        .ok_or_else(|| AppError::Message("No project is open.".to_string()))?;
+        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+        .unwrap_or_else(|| history::TALK_STORE.to_string());
     let _ = history::save_current_conversation(&state, &proj_path);
 
     let source_id = state
@@ -539,5 +534,69 @@ pub fn set_message_feedback(
         msg.feedback = value;
     }
     history::upsert_conversation_snapshot(&state, &path, &id, &title, hist)
+}
+
+#[tauri::command]
+pub fn flush_chat_history(
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    let path = app_state.0.lock()?.project_path.clone();
+    if let Some(path) = path {
+        let _ = history::save_current_conversation(&state, &path);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_open_at_login(enabled: bool) -> Result<bool, AppError> {
+    set_login_item(enabled)?;
+    Ok(enabled)
+}
+
+#[tauri::command]
+pub fn get_open_at_login() -> Result<bool, AppError> {
+    Ok(login_item_enabled())
+}
+
+fn set_login_item(enabled: bool) -> Result<(), AppError> {
+    #[cfg(windows)]
+    {
+        use winreg::enums::*;
+        let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
+        let (key, _) = hkcu
+            .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")
+            .map_err(|e| AppError::Message(e.to_string()))?;
+        if enabled {
+            let exe = std::env::current_exe().map_err(|e| AppError::Message(e.to_string()))?;
+            let path = exe.to_string_lossy().to_string();
+            key.set_value("Shape", &path)
+                .map_err(|e| AppError::Message(e.to_string()))?;
+        } else {
+            let _ = key.delete_value("Shape");
+        }
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = enabled;
+        Ok(())
+    }
+}
+
+fn login_item_enabled() -> bool {
+    #[cfg(windows)]
+    {
+        use winreg::enums::*;
+        let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
+        let Ok(key) = hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run") else {
+            return false;
+        };
+        key.get_value::<String, _>("Shape").is_ok()
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 

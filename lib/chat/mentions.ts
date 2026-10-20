@@ -43,7 +43,7 @@ export function resolveBrowserMentionPath(path: string | undefined): string | nu
 
 /** Explicit typed tokens + bare paths / design names (no spaces). */
 const MENTION_PATTERN =
-    /@(?:(file|folder|design|docs|terminal|chat|branch|browser|mcp|plugin|skill|element):([^\s]+)|(codebase|selection)\b|((?:[\w.-]+\/)*[\w.-]+\/?))/g;
+    /@(?:(file|folder|design|docs|terminal|chat|branch|browser|mcp|plugin|skill|element):([^\s]+)|(codebase|selection)\b|((?:[A-Za-z]:[\\/])?(?:[\w.-]+[\\/])*[\w.-]+\/?))/g;
 
 function normalizeDesignKey(value: string): string {
     return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -481,6 +481,72 @@ function skillMentionBlock(onDisk: DiscoveredSkill): string {
     return `<mention_context ${attributes.join(" ")}>Follow this skill for the rest of the turn.${folderNote}\n${onDisk.body}\n</mention_context>`;
 }
 
+function isAbsoluteFsPath(path: string) {
+    return /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(path);
+}
+
+async function resolveMentionFsPath(
+    path: string | undefined,
+    projectPath: string | null,
+): Promise<string | null> {
+    if (!path) return null;
+    let next = path.trim();
+    if (next.startsWith("~/") || next.startsWith("~\\")) {
+        const home = await commands.homeDir().catch(() => null);
+        if (!home) return null;
+        next = `${home.replace(/[\\/]+$/, "")}/${next.slice(2)}`;
+    }
+    if (isAbsoluteFsPath(next)) return next;
+    if (projectPath) {
+        const sep = projectPath.includes("\\") ? "\\" : "/";
+        return `${projectPath.replace(/[\\/]+$/, "")}${sep}${next.replace(/\//g, sep)}`;
+    }
+    const home = await commands.homeDir().catch(() => null);
+    if (!home) return next;
+    const sep = home.includes("\\") ? "\\" : "/";
+    return `${home.replace(/[\\/]+$/, "")}${sep}${next.replace(/\//g, sep)}`;
+}
+
+async function loadChatMentionTranscript(mention: ChatMention): Promise<string | null> {
+    const id = mention.id || mention.path;
+    if (!id) return null;
+    try {
+        let conv: Awaited<ReturnType<typeof commands.getConversation>>;
+        try {
+            conv = await commands.getConversation(id);
+        } catch {
+            const all = await commands.getConversations(undefined, true);
+            const slug = slugifyMentionLabel(mention.label || id);
+            const hit = all.find(
+                (c) =>
+                    c.id === id ||
+                    slugifyMentionLabel(c.title || "") === slug ||
+                    (c.title || "").toLowerCase() === (mention.label || "").toLowerCase(),
+            );
+            if (!hit) return null;
+            conv = hit;
+        }
+        const messages = (conv.history || []).filter(
+            (m) => m.role === "user" || m.role === "assistant",
+        );
+        const start = Math.max(0, messages.length - 30);
+        const slice = messages.slice(start);
+        const lines = slice.map((m) => {
+            const body = (m.content || "")
+                .replace(/<mention_context[\s\S]*?<\/mention_context>/g, "")
+                .replace(/<[^>]+>/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+            const clipped = body.length > 1600 ? `${body.slice(0, 1600)}…` : body;
+            return `[${m.role}] ${clipped}`;
+        });
+        const omitted = start > 0 ? `\n[${start} earlier messages omitted]` : "";
+        return `<mention_context type="chat" id="${escapeXmlAttr(conv.id)}" title="${escapeXmlAttr(conv.title || mention.label)}">${omitted}\n${lines.join("\n")}\n</mention_context>`;
+    } catch {
+        return null;
+    }
+}
+
 async function readMentionContext(
     mention: ChatMention,
     projectPath: string | null,
@@ -562,7 +628,9 @@ async function readMentionContext(
             return `<mention_context type="browser" path="current" label="Current page">The user referenced the Preview panel current page, but no local preview URL is loaded yet. Ask them for the localhost URL or open Preview.</mention_context>`;
         }
         if (mention.kind === "chat") {
-            return `<mention_context type="chat" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced a past chat titled "${escapeXmlAttr(label)}".</mention_context>`;
+            const transcript = await loadChatMentionTranscript(mention);
+            if (transcript) return transcript;
+            return `<mention_context type="chat" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">The user referenced a past chat titled "${escapeXmlAttr(label)}", but its messages could not be loaded (it may have been deleted).</mention_context>`;
         }
         if (mention.kind === "mcp") {
             const id = mention.id || path;
@@ -575,11 +643,11 @@ async function readMentionContext(
         return `<mention_context type="${mention.kind}" path="${escapeXmlAttr(path)}" label="${escapeXmlAttr(label)}">${escapeXmlAttr(label)}</mention_context>`;
     }
 
-    if (!projectPath) return null;
-
-    const sep = projectPath.includes("\\") ? "\\" : "/";
-    const rel = mention.path?.replace(/\//g, sep) ?? "";
-    const fullPath = `${projectPath.replace(/[\\/]+$/, "")}${sep}${rel}`;
+    const fullPath = await resolveMentionFsPath(mention.path, projectPath);
+    if (!fullPath) {
+        return `<mention_context type="${mention.kind}" path="${escapeXmlAttr(mention.path || mention.label)}">The user referenced ${escapeXmlAttr(mentionDisplayLabel(mention))}, but that path could not be resolved.</mention_context>`;
+    }
+    const rel = mention.path ?? fullPath;
 
     if (mention.kind === "folder") {
         try {

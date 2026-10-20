@@ -31,7 +31,7 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
     const isFocus = Boolean(focus);
     const [windowWidth, setWindowWidth] = useState(1200);
 
-    const { isMaximized, minimize, toggleMaximize, close, closeWindow } = useWindowControls();
+    const { isMaximized, minimize, toggleMaximize, close, closeWindow, quit } = useWindowControls();
     const { repoHistory, clearHistory } = useRepoHistory(project_path);
     const { readLatestContent } = useEditorBuffer();
 
@@ -43,8 +43,9 @@ export default function Titlebar({ onboarding, settings, focus, title, onBack }:
                 openFiles: open_files,
                 readLatestContent,
                 closeWindow,
+                quitApp: quit,
             }),
-        [project_path, active_file, open_files, readLatestContent, closeWindow],
+        [project_path, active_file, open_files, readLatestContent, closeWindow, quit],
     );
 
     useEffect(() => {

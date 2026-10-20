@@ -53,6 +53,10 @@ pub async fn send_chat_message(
     conversation_kind: Option<String>,
     subagent_models: Option<Vec<String>>,
     subagent_default_model: Option<String>,
+    workspace_mode: Option<String>,
+    worker_name: Option<String>,
+    worker_job: Option<String>,
+    selected_media_id: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -70,6 +74,14 @@ pub async fn send_chat_message(
     })?;
     let client = Client::new();
     let current_proj_path = app_state.0.lock()?.project_path.clone();
+    let workspace = workspace_mode
+        .clone()
+        .unwrap_or_else(|| "Code".to_string());
+    let talk = matches!(workspace.as_str(), "Chat" | "Cowork" | "GTM");
+    let store_path = Some(history::conversation_store(
+        talk,
+        current_proj_path.as_deref(),
+    ));
     let selected_auto = model_router::is_auto_selection(&raw_model);
     let model_to_use = model_router::normalize_model(&raw_model);
     let proxy_model = model_router::proxy_model_id(&raw_model);
@@ -167,25 +179,23 @@ pub async fn send_chat_message(
         );
     }
 
-    // Project switching: clear history when the user opens a different project.
+    // Assign a persistence store for new conversations. Never clear a live
+    // transcript just because the coding folder changed — background chats
+    // keep running under their original store.
     {
+        let new_conversation = state.current_conversation_id.lock()?.is_none();
         let mut active_proj = state.current_project.lock()?;
-        if *active_proj != current_proj_path {
-            logging::info(
-                "chat",
-                &format!("Project switched from {:?} to {:?}", active_proj, current_proj_path),
-            );
-            if let Some(old_path) = active_proj.as_ref() {
-                let _ = history::save_current_conversation(&state, old_path);
+        if new_conversation {
+            if let Some(store) = store_path.clone() {
+                if !history::project_paths_equal(&Some(store.clone()), &*active_proj) {
+                    if let Some(old_path) = active_proj.as_ref() {
+                        let _ = history::save_current_conversation(&state, old_path);
+                    }
+                    *active_proj = Some(store);
+                }
             }
-            state.history.lock()?.clear();
-            state.title.lock()?.take();
-            *state.history_summary.lock()? = None;
-            *state.current_conversation_id.lock()? = None;
-            *state.conversation_kind.lock()? = None;
-            state.clear_design_preview_state();
-            state.clear_file_checkpoints();
-            *active_proj = current_proj_path.clone();
+        } else if active_proj.is_none() {
+            *active_proj = store_path.clone();
         }
     }
 
@@ -387,7 +397,11 @@ pub async fn send_chat_message(
         .with_reasoning_effort(Some(effort_norm.clone()))
         .with_service_tier(tier_norm.clone());
 
-    let local_packs = schema::SteerPacks::infer(&message, &mode_to_use);
+    let local_packs = if talk {
+        schema::SteerPacks::talk()
+    } else {
+        schema::SteerPacks::infer(&message, &mode_to_use)
+    };
     let mut context_opts = context_options_for_query(message.clone(), (*index_state).clone());
     context_opts.include_repo_map = local_packs.workspace;
     context_opts.include_diagnostics = local_packs.workspace;
@@ -399,7 +413,11 @@ pub async fn send_chat_message(
         let mode = mode_to_use.clone();
         let tid = turn_id.clone();
         let cid = conversation_id.clone();
+        let skip = talk;
         async move {
+            if skip {
+                return schema::SteerPacks::talk();
+            }
             crate::agent::tools::plugins::fetch_steer(
                 &auth,
                 &msg,
@@ -415,7 +433,13 @@ pub async fn send_chat_message(
         build_context_with_options(&app_state, context_opts)
     );
     let (context_string, _active_file, _project_root) = ctx_res?;
-    let steer = if steer.is_all_on() { local_packs } else { steer };
+    let steer = if talk {
+        schema::SteerPacks::talk()
+    } else if steer.is_all_on() {
+        local_packs
+    } else {
+        steer
+    };
     logging::debug(
         "chat",
         &format!(
@@ -425,7 +449,13 @@ pub async fn send_chat_message(
     );
     logging::debug("chat", &format!("Context built: {} chars", context_string.len()));
 
-    let system_md = if steer.is_chat_only() {
+    let system_md = if talk {
+        match workspace.as_str() {
+            "Cowork" => prompts::COWORK_MD,
+            "GTM" => prompts::GTM_MD,
+            _ => prompts::TALK_MD,
+        }
+    } else if steer.is_chat_only() {
         prompts::CHAT_MD
     } else {
         prompts::SYSTEM_MD
@@ -446,10 +476,12 @@ pub async fn send_chat_message(
     if !merged_rules.is_empty() {
         prompt_parts.push(format!("\n<user_rules>\n{}\n</user_rules>", merged_rules));
     }
-    if matches!(
-        mode_to_use.to_ascii_lowercase().as_str(),
-        "visual" | "design"
-    ) {
+    if !talk
+        && matches!(
+            mode_to_use.to_ascii_lowercase().as_str(),
+            "visual" | "design"
+        )
+    {
         // No design-options UI anymore — always start a sandbox session for optional previews.
         state.begin_design_turn(None, &message);
     }
@@ -529,12 +561,28 @@ pub async fn send_chat_message(
     let mut api_messages =
         messages::build_messages_json(&final_system_prompt, &api_history, &model_to_use);
     let mut turn_context = format!("Mode: {mode_to_use}");
-    if matches!(mode_to_use.to_ascii_lowercase().as_str(), "ask" | "plan") {
+    if talk {
+        turn_context.push_str(&format!("\nWorkspace: {workspace}"));
+        if let Some(name) = worker_name.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            turn_context.push_str(&format!("\nYou are {name}."));
+        }
+        if let Some(job) = worker_job.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            turn_context.push_str(&format!("\nJob: {job}"));
+        }
+        let ledger = crate::agent::media_stash::ledger_for_conversation(&owned_conversation_id);
+        if !ledger.is_empty() {
+            turn_context.push_str("\n\n");
+            turn_context.push_str(&ledger);
+        }
+        if let Some(id) = selected_media_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            turn_context.push_str(&format!("\nSelected image for “this”: media_id={id}"));
+        }
+    } else if matches!(mode_to_use.to_ascii_lowercase().as_str(), "ask" | "plan") {
         turn_context.push_str(
             "\nThis turn is read-only. Do not call edit, shell, git commit, browse, or mcp_call. They are blocked.",
         );
     }
-    if !mode_prompt.is_empty() {
+    if !talk && !mode_prompt.is_empty() {
         turn_context.push_str("\n\n");
         turn_context.push_str(mode_prompt);
     }
@@ -548,7 +596,14 @@ pub async fn send_chat_message(
     turn_context.push_str(&crate::agent::subagents::policy_line(&state));
     messages::append_turn_context(&mut api_messages, &turn_context);
 
-    let tools = schema::apply_steer_packs(schema::stable_tools(family), &steer);
+    let tools = {
+        let steered = schema::apply_steer_packs(schema::stable_tools(family), &steer);
+        if talk {
+            schema::apply_talk_tools(steered)
+        } else {
+            steered
+        }
+    };
     let mcp_tokens: u64 = 0;
 
     let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());

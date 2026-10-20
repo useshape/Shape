@@ -20,6 +20,7 @@ import { FolderAdd24Filled, FolderAdd24Regular } from "@fluentui/react-icons/hea
 import { Connected24Filled, Connected24Regular } from "@fluentui/react-icons/headless/svg/connected";
 import { DocumentEdit24Filled, DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
 import { MoviesAndTv24Filled, MoviesAndTv24Regular } from "@fluentui/react-icons/headless/svg/movies-and-tv";
+import { Mic20Regular } from "@fluentui/react-icons/headless/svg/mic";
 import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
 
 
@@ -95,6 +96,8 @@ import { useShapeAuth } from "@/lib/cloud/store";
 import { SearchInput } from "@/components/ui/search";
 import { effortDisplayLabel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
 import { ThinkingEffortControl } from "./thinking-bar";
+import { FrostMark } from "@/components/ui/frost-mark";
+import { microphoneConstraints } from "@/lib/settings";
 export type { ReasoningEffort };
 
 type ChatInputProps = {
@@ -134,6 +137,10 @@ type ChatInputProps = {
     onNewChat?: () => void;
     /** Tighter chrome for empty-chat centered layout */
     variant?: "default" | "empty";
+    talkSurface?: boolean;
+    talkName?: string;
+    /** Code mode with no folder: composer is a folder-open prompt. */
+    folderLocked?: boolean;
 };
 
 function formatContextWindow(raw?: string): string {
@@ -558,6 +565,9 @@ export function ChatInput({
     projectRuleFiles = [],
     onNewChat,
     variant = "default",
+    talkSurface = false,
+    talkName = "Shape",
+    folderLocked = false,
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
@@ -573,6 +583,8 @@ export function ChatInput({
     const [mentionCaret, setMentionCaret] = React.useState(0);
     const [slashOpen, setSlashOpen] = React.useState(false);
     const [slashQuery, setSlashQuery] = React.useState("");
+    const [listening, setListening] = React.useState(false);
+    const recognitionRef = React.useRef<{ stop: () => void } | null>(null);
 
     const handleInputChangeWithMentions = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const raw = e.target.value;
@@ -1004,8 +1016,13 @@ export function ChatInput({
 
     const sendDisabled =
         needsSignIn ||
+        folderLocked ||
         uploadedFiles.some((a) => a.status === "processing") ||
         (!isLoading && !inputValue.trim() && uploadedFiles.length === 0);
+
+    const openFolder = () => {
+        window.dispatchEvent(new Event("shape-open-project-pick"));
+    };
 
     const sendActive =
         (inputValue.trim() || isLoading || uploadedFiles.length > 0) &&
@@ -1019,7 +1036,7 @@ export function ChatInput({
             )}
         >
             <div className="relative z-10 flex w-full flex-col gap-1.5">
-                {project_path ? (
+                {project_path && !talkSurface ? (
                     <div className="flex min-w-0 items-center gap-1.5 px-1">
                         <CommitMenu projectPath={project_path} part="pr" />
                     </div>
@@ -1066,13 +1083,22 @@ export function ChatInput({
                         "border-border-subtle/40 bg-surface-4",
                         composerTall || uploadedFiles.length > 0 ? "rounded-xl" : "rounded-full",
                         dragOver && "bg-surface-3/80",
-                        needsSignIn && "cursor-default",
+                        (needsSignIn || folderLocked) && "cursor-default",
+                        folderLocked && "opacity-70",
                     )}
-                    onDrop={needsSignIn ? undefined : handleDrop}
-                    onDragEnter={needsSignIn ? undefined : handleDragEnter}
-                    onDragLeave={needsSignIn ? undefined : handleDragLeave}
-                    onDragOver={needsSignIn ? undefined : handleDragOver}
+                    onDrop={needsSignIn || folderLocked ? undefined : handleDrop}
+                    onDragEnter={needsSignIn || folderLocked ? undefined : handleDragEnter}
+                    onDragLeave={needsSignIn || folderLocked ? undefined : handleDragLeave}
+                    onDragOver={needsSignIn || folderLocked ? undefined : handleDragOver}
                 >
+                    {folderLocked ? (
+                        <button
+                            type="button"
+                            className="absolute inset-0 z-30 cursor-pointer rounded-[inherit]"
+                            aria-label="Open a folder to start coding"
+                            onClick={openFolder}
+                        />
+                    ) : null}
                     {dragOver ? (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-border-subtle bg-surface-3/95">
                             <p className="text-sm font-medium text-text-primary">Drop files to attach</p>
@@ -1240,8 +1266,18 @@ export function ChatInput({
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <div className={cn("relative min-w-0 flex-1", composerTall ? "min-h-6" : "flex h-11 items-center")}>
-                        {!needsSignIn && !inputValue ? (
+                        {folderLocked && !inputValue ? (
+                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-5 text-text-muted">
+                                Open a folder to start coding.
+                            </div>
+                        ) : !needsSignIn && !inputValue ? (
+                            talkSurface ? (
+                                <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-5 text-text-muted">
+                                    Message {talkName}
+                                </div>
+                            ) : (
                             <RotatingComposerHint paused={false} />
+                            )
                         ) : needsSignIn && !inputValue ? (
                             <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-5 text-text-muted">
                                 Sign in to use the chat
@@ -1338,8 +1374,11 @@ export function ChatInput({
                                         syncComposerOverlayScroll(e.currentTarget, mentionOverlayRef.current);
                                     }}
                                     placeholder=""
+                                    readOnly={folderLocked}
                                     aria-label={
-                                        needsSignIn
+                                        folderLocked
+                                            ? "Open a folder to start coding"
+                                            : needsSignIn
                                             ? "Sign in to use the chat"
                                             : COMPOSER_HINTS[0]
                                     }
@@ -1563,7 +1602,7 @@ export function ChatInput({
                                         </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        {hideModeSelect ? null : (
+                        {hideModeSelect || talkSurface ? null : (
                             <ModeMenu
                                 selectedMode={selectedMode}
                                 setSelectedMode={setSelectedMode}
@@ -1571,6 +1610,57 @@ export function ChatInput({
                             />
                         )}
                         </div>
+                        {talkSurface ? (
+                            <button
+                                type="button"
+                                aria-label={listening ? "Stop voice" : "Voice"}
+                                className={cn(
+                                    "mr-1 flex size-8 shrink-0 items-center justify-center rounded-full text-text-muted hover:text-text-primary",
+                                    listening && "bg-accent/20 text-accent",
+                                )}
+                                onClick={() => {
+                                    const w = window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any };
+                                    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+                                    if (!Ctor) return;
+                                    if (listening) {
+                                        recognitionRef.current?.stop();
+                                        setListening(false);
+                                        return;
+                                    }
+                                    const rec = new Ctor();
+                                    rec.continuous = false;
+                                    rec.interimResults = true;
+                                    rec.onresult = (event: { results: ArrayLike<{ 0?: { transcript?: string } }> }) => {
+                                        const text = Array.from(event.results)
+                                            .map((result) => result[0]?.transcript || "")
+                                            .join(" ");
+                                        onInputChange({
+                                            target: { value: text },
+                                        } as React.ChangeEvent<HTMLTextAreaElement>);
+                                    };
+                                    rec.onend = () => setListening(false);
+                                    recognitionRef.current = rec;
+                                    setListening(true);
+                                    const start = () => rec.start();
+                                    if (navigator.mediaDevices?.getUserMedia) {
+                                        void navigator.mediaDevices
+                                            .getUserMedia({ audio: microphoneConstraints(settings.voice.deviceId) })
+                                            .then((stream) => {
+                                                rec.onend = () => {
+                                                    stream.getTracks().forEach((track) => track.stop());
+                                                    setListening(false);
+                                                };
+                                                start();
+                                            })
+                                            .catch(() => start());
+                                    } else {
+                                        start();
+                                    }
+                                }}
+                            >
+                                <Icon icon={Mic20Regular} />
+                            </button>
+                        ) : null}
                         <button
                             type="button"
                             onClick={() => {
@@ -1606,6 +1696,12 @@ export function ChatInput({
                         </button>
                     </div>
                 </div>
+                {talkSurface ? (
+                    <div className="flex items-center gap-2 px-2 pt-1 text-xs text-text-muted">
+                        <FrostMark size={16} label="" />
+                        You are chatting to {talkName}
+                    </div>
+                ) : null}
             </div>
             <MediaLightbox
                 open={!!mediaViewer}

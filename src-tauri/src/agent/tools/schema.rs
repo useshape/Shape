@@ -272,6 +272,20 @@ impl SteerPacks {
         }
     }
 
+    /// Chat / Cowork / GTM: media + web, no repo edits or terminals.
+    pub fn talk() -> Self {
+        Self {
+            workspace: false,
+            plugins: false,
+            browse: false,
+            web: true,
+            git: false,
+            terminal: false,
+            media: true,
+            hint: "Use generate_image with count 1-4 for new pictures. Use edit_image with media_id from the Images list for “the second one” or a selected card. Pass model klein, klein9, or mini only when the user wrote that alias. Do not swap models.".to_string(),
+        }
+    }
+
     pub fn from_json(value: &Value) -> Self {
         let pack = |key: &str| value.get(key).and_then(|v| v.as_bool()).unwrap_or(true);
         let hint = value
@@ -356,6 +370,29 @@ pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
             Some("media") => packs.media,
             _ => true,
         })
+        .collect()
+}
+
+pub fn apply_talk_tools(tools: Vec<Value>) -> Vec<Value> {
+    const KEEP: &[&str] = &[
+        "read_file",
+        "list_dir",
+        "search_files",
+        "list_chats",
+        "read_chat",
+        "generate_image",
+        "edit_image",
+        "generate_svg",
+        "show_images",
+        "web_search",
+        "visit_url",
+        "ask_user",
+        "finish",
+        "decide",
+    ];
+    tools
+        .into_iter()
+        .filter(|tool| KEEP.contains(&tool_fn_name(tool)))
         .collect()
 }
 
@@ -1160,11 +1197,13 @@ fn generate_svg() -> Value {
 fn generate_image() -> Value {
     tool(
         "generate_image",
-        "Generate a raster image (PNG) via the image tool (not a chat model). Cheap quality suitable for mock assets, photos, and UI pictures. Preview appears in chat at the tool call. Asking to generate an image is not a request to write a project file. If this tool errors as not configured or unavailable, tell the user generation is unavailable; do not retry generate_svg; do not write an image with create_file or edit.",
+        "Generate raster images via the Shape generate API. “Four options” means count=4 (one card each), not a written list. Cap 4. Default model is klein (flux-2-klein-4b). Use klein9 for likeness/layout edits via edit_image. Use mini only when the user wrote @mini. If they named an @alias, pass that model and never substitute. Refer to prior pictures by media_id from the Images ledger (the second one = ordinal 2).",
         json!({
             "type": "object",
             "properties": {
-                "prompt": {"type": "string", "description": "What to generate. Be specific about subject, style, and framing."}
+                "prompt": {"type": "string", "description": "What to generate. Be specific about subject, style, and framing."},
+                "count": {"type": "integer", "minimum": 1, "maximum": 4, "description": "How many images. Default 1. Use 4 for four options."},
+                "model": {"type": "string", "description": "klein, klein9, or mini. Omit for auto routing."}
             },
             "required": ["prompt"],
             "additionalProperties": false
@@ -1191,14 +1230,15 @@ fn generate_audio() -> Value {
 fn edit_image() -> Value {
     tool(
         "edit_image",
-        "Edit an existing image with a prompt (budget model, not frontier). Pass media_id from a prior generate, an attachment name, or a project path. Result is stashed as media_id.",
+        "Edit a prior image. Pass media_id from the Images ledger (ordinal 2 for “the second one”, or the selected card). Default model klein9. If the user wrote @mini or @klein, pass that model. Do not swap. State in the prompt what must stay the same.",
         json!({
             "type": "object",
             "properties": {
-                "prompt": {"type": "string", "description": "How to change the image."},
+                "prompt": {"type": "string", "description": "How to change the image. Say what stays the same."},
                 "media_id": {"type": "string", "description": "Stashed media id from generate/edit."},
                 "attachment": {"type": "string", "description": "User-attached image filename."},
-                "path": {"type": "string", "description": "Project-relative image path."}
+                "path": {"type": "string", "description": "Project-relative image path."},
+                "model": {"type": "string", "description": "klein, klein9, or mini. Omit for auto (klein9)."}
             },
             "required": ["prompt"],
             "additionalProperties": false
@@ -1542,6 +1582,27 @@ mod tests {
         let ask_names = tool_names(&ask_on);
         assert!(ask_names.contains(&"list_chats".to_string()));
         assert!(ask_names.contains(&"read_chat".to_string()));
+    }
+
+    #[test]
+    fn talk_tools_keep_media_and_web() {
+        let names = tool_names(&apply_talk_tools(apply_steer_packs(
+            stable_tools(ModelFamily::OpenAi),
+            &SteerPacks::talk(),
+        )));
+        assert!(names.contains(&"generate_image".to_string()));
+        assert!(names.contains(&"edit_image".to_string()));
+        assert!(names.contains(&"generate_svg".to_string()));
+        assert!(names.contains(&"web_search".to_string()));
+        assert!(names.contains(&"visit_url".to_string()));
+        assert!(names.contains(&"ask_user".to_string()));
+        assert!(names.contains(&"read_file".to_string()));
+        assert!(names.contains(&"list_dir".to_string()));
+        assert!(!names.contains(&"run_terminal".to_string()));
+        assert!(!names.contains(&"apply_patch".to_string()));
+        assert!(!names.contains(&"edit_file".to_string()));
+        assert!(!names.contains(&"git_status".to_string()));
+        assert!(!names.contains(&"save_media".to_string()));
     }
 }
 

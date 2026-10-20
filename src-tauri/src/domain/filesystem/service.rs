@@ -156,6 +156,13 @@ pub async fn search_project_files(
     fs::search_project_files(state, query, limit).await
 }
 
+pub async fn search_local_files(
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<SearchResult>, AppError> {
+    fs::search_local_files(query, limit).await
+}
+
 pub async fn search_content(
     state: State<'_, AppState>,
     query: String,

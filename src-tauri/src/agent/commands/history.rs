@@ -5,11 +5,26 @@ use crate::core::error::AppError;
 use super::super::models::{AgentState, ChatMessage, Conversation};
 use super::logging;
 
+/// Sentinel store for Chat / Cowork / GTM conversations (not tied to a coding folder).
+pub const TALK_STORE: &str = "__shape_talk__";
+
 pub fn now_f64() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs_f64()
+}
+
+pub fn is_talk_store(path: &str) -> bool {
+    normalize_project_path(path) == TALK_STORE
+}
+
+pub fn conversation_store(talk: bool, project: Option<&str>) -> String {
+    if talk {
+        TALK_STORE.to_string()
+    } else {
+        project.unwrap_or(TALK_STORE).to_string()
+    }
 }
 
 pub fn normalize_project_path(path: &str) -> String {

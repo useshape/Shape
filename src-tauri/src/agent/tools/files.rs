@@ -19,7 +19,7 @@ const NOISY_DIR_NAMES: &[&str] = &[
 
 /// List files in a directory, validated against the project root.
 pub fn list_files(path: &str, project_path: &str) -> Result<String, AppError> {
-    let target = paths::resolve_safe_path(path, project_path)?;
+    let target = paths::validate_read_path(path, project_path)?;
 
     if !target.exists() {
         return Err(AppError::Message(format!("Path '{}' does not exist", path)));
