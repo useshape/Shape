@@ -4,12 +4,12 @@ import { useEffect, useId, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Circular frost face. Same eyes and pointer tracking as the frost cloud,
- * drawn as a colored disc with the glow and the cloud shape left out.
+ * Frost face. Same eyes and pointer tracking as the frost cloud.
+ * The body can be a circle, square, triangle, or cloud.
  * https://www.affectui.com/illustrations/frost-cloud
  */
 
-const EYES = { y: 100, w: 22, h: 36, left: 90, right: 128 };
+const EYES = { y: 96, w: 28, h: 44, left: 86, right: 126 };
 const CX = 120;
 const CY = 120;
 
@@ -24,12 +24,38 @@ const GLANCES = [
 
 const about = (x: number, y: number, t: string) => `translate(${x} ${y}) ${t} translate(${-x} ${-y})`;
 
+export type FrostShape = "circle" | "square" | "triangle" | "cloud";
+
+const CLOUD =
+    "M48 150c-22 0-28-32-4-42-8-32 22-52 48-40 12-28 58-32 74-4 32-8 52 22 40 46 28 8 22 42-8 46-4 28-48 36-70 16-22 22-62 16-80-22z";
+
+function mixHex(hex: string, toward: string, amount: number): string {
+    const read = (value: string) => {
+        const raw = value.replace("#", "");
+        const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
+        return [0, 2, 4].map((index) => parseInt(full.slice(index, index + 2), 16));
+    };
+    const from = read(hex);
+    const to = read(toward);
+    const mixed = from.map((channel, index) => Math.round(channel + (to[index] - channel) * amount));
+    return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function FrostBody({ shape, fill }: { shape: FrostShape; fill: string }) {
+    if (shape === "square") return <rect x="18" y="18" width="204" height="204" rx="44" fill={fill} />;
+    if (shape === "triangle") return <polygon points="120,14 228,220 12,220" fill={fill} />;
+    if (shape === "cloud") return <path d={CLOUD} fill={fill} />;
+    return <circle cx={CX} cy={CY} r="108" fill={fill} />;
+}
+
 export function FrostMark({
     size = 28,
     className,
     live = false,
     followPointer = true,
     color = "blue",
+    tint,
+    shape = "circle",
     label = "Shape",
 }: {
     size?: number;
@@ -37,6 +63,9 @@ export function FrostMark({
     live?: boolean;
     followPointer?: boolean;
     color?: "blue" | "orange";
+    /** Body color. Keeps the face; overrides the blue and orange presets. */
+    tint?: string;
+    shape?: FrostShape;
     label?: string;
 }) {
     const raw = useId().replace(/[^a-zA-Z0-9_-]/g, "");
@@ -177,7 +206,19 @@ export function FrostMark({
             ref={root}
             className={cn("ui-fm inline-flex shrink-0", className)}
             data-color={color}
-            style={{ width: size, height: size }}
+            style={{
+                width: size,
+                height: size,
+                ...(tint
+                    ? {
+                        ["--ui-fm-top" as string]: tint,
+                        ["--ui-fm-bottom" as string]: mixHex(tint, "#ffffff", 0.32),
+                        ["--ui-fm-light" as string]: "rgba(255,255,255,0.42)",
+                        ["--ui-fm-hole-1" as string]: mixHex(tint, "#000000", 0.58),
+                        ["--ui-fm-hole-2" as string]: mixHex(tint, "#000000", 0.34),
+                    }
+                    : null),
+            }}
             role="img"
             aria-label={label}
         >
@@ -187,21 +228,16 @@ export function FrostMark({
                         <stop offset="0" stopColor="var(--ui-fm-top)" />
                         <stop offset="1" stopColor="var(--ui-fm-bottom)" />
                     </linearGradient>
-                    <radialGradient id={id("light")} cx="62%" cy="38%" r="55%">
-                        <stop offset="0" stopColor="var(--ui-fm-light)" />
-                        <stop offset="70%" stopColor="transparent" />
-                    </radialGradient>
                     <linearGradient id={id("hole")} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0" stopColor="var(--ui-fm-hole-1)" />
                         <stop offset="1" stopColor="var(--ui-fm-hole-2)" />
                     </linearGradient>
                     <clipPath id={id("disc")}>
-                        <circle cx={CX} cy={CY} r="108" />
+                        <FrostBody shape={shape} fill="#000" />
                     </clipPath>
                 </defs>
                 <g ref={turnRef} clipPath={`url(#${id("disc")})`}>
-                    <circle cx={CX} cy={CY} r="108" fill={`url(#${id("sky")})`} />
-                    <circle cx={CX} cy={CY} r="108" fill={`url(#${id("light")})`} />
+                    <FrostBody shape={shape} fill={`url(#${id("sky")})`} />
                     <g ref={eyesRef}>
                         {eye(EYES.left, leftEye)}
                         {eye(EYES.right, rightEye)}

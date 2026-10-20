@@ -9,7 +9,15 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 static INDEX: LazyLock<Mutex<HashMap<String, MediaEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+    LazyLock::new(|| Mutex::new(load_index()));
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StashMeta {
+    pub model: Option<String>,
+    pub parent_id: Option<String>,
+    pub batch_id: Option<String>,
+    pub ordinal: Option<u32>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaEntry {
@@ -20,10 +28,44 @@ pub struct MediaEntry {
     pub prompt: Option<String>,
     pub conversation_id: Option<String>,
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ordinal: Option<u32>,
 }
 
 fn app_data_dir() -> Option<PathBuf> {
     dirs::data_local_dir().map(|d| d.join("Shape").join("media"))
+}
+
+fn index_path() -> Option<PathBuf> {
+    app_data_dir().map(|d| d.join("index.json"))
+}
+
+fn load_index() -> HashMap<String, MediaEntry> {
+    let Some(path) = index_path() else {
+        return HashMap::new();
+    };
+    let Ok(raw) = fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn persist_index(map: &HashMap<String, MediaEntry>) {
+    let Some(path) = index_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(raw) = serde_json::to_string_pretty(map) {
+        let _ = fs::write(path, raw);
+    }
 }
 
 fn ensure_dir(conversation_id: Option<&str>) -> Result<PathBuf, String> {
@@ -65,6 +107,18 @@ pub fn stash_bytes(
     prompt: Option<&str>,
     name: Option<&str>,
 ) -> Result<MediaEntry, String> {
+    stash_bytes_meta(bytes, mime, kind, conversation_id, prompt, name, StashMeta::default())
+}
+
+pub fn stash_bytes_meta(
+    bytes: &[u8],
+    mime: &str,
+    kind: &str,
+    conversation_id: Option<&str>,
+    prompt: Option<&str>,
+    name: Option<&str>,
+    meta: StashMeta,
+) -> Result<MediaEntry, String> {
     let dir = ensure_dir(conversation_id)?;
     let id = Uuid::new_v4().to_string();
     let ext = ext_for(mime, kind);
@@ -78,9 +132,14 @@ pub fn stash_bytes(
         prompt: prompt.map(|s| s.to_string()),
         conversation_id: conversation_id.map(|s| s.to_string()),
         name: name.map(|s| s.to_string()),
+        model: meta.model,
+        parent_id: meta.parent_id,
+        batch_id: meta.batch_id,
+        ordinal: meta.ordinal,
     };
     if let Ok(mut guard) = INDEX.lock() {
         guard.insert(id, entry.clone());
+        persist_index(&guard);
     }
     Ok(entry)
 }
@@ -103,6 +162,42 @@ pub fn get(id: &str) -> Option<MediaEntry> {
 pub fn read_bytes(id: &str) -> Result<Vec<u8>, String> {
     let entry = get(id).ok_or_else(|| format!("Unknown media_id '{id}'."))?;
     fs::read(&entry.path).map_err(|e| e.to_string())
+}
+
+pub fn list_for_conversation(conversation_id: &str) -> Vec<MediaEntry> {
+    let Ok(guard) = INDEX.lock() else {
+        return Vec::new();
+    };
+    let mut rows: Vec<_> = guard
+        .values()
+        .filter(|e| e.conversation_id.as_deref() == Some(conversation_id))
+        .cloned()
+        .collect();
+    rows.sort_by(|a, b| a.id.cmp(&b.id));
+    rows
+}
+
+pub fn ledger_for_conversation(conversation_id: &str) -> String {
+    let rows = list_for_conversation(conversation_id);
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec!["Images in this conversation:".to_string()];
+    for (i, row) in rows.iter().enumerate() {
+        let ordinal = row.ordinal.unwrap_or((i + 1) as u32);
+        let prompt = row.prompt.as_deref().unwrap_or("").replace('\n', " ");
+        let parent = row
+            .parent_id
+            .as_deref()
+            .map(|p| format!(" parent={p}"))
+            .unwrap_or_default();
+        let model = row.model.as_deref().unwrap_or("-");
+        lines.push(format!(
+            "{ordinal}. media_id={} model={model}{parent} \"{prompt}\"",
+            row.id
+        ));
+    }
+    lines.join("\n")
 }
 
 pub fn find_by_name(name: &str) -> Option<MediaEntry> {

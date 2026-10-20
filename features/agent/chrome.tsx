@@ -13,6 +13,7 @@ import { useShapeAuth } from "@/lib/cloud/store";
 import { dashboardUrl } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend/commands";
 import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
+import { Button } from "@/components/ui/button";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
 export const AGENT_CHROME_ACTIONS_SLOT = "shape-agent-chrome-actions";
@@ -95,7 +96,7 @@ export function AgentChrome({
     onSidebarHoverEnd?: () => void;
 }) {
     return (
-        <div className="relative z-30 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent" data-tauri-drag-region>
+        <div className="relative z-30 flex h-titlebar shrink-0 items-center overflow-hidden bg-sidebar" data-tauri-drag-region>
             {!sidebarOpen && onToggleSidebar ? (
                 <div
                     data-sidebar-peek-toggle=""
@@ -109,7 +110,7 @@ export function AgentChrome({
             ) : null}
             <div
                 id={AGENT_TABS_SLOT}
-                className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-2"
+                className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1.5 leading-none"
             />
 
             <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
@@ -141,17 +142,15 @@ export function SidebarToggleBtn({
 }) {
     return (
         <Tooltip content={open ? "Hide sidebar" : "Show sidebar"} side={collapsed ? "right" : "bottom"} delayDuration={80}>
-            <button
-                type="button"
+            <Button
+                variant="ghost"
+                size="icon"
                 aria-label={open ? "Hide sidebar" : "Show sidebar"}
                 onClick={onToggle}
-                className={cn(
-                    "flex items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary",
-                    collapsed ? "size-9" : "size-7",
-                )}
+                className="-mr-1.5"
             >
-                <Icon icon={PanelLeft20Filled} />
-            </button>
+                <Icon icon={PanelLeft20Filled} style={{ ["--icon-size" as string]: "20px" }} />
+            </Button>
         </Tooltip>
     );
 }

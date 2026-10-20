@@ -156,6 +156,8 @@ export type Chunk = {
     pluginLabel?: string;
     mediaPrompt?: string;
     mediaCredits?: string;
+    mediaId?: string;
+    mediaModel?: string;
     questions?: AgentQuestion[];
     answers?: QuestionAnswers | null;
 };
@@ -457,6 +459,10 @@ function unescapeXml(s: string): string {
             content: content.trim(),
             mediaPrompt: get("prompt") || undefined,
             mediaCredits: get("credits") || undefined,
+            mediaId: get("media_id") || undefined,
+            mediaModel: get("model") || undefined,
+            commandId: get("ordinal") || undefined,
+            commandStatus: get("failed") === "1" ? "failed" : undefined,
             query: get("prompt") || undefined,
             isGenerating,
         };
@@ -987,6 +993,32 @@ function buildSegments(chunks: Chunk[]): Segment[] {
     return segments;
 }
 
+const TALK_SKIP = new Set([
+    "terminal_command",
+    "edit",
+    "edit_pending",
+    "git_operation",
+    "tool_result",
+    "run",
+    "ls",
+    "cat",
+    "create_file",
+    "mkdir",
+    "delete_file",
+    "rename_file",
+    "search",
+    "grep",
+    "inspect_runtime",
+    "plugin_call",
+    "browse_session",
+    "subagent",
+    "subagent_ref",
+    "plan",
+    "plan_saved",
+    "think",
+    "thought",
+]);
+
 export function MessageRenderer({
     content,
     isGenerating,
@@ -994,6 +1026,7 @@ export function MessageRenderer({
     isFileEditResolved,
     durationMs,
     skipSubagentSync,
+    surface = "code",
 }: {
     content: string;
     isGenerating?: boolean;
@@ -1001,6 +1034,7 @@ export function MessageRenderer({
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
     durationMs?: number;
     skipSubagentSync?: boolean;
+    surface?: "code" | "talk";
 }) {
     const chunks = useMemo(() => {
         const parsed = parseMessageContent(content);
@@ -1029,6 +1063,10 @@ export function MessageRenderer({
         () =>
             buildSegments(
                 contentChunks.filter((c) => {
+                    if (surface === "talk") {
+                        if (TALK_SKIP.has(c.type) || WORKFLOW_CHUNK_TYPES.has(c.type)) return false;
+                        return true;
+                    }
                     if (browsing && (c.type === "think" || c.type === "thought")) return false;
                     if (WORKFLOW_CHUNK_TYPES.has(c.type)) {
                         return isRenderableWorkflowBlock(c, isGenerating);
@@ -1036,7 +1074,7 @@ export function MessageRenderer({
                     return true;
                 }),
             ),
-        [contentChunks, isGenerating, browsing],
+        [contentChunks, isGenerating, browsing, surface],
     );
 
     const workflowSegments = segments.filter((s): s is Extract<Segment, { kind: "workflow" }> => s.kind === "workflow");
@@ -1268,6 +1306,10 @@ export function MessageRenderer({
                     prompt={chunk.mediaPrompt || chunk.query}
                     credits={chunk.mediaCredits}
                     loading={!!chunk.isGenerating && !chunk.content?.trim()}
+                    mediaId={chunk.mediaId}
+                    model={chunk.mediaModel}
+                    failed={chunk.commandStatus === "failed"}
+                    selectable={surface === "talk" && chunk.type === "generated_image"}
                 />
             );
         }

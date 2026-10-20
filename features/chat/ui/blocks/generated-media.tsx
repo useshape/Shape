@@ -1,29 +1,64 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore, useState } from "react";
 import { cn } from "@/lib/utils";
+import { getSelectedTalkMediaId, setSelectedTalkMediaId, subscribeTalkMedia } from "@/lib/chat/talk-media";
+
+function modelAlias(model?: string) {
+    if (!model) return "";
+    if (model.includes("9b") || model === "klein9") return "@klein9";
+    if (model.includes("mini") || model === "mini") return "@mini";
+    if (model.includes("klein") || model === "klein" || model.includes("flux")) return "@klein";
+    return `@${model}`;
+}
 
 export function GeneratedMediaCard({
     kind,
     src,
     prompt,
     loading,
+    mediaId,
+    model,
+    failed,
+    selectable,
 }: {
     kind: "svg" | "image" | "audio";
     src?: string;
     prompt?: string;
     credits?: string;
     loading?: boolean;
+    mediaId?: string;
+    model?: string;
+    failed?: boolean;
+    selectable?: boolean;
 }) {
     const url = (src || "").trim();
     const [ready, setReady] = useState(() => url.startsWith("data:") || kind === "audio");
     const showShimmer = loading || (!!url && !ready && kind !== "audio");
+    const selected = useSyncExternalStore(subscribeTalkMedia, getSelectedTalkMediaId, () => null);
+    const alias = modelAlias(model);
+    const isSelected = Boolean(selectable && mediaId && selected === mediaId);
 
-    if (!url && !loading) {
+    if ((!url && !loading) || failed) {
         return (
             <div className="my-2 w-full max-w-[360px] overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
-                <div className="flex h-28 items-center justify-center px-3 text-center text-sm text-text-muted">
-                    {kind === "svg" ? "SVG" : kind === "audio" ? "Audio" : "Image"} generation failed
+                <div className="flex h-28 flex-col items-center justify-center gap-2 px-3 text-center text-sm text-text-muted">
+                    <span>{kind === "svg" ? "SVG" : kind === "audio" ? "Audio" : "Image"} generation failed{alias ? ` (${alias})` : ""}</span>
+                    {prompt ? (
+                        <button
+                            type="button"
+                            className="rounded-full bg-panel-hover px-3 py-1 text-xs text-text-primary"
+                            onClick={() => {
+                                window.dispatchEvent(
+                                    new CustomEvent("shape-retry-image", {
+                                        detail: { prompt, model, mediaId },
+                                    }),
+                                );
+                            }}
+                        >
+                            Retry
+                        </button>
+                    ) : null}
                 </div>
             </div>
         );
@@ -37,14 +72,6 @@ export function GeneratedMediaCard({
                     "bg-linear-to-br from-accent/25 via-surface-3 to-surface-2 p-4",
                 )}
             >
-                <div
-                    className="pointer-events-none absolute -right-8 -top-10 size-36 rounded-full bg-accent/30 blur-3xl"
-                    aria-hidden
-                />
-                <div
-                    className="pointer-events-none absolute -bottom-12 -left-6 size-32 rounded-full bg-accent/15 blur-2xl"
-                    aria-hidden
-                />
                 <div className="relative z-10 flex flex-col gap-3">
                     <div className="text-xs font-medium text-text-secondary">Generated audio</div>
                     {loading && !url ? (
@@ -60,17 +87,23 @@ export function GeneratedMediaCard({
                             aria-label={prompt || "Generated audio"}
                         />
                     )}
-                    {prompt ? (
-                        <p className="line-clamp-2 text-xs text-text-muted">{prompt}</p>
-                    ) : null}
                 </div>
             </div>
         );
     }
 
-    // SVG / image — fill the card; no letterbox bars.
     return (
-        <div className="my-2 w-full max-w-[360px] overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
+        <button
+            type="button"
+            disabled={!selectable || !mediaId}
+            onClick={() => {
+                if (mediaId) setSelectedTalkMediaId(isSelected ? null : mediaId);
+            }}
+            className={cn(
+                "my-2 w-full max-w-[360px] overflow-hidden rounded-xl border bg-surface-3 text-left",
+                isSelected ? "border-accent" : "border-border-subtle",
+            )}
+        >
             <div
                 className={cn(
                     "relative w-full overflow-hidden bg-surface-2",
@@ -98,6 +131,9 @@ export function GeneratedMediaCard({
                     />
                 ) : null}
             </div>
-        </div>
+            {alias ? (
+                <div className="px-3 py-1.5 text-xs text-text-muted">{alias}</div>
+            ) : null}
+        </button>
     );
 }

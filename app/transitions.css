@@ -778,7 +778,7 @@
     --ui-fm-hole-2: #b84322;
 }
 
-/* Composer rotating empty-state hint (fade up). Centered on the one-line row. */
+/* Composer rotating empty-state hint. Centered on the one-line row. */
 .t-composer-hint {
   position: absolute;
   inset: 0;

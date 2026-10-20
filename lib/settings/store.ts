@@ -193,6 +193,8 @@ export interface ShapeSettings {
         showWelcomeOnStartup: boolean;
         /** Skip the confirm dialog when restoring a chat checkpoint (rolls back file edits). */
         skipCheckpointRestoreConfirm: boolean;
+        /** Launch Shape when this account signs in to the OS. */
+        openAtLogin: boolean;
     };
     notifications: {
         /** Master switch for OS/desktop notifications. On by default. */
@@ -349,6 +351,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         showLoginPromptOnLaunch: true,
         showWelcomeOnStartup: true,
         skipCheckpointRestoreConfirm: false,
+        openAtLogin: false,
     },
     notifications: {
         desktopEnabled: true,

@@ -2,11 +2,10 @@
 
 import { GithubMark } from "@/components/ui/github-mark";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
-import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
-import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
 
-import { type IconGlyph, Icon } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
@@ -16,65 +15,21 @@ import { AccountMenu, ProfileAvatar } from "./menu";
 import { ChatUsageButton } from "@/features/chat/ui/composer/usage";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
+import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { setWorkspaceMode, useWorkspaceMode, WORKSPACE_MODES } from "@/lib/ui/workspace-mode";
 import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
 import type { AgentOverlay } from "../overlay";
 
 export const AGENT_SIDEBAR_NAV_SLOT = "shape-agent-sidebar-nav";
 
-function NavItem({
-    label,
-    icon,
-    onClick,
-    collapsed,
-    active,
-}: {
-    label: string;
-    icon: IconGlyph;
-    onClick: () => void;
-    collapsed?: boolean;
-    active?: boolean;
-}) {
-    if (collapsed) {
-        return (
-            <Tooltip content={label} side="right" delayDuration={80}>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={onClick}
-                    aria-label={label}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                        "size-9 shrink-0 text-text-secondary hover:text-text-primary",
-                        active && "bg-panel-active text-text-primary",
-                    )}
-                >
-                    <Icon icon={icon} />
-                </Button>
-            </Tooltip>
-        );
-    }
-
-    return (
-        <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClick}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-                "flex h-9 w-full items-center justify-start gap-2 px-1.5! text-left",
-                active && "bg-panel-active",
-            )}
-        >
-            <Icon icon={icon} className="shrink-0 text-text-muted" />
-            <span className="min-w-0 flex-1 truncate">{label}</span>
-        </Button>
-    );
-}
-
 export function AgentSidebar({
-    onSearch,
+    onSearch: _onSearch,
     expanded,
     open = true,
     overlay,
@@ -89,6 +44,8 @@ export function AgentSidebar({
     onToggleSidebar?: () => void;
 }) {
     const github = useGitHubAuth();
+    const workspaceModeId = useWorkspaceMode();
+    const activeMode = WORKSPACE_MODES.find((mode) => mode.id === workspaceModeId) ?? WORKSPACE_MODES[0];
     const shapeAuth = useShapeAuth();
     const showHostedNav = Boolean(overlay);
 
@@ -107,19 +64,6 @@ export function AgentSidebar({
                 detail: { id: "primary-sidebar" },
             }),
         );
-    };
-
-    const items: { label: string; icon: IconGlyph; onClick: () => void; active?: boolean }[] = [
-        {
-            label: "Settings",
-            icon: Settings20Regular,
-            onClick: () => void openSettingsWindow(),
-        },
-    ];
-
-    const newChat = () => {
-        window.dispatchEvent(new Event("shape-chat-new"));
-        window.dispatchEvent(new Event("shape-chat-focus-input"));
     };
 
     return (
@@ -166,31 +110,52 @@ export function AgentSidebar({
                     <>
                         <div
                             className={cn(
-                                "relative z-20 flex h-titlebar shrink-0 items-center gap-1",
-                                expanded ? "justify-between pl-3 pr-2" : "justify-center px-1.5",
+                                "relative z-20 flex h-titlebar shrink-0 items-center",
+                                expanded ? "justify-between gap-0.5 px-1.5" : "justify-center px-1.5",
                             )}
                         >
                             {expanded ? (
-                                <AccountMenu>
-                                    <button
-                                        type="button"
-                                        aria-label="Account"
-                                        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-panel-hover"
-                                    >
-                                        <ProfileAvatar
-                                            gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
-                                            shapeUserId={shapeAuth.userId}
-                                            offline={Boolean(shapeAuth.offline)}
-                                            name={displayName}
-                                            size={20}
-                                        />
-                                        <Icon
-                                            icon={ChevronDown20Regular}
-                                            className="shrink-0 text-text-muted!"
-                                            style={{ ["--icon-size" as string]: "14px" }}
-                                        />
-                                    </button>
-                                </AccountMenu>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="gap-1.5 px-1.5 text-lg font-medium"
+                                        >
+                                            <img
+                                                src={activeMode.icon}
+                                                alt=""
+                                                width={16}
+                                                height={16}
+                                                className="size-5 mr-0.5 shrink-0"
+                                            />
+                                            <span className="leading-none">{activeMode.id}</span>
+                                            <Icon
+                                                icon={ChevronDown20Regular}
+                                                className="text-text-muted"
+                                                style={{ ["--icon-size" as string]: "16px" }}
+                                            />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="w-44">
+                                        {WORKSPACE_MODES.map((mode) => (
+                                            <DropdownMenuItem key={mode.id} onSelect={() => setWorkspaceMode(mode.id)}>
+                                                <img
+                                                    src={mode.icon}
+                                                    alt=""
+                                                    width={16}
+                                                    height={16}
+                                                    className="size-6 shrink-0"
+                                                />
+                                                <span className="min-w-0 flex-1">{mode.id}</span>
+                                                {mode.id === workspaceModeId ? (
+                                                    <Icon icon={Checkmark20Regular} className="text-text-muted" />
+                                                ) : null}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             ) : null}
                             <SidebarToggleBtn
                                 open={expanded}
@@ -198,41 +163,6 @@ export function AgentSidebar({
                                 onToggle={toggleSidebar}
                             />
                         </div>
-
-                        <nav
-                            className={cn(
-                                "flex shrink-0 gap-0.5",
-                                expanded ? "flex-col px-2" : "flex-col items-center px-1.5",
-                            )}
-                        >
-                            {expanded ? (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={newChat}
-                                    className="flex h-9 w-full items-center justify-start gap-2 px-1.5! text-left"
-                                >
-                                    <Icon icon={Compose20Regular} className="shrink-0 text-text-muted" />
-                                    <span className="min-w-0 flex-1 truncate">New Chat</span>
-                                </Button>
-                            ) : (
-                                <>
-                                    <NavItem label="New Chat" icon={Compose20Regular} onClick={newChat} collapsed />
-                                    <NavItem label="Command Palette" icon={Search20Regular} onClick={onSearch} collapsed />
-                                </>
-                            )}
-                            {items.map((item) => (
-                                <NavItem
-                                    key={item.label}
-                                    label={item.label}
-                                    icon={item.icon}
-                                    onClick={item.onClick}
-                                    collapsed={!expanded}
-                                    active={item.active}
-                                />
-                            ))}
-                        </nav>
 
                         {expanded ? (
                             <ChatList
@@ -267,7 +197,29 @@ export function AgentSidebar({
                                     Connect GitHub
                                 </Button>
                             ) : null}
-                            <div className="flex items-center gap-0.5 px-1 pb-0.5">
+                            <div className="flex items-center gap-1 px-1 pb-1">
+                                <AccountMenu side="top">
+                                    <button
+                                        type="button"
+                                        aria-label="Account"
+                                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-panel-hover"
+                                    >
+                                        <ProfileAvatar
+                                            gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
+                                            shapeUserId={shapeAuth.userId}
+                                            offline={Boolean(shapeAuth.offline)}
+                                            name={displayName}
+                                            size={22}
+                                        />
+                                        <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                                            {displayName}
+                                        </span>
+                                        <Icon
+                                            icon={MoreHorizontal20Regular}
+                                            className="shrink-0 text-text-muted"
+                                        />
+                                    </button>
+                                </AccountMenu>
                                 <ChatUsageButton />
                             </div>
                         </>

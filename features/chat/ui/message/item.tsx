@@ -45,6 +45,8 @@ import { Button } from "@/components/ui/button";
 import { UserMessageCard } from "./bubble";
 import { ContextChip, MentionChipIcon, WorkflowChipIcon } from "./context-chip";
 import { GeneratingIndicator } from "../blocks/generating";
+import { FrostMark } from "@/components/ui/frost-mark";
+import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
 import { CitedSources } from "../blocks/citations";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 import { commands } from "@/lib/backend/commands";
@@ -80,6 +82,9 @@ type ChatMessageItemProps = {
     onFork?: (index: number) => void;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
     fullWidthBubbles?: boolean;
+    surface?: "code" | "talk";
+    talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
+    talkName?: string;
 };
 
 function SentAttachment({ att }: { att: ParsedUserAttachment }) {
@@ -296,7 +301,11 @@ function ChatMessageItemInner({
     onRestore,
     onFork,
     isFileEditResolved,
+    surface = "code",
+    talkMark = null,
+    talkName = "Shape",
 }: ChatMessageItemProps) {
+    const talk = surface === "talk";
     const [expanded, setExpanded] = React.useState(false);
     const [forkOpen, setForkOpen] = React.useState(false);
     const [menuOpen, setMenuOpen] = React.useState(false);
@@ -397,7 +406,7 @@ function ChatMessageItemInner({
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
-                <div className="group flex w-full min-w-0 items-start justify-end">
+                <div className={cn("group flex w-full min-w-0 items-start", talk ? "justify-start" : "justify-end")}>
                     <div className="flex w-fit max-w-[min(100%,32rem)] min-w-0 flex-col items-end gap-1">
                         <UserMessageCard className="w-full">
                             <div
@@ -493,7 +502,29 @@ function ChatMessageItemInner({
         >
             <div className="flex min-w-0 flex-col gap-1 pr-6">
                 <div ref={bodyRef} className="min-w-0 select-text overflow-visible chat-text text-text-primary">
-                    {showTypingOnly ? (
+                    {talk ? (
+                        <div className="flex max-w-[min(100%,32rem)] items-start gap-2">
+                            {talkMark ? (
+                                <WorkerMark shape={talkMark.shape} color={talkMark.color} size={28} live={!!isGenerating} />
+                            ) : (
+                                <FrostMark size={28} live={!!isGenerating} label={talkName} />
+                            )}
+                            <div className="min-w-0 flex-1 rounded-2xl bg-surface-3 px-3 py-2">
+                                {showTypingOnly || (isGenerating && !renderContent.replace(/<[^>]+>/g, "").trim()) ? (
+                                    <span className="text-sm text-text-muted">{content.trim() ? "Typing" : "Thinking"}</span>
+                                ) : (
+                                    <MessageRenderer
+                                        content={renderContent}
+                                        isGenerating={isGenerating}
+                                        activityLabel={activityLabel}
+                                        isFileEditResolved={isFileEditResolved}
+                                        durationMs={stats?.timeMs}
+                                        surface="talk"
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    ) : showTypingOnly ? (
                         <GeneratingIndicator
                             label="Thinking"
                             model={shownStats?.usedAuto || isAutoModelId(shownModel) ? undefined : shownModel}

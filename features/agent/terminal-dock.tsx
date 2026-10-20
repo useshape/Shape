@@ -2,6 +2,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useProjectState } from "@/lib/backend/project-state";
+import { useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import { registerBoundTerminalTab } from "@/features/terminal/session";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,10 @@ function clearBodyResize() {
 
 export function TerminalDock() {
     const { project_path } = useProjectState();
+    const workspaceMode = useWorkspaceMode();
+    const codeWorkspace = workspaceMode === "Code";
+    const codeRef = useRef(codeWorkspace);
+    codeRef.current = codeWorkspace;
     const cwdRef = useRef(project_path);
     cwdRef.current = project_path;
     const [open, setOpen] = useState(false);
@@ -82,6 +87,7 @@ export function TerminalDock() {
                         shell: "ai",
                         boundPtyId: event.payload.sessionId,
                     });
+                    if (!codeRef.current) return;
                     window.dispatchEvent(
                         new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }),
                     );
@@ -100,6 +106,7 @@ export function TerminalDock() {
 
     useEffect(() => {
         const onToggle = (e: Event) => {
+            if (!codeRef.current) return;
             const detail = (e as CustomEvent<{ id?: string; value?: boolean }>).detail;
             const id = detail?.id;
             if (id !== "panel" && id !== "terminal") return;
@@ -107,12 +114,17 @@ export function TerminalDock() {
             else if (detail?.value === true) persistOpen(true);
             else persistOpen(!open);
         };
-        const onOpen = () => persistOpen(true);
+        const onOpen = () => {
+            if (!codeRef.current) return;
+            persistOpen(true);
+        };
         const onShortcut = (e: Event) => {
+            if (!codeRef.current) return;
             const action = (e as CustomEvent<{ action?: string }>).detail?.action;
             if (action === "open" || action === "toggle" || !action) persistOpen(true);
         };
         const onTab = (e: Event) => {
+            if (!codeRef.current) return;
             const tabId = (e as CustomEvent<string>).detail?.toLowerCase();
             if (tabId === "terminal") persistOpen(true);
         };
@@ -134,6 +146,7 @@ export function TerminalDock() {
             if (t?.closest("textarea, input, [contenteditable='true']")) return;
             if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
             if (e.key.toLowerCase() !== "j") return;
+            if (!codeRef.current) return;
             e.preventDefault();
             persistOpen(!open);
         };
@@ -180,6 +193,7 @@ export function TerminalDock() {
         return () => window.clearTimeout(t);
     }, [open, height]);
 
+    const shown = open && codeWorkspace;
     if (!mounted) return null;
 
     return (
@@ -187,16 +201,16 @@ export function TerminalDock() {
             className={cn(
                 "relative z-20 shrink-0 overflow-hidden",
                 "transition-[height,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                open ? "m-3" : "pointer-events-none m-0",
+                shown ? "m-3" : "pointer-events-none m-0",
                 resizing && "transition-none",
             )}
-            style={{ height: open ? height + 10 : 0 }}
-            aria-hidden={!open}
+            style={{ height: shown ? height + 10 : 0 }}
+            aria-hidden={!shown}
         >
             <div
                 className="relative flex h-full flex-col overflow-hidden rounded-xl squircle-2xl border border-border bg-panel px-2 pb-2"
             >
-                {open ? (
+                {shown ? (
                     <div
                         role="separator"
                         aria-orientation="horizontal"
@@ -214,7 +228,7 @@ export function TerminalDock() {
                 ) : null}
                 <div className={cn("min-h-0 flex-1 overflow-hidden", resizing && "pointer-events-none")}>
                     <Suspense fallback={<div className="h-full w-full bg-panel" />}>
-                        <Terminal terminalOnly isOpen={open} onClose={() => persistOpen(false)} />
+                        <Terminal terminalOnly isOpen={shown} onClose={() => persistOpen(false)} />
                     </Suspense>
                 </div>
             </div>

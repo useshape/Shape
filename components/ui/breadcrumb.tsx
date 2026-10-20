@@ -50,7 +50,7 @@ export function Breadcrumb({
         className,
       )}
     >
-      <ol className="flex items-center gap-1 px-1">
+      <ol className="flex h-full items-center gap-1 px-1 leading-none">
         {items.map((item, index) => (
           <Fragment key={item.key ?? index}>
             {index > 0 && (

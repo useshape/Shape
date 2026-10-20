@@ -2,7 +2,7 @@
 
 import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
-
+import { Archive24Filled } from "@fluentui/react-icons/headless/svg/archive";
 
 
 import { useEffect, useMemo, useState } from "react";
@@ -92,7 +92,7 @@ export function WorkspaceBranchSwitch({
                         disabled={!repoPath}
                         className="h-7 max-w-48 rounded-full px-2.5 font-normal text-text-primary [corner-shape:unset]"
                     >
-                        <Icon icon={Branch20Regular} className="shrink-0 text-text-muted" />
+                        <Icon icon={Archive24Filled} className="shrink-0 text-text-muted" />
                         <span className="truncate">{branch ?? "Branch"}</span>
                     </Button>
                 ) : (
@@ -100,10 +100,10 @@ export function WorkspaceBranchSwitch({
                         type="button"
                         disabled={!repoPath}
                         className={cn(
-                            "inline-flex max-w-40 items-center gap-1 rounded-md px-1.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled",
+                            "inline-flex max-w-40 items-center border border-border font-regular gap-1 rounded-full px-3 py-0.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled",
                         )}
                     >
-                        <Icon icon={Branch20Regular} className="shrink-0 text-text-muted" />
+                        <Icon icon={Archive24Filled} className="shrink-0 text-text-muted icon-sm" />
                         <span className="truncate">{branch ?? "Branch"}</span>
                     </button>
                 )}

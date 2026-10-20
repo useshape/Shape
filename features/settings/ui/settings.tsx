@@ -751,6 +751,15 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
     return (
         <>
             <SettingSection title="Startup">
+                <SettingRow title="Open Shape at login" description="Start Shape when you sign in to this computer. Routines only run while Shape is open.">
+                    <SettingSwitch
+                        checked={p.openAtLogin}
+                        onChange={(v) => {
+                            updateSettingSection("privacy", { openAtLogin: v });
+                            void commands.setOpenAtLogin(v).catch(() => {});
+                        }}
+                    />
+                </SettingRow>
                 <SettingRow title="Show welcome page on startup">
                     <SettingSwitch
                         checked={p.showWelcomeOnStartup}

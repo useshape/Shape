@@ -16,6 +16,9 @@ export function ChatMessageList({
     isFileEditResolved,
     emptyState,
     fullWidthBubbles,
+    surface = "code",
+    talkMark = null,
+    talkName = "Shape",
 }: {
     messageGroups: { msg: ChatMessage; msgIdx: number }[][];
     messages: ChatMessage[];
@@ -31,6 +34,9 @@ export function ChatMessageList({
     /** @deprecated sticky removed */
     stickyTurnIndex?: number;
     fullWidthBubbles?: boolean;
+    surface?: "code" | "talk";
+    talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
+    talkName?: string;
 }) {
     return (
         <>
@@ -71,6 +77,9 @@ export function ChatMessageList({
                                             onFork={onFork}
                                             isFileEditResolved={isFileEditResolved}
                                             fullWidthBubbles={fullWidthBubbles}
+                                            surface={surface}
+                                            talkMark={talkMark}
+                                            talkName={talkName}
                                         />
                                     </div>
                                 );

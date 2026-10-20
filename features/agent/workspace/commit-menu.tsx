@@ -685,7 +685,7 @@ export function CommitMenu({
             <Button
                 variant="outline"
                 size="sm"
-                className={cn(PILL, "text-text-primary bg-panel-hover px-3 py-4! text-md border-border-subtle border")}
+                className={cn(PILL, "text-text-primary h-9 bg-surface-4 p-4 text-md border-border-subtle border")}
                 onClick={() => {
                     void commands.openUrlExternal(compareUrl);
                 }}
@@ -710,7 +710,7 @@ export function CommitMenu({
                 <Button
                     variant="outline"
                     size="sm"
-                    className={cn(PILL, "text-text-primary bg-panel-hover px-3 py-4! text-md border-border-subtle border")}
+                    className={cn(PILL, "text-text-primary h-9 bg-surface-4 p-4 text-md border-border-subtle border")}
                     aria-label="Changes"
                 >
                     {plus > 0 ? <span className="tabular-nums text-success">+{plus}</span> : null}
@@ -792,17 +792,15 @@ export function CommitMenu({
             }}
         >
             <DropdownMenuTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="sm"
+                <button
                     disabled={busy}
-                    className="px-1.5 text-sm font-normal text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                    className="px-2 py-0.5 rounded-full border border-border text-sm font-regular text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
                     <span>Commit</span>
-                    {totals.plus > 0 ? <span className="tabular-nums text-success">+{totals.plus}</span> : null}
+                    {totals.plus > 0 ? <span className="tabular-nums pl-2 text-success">+{totals.plus}</span> : null}
                     {totals.minus > 0 ? <span className="tabular-nums text-error">−{totals.minus}</span> : null}
                     <Icon icon={ChevronDown20Regular} className="opacity-60" />
-                </Button>
+                </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[320px]">
                 <div

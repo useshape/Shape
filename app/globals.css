@@ -10,23 +10,23 @@
   --surface-0: #181818;
   --surface-1: #181818;
   --surface-2: #1b1b1b;
-  --surface-3: #202020;
-  --surface-4: #252525;
+  --surface-3: #171717;
+  --surface-4: #232323;
   --settings-card: #2a2a2a;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
   --chrome: #1E1E1E;
-  --sidebar: #2D2D2D;
+  --sidebar: #1a1a1a;
   --editor: #191919;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #1B1B1B;
+  --panel: #101010;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
-  --panel-hover: rgba(255, 255, 255, 0.04);
+  --panel-hover: rgba(255, 255, 255, 0.096);
   --titlebar: var(--chrome);
   --activitybar: transparent;
   --editor-secondary: var(--surface-1);
@@ -41,9 +41,9 @@
   --text-active: #ffffff;
 
   /* ── Borders / stroke ──────────────────────────────────── */
-  --border: rgba(255, 255, 255, 0.116);
-  --border-subtle: rgba(255, 255, 255, 0.062);
-  --border-secondary: rgba(255, 255, 255, 0.075);
+  --border: rgba(255, 255, 255, 0.13);
+  --border-subtle: rgba(255, 255, 255, 0.048);
+  --border-secondary: rgba(255, 255, 255, 0.13);
   --stroke: 1px;
 
   /* ── Actions ───────────────────────────────────────────── */
@@ -317,6 +317,7 @@
   --font-sans: var(--font-ui);
   --font-brand: var(--type-brand);
   --font-mono: var(--font-mono);
+  --font-weight-regular: 400;
   --font-weight-normal: var(--type-weight-normal);
   --font-weight-medium: var(--type-weight-medium);
   --font-weight-semibold: var(--type-weight-semibold);
