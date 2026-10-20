@@ -3,6 +3,7 @@ import {
     isWorkspaceTrusted,
     listTrustedWorkspaces,
     normalizeWorkspacePath,
+    shouldPromptWorkspaceTrust,
     trustWorkspace,
     untrustWorkspace,
 } from "@/lib/workspace/trust";
@@ -31,5 +32,15 @@ describe("workspace-trust", () => {
     it("matches trusted paths regardless of slash style", () => {
         trustWorkspace("C:\\repo\\shape");
         expect(isWorkspaceTrusted("C:/repo/shape")).toBe(true);
+    });
+
+    it("prompts until the user trusts or declines", () => {
+        expect(shouldPromptWorkspaceTrust("C:/new-repo")).toBe(true);
+        untrustWorkspace("C:/new-repo");
+        expect(shouldPromptWorkspaceTrust("C:/new-repo")).toBe(false);
+        expect(isWorkspaceTrusted("C:/new-repo")).toBe(false);
+        trustWorkspace("C:/new-repo");
+        expect(shouldPromptWorkspaceTrust("C:/new-repo")).toBe(false);
+        expect(isWorkspaceTrusted("C:/new-repo")).toBe(true);
     });
 });

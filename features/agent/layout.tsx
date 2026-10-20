@@ -15,6 +15,7 @@ import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
 import { TerminalDock } from "./terminal-dock";
 import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
+import { TrustFolderHost } from "@/features/agent/workspace/trust-dialog";
 import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-terminal-notify";
 import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
 import { useWorkspaceMode } from "@/lib/ui/workspace-mode";
@@ -497,6 +498,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             <DevRunHost />
             <RoutinesHost />
             <ProjectQuickPickHost />
+            <TrustFolderHost />
             {splash ? (
                 <div
                     className={cn(

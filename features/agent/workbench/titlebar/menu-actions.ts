@@ -1,8 +1,7 @@
 import { commands } from "@/lib/backend";
 import { HELP_LINKS } from "@/lib/errors/help-links";
 import { isPopoutPath } from "@/lib/window/tauri-window";
-import { notifyWorkspaceClosed, notifyWorkspaceOpened } from "@/lib/workspace/trust";
-import { clearExtraWorkspaceFolders } from "@/lib/workspace/folders";
+import { notifyWorkspaceClosed } from "@/lib/workspace/trust";
 import type { MenuActionContext } from "./types";
 import { getFileExtension, isImageExtension, isFontExtension } from "@/features/editor/lib/image-types";
 
@@ -65,9 +64,8 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 if (typeof selected === "string") {
                     const selectedDir = getDirectoryName(selected);
                     if (!ctx.projectPath && selectedDir) {
-                        clearExtraWorkspaceFolders();
-                        await commands.setProjectPath(selectedDir);
-                        notifyWorkspaceOpened(selectedDir);
+                        const { openProject } = await import("@/features/agent/lib/open-project");
+                        await openProject(selectedDir);
                     }
                     await commands.openFile(selected, getFileName(selected));
                 }
@@ -324,8 +322,10 @@ export function createMenuActionHandler(ctx: MenuActionContext) {
                 void commands.openUrlExternal(HELP_LINKS.privacy);
                 break;
             case "Close Window":
-            case "Exit":
                 ctx.closeWindow();
+                break;
+            case "Exit":
+                ctx.quitApp();
                 break;
             case "About": {
                 const { message } = await import("@tauri-apps/plugin-dialog");
