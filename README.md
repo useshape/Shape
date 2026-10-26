@@ -1,3 +1,5 @@
+Shape is currently licensed under BSL 1.1, with plans to transition to an open-source license with the release of 2.0.0.
+
 <p align="center">
   <a href="https://useshape.org">
     <img src="./public/hero.png" alt="Chat next to the open folder" width="880">
