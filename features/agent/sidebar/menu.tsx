@@ -23,6 +23,8 @@ import {
     DropdownMenuItem,
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown";
+import { ChatUsageButton } from "@/features/chat/ui/composer/usage";
+import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
 
 export function ProfileAvatar({
     gitAvatarUrl,
@@ -68,6 +70,7 @@ export function AccountMenu({
     const shapeAuth = useShapeAuth();
     const githubAuth = useGitHubAuth();
     const { project_path } = useProjectState();
+    const talk = isTalkWorkspace(useWorkspaceMode());
 
     const displayName =
         (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
@@ -96,6 +99,7 @@ export function AccountMenu({
                             {displayName}
                         </div>
                     </div>
+                    <ChatUsageButton compact />
                 </div>
 
                 {shapeAuth.loggedIn && !shapeAuth.offline && shapeAuth.tier === "free" ? (
@@ -114,13 +118,15 @@ export function AccountMenu({
                     <Icon icon={Settings20Regular} />
                     Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                    onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
-                >
-                    <Icon icon={FolderOpen20Regular} />
-                    Open folder
-                </DropdownMenuItem>
-                {project_path ? (
+                {talk ? null : (
+                    <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
+                    >
+                        <Icon icon={FolderOpen20Regular} />
+                        Open folder
+                    </DropdownMenuItem>
+                )}
+                {!talk && project_path ? (
                     <DropdownMenuItem onClick={() => void commands.revealPath(project_path)}>
                         <Icon icon={Open20Regular} />
                         Reveal in Explorer

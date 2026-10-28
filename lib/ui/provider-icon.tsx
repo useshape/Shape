@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/lib/utils";
 import type { IconModule } from "thesvg";
 import anthropic from "thesvg/anthropic";
 import openai from "thesvg/openai";
@@ -14,7 +15,26 @@ import mistral from "thesvg/mistral-ai";
 import meta from "thesvg/meta";
 import cohere from "thesvg/cohere";
 import zhipu from "thesvg/zhipu";
-import { FrostMark } from "@/components/ui/frost-mark";
+/** Application mark used wherever Auto is shown. */
+export function ShapeAutoIcon({
+    size = 16,
+    className,
+}: {
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <img
+            src="/logos/logo.svg"
+            alt=""
+            width={size}
+            height={size}
+            draggable={false}
+            className={cn("shrink-0", className)}
+            style={{ width: size, height: size }}
+        />
+    );
+}
 
 type Provider =
     | "shape"
@@ -70,16 +90,6 @@ function BrandIcon({ icon, size }: { icon: IconModule; size: number }) {
             dangerouslySetInnerHTML={{ __html: html }}
         />
     );
-}
-
-export function ShapeAutoIcon({
-    size = 16,
-    className,
-}: {
-    size?: number;
-    className?: string;
-}) {
-    return <FrostMark size={size} live className={className} label="Auto" />;
 }
 
 export function providerIcon(modelId: string, size = 18): React.ReactNode {

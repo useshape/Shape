@@ -46,44 +46,6 @@ pub fn agent_browse_stop(app: tauri::AppHandle) {
     );
 }
 
-/// Click or move inside the same page the user is looking at. Coordinates are
-/// percentages of the 1280×720 layout, which the UI scales to fit.
-#[tauri::command]
-pub async fn agent_browse_pointer(app: tauri::AppHandle, kind: String, x: f64, y: f64) -> Result<(), String> {
-    if stopped() {
-        return Err("Browser control is stopped.".into());
-    }
-    let x = x.clamp(0.0, 100.0);
-    let y = y.clamp(0.0, 100.0);
-    let port = {
-        let guard = SESSION.lock().unwrap_or_else(|p| p.into_inner());
-        let port = guard.as_ref().map(|s| s.port).ok_or_else(|| "Browser is not running.".to_string())?;
-        crate::browser::note_live_port(port);
-        port
-    };
-    let ws = fetch_page_ws(port).await?;
-    let _ = app.emit(
-        "agent-browse",
-        json!({"id": "live", "status": "controlling", "x": x, "y": y}),
-    );
-    if kind == "click" {
-        click_at(&ws, x, y).await?;
-        if let Ok(jpeg) = capture_jpeg(&ws).await {
-            let _ = app.emit(
-                "agent-browse",
-                json!({
-                    "id": "live",
-                    "status": "controlling",
-                    "x": x,
-                    "y": y,
-                    "image": format!("data:image/jpeg;base64,{jpeg}")
-                }),
-            );
-        }
-    }
-    Ok(())
-}
-
 pub fn stop_session() {
     STOP.store(true, Ordering::SeqCst);
     SHOW_FRAMES.store(false, Ordering::SeqCst);
@@ -148,7 +110,7 @@ pub async fn tool_browse(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             json!({"id": "live", "status": "stopped"}),
         );
         return ok(
-            "Browser control stopped. The user has the tab back.",
+            "Browser control stopped.",
             browse_tag("stopped", "", "Browser"),
             None,
         );

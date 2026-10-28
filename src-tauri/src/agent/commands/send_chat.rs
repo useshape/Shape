@@ -57,6 +57,8 @@ pub async fn send_chat_message(
     worker_name: Option<String>,
     worker_job: Option<String>,
     selected_media_id: Option<String>,
+    computer_use: Option<bool>,
+    shell_automation: Option<bool>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -65,23 +67,32 @@ pub async fn send_chat_message(
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
     let review_adversarial_on = review_adversarial_enabled.unwrap_or(false);
-    let raw_model = model
-        .filter(|m| !m.trim().is_empty())
-        .unwrap_or_else(|| MODEL_DEFAULT.to_string());
+    let workspace = workspace_mode
+        .clone()
+        .unwrap_or_else(|| "Code".to_string());
+    // Chat always bills as Auto. A paid model picked in Code must not follow it.
+    // "Cowork" is a retired workspace id; treat stored clients as Chat.
+    let talk = matches!(workspace.as_str(), "Chat" | "Cowork");
+    let raw_model = if talk {
+        "auto".to_string()
+    } else {
+        model
+            .filter(|m| !m.trim().is_empty())
+            .unwrap_or_else(|| MODEL_DEFAULT.to_string())
+    };
     let llm_provider = streaming::LlmProvider::Shape;
     let auth_token = access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
         AppError::Env("Sign in to Shape to use AI chat.".to_string())
     })?;
     let client = Client::new();
     let current_proj_path = app_state.0.lock()?.project_path.clone();
-    let workspace = workspace_mode
-        .clone()
-        .unwrap_or_else(|| "Code".to_string());
-    let talk = matches!(workspace.as_str(), "Chat" | "Cowork" | "GTM");
     let store_path = Some(history::conversation_store(
         talk,
         current_proj_path.as_deref(),
     ));
+    let turn_store = store_path
+        .clone()
+        .unwrap_or_else(|| history::TALK_STORE.to_string());
     let selected_auto = model_router::is_auto_selection(&raw_model);
     let model_to_use = model_router::normalize_model(&raw_model);
     let proxy_model = model_router::proxy_model_id(&raw_model);
@@ -95,7 +106,16 @@ pub async fn send_chat_message(
         })
         .unwrap_or(false);
     let has_images = model_router::content_has_images(&message) || history_has_images;
-    let mode_to_use = mode.unwrap_or_else(|| "Ask".to_string());
+    let mode_to_use = if talk {
+        "Agent".to_string()
+    } else {
+        let picked = mode.unwrap_or_else(|| "Ask".to_string());
+        if picked.eq_ignore_ascii_case("visual") || picked.eq_ignore_ascii_case("design") {
+            "Code".to_string()
+        } else {
+            picked
+        }
+    };
     // Auto stays on DeepSeek locally. The website maps `auto` for billing.
     // Vision-capable picks keep pixels; text-only models get a caption pass.
     let effort_raw = reasoning_effort
@@ -103,15 +123,19 @@ pub async fn send_chat_message(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("low");
-    let effort_norm = match effort_raw.to_ascii_lowercase().as_str() {
-        "super" => "super",
-        "max" => "max",
-        "ultra" => "ultra",
-        "high" | "medium" => "high",
-        "low" | "fast" => "low",
-        _ => "low",
-    }
-    .to_string();
+    let effort_norm = if talk {
+        "low".to_string()
+    } else {
+        match effort_raw.to_ascii_lowercase().as_str() {
+            "super" => "super",
+            "max" => "max",
+            "ultra" => "ultra",
+            "high" | "medium" => "high",
+            "low" | "fast" => "low",
+            _ => "low",
+        }
+        .to_string()
+    };
     let tier_norm = service_tier
         .as_deref()
         .map(str::trim)
@@ -279,6 +303,8 @@ pub async fn send_chat_message(
             .map(|s| s.trim().to_ascii_lowercase())
             .filter(|s| !s.is_empty())
             .collect(),
+        computer_use: computer_use.unwrap_or(true),
+        shell_automation: shell_automation.unwrap_or(true),
     };
     state.set_turn_policy_for(&owned_conversation_id, turn_policy);
     if !state.try_begin_in_flight(turn_id.clone(), Some(owned_conversation_id.clone())) {
@@ -352,9 +378,7 @@ pub async fn send_chat_message(
             "usedAuto": selected_auto,
         }),
     );
-    if let Some(path) = &current_proj_path {
-        let _ = history::save_current_conversation(&state, path);
-    }
+    let _ = history::save_current_conversation(&state, &turn_store);
 
     let owned_title = provisional_title.clone();
 
@@ -403,42 +427,18 @@ pub async fn send_chat_message(
         schema::SteerPacks::infer(&message, &mode_to_use)
     };
     let mut context_opts = context_options_for_query(message.clone(), (*index_state).clone());
-    context_opts.include_repo_map = local_packs.workspace;
-    context_opts.include_diagnostics = local_packs.workspace;
-    context_opts.include_git_status = local_packs.git || local_packs.workspace;
-    // Steer and workspace context are independent; overlapping them hid ~2s from first token.
-    let steer_fut = {
-        let auth = auth_token.clone();
-        let msg = message.clone();
-        let mode = mode_to_use.clone();
-        let tid = turn_id.clone();
-        let cid = conversation_id.clone();
-        let skip = talk;
-        async move {
-            if skip {
-                return schema::SteerPacks::talk();
-            }
-            crate::agent::tools::plugins::fetch_steer(
-                &auth,
-                &msg,
-                &mode,
-                Some(&tid),
-                cid.as_deref(),
-            )
-            .await
-        }
-    };
-    let (steer, ctx_res) = tokio::join!(
-        steer_fut,
-        build_context_with_options(&app_state, context_opts)
-    );
+    context_opts.include_repo_map = local_packs.workspace && !talk;
+    context_opts.include_diagnostics = local_packs.workspace && !talk;
+    context_opts.include_git_status = !talk && (local_packs.git || local_packs.workspace);
+    // Chat can see the open project. It still cannot see another mode's transcript.
+    context_opts.include_workspace = true;
+    // Tool list stays complete in the IDE. Keyword packs only choose a shorter chat prompt.
+    let ctx_res = build_context_with_options(&app_state, context_opts).await;
     let (context_string, _active_file, _project_root) = ctx_res?;
     let steer = if talk {
-        schema::SteerPacks::talk()
-    } else if steer.is_all_on() {
-        local_packs
+        local_packs.clone()
     } else {
-        steer
+        schema::SteerPacks::all_on()
     };
     logging::debug(
         "chat",
@@ -450,17 +450,16 @@ pub async fn send_chat_message(
     logging::debug("chat", &format!("Context built: {} chars", context_string.len()));
 
     let system_md = if talk {
-        match workspace.as_str() {
-            "Cowork" => prompts::COWORK_MD,
-            "GTM" => prompts::GTM_MD,
-            _ => prompts::TALK_MD,
-        }
-    } else if steer.is_chat_only() {
+        prompts::TALK_MD
+    } else if local_packs.is_chat_only() {
         prompts::CHAT_MD
     } else {
         prompts::SYSTEM_MD
     };
     let mut prompt_parts = vec![system_md.to_string()];
+    if talk {
+        prompt_parts.push(prompts::TALK_VOICE_MD.to_string());
+    }
     if !family_prompt.trim().is_empty() {
         prompt_parts.push(format!("\n{}", family_prompt.trim()));
     }
@@ -569,14 +568,24 @@ pub async fn send_chat_message(
         if let Some(job) = worker_job.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             turn_context.push_str(&format!("\nJob: {job}"));
         }
+        let work = history::chat_work_dir(&owned_conversation_id);
+        turn_context.push_str(&format!("\nChat folder (files and shell run here): {work}"));
+        if let Some(project) = current_proj_path.as_deref().filter(|p| !p.is_empty()) {
+            turn_context.push_str(&format!(
+                "\nOpen code project (do not read, write, or pass this path to the shell): {project}"
+            ));
+        }
         let ledger = crate::agent::media_stash::ledger_for_conversation(&owned_conversation_id);
         if !ledger.is_empty() {
             turn_context.push_str("\n\n");
             turn_context.push_str(&ledger);
         }
         if let Some(id) = selected_media_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-            turn_context.push_str(&format!("\nSelected image for “this”: media_id={id}"));
+            turn_context.push_str(&format!("\nSelected asset for “this”: media_id={id}"));
         }
+        turn_context.push_str(
+            "\nA new request is new work. Continue an earlier asset only when this message refers to it, and then edit_image that media_id. A story, fable, poem, or question is text. Call generate_image only when they asked for a picture, and use the count they named (one if they did not).",
+        );
     } else if matches!(mode_to_use.to_ascii_lowercase().as_str(), "ask" | "plan") {
         turn_context.push_str(
             "\nThis turn is read-only. Do not call edit, shell, git commit, browse, or mcp_call. They are blocked.",
@@ -631,11 +640,21 @@ pub async fn send_chat_message(
     let proxy_base = proxy_base.with_context_breakdown(Some(breakdown.clone()));
 
     let project_path = current_proj_path.clone().unwrap_or_default();
-    if !project_path.is_empty() && index_state.should_background_index(&project_path) {
+    let sealed_project = if talk {
+        current_proj_path.clone().filter(|path| !path.is_empty())
+    } else {
+        None
+    };
+    let turn_project = if talk {
+        history::chat_work_dir(&owned_conversation_id)
+    } else {
+        project_path.clone()
+    };
+    if !talk && !project_path.is_empty() && index_state.should_background_index(&project_path) {
         let _ = index_state.spawn_background_index(app_handle.clone(), project_path.clone());
     }
 
-    if cancel.is_cancelled() {
+        if cancel.is_cancelled() {
         state.clear_in_flight_if(&turn_id);
         let _ = app_handle.emit(
             "chat_complete",
@@ -645,9 +664,7 @@ pub async fn send_chat_message(
                 "conversationId": &owned_conversation_id,
             }),
         );
-        if let Some(path) = &current_proj_path {
-            let _ = history::save_current_conversation(&state, path);
-        }
+        let _ = history::save_current_conversation(&state, &turn_store);
         return Ok(String::new());
     }
 
@@ -661,7 +678,9 @@ pub async fn send_chat_message(
         model: &model_to_use,
         proxy_model: &proxy_model,
         mode: &mode_to_use,
-        project_path: &project_path,
+        project_path: &turn_project,
+        history_store: &turn_store,
+        sealed_project: sealed_project.as_deref(),
         app_handle: &app_handle,
         agent_state: &*state,
         index_state: Some(&*index_state),
@@ -720,12 +739,62 @@ pub async fn send_chat_message(
             &final_full_response,
             &project_path,
             &proxy_base,
+            &app_handle,
+            &cancel,
         )
         .await
         {
-            Ok(xml) => {
-                streaming::emit_stream_token(&app_handle, &proxy_base, xml.clone());
-                final_full_response.push_str(&xml);
+            Ok(review) => {
+                streaming::emit_stream_token(&app_handle, &proxy_base, review.markup.clone());
+                final_full_response.push_str(&review.markup);
+                if let Some(findings) = review
+                    .synthesis
+                    .filter(|text| super::adversarial_review::has_actionable_findings(text))
+                {
+                    if !cancel.is_cancelled() {
+                        api_messages.push(serde_json::json!({
+                            "role": "user",
+                            "content": format!(
+                                "An adversarial review of the edits you just made confirmed these issues. Fix the confirmed ones now. Do not start another review, and do not repeat the review markup. Leave disputed notes alone unless they are a clear defect.\n\n<review>\n{findings}\n</review>"
+                            ),
+                        }));
+                        match run_turn::run_agent_turn(run_turn::AgentTurnConfig {
+                            client: &client,
+                            api_key: &auth_token,
+                            api_messages: &mut api_messages,
+                            tools: &tools,
+                            model: &model_to_use,
+                            proxy_model: &proxy_model,
+                            mode: &mode_to_use,
+                            project_path: &turn_project,
+                            history_store: &turn_store,
+                            sealed_project: sealed_project.as_deref(),
+                            app_handle: &app_handle,
+                            agent_state: &*state,
+                            index_state: Some(&*index_state),
+                            mcp_state: Some(&*mcp_state),
+                            pty_state: Some(&*pty_state),
+                            cancel: cancel.clone(),
+                            proxy_ctx: proxy_base.clone().fresh_request(),
+                            max_loops: 6,
+                            emit_complete: false,
+                        })
+                        .await
+                        {
+                            Ok(follow) => {
+                                if !follow.response_text.is_empty() {
+                                    final_full_response.push_str(&follow.response_text);
+                                }
+                            }
+                            Err(e) => {
+                                logging::warn(
+                                    "review",
+                                    &format!("Follow-up after adversarial review failed: {e}"),
+                                );
+                            }
+                        }
+                    }
+                }
             }
             Err(e) => {
                 logging::warn("review", &format!("Adversarial review skipped: {e}"));
@@ -759,7 +828,10 @@ pub async fn send_chat_message(
     let billed_tokens = total_input_tokens + total_output_tokens;
     let duration_ms = start_time.elapsed().as_millis() as f64;
 
-    let used_auto = selected_auto;
+    let used_auto = selected_auto || talk;
+    if talk {
+        final_full_response = messages::compact_talk_history(&final_full_response);
+    }
 
     let mut assistant_message = ChatMessage {
         role: "assistant".to_string(),
@@ -843,9 +915,7 @@ pub async fn send_chat_message(
             }),
         );
 
-        if let Some(path) = &current_proj_path {
-            let _ = history::save_current_conversation(&state, path);
-        }
+        let _ = history::save_current_conversation(&state, &turn_store);
     } else if still_this_turn && !was_cancelled {
         // User started a new chat or switched conversations while this turn was
         // finishing — persist under the original id without touching live state.
@@ -853,24 +923,22 @@ pub async fn send_chat_message(
             "chat",
             "Turn finished after conversation switch — persisting to original conversation only",
         );
-        if let Some(path) = &current_proj_path {
-            let mut hist = {
-                let convs = state.conversations.lock()?;
-                convs
-                    .get(path)
-                    .and_then(|list| list.iter().find(|c| c.id == owned_conversation_id))
-                    .map(|c| c.history.clone())
-                    .unwrap_or_default()
-            };
-            history::replace_or_push_assistant(&mut hist, assistant_message.clone());
-            let _ = history::upsert_conversation_snapshot(
-                &state,
-                path,
-                &owned_conversation_id,
-                &owned_title,
-                hist,
-            );
-        }
+        let mut hist = {
+            let convs = state.conversations.lock()?;
+            convs
+                .get(&turn_store)
+                .and_then(|list| list.iter().find(|c| c.id == owned_conversation_id))
+                .map(|c| c.history.clone())
+                .unwrap_or_default()
+        };
+        history::replace_or_push_assistant(&mut hist, assistant_message.clone());
+        let _ = history::upsert_conversation_snapshot(
+            &state,
+            &turn_store,
+            &owned_conversation_id,
+            &owned_title,
+            hist,
+        );
         // The open chat is still this turn. Send the same details the menu reads,
         // even though live history now belongs to whatever the user switched to.
         let _ = app_handle.emit(
@@ -903,9 +971,7 @@ pub async fn send_chat_message(
                 let mut hist = state.history.lock()?;
                 history::replace_or_push_assistant(&mut hist, assistant_message);
             }
-            if let Some(path) = &current_proj_path {
-                let _ = history::save_current_conversation(&state, path);
-            }
+            let _ = history::save_current_conversation(&state, &turn_store);
         }
         let _ = app_handle.emit(
             "chat_complete",
@@ -951,6 +1017,8 @@ pub fn update_turn_policy(
     auto_run_mode: Option<String>,
     require_edit_approval: Option<bool>,
     protect_destructive_git: Option<bool>,
+    computer_use: Option<bool>,
+    shell_automation: Option<bool>,
 ) -> Result<(), String> {
     let mut policy = state.turn_policy();
     if let Some(mode) = auto_run_mode.as_deref() {
@@ -962,6 +1030,12 @@ pub fn update_turn_policy(
     if let Some(v) = protect_destructive_git {
         policy.protect_destructive_git = v;
     }
+    if let Some(v) = computer_use {
+        policy.computer_use = v;
+    }
+    if let Some(v) = shell_automation {
+        policy.shell_automation = v;
+    }
     if let Some(id) = state.current_conversation_id.lock().ok().and_then(|g| g.clone()) {
         state.set_turn_policy_for(&id, policy);
     } else {
@@ -970,4 +1044,3 @@ pub fn update_turn_policy(
     Ok(())
 }
 
-// ----- helpers --------------------------------------------------------------------------

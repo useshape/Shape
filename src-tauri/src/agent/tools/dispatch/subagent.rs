@@ -50,6 +50,7 @@ pub(super) async fn tool_spawn_subagent(args: &Value, ctx: &ToolCtx<'_>) -> Tool
     let id = subagents::spawn(
         ctx.app_handle.clone(),
         ctx.project_path.to_string(),
+        ctx.sealed_project.map(|path| path.to_string()),
         ctx.api_key.to_string(),
         model.clone(),
         ctx.mode.to_string(),

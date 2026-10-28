@@ -278,37 +278,6 @@ export interface Conversation {
     kind?: "chat" | "multiwork";
 }
 
-export interface BrowserTab {
-    id: string;
-    url: string;
-    title: string;
-    loading: boolean;
-    canBack: boolean;
-    canForward: boolean;
-    error: string | null;
-    favicon: string | null;
-}
-
-export interface BrowserTabsPayload {
-    tabs: BrowserTab[];
-    activeId: string | null;
-}
-
-export interface BrowserHistoryEntry {
-    url: string;
-    title: string;
-    visits: number;
-    last: number;
-}
-
-/** Coordinates are percentages of the page; modifiers use the CDP bitmask (Alt 1, Ctrl 2, Meta 4, Shift 8). */
-export type BrowserInputEvent =
-    | { kind: "move"; x: number; y: number; modifiers?: number }
-    | { kind: "down" | "up" | "click"; x: number; y: number; button?: "left" | "right" | "middle"; clicks?: number; modifiers?: number }
-    | { kind: "wheel"; x: number; y: number; dx: number; dy: number; modifiers?: number }
-    | { kind: "text"; text: string }
-    | { kind: "key"; type: "keyDown" | "keyUp"; key: string; code: string; modifiers?: number };
-
 export interface BrowserPickedElement {
     tag: string;
     label: string;

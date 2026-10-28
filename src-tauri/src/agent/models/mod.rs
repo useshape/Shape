@@ -68,6 +68,10 @@ pub struct TurnPolicy {
     pub plugin_disabled_actions: HashMap<String, Vec<String>>,
     /// Workflow-preapproved plugin slugs (`toolkit:slug` and/or slug).
     pub plugin_auto_allow: HashSet<String>,
+    /// List windows, capture one, and inspect running processes.
+    pub computer_use: bool,
+    /// Interpreters and programs may run through the shell. Hard-blocked commands stay blocked.
+    pub shell_automation: bool,
 }
 
 impl Default for TurnPolicy {
@@ -80,6 +84,8 @@ impl Default for TurnPolicy {
             plugin_approvals: HashMap::new(),
             plugin_disabled_actions: HashMap::new(),
             plugin_auto_allow: HashSet::new(),
+            computer_use: true,
+            shell_automation: true,
         }
     }
 }
@@ -286,6 +292,29 @@ impl Default for AgentState {
     }
 }
 
+/// A later review block replaces the running one instead of stacking a second card.
+fn replace_review_block(content: &str, chunk: &str) -> String {
+    let Some(block_start) = chunk.find("<review_debate") else {
+        return format!("{content}{chunk}");
+    };
+    let Some(rel_end) = chunk[block_start..].find("</review_debate>") else {
+        return format!("{content}{chunk}");
+    };
+    let block = &chunk[block_start..block_start + rel_end + "</review_debate>".len()];
+    if let Some(existing) = content.rfind("<review_debate") {
+        if let Some(rel) = content[existing..].find("</review_debate>") {
+            let end = existing + rel + "</review_debate>".len();
+            let mut out = String::with_capacity(content.len() + block.len());
+            out.push_str(&content[..existing]);
+            out.push_str(block);
+            out.push_str(&content[end..]);
+            return out;
+        }
+        return format!("{}{block}", &content[..existing]);
+    }
+    format!("{content}{chunk}")
+}
+
 impl AgentState {
     pub fn new() -> Self {
         Self {
@@ -405,24 +434,14 @@ impl AgentState {
     }
 
     pub fn set_in_flight_activity_label(&self, label: Option<&str>) {
-        let current = self
-            .current_conversation_id
-            .lock()
-            .ok()
-            .and_then(|g| g.clone());
-        if let Ok(mut guard) = self.in_flight.lock() {
-            let target = current.or_else(|| {
-                if guard.len() == 1 {
-                    guard.keys().next().cloned()
-                } else {
-                    None
-                }
-            });
-            if let Some(key) = target {
-                if let Some(in_flight) = guard.get_mut(&key) {
-                    in_flight.activity_label = label.map(|s| s.to_string());
-                }
-            }
+        let Ok(mut guard) = self.in_flight.lock() else {
+            return;
+        };
+        if guard.len() != 1 {
+            return;
+        }
+        if let Some(in_flight) = guard.values_mut().next() {
+            in_flight.activity_label = label.map(|s| s.to_string());
         }
     }
 
@@ -454,7 +473,11 @@ impl AgentState {
             let Some(in_flight) = guard.get_mut(&key) else {
                 return;
             };
-            in_flight.partial_content.push_str(chunk);
+            if chunk.contains("<review_debate") {
+                in_flight.partial_content = replace_review_block(&in_flight.partial_content, chunk);
+            } else {
+                in_flight.partial_content.push_str(chunk);
+            }
             if let Some(label) = activity_label {
                 in_flight.activity_label = Some(label.to_string());
             }

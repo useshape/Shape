@@ -20,10 +20,10 @@ describe("composer ghost text", () => {
         expect(composerGhost("fix the", 7, ["fix the button alignment"])).toBe(" button alignment");
     });
 
-    it("prefers the shortest continuation", () => {
+    it("continues only the part every previous prompt shares", () => {
         expect(
             composerGhost("open", 4, ["open the settings panel", "open the file"]),
-        ).toBe(" the file");
+        ).toBe(" the ");
     });
 
     it("stays quiet unless the caret is at the end", () => {

@@ -1,5 +1,5 @@
-﻿import { invoke } from "@tauri-apps/api/core";
-import { ActivityTotals, BrowserHistoryEntry, BrowserInputEvent, BrowserPickedElement, BrowserTab, BrowserTabsPayload, ChatGenerationState, ChatMessage, CodebaseSearchHit, ContentSearchResult, Conversation, EslintLintResult, FileEntry, FileInfo, FileSearchResult, GitActivityPoint, GitFileParams, GitRepoInfo, GitHubAuthLoginResult, GitHubAuthStatus, GitLogEntry, GitSyncStatus, GitStashEntry, BlameLine, HistoryEntry, IndexStatus, McpServerConfig, McpStatusEntry, McpToolInfo, PackageInfo, OutlineResponse, ProjectState, ProjectStatsSnapshot, ReplaceResult, SearchOptions, TestDiscoveryResult, TestRunSummaryResult, ContentMatch } from "@/lib/backend/types";
+import { invoke } from "@tauri-apps/api/core";
+import { ActivityTotals, ChatGenerationState, ChatMessage, CodebaseSearchHit, ContentSearchResult, Conversation, EslintLintResult, FileEntry, FileInfo, FileSearchResult, GitActivityPoint, GitFileParams, GitRepoInfo, GitHubAuthLoginResult, GitHubAuthStatus, GitLogEntry, GitSyncStatus, GitStashEntry, BlameLine, HistoryEntry, IndexStatus, McpServerConfig, McpStatusEntry, McpToolInfo, PackageInfo, OutlineResponse, ProjectState, ProjectStatsSnapshot, ReplaceResult, SearchOptions, TestDiscoveryResult, TestRunSummaryResult, ContentMatch } from "@/lib/backend/types";
 
 type InvokeLogger = (command: string, durationMs: number) => void;
 
@@ -127,52 +127,6 @@ export const commands = {
     openUrlExternal: (url: string) => invokeCommand("open_url_external", { url }),
     pinToTaskbar: () => invokeCommand<void>("pin_to_taskbar"),
     agentBrowseStop: () => invokeCommand<void>("agent_browse_stop"),
-    agentBrowsePointer: (kind: "click" | "move", x: number, y: number) =>
-        invokeCommand<void>("agent_browse_pointer", { kind, x, y }),
-    browserTabs: () => invokeCommand<BrowserTabsPayload>("browser_tabs"),
-    browserOpenTab: (url?: string, activate = true) =>
-        invokeCommand<BrowserTab>("browser_open_tab", { url: url ?? null, activate }),
-    browserCloseTab: (id: string) => invokeCommand<void>("browser_close_tab", { id }),
-    browserActivateTab: (id: string) => invokeCommand<void>("browser_activate_tab", { id }),
-    browserNavigate: (id: string, url: string) =>
-        invokeCommand<void>("browser_navigate", { id, url }),
-    browserBack: (id: string) => invokeCommand<void>("browser_back", { id }),
-    browserForward: (id: string) => invokeCommand<void>("browser_forward", { id }),
-    browserReload: (id: string, hard = false) =>
-        invokeCommand<void>("browser_reload", { id, hard }),
-    browserInput: (id: string, event: BrowserInputEvent) =>
-        invokeCommand<void>("browser_input", { id, event }),
-    browserPick: (id: string, x: number, y: number, commit = false) =>
-        invokeCommand<BrowserPickedElement | null>("browser_pick", { id, x, y, commit }),
-    browserScreenshot: (id: string) => invokeCommand<string>("browser_screenshot", { id }),
-    browserClear: (kind: "history" | "cookies" | "cache") =>
-        invokeCommand<void>("browser_clear", { kind }),
-    browserHistory: (query?: string, limit?: number) =>
-        invokeCommand<BrowserHistoryEntry[]>("browser_history", {
-            query: query ?? null,
-            limit: limit ?? null,
-        }),
-    browserSurfaceOpen: (url?: string) =>
-        invokeCommand<{ id: string; url: string; title: string; canBack: boolean; canForward: boolean }>(
-            "browser_surface_open",
-            { url: url ?? null },
-        ),
-    browserSurfaceClose: (id: string) => invokeCommand<void>("browser_surface_close", { id }),
-    browserSurfaceActivate: (id: string) => invokeCommand<void>("browser_surface_activate", { id }),
-    browserSurfaceNavigate: (id: string, url: string) =>
-        invokeCommand<void>("browser_surface_navigate", { id, url }),
-    browserSurfaceBack: (id: string) => invokeCommand<void>("browser_surface_back", { id }),
-    browserSurfaceForward: (id: string) => invokeCommand<void>("browser_surface_forward", { id }),
-    browserSurfaceReload: (id: string, hard = false) =>
-        invokeCommand<void>("browser_surface_reload", { id, hard }),
-    browserSurfaceBounds: (x: number, y: number, w: number, h: number, shown: boolean) =>
-        invokeCommand<void>("browser_surface_bounds", { x, y, w, h, shown }),
-    browserSurfaceHide: () => invokeCommand<void>("browser_surface_hide"),
-    browserSurfaceDevtools: (url: string) => invokeCommand<string>("browser_surface_devtools", { url }),
-    browserSurfaceScheme: (scheme: "system" | "light" | "dark") =>
-        invokeCommand<void>("browser_surface_scheme", { scheme }),
-    browserSurfacePick: (id: string, on: boolean) =>
-        invokeCommand<void>("browser_surface_pick", { id, on }),
     showDesktopNotification: (title: string, body: string) =>
         invokeCommand<void>("show_desktop_notification", { title, body }),
     newWindow: () => invokeCommand("spawn_new_window"),
@@ -499,7 +453,6 @@ export const commands = {
             singleMatch: singleMatch ?? null,
             singleFilePath: singleFilePath ?? null,
         }),
-    // Chat
     sendChatMessage: (
         message: string,
         model?: string,
@@ -523,6 +476,8 @@ export const commands = {
             pluginApprovals?: Record<string, string>;
             pluginDisabledActions?: Record<string, string[]>;
             pluginAutoAllow?: string[];
+            computerUse?: boolean;
+            shellAutomation?: boolean;
         },
         reasoningEffort?: string,
         serviceTier?: string | null,
@@ -552,6 +507,8 @@ export const commands = {
             pluginApprovals: executionPolicy?.pluginApprovals ?? null,
             pluginDisabledActions: executionPolicy?.pluginDisabledActions ?? null,
             pluginAutoAllow: executionPolicy?.pluginAutoAllow ?? null,
+            computerUse: executionPolicy?.computerUse ?? null,
+            shellAutomation: executionPolicy?.shellAutomation ?? null,
             reasoningEffort: reasoningEffort ?? null,
             serviceTier: serviceTier ?? null,
             displayMessage: displayMessage ?? null,
@@ -603,11 +560,15 @@ export const commands = {
         autoRunMode?: string;
         requireEditApproval?: boolean;
         protectDestructiveGit?: boolean;
+        computerUse?: boolean;
+        shellAutomation?: boolean;
     }) =>
         invokeCommand<void>("update_turn_policy", {
             autoRunMode: policy.autoRunMode ?? null,
             requireEditApproval: policy.requireEditApproval ?? null,
             protectDestructiveGit: policy.protectDestructiveGit ?? null,
+            computerUse: policy.computerUse ?? null,
+            shellAutomation: policy.shellAutomation ?? null,
         }),
     cleanupDesignSandbox: (sessionId?: string) =>
         invokeCommand<void>("cleanup_design_sandbox", {
@@ -688,7 +649,8 @@ export const commands = {
             "redo_design_source_patch",
         ),
     stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
-    getChatHistory: () => invokeCommand<ChatMessage[]>("get_chat_history"),
+    getChatHistory: (limit?: number) =>
+        invokeCommand<ChatMessage[]>("get_chat_history", limit == null ? {} : { limit }),
     getChatGenerationState: () =>
         invokeCommand<ChatGenerationState>("get_chat_generation_state"),
     getChatTitle: () => invokeCommand<string>("get_chat_title"),
@@ -701,7 +663,8 @@ export const commands = {
     getConversation: (id: string, projectPath?: string | null) =>
         invokeCommand<Conversation>("get_conversation", { id, projectPath: projectPath ?? null }),
     clearChatHistory: () => invokeCommand<void>("clear_chat_history"),
-    newChat: () => invokeCommand<void>("new_chat"),
+    newChat: (storePath?: string | null) =>
+        invokeCommand<void>("new_chat", { storePath: storePath ?? null }),
     setChatIncognito: (enabled: boolean) =>
         invokeCommand<void>("set_chat_incognito", { enabled }),
     getChatIncognito: () => invokeCommand<boolean>("get_chat_incognito"),

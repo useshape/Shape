@@ -608,16 +608,6 @@ export default function Terminal({
     }, []);
 
     useEffect(() => {
-        const handleOpenBrowser = () => {
-            void import("@/lib/window/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
-        };
-        window.addEventListener("shape-open-preview", handleOpenBrowser);
-        return () => {
-            window.removeEventListener("shape-open-preview", handleOpenBrowser);
-        };
-    }, []);
-
-    useEffect(() => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const refit = () => {
             if (isLayoutResizing()) return;

@@ -154,6 +154,20 @@ impl ProxyContext {
 }
 
 pub(crate) fn emit_chat_status(app_handle: &tauri::AppHandle, payload: serde_json::Value) {
+    let mut payload = payload;
+    if payload.get("conversationId").is_none() {
+        if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
+            if let Ok(guard) = agent_state.in_flight.lock() {
+                if guard.len() == 1 {
+                    if let Some(id) = guard.keys().next() {
+                        if let Some(obj) = payload.as_object_mut() {
+                            obj.insert("conversationId".to_string(), json!(id));
+                        }
+                    }
+                }
+            }
+        }
+    }
     if let Some(label) = payload
         .get("label")
         .and_then(|v| v.as_str())
@@ -968,6 +982,9 @@ pub async fn stream_chat_with_retry(
         "stream",
         "Empty response received, retrying once before bailing",
     );
+    // A retry is a new attempt. Reusing the billed request id is a 409.
+    let mut retry_ctx = proxy_ctx.clone();
+    retry_ctx.refresh_request_id();
     let second = stream_chat(
         client,
         api_key,
@@ -976,7 +993,7 @@ pub async fn stream_chat_with_retry(
         app_handle,
         token,
         model,
-        proxy_ctx,
+        &retry_ctx,
     )
     .await?;
     Ok(second)
@@ -1209,7 +1226,7 @@ pub async fn complete_chat_with_max_tokens(
     });
     if matches!(
         proxy_ctx.feature.as_str(),
-        "commit" | "title" | "file-edit" | "caption"
+        "commit" | "title" | "file-edit" | "caption" | "review"
     ) {
         body["reasoning"] = json!({ "enabled": false, "exclude": true });
     }

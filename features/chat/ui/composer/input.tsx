@@ -11,7 +11,6 @@ import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { ChatMultiple20Filled, ChatMultiple20Regular } from "@fluentui/react-icons/headless/svg/chat-multiple";
 import { CalendarMultiple24Filled, CalendarMultiple24Regular } from "@fluentui/react-icons/headless/svg/calendar-multiple";
-import { ColorLine24Filled, ColorLine24Regular } from "@fluentui/react-icons/headless/svg/color-line";
 import { Incognito24Filled } from "@fluentui/react-icons/headless/svg/incognito";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
@@ -20,7 +19,6 @@ import { FolderAdd24Filled, FolderAdd24Regular } from "@fluentui/react-icons/hea
 import { Connected24Filled, Connected24Regular } from "@fluentui/react-icons/headless/svg/connected";
 import { DocumentEdit24Filled, DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
 import { MoviesAndTv24Filled, MoviesAndTv24Regular } from "@fluentui/react-icons/headless/svg/movies-and-tv";
-import { Mic20Regular } from "@fluentui/react-icons/headless/svg/mic";
 import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
 
 
@@ -57,7 +55,7 @@ import {
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { MentionPicker } from "./mentions";
 import { PendingEditsPanel } from "./edits";
-import { composerGhost, loadComposerPrompts, rememberComposerPrompt } from "@/lib/chat/composer-complete";
+import { composerGhost, composerSpell, loadComposerPrompts, rememberComposerPrompt } from "@/lib/chat/composer-complete";
 import {
     ComposerTasksStrip,
     type ComposerTaskItem,
@@ -74,8 +72,6 @@ import {
     pastedTextFile,
     terminalAttachmentFile,
 } from "@/features/chat/lib/shape-clip";
-import type { BrowserPickedElement } from "@/lib/backend/types";
-import { registerElementMention } from "@/lib/chat/element-mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
 import { revealComposerCaret, syncComposerOverlayScroll } from "@/lib/chat/composer-scroll";
 import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
@@ -91,13 +87,15 @@ import {
 } from "@/lib/catalog/store";
 import { useProjectState } from "@/lib/backend";
 import { CommitMenu } from "@/features/agent/workspace/commit-menu";
+import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
 import { useSettings } from "@/lib/settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { SearchInput } from "@/components/ui/search";
 import { effortDisplayLabel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
 import { ThinkingEffortControl } from "./thinking-bar";
-import { FrostMark } from "@/components/ui/frost-mark";
-import { microphoneConstraints } from "@/lib/settings";
+import { ShapeAutoIcon } from "@/lib/ui/provider-icon";
+import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
+import { Add20Filled } from "@fluentui/react-icons";
 export type { ReasoningEffort };
 
 type ChatInputProps = {
@@ -139,6 +137,7 @@ type ChatInputProps = {
     variant?: "default" | "empty";
     talkSurface?: boolean;
     talkName?: string;
+    talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
     /** Code mode with no folder: composer is a folder-open prompt. */
     folderLocked?: boolean;
 };
@@ -318,7 +317,6 @@ const CHAT_MODES = [
     { id: "Code", icon: CodeTextEdit20Filled, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
     { id: "Ask", icon: ChatMultiple20Filled, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
     { id: "Plan", icon: CalendarMultiple24Filled, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
-    { id: "Visual", icon: ColorLine24Filled, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
     { id: "Review", icon: Incognito24Filled, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
 ] as const;
 
@@ -326,7 +324,6 @@ const COMPOSER_HINTS = [
     "Ask a task. @ for files. / for a workflow.",
     "Escape stops the current turn.",
     "Queue a follow-up while Shape is working.",
-    "Visual: ask to see a few button styles first",
     "Drop a screenshot to redesign",
     "Paste a stack trace to debug",
 ] as const;
@@ -567,6 +564,7 @@ export function ChatInput({
     variant = "default",
     talkSurface = false,
     talkName = "Shape",
+    talkMark = null,
     folderLocked = false,
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
@@ -583,9 +581,6 @@ export function ChatInput({
     const [mentionCaret, setMentionCaret] = React.useState(0);
     const [slashOpen, setSlashOpen] = React.useState(false);
     const [slashQuery, setSlashQuery] = React.useState("");
-    const [listening, setListening] = React.useState(false);
-    const recognitionRef = React.useRef<{ stop: () => void } | null>(null);
-
     const handleInputChangeWithMentions = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const raw = e.target.value;
         const caretRaw = e.target.selectionStart ?? raw.length;
@@ -692,7 +687,10 @@ export function ChatInput({
         setPrompts(loadComposerPrompts());
     }, []);
 
-    const ghost = composerGhost(inputValue, caret, prompts);
+    const spell = composerSpell(inputValue, caret);
+    const ghost = spell ? "" : composerGhost(inputValue, caret, prompts);
+    const ghostText = spell?.word ?? ghost;
+    const ghostBase = spell ? inputValue.slice(0, spell.start) : inputValue;
 
     const onComposerKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if ((mentionOpen || slashOpen) && (e.key === "Enter" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape")) {
@@ -701,9 +699,9 @@ export function ChatInput({
         }
         const el = e.currentTarget;
         const atEnd = el.selectionStart === el.selectionEnd && el.selectionStart === inputValue.length;
-        if (ghost && atEnd && !mentionOpen && !slashOpen && (e.key === "Tab" || e.key === "ArrowRight")) {
+        if ((ghost || spell) && atEnd && !mentionOpen && !slashOpen && (e.key === "Tab" || e.key === "ArrowRight")) {
             e.preventDefault();
-            const next = inputValue + ghost;
+            const next = spell ? inputValue.slice(0, spell.start) + spell.word : inputValue + ghost;
             onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
             setCaret(next.length);
             requestAnimationFrame(() => {
@@ -717,7 +715,7 @@ export function ChatInput({
         }
         setCaret(el.selectionStart ?? inputValue.length);
         onKeyDown(e);
-    }, [mentionOpen, slashOpen, onKeyDown, ghost, inputValue, onInputChange, rememberPrompt]);
+    }, [mentionOpen, slashOpen, onKeyDown, ghost, spell, inputValue, onInputChange, rememberPrompt]);
 
     React.useEffect(() => {
         if (reasoningEffort === "super" && !modelSupportsSuperThinking(selectedModel)) {
@@ -869,31 +867,6 @@ export function ChatInput({
         e.stopPropagation();
     }, []);
 
-    // Elements picked in the Browser tab become @element mentions at the caret.
-    React.useEffect(() => {
-        const onElement = (e: Event) => {
-            const detail = (e as CustomEvent<BrowserPickedElement>).detail;
-            if (!detail?.tag) return;
-            const token = registerElementMention(detail);
-            const textarea = textareaRef.current;
-            const val = inputValue;
-            const caret = textarea?.selectionStart ?? val.length;
-            const before = val.slice(0, caret);
-            const after = val.slice(caret);
-            const lead = before && !/\s$/.test(before) ? " " : "";
-            const trail = after && !/^\s/.test(after) ? " " : after ? "" : " ";
-            const next = `${before}${lead}${token}${trail}${after}`;
-            onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
-            const pos = before.length + lead.length + token.length + trail.length;
-            requestAnimationFrame(() => {
-                textarea?.focus();
-                textarea?.setSelectionRange(pos, pos);
-            });
-        };
-        window.addEventListener("shape-chat-attach-element", onElement as EventListener);
-        return () => window.removeEventListener("shape-chat-attach-element", onElement as EventListener);
-    }, [inputValue, onInputChange]);
-
     // Filter file uploads to only allowed types
     const handleFilteredFileUpload = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -1032,12 +1005,16 @@ export function ChatInput({
         <div
             className={cn(
                 "relative shrink-0 overflow-visible",
-                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-0",
+                talkSurface ? "w-full px-0 pb-5 pt-0" : variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-0",
             )}
         >
             <div className="relative z-10 flex w-full flex-col gap-1.5">
                 {project_path && !talkSurface ? (
-                    <div className="flex min-w-0 items-center gap-1.5 px-1">
+                    <div className={cn(
+                        "flex min-w-0 items-center gap-1.5 px-1",
+                        variant === "empty" && "justify-center",
+                    )}>
+                        <WorkspaceBranchSwitch />
                         <CommitMenu projectPath={project_path} part="pr" />
                     </div>
                 ) : null}
@@ -1079,9 +1056,9 @@ export function ChatInput({
                 <div
                     ref={composerBoxRef}
                     className={cn(
-                        "relative flex w-full flex-col border transition-colors p-1.5",
-                        "border-border-subtle/40 bg-surface-4",
-                        composerTall || uploadedFiles.length > 0 ? "rounded-xl" : "rounded-full",
+                        "relative flex w-full flex-col transition-colors p-1.5",
+                        "bg-surface-4",
+                        composerTall || uploadedFiles.length > 0 ? "squircle-3xl" : "rounded-full",
                         dragOver && "bg-surface-3/80",
                         (needsSignIn || folderLocked) && "cursor-default",
                         folderLocked && "opacity-70",
@@ -1101,7 +1078,7 @@ export function ChatInput({
                     ) : null}
                     {dragOver ? (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-border-subtle bg-surface-3/95">
-                            <p className="text-sm font-medium text-text-primary">Drop files to attach</p>
+                            <p className="text-sm font-regular text-text-primary">Drop files to attach</p>
                         </div>
                     ) : null}
                     <MentionPicker
@@ -1156,29 +1133,31 @@ export function ChatInput({
                             <DropdownMenuTrigger asChild>
                                 <button
                                     className={cn(
-                                        "inline-flex size-8 shrink-0 items-center justify-center p-0",
+                                        "inline-flex size-9 shrink-0 items-center justify-center p-0",
                                         "text-text-muted hover:text-text-primary",
                                         "rounded-full bg-panel-hover hover:bg-panel-active",
                                     )}
                                     aria-label="Add"
                                     disabled={needsSignIn}
                                 >
-                                    <Icon icon={Add20Regular} />
+                                    <Icon icon={Add20Filled} />
                                 </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-56">
+                            <DropdownMenuContent align="start" className="w-66">
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-media-upload")?.click()}
                                 >
                                     <Icon icon={MoviesAndTv24Filled} />
                                     Upload photos & file
                                 </DropdownMenuItem>
+                                {talkSurface ? null : (
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-folder-upload")?.click()}
                                 >
                                     <Icon icon={FolderAdd24Filled} />
                                     Attach folder
                                 </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
                                         <Icon icon={Connected24Filled} />
@@ -1287,7 +1266,7 @@ export function ChatInput({
                             ref={mentionOverlayRef}
                             aria-hidden
                             className={cn(
-                                "pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-medium text-text-primary",
+                                "pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-regular text-text-primary",
                                 composerTall ? "whitespace-pre-wrap break-words py-0 leading-6" : "flex items-center whitespace-pre leading-5",
                             )}
                         >
@@ -1304,13 +1283,14 @@ export function ChatInput({
                                     if (prev && r.start < prev.end) continue;
                                     merged.push(r);
                                 }
-                                const ghostNode = ghost ? (
-                                    <span className="text-text-muted opacity-40">{ghost}</span>
+                                const ghostNode = ghostText ? (
+                                    <span className="text-text-muted opacity-40">{ghostText}</span>
                                 ) : null;
+                                const painted = ghostBase;
                                 if (merged.length === 0) {
                                     return (
                                         <>
-                                            {inputValue || "\u00a0"}
+                                            {painted || "\u00a0"}
                                             {ghostNode}
                                         </>
                                     );
@@ -1339,6 +1319,7 @@ export function ChatInput({
                         <ContextMenu>
                             <ContextMenuTrigger asChild>
                                 <textarea
+                                    data-chat-composer="true"
                                     ref={textareaRef}
                                     value={inputValue}
                                     onChange={(e) => {
@@ -1438,6 +1419,8 @@ export function ChatInput({
                         </ContextMenu>
                         </div>
                         <div className="flex shrink-0 items-center">
+                        {talkSurface ? null : (
+                        <>
                         <DropdownMenu
                             onOpenChange={(open) => {
                                 if (!open) setModelQuery("");
@@ -1602,65 +1585,16 @@ export function ChatInput({
                                         </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        {hideModeSelect || talkSurface ? null : (
+                        {hideModeSelect ? null : (
                             <ModeMenu
                                 selectedMode={selectedMode}
                                 setSelectedMode={setSelectedMode}
                                 disabled={needsSignIn}
                             />
                         )}
+                        </>
+                        )}
                         </div>
-                        {talkSurface ? (
-                            <button
-                                type="button"
-                                aria-label={listening ? "Stop voice" : "Voice"}
-                                className={cn(
-                                    "mr-1 flex size-8 shrink-0 items-center justify-center rounded-full text-text-muted hover:text-text-primary",
-                                    listening && "bg-accent/20 text-accent",
-                                )}
-                                onClick={() => {
-                                    const w = window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any };
-                                    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-                                    if (!Ctor) return;
-                                    if (listening) {
-                                        recognitionRef.current?.stop();
-                                        setListening(false);
-                                        return;
-                                    }
-                                    const rec = new Ctor();
-                                    rec.continuous = false;
-                                    rec.interimResults = true;
-                                    rec.onresult = (event: { results: ArrayLike<{ 0?: { transcript?: string } }> }) => {
-                                        const text = Array.from(event.results)
-                                            .map((result) => result[0]?.transcript || "")
-                                            .join(" ");
-                                        onInputChange({
-                                            target: { value: text },
-                                        } as React.ChangeEvent<HTMLTextAreaElement>);
-                                    };
-                                    rec.onend = () => setListening(false);
-                                    recognitionRef.current = rec;
-                                    setListening(true);
-                                    const start = () => rec.start();
-                                    if (navigator.mediaDevices?.getUserMedia) {
-                                        void navigator.mediaDevices
-                                            .getUserMedia({ audio: microphoneConstraints(settings.voice.deviceId) })
-                                            .then((stream) => {
-                                                rec.onend = () => {
-                                                    stream.getTracks().forEach((track) => track.stop());
-                                                    setListening(false);
-                                                };
-                                                start();
-                                            })
-                                            .catch(() => start());
-                                    } else {
-                                        start();
-                                    }
-                                }}
-                            >
-                                <Icon icon={Mic20Regular} />
-                            </button>
-                        ) : null}
                         <button
                             type="button"
                             onClick={() => {
@@ -1697,9 +1631,19 @@ export function ChatInput({
                     </div>
                 </div>
                 {talkSurface ? (
-                    <div className="flex items-center gap-2 px-2 pt-1 text-xs text-text-muted">
-                        <FrostMark size={16} label="" />
-                        You are chatting to {talkName}
+                    <div className="flex items-center justify-center gap-2 px-2 pb-1 pt-3 text-center text-xs text-text-muted">
+                        {talkMark ? (
+                            <WorkerMark
+                                shape={talkMark.shape}
+                                color={talkMark.color}
+                                size={16}
+                                live
+                                mood={inputValue.trim() ? "typing" : "idle"}
+                            />
+                        ) : (
+                            <ShapeAutoIcon size={16} className="text-text-muted" />
+                        )}
+                        <span>You are chatting to {talkName}</span>
                     </div>
                 ) : null}
             </div>

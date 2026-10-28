@@ -33,7 +33,6 @@ import { parseWebSearchHits, WebSearchBlock, WebSearchTrail } from "./search";
 import { countChangedLines } from "@/lib/ui/diff-count";
 import { ChatEditDiff } from "./chat-diff";
 import { ActionLine, splitActionLabel } from "./action-line";
-import { GeneratingIndicator } from "./generating";
 import { joinThoughtLines } from "@/lib/chat/thought-text";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ApprovalCard } from "./approval";
@@ -254,8 +253,8 @@ function ThoughtScroller({ children }: { children: React.ReactNode }) {
                     {children}
                 </div>
             </div>
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-background to-transparent" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-background to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-[var(--panel)] to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-[var(--panel)] to-transparent" />
         </div>
     );
 }
@@ -269,9 +268,7 @@ function ThoughtStep({
 }) {
     const trimmed = joinThoughtLines(content).trim();
     if (!trimmed) return null;
-    if (isActive) {
-        return <ActionLine action="Thinking" shimmer />;
-    }
+    if (isActive) return null;
 
     const expandable = trimmed.length >= 80;
     const detail = trimmed.length < 40 ? "briefly" : `${estimateThoughtSeconds(trimmed)}s`;
@@ -602,7 +599,7 @@ function StepRow({ block }: { block: Chunk }) {
                 action={block.isGenerating ? "Visiting" : "Visited"}
                 detail={host}
                 favicons={url ? [url] : undefined}
-                shimmer={Boolean(block.isGenerating)}
+                shimmer={false}
                 onClick={block.visitUrl ? () => void commands.openUrlExternal(block.visitUrl!) : undefined}
             />
         );
@@ -805,8 +802,6 @@ export function TurnWorkflowSummary({
                     add={stats.linesAdded}
                     del={stats.linesRemoved}
                     favicons={marks.urls}
-                    shimmer={Boolean(isActive)}
-                    icon={isActive ? <GeneratingIndicator model={model} /> : undefined}
                     open={open}
                     onOpenChange={setOpen}
                     extra={

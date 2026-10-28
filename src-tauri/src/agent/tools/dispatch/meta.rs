@@ -889,6 +889,35 @@ pub(super) async fn tool_ask_user(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcom
     }
 }
 
+pub(super) fn tool_schedule_followup(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let seconds = args
+        .get("seconds")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(60)
+        .clamp(20, 900);
+    let reason = args
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Follow up on the earlier request.")
+        .trim()
+        .to_string();
+    let _ = ctx.app_handle.emit(
+        "chat_followup",
+        json!({
+            "conversationId": ctx.conversation_id,
+            "seconds": seconds,
+            "reason": reason,
+        }),
+    );
+    ToolOutcome {
+        tool_result: format!(
+            "Follow-up scheduled in {seconds}s. Call finish now. Do not wait in this turn."
+        ),
+        ui_chunk: String::new(),
+        side_effect: None,
+    }
+}
+
 pub(super) fn tool_finish(args: &Value) -> ToolOutcome {
     let summary = args
         .get("summary")

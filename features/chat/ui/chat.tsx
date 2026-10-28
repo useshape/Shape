@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../lib/use-chat-session";
 import { ChatTitlebar, resolveChatCrumbTitle } from "./shell/titlebar";
@@ -10,10 +9,8 @@ import { ChatMessageList } from "./message/list";
 import { ChatErrorDialog } from "./blocks/error";
 import { ChatEmptyState } from "./shell/empty";
 import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
-import { chatMark } from "@/lib/sidebar/chat-lanes";
 import { parseMessageContent } from "./md/renderer";
 import type { ComposerTaskItem } from "./composer/activity";
-import { AGENT_TABS_SLOT } from "@/features/agent/chrome";
 import { ChatHistoryStepper, useChatTurnActive } from "./shell/history-stepper";
 import { useSyncChatGenerating } from "../lib/generating-chats";
 import { SubagentChatView } from "@/features/agent/subagents/view";
@@ -51,19 +48,8 @@ export default function Chat({
     const session = useChatSession();
     const workspaceModeId = useWorkspaceMode();
     const talk = isTalkWorkspace(workspaceModeId);
-    const storedMark = session.conversationId ? chatMark(session.conversationId) : null;
-    const talkMark =
-        talk && workspaceModeId !== "Chat"
-            ? {
-                shape: (workspaceModeId === "GTM" ? "circle" : storedMark?.shape || "circle") as
-                    | "circle"
-                    | "square"
-                    | "triangle"
-                    | "cloud",
-                color: storedMark?.color || (workspaceModeId === "GTM" ? "#8b5cf6" : "#3b82f6"),
-            }
-            : null;
-    const talkName = workspaceModeId === "Chat" ? "Shape" : session.chatTitle || "Shape";
+    const talkMark = null;
+    const talkName = "Shape";
     const activeSubagent = React.useSyncExternalStore(subscribeSubagents, getActiveSubagent, getActiveSubagent);
 
     React.useEffect(() => {
@@ -115,23 +101,6 @@ export default function Chat({
         };
     }, [session.conversationId, session.handleSelectChatTab, session.messages]);
     useSyncChatGenerating(session.conversationId ?? session.activeChatTabId, session.isLoading);
-    const [tabsSlot, setTabsSlot] = React.useState<HTMLElement | null>(null);
-    React.useEffect(() => {
-        const find = () => document.getElementById(AGENT_TABS_SLOT);
-        setTabsSlot(find());
-        const timer = window.setInterval(() => {
-            const el = find();
-            if (el) {
-                setTabsSlot(el);
-                window.clearInterval(timer);
-            }
-        }, 50);
-        const stop = window.setTimeout(() => window.clearInterval(timer), 2000);
-        return () => {
-            window.clearInterval(timer);
-            window.clearTimeout(stop);
-        };
-    }, []);
 
     const taskItems = useMemo((): ComposerTaskItem[] => {
         const lastAssistant = [...session.messages].reverse().find((m) => m.role === "assistant");
@@ -242,7 +211,7 @@ export default function Chat({
     );
 
     const isEmpty = session.messages.length === 0;
-    const emptyStage = isEmpty && !embedded;
+    const emptyStage = isEmpty && !embedded && !talk;
     const emptyStageRef = React.useRef<HTMLDivElement>(null);
     const emptyStackRef = React.useRef<HTMLDivElement>(null);
     const [emptyTop, setEmptyTop] = React.useState(0);
@@ -307,6 +276,7 @@ export default function Chat({
             hideModeSelect={talk}
             talkSurface={talk}
             talkName={talkName}
+            talkMark={talkMark}
             selectedMode={session.selectedMode}
             setSelectedMode={session.setSelectedMode}
             reasoningEffort={session.reasoningEffort}
@@ -378,7 +348,7 @@ export default function Chat({
                         sel?.removeAllRanges();
                         sel?.addRange(range);
                     }}
-                    className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto no-scrollbar select-text", insetX)}
+                    className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto overflow-x-clip no-scrollbar select-text", insetX)}
                 >
                     <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-16 pt-5" : "pb-80 pt-12")}>
                         <ChatMessageList
@@ -396,6 +366,7 @@ export default function Chat({
                             surface={talk ? "talk" : "code"}
                             talkMark={talkMark}
                             talkName={talkName}
+                            emptyState={talk && isEmpty ? <ChatEmptyState /> : undefined}
                         />
                     </div>
                 </div>
@@ -432,7 +403,7 @@ export default function Chat({
 
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
-            {embedded ? null : tabsSlot ? createPortal(titlebar, tabsSlot) : null}
+            {embedded ? null : titlebar}
 
             <div
                 className={cn(

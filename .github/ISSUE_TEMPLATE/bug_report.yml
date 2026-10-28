@@ -37,7 +37,7 @@ body:
     id: version
     attributes:
       label: Shape version
-      placeholder: e.g. 0.2.3
+      placeholder: e.g. 1.0.3
   - type: dropdown
     id: os
     attributes:

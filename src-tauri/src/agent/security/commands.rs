@@ -133,6 +133,12 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
         };
     }
 
+    if let Some(reason) = obfuscated_execution(&cmd_lower) {
+        return CommandSafety::Blocked {
+            reason: reason.to_string(),
+        };
+    }
+
     // Require approval for shell operators (chaining, redirection, substitution).
     if has_shell_metacharacters(&cmd_lower) {
         return CommandSafety::NeedsApproval {
@@ -202,6 +208,50 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
     CommandSafety::NeedsApproval {
         reason: "Unrecognized command. Please review before executing.".to_string(),
     }
+}
+
+/// Encoded or download-and-execute forms. Blocked in every auto-run mode.
+/// Native Windows has no OS sandbox around the agent shell (same constraint Claude Code
+/// documents), so these cannot be relaxed by a setting.
+pub fn obfuscated_execution(cmd_lower: &str) -> Option<&'static str> {
+    let ps = cmd_lower.contains("powershell") || cmd_lower.contains("pwsh");
+    if ps && (cmd_lower.contains("-encodedcommand") || cmd_lower.contains("-enc")) {
+        return Some("Encoded PowerShell is blocked. Run the command in plain text.");
+    }
+    let token_hit = cmd_lower.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_')).any(|tok| {
+        tok == "iex" || tok == "invoke-expression"
+    });
+    if token_hit {
+        return Some("invoke-expression is blocked. Run the command in plain text.");
+    }
+    if cmd_lower.contains("certutil") && (cmd_lower.contains("-urlcache") || cmd_lower.contains("-decode")) {
+        return Some("certutil download or decode is blocked.");
+    }
+    if cmd_lower.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_')).any(|tok| tok == "bitsadmin") {
+        return Some("bitsadmin is blocked.");
+    }
+    None
+}
+
+/// Interpreters, shell redirects, and command wrappers can write outside the project
+/// and bypass the file tools. The cloud gate must not auto-run these. The user still
+/// approves them, unless they explicitly chose run-everything.
+pub fn requires_explicit_user_approval(command: &str) -> bool {
+    let cmd = command.to_lowercase();
+    cmd.contains("python -c")
+        || cmd.contains("python3 -c")
+        || cmd.contains("powershell -command")
+        || cmd.contains("powershell.exe -command")
+        || cmd.contains("pwsh -command")
+        || cmd.contains("set-content")
+        || cmd.contains("out-file")
+        || cmd.contains("add-content")
+        || cmd.contains(" > ")
+        || cmd.contains(" >> ")
+        || cmd.contains("sed -i")
+        || cmd.contains("cmd /c")
+        || cmd.contains("cmd.exe /c")
+        || cmd.contains("cmd /k")
 }
 
 fn kills_host_runtime(cmd_lower: &str) -> bool {
@@ -450,6 +500,28 @@ mod tests {
             CommandSafety::NeedsApproval { .. }
         ));
         assert_eq!(check_command_safety("git log -1 --oneline"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn encoded_powershell_stays_blocked_in_run_everything() {
+        use crate::agent::models::AutoRunMode;
+        let cmd = "powershell -encodedcommand ZQBjAGgAbwA=";
+        let base = check_command_safety(cmd);
+        assert!(matches!(base, CommandSafety::Blocked { .. }));
+        assert!(matches!(
+            apply_auto_run_mode(base, cmd, AutoRunMode::Always, true),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(obfuscated_execution("powershell.exe -enc abc").is_some());
+        assert!(obfuscated_execution("python script.py").is_none());
+    }
+
+    #[test]
+    fn interpreter_one_liners_need_the_user_not_just_a_classifier() {
+        assert!(requires_explicit_user_approval("python -c \"print(1)\""));
+        assert!(requires_explicit_user_approval("Set-Content out.txt hi"));
+        assert!(!requires_explicit_user_approval("python script.py"));
+        assert!(!requires_explicit_user_approval("npm test"));
     }
 
     #[test]

@@ -55,8 +55,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar", value: true } }));
             return true;
         case "Terminal":
-            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
-            window.dispatchEvent(new CustomEvent("shape-terminal-shortcut", { detail: { action: "open" } }));
+            window.dispatchEvent(new CustomEvent("shape-terminal-shortcut", { detail: { action: "toggle" } }));
             return true;
         case "New Terminal":
             window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "panel", value: true } }));
@@ -179,6 +178,30 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             return true;
         case "Cycle Chat Mode":
             window.dispatchEvent(new Event("shape-chat-cycle-mode"));
+            return true;
+        case "Toggle Primary Sidebar":
+            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "primary-sidebar" } }));
+            return true;
+        case "Toggle Secondary Sidebar":
+            window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "secondary-sidebar" } }));
+            return true;
+        case "Code Mode":
+            window.dispatchEvent(new CustomEvent("shape-set-workspace-mode", { detail: { id: "Code" } }));
+            return true;
+        case "Chat Mode":
+            window.dispatchEvent(new CustomEvent("shape-set-workspace-mode", { detail: { id: "Chat" } }));
+            return true;
+        case "Previous Conversation":
+            window.dispatchEvent(new CustomEvent("shape-chat-cycle", { detail: { dir: -1 } }));
+            return true;
+        case "Next Conversation":
+            window.dispatchEvent(new CustomEvent("shape-chat-cycle", { detail: { dir: 1 } }));
+            return true;
+        case "Graph":
+            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "graph" }));
+            return true;
+        case "Pull Requests":
+            window.dispatchEvent(new CustomEvent("shape-set-active-tab", { detail: "prs" }));
             return true;
         case "Toggle Word Wrap":
             dispatchEditorAction("toggleWordWrap");

@@ -40,7 +40,33 @@ describe("upsertTaggedBlockInContent", () => {
     expect(out.endsWith(chunk)).toBe(true);
   });
 
-  it("appends plain text chunks unchanged", () => {
+    it("keeps each generated image and only replaces the same media id", () => {
+        const first = '<generated_image media_id="a" model="klein">https://cdn/a.png</generated_image>';
+        const second = '<generated_image media_id="b" model="klein">https://cdn/b.png</generated_image>';
+        const both = upsertTaggedBlockInContent(first, second);
+        expect(both.match(/<generated_image/g)).toHaveLength(2);
+        expect(both).toContain("https://cdn/a.png");
+        expect(both).toContain("https://cdn/b.png");
+        const revised = '<generated_image media_id="b" model="klein">https://cdn/b2.png</generated_image>';
+        const updated = upsertTaggedBlockInContent(both, revised);
+        expect(updated.match(/<generated_image/g)).toHaveLength(2);
+        expect(updated).toContain("https://cdn/a.png");
+        expect(updated).toContain("https://cdn/b2.png");
+        expect(updated).not.toContain("https://cdn/b.png");
+    });
+
+    it("replaces a running adversarial review instead of stacking a second one", () => {
+        const running = '<review_debate model="auto" status="running"></review_debate>';
+        const done = '<review_debate model="auto" status="done">\n**Confirmed issues**\n- auth check missing\n</review_debate>';
+        const out = upsertTaggedBlockInContent(`Notes\n${running}\n`, `\n${done}\n`);
+        expect(out.match(/<review_debate/g)).toHaveLength(1);
+        expect(out).toContain('status="done"');
+        expect(out).not.toContain('status="running"');
+        expect(out).toContain("auth check missing");
+        expect(out.startsWith("Notes")).toBe(true);
+    });
+
+    it("appends plain text chunks unchanged", () => {
     expect(upsertTaggedBlockInContent("a", "b")).toBe("ab");
 
     const first = '<browse_session id="live" status="controlling" url="https://a.test" title="A"></browse_session>';

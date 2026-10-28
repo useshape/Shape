@@ -6,23 +6,12 @@ import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/windo
 
 
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 
 
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
 import { useBrowseFrame, type BrowseFrame } from "@/features/agent/browser/session";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 const PAGE_W = 1280;
 const PAGE_H = 720;
@@ -37,22 +26,19 @@ function fitPage(width: number, height: number) {
 export function BrowseStage({
     frame,
     className,
-    interactive = false,
     fill = false,
     natural = false,
 }: {
     frame: Pick<BrowseFrame, "image" | "x" | "y" | "title" | "url" | "status" | "error">;
     className?: string;
-    interactive?: boolean;
     fill?: boolean;
     /** Size the card to the screenshot so nothing is cropped or letterboxed. */
     natural?: boolean;
 }) {
     const hostRef = useRef<HTMLDivElement>(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
-    const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
     const status = frame.status || (frame.image ? "controlling" : "loading");
-    const cursor = pointer ?? { x: frame.x, y: frame.y };
+    const cursor = { x: frame.x, y: frame.y };
 
     useEffect(() => {
         const el = hostRef.current;
@@ -70,17 +56,6 @@ export function BrowseStage({
         top: fitted.top + (percentY / 100) * fitted.height,
     });
 
-    const readPoint = (event: React.PointerEvent<HTMLDivElement>) => {
-        const host = hostRef.current;
-        if (!host) return null;
-        const bounds = host.getBoundingClientRect();
-        const rect = fitPage(bounds.width, bounds.height);
-        const x = event.clientX - bounds.left - rect.left;
-        const y = event.clientY - bounds.top - rect.top;
-        if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
-        return { x: (x / rect.width) * 100, y: (y / rect.height) * 100 };
-    };
-
     const spot = (fill || natural) && box.w > 0
         ? { left: (cursor.x / 100) * box.w, top: (cursor.y / 100) * box.h }
         : place(cursor.x, cursor.y);
@@ -91,20 +66,8 @@ export function BrowseStage({
             ref={hostRef}
             className={cn(
                 natural ? "relative w-full" : "relative overflow-hidden bg-editor",
-                interactive && status === "controlling" && "cursor-none",
                 className,
             )}
-            onPointerMove={interactive ? (event) => {
-                const next = readPoint(event);
-                setPointer(next);
-            } : undefined}
-            onPointerLeave={interactive ? () => setPointer(null) : undefined}
-            onPointerDown={interactive && status === "controlling" ? (event) => {
-                const next = readPoint(event);
-                if (!next) return;
-                setPointer(next);
-                void commands.agentBrowsePointer("click", next.x, next.y);
-            } : undefined}
         >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -122,7 +85,7 @@ export function BrowseStage({
                     style={{
                         left: spot.left,
                         top: spot.top,
-                        transition: pointer ? "none" : "left 180ms cubic-bezier(.2,.7,.2,1), top 180ms cubic-bezier(.2,.7,.2,1)",
+                        transition: "left 180ms cubic-bezier(.2,.7,.2,1), top 180ms cubic-bezier(.2,.7,.2,1)",
                         filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.45))",
                     }}
                     width="22"
@@ -213,46 +176,5 @@ export function BrowseChatCard({
                 </pre>
             ) : null}
         </div>
-    );
-}
-
-export function AgentControlBar() {
-    const frame = useBrowseFrame();
-    const [confirm, setConfirm] = useState(false);
-    if (!frame || frame.status === "stopped") return null;
-
-    return (
-        <>
-            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-subtle bg-surface-2 px-2">
-                <span className="min-w-0 flex-1 truncate text-xs text-text-primary">The agent is controlling this tab</span>
-                <Button type="button" variant="ghost" size="icon" aria-label="Stop agent control" onClick={() => setConfirm(true)}>
-                    <Icon icon={Dismiss20Regular} />
-                </Button>
-            </div>
-            <AlertDialog open={confirm} onOpenChange={setConfirm}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Stop agent control?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            The agent will stop clicking and running scripts on this page. You stay in the chat, and this tab is yours again.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Keep control</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => {
-                                const url = frame?.url;
-                                void commands.agentBrowseStop();
-                                if (url) {
-                                    void import("@/features/agent/browser/store").then(({ openBrowserTab }) => openBrowserTab(url));
-                                }
-                            }}
-                        >
-                            Stop
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
     );
 }

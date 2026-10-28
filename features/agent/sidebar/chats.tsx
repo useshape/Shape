@@ -1,7 +1,6 @@
 "use client";
 
 import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
-import { Calendar20Regular } from "@fluentui/react-icons/headless/svg/calendar";
 import { Checkmark } from "@/components/ui/checkmark";
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
@@ -15,7 +14,6 @@ import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import { Pin20Filled } from "@fluentui/react-icons/headless/svg/pin";
 import { Pin20Regular } from "@fluentui/react-icons/headless/svg/pin";
-import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Eclipse } from "loading-dev";
 
 import {
@@ -75,22 +73,19 @@ import {
 import { listen } from "@tauri-apps/api/event";
 import { ScrollArea } from "@/components/ui/scroll";
 import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
-import { TALK_CONVERSATION_STORE } from "@/lib/chat/conversation-store";
+import { conversationStorePath, TALK_CONVERSATION_STORE } from "@/lib/chat/conversation-store";
 import {
     armNextChat,
+    assignLane,
     chatLane,
     chatMark,
-    clearNextChat,
     getLaneSnapshot,
     getLaneSnapshotServer,
-    lastLaneChat,
-    nextWorkerColor,
     rememberLaneChat,
     subscribeChatLanes,
     type WorkerShape,
 } from "@/lib/sidebar/chat-lanes";
-import { CreateWorkerDialog, WorkerMark } from "./worker-mark";
-import { upsertRoutine } from "@/lib/cowork/routines";
+import { WorkerMark } from "./worker-mark";
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
 type ChatFilter = "all" | "pinned" | "unread";
 
@@ -151,29 +146,20 @@ function HeaderIconBtn({
     );
 }
 
-function formatWhen(timestamp: number): string {
-    if (!timestamp) return "";
-    const ms = timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000;
-    const date = new Date(ms);
-    if (Number.isNaN(date.getTime())) return "";
-    const now = new Date();
-    if (date.toDateString() === now.toDateString()) {
-        return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    }
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-    return date.toLocaleDateString([], { month: "short", day: "numeric" });
+function readablePreview(raw: string): string {
+    return raw
+        .replace(/```[\s\S]*?```/g, " ")
+        .replace(/<([a-z][\w:-]*)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<\/?[a-z][\w:-]*\b[^>]*\/?>/gi, " ")
+        .replace(/[#>*_`[\]]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 function previewLine(chat: Conversation): string {
     const history = chat.history || [];
     for (let i = history.length - 1; i >= 0; i--) {
-        const text = (history[i]?.content || "")
-            .replace(/```[\s\S]*?```/g, " ")
-            .replace(/[#>*_`[\]]/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
+        const text = readablePreview(history[i]?.content || "");
         if (text) return text;
     }
     return "No messages yet";
@@ -201,7 +187,6 @@ function ChatRow({
     selected = false,
     onToggleSelect,
     mark = null,
-    when = "",
     preview = "",
     onNew,
 }: {
@@ -219,10 +204,10 @@ function ChatRow({
     selected?: boolean;
     onToggleSelect?: () => void;
     mark?: { shape: WorkerShape; color: string } | null;
-    when?: string;
     preview?: string;
     onNew?: () => void;
 }) {
+    const workspaceMode = useWorkspaceMode();
     const generating = useIsChatGenerating(id);
     const [renaming, setRenaming] = useState(false);
     const [draft, setDraft] = useState(title);
@@ -301,26 +286,10 @@ function ChatRow({
                         }),
                     );
                 },
-            }, {
-                key: "routine",
-                label: "Run daily at 9:00",
-                icon: Calendar20Regular,
-                run: () => {
-                    const stored = chatMark(id);
-                    upsertRoutine({
-                        id: `daily-${id}`,
-                        workerId: id,
-                        instruction: stored?.taught || stored?.job || "Do your job.",
-                        weekday: "daily",
-                        time: "09:00",
-                        lastRun: 0,
-                        lastError: null,
-                    });
-                },
             }]
             : []),
         { key: "copy", label: "Copy Title", icon: Copy20Regular, sep: true, run: () => void navigator.clipboard.writeText(title) },
-        ...(path
+        ...(!isTalkWorkspace(workspaceMode) && path
             ? [{ key: "reveal", label: "Reveal Folder", icon: FolderOpen20Regular, run: () => void commands.revealPath(path).catch(() => {}) }]
             : []),
         { key: "archive", label: "Archive", icon: MailInbox20Regular, sep: true, run: archive },
@@ -357,7 +326,7 @@ function ChatRow({
                     <div
                         className={cn(
                             "group/chat relative flex w-full gap-1 text-sm",
-                            mark ? "items-start squircle-2xl px-2 py-2" : "h-10 items-center px-",
+                            mark ? "items-center squircle-2xl px-2 py-1.5" : "h-10 items-center px-",
                             !mark && !color && "squircle-2xl",
                             "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                             !color && (active ? "bg-panel-hover text-text-primary" : "text-text-primary hover:bg-panel-hover"),
@@ -397,7 +366,7 @@ function ChatRow({
                                     }}
                                     className={cn(
                                         "flex min-w-0 flex-1 text-left",
-                                        mark ? "items-start gap-2.5" : "items-center gap-2",
+                                        mark ? "items-center gap-2.5" : "items-center gap-2",
                                     )}
                                 >
                                     <span
@@ -413,14 +382,25 @@ function ChatRow({
                                             />
                                         </span>
                                     </span>
-                                    {mark ? <WorkerMark shape={mark.shape} color={mark.color} size={32} /> : null}
+                                    {mark ? <WorkerMark shape={mark.shape} color={mark.color} size={36} /> : null}
                                     {mark ? (
                                         <span className="min-w-0 flex-1">
-                                            <span className="flex items-baseline gap-2">
-                                                <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{title}</span>
-                                                {when ? <span className="shrink-0 text-xs text-text-muted">{when}</span> : null}
+                                            <span
+                                                className="block overflow-hidden whitespace-nowrap text-sm text-text-primary"
+                                                style={{
+                                                    maskImage: `linear-gradient(to right, #000 0, #000 calc(100% - ${fade}), transparent)`,
+                                                }}
+                                            >
+                                                {title}
                                             </span>
-                                            <span className="mt-0.5 block truncate text-xs text-text-muted">{preview}</span>
+                                            <span
+                                                className="mt-0.5 block overflow-hidden whitespace-nowrap text-xs text-text-muted"
+                                                style={{
+                                                    maskImage: `linear-gradient(to right, #000 0, #000 calc(100% - ${fade}), transparent)`,
+                                                }}
+                                            >
+                                                {preview}
+                                            </span>
                                         </span>
                                     ) : (
                                     <span
@@ -561,7 +541,6 @@ function SessionRow({
     selected,
     onToggleSelect,
     mark = null,
-    when = "",
     preview = "",
     onNew,
 }: {
@@ -577,7 +556,6 @@ function SessionRow({
     selected: boolean;
     onToggleSelect: () => void;
     mark?: { shape: WorkerShape; color: string } | null;
-    when?: string;
     preview?: string;
     onNew?: () => void;
 }) {
@@ -596,7 +574,6 @@ function SessionRow({
             selected={selected}
             onToggleSelect={onToggleSelect}
             mark={mark}
-            when={when}
             preview={preview}
             onNew={onNew}
         />
@@ -613,7 +590,6 @@ export function ChatList({
     const { project_path } = useProjectState();
     const mode = useWorkspaceMode();
     const laneSnap = useSyncExternalStore(subscribeChatLanes, getLaneSnapshot, getLaneSnapshotServer);
-    const [workerOpen, setWorkerOpen] = useState(false);
     const [workerQuery, setWorkerQuery] = useState("");
     const [chats, setChats] = useState<Conversation[]>([]);
     const [chatsReady, setChatsReady] = useState(false);
@@ -659,26 +635,18 @@ export function ChatList({
 
     const loadChats = useCallback(async () => {
         try {
+            let merged: Conversation[] = [];
+            const store = conversationStorePath(mode, project_path);
             if (isTalkWorkspace(mode)) {
-                const [talk, extra] = await Promise.all([
-                    commands.getConversations(TALK_CONVERSATION_STORE),
-                    project_path ? commands.getConversations(project_path) : Promise.resolve([]),
-                ]);
-                const seen = new Set<string>();
-                const merged: Conversation[] = [];
-                for (const chat of [...talk, ...extra]) {
-                    if (seen.has(chat.id)) continue;
-                    seen.add(chat.id);
-                    merged.push(chat);
-                }
-                setChats(merged);
-            } else if (!project_path) {
-                setChats([]);
-            } else {
-                setChats(await commands.getConversations(project_path));
+                merged = await commands.getConversations(TALK_CONVERSATION_STORE);
+            } else if (store) {
+                merged = await commands.getConversations(store);
             }
+            setChats(merged);
+            return merged;
         } catch {
             setChats([]);
+            return [];
         } finally {
             setChatsReady(true);
         }
@@ -727,16 +695,21 @@ export function ChatList({
         void commands
             .getCurrentConversationId()
             .then((id) => {
-                if (!cancelled && id) setActiveId(id);
+                if (!cancelled && id && chatLane(id) === mode) setActiveId(id);
             })
             .catch(() => {});
         return () => {
             cancelled = true;
         };
-    }, [project_path]);
+    }, [project_path, mode]);
 
     const visible = useMemo(() => {
-        const live = chats.filter((c) => !c.archived && chatLane(c.id) === mode);
+        const live = chats.filter((c) => {
+            if (c.archived) return false;
+            const lane = chatMark(c.id);
+            const assigned = lane?.mode ?? (isTalkWorkspace(mode) ? "Chat" : "Code");
+            return assigned === mode;
+        });
         const sorted = [...live];
         sorted.sort((a, b) => {
             const aPin = pinnedIds.has(a.id);
@@ -763,7 +736,7 @@ export function ChatList({
         if (filter === "pinned") next = next.filter((c) => pinnedIds.has(c.id));
         if (filter === "unread") next = next.filter((c) => unreadIds.has(c.id));
         const q = workerQuery.trim().toLowerCase();
-        if (q && (mode === "Cowork" || mode === "GTM")) {
+        if (q) {
             next = next.filter((c) => (c.title || "").toLowerCase().includes(q));
         }
         return next;
@@ -775,73 +748,37 @@ export function ChatList({
     };
 
     const startLaneChat = () => {
-        if (mode === "Cowork") {
-            setWorkerOpen(true);
-            return;
-        }
-        if (mode === "GTM") {
-            armNextChat({ mode: "GTM", shape: "circle", color: nextWorkerColor("GTM") });
-        } else {
-            armNextChat({ mode });
-        }
+        armNextChat({ mode });
         onNewChat();
     };
 
-    const alignedMode = useRef<string | null>(null);
-    const switchingLane = useRef(false);
+    const activeIdRef = useRef(activeId);
+    activeIdRef.current = activeId;
+    const previousMode = useRef(mode);
+    const seenMode = useRef(false);
     useEffect(() => {
-        if (!chatsReady) return;
-        if (mode === "Code" && !project_path) {
-            if (alignedMode.current === mode) return;
-            alignedMode.current = mode;
-            switchingLane.current = true;
-            window.dispatchEvent(new Event("shape-chat-new"));
-            return;
+        let cancelled = false;
+        const from = previousMode.current;
+        const modeChanged = seenMode.current && from !== mode;
+        seenMode.current = true;
+        previousMode.current = mode;
+        const open = activeIdRef.current;
+        if (modeChanged && open) {
+            if (!chatMark(open)) assignLane(open, from);
+            rememberLaneChat(from, open);
         }
-        if (switchingLane.current) {
-            if (!activeId || chatLane(activeId) === mode) switchingLane.current = false;
-            else return;
-        }
-        if (alignedMode.current === mode && (!activeId || chatLane(activeId) === mode)) return;
-        if (activeId && chatLane(activeId) === mode) {
-            alignedMode.current = mode;
-            return;
-        }
-        if (!activeId && alignedMode.current == null) return;
-        alignedMode.current = mode;
-        switchingLane.current = true;
-        const known = chats.filter((chat) => !chat.archived && chatLane(chat.id) === mode);
-        const remembered = lastLaneChat(mode);
-        const target = known.find((chat) => chat.id === remembered) ?? known[0];
-        if (target) {
-            clearNextChat();
-            window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id: target.id } }));
-            return;
-        }
-        if (mode === "GTM") {
-            armNextChat({ mode: "GTM", shape: "circle", color: nextWorkerColor("GTM") });
-        } else if (mode === "Cowork") {
-            armNextChat({
-                mode: "Cowork",
-                shape: "circle",
-                color: "#3b82f6",
-                title: "Manager",
-                job: "Coordinate teammates and keep work moving.",
-            });
-        } else {
-            armNextChat({ mode });
-        }
-        window.dispatchEvent(new Event("shape-chat-new"));
-    }, [mode, activeId, chatsReady, project_path, chats]);
+
+        void (async () => {
+            await loadChats();
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [mode, project_path, loadChats]);
 
     const rowProps = (chat: Conversation) => {
-        const stored = chatMark(chat.id);
-        const mark = mode === "Code" || mode === "Chat"
-            ? null
-            : {
-                shape: (mode === "GTM" ? "circle" : stored?.shape || "circle") as WorkerShape,
-                color: stored?.color || (mode === "GTM" ? "#8b5cf6" : "#3b82f6"),
-            };
+        const mark = null;
         return {
             chat,
             projectPath: project_path || "",
@@ -855,8 +792,7 @@ export function ChatList({
             selected: selected.has(chat.id),
             onToggleSelect: () => toggleSelect(chat.id),
             mark,
-            when: mode === "Code" || mode === "Chat" ? "" : formatWhen(chat.timestamp),
-            preview: mode === "Code" || mode === "Chat" ? "" : previewLine(chat),
+            preview: "",
             onNew: startLaneChat,
         };
     };
@@ -873,68 +809,7 @@ export function ChatList({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center justify-between pl-3 pr-1 pb-1 pt-3">
-                {mode === "Cowork" ? (
-                    <div className="relative min-w-0 flex-1 pr-1">
-                        <Icon icon={Search20Regular} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
-                        <input
-                            value={workerQuery}
-                            onChange={(event) => setWorkerQuery(event.target.value)}
-                            placeholder="Search"
-                            className="h-8 w-full rounded-lg bg-panel-hover pl-8 pr-2 text-sm text-text-primary outline-none"
-                        />
-                    </div>
-                ) : (
-                <span className="text-sm font-regular text-text-muted">
-                    {mode === "Chat" ? "Chats" : mode === "GTM" ? "Chats" : "Sessions"}
-                </span>
-                )}
-                {mode === "Cowork" ? null : (
-                <div className="flex items-center">
-                    <HeaderIconBtn label="Search" onClick={openCommandPalette}>
-                        <Icon icon={Search20Regular} />
-                    </HeaderIconBtn>
-                    <DropdownMenu modal={false}>
-                        <Tooltip content="Filter" side="bottom" delayDuration={80}>
-                            <DropdownMenuTrigger asChild>
-                                <button
-                                    type="button"
-                                    aria-label="Filter"
-                                    className="flex size-7 items-center justify-center rounded-md text-text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)] hover:bg-panel-hover hover:text-text-primary data-[state=open]:bg-panel-hover data-[state=open]:text-text-primary"
-                                >
-                                    <Icon icon={Filter20Regular} />
-                                </button>
-                            </DropdownMenuTrigger>
-                        </Tooltip>
-                        <DropdownMenuContent align="end" className="min-w-40">
-                            <DropdownMenuLabel>Show</DropdownMenuLabel>
-                            <DropdownMenuRadioGroup
-                                value={filter}
-                                onValueChange={(value) => setFilter(value as ChatFilter)}
-                            >
-                                {FILTER_OPTIONS.map((opt) => (
-                                    <DropdownMenuRadioItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </DropdownMenuRadioItem>
-                                ))}
-                            </DropdownMenuRadioGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuLabel>Sort</DropdownMenuLabel>
-                            <DropdownMenuRadioGroup
-                                value={sort}
-                                onValueChange={(value) => persistSort(value as ChatSort)}
-                            >
-                                {SORT_OPTIONS.map((opt) => (
-                                    <DropdownMenuRadioItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </DropdownMenuRadioItem>
-                                ))}
-                            </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-                )}
-            </div>
+            <div className="h-2 shrink-0" />
 
             <ScrollArea fadeFrom="from-sidebar" className="min-h-0 flex-1 px-1.5 pb-2">
                 {mode === "Code" && !project_path ? (
@@ -956,10 +831,15 @@ export function ChatList({
                                     size={32}
                                 />
                                 <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-sm text-text-primary">
+                                    <span
+                                        className="block overflow-hidden whitespace-nowrap text-sm text-text-primary"
+                                        style={{
+                                            maskImage: "linear-gradient(to right, #000 0, #000 calc(100% - 1.25rem), transparent)",
+                                        }}
+                                    >
                                         {pending.title || "New chat"}
                                     </span>
-                                    <span className="mt-0.5 block truncate text-xs text-text-muted">No messages yet</span>
+                                    <span className="mt-0.5 block text-xs text-text-muted">No messages yet</span>
                                 </span>
                             </div>
                         ) : null}
@@ -969,15 +849,14 @@ export function ChatList({
                         <button
                             type="button"
                             onClick={startLaneChat}
-                            className="mt-1 flex w-full items-center gap-1 squircle-2xl px-1 h-10 font-regular text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
+                            className="mt-1 flex h-10 w-full items-center justify-start gap-1 squircle-2xl px-1 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
                         >
-                            <Icon icon={Compose20Regular} className="shrink-0 icon-lg" />
-                            <span>{mode === "Cowork" ? "New worker" : "New chat"}</span>
+                            <Icon icon={Compose20Regular} className="icon-lg shrink-0" />
+                            <span>New chat</span>
                         </button>
                     </div>
                 )}
             </ScrollArea>
-            <CreateWorkerDialog open={workerOpen} onOpenChange={setWorkerOpen} />
         </div>
     );
 }

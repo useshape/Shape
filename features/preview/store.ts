@@ -402,7 +402,6 @@ export function ensurePreviewLoaded() {
 }
 
 export function openPreviewPanel(url?: string) {
-    void import("@/lib/window/browser-tab").then(({ openBrowserTab }) => openBrowserTab());
     if (url) {
         void navigatePreview(url);
     } else {

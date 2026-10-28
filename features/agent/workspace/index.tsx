@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
+import { Folder20Regular } from "@fluentui/react-icons/headless/svg/folder";
+import { Icon, type IconGlyph } from "@/components/ui/icon";
+import { Tooltip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { useProjectState } from "@/lib/backend";
 import { EditorViewProvider, EditorSplitProvider } from "@/core/providers/editor";
 import { PlanTabView } from "./plan-tab";
@@ -13,6 +19,12 @@ import { subscribePrUi, getPrUi } from "@/features/chat/ui/prs/store";
 import { isBrowserTab } from "@/lib/window/browser-tab";
 import { WorkspaceTabs } from "./tabs";
 import { FileBar } from "./file-bar";
+import {
+    DEFAULT_TABS,
+    uid,
+    type TabKind,
+    type WorkspaceTab,
+} from "./model";
 import type { CSSProperties } from "react";
 
 const SIDEBAR_SURFACE = {
@@ -21,12 +33,37 @@ const SIDEBAR_SURFACE = {
     "--editor": "var(--sidebar)",
     "--color-editor": "var(--sidebar)",
 } as CSSProperties;
-import {
-    DEFAULT_TABS,
-    uid,
-    type TabKind,
-    type WorkspaceTab,
-} from "./model";
+
+function PanelIcon({
+    label,
+    shortcut,
+    active,
+    onClick,
+    icon,
+}: {
+    label: string;
+    shortcut: string;
+    active: boolean;
+    onClick: () => void;
+    icon: IconGlyph;
+}) {
+    return (
+        <Tooltip content={label} shortcut={shortcut} side="bottom">
+            <button
+                type="button"
+                aria-label={label}
+                aria-pressed={active}
+                onClick={onClick}
+                className={cn(
+                    "flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary",
+                    active && "bg-panel-active text-text-primary",
+                )}
+            >
+                <Icon icon={icon} />
+            </button>
+        </Tooltip>
+    );
+}
 
 export function AgentWorkspace({
     projectPath,
@@ -258,10 +295,34 @@ export function AgentWorkspace({
 
     return (
         <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-sidebar">
-            <div className="flex h-titlebar shrink-0 items-stretch">
+            <div className="flex h-titlebar shrink-0 items-center gap-0.5 px-1.5">
+                <PanelIcon
+                    label="Graph"
+                    shortcut="Ctrl+Alt+G"
+                    active={active?.kind === "graph"}
+                    onClick={() => addTab("graph", { expand: true })}
+                    icon={Branch20Regular}
+                />
+                <PanelIcon
+                    label="Files"
+                    shortcut="Ctrl+Shift+E"
+                    active={active?.kind === "files"}
+                    onClick={() => addTab("files", { expand: true })}
+                    icon={Folder20Regular}
+                />
+                <PanelIcon
+                    label="Pull requests"
+                    shortcut="Ctrl+Alt+R"
+                    active={active?.kind === "prs"}
+                    onClick={() => addTab("prs", { expand: true })}
+                    icon={BranchRequest20Regular}
+                />
+            </div>
+            {tabs.some((tab) => tab.kind === "file" || tab.kind === "diff" || tab.kind === "plan") ? (
+            <div className="flex h-8 shrink-0 items-stretch">
                 <WorkspaceTabs
                     className="min-w-0 flex-1 bg-transparent"
-                    tabs={tabs}
+                    tabs={tabs.filter((tab) => tab.kind === "file" || tab.kind === "diff" || tab.kind === "plan")}
                     activeId={active?.id ?? ""}
                     onSelect={(id) => {
                         activeIdRef.current = id;
@@ -272,6 +333,7 @@ export function AgentWorkspace({
                     onReorder={(next) => commitTabs(next, activeIdRef.current)}
                 />
             </div>
+            ) : null}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                     {active?.kind === "graph" ? (

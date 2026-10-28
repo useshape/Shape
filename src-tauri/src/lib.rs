@@ -22,19 +22,23 @@ fn emit_shape_deep_link(app: &AppHandle, url: &str) {
     }
 }
 
+fn present_window(window: &tauri::WebviewWindow) {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 fn focus_shape_windows(app: &AppHandle) {
     for label in ["main", "onboarding", "settings", "branch"] {
         if let Some(window) = app.get_webview_window(label) {
-            let _ = window.show();
-            let _ = window.set_focus();
+            present_window(&window);
         }
     }
 }
 
 fn focus_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
+        present_window(&window);
     } else {
         focus_shape_windows(app);
     }
@@ -113,8 +117,10 @@ pub fn run() {
             crate::core::windows_notifications::init();
             crate::core::mic::allow_microphone(app.handle());
             crate::core::webview_recovery::install(app.handle());
-            crate::browser::surface::install(app.handle());
-
+            if let Some(window) = app.get_webview_window("main") {
+                present_window(&window);
+                crate::core::window_material::install(&window);
+            }
             // Initialize menu
             commands::ipc::shortcuts::setup_menu(app.handle())?;
             if let Some(icon) = app.default_window_icon() {
@@ -131,20 +137,13 @@ pub fn run() {
                             return;
                         };
                         if let Some(window) = tray.app_handle().get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
+                            present_window(&window);
                         }
                     })
                     .build(app);
             }
             app.on_menu_event(|app, event| {
-                let id = event.id().0.as_str();
-                if id.starts_with("shape-browser-") {
-                    browser::surface::on_menu(app, id);
-                    return;
-                }
-                commands::ipc::shortcuts::handle_menu_event(app, id);
+                commands::ipc::shortcuts::handle_menu_event(app, event.id().0.as_str());
             });
 
             if cfg!(debug_assertions) {
@@ -342,35 +341,7 @@ pub fn run() {
             agent::commands::conversation::rename_conversation,
             agent::commands::approvals::stop_chat_message,
             agent::tools::browse::agent_browse_stop,
-            agent::tools::browse::agent_browse_pointer,
             agent::commands::conversation::set_conversation_archived,
-            // browser tab
-            browser::browser_tabs,
-            browser::browser_open_tab,
-            browser::browser_close_tab,
-            browser::browser_activate_tab,
-            browser::browser_navigate,
-            browser::browser_back,
-            browser::browser_forward,
-            browser::browser_reload,
-            browser::browser_input,
-            browser::browser_pick,
-            browser::browser_screenshot,
-            browser::browser_clear,
-            browser::browser_history,
-            browser::browser_shutdown,
-            browser::surface::browser_surface_open,
-            browser::surface::browser_surface_close,
-            browser::surface::browser_surface_activate,
-            browser::surface::browser_surface_navigate,
-            browser::surface::browser_surface_back,
-            browser::surface::browser_surface_forward,
-            browser::surface::browser_surface_reload,
-            browser::surface::browser_surface_bounds,
-            browser::surface::browser_surface_hide,
-            browser::surface::browser_surface_devtools,
-            browser::surface::browser_surface_scheme,
-            browser::surface::browser_surface_pick,
             core::mic::dictation_start,
             core::mic::dictation_stop,
             core::mic::dictation_push,

@@ -1,35 +1,55 @@
 "use client";
 
 import { GithubMark } from "@/components/ui/github-mark";
-import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
 
+import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
 import { useShapeAuth } from "@/lib/cloud/store";
+import { useProjectState } from "@/lib/backend";
+import { getRepoName } from "@/lib/workspace/repo-history";
 import { ChatList } from "./chats";
 import { AccountMenu, ProfileAvatar } from "./menu";
-import { ChatUsageButton } from "@/features/chat/ui/composer/usage";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown";
-import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
-import { setWorkspaceMode, useWorkspaceMode, WORKSPACE_MODES } from "@/lib/ui/workspace-mode";
 import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
 import type { AgentOverlay } from "../overlay";
 
 export const AGENT_SIDEBAR_NAV_SLOT = "shape-agent-sidebar-nav";
 
+function RoundIconBtn({
+    label,
+    onClick,
+    children,
+}: {
+    label: string;
+    onClick: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <Tooltip content={label} side="bottom" delayDuration={80}>
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={label}
+                onClick={onClick}
+                className="size-8 min-h-8 min-w-8 rounded-full"
+            >
+                {children}
+            </Button>
+        </Tooltip>
+    );
+}
+
 export function AgentSidebar({
-    onSearch: _onSearch,
+    onSearch,
     expanded,
     open = true,
     overlay,
@@ -44,8 +64,8 @@ export function AgentSidebar({
     onToggleSidebar?: () => void;
 }) {
     const github = useGitHubAuth();
-    const workspaceModeId = useWorkspaceMode();
-    const activeMode = WORKSPACE_MODES.find((mode) => mode.id === workspaceModeId) ?? WORKSPACE_MODES[0];
+    const { project_path } = useProjectState();
+    const repo = project_path ? getRepoName(project_path) : null;
     const shapeAuth = useShapeAuth();
     const showHostedNav = Boolean(overlay);
 
@@ -70,7 +90,7 @@ export function AgentSidebar({
         <aside
             aria-hidden={!open}
             className={cn(
-                "relative z-20 flex h-full shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
+                "relative z-20 flex h-full pt-2 shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
                 "transition-[width,border-color] duration-[var(--transition-base)] ease-[var(--ease-out)]",
                 !open ? "w-0 border-r-transparent" : expanded ? "w-80" : "w-12",
             )}
@@ -108,60 +128,25 @@ export function AgentSidebar({
                     </>
                 ) : (
                     <>
-                        <div
-                            className={cn(
-                                "relative z-20 flex h-titlebar shrink-0 items-center",
-                                expanded ? "justify-between gap-0.5 px-1.5" : "justify-center px-1.5",
-                            )}
-                        >
-                            {expanded ? (
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="gap-1.5 px-1.5 text-lg font-medium"
-                                        >
-                                            <img
-                                                src={activeMode.icon}
-                                                alt=""
-                                                width={16}
-                                                height={16}
-                                                className="size-5 mr-0.5 shrink-0"
-                                            />
-                                            <span className="leading-none">{activeMode.id}</span>
-                                            <Icon
-                                                icon={ChevronDown20Regular}
-                                                className="text-text-muted"
-                                                style={{ ["--icon-size" as string]: "16px" }}
-                                            />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="start" className="w-44">
-                                        {WORKSPACE_MODES.map((mode) => (
-                                            <DropdownMenuItem key={mode.id} onSelect={() => setWorkspaceMode(mode.id)}>
-                                                <img
-                                                    src={mode.icon}
-                                                    alt=""
-                                                    width={16}
-                                                    height={16}
-                                                    className="size-6 shrink-0"
-                                                />
-                                                <span className="min-w-0 flex-1">{mode.id}</span>
-                                                {mode.id === workspaceModeId ? (
-                                                    <Icon icon={Checkmark20Regular} className="text-text-muted" />
-                                                ) : null}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            ) : null}
+                        <div className="relative z-20 flex h-titlebar shrink-0 items-center justify-start gap-0.5 px-1.5">
                             <SidebarToggleBtn
                                 open={expanded}
                                 collapsed={!expanded}
                                 onToggle={toggleSidebar}
                             />
+                            {expanded ? (
+                                <>
+                                    <RoundIconBtn label="Search" onClick={onSearch}>
+                                        <Icon icon={Search20Regular} style={{ ["--icon-size" as string]: "20px" }} />
+                                    </RoundIconBtn>
+                                    <RoundIconBtn
+                                        label={repo ? `Project: ${repo}` : "Open project"}
+                                        onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
+                                    >
+                                        <Icon icon={FolderOpen20Regular} style={{ ["--icon-size" as string]: "20px" }} />
+                                    </RoundIconBtn>
+                                </>
+                            ) : null}
                         </div>
 
                         {expanded ? (
@@ -172,7 +157,17 @@ export function AgentSidebar({
                                 }}
                             />
                         ) : (
-                            <div className="min-h-0 flex-1" />
+                            <div className="flex min-h-0 flex-1 flex-col items-center gap-1 pt-1">
+                                <RoundIconBtn label="Search" onClick={onSearch}>
+                                    <Icon icon={Search20Regular} style={{ ["--icon-size" as string]: "20px" }} />
+                                </RoundIconBtn>
+                                <RoundIconBtn
+                                    label={repo ? `Project: ${repo}` : "Open project"}
+                                    onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
+                                >
+                                    <Icon icon={FolderOpen20Regular} style={{ ["--icon-size" as string]: "20px" }} />
+                                </RoundIconBtn>
+                            </div>
                         )}
                     </>
                 )}
@@ -220,12 +215,10 @@ export function AgentSidebar({
                                         />
                                     </button>
                                 </AccountMenu>
-                                <ChatUsageButton />
                             </div>
                         </>
                     ) : (
                         <div className="flex flex-col items-center gap-1">
-                            <ChatUsageButton compact />
                             <Tooltip content="Settings" side="right" delayDuration={80}>
                                 <button
                                     type="button"

@@ -121,7 +121,8 @@ export function TerminalDock() {
         const onShortcut = (e: Event) => {
             if (!codeRef.current) return;
             const action = (e as CustomEvent<{ action?: string }>).detail?.action;
-            if (action === "open" || action === "toggle" || !action) persistOpen(true);
+            if (action === "toggle") persistOpen(!open);
+            else if (action === "open" || !action) persistOpen(true);
         };
         const onTab = (e: Event) => {
             if (!codeRef.current) return;

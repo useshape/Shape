@@ -1,15 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Chat from "@/features/chat/ui/chat";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
-import { OverlayRootProvider } from "@/lib/ui/overlay-root";
-import { AgentSidebar, AGENT_SIDEBAR_NAV_SLOT } from "./sidebar";
-import { ChatList } from "./sidebar/chats";
-import { RoutinesHost } from "./sidebar/routines-host";
-import { AgentChrome } from "./chrome";
+import { ChatChromeTabs } from "./chat-tabs";
+import { ChatSearch } from "@/features/chat/ui/shell/chat-search";
 import { AgentWorkspace } from "./workspace";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
@@ -18,13 +15,12 @@ import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
 import { TrustFolderHost } from "@/features/agent/workspace/trust-dialog";
 import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-terminal-notify";
 import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
-import { useWorkspaceMode } from "@/lib/ui/workspace-mode";
+import { setWorkspaceMode, useWorkspaceMode, type WorkspaceModeId } from "@/lib/ui/workspace-mode";
 import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
 
 const MIN_WORKSPACE = 360;
 const MIN_WORKSPACE_SOFT = 280;
 const MIN_CHAT = 380;
-const SIDEBAR_EXPANDED = 304;
 const WORKSPACE_GUTTER = 12;
 const WINDOW_MIN_HEIGHT = 500;
 const WINDOW_MIN_WIDTH = 1000;
@@ -32,78 +28,15 @@ const MAX_WORKSPACE_RATIO = 0.72;
 const MAX_WORKSPACE_PX = 1200;
 const SPLASH_KEY = "shape-agent-splash-seen";
 
-function layoutMinWidth(sidebarOpen: boolean, workspaceOpen: boolean) {
-    const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : 0;
+function layoutMinWidth(_sidebarOpen: boolean, workspaceOpen: boolean) {
+    const sidebar = 0;
     const workspace = workspaceOpen ? MIN_WORKSPACE + WORKSPACE_GUTTER : 0;
     return Math.max(WINDOW_MIN_WIDTH, sidebar + MIN_CHAT + workspace);
 }
 
-function isFlyoutUiTarget(target: EventTarget | null) {
-    if (!(target instanceof Element)) return false;
-    return Boolean(target.closest("[data-sidebar-peek], [data-sidebar-peek-toggle]"));
-}
-
-function SidebarPeek({
-    shown,
-    onEnter,
-    onLeave,
-}: {
-    shown: boolean;
-    onEnter: () => void;
-    onLeave: () => void;
-}) {
-    const hostRef = useRef<HTMLDivElement>(null);
-    const [host, setHost] = useState<HTMLElement>();
-    const [mounted, setMounted] = useState(shown);
-
-    useLayoutEffect(() => {
-        setHost(hostRef.current ?? undefined);
-    }, []);
-
-    useEffect(() => {
-        if (shown) {
-            setMounted(true);
-            return;
-        }
-        const t = window.setTimeout(() => setMounted(false), 200);
-        return () => window.clearTimeout(t);
-    }, [shown]);
-
-    return (
-        <div
-            ref={hostRef}
-            data-sidebar-peek=""
-            className={cn(
-                "fixed z-30 flex w-82 flex-col overflow-visible transition-opacity duration-200 ease-[var(--ease-out)]",
-                shown ? "opacity-100" : "pointer-events-none opacity-0",
-            )}
-            style={{ top: 0, bottom: 8, left: 8 }}
-            onMouseEnter={onEnter}
-            onMouseLeave={(e) => {
-                if (isFlyoutUiTarget(e.relatedTarget)) return;
-                onLeave();
-            }}
-        >
-            <div className="h-titlebar w-10 shrink-0" aria-hidden />
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden squircle-2xl border border-border-subtle bg-sidebar shadow-md/40">
-                {mounted && host ? (
-                    <OverlayRootProvider value={host}>
-                        <ChatList
-                            onNewChat={() => {
-                                window.dispatchEvent(new Event("shape-chat-new"));
-                                window.dispatchEvent(new Event("shape-chat-focus-input"));
-                            }}
-                        />
-                    </OverlayRootProvider>
-                ) : null}
-            </div>
-        </div>
-    );
-}
-
 /**
- * Agent View — left sidebar (agent / settings / git / files nav),
- * center chrome + content; expanded workspace is full-height; rail under chrome.
+ * Agent view — chrome tabs across the top, chat underneath,
+ * workspace on the right when a project is open.
  */
 export function AgentLayout({ children }: { children: React.ReactNode }) {
     const { project_path, active_file } = useProjectState();
@@ -115,9 +48,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const [splash, setSplash] = useState(false);
     const [splashVisible, setSplashVisible] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
-    const [navSlot, setNavSlot] = useState<HTMLElement | null>(null);
-    const [sidebarFlyout, setSidebarFlyout] = useState(false);
-    const flyoutTimer = useRef<number | null>(null);
+    const [chatSearch, setChatSearch] = useState(false);
     const dragging = useRef(false);
     const widthRef = useRef(560);
 
@@ -138,6 +69,15 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    useEffect(() => {
+        const onMode = (event: Event) => {
+            const id = (event as CustomEvent<{ id?: WorkspaceModeId }>).detail?.id;
+            if (id === "Code" || id === "Chat") setWorkspaceMode(id);
+        };
+        window.addEventListener("shape-set-workspace-mode", onMode as EventListener);
+        return () => window.removeEventListener("shape-set-workspace-mode", onMode as EventListener);
+    }, []);
+
     // Warm start-command + route map when a project opens (or fingerprint changes).
     useEffect(() => {
         if (!project_path) return;
@@ -148,27 +88,11 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
 
     useEffect(() => startAgentBackgroundExitToasts(), []);
 
-    // Resolve sidebar nav portal target when overlay / explorer needs it.
     useEffect(() => {
-        if (!overlay) {
-            setNavSlot(null);
-            return;
-        }
-        const find = () => document.getElementById(AGENT_SIDEBAR_NAV_SLOT);
-        setNavSlot(find());
-        const id = window.setInterval(() => {
-            const el = find();
-            if (el) {
-                setNavSlot(el);
-                window.clearInterval(id);
-            }
-        }, 30);
-        const stop = window.setTimeout(() => window.clearInterval(id), 1500);
-        return () => {
-            window.clearInterval(id);
-            window.clearTimeout(stop);
-        };
-    }, [overlay, sidebarOpen]);
+        const openSearch = () => setChatSearch(true);
+        window.addEventListener("shape-open-chat-search", openSearch);
+        return () => window.removeEventListener("shape-open-chat-search", openSearch);
+    }, []);
 
     useEffect(() => {
         if (!splash) return;
@@ -203,14 +127,14 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
 
     const clampWorkspace = useCallback(
         (x: number, winW = typeof window === "undefined" ? 1280 : window.innerWidth) => {
-            const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : 0;
+            const sidebar = 0;
             const maxByChat = Math.max(0, winW - sidebar - MIN_CHAT - WORKSPACE_GUTTER);
             const maxByRatio = Math.min(MAX_WORKSPACE_PX, Math.floor(winW * MAX_WORKSPACE_RATIO));
             const max = Math.min(maxByChat, maxByRatio);
             if (max < MIN_WORKSPACE_SOFT) return 0;
             return Math.min(max, Math.max(MIN_WORKSPACE_SOFT, x));
         },
-        [sidebarOpen],
+        [],
     );
 
     const prevActiveFile = useRef<string | null>(null);
@@ -249,7 +173,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [persistWorkspace]);
 
     const toggleSidebar = useCallback(() => {
-        setSidebarFlyout(false);
         setSidebarOpen((prev) => {
             const next = !prev;
             try {
@@ -259,17 +182,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             }
             return next;
         });
-    }, []);
-
-    const openSidebarFlyout = useCallback(() => {
-        if (flyoutTimer.current) window.clearTimeout(flyoutTimer.current);
-        flyoutTimer.current = null;
-        setSidebarFlyout(true);
-    }, []);
-
-    const closeSidebarFlyout = useCallback(() => {
-        if (flyoutTimer.current) window.clearTimeout(flyoutTimer.current);
-        flyoutTimer.current = window.setTimeout(() => setSidebarFlyout(false), 180);
     }, []);
 
     const toggleWorkspace = useCallback(() => {
@@ -487,16 +399,16 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         };
     }, [openWorkspaceTerminal]);
 
+    const mode = useWorkspaceMode();
     const overlayOpen = overlay != null;
-    const codeWorkspace = useWorkspaceMode() === "Code";
+    const codeWorkspace = mode === "Code";
     const showWorkspace = codeWorkspace && Boolean(project_path) && !overlayOpen;
     const rightExpanded = workspaceOpen && showWorkspace && workspaceFits;
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
-        <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-sidebar">
+        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-transparent">
             <DevRunHost />
-            <RoutinesHost />
             <ProjectQuickPickHost />
             <TrustFolderHost />
             {splash ? (
@@ -523,54 +435,35 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 </div>
             ) : null}
 
-            <AgentSidebar
-                expanded
-                open={sidebarOpen}
-                overlay={overlay}
-                onToggleSidebar={toggleSidebar}
-                onSearch={() => {
-                    window.dispatchEvent(
-                        new CustomEvent("shape-command-palette", {
-                            detail: { placeholder: "Search…" },
-                        }),
-                    );
-                }}
-            />
-            {sidebarOpen ? null : (
-                <SidebarPeek shown={sidebarFlyout} onEnter={openSidebarFlyout} onLeave={closeSidebarFlyout} />
-            )}
-
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-sidebar">
-                <AgentChrome
-                    rightOpen={rightExpanded}
-                    onToggleRight={toggleWorkspace}
-                    canToggleRight={Boolean(project_path) && !overlayOpen}
-                    showRightToggle={codeWorkspace && !overlayOpen}
-                    padWindowControls
-                    sidebarOpen={sidebarOpen}
-                    onToggleSidebar={toggleSidebar}
-                    onSidebarHoverStart={openSidebarFlyout}
-                    onSidebarHoverEnd={closeSidebarFlyout}
-                />
-                <div className="relative m-1.5 mt-0 flex min-h-0 min-w-0 flex-1 overflow-hidden squircle-2xl border border-border-subtle bg-panel">
-                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+            <ChatChromeTabs />
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-surface-3">
+                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel">
+                    {chatSearch && codeWorkspace ? (
+                        <>
+                            <button
+                                type="button"
+                                aria-label="Close chat search"
+                                className="absolute inset-0 z-30 cursor-default"
+                                onClick={() => setChatSearch(false)}
+                            />
+                            <div className="absolute inset-x-3 top-2 z-40">
+                                <ChatSearch onClose={() => setChatSearch(false)} />
+                            </div>
+                        </>
+                    ) : null}
                     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                            {overlay ? (
-                                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                                    <AgentOverlayView
-                                        overlay={overlay}
-                                        onClose={() => setOverlay(null)}
-                                        navPortalTarget={navSlot}
-                                        sidebarExpanded={sidebarOpen}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                                    <Chat className="bg-transparent" />
-                                </div>
-                            )}
-                            <div className="hidden">{children}</div>
-                            {codeWorkspace && project_path ? <TerminalDock /> : null}
+                        {overlay ? (
+                            <AgentOverlayView
+                                overlay={overlay}
+                                onClose={() => setOverlay(null)}
+                                navPortalTarget={null}
+                                sidebarExpanded
+                            />
+                        ) : (
+                            <Chat className="bg-transparent" />
+                        )}
+                        <div className="hidden">{children}</div>
+                        {codeWorkspace && project_path ? <TerminalDock /> : null}
                     </div>
                 </div>
                 {showWorkspace && project_path ? (
@@ -592,45 +485,36 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                 document.body.style.userSelect = "none";
                             }}
                         >
-                            <div className="absolute inset-y-3 -left-1.5 w-3 cursor-col-resize" />
+                            <div className="absolute inset-y-0 -left-1.5 w-3 cursor-col-resize" />
                         </div>
                         <div
-                            style={{
-                                width: rightExpanded ? workspaceWidth + 12 : 0,
-                                flex: "0 0 auto",
-                            }}
+                            style={{ width: rightExpanded ? workspaceWidth : 0 }}
                             className={cn(
-                                "h-full min-w-0 overflow-hidden",
-                                rightExpanded ? "py-2 pr-2" : "pointer-events-none p-0",
-                                !isResizing &&
-                                    "transition-[width] duration-200 ease-[var(--ease-out)]",
+                                "h-full min-h-0 min-w-0 overflow-hidden border-l border-border-subtle bg-sidebar rounded-l-xl",
+                                !rightExpanded && "pointer-events-none border-l-transparent",
+                                !isResizing && "transition-[width] duration-200 ease-[var(--ease-out)]",
                             )}
                             aria-hidden={!rightExpanded}
                         >
                             {rightExpanded ? (
-                                <div
-                                    style={{ width: workspaceWidth }}
-                                    className="relative flex h-full overflow-hidden rounded-xl bg-sidebar border border-border-subtle"
-                                >
-                                    <AgentWorkspace
-                                        projectPath={project_path}
-                                        expanded
-                                        onExpand={() => persistWorkspace(true)}
-                                    />
-                                </div>
+                                <AgentWorkspace
+                                    projectPath={project_path}
+                                    expanded
+                                    onExpand={() => persistWorkspace(true)}
+                                />
                             ) : null}
                         </div>
                     </>
                 ) : null}
-                </div>
             </div>
             <WindowControls
                 isMaximized={isMaximized}
                 onMinimize={minimize}
                 onToggleMaximize={() => void toggleMaximize()}
                 onClose={close}
-                surface="sidebar"
+                surface="panel"
                 spacer={false}
+                bare
             />
         </div>
     );

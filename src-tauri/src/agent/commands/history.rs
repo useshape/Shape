@@ -5,7 +5,7 @@ use crate::core::error::AppError;
 use super::super::models::{AgentState, ChatMessage, Conversation};
 use super::logging;
 
-/// Sentinel store for Chat / Cowork / GTM conversations (not tied to a coding folder).
+/// Sentinel store for Chat / Cowork conversations (not tied to a coding folder).
 pub const TALK_STORE: &str = "__shape_talk__";
 
 pub fn now_f64() -> f64 {
@@ -17,6 +17,27 @@ pub fn now_f64() -> f64 {
 
 pub fn is_talk_store(path: &str) -> bool {
     normalize_project_path(path) == TALK_STORE
+}
+
+/// Per-conversation folder for Chat files and shell. Outside any open code project.
+pub fn chat_work_dir(conversation_id: &str) -> String {
+    let id: String = conversation_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(80)
+        .collect();
+    let id = if id.is_empty() { "chat".to_string() } else { id };
+    let root = dirs::data_local_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("Shape")
+        .join("chat-work")
+        .join(id);
+    let _ = std::fs::create_dir_all(&root);
+    root.to_string_lossy().to_string()
+}
+
+pub fn is_chat_work_dir(path: &str) -> bool {
+    path.replace('\\', "/").to_ascii_lowercase().contains("/shape/chat-work/")
 }
 
 pub fn conversation_store(talk: bool, project: Option<&str>) -> String {
@@ -209,14 +230,13 @@ fn save_current_conversation_inner(
         return Ok(());
     }
     let history = state.history_for_persistence()?;
-    if history.is_empty() {
-        return Ok(());
-    }
-
     let title = state.title.lock()?.clone();
     let has_assistant_response = history.iter().any(|m| m.role == "assistant");
-    // Persist as soon as we have a title (even user-only) so a mid-generation switch
-    // does not drop the chat. Still skip completely untitled empty drafts.
+    // Persist as soon as we have a title so a new worker/chat is openable
+    // before the first message. Skip untitled empty drafts.
+    if history.is_empty() && title.is_none() {
+        return Ok(());
+    }
     if title.is_none() && !has_assistant_response {
         return Ok(());
     }

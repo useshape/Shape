@@ -28,5 +28,7 @@ describe("settings merge", () => {
         expect(settings.ai.defaultModel).toBe("auto");
         expect(settings.ai.subagentModels).toEqual(["auto"]);
         expect(settings.ai.subagentDefaultModel).toBe("auto");
+        expect(settings.ai.computerUse).toBe(true);
+        expect(settings.ai.shellAutomation).toBe(true);
     });
 });

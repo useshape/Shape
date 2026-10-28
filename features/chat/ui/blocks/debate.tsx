@@ -1,5 +1,6 @@
 "use client";
 
+import { Orbit } from "loading-dev";
 import React, { useMemo, useState } from "react";
 import { ChatMarkdown } from "../md/view";
 import { Collapse } from "./collapse";
@@ -16,7 +17,7 @@ function formatReviewContent(raw: string): string | null {
         .trim();
     if (!trimmed) return null;
 
-    if (/^(new chat|untitled)$/i.test(trimmed) || trimmed.length < 24) {
+    if (/^(new chat|untitled)$/i.test(trimmed)) {
         return null;
     }
 
@@ -68,13 +69,41 @@ function formatReviewContent(raw: string): string | null {
 export function ReviewDebatePanel({
     content,
     model,
+    status,
 }: {
     content: string;
     model?: string;
+    status?: string;
 }) {
     const [open, setOpen] = useState(false);
     const display = useMemo(() => formatReviewContent(content), [content]);
     const iconModel = model && !isAutoModelId(model) ? model : "auto";
+    const state = (status || "done").toLowerCase();
+
+    if (state === "running") {
+        return (
+            <div className="my-0.5 flex h-5 items-center gap-1.5 text-sm text-text-muted">
+                <Orbit size={14} className="shrink-0" />
+                <span>Reviewing changes</span>
+            </div>
+        );
+    }
+
+    if (state === "cancelled") {
+        return (
+            <div className="my-0.5">
+                <ActionLine action="Review cancelled" detail={display ?? undefined} />
+            </div>
+        );
+    }
+
+    if (state === "error" || state === "failed") {
+        return (
+            <div className="my-0.5">
+                <ActionLine action="Review failed" detail={display ?? "The review did not finish"} />
+            </div>
+        );
+    }
 
     if (!display?.trim()) return null;
 

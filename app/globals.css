@@ -3,6 +3,16 @@
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "./transitions.css";
 
+html,
+body,
+#shape-workbench {
+  background: #1e1e1e49;
+}
+
+.shape-window-titlebar {
+  background: transparent;
+}
+
 :root {
   color-scheme: dark;
 
@@ -11,19 +21,19 @@
   --surface-1: #181818;
   --surface-2: #1b1b1b;
   --surface-3: #171717;
-  --surface-4: #232323;
+  --surface-4: #2F2F2F;
   --settings-card: #2a2a2a;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
   --chrome: #1E1E1E;
-  --sidebar: #1a1a1a;
+  --sidebar: #0E0E0E;
   --editor: #191919;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #101010;
+  --panel: #1E1E1E;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.096);
@@ -147,7 +157,7 @@
   --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --type-brand: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --type-weight-normal: 500;
+  --type-weight-normal: 400;
   --type-weight-medium: 600;
   --type-weight-semibold: 700;
   --font-weight: var(--type-weight-normal);
@@ -599,7 +609,7 @@ html {
 }
 
 body {
-  background: var(--background);
+  background: transparent;
   color: var(--foreground);
   font-family: var(--font-ui);
   font-size: var(--text-base);
@@ -1163,7 +1173,6 @@ body[data-resizing] .xterm {
   height: 0 !important;
 }
 
-/* Native window chrome — HWND is opaque and Windows owns snap/maximize rounding. */
 #shape-workbench {
   overflow: hidden;
 }

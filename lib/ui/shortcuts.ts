@@ -255,6 +255,20 @@ export function eventToKeyChord(e: KeyboardEvent): string | null {
     return eventModifierPrefix(e) + keyName;
 }
 
+/** True when a binding's `when` clause matches the focused element. */
+export function bindingApplies(when: string, target: EventTarget | null): boolean {
+    const el = target instanceof HTMLElement ? target : null;
+    const parts = (when || "global").split("||").map((part) => part.trim()).filter(Boolean);
+    const kinds = new Set<string>(["global"]);
+    if (el?.closest("[data-terminal-root='true']")) kinds.add("terminalFocus");
+    if (el?.closest(".monaco-editor, [data-editor-root='true']")) {
+        kinds.add("editorFocus");
+        kinds.add("editorTextFocus");
+    }
+    if (el?.closest("[data-chat-composer='true']")) kinds.add("chatFocus");
+    return parts.some((part) => kinds.has(part));
+}
+
 /**
  * React hook that registers global keyboard shortcuts from the built-in config.
  */
@@ -281,7 +295,11 @@ export function useKeyboardShortcuts() {
                 target.tagName === "INPUT"
                 || target.tagName === "TEXTAREA"
                 || target.isContentEditable;
+            const inEditor = !!target.closest(".monaco-editor, [data-editor-root='true']");
+            const inTerminal = !!target.closest("[data-terminal-root='true']");
+            if (isInput && !inEditor && !inTerminal && !e.ctrlKey && !e.metaKey && !e.altKey) return;
 
+            const active = bindingsRef.current.filter((binding) => bindingApplies(binding.when, target) && binding.key);
             const currentPartial = eventToKeyChord(e);
             if (!currentPartial) return;
 
@@ -296,10 +314,10 @@ export function useKeyboardShortcuts() {
             // Prefer chord prefixes over a shorter exact match (e.g. Ctrl+K vs Ctrl+K S).
             const isChordRoot =
                 !chordRef.current
-                && bindingsRef.current.some((k) => k.key.startsWith(currentPartial + " "));
+                && active.some((k) => k.key.startsWith(currentPartial + " "));
             if (isChordRoot) {
                 e.preventDefault();
-                const exact = bindingsRef.current.find((k) => k.key === currentPartial);
+                const exact = active.find((k) => k.key === currentPartial);
                 chordRef.current = currentPartial;
                 if (chordTimerRef.current) clearTimeout(chordTimerRef.current);
                 chordTimerRef.current = setTimeout(() => {
@@ -314,7 +332,7 @@ export function useKeyboardShortcuts() {
                 return;
             }
 
-            const binding = bindingsRef.current.find((k) => k.key === fullShortcut);
+            const binding = active.find((k) => k.key === fullShortcut);
 
             if (binding) {
                 const terminalRoot = target.closest('[data-terminal-root="true"]');

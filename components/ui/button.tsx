@@ -52,7 +52,7 @@ const sizeClasses: Record<ButtonSize, string> = {
     sm: "h-7.5 min-h-7.5 px-3 text-sm squircle-2xl",
     md: "h-9 min-h-8 px-3.5 text-sm squircle-2xl",
     lg: "h-10 min-h-10 px-4 text-base squircle-3xl",
-    icon: "size-9 min-h-9 min-w-9 shrink-0 overflow-visible p-0 squircle-4xl",
+    icon: "size-9 min-h-9 min-w-9 shrink-0 overflow-visible p-2 rounded-full",
 };
 
 const selectedClasses =

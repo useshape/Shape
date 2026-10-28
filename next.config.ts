@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   experimental: {
+    agentUpgrade: "security",
     optimizePackageImports: ["@tauri-apps/api", "react-syntax-highlighter"],
   },
   // Cut noisy full reloads when Cargo/target or runtime files change.

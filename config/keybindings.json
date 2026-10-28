@@ -321,6 +321,62 @@
             "key": "Ctrl+Shift+D",
             "when": "global",
             "category": "Agent"
+        },
+        {
+            "id": "view.primarySidebar",
+            "label": "Toggle Primary Sidebar",
+            "key": "Ctrl+B",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.secondarySidebar",
+            "label": "Toggle Secondary Sidebar",
+            "key": "Ctrl+Alt+B",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.graph",
+            "label": "Graph",
+            "key": "Ctrl+Alt+G",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "view.pullRequests",
+            "label": "Pull Requests",
+            "key": "Ctrl+Alt+R",
+            "when": "global",
+            "category": "View"
+        },
+        {
+            "id": "workspace.code",
+            "label": "Code Mode",
+            "key": "Ctrl+Alt+1",
+            "when": "global",
+            "category": "Agent"
+        },
+        {
+            "id": "workspace.chat",
+            "label": "Chat Mode",
+            "key": "Ctrl+Alt+2",
+            "when": "global",
+            "category": "Agent"
+        },
+        {
+            "id": "agent.previousConversation",
+            "label": "Previous Conversation",
+            "key": "Ctrl+PageUp",
+            "when": "global",
+            "category": "Agent"
+        },
+        {
+            "id": "agent.nextConversation",
+            "label": "Next Conversation",
+            "key": "Ctrl+PageDown",
+            "when": "global",
+            "category": "Agent"
         }
     ]
 }

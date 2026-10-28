@@ -85,6 +85,7 @@ export function WindowControlsSpacer() {
         <div
             className="h-full shrink-0"
             style={{ width: CONTROLS_WIDTH }}
+            data-tauri-drag-region
             aria-hidden
         />
     );
@@ -98,6 +99,7 @@ export function WindowControls({
     surface = "panel",
     spacer = true,
     floating = true,
+    bare = false,
 }: {
     isMaximized: boolean;
     onMinimize: () => void;
@@ -107,6 +109,8 @@ export function WindowControls({
     surface?: "chrome" | "panel" | "sidebar";
     spacer?: boolean;
     floating?: boolean;
+    /** Sit on a painted strip with no solid backing. */
+    bare?: boolean;
 }) {
     const [host, setHost] = useState<HTMLElement | null>(null);
     useEffect(() => {
@@ -129,8 +133,8 @@ export function WindowControls({
     const floatingEl = floating ? (
         <div
             className={cn(
-                "titlebar-window-controls pointer-events-auto fixed top-0 right-0 isolate z-titlebar-controls flex h-titlebar shrink-0 items-stretch",
-                bg,
+                "titlebar-window-controls pointer-events-auto fixed top-0 right-0 isolate z-titlebar-controls flex shrink-0 items-stretch",
+                bare ? "h-titlebar bg-transparent" : cn("h-titlebar", bg),
             )}
             data-no-drag
         >

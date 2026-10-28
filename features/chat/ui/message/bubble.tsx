@@ -1,7 +1,7 @@
 "use client";
 
+import { Slide } from "loading-dev";
 import { cn } from "@/lib/utils";
-import { FrostMark } from "@/components/ui/frost-mark";
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { formatMessageModelLabel, isAutoModelId } from "@/lib/chat/usage-display";
 
@@ -16,7 +16,7 @@ export function UserMessageCard({
     return (
         <div
             className={cn(
-                "relative w-fit max-w-[min(100%,32rem)] squircle-2xl border border-border-subtle bg-surface-3 p-3 chat-text text-text-primary",
+                "relative w-fit max-w-[min(100%,32rem)] rounded-[1.15rem] bg-surface-4 px-3.5 py-2 chat-text text-text-primary",
                 className,
             )}
         >
@@ -25,10 +25,10 @@ export function UserMessageCard({
     );
 }
 
-/** Frost face while the assistant is typing, with the chosen model in the corner. */
+/** Loading arc while the assistant is typing, with the chosen model in the corner. */
 export function AssistantMark({
     model,
-    size = 35,
+    size = 28,
     className,
 }: {
     model?: string;
@@ -38,14 +38,10 @@ export function AssistantMark({
     const showModel = !!model && !isAutoModelId(model);
     const badge = Math.max(10, Math.round(size * 0.42));
     return (
-        <span className={cn("relative inline-flex shrink-0", className)} style={{ width: size, height: size }} role="status" aria-label="Typing">
-            <FrostMark size={size} live />
+        <span className={cn("relative inline-flex shrink-0 text-text-muted", className)} style={{ width: size, height: size }} role="status" aria-label="Typing">
+            <Slide size={Math.min(size, 14)} />
             {showModel ? (
                 <span className="absolute -right-1 -bottom-1" style={{ width: badge, height: badge }}>
-                    <span
-                        className="absolute -inset-[3px] animate-spin rounded-full border-[1.5px] border-transparent border-t-accent border-r-accent/40"
-                        aria-hidden
-                    />
                     <span className="relative flex size-full items-center justify-center rounded-full bg-panel">
                         {providerIcon(model, Math.max(8, badge - 4))}
                     </span>
@@ -55,14 +51,14 @@ export function AssistantMark({
     );
 }
 
-/** Circular spinner while the assistant is typing. */
+/** Spinner while the assistant is typing. */
 export function TypingDots({ className, model }: { className?: string; model?: string }) {
-    return <AssistantMark model={model} size={56} className={className} />;
+    return <AssistantMark model={model} size={28} className={className} />;
 }
 
 /** Compact spinner for sidebar / chat tabs. */
 export function WorkingDots({ className }: { className?: string }) {
-    return <FrostMark size={22} live className={className} label="" />;
+    return <Slide size={12} className={className} />;
 }
 
 /** Model mark. Auto uses the frost face. */

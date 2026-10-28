@@ -1,4 +1,21 @@
+function upsertReviewDebate(content: string, chunk: string): string | null {
+  const start = chunk.indexOf("<review_debate");
+  if (start < 0) return null;
+  const close = "</review_debate>";
+  const end = chunk.indexOf(close, start);
+  if (end < 0) return null;
+  const block = chunk.slice(start, end + close.length);
+  const existing = content.lastIndexOf("<review_debate");
+  if (existing < 0) return content + chunk;
+  const existingEnd = content.indexOf(close, existing);
+  if (existingEnd < 0) return content.slice(0, existing) + block;
+  return content.slice(0, existing) + block + content.slice(existingEnd + close.length);
+}
+
 export function upsertTaggedBlockInContent(content: string, chunk: string): string {
+  const review = upsertReviewDebate(content, chunk);
+  if (review !== null) return review;
+
   const todosStart = chunk.indexOf("<todos");
   if (todosStart >= 0) {
     const todosEnd = chunk.indexOf("</todos>");
@@ -95,21 +112,45 @@ export function upsertTaggedBlockInContent(content: string, chunk: string): stri
     }
   }
 
-  for (const tag of ["browse_session", "generated_svg", "generated_image", "generated_audio"] as const) {
+  const browseOpen = "<browse_session";
+  const browseClose = "</browse_session>";
+  const browseStart = chunk.indexOf(browseOpen);
+  const browseEnd = chunk.indexOf(browseClose);
+  if (browseStart >= 0 && browseEnd >= 0) {
+    const block = chunk.slice(browseStart, browseEnd + browseClose.length);
+    const existing = content.lastIndexOf(browseOpen);
+    if (existing >= 0) {
+      const existingClose = content.indexOf(browseClose, existing);
+      const existingEnd = existingClose >= 0 ? existingClose + browseClose.length : content.length;
+      return (
+        content.slice(0, existing) +
+        block +
+        content.slice(existingEnd) +
+        chunk.slice(0, browseStart) +
+        chunk.slice(browseEnd + browseClose.length)
+      );
+    }
+  }
+
+  for (const tag of ["generated_svg", "generated_image", "generated_audio"] as const) {
     const open = `<${tag}`;
     const close = `</${tag}>`;
     const start = chunk.indexOf(open);
     const endRel = chunk.indexOf(close);
     if (start < 0 || endRel < 0) continue;
     const block = chunk.slice(start, endRel + close.length);
-    const existing = content.lastIndexOf(open);
-    if (existing < 0) continue;
-    const existingClose = content.indexOf(close, existing);
-    const existingEnd = existingClose >= 0 ? existingClose + close.length : content.length;
+    const mediaId = block.match(/\bmedia_id="([^"]*)"/)?.[1];
+    if (!mediaId) continue;
+    const marker = `media_id="${mediaId}"`;
+    const markerPos = content.lastIndexOf(marker);
+    if (markerPos < 0) continue;
+    const existing = content.lastIndexOf(open, markerPos);
+    const existingClose = content.indexOf(close, markerPos);
+    if (existing < 0 || existingClose < 0) continue;
     return (
       content.slice(0, existing) +
       block +
-      content.slice(existingEnd) +
+      content.slice(existingClose + close.length) +
       chunk.slice(0, start) +
       chunk.slice(endRel + close.length)
     );

@@ -1,21 +1,12 @@
 "use client";
 
-import { PanelBottom20Filled } from "@fluentui/react-icons/headless/svg/panel-bottom";
+import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
+import { ArrowRight20Regular } from "@fluentui/react-icons/headless/svg/arrow-right";
+import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { People20Filled } from "@fluentui/react-icons/headless/svg/people";
-
-
-
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
-
-
 import { Tooltip } from "@/components/ui/tooltip";
-import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
-import { getRepoName } from "@/lib/workspace/repo-history";
-import { useProjectState } from "@/lib/backend";
-import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
-import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
 import { useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import {
     DropdownMenu,
@@ -30,7 +21,26 @@ import {
     subscribeSubagents,
     type SubagentCard,
 } from "@/features/agent/subagents/store";
+import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
+import {
+    chatNavBack,
+    chatNavForward,
+    ensureChatNav,
+    getChatNav,
+    subscribeChatNav,
+} from "@/features/chat/lib/chat-nav";
 import { cn } from "@/lib/utils";
+import { ArrowLeft20Filled, ArrowRight20Filled, Search20Regular, Settings20Regular } from "@fluentui/react-icons";
+import { useProjectState } from "@/lib/backend";
+import { TerminalToggle } from "@/features/agent/chrome";
+
+function Cluster({ children }: { children: ReactNode }) {
+    return (
+        <div className="inline-flex items-center p-1.5">
+            {children}
+        </div>
+    );
+}
 
 function isGenericChatTitle(title: string | null | undefined): boolean {
     const value = (title || "").trim().toLowerCase();
@@ -76,9 +86,9 @@ function shortModelName(model?: string): string {
     return leaf.replace(/[-_]+/g, " ");
 }
 
-function ModelMark({ model, pin = false }: { model?: string; pin?: boolean }) {
+function ModelMark({ model }: { model?: string }) {
     return (
-        <span className={cn("flex shrink-0 items-center gap-1 text-xs text-text-muted", pin && "ml-auto")}>
+        <span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-text-muted">
             {providerIcon(model || "auto", 12)}
             <span className="max-w-[7rem] truncate">{shortModelName(model)}</span>
         </span>
@@ -99,12 +109,36 @@ function chatSubagents(parentId: string | null, extra: SubagentCard[]): Subagent
     return [...map.values()];
 }
 
+function NavButton({
+    label,
+    disabled,
+    onClick,
+    children,
+}: {
+    label: string;
+    disabled?: boolean;
+    onClick: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <Tooltip content={label}>
+            <button
+                type="button"
+                aria-label={label}
+                disabled={disabled}
+                onClick={onClick}
+                className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary disabled:pointer-events-none disabled:text-text-disabled"
+            >
+                {children}
+            </button>
+        </Tooltip>
+    );
+}
+
 export function ChatTitlebar({
     title,
     conversationId,
-    onSelect,
     subagentTitle,
-    subagentModel,
     onCloseSubagent,
     extractedSubagents = [],
 }: {
@@ -118,140 +152,139 @@ export function ChatTitlebar({
     onCloseSubagent?: () => void;
     extractedSubagents?: SubagentCard[];
 }) {
-    const { project_path } = useProjectState();
-    const repo = project_path ? getRepoName(project_path) : null;
-    const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
     const workspaceModeId = useWorkspaceMode();
-    const [terminalOpen, setTerminalOpen] = useState(false);
+    const code = workspaceModeId === "Code";
+    const { project_path } = useProjectState();
+    const project = project_path?.split(/[/\\]/).filter(Boolean).pop() || "shape";
     useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
+    const nav = useSyncExternalStore(subscribeChatNav, getChatNav, getChatNav);
     const subagents = chatSubagents(conversationId, extractedSubagents);
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(title);
+    const canRename = Boolean(conversationId && conversationId !== NEW_CHAT_TAB_ID);
 
     useEffect(() => {
-        const find = () => {
-            const el = document.getElementById(AGENT_CHROME_ACTIONS_SLOT);
-            setActionsSlot(el && el.isConnected ? el : null);
-        };
-        find();
-        const timer = window.setInterval(find, 200);
-        const stop = window.setTimeout(() => window.clearInterval(timer), 4000);
-        return () => {
-            window.clearInterval(timer);
-            window.clearTimeout(stop);
-        };
+        ensureChatNav();
     }, []);
 
     useEffect(() => {
-        try {
-            setTerminalOpen(localStorage.getItem("shape-agent-terminal-open") === "true");
-        } catch {
-            /* ignore */
-        }
-        const onOpen = (e: Event) => {
-            const open = (e as CustomEvent<{ open?: boolean }>).detail?.open;
-            if (typeof open === "boolean") setTerminalOpen(open);
-        };
-        window.addEventListener("shape-terminal-open", onOpen as EventListener);
-        return () => window.removeEventListener("shape-terminal-open", onOpen as EventListener);
-    }, []);
+        if (!editing) setDraft(title);
+    }, [title, editing]);
 
-    const toggleTerminal = () => {
+    const commitRename = () => {
+        const next = draft.trim();
+        setEditing(false);
+        if (!canRename || !next || next === title || !conversationId) return;
         window.dispatchEvent(
-            new CustomEvent("shape-layout-toggle", {
-                detail: { id: "terminal", value: !terminalOpen },
-            }),
+            new CustomEvent("shape-chat-rename", { detail: { id: conversationId, title: next } }),
         );
     };
 
-    const actions = (
-        <div className="flex items-center gap-2">
-            {workspaceModeId === "Code" && project_path ? <WorkspaceBranchSwitch /> : null}
-            {workspaceModeId === "Code" ? (
-            <Tooltip content={terminalOpen ? "Hide terminal" : "Show terminal"}>
+    if (!code) {
+        return (
+            <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border-subtle px-2">
+                <span className="truncate text-sm text-text-secondary">{workspaceModeId}</span>
+                {subagentTitle ? (
+                    <span className="ml-2 truncate text-sm text-text-muted">{subagentTitle}</span>
+                ) : null}
+            </div>
+        );
+    }
+
+    const name = subagents.length > 0 ? (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
                 <button
                     type="button"
-                    aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}
-                    aria-pressed={terminalOpen}
-                    onClick={toggleTerminal}
-                    className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary data-[active=true]:text-text-primary"
-                    data-active={terminalOpen}
+                    className="min-w-0 truncate text-left text-sm text-text-primary hover:text-text-secondary"
                 >
-                    <Icon icon={PanelBottom20Filled} />
+                    {title}
                 </button>
-            </Tooltip>
-            ) : null}
-        </div>
-    );
-
-    const chatCrumb = subagents.length > 0 ? (
-        <li className="flex min-w-0 items-center">
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <button
-                        type="button"
-                        className={cn(
-                            "flex h-7 min-w-0 max-w-[220px] items-center gap-0.5 rounded-md px-1 py-0 text-left text-sm leading-none whitespace-nowrap",
-                            subagentTitle
-                                ? "text-text-tertiary hover:bg-background-primary-hover hover:text-text-secondary"
-                                : "text-text-secondary",
-                        )}
-                    >
-                        <span className="min-w-0 truncate">{title}</span>
-                    </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-52">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-52">
+                <DropdownMenuItem onClick={() => onCloseSubagent?.()}>{title}</DropdownMenuItem>
+                {subagents.map((card) => (
                     <DropdownMenuItem
-                        onClick={() => onCloseSubagent?.()}
+                        key={card.id}
+                        onClick={() => openSubagent(card.id)}
+                        className="gap-2"
                     >
-                        {title}
+                        <Icon icon={People20Filled} className="text-text-muted" />
+                        <span className="min-w-0 flex-1 truncate">{card.title}</span>
+                        <ModelMark model={card.model} />
                     </DropdownMenuItem>
-                    {subagents.map((card) => (
-                        <DropdownMenuItem
-                            key={card.id}
-                            onClick={() => openSubagent(card.id)}
-                            className="gap-2"
-                        >
-                            <Icon icon={People20Filled} className="text-text-muted" />
-                            <span className="min-w-0 flex-1 truncate">{card.title}</span>
-                            <ModelMark model={card.model} pin />
-                        </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </li>
-    ) : subagentTitle ? (
-        <BreadcrumbItem onClick={() => onCloseSubagent?.()} className="h-7 min-w-0 truncate py-0 text-sm leading-none">
-            {title}
-        </BreadcrumbItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
     ) : (
-        <BreadcrumbItem current className="h-7 min-w-0 truncate py-0 text-sm leading-none">
-            {title}
-        </BreadcrumbItem>
+        <span className="min-w-0 truncate text-sm text-text-primary">{title}</span>
     );
 
     return (
-        <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden leading-none">
-            <Breadcrumb className="h-7 w-auto min-w-0 max-w-full items-center overflow-hidden leading-none" aria-label="Project">
-                {workspaceModeId === "Code" && repo ? (
-                    <BreadcrumbItem
-                        onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
-                        className="h-7 py-0 text-sm leading-none"
-                    >
-                        {repo}
-                    </BreadcrumbItem>
-                ) : null}
-                {chatCrumb}
-                {subagentTitle ? (
-                    <BreadcrumbItem current className="h-7 min-w-0 max-w-[24rem] py-0 text-sm leading-none">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                            <Icon icon={People20Filled} className="shrink-0 text-text-muted" />
-                            <span className="min-w-0 truncate">{subagentTitle}</span>
-                            <ModelMark model={subagentModel || undefined} />
+        <div className="flex h-9 shrink-0 items-center gap-1 px-2 my-2">
+            <Cluster>
+                <NavButton label="Back" disabled={!nav.canBack} onClick={chatNavBack}>
+                    <Icon icon={ArrowLeft20Filled} className="icon-md" />
+                </NavButton>
+                <NavButton label="Forward" disabled={!nav.canForward} onClick={chatNavForward}>
+                    <Icon icon={ArrowRight20Filled} className="icon-md" />
+                </NavButton>
+            </Cluster>
+            {editing ? (
+                <input
+                    autoFocus
+                    value={draft}
+                    aria-label="Chat name"
+                    onChange={(event) => setDraft(event.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitRename();
+                        }
+                        if (event.key === "Escape") {
+                            event.preventDefault();
+                            setDraft(title);
+                            setEditing(false);
+                        }
+                    }}
+                    className="h-7 min-w-0 max-w-64 rounded-md bg-surface-2 px-2 text-sm text-text-primary outline-none"
+                />
+            ) : (
+                <Cluster>
+                    <div className="flex min-w-0 items-center gap-1.5 px-2 text-sm">
+                        <span className="shrink-0 truncate text-text-muted">{project}</span>
+                        <span className="shrink-0 text-text-muted"></span>
+                        <span
+                            className="min-w-0 truncate text-text-primary"
+                            onDoubleClick={() => {
+                                if (!canRename) return;
+                                setDraft(title);
+                                setEditing(true);
+                            }}
+                        >
+                            {subagentTitle ?? name}
                         </span>
-                    </BreadcrumbItem>
-                ) : null}
-            </Breadcrumb>
-            <div className="h-full min-w-4 flex-1" />
-            {actionsSlot && actionsSlot.isConnected ? createPortal(actions, actionsSlot) : null}
+                    </div>
+                </Cluster>
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+                <Cluster>
+                    <TerminalToggle />
+                    <NavButton
+                        label="Search"
+                        onClick={() => window.dispatchEvent(new Event("shape-open-chat-search"))}
+                    >
+                        <Icon icon={Search20Regular} className="icon-md" />
+                    </NavButton>
+                    <NavButton
+                        label="Settings"
+                        onClick={() => window.dispatchEvent(new Event("shape-open-settings"))}
+                    >
+                        <Icon icon={Settings20Regular} className="icon-md" />
+                    </NavButton>
+                </Cluster>
+            </div>
         </div>
     );
 }

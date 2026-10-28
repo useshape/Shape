@@ -685,7 +685,7 @@ export function CommitMenu({
             <Button
                 variant="outline"
                 size="sm"
-                className={cn(PILL, "text-text-primary h-9 bg-surface-4 p-4 text-md border-border-subtle border")}
+                className={cn(PILL, "text-text-primary h-9 bg-surface-4 p-4 text-md border-none")}
                 onClick={() => {
                     void commands.openUrlExternal(compareUrl);
                 }}

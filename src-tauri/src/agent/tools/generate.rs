@@ -97,10 +97,16 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         Err(e) => return fail_with_prompt(kind, &e, false, prompt, ""),
     };
     let count = if kind == "image" {
-        args.get("count")
+        let asked = asked_image_count(ctx);
+        let from_args = args
+            .get("count")
             .and_then(|v| v.as_u64())
-            .unwrap_or(1)
-            .clamp(1, 4) as usize
+            .map(|n| n.clamp(1, 4) as usize);
+        match from_args {
+            Some(n) if n > asked => asked,
+            Some(n) => n,
+            None => asked,
+        }
     } else {
         1
     };
@@ -132,6 +138,7 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
 
     let mut results = Vec::new();
     let mut total_credits = 0.0;
+    let mut ui_chunk = String::new();
     let mut i = 0;
     while i < count {
         let batch = (i..count.min(i + 2)).collect::<Vec<_>>();
@@ -195,11 +202,22 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
                         },
                     )
                     .await;
+                    let parent_attr = parent_id
+                        .as_ref()
+                        .map(|id| format!(" parent=\"{id}\""))
+                        .unwrap_or_default();
                     let id_attr = media_id
                         .as_ref()
-                        .map(|id| format!(" media_id=\"{id}\" model=\"{model}\" ordinal=\"{}\"", ordinal + 1))
+                        .map(|id| {
+                            format!(
+                                " media_id=\"{id}\" model=\"{model}\" ordinal=\"{}\"{parent_attr}",
+                                ordinal + 1
+                            )
+                        })
                         .unwrap_or_default();
-                    ctx.emit_ui_token(&format!("\n<{tag} credits=\"{credits:.2}\"{id_attr}>{url}</{tag}>\n"));
+                    ui_chunk.push_str(&format!(
+                        "\n<{tag} credits=\"{credits:.2}\"{id_attr}>{url}</{tag}>\n"
+                    ));
                     results.push((url, media_id, credits, ordinal + 1));
                 }
                 Err(e) => return fail_with_prompt(kind, &e, !results.is_empty(), prompt, &model),
@@ -225,9 +243,44 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
     );
     ToolOutcome {
         tool_result: result,
-        ui_chunk: String::new(),
+        ui_chunk,
         side_effect: None,
     }
+}
+
+fn asked_image_count(ctx: &ToolCtx<'_>) -> usize {
+    let task = ctx
+        .agent_state
+        .history
+        .lock()
+        .ok()
+        .and_then(|history| {
+            history
+                .iter()
+                .rev()
+                .find(|message| message.role == "user")
+                .map(|message| message.content.to_ascii_lowercase())
+        })
+        .unwrap_or_default();
+    if task.contains("four")
+        || task.contains("4 image")
+        || task.contains("4 picture")
+        || task.contains("4 photo")
+        || task.contains("4 option")
+    {
+        return 4;
+    }
+    if task.contains("three") || task.contains("3 image") || task.contains("3 picture") {
+        return 3;
+    }
+    if task.contains("two ")
+        || task.contains("a couple")
+        || task.contains("2 image")
+        || task.contains("2 picture")
+    {
+        return 2;
+    }
+    1
 }
 
 async fn stash_generated(

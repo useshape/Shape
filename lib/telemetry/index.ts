@@ -26,11 +26,18 @@ async function telemetryFetch(path: string, init: RequestInit = {}) {
   });
 }
 
+let lastTelemetrySync: boolean | null = null;
+
 async function syncTelemetryOptIn(enabled: boolean) {
   const token = getShapeAccessToken();
-  if (!token) return;
+  if (!token) {
+    lastTelemetrySync = null;
+    return;
+  }
+  if (lastTelemetrySync === enabled) return;
+  lastTelemetrySync = enabled;
   try {
-    await fetch(`${SHAPE_API_BASE}/api/account/telemetry`, {
+    const res = await fetch(`${SHAPE_API_BASE}/api/account/telemetry`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -38,8 +45,9 @@ async function syncTelemetryOptIn(enabled: boolean) {
       },
       body: JSON.stringify({ enabled }),
     });
+    if (!res.ok) lastTelemetrySync = null;
   } catch {
-    /* best-effort */
+    lastTelemetrySync = null;
   }
 }
 

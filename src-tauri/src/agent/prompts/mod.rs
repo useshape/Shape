@@ -1,8 +1,7 @@
 pub const SYSTEM_MD: &str = include_str!("SYSTEM.MD");
 pub const CHAT_MD: &str = include_str!("CHAT.MD");
 pub const TALK_MD: &str = include_str!("TALK.MD");
-pub const COWORK_MD: &str = include_str!("COWORK.MD");
-pub const GTM_MD: &str = include_str!("GTM.MD");
+pub const TALK_VOICE_MD: &str = include_str!("TALK_VOICE.MD");
 pub const PLAN_MD: &str = include_str!("PLAN.MD");
 pub const REVIEW_MD: &str = include_str!("REVIEW.MD");
 pub const COMMIT_MD: &str = include_str!("COMMIT.MD");

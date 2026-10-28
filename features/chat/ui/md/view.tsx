@@ -90,12 +90,10 @@ function revealText(text: string, reveal: RevealState | null): React.ReactNode {
         const id = `w${reveal.seq.n++}`;
         const fresh = !reveal.seen.has(id);
         reveal.seen.add(id);
-        const delay = fresh ? Math.min(reveal.seq.fresh++, 10) * 36 : 0;
         return (
             <span
                 key={`${id}-${index}`}
                 className={fresh ? "chat-reveal-word" : undefined}
-                style={fresh ? { animationDelay: `${delay}ms` } : undefined}
             >
                 {withCites(part)}
             </span>
@@ -146,15 +144,30 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
     );
 }
 
-function createMarkdownComponents(options?: { nested?: boolean; reveal?: RevealState | null }) {
+function createMarkdownComponents(options?: { nested?: boolean; reveal?: RevealState | null; plain?: boolean }) {
     const nested = options?.nested;
     const reveal = options?.reveal ?? null;
+    const plain = options?.plain;
     const linked = (children?: React.ReactNode) => linkifyChildren(children, reveal);
 
     return {
-        pre: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+        ...(plain
+            ? {
+                table: () => null,
+                thead: () => null,
+                tbody: () => null,
+                tr: () => null,
+                th: () => null,
+                td: () => null,
+                h1: ({ children }: { children?: React.ReactNode }) => <p>{linked(children)}</p>,
+                h2: ({ children }: { children?: React.ReactNode }) => <p>{linked(children)}</p>,
+                h3: ({ children }: { children?: React.ReactNode }) => <p>{linked(children)}</p>,
+            }
+            : {}),
+        pre: ({ children }: { children?: React.ReactNode }) => (plain ? <p className="whitespace-pre-wrap">{children}</p> : <>{children}</>),
         code(props: { className?: string; children?: React.ReactNode }) {
             const { className, children, ...rest } = props;
+            if (plain) return <span>{children}</span>;
             const match = /language-([a-z0-9-]+)/i.exec(className || "");
             const codeContent = String(children).replace(/\n$/, "");
             if (codeContent === "undefined") return null;
@@ -300,23 +313,21 @@ function createMarkdownComponents(options?: { nested?: boolean; reveal?: RevealS
     };
 }
 
-/** Fast catch-up typewriter over the raw markdown string (survives re-parses). */
+/**
+ * Fast catch-up typewriter over the raw markdown string.
+ * The cursor only moves forward. When this block is no longer the live tail
+ * (a tool run started after it, or generation finished), show the whole string
+ * immediately so a mid-word slice cannot stick around until the turn ends.
+ */
 function useRevealText(full: string, live: boolean): string {
     const len = full.length;
     const [shown, setShown] = useState(() => (live ? Math.min(24, len) : len));
     const shownRef = useRef(shown);
     shownRef.current = shown;
-    const wasLive = useRef(live);
-    if (live) wasLive.current = true;
 
     useEffect(() => {
-        // Finished message that never streamed in this mount — show fully.
-        if (!live && !wasLive.current) {
-            setShown(len);
-            return;
-        }
-        if (shownRef.current > len) {
-            setShown(len);
+        if (!live || shownRef.current > len) {
+            if (shownRef.current !== len) setShown(len);
             return;
         }
         if (shownRef.current >= len) return;
@@ -329,12 +340,15 @@ function useRevealText(full: string, live: boolean): string {
             const dt = Math.min(32, now - last);
             last = now;
             const behind = len - cur;
-            // Sprint on dumps; cruise near the tip. Stay under ~0.5s for big chunks.
+            if (behind > 1600) {
+                setShown(len);
+                return;
+            }
             let cps: number;
-            if (behind > 800) cps = 1400;
-            else if (behind > 300) cps = 900;
-            else if (behind > 80) cps = 480;
-            else cps = live ? 180 : 320;
+            if (behind > 800) cps = 2200;
+            else if (behind > 300) cps = 1200;
+            else if (behind > 80) cps = 640;
+            else cps = 240;
             const step = Math.max(1, Math.ceil((cps * dt) / 1000));
             const next = Math.min(len, cur + step);
             setShown(next);
@@ -342,9 +356,9 @@ function useRevealText(full: string, live: boolean): string {
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
-    }, [len, live, shown < len]);
+    }, [len, live]);
 
-    return full.slice(0, shown);
+    return full.slice(0, Math.min(shown, len));
 }
 
 export const ChatMarkdown = React.memo(({
@@ -352,13 +366,17 @@ export const ChatMarkdown = React.memo(({
     nested,
     isGenerating,
     isLast,
+    plain,
 }: {
     content: string;
     nested?: boolean;
     isGenerating?: boolean;
     isLast?: boolean;
+    plain?: boolean;
 }) => {
-    // Keep revealing briefly after generation ends so a late dump still types in.
+    // After generation ends, keep typing for a moment if this paragraph is
+    // still the tail. A paragraph that a tool run has moved off the tail
+    // is not live, so useRevealText shows it in full.
     const [hold, setHold] = useState(false);
     useEffect(() => {
         if (isGenerating && isLast) {
@@ -371,7 +389,7 @@ export const ChatMarkdown = React.memo(({
     }, [isGenerating, isLast, hold]);
 
     const live = !nested && !!isLast && (!!isGenerating || hold);
-    const visible = useRevealText(content, live);
+    const visible = useRevealText(content, plain ? false : live);
     const seenWords = useRef(new Set<string>());
     const wordSeq = useRef({ n: 0, fresh: 0 });
     wordSeq.current.n = 0;
@@ -380,9 +398,10 @@ export const ChatMarkdown = React.memo(({
     const components = React.useMemo(
         () => createMarkdownComponents({
             nested,
-            reveal: live ? { seen: seenWords.current, seq: wordSeq.current } : null,
+            plain,
+            reveal: live && visible.length < 280 ? { seen: seenWords.current, seq: wordSeq.current } : null,
         }),
-        [nested, live],
+        [nested, live, plain],
     );
 
     const processed = React.useMemo(

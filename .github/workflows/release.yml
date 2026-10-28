@@ -17,8 +17,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: npm
+          node-version: "24.22.1"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
 
       - name: Install system dependencies
         run: |
@@ -31,13 +34,13 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      - run: npm ci
+      - run: bun install --frozen-lockfile
 
       - name: Build runtime
-        run: npm run build:runtime
+        run: bun run build:runtime
 
       - name: Test
-        run: npm run test:all
+        run: bun run test:all
 
       - name: Assert tag matches package.json
         run: |
@@ -66,8 +69,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: npm
+          node-version: "24.22.1"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -78,13 +84,13 @@ jobs:
           workspaces: src-tauri -> target
           key: ${{ matrix.arch }}
 
-      - run: npm ci
+      - run: bun install --frozen-lockfile
 
       - name: Sync version
-        run: npm run sync-version
+        run: bun run sync-version
 
       - name: Build runtime
-        run: npm run build:runtime
+        run: bun run build:runtime
 
       # Password-protected key in secrets (upload via node/fs, not PowerShell pipe —
       # UTF-16 piping corrupts the key and surfaces as "Wrong password").
@@ -103,9 +109,9 @@ jobs:
             exit 1
           fi
           if [ -n "${{ matrix.target }}" ]; then
-            npm run tauri -- build --bundles nsis --target "${{ matrix.target }}"
+            bun run tauri -- build --bundles nsis --target "${{ matrix.target }}"
           else
-            npm run tauri -- build --bundles nsis
+            bun run tauri -- build --bundles nsis
           fi
 
       - name: Prepare release assets
@@ -129,10 +135,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: npm
+          node-version: "24.22.1"
 
-      - run: npm ci
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - run: bun install --frozen-lockfile
 
       - name: Download artifacts
         uses: actions/download-artifact@v4

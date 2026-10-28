@@ -77,9 +77,9 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
             <div
                 data-dropdown-search={fade ? "" : undefined}
                 className={cn(
-                    "relative flex min-w-0 items-center border-b border-border -mx-1.5 mb-1",
+                    "relative flex w-full min-w-0 items-center",
+                    borderless && "border-b border-border-subtle",
                     !borderless && "h-chrome",
-                    className,
                 )}
             >
                 <Icon

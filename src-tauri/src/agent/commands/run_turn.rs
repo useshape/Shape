@@ -301,12 +301,25 @@ fn is_repeat_prose(existing: &str, incoming: &str) -> bool {
     prefix.chars().count() >= 80 && existing.contains(&prefix)
 }
 
-/// After a real answer, skip the "nothing more to do / answer is up above" reprise.
+/// Skip the model narrating its own stop. A short "nothing left to do" is not a reply.
 fn is_redundant_coda(existing: &str, incoming: &str) -> bool {
+    let lower = strip_tool_markup(incoming).to_lowercase();
+    let trimmed = lower.trim();
+    let short = trimmed.chars().count() < 320;
+    if short
+        && (trimmed.contains("nothing left to do")
+            || trimmed.contains("nothing more to do")
+            || trimmed.contains("nothing else to do")
+            || trimmed.contains("no further action")
+            || trimmed.contains("the answer is up above")
+            || trimmed.contains("there is nothing left")
+            || trimmed.contains("there's nothing left"))
+    {
+        return true;
+    }
     if !has_substantive_text(existing) {
         return false;
     }
-    let lower = strip_tool_markup(incoming).to_lowercase();
     lower.contains("nothing more to do")
         || lower.contains("the answer is up above")
         || lower.contains("that was a question, not a change request")
@@ -485,6 +498,11 @@ pub struct AgentTurnConfig<'a> {
     pub proxy_model: &'a str,
     pub mode: &'a str,
     pub project_path: &'a str,
+    /// Where this conversation is saved. Chat tools run in a scratch folder, so this
+    /// stays the talk store instead of that folder.
+    pub history_store: &'a str,
+    /// Open code project Chat must not modify. None in Code.
+    pub sealed_project: Option<&'a str>,
     pub app_handle: &'a tauri::AppHandle,
     pub agent_state: &'a AgentState,
     pub index_state: Option<&'a crate::agent::index::IndexState>,
@@ -931,6 +949,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     pty_state: config.pty_state,
                     turn_id: turn_id.clone(),
                     conversation_id: conversation_id.clone(),
+                    sealed_project: config.sealed_project,
                 })
                 .collect();
 
@@ -1281,6 +1300,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 pty_state: config.pty_state,
                 turn_id: turn_id.clone(),
                 conversation_id: conversation_id.clone(),
+                sealed_project: config.sealed_project,
             };
 
             let tool_outcome = dispatch::execute_tool(&call.name, &call.arguments, &ctx).await;
@@ -1562,7 +1582,12 @@ async fn inject_page_screenshot(config: &mut AgentTurnConfig<'_>, tag: &str) {
             config.api_messages.push(json!({
                 "role": "user",
                 "content": format!(
-                    "screenshot_page captured this page.\n\n[image description]\n{desc}\n\nUse this description. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+                    "{}\n\n[image description]\n{desc}\n\nUse this description. If the image does not show the goal, keep working.",
+                    if tag.contains("name=\"window.png\"") {
+                        "A window was captured."
+                    } else {
+                        "screenshot_page captured this page. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+                    }
                 ),
             }));
         }
@@ -1590,10 +1615,12 @@ fn track_stream_chunk(config: &AgentTurnConfig<'_>, chunk: &str, activity_label:
     if chunk.is_empty() {
         return;
     }
-    let proj = if config.project_path.is_empty() {
+    let proj = if config.history_store.is_empty()
+        || crate::agent::commands::history::is_chat_work_dir(config.history_store)
+    {
         None
     } else {
-        Some(config.project_path)
+        Some(config.history_store)
     };
     config
         .agent_state
@@ -1625,12 +1652,11 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
         upsert_tagged_block(accumulated, chunk, "<todos", "</todos>");
         return;
     }
-    if chunk.contains("<generated_svg") {
-        upsert_tagged_block(accumulated, chunk, "<generated_svg", "</generated_svg>");
-        return;
-    }
-    if chunk.contains("<generated_image") {
-        upsert_tagged_block(accumulated, chunk, "<generated_image", "</generated_image>");
+    if chunk.contains("<generated_svg")
+        || chunk.contains("<generated_image")
+        || chunk.contains("<generated_audio")
+    {
+        upsert_media_chunk(accumulated, chunk);
         return;
     }
     let tag = if chunk.contains("<terminal_command") {
@@ -1665,6 +1691,42 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
 
     let block_end = block_start + rel_end + tag.1.len();
     accumulated.replace_range(block_start..block_end, chunk);
+}
+
+fn upsert_media_chunk(accumulated: &mut String, chunk: &str) {
+    let Some(id) = extract_xml_attr(chunk, "media_id") else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let marker = format!("media_id=\"{id}\"");
+    let Some(marker_pos) = accumulated.rfind(&marker) else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let start_tag = if chunk.contains("<generated_svg") {
+        "<generated_svg"
+    } else if chunk.contains("<generated_audio") {
+        "<generated_audio"
+    } else {
+        "<generated_image"
+    };
+    let end_tag = if chunk.contains("<generated_svg") {
+        "</generated_svg>"
+    } else if chunk.contains("<generated_audio") {
+        "</generated_audio>"
+    } else {
+        "</generated_image>"
+    };
+    let Some(block_start) = accumulated[..marker_pos].rfind(start_tag) else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let Some(rel_end) = accumulated[block_start..].find(end_tag) else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let block_end = block_start + rel_end + end_tag.len();
+    accumulated.replace_range(block_start..block_end, chunk.trim());
 }
 
 fn upsert_tagged_block(accumulated: &mut String, chunk: &str, start_tag: &str, end_tag: &str) {
@@ -1717,6 +1779,27 @@ mod file_cache_tests {
         assert!(cache.contains_key("c.rs"));
         assert!(cache.len() <= 2);
     }
+
+    #[test]
+    fn generated_images_append_until_the_same_id_is_revised() {
+        let mut text = String::new();
+        upsert_media_chunk(
+            &mut text,
+            "<generated_image media_id=\"a\">one</generated_image>",
+        );
+        upsert_media_chunk(
+            &mut text,
+            "<generated_image media_id=\"b\">two</generated_image>",
+        );
+        assert!(text.contains("one") && text.contains(">two<"));
+        upsert_media_chunk(
+            &mut text,
+            "<generated_image media_id=\"b\">three</generated_image>",
+        );
+        assert!(text.contains("one"));
+        assert!(text.contains("three"));
+        assert!(!text.contains(">two<"));
+    }
 }
 
 #[cfg(test)]
@@ -1751,6 +1834,8 @@ This IDE has a few modes, and design work lives in Visual mode.\n\
         let first = "Design mode lives in Visual mode. Switch with the mode selector.";
         let coda = "Nothing more to do here — that was a question, not a change request. The answer is up above.";
         assert!(is_redundant_coda(first, coda));
-        assert!(!is_redundant_coda("", coda));
+        assert!(is_redundant_coda("", coda));
+        assert!(is_redundant_coda("", "There's nothing left to do."));
+        assert!(!is_redundant_coda("", "The restaurant is open until 10."));
     }
 }

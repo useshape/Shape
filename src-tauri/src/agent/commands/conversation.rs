@@ -25,12 +25,20 @@ pub fn get_current_conversation_id(state: tauri::State<'_, AgentState>) -> Resul
 
 #[tauri::command]
 pub fn get_chat_history(
+    limit: Option<usize>,
     state: tauri::State<'_, AgentState>,
     _app_state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ChatMessage>, AppError> {
     // Opening or closing a coding folder must not wipe the live conversation.
     // Persistence store is owned by load/new/send, not by the workspace path.
-    Ok(state.merge_in_flight_into_history(state.history.lock()?.clone()))
+    let history = state.merge_in_flight_into_history(state.history.lock()?.clone());
+    let Some(limit) = limit.filter(|n| *n > 0) else {
+        return Ok(history);
+    };
+    if history.len() <= limit {
+        return Ok(history);
+    }
+    Ok(history[history.len() - limit..].to_vec())
 }
 
 #[tauri::command]
@@ -203,6 +211,7 @@ pub async fn restore_checkpoint(
 
 #[tauri::command]
 pub fn new_chat(
+    store_path: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     index_state: tauri::State<'_, crate::agent::index::IndexState>,
@@ -225,8 +234,12 @@ pub fn new_chat(
     state.title.lock()?.take();
     state.reset_title_meta();
     *state.history_summary.lock()? = None;
-    *state.current_conversation_id.lock()? = None;
-    *state.conversation_kind.lock()? = None;
+    let next_id = format!("{}", history::now_f64() as u64);
+    *state.current_conversation_id.lock()? = Some(next_id);
+    *state.conversation_kind.lock()? = Some("chat".to_string());
+    if let Some(store) = store_path.filter(|s| !s.trim().is_empty()) {
+        *state.current_project.lock()? = Some(store);
+    }
     state.clear_design_preview_state();
     state.clear_file_checkpoints();
     state.set_incognito(false);

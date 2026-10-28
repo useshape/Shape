@@ -124,7 +124,7 @@ export function AiSettingsPanel({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context" | "subagents";
+    page: "models" | "rules" | "workflows" | "context" | "subagents" | "access";
 }) {
     const a = settings.ai;
     useShapeCatalog();
@@ -355,9 +355,42 @@ export function AiSettingsPanel({
                 </SettingRow>
             </SettingSection>
 
-            <SettingSection title="Auto-run">
+                </>
+            ) : null}
+
+            {page === "access" ? (
+                <>
+            <SettingSection id="settings-ai-access" title="Computer">
                 <SettingCard>
-                <SettingRow title="Auto-run mode" description="When the agent may run terminal commands.">
+                <SettingRow
+                    title="Computer use"
+                    description="List windows and processes. Captures ask you first. Password managers stay hidden."
+                >
+                    <SettingSwitch
+                        checked={a.computerUse}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { computerUse: on });
+                            void commands.updateTurnPolicy({ computerUse: on });
+                        }}
+                    />
+                </SettingRow>
+                <SettingRow
+                    title="Shell automation"
+                    description="Run installed programs and scripts. One-liners still ask. Encoded commands and secrets stay blocked."
+                >
+                    <SettingSwitch
+                        checked={a.shellAutomation}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { shellAutomation: on });
+                            void commands.updateTurnPolicy({ shellAutomation: on });
+                        }}
+                    />
+                </SettingRow>
+                </SettingCard>
+            </SettingSection>
+            <SettingSection title="Commands">
+                <SettingCard>
+                <SettingRow title="Auto-run" description="Run everything is unsandboxed on Windows. Destructive git still asks.">
                     <SettingSelect
                         value={a.autoRunMode}
                         options={[
@@ -382,10 +415,9 @@ export function AiSettingsPanel({
                 </SettingRow>
                 </SettingCard>
             </SettingSection>
-
             <SettingSection title="Edits">
                 <SettingCard>
-                <SettingRow title="Require edit approval" description="Stage file edits before they are written.">
+                <SettingRow title="Approve file edits" description="Stage edits before they are written.">
                     <SettingSwitch
                         checked={a.requireEditApproval}
                         onChange={(on) => {
@@ -394,7 +426,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Auto-apply agent edits" description="Write approved edits without a second confirm.">
+                <SettingRow title="Apply approved edits" description="Write staged edits as soon as they appear.">
                     <SettingSwitch
                         checked={a.autoApplyEdits}
                         onChange={(on) => updateSettingSection("ai", { autoApplyEdits: on })}

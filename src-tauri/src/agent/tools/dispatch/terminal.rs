@@ -26,6 +26,15 @@ pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
         Err(e) => return error_outcome("run_terminal", &e),
     };
 
+    if let Some(project) = ctx.sealed_project {
+        if crate::agent::tools::desktop::touches_sealed_project(&command, project, ctx.project_path) {
+            return blocked_outcome(
+                "run_terminal",
+                "Chat cannot run commands against the open code project. Use the chat folder, or switch to Code to edit that project.",
+            );
+        }
+    }
+
     // Models sometimes try `cat file` / `dir folder` via the terminal even though
     // dedicated tools exist. Running a shell for simple file inspection wastes loops,
     // bypasses read tracking, and on Windows may prompt/format unexpectedly. Translate
@@ -34,11 +43,11 @@ pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
         return outcome;
     }
 
-    if let Some(outcome) = intercept_file_mutation_command(&command) {
+    let policy = ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref());
+    if let Some(outcome) = intercept_file_mutation_command(&command, policy.shell_automation) {
         return outcome;
     }
 
-    let policy = ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref());
     let safety = security::commands::apply_auto_run_mode(
         security::commands::check_command_safety(&command),
         &command,
@@ -62,7 +71,11 @@ pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
             execute_terminal_session(&command, &cmd_id, ctx).await
         }
         CommandSafety::NeedsApproval { reason } => {
-            if security::commands::is_destructive_git(&command) {
+            // Destructive git and shell forms that escape the file tools always
+            // wait for the user. A remote gate must not auto-run them.
+            if security::commands::is_destructive_git(&command)
+                || security::commands::requires_explicit_user_approval(&command)
+            {
                 return run_with_approval(&command, &reason, ctx).await;
             }
             let gate = crate::agent::tools::plugins::fetch_gate(
@@ -166,9 +179,24 @@ pub(super) async fn execute_terminal_session(command: &str, cmd_id: &str, ctx: &
     }
 }
 
-pub(super) fn intercept_file_mutation_command(command: &str) -> Option<ToolOutcome> {
+pub(super) fn intercept_file_mutation_command(command: &str, shell_automation: bool) -> Option<ToolOutcome> {
     let cmd_lower = command.trim().to_lowercase();
     if cmd_lower.is_empty() {
+        return None;
+    }
+
+    if let Some(reason) = security::commands::obfuscated_execution(&cmd_lower) {
+        return Some(blocked_shell(command, reason));
+    }
+
+    if crate::agent::tools::desktop::command_targets_secret(&cmd_lower) {
+        return Some(blocked_shell(
+            command,
+            "This command targets a credential or secret file. Those stay blocked in the shell.",
+        ));
+    }
+
+    if shell_automation {
         return None;
     }
 
@@ -185,12 +213,10 @@ pub(super) fn intercept_file_mutation_command(command: &str) -> Option<ToolOutco
         || cmd_lower.contains("powershell -enc")
         || cmd_lower.contains("pwsh -command")
     {
-        // Steering a read attempt toward edit tools sends the model looking for another
-        // shell trick instead of the tool it actually wanted.
         if looks_like_read {
-            Some("Shell one-liners cannot inspect files. Use `read_file` (it takes start_line/end_line) or `grep`.")
+            Some("Shell automation is off, so one-liners cannot inspect files. Use `read_file` or `grep`, or turn on shell automation in Settings → Access.")
         } else {
-            Some("Shell one-liners cannot edit files. Use `edit_file` or `apply_patch` (whichever is in your tool list).")
+            Some("Shell automation is off, so one-liners cannot run. Turn it on in Settings → Access, or use `edit_file` / `apply_patch` for project source.")
         }
     } else if cmd_lower.contains("set-content")
         || cmd_lower.contains("out-file")
@@ -200,25 +226,29 @@ pub(super) fn intercept_file_mutation_command(command: &str) -> Option<ToolOutco
         || cmd_lower.contains(" open(")
             && (cmd_lower.contains(".write(") || cmd_lower.contains(".writelines("))
     {
-        Some("Writing files through the shell is blocked. Use `edit_file` or `apply_patch` (whichever is in your tool list).")
+        Some("Shell automation is off, so writing files through the shell is blocked. Use `edit_file` or `apply_patch`, or turn it on in Settings → Access.")
     } else if cmd_lower.contains(" > ")
         || cmd_lower.contains(" >> ")
         || cmd_lower.starts_with("sed -i")
         || cmd_lower.contains("sed -i")
     {
-        Some("Redirecting shell output to files is blocked. Use `edit_file` or `apply_patch` (whichever is in your tool list).")
+        Some("Shell automation is off, so redirecting output to files is blocked. Use the edit tool, or turn it on in Settings → Access.")
     } else {
         None
     };
 
-    blocked_reason.map(|reason| ToolOutcome {
+    blocked_reason.map(|reason| blocked_shell(command, reason))
+}
+
+fn blocked_shell(command: &str, reason: &str) -> ToolOutcome {
+    ToolOutcome {
         tool_result: format!("BLOCKED: {} Command: {}", reason, command),
         ui_chunk: format!(
             "\n<terminal_command status=\"blocked\">{}\nBlocked: {}</terminal_command>\n",
             command, reason
         ),
         side_effect: None,
-    })
+    }
 }
 
 /// Split a command into pipeline/statement segments, ignoring separators inside quotes.
@@ -948,13 +978,25 @@ mod tests {
     }
 
     #[test]
-    fn read_shaped_one_liners_are_pointed_at_read_file() {
-        let blocked = intercept_file_mutation_command("python -c \"print(open('a.txt').read())\"")
-            .expect("blocked");
+    fn restricted_shell_blocks_one_liners() {
+        let blocked = intercept_file_mutation_command(
+            "python -c \"print(open('a.txt').read())\"",
+            false,
+        )
+        .expect("blocked");
         assert!(blocked.tool_result.contains("read_file"), "{}", blocked.tool_result);
 
-        let write = intercept_file_mutation_command("python -c \"open('a.txt','w').write('x')\"")
+        let write = intercept_file_mutation_command("python -c \"open('a.txt','w').write('x')\"", false)
             .expect("blocked");
-        assert!(write.tool_result.contains("edit_file"), "{}", write.tool_result);
+        assert!(write.tool_result.contains("edit_file") || write.tool_result.contains("automation"), "{}", write.tool_result);
+    }
+
+    #[test]
+    fn automation_allows_scripts_and_blocks_secrets() {
+        assert!(intercept_file_mutation_command("python script.py", true).is_none());
+        assert!(intercept_file_mutation_command("python -c \"print(1)\"", true).is_none());
+        let secret = intercept_file_mutation_command("python -c \"open('.env').read()\"", true)
+            .expect("secret blocked");
+        assert!(secret.tool_result.starts_with("BLOCKED:"), "{}", secret.tool_result);
     }
 }

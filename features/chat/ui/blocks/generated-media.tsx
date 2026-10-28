@@ -1,8 +1,60 @@
 "use client";
 
-import { useSyncExternalStore, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getSelectedTalkMediaId, setSelectedTalkMediaId, subscribeTalkMedia } from "@/lib/chat/talk-media";
+
+export function RefineBar({
+    kind,
+    mediaId,
+    prompt,
+    model,
+}: {
+    kind: "svg" | "image" | "audio";
+    mediaId?: string;
+    prompt?: string;
+    model?: string;
+}) {
+    const [text, setText] = useState("");
+    if (!mediaId) return null;
+    return (
+        <form
+            className="flex items-center gap-1.5 px-2 py-2"
+            onSubmit={(event) => {
+                event.preventDefault();
+                const change = text.trim();
+                if (!change) return;
+                const instruction =
+                    kind === "svg"
+                        ? "Regenerate this SVG from the previous one."
+                        : kind === "audio"
+                          ? "Regenerate this audio."
+                          : "Use edit_image on this asset. Do not start a new image.";
+                window.dispatchEvent(
+                    new CustomEvent("shape-chat-send-text", {
+                        detail: {
+                            text: `${instruction} media_id=${mediaId}${model ? ` model ${model}` : ""}${prompt ? ` Previous prompt: ${prompt}` : ""}. Change: ${change}. Keep everything else the same.`,
+                        },
+                    }),
+                );
+                setText("");
+            }}
+        >
+            <Input
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                placeholder="Change this…"
+                aria-label="Change this asset"
+                className="h-8"
+            />
+            <Button type="submit" size="sm" variant="secondary" disabled={!text.trim()}>
+                Refine
+            </Button>
+        </form>
+    );
+}
 
 function modelAlias(model?: string) {
     if (!model) return "";
@@ -93,17 +145,20 @@ export function GeneratedMediaCard({
     }
 
     return (
-        <button
-            type="button"
-            disabled={!selectable || !mediaId}
-            onClick={() => {
-                if (mediaId) setSelectedTalkMediaId(isSelected ? null : mediaId);
-            }}
+        <div
             className={cn(
                 "my-2 w-full max-w-[360px] overflow-hidden rounded-xl border bg-surface-3 text-left",
                 isSelected ? "border-accent" : "border-border-subtle",
             )}
         >
+            <button
+                type="button"
+                disabled={!selectable || !mediaId}
+                onClick={() => {
+                    if (mediaId) setSelectedTalkMediaId(isSelected ? null : mediaId);
+                }}
+                className="block w-full text-left"
+            >
             <div
                 className={cn(
                     "relative w-full overflow-hidden bg-surface-2",
@@ -131,9 +186,9 @@ export function GeneratedMediaCard({
                     />
                 ) : null}
             </div>
-            {alias ? (
-                <div className="px-3 py-1.5 text-xs text-text-muted">{alias}</div>
-            ) : null}
-        </button>
+            </button>
+            {alias ? <div className="px-3 py-1.5 text-xs text-text-muted">{alias}</div> : null}
+            {isSelected ? <RefineBar kind={kind} mediaId={mediaId} prompt={prompt} model={model} /> : null}
+        </div>
     );
 }

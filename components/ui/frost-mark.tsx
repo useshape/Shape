@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
  * https://www.affectui.com/illustrations/frost-cloud
  */
 
-const EYES = { y: 96, w: 28, h: 44, left: 86, right: 126 };
+const EYES = { y: 86, w: 38, h: 58, left: 76, right: 126 };
 const CX = 120;
 const CY = 120;
+const REST = { x: 0.62, y: -0.2 };
 
 const GLANCES = [
     { x: 0, y: 0 },
@@ -57,6 +58,7 @@ export function FrostMark({
     tint,
     shape = "circle",
     label = "Shape",
+    mood = "idle",
 }: {
     size?: number;
     className?: string;
@@ -67,6 +69,7 @@ export function FrostMark({
     tint?: string;
     shape?: FrostShape;
     label?: string;
+    mood?: "idle" | "typing" | "working" | "playful";
 }) {
     const raw = useId().replace(/[^a-zA-Z0-9_-]/g, "");
     const id = (name: string) => `fm${raw}-${name}`;
@@ -81,8 +84,15 @@ export function FrostMark({
         if (!el || !live) return;
         const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-        const look = { x: 0, y: 0, vx: 0, vy: 0 };
-        const target = { x: 0, y: 0 };
+        const rest = mood === "working"
+            ? { x: 0.78, y: 0.22 }
+            : mood === "playful"
+              ? { x: 0.35, y: -0.45 }
+              : mood === "typing"
+                ? { x: 0.15, y: 0.72 }
+                : REST;
+        const look = { x: rest.x, y: rest.y, vx: 0, vy: 0 };
+        const target = { x: rest.x, y: rest.y };
         const squish = { p: 0, v: 0 };
         let pointer = false;
         let nextGlance = 1.2;
@@ -90,6 +100,7 @@ export function FrostMark({
         let blinkAt = -1;
         let blinkTwice = false;
         let winkAt = -1;
+        let lastStrike = 0;
         let frame = 0;
         let last = 0;
         let time = 0;
@@ -98,12 +109,13 @@ export function FrostMark({
             since < 0 || since > length ? 1 : 1 - 0.9 * Math.sin((since / length) * Math.PI);
 
         const draw = () => {
-            const breathe = still ? 0 : Math.sin(time * 1.1) * 0.012;
-            const sy = 1 + breathe - squish.p * 0.08;
-            const sx = 1 - breathe + squish.p * 0.06;
+            const breathe = still ? 0 : Math.sin(time * (mood === "typing" ? 2.4 : 1.1)) * (mood === "typing" ? 0.02 : 0.012);
+            const hop = mood === "typing" ? Math.max(0, Math.sin(time * 16)) * -2.4 : 0;
+            const sy = 1 + breathe - squish.p * (mood === "typing" ? 0.14 : 0.08);
+            const sx = 1 - breathe + squish.p * (mood === "typing" ? 0.1 : 0.06);
             turnRef.current?.setAttribute(
                 "transform",
-                `translate(${(look.x * 3).toFixed(2)} ${(look.y * 2).toFixed(2)}) ${about(CX, CY, `rotate(${(look.x * 2).toFixed(2)}) scale(${sx.toFixed(4)} ${sy.toFixed(4)})`)}`,
+                `translate(${(look.x * 3).toFixed(2)} ${(look.y * 2 + hop).toFixed(2)}) ${about(CX, CY, `rotate(${(look.x * (mood === "typing" ? 4 : 2)).toFixed(2)}) scale(${sx.toFixed(4)} ${sy.toFixed(4)})`)}`,
             );
             eyesRef.current?.setAttribute(
                 "transform",
@@ -123,14 +135,27 @@ export function FrostMark({
 
             if (!pointer && time > nextGlance) {
                 const g = GLANCES[Math.floor(Math.random() * GLANCES.length)]!;
-                target.x = g.x;
-                target.y = g.y;
-                nextGlance = time + 1.4 + Math.random() * 2.2;
+                const amp = mood === "playful" ? 1.35 : mood === "typing" ? 1.15 : mood === "working" ? 0.7 : 1;
+                target.x = rest.x + g.x * amp;
+                target.y = rest.y + g.y * amp;
+                if (mood === "playful" && Math.random() < 0.45) squish.p = 0.55;
+                nextGlance = time + (mood === "playful" ? 0.35 : mood === "typing" ? 0.55 : 1.2) + Math.random() * (mood === "working" ? 1.1 : mood === "playful" ? 0.8 : 2.2);
             }
             if (time > nextBlink) {
                 blinkAt = time;
-                blinkTwice = Math.random() < 0.25;
-                nextBlink = time + 2.4 + Math.random() * 3;
+                blinkTwice = Math.random() < (mood === "working" ? 0.45 : 0.25);
+                nextBlink = time + (mood === "typing" ? 1.4 : 2.2) + Math.random() * 2.4;
+            }
+            if (mood === "working") {
+                squish.v += (0.35 * Math.sin(time * 6) - squish.p) * 8 * dt;
+            }
+            if (mood === "typing" && !pointer && time - lastStrike > 0.07 && Math.sin(time * 23 + look.x) > 0.72) {
+                lastStrike = time;
+                squish.p = 0.85;
+                squish.v = -6;
+                target.x = rest.x + (Math.random() < 0.5 ? -0.55 : 0.7);
+                target.y = 0.95;
+                if (Math.random() < 0.18) winkAt = time;
             }
 
             look.vx += ((target.x - look.x) * 70 - look.vx * 13) * dt;
@@ -167,8 +192,8 @@ export function FrostMark({
         };
         const onLeave = () => {
             pointer = false;
-            target.x = 0;
-            target.y = 0;
+            target.x = rest.x;
+            target.y = rest.y;
             nextGlance = time + 0.4;
         };
         const onDown = () => {
@@ -193,7 +218,7 @@ export function FrostMark({
             window.removeEventListener("blur", onLeave);
             el.removeEventListener("pointerdown", onDown);
         };
-    }, [followPointer, live]);
+    }, [followPointer, live, mood]);
 
     const eye = (x: number, ref: typeof leftEye) => (
         <g ref={ref}>
@@ -226,7 +251,6 @@ export function FrostMark({
                 <defs>
                     <linearGradient id={id("sky")} x1="0" y1="12" x2="0" y2="228" gradientUnits="userSpaceOnUse">
                         <stop offset="0" stopColor="var(--ui-fm-top)" />
-                        <stop offset="1" stopColor="var(--ui-fm-bottom)" />
                     </linearGradient>
                     <linearGradient id={id("hole")} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0" stopColor="var(--ui-fm-hole-1)" />
@@ -236,7 +260,11 @@ export function FrostMark({
                         <FrostBody shape={shape} fill="#000" />
                     </clipPath>
                 </defs>
-                <g ref={turnRef} clipPath={`url(#${id("disc")})`}>
+                <g
+                    ref={turnRef}
+                    clipPath={`url(#${id("disc")})`}
+                    transform={`translate(${(REST.x * 3).toFixed(2)} ${(REST.y * 2).toFixed(2)}) ${about(CX, CY, `rotate(${(REST.x * 2).toFixed(2)})`)}`}
+                >
                     <FrostBody shape={shape} fill={`url(#${id("sky")})`} />
                     <g ref={eyesRef}>
                         {eye(EYES.left, leftEye)}

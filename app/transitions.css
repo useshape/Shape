@@ -51,9 +51,9 @@
   --reason-fade: 28px;
   --reason-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --stream-fade: 350ms;
-  --stream-gap: 60ms;
-  --stream-blur: 1px;
+  --stream-fade: 520ms;
+  --stream-gap: 70ms;
+  --stream-blur: 7px;
   --stream-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   --hint-swap: 380ms;
@@ -424,14 +424,28 @@
 .t-stream-w {
   opacity: 0;
   filter: blur(var(--stream-blur));
-  transition:
-    opacity var(--stream-fade) var(--stream-ease),
-    filter var(--stream-fade) var(--stream-ease);
+  animation: t-stream-in var(--stream-fade) var(--stream-ease) both;
 }
 
 .t-stream-w.is-in {
   opacity: 1;
   filter: blur(0);
+}
+
+.chat-reveal-word {
+  display: inline;
+  animation: chat-text-reveal 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes t-stream-in {
+  from {
+    opacity: 0;
+    filter: blur(var(--stream-blur));
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
 }
 
 .t-success-check {
@@ -559,21 +573,12 @@
   }
 }
 
-.chat-reveal-word {
-    display: inline-block;
-    animation: chat-text-reveal 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
 @keyframes chat-text-reveal {
     from {
-        opacity: 0;
-        filter: blur(6px);
-        transform: translateY(0.35em);
+        opacity: 0.45;
     }
     to {
         opacity: 1;
-        filter: blur(0);
-        transform: none;
     }
 }
 
@@ -584,13 +589,9 @@
 @keyframes tool-arrive {
     from {
         opacity: 0;
-        filter: blur(3px);
-        transform: translateY(6px);
     }
     to {
         opacity: 1;
-        filter: blur(0);
-        transform: none;
     }
 }
 

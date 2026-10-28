@@ -126,14 +126,6 @@ pub async fn screenshot_jpeg(ws_url: &str, quality: u8, scale: f64) -> Result<St
         .ok_or_else(|| "No screenshot data".into())
 }
 
-pub async fn screenshot_png(ws_url: &str) -> Result<String, String> {
-    let v = call(ws_url, "Page.captureScreenshot", json!({ "format": "png" })).await?;
-    v.get("data")
-        .and_then(|d| d.as_str())
-        .map(|s| s.to_string())
-        .ok_or_else(|| "No screenshot data".into())
-}
-
 pub async fn click_px(ws_url: &str, x: f64, y: f64) -> Result<(), String> {
     call_all(
         ws_url,

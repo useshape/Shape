@@ -189,8 +189,24 @@ describe("dispatchShortcutAction", () => {
         const terminal = listenCustomEvent<{ action: string }>("shape-terminal-shortcut");
         expect(dispatchShortcutAction("Terminal", "Ctrl+`")).toBe(true);
         expect(dispatchShortcutAction("New Terminal", "Ctrl+Shift+`")).toBe(true);
-        expect(terminal.events[0]?.detail).toEqual({ action: "open" });
+        expect(terminal.events[0]?.detail).toEqual({ action: "toggle" });
         expect(terminal.events[1]?.detail).toEqual({ action: "new" });
         terminal.off();
+    });
+
+    it("switches workspace modes without touching chat send", () => {
+        const mode = listenCustomEvent<{ id: string }>("shape-set-workspace-mode");
+        expect(dispatchShortcutAction("Code Mode", "Ctrl+Alt+1")).toBe(true);
+        expect(dispatchShortcutAction("Chat Mode", "Ctrl+Alt+2")).toBe(true);
+        expect(mode.events.map((event) => event.detail)).toEqual([{ id: "Code" }, { id: "Chat" }]);
+        mode.off();
+    });
+
+    it("cycles conversations by direction", () => {
+        const cycle = listenCustomEvent<{ dir: number }>("shape-chat-cycle");
+        expect(dispatchShortcutAction("Previous Conversation", "Ctrl+PageUp")).toBe(true);
+        expect(dispatchShortcutAction("Next Conversation", "Ctrl+PageDown")).toBe(true);
+        expect(cycle.events.map((event) => event.detail)).toEqual([{ dir: -1 }, { dir: 1 }]);
+        cycle.off();
     });
 });

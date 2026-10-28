@@ -6,7 +6,7 @@ import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/windo
 
 
 import React, { type ReactNode } from "react";
-import { Arc } from "loading-dev";
+import { Slide } from "loading-dev";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -64,7 +64,7 @@ export function ApprovalCard({
         >
             <div className="flex items-center gap-2 px-3 py-2">
                 {isProcessing ? (
-                    <Arc size={12} className="shrink-0 text-text-muted" />
+                    <Slide size={10} className="shrink-0 text-text-muted" />
                 ) : (
                     icon
                 )}

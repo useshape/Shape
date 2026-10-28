@@ -1,6 +1,6 @@
 "use client";
 
-import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
+import { Branch20Regular, Branch24Filled } from "@fluentui/react-icons/headless/svg/branch";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
 import { Archive24Filled } from "@fluentui/react-icons/headless/svg/archive";
 
@@ -100,10 +100,10 @@ export function WorkspaceBranchSwitch({
                         type="button"
                         disabled={!repoPath}
                         className={cn(
-                            "inline-flex max-w-40 items-center border border-border font-regular gap-1 rounded-full px-3 py-0.5 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled",
+                            "inline-flex max-w-40 items-center border border-border-subtle font-regular gap-1 rounded-full px-4 bg-surface-4 py-1 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled",
                         )}
                     >
-                        <Icon icon={Archive24Filled} className="shrink-0 text-text-muted icon-sm" />
+                        <Icon icon={Branch24Filled} className="shrink-0 text-text-muted icon-md" />
                         <span className="truncate">{branch ?? "Branch"}</span>
                     </button>
                 )}

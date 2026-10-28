@@ -236,6 +236,38 @@ pub(super) async fn tool_search_codebase(args: &Value, ctx: &ToolCtx<'_>) -> Too
     }
 }
 
+pub(super) fn tool_map_module(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let path = match get_str(args, "path") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("map_module", &e),
+    };
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    if matches!(
+        ext.as_str(),
+        "exe" | "dll" | "so" | "dylib" | "bin" | "o" | "obj" | "wasm"
+    ) {
+        return error_outcome(
+            "map_module",
+            "That file is a binary. Shape maps source in the open folder and does not decompile binaries.",
+        );
+    }
+    match crate::agent::tools::files::read_file(&path, ctx.project_path) {
+        Ok(content) => {
+            let mapped = crate::agent::tools::symbols::map_source(&path, &content);
+            let ui = format!(
+                "\n<status>Mapped {}</status>\n",
+                escape_xml_attr(&path)
+            );
+            ToolOutcome {
+                tool_result: clip(&mapped, 8000),
+                ui_chunk: ui,
+                side_effect: None,
+            }
+        }
+        Err(e) => error_outcome("map_module", &e.to_string()),
+    }
+}
+
 pub(super) async fn tool_codebase_overview(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     match crate::agent::overview::answer_overview(args, ctx).await {
         Ok(result) => {
@@ -252,6 +284,42 @@ pub(super) async fn tool_codebase_overview(args: &Value, ctx: &ToolCtx<'_>) -> T
         }
         Err(e) => error_outcome("codebase_overview", &e),
     }
+}
+
+fn plugin_connect_ui(toolkit: &str, name: &str) -> String {
+    format!(
+        "\n<plugin_connect toolkit=\"{}\" name=\"{}\"></plugin_connect>\n",
+        escape_xml_attr(toolkit),
+        escape_xml_attr(name)
+    )
+}
+
+fn guess_plugin_toolkit(query: &str) -> Option<(String, String)> {
+    let q = query.to_ascii_lowercase();
+    let hits = [
+        ("gmail", "gmail", "Gmail"),
+        ("google mail", "gmail", "Gmail"),
+        ("google calendar", "googlecalendar", "Google Calendar"),
+        ("calendar", "googlecalendar", "Google Calendar"),
+        ("slack", "slack", "Slack"),
+        ("linear", "linear", "Linear"),
+        ("github", "github", "GitHub"),
+        ("notion", "notion", "Notion"),
+        ("hubspot", "hubspot", "HubSpot"),
+        ("salesforce", "salesforce", "Salesforce"),
+        ("outlook", "outlook", "Outlook"),
+        ("discord", "discord", "Discord"),
+    ];
+    hits.iter().find(|(needle, _, _)| q.contains(needle)).map(|(_, toolkit, name)| {
+        ((*toolkit).to_string(), (*name).to_string())
+    })
+}
+
+fn plugin_needs_connect(res: &str) -> bool {
+    let l = res.to_ascii_lowercase();
+    l.contains("no plugins are connected")
+        || l.contains("not connected")
+        || l.contains("call plugin_connect")
 }
 
 fn plugin_call_ui(
@@ -319,22 +387,58 @@ fn plugin_needs_approval(mode: AutoRunMode, slug: &str) -> bool {
     }
 }
 
-fn plugin_discovery_outcome(toolkit: &str, slug: &str, label: &str, res: String) -> ToolOutcome {
+fn plugin_discovery_outcome(
+    toolkit: &str,
+    slug: &str,
+    label: &str,
+    res: String,
+    query: Option<&str>,
+) -> ToolOutcome {
     let status = if res.starts_with("ERROR") || res.starts_with("Plugins are not configured") {
         "error"
     } else {
         "ok"
     };
+    let mut ui_chunk = plugin_call_ui(toolkit, slug, label, status, None, &res);
+    if plugin_needs_connect(&res) {
+        if let Some((id, name)) = query.and_then(guess_plugin_toolkit).or_else(|| {
+            if toolkit != "plugins" {
+                Some((toolkit.to_string(), toolkit.to_string()))
+            } else {
+                None
+            }
+        }) {
+            ui_chunk.push_str(&plugin_connect_ui(&id, &name));
+        }
+    }
     ToolOutcome {
         tool_result: clip(&res, 8000),
-        ui_chunk: plugin_call_ui(toolkit, slug, label, status, None, &res),
+        ui_chunk,
+        side_effect: None,
+    }
+}
+
+pub(super) fn tool_plugin_connect(args: &Value) -> ToolOutcome {
+    let toolkit = match get_str(args, "toolkit") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("plugin_connect", &e),
+    };
+    let name = args
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(toolkit.as_str());
+    ToolOutcome {
+        tool_result: "Showed an Authorize card in chat. Wait for the user to connect, then continue.".to_string(),
+        ui_chunk: plugin_connect_ui(&toolkit, name),
         side_effect: None,
     }
 }
 
 pub(super) async fn tool_plugin_list(ctx: &ToolCtx<'_>) -> ToolOutcome {
     let res = crate::agent::tools::plugins::execute_plugin_list(ctx.api_key).await;
-    plugin_discovery_outcome("plugins", "plugin_list", "Listed plugins", res)
+    plugin_discovery_outcome("plugins", "plugin_list", "Listed plugins", res, None)
 }
 
 pub(super) async fn tool_plugin_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
@@ -350,7 +454,7 @@ pub(super) async fn tool_plugin_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolO
     )
     .await;
     let label = format!("Searched plugins for {query}");
-    plugin_discovery_outcome("plugins", "plugin_search", &label, res)
+    plugin_discovery_outcome("plugins", "plugin_search", &label, res, Some(&query))
 }
 
 pub(super) async fn tool_plugin_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
@@ -362,7 +466,7 @@ pub(super) async fn tool_plugin_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
     let res =
         crate::agent::tools::plugins::execute_plugin_tools(&toolkit, query, ctx.api_key).await;
     let label = format!("Listed {toolkit} actions");
-    plugin_discovery_outcome(&toolkit, "plugin_tools", &label, res)
+    plugin_discovery_outcome(&toolkit, "plugin_tools", &label, res, Some(&toolkit))
 }
 
 async fn execute_plugin_run_ui(
@@ -389,9 +493,13 @@ async fn execute_plugin_run_ui(
         || res.starts_with("Monthly")
         || (!res.trim_start().starts_with('{') && res.to_ascii_lowercase().contains("error"));
     let status = if err { "error" } else { "ok" };
+    let mut ui_chunk = plugin_call_ui(toolkit, slug, label, status, cmd_id, &res);
+    if plugin_needs_connect(&res) {
+        ui_chunk.push_str(&plugin_connect_ui(toolkit, toolkit));
+    }
     ToolOutcome {
         tool_result: clip(&res, 8000),
-        ui_chunk: plugin_call_ui(toolkit, slug, label, status, cmd_id, &res),
+        ui_chunk,
         side_effect: None,
     }
 }

@@ -14,9 +14,12 @@ import {
 } from '../blocks/workflow';
 import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
+import { PluginConnectCard } from '../blocks/plugin-connect';
 import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
 import { GeneratedMediaCard } from '../blocks/generated-media';
+import { PhotoStack } from '../blocks/photo-stack';
+import { setSelectedTalkMediaId } from '@/lib/chat/talk-media';
 import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { PersonaReviewPanel } from '../blocks/persona-review';
@@ -121,7 +124,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
     content?: string;
     file?: string;
     query?: string;
@@ -376,8 +379,11 @@ function unescapeXml(s: string): string {
     };
 
     const parseReviewDebateBlock = (block: string): Chunk => {
-        const modelMatch = block.match(/<review_debate[^>]*\bmodel="([^"]*)"/i);
-        const inner = block
+        const trimmedBlock = block.trim();
+        const open = trimmedBlock.match(/^<review_debate\b[^>]*>/i)?.[0] || "";
+        const modelMatch = open.match(/\bmodel="([^"]*)"/i);
+        const statusMatch = open.match(/\bstatus="([^"]*)"/i);
+        const inner = trimmedBlock
             .replace(/^<review_debate[^>]*>\s*/i, "")
             .replace(/\s*<\/review_debate>$/i, "")
             .trim();
@@ -385,6 +391,7 @@ function unescapeXml(s: string): string {
             type: "review_debate",
             content: inner,
             reviewModel: modelMatch?.[1],
+            commandStatus: statusMatch?.[1],
         };
     };
 
@@ -433,6 +440,15 @@ function unescapeXml(s: string): string {
             commandId: get("id") || undefined,
             commandStatus: status,
             isGenerating,
+        };
+    };
+
+    const parsePluginConnectBlock = (tagFull: string): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type: "plugin_connect",
+            pluginToolkit: get("toolkit") || undefined,
+            pluginLabel: get("name") || undefined,
         };
     };
 
@@ -539,6 +555,7 @@ function unescapeXml(s: string): string {
             { type: 'generated_image', start: '<generated_image', end: '</generated_image>' },
             { type: 'generated_audio', start: '<generated_audio', end: '</generated_audio>' },
             { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
+            { type: 'plugin_connect', start: '<plugin_connect', end: '</plugin_connect>' },
             { type: 'browse_session', start: '<browse_session', end: '</browse_session>' },
             { type: 'chart', start: '<chart', end: '</chart>' },
             { type: 'insight_card', start: '<insight_card', end: '</insight_card>' },
@@ -688,6 +705,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_call') {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'plugin_connect') {
+                chunks.push(parsePluginConnectBlock(tagFull));
             } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
                 chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
@@ -784,6 +803,8 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
+            } else if (firstMatch.type === 'plugin_connect') {
+                chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
             } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, true));
@@ -881,6 +902,8 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
+            } else if (firstMatch.type === 'plugin_connect') {
+                chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
             } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
@@ -988,9 +1011,55 @@ function buildSegments(chunks: Chunk[]): Segment[] {
             continue;
         }
         if (chunk.type === 'text' && !(chunk.content || '').trim()) continue;
+        const prev = segments[segments.length - 1];
+        if (chunk.type === "text" && prev?.kind === "chunk" && prev.chunk.type === "text") {
+            prev.chunk.content = `${prev.chunk.content || ""}\n\n${chunk.content || ""}`;
+            if (chunk.isGenerating) prev.chunk.isGenerating = true;
+            continue;
+        }
         segments.push({ kind: 'chunk', chunk });
     }
     return segments;
+}
+
+function isTextSegment(segment: Segment | undefined): boolean {
+    return segment?.kind === "chunk" && segment.chunk.type === "text";
+}
+
+function recvBubbleRadius(prevText: boolean, nextText: boolean): string {
+    if (!prevText && !nextText) return "rounded-[1.15rem]";
+    if (!prevText && nextText) return "rounded-[1.15rem] rounded-bl-[0.35rem]";
+    if (prevText && nextText) return "rounded-[1.15rem] rounded-tl-[0.35rem] rounded-bl-[0.35rem]";
+    return "rounded-[1.15rem] rounded-tl-[0.35rem]";
+}
+
+/** Drop tool dumps that leaked into a text. Keep the short reply at the end. */
+function isSelfTalk(line: string): boolean {
+    return /nothing (left|more|else) to do|no further action|answer is up above|there(?:'s| is) nothing left/i.test(line);
+}
+
+function talkProse(raw: string): string {
+    const source = raw.length > 24_000 ? raw.slice(-24_000) : raw;
+    let text = source
+        .replace(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]{80,}/gi, " ")
+        .replace(/<([a-z][\w:-]*)\b[^>]*>[\s\S]*?<\/\1>/gi, "\n")
+        .replace(/<\/?[a-z][\w:-]*\b[^>]*>/gi, " ")
+        .replace(/\[truncated,[^\]]*\]/gi, " ");
+    if ((/https?:\/\//i.test(text) || /<web_result/i.test(source)) && text.length > 320) {
+        const bits = text
+            .split(/\n+/)
+            .map((line) => line.replace(/\s+/g, " ").trim())
+            .filter((line) => line.length > 1 && line.length < 420 && !isSelfTalk(line) && !/^https?:/i.test(line) && !/^url:?$/i.test(line));
+        const spoken = bits.filter((line) => /[.!?]/.test(line));
+        if (spoken.length > 0) text = spoken.slice(-3).join("\n\n");
+        else if (bits.length > 0) text = bits.slice(-3).join("\n\n");
+    } else {
+        text = text
+            .split("\n")
+            .filter((line) => !isSelfTalk(line))
+            .join("\n");
+    }
+    return text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 const TALK_SKIP = new Set([
@@ -1017,6 +1086,13 @@ const TALK_SKIP = new Set([
     "plan_saved",
     "think",
     "thought",
+    "web_search",
+    "web_result",
+    "web_visit",
+    "search_result",
+    "status",
+    "shown_images",
+    "todos",
 ]);
 
 export function MessageRenderer({
@@ -1027,6 +1103,7 @@ export function MessageRenderer({
     durationMs,
     skipSubagentSync,
     surface = "code",
+    talkName = "Shape",
 }: {
     content: string;
     isGenerating?: boolean;
@@ -1035,6 +1112,7 @@ export function MessageRenderer({
     durationMs?: number;
     skipSubagentSync?: boolean;
     surface?: "code" | "talk";
+    talkName?: string;
 }) {
     const chunks = useMemo(() => {
         const parsed = parseMessageContent(content);
@@ -1094,11 +1172,6 @@ export function MessageRenderer({
         return -1;
     })();
 
-    const lastSegment = segments[segments.length - 1];
-    const proseIsStreaming =
-        lastSegment?.kind === 'chunk'
-        && lastSegment.chunk.type === 'text'
-        && !!lastSegment.chunk.content?.trim();
     const hasPendingApproval =
         workflowSegments.some((s) =>
             s.blocks.some(
@@ -1109,33 +1182,20 @@ export function MessageRenderer({
         )
         || contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
         || contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending');
-    const lastWorkflowBlock = workflowSegments.at(-1)?.blocks.at(-1);
-    const isThinking = !!isGenerating
-        && (lastWorkflowBlock?.type === 'think' || lastWorkflowBlock?.type === 'thought')
-        && !!lastWorkflowBlock.isGenerating;
-    const lastIsEdit = lastWorkflowBlock?.type === "edit" || lastWorkflowBlock?.type === "edit_pending";
-    const activityIsEdit = /\bedit/i.test(activityLabel ?? "");
-    const editFileName = [...(workflowSegments.at(-1)?.blocks ?? [])]
-        .reverse()
-        .find((b) => b.type === "edit" || b.type === "edit_pending")
-        ?.file?.split(/[\\/]/).pop();
-    const statusLabel = hasPendingApproval
-        ? (contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
-            ? "Waiting for your answers"
-            : contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending')
-              ? "Waiting for you to pick a design"
-              : "Waiting for approval")
-        : lastIsEdit || activityIsEdit
-          ? `Editing ${editFileName || "file"}`
-          : (activityLabel?.trim() || (isThinking ? "Thinking" : (workflowSegments.length > 0 ? "Working" : undefined)));
-    const showStatusLine =
-        !!isGenerating
-        && !proseIsStreaming
-        && (
-            hasPendingApproval
-            || !!statusLabel
-        );
+    const showStatusLine = !!isGenerating;
+    const statusPhrase = !hasPendingApproval
+        ? null
+        : contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
+          ? "Waiting for your answers"
+          : contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending')
+            ? "Waiting for you to pick a design"
+            : "Waiting for approval";
 
+    // Text keys follow prose order, not the segment index. A tool block
+    // inserted ahead of an existing paragraph must not remount it — a remount
+    // restarts the typewriter at the first few characters and the rest stays
+    // missing until the turn settles.
+    let textOrdinal = 0;
     const renderedSegments = segments.map((segment, index) => {
         const isLastSegment = index === segments.length - 1;
 
@@ -1143,13 +1203,14 @@ export function MessageRenderer({
             const isFirst = index === firstWorkflowIndex;
             const isLastWf = index === lastWorkflowIndex;
             return (
-                <TurnWorkflowSummary
-                    key={`wf-${index}`}
-                    blocks={segment.blocks}
-                    isActive={!!isGenerating && isLastWf}
-                    durationMs={isFirst ? durationMs : undefined}
-                    activityLabel={isLastWf ? activityLabel : null}
-                />
+                <div key={`wf-${index}`} className="my-1.5 w-full min-w-0 overflow-visible contain-layout">
+                    <TurnWorkflowSummary
+                        blocks={segment.blocks}
+                        isActive={!!isGenerating && isLastWf}
+                        durationMs={isFirst ? durationMs : undefined}
+                        activityLabel={isLastWf ? activityLabel : null}
+                    />
+                </div>
             );
         }
 
@@ -1157,12 +1218,31 @@ export function MessageRenderer({
         if (chunk.type === 'text') {
             const text = chunk.content;
             if (!text?.trim()) return null;
+            const shown = surface === "talk" ? talkProse(text) : text;
+            if (!shown.trim()) return null;
+            const textKey = `text-${textOrdinal}`;
+            textOrdinal += 1;
+            const prevText = isTextSegment(segments[index - 1]);
+            const nextText = isTextSegment(segments[index + 1]);
             return (
                 <div
-                    key={`text-${index}`}
-                    className="text-sm font-medium text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown"
+                    key={textKey}
+                    className={
+                        surface === "talk"
+                            ? "mb-0 w-fit max-w-full min-w-0 overflow-visible text-sm font-medium leading-[var(--conversation-line-height)] text-text-primary prose-compact chat-markdown"
+                            : cn(
+                                "w-fit max-w-[min(100%,32rem)] min-w-0 overflow-visible px-3.5 py-2 text-sm font-medium leading-[var(--conversation-line-height)] text-text-primary prose-compact chat-markdown bg-surface-4",
+                                recvBubbleRadius(prevText, nextText),
+                                prevText || nextText ? "mb-0.5" : "mb-2",
+                            )
+                    }
                 >
-                    <ChatMarkdown content={text} isGenerating={isGenerating} isLast={isLastSegment} />
+                    <ChatMarkdown
+                        content={shown}
+                        isGenerating={isGenerating}
+                        isLast={isLastSegment}
+                        plain={surface === "talk" || (!isLastSegment && !!isGenerating)}
+                    />
                 </div>
             );
         }
@@ -1254,6 +1334,17 @@ export function MessageRenderer({
                 />
             );
         }
+        if (chunk.type === 'plugin_connect') {
+            if (!chunk.pluginToolkit) return null;
+            return (
+                <PluginConnectCard
+                    key={`plugin-connect-${index}`}
+                    toolkit={chunk.pluginToolkit}
+                    name={chunk.pluginLabel}
+                    botName={talkName}
+                />
+            );
+        }
         if (chunk.type === 'sent_file') {
             return (
                 <SentFileCard
@@ -1266,17 +1357,17 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'attached_image') {
-            const src = chunk.content?.trim() || "";
-            if (!src) return null;
-            return (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    key={`image-${index}`}
-                    src={src}
-                    alt={chunk.file || ""}
-                    className="my-2 max-h-80 max-w-[420px] rounded-xl border border-border-subtle object-contain"
-                />
-            );
+            const previous = segments[index - 1];
+            if (previous?.kind === "chunk" && previous.chunk.type === "attached_image") return null;
+            const group = [];
+            for (let cursor = index; cursor < segments.length; cursor++) {
+                const next = segments[cursor];
+                if (next?.kind !== "chunk" || next.chunk.type !== "attached_image") break;
+                const src = next.chunk.content?.trim() || "";
+                if (src) group.push({ src, alt: next.chunk.file || "" });
+            }
+            if (group.length === 0) return null;
+            return <PhotoStack key={`attached-${index}`} photos={group} align="start" />;
         }
         if (chunk.type === 'design_previews') {
             const n = chunk.designPreviews?.length ?? 0;
@@ -1291,17 +1382,59 @@ export function MessageRenderer({
                 </p>
             );
         }
-        if (chunk.type === 'generated_svg' || chunk.type === 'generated_image' || chunk.type === 'generated_audio') {
+        if (chunk.type === 'generated_image') {
+            const previous = segments[index - 1];
+            if (previous?.kind === "chunk" && previous.chunk.type === "generated_image") return null;
+            const group = [];
+            for (let cursor = index; cursor < segments.length; cursor++) {
+                const next = segments[cursor];
+                if (next?.kind !== "chunk" || next.chunk.type !== "generated_image") break;
+                group.push(next.chunk);
+            }
+            const photos = group
+                .filter((item) => item.content?.trim() && item.commandStatus !== "failed")
+                .map((item) => ({
+                    src: item.content!.trim(),
+                    alt: item.mediaPrompt || item.query,
+                    mediaId: item.mediaId,
+                    model: item.mediaModel,
+                }));
+            if (photos.length === group.length && photos.length > 0) {
+                return (
+                    <PhotoStack
+                        key={`photos-${index}`}
+                        photos={photos}
+                        align="start"
+                        onOpen={(photo) => {
+                            if (surface === "talk" && photo.mediaId) setSelectedTalkMediaId(photo.mediaId);
+                        }}
+                    />
+                );
+            }
+            return (
+                <div key={`photos-${index}`} className="flex flex-col gap-2">
+                    {group.map((item, offset) => (
+                        <GeneratedMediaCard
+                            key={`media-${index + offset}`}
+                            kind="image"
+                            src={item.content}
+                            prompt={item.mediaPrompt || item.query}
+                            credits={item.mediaCredits}
+                            loading={!!item.isGenerating && !item.content?.trim()}
+                            mediaId={item.mediaId}
+                            model={item.mediaModel}
+                            failed={item.commandStatus === "failed"}
+                            selectable={surface === "talk"}
+                        />
+                    ))}
+                </div>
+            );
+        }
+        if (chunk.type === 'generated_svg' || chunk.type === 'generated_audio') {
             return (
                 <GeneratedMediaCard
                     key={`media-${index}`}
-                    kind={
-                        chunk.type === "generated_svg"
-                            ? "svg"
-                            : chunk.type === "generated_audio"
-                              ? "audio"
-                              : "image"
-                    }
+                    kind={chunk.type === "generated_svg" ? "svg" : "audio"}
                     src={chunk.content}
                     prompt={chunk.mediaPrompt || chunk.query}
                     credits={chunk.mediaCredits}
@@ -1309,7 +1442,7 @@ export function MessageRenderer({
                     mediaId={chunk.mediaId}
                     model={chunk.mediaModel}
                     failed={chunk.commandStatus === "failed"}
-                    selectable={surface === "talk" && chunk.type === "generated_image"}
+                    selectable={false}
                 />
             );
         }
@@ -1319,6 +1452,7 @@ export function MessageRenderer({
                     key={`review-debate-${index}`}
                     content={chunk.content || ''}
                     model={chunk.reviewModel}
+                    status={chunk.commandStatus}
                 />
             );
         }
@@ -1348,12 +1482,11 @@ export function MessageRenderer({
     });
 
     return (
-        <div className="flex flex-col gap-0 overflow-hidden">
+        <div className="flex w-fit max-w-full min-w-0 flex-col items-start gap-0 overflow-visible">
             {renderedSegments}
-            {showStatusLine && !segments.some((segment) => segment.kind === "workflow") ? (
-                <div className="flex items-center gap-2 py-0.5">
-                    <GeneratingIndicator label={statusLabel} />
-                    {statusLabel ? <span className="chat-text text-text-muted">{statusLabel}</span> : null}
+            {showStatusLine ? (
+                <div className="mt-1">
+                    <GeneratingIndicator label={statusPhrase ?? undefined} />
                 </div>
             ) : null}
         </div>

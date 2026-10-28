@@ -115,6 +115,7 @@ dependencies = [
  "notify",
  "nucleo-matcher",
  "open",
+ "png 0.17.16",
  "portable-pty",
  "regex",
  "reqwest 0.12.28",
@@ -160,6 +161,7 @@ dependencies = [
  "walkdir",
  "webview2-com",
  "window-vibrancy 0.5.3",
+ "windows 0.61.3",
  "windows-core 0.61.2",
  "winreg 0.52.0",
 ]

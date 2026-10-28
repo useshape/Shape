@@ -142,7 +142,11 @@ pub fn push_page_screenshot_followup(api_messages: &mut Vec<Value>, tag: &str, m
         let is_anthropic = model.starts_with("anthropic/");
         let mut parts: Vec<Value> = vec![json!({
             "type": "text",
-            "text": "screenshot_page captured this page. Look at the image(s) below before claiming success. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+            "text": if tag.contains("name=\"window.png\"") {
+                "A window was captured. Look at the image before claiming what is on screen. If it is the wrong window, list windows and capture again with a tighter title."
+            } else {
+                "screenshot_page captured this page. Look at the image(s) below before claiming success. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+            }
         })];
         for data_url in data_urls {
             if is_anthropic {
@@ -204,17 +208,116 @@ pub fn build_api_history(history: &[ChatMessage]) -> Vec<ChatMessage> {
     let stripped: Vec<ChatMessage> = history
         .iter()
         .map(|msg| {
-            if msg.role != "assistant" {
-                return msg.clone();
-            }
+            let cleaned = if msg.role == "assistant" {
+                strip_tool_markup_for_api(&msg.content)
+            } else {
+                collapse_data_urls(&msg.content)
+            };
+            // A single recent turn can be a screenshot or a scraped page. Middle-turn
+            // trimming leaves the tail intact, which is how a 1MB reply gets resent.
+            let cap = if msg.role == "assistant" {
+                ASSISTANT_MESSAGE_API_CAP
+            } else {
+                USER_MESSAGE_API_CAP
+            };
             ChatMessage {
-                content: strip_tool_markup_for_api(&msg.content),
+                content: cap_message_tail(&cleaned, cap),
                 ..msg.clone()
             }
         })
         .collect();
 
     trim_middle_history(&stripped, API_HISTORY_SOFT_BUDGET)
+}
+
+/// Saved Chat/Cowork replies keep the text and photos. Page dumps, browser frames,
+/// and the model's "nothing left to do" notes stay out of the thread.
+pub fn compact_talk_history(content: &str) -> String {
+    let mut content = content.to_string();
+    for (open, close) in [
+        ("<web_result", "</web_result>"),
+        ("<web_search", "</web_search>"),
+        ("<web_visit", "</web_visit>"),
+        ("<browse_session", "</browse_session>"),
+        ("<think", "</think>"),
+        ("<thought", "</thought>"),
+        ("<tool_result", "</tool_result>"),
+        ("<shown_images", "</shown_images>"),
+        ("<search_result", "</search_result>"),
+        ("<status", "</status>"),
+        ("<todos", "</todos>"),
+        ("<plugin_call", "</plugin_call>"),
+        ("<place_map", "</place_map>"),
+    ] {
+        strip_paired(&mut content, open, close);
+    }
+    let kept = content
+        .lines()
+        .filter(|line| !is_self_talk_line(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    cap_message_tail(&kept, 16_000)
+}
+
+fn strip_paired(content: &mut String, open: &str, close: &str) {
+    loop {
+        let Some(start) = content.find(open) else { break };
+        let Some(rel) = content[start..].find(close) else {
+            content.replace_range(start.., "");
+            break;
+        };
+        let end = start + rel + close.len();
+        content.replace_range(start..end, "");
+    }
+}
+
+fn is_self_talk_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.chars().count() > 280 {
+        return false;
+    }
+    let lower = trimmed.to_lowercase();
+    lower.contains("nothing left to do")
+        || lower.contains("nothing more to do")
+        || lower.contains("nothing else to do")
+        || lower.contains("no further action")
+        || lower.contains("the answer is up above")
+        || lower.contains("there is nothing left")
+        || lower.contains("there's nothing left")
+}
+
+fn cap_message_tail(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let char_count = text.chars().count();
+    let tail: String = text
+        .chars()
+        .skip(char_count.saturating_sub(max_chars))
+        .collect();
+    format!("[earlier part omitted]\n{tail}")
+}
+
+fn collapse_data_urls(content: &str) -> String {
+    let mut out = String::new();
+    let mut rest = content;
+    while let Some(at) = rest.find("data:image") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at..];
+        let end = after
+            .find(|c: char| c.is_whitespace() || c == '<' || c == '"')
+            .unwrap_or(after.len());
+        if end > 180 {
+            out.push_str("[image]");
+            rest = &after[end..];
+        } else {
+            let ch = after.chars().next().unwrap_or('d');
+            out.push(ch);
+            rest = &after[ch.len_utf8()..];
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 fn strip_think_blocks(content: &str) -> String {
@@ -239,11 +342,17 @@ fn strip_think_blocks(content: &str) -> String {
 }
 
 fn strip_tool_markup_for_api(content: &str) -> String {
-    let mut content = content.to_string();
+    let mut content = collapse_data_urls(content);
     for (open, close, placeholder) in [
         ("<attached_image", "</attached_image>", "[image]"),
+        ("<generated_image", "</generated_image>", "[image]"),
         ("<sent_file", "</sent_file>", "[file]"),
         ("<browse_session", "</browse_session>", "[browser frame]"),
+        ("<web_result", "</web_result>", ""),
+        ("<web_search", "</web_search>", ""),
+        ("<web_visit", "</web_visit>", ""),
+        ("<shown_images", "</shown_images>", ""),
+        ("<search_result", "</search_result>", ""),
         ("<insight_card", "</insight_card>", "[chart]"),
         ("<chart", "</chart>", "[chart]"),
         ("<filter_table", "</filter_table>", "[filter table]"),
@@ -385,6 +494,8 @@ pub const HISTORY_CHAR_BUDGET: usize = 60_000;
 const API_HISTORY_SOFT_BUDGET: usize = 40_000;
 const KEEP_RECENT_MESSAGES: usize = 10;
 const MIDDLE_MESSAGE_MAX_CHARS: usize = 800;
+const ASSISTANT_MESSAGE_API_CAP: usize = 12_000;
+const USER_MESSAGE_API_CAP: usize = 24_000;
 
 /// Attach per-turn state to the latest user message. Git status, diagnostics, mode
 /// instructions, and the repo map change every request. They must not live in the
@@ -544,6 +655,40 @@ mod tests {
         assert_eq!(trimmed.len(), history.len());
         assert_eq!(trimmed.last().unwrap().content.len(), 10_000);
         assert!(trimmed[5].content.contains("chars omitted"));
+    }
+
+    #[test]
+    fn a_huge_recent_reply_is_not_sent_back() {
+        let dump = format!(
+            "<web_result query=\"restaurants\">{}</web_result>\nThere's nothing left to do.",
+            "x".repeat(80_000)
+        );
+        let history = vec![
+            ChatMessage {
+                role: "user".into(),
+                content: "find a place".into(),
+                timestamp: 0.0,
+                stats: None,
+                model: None,
+                feedback: None,
+                hidden: false,
+            },
+            ChatMessage {
+                role: "assistant".into(),
+                content: dump,
+                timestamp: 0.0,
+                stats: None,
+                model: None,
+                feedback: None,
+                hidden: false,
+            },
+        ];
+        let api = build_api_history(&history);
+        assert!(api[1].content.len() < 13_000);
+        assert!(!api[1].content.contains("web_result"));
+        let saved = compact_talk_history(&history[1].content);
+        assert!(!saved.to_lowercase().contains("nothing left to do"));
+        assert!(saved.len() < 1_000);
     }
 
     #[test]

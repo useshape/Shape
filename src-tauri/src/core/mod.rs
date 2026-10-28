@@ -8,6 +8,7 @@ pub mod ram_debug;
 pub mod result;
 pub mod state;
 pub mod webview_recovery;
+pub mod window_material;
 pub mod website_url;
 #[cfg(windows)]
 pub mod windows_notifications;

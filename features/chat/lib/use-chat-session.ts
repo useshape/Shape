@@ -37,7 +37,8 @@ import {
     setIncognitoChat,
 } from "@/lib/chat/incognito";
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
-import { chatMark, clearNextChat, ensureDraftForCurrentMode, sealNextChat } from "@/lib/sidebar/chat-lanes";
+import { chatMark, clearNextChat, ensureDraftForCurrentMode, laneFor, lastLaneChat, sealNextChat } from "@/lib/sidebar/chat-lanes";
+import { isPlaceholderView } from "./live-turn-key";
 import { getWorkspaceMode, isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import { conversationStorePath } from "@/lib/chat/conversation-store";
 import { getSelectedTalkMediaId } from "@/lib/chat/talk-media";
@@ -204,13 +205,14 @@ export function useChatSession() {
     );
     const [fastMode, setFastMode] = React.useState(() => readComposerPrefs().fast ?? true);
     const tabsHydratedForRef = React.useRef<string | null>(null);
+    const seenStoreRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
         setSelectedMode((mode) =>
             mode === "Debug" || mode === "Security"
                 ? "Review"
-                : mode === "Design"
-                  ? "Visual"
+                : mode === "Design" || mode === "Visual"
+                  ? "Code"
                   : mode,
         );
     }, []);
@@ -260,10 +262,22 @@ export function useChatSession() {
         let cancelled = false;
         setTabsReady(false);
         const key = chatTabsStorageKey(storePath);
+        const switching = seenStoreRef.current !== null && seenStoreRef.current !== key;
+        seenStoreRef.current = key;
         tabsHydratedForRef.current = key;
+        if (switching) {
+            setMessages([]);
+            startDraftChat();
+            setConversationId(null);
+            conversationIdRef.current = null;
+        }
 
         void (async () => {
+            const mode = getWorkspaceMode();
+            const laneFallback = isTalkWorkspace(mode) ? "Chat" : "Code";
             const persisted = readPersistedChatTabs(storePath);
+            const remembered = lastLaneChat(mode);
+            let loadedId: string | null = null;
             if (persisted) {
                 const tabs = persisted.tabs.filter((t) => t.id !== "__demo_chat__");
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
@@ -272,31 +286,51 @@ export function useChatSession() {
                 const activeId = persisted.activeId === "__demo_chat__" ? NEW_CHAT_TAB_ID : persisted.activeId;
                 setOpenChatTabs(tabs);
                 setActiveChatTabId(activeId);
-                if (activeId !== NEW_CHAT_TAB_ID && !isEphemeralChatTabId(activeId)) {
-                    try {
-                        if (!resumeLiveConversation(activeId)) {
-                            await commands.loadConversation(
-                                activeId,
-                                storePath ?? undefined,
-                            );
-                        }
-                        if (!cancelled) {
-                            setConversationId(activeId);
-                            setCurrentConversationId(activeId);
-                            clearAllDesignPreviewSessions();
-                            setContextSummarized(false);
-                        }
-                    } catch (err) {
-                        // Ephemeral / deleted tabs — fall back to a draft quietly.
-                        if (!cancelled) {
-                            setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
-                            setActiveChatTabId(NEW_CHAT_TAB_ID);
-                        }
-                    }
+                if (
+                    activeId !== NEW_CHAT_TAB_ID
+                    && !isEphemeralChatTabId(activeId)
+                    && laneFor(activeId, laneFallback) === mode
+                ) {
+                    loadedId = activeId;
                 }
             } else {
                 setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
+            }
+            if (!loadedId && remembered && laneFor(remembered, laneFallback) === mode) {
+                loadedId = remembered;
+            }
+            if (loadedId) {
+                try {
+                    if (!resumeLiveConversation(loadedId)) {
+                        await commands.loadConversation(loadedId, storePath ?? undefined);
+                    }
+                    if (!cancelled) {
+                        setConversationId(loadedId);
+                        setCurrentConversationId(loadedId);
+                        setViewingConversation(loadedId);
+                        clearAllDesignPreviewSessions();
+                        setContextSummarized(false);
+                    }
+                } catch {
+                    if (!cancelled) {
+                        setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
+                        setActiveChatTabId(NEW_CHAT_TAB_ID);
+                    }
+                }
+            } else if (switching) {
+                try {
+                    await commands.newChat(storePath ?? undefined);
+                    const id = await commands.getCurrentConversationId();
+                    if (!cancelled && id) {
+                        setConversationId(id);
+                        setCurrentConversationId(id);
+                        setViewingConversation(id);
+                        setMessages([]);
+                    }
+                } catch {
+                    /* draft stays empty */
+                }
             }
             if (!cancelled) setTabsReady(true);
         })();
@@ -304,7 +338,7 @@ export function useChatSession() {
         return () => {
             cancelled = true;
         };
-    }, [storePath, setContextSummarized]);
+    }, [storePath, setContextSummarized, setMessages, startDraftChat, resumeLiveConversation, setViewingConversation]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -672,12 +706,15 @@ export function useChatSession() {
                 await refreshMetadata();
                 return;
             }
+            const viewAtStart = conversationIdRef.current;
             try {
                 const convs = isTalkWorkspace(workspaceModeId)
                     ? await commands.getConversations(undefined, true)
                     : await commands.getConversations(storePath ?? undefined);
                 const title = await commands.getChatTitle();
                 const convId = await commands.getCurrentConversationId();
+                if (!isPlaceholderView(viewAtStart) && conversationIdRef.current !== viewAtStart) return;
+                if (!isPlaceholderView(viewAtStart) && viewAtStart && convId !== viewAtStart) return;
 
                 setRecentConvs(convs);
                 setChatTitle(title);
@@ -788,6 +825,21 @@ export function useChatSession() {
         window.addEventListener("shape-chat-cycle-mode", onCycle);
         return () => window.removeEventListener("shape-chat-cycle-mode", onCycle);
     }, []);
+
+    React.useEffect(() => {
+        const onCycleChat = (event: Event) => {
+            const dir = (event as CustomEvent<{ dir?: number }>).detail?.dir ?? 1;
+            const ids = recentConvs.map((row) => row.id).filter(Boolean);
+            if (ids.length < 2) return;
+            const current = conversationIdRef.current;
+            const index = Math.max(0, ids.indexOf(current || ""));
+            const next = ids[(index + (dir < 0 ? -1 : 1) + ids.length) % ids.length];
+            if (!next || next === current) return;
+            window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: next }));
+        };
+        window.addEventListener("shape-chat-cycle", onCycleChat as EventListener);
+        return () => window.removeEventListener("shape-chat-cycle", onCycleChat as EventListener);
+    }, [recentConvs]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
@@ -1016,7 +1068,6 @@ export function useChatSession() {
             const messageWithWorkflows = applyWorkflows(expandedMessage, settings.ai.workflows);
             const pluginAutoAllow = matchWorkflows(userMsg, settings.ai.workflows).flatMap(workflowAllowKeys);
 
-            const modelToSend = selectedModelRef.current || "auto";
             const modeToSend = selectedModeRef.current;
             const catalogIds = getCatalogModels().map((m) => m.id);
             const subagentSend = subagentModelsForSend(settings.ai.subagentModels, catalogIds, {
@@ -1026,6 +1077,8 @@ export function useChatSession() {
             });
 
             const workspace = getWorkspaceMode();
+            const talkSend = isTalkWorkspace(workspace);
+            const modelToSend = talkSend ? "auto" : (selectedModelRef.current || "auto");
             const mark = conversationIdRef.current ? chatMark(conversationIdRef.current) : null;
             const loop = (window as unknown as { __shapeLoopWorker?: { name: string; job?: string } }).__shapeLoopWorker;
             if (loop) delete (window as unknown as { __shapeLoopWorker?: unknown }).__shapeLoopWorker;
@@ -1035,7 +1088,7 @@ export function useChatSession() {
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 modelToSend,
-                isTalkWorkspace(workspace) ? "Ask" : modeToSend,
+                isTalkWorkspace(workspace) ? "Agent" : modeToSend,
                 mergedRules,
                 token,
                 undefined,
@@ -1048,8 +1101,10 @@ export function useChatSession() {
                     pluginApprovals: settings.ai.pluginApprovals,
                     pluginDisabledActions: settings.ai.pluginDisabledActions,
                     pluginAutoAllow,
+                    computerUse: settings.ai.computerUse,
+                    shellAutomation: settings.ai.shellAutomation,
                 },
-                reasoningEffort,
+                talkSend ? "low" : reasoningEffort,
                 priorityTierForCredits(shapeAuth.creditsRemaining, shapeAuth.creditsIncluded),
                 userMsg,
                 undefined,
@@ -1448,6 +1503,31 @@ export function useChatSession() {
         );
 
         register(
+            listen<{ conversationId?: string | null; seconds?: number; reason?: string }>("chat_followup", (event) => {
+                const cid = event.payload?.conversationId?.trim();
+                const seconds = Math.max(20, Math.min(900, Number(event.payload?.seconds) || 60));
+                const reason = (event.payload?.reason || "Continue the earlier request.").trim();
+                if (!cid) return;
+                window.setTimeout(() => {
+                    void (async () => {
+                        if (conversationIdRef.current !== cid) {
+                            try {
+                                await commands.loadConversation(cid);
+                                setConversationId(cid);
+                                setCurrentConversationId(cid);
+                                setActiveChatTabId(cid);
+                            } catch {
+                                return;
+                            }
+                        }
+                        if (isLoadingRef.current) return;
+                        await handleSendMessageRef.current(`<scheduled_followup>${reason}</scheduled_followup>`);
+                    })();
+                }, seconds * 1000);
+            }),
+        );
+
+        register(
             listen<{ title?: string; conversationId?: string }>("chat_title", (event) => {
                 const title = event.payload?.title?.trim();
                 const convId = event.payload?.conversationId?.trim();
@@ -1473,9 +1553,18 @@ export function useChatSession() {
     const handleNewChat = async () => {
         try {
             ensureDraftForCurrentMode();
+            conversationIdRef.current = `__switching__${Date.now()}`;
             // Do not stop background generation; only the Stop button cancels.
             startDraftChat();
-            await commands.newChat();
+            const mode = getWorkspaceMode();
+            const store = conversationStorePath(mode, project_path);
+            await commands.newChat(store);
+            const convId = await commands.getCurrentConversationId();
+            const seededTitle = convId ? sealNextChat(convId) : null;
+            if (convId && seededTitle) {
+                await commands.renameConversation(convId, seededTitle).catch(() => {});
+            }
+            if (convId) setViewingConversation(convId);
             if (!isIncognitoChat()) void captureTelemetry("chat_new");
             clearAllDesignPreviewSessions();
             setSendError(null);
@@ -1484,15 +1573,25 @@ export function useChatSession() {
             void import("@/features/agent/subagents/store").then(({ resetSubagentsForParent }) => {
                 resetSubagentsForParent(conversationIdRef.current);
             });
-            setChatTitle("New Chat");
-            setConversationId(null);
+            const title = seededTitle || "New Chat";
+            setChatTitle(title);
+            setConversationId(convId);
+            setCurrentConversationId(convId);
             setResolvedFiles(new Set());
             clearAllProposedEdits();
-            setOpenChatTabs((prev) => {
-                const others = prev.filter((tab) => tab.id !== NEW_CHAT_TAB_ID);
-                return [{ id: NEW_CHAT_TAB_ID, title: "New Chat" }, ...others];
-            });
-            setActiveChatTabId(NEW_CHAT_TAB_ID);
+            if (convId) {
+                setOpenChatTabs((prev) => {
+                    const others = prev.filter((tab) => tab.id !== NEW_CHAT_TAB_ID && tab.id !== convId);
+                    return [{ id: convId, title }, ...others];
+                });
+                setActiveChatTabId(convId);
+            } else {
+                setOpenChatTabs((prev) => {
+                    const others = prev.filter((tab) => tab.id !== NEW_CHAT_TAB_ID);
+                    return [{ id: NEW_CHAT_TAB_ID, title: "New Chat" }, ...others];
+                });
+                setActiveChatTabId(NEW_CHAT_TAB_ID);
+            }
             await refreshHistory(true);
         } catch (err) {
             console.error("Failed to start new chat:", err);
@@ -1609,13 +1708,17 @@ export function useChatSession() {
                     : (await commands.getConversations()).find((c) => c.id === id));
 
             try {
+                conversationIdRef.current = id;
+                setConversationId(id);
                 setViewingConversation(id);
+                syncOpenTabs(id, conv?.title?.trim() || "Chat");
                 await commands.loadConversation(id, conv?.project_path ?? project_path);
+                if (conversationIdRef.current !== id) return;
                 clearAllDesignPreviewSessions();
                 setContextSummarized(false);
-                const history = await commands.getChatHistory();
+                const history = await commands.getChatHistory(40);
+                if (conversationIdRef.current !== id) return;
                 setMessages(history);
-                await refreshHistory(true);
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 if (!message.includes("Conversation not found")) {
@@ -1630,8 +1733,8 @@ export function useChatSession() {
     React.useEffect(() => {
         const onLoad = (e: Event) => {
             const id = (e as CustomEvent<{ id?: string }>).detail?.id;
-            if (!id) return;
-            void handleLoadConversation(id, { force: true });
+            if (!id || (id === conversationIdRef.current && messagesRef.current.length > 0)) return;
+            void handleLoadConversation(id);
         };
         window.addEventListener("shape-chat-load", onLoad as EventListener);
         return () => window.removeEventListener("shape-chat-load", onLoad as EventListener);

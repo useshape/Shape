@@ -75,10 +75,6 @@ export interface ShapeSettings {
         scrollback: number;
         copyOnSelect: boolean;
     };
-    voice: {
-        /** `"default"` or a MediaDeviceInfo.deviceId from the microphone list. */
-        deviceId: string;
-    };
     git: {
         autoFetch: boolean;
         autoFetchInterval: number;
@@ -107,12 +103,12 @@ export interface ShapeSettings {
         reviewAdversarialEnabled: boolean;
         /** Trigger phrase → prompt (+ optional plugin tool) injected on send. */
         workflows: AgentWorkflow[];
-        /** Ask before the first Multiwork send. */
-        multiworkConfirm: boolean;
-        /** Show agent cards on the composer during Multiwork. */
-        multiworkShowChips: boolean;
         /** Terminal command approval mode (Cursor-style run modes). */
         autoRunMode: AutoRunModeSetting;
+        /** List windows, capture one, and inspect running processes. */
+        computerUse: boolean;
+        /** Interpreters and installed programs may run. Destructive commands stay blocked. */
+        shellAutomation: boolean;
         /** Stage agent file edits for approval before they touch disk. */
         requireEditApproval: boolean;
         /** Destructive git commands always ask, even in "run everything". */
@@ -260,9 +256,6 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         scrollback: 5000,
         copyOnSelect: false,
     },
-    voice: {
-        deviceId: "default",
-    },
     git: {
         autoFetch: false,
         autoFetchInterval: 300,
@@ -285,9 +278,9 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         mcpServers: [],
         reviewAdversarialEnabled: true,
         workflows: [],
-        multiworkConfirm: true,
-        multiworkShowChips: true,
         autoRunMode: "auto",
+        computerUse: true,
+        shellAutomation: true,
         requireEditApproval: false,
         protectDestructiveGit: true,
         pluginApprovalDefault: "ask",
@@ -376,7 +369,6 @@ let currentSettings: ShapeSettings = {
     ...DEFAULT_SETTINGS,
     editor: { ...DEFAULT_SETTINGS.editor },
     terminal: { ...DEFAULT_SETTINGS.terminal },
-    voice: { ...DEFAULT_SETTINGS.voice },
     git: { ...DEFAULT_SETTINGS.git },
     ai: { ...DEFAULT_SETTINGS.ai },
     files: { ...DEFAULT_SETTINGS.files },
@@ -444,7 +436,6 @@ function mergeSettings(base: ShapeSettings, patch: Partial<ShapeSettings>): Shap
     return {
         editor: { ...DEFAULT_SETTINGS.editor, ...base.editor, ...patch.editor },
         terminal: { ...DEFAULT_SETTINGS.terminal, ...base.terminal, ...patch.terminal },
-        voice: { ...DEFAULT_SETTINGS.voice, ...base.voice, ...patch.voice },
         git: {
             ...DEFAULT_SETTINGS.git,
             ...base.git,
@@ -682,30 +673,6 @@ export function updateSettings(patch: Partial<ShapeSettings>): void {
         } catch { /* ignore */ }
     })();
     emit();
-}
-
-/** `true` uses the system default. A saved device id is requested exactly. */
-export function microphoneConstraints(deviceId: string): MediaTrackConstraints | boolean {
-    if (!deviceId || deviceId === "default") return true;
-    return { deviceId: { exact: deviceId } };
-}
-
-/** One-line reason a `getUserMedia` call failed. */
-export function microphoneErrorMessage(err: unknown): string {
-    const name = err instanceof Error ? err.name : "";
-    switch (name) {
-        case "NotAllowedError":
-        case "SecurityError":
-            return "Microphone access is blocked. Allow it for Shape in Windows privacy settings.";
-        case "NotFoundError":
-        case "OverconstrainedError":
-            return "No microphone was found.";
-        case "NotReadableError":
-        case "AbortError":
-            return "The microphone is in use by another app.";
-        default:
-            return "The microphone couldn't be started.";
-    }
 }
 
 export function updateSettingSection<K extends keyof ShapeSettings>(

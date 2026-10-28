@@ -27,6 +27,7 @@ type LaneRecord = {
     color?: string;
     job?: string;
     taught?: string;
+    name?: string;
 };
 
 export type LaneDraft = LaneRecord & {
@@ -57,18 +58,32 @@ function emit() {
     for (const listener of listeners) listener();
 }
 
+function normalizeMode(mode: string | undefined): WorkspaceModeId {
+    if (mode === "Chat" || mode === "GTM" || mode === "Cowork" || mode === "Image") return "Chat";
+    return "Code";
+}
+
 function load() {
     if (loaded || typeof window === "undefined") return;
     loaded = true;
     try {
         const raw = JSON.parse(localStorage.getItem(KEY) || "{}") as Record<string, LaneRecord>;
-        if (raw && typeof raw === "object") lanes = raw;
+        if (raw && typeof raw === "object") {
+            lanes = Object.fromEntries(
+                Object.entries(raw).map(([id, lane]) => [id, { ...lane, mode: normalizeMode(lane.mode) }]),
+            );
+        }
     } catch {
         lanes = {};
     }
     try {
-        const raw = JSON.parse(localStorage.getItem(LAST_KEY) || "{}") as Partial<Record<WorkspaceModeId, string>>;
-        if (raw && typeof raw === "object") last = raw;
+        const raw = JSON.parse(localStorage.getItem(LAST_KEY) || "{}") as Record<string, string>;
+        if (raw && typeof raw === "object") {
+            last = {
+                Code: raw.Code,
+                Chat: raw.Chat || raw.GTM || raw.Cowork,
+            };
+        }
     } catch {
         last = {};
     }
@@ -99,7 +114,15 @@ export function getLaneSnapshotServer(): Snapshot {
 
 export function chatLane(id: string): WorkspaceModeId {
     load();
-    return lanes[id]?.mode ?? "Code";
+    return normalizeMode(lanes[id]?.mode);
+}
+
+/** Untagged chats belong to the store that loaded them, not to Code by default. */
+export function laneFor(id: string, fallback: WorkspaceModeId): WorkspaceModeId {
+    load();
+    const lane = lanes[id];
+    if (!lane) return fallback;
+    return normalizeMode(lane.mode);
 }
 
 export function chatMark(id: string): LaneRecord | null {
@@ -147,6 +170,7 @@ export function sealNextChat(id: string): string | null {
                 color: draft.color,
                 job: draft.job,
                 taught: draft.taught,
+                name: draft.title?.trim() || undefined,
             },
         };
         saveLanes();
@@ -169,22 +193,15 @@ export function patchLane(id: string, patch: Partial<LaneRecord>) {
 export function ensureDraftForCurrentMode() {
     load();
     if (draft) return;
-    const mode = getWorkspaceMode();
-    if (mode === "Cowork") {
-        armNextChat({
-            mode,
-            shape: "circle",
-            color: "#3b82f6",
-            title: "Manager",
-            job: "Coordinate teammates and keep work moving.",
-        });
-        return;
-    }
-    if (mode === "GTM") {
-        armNextChat({ mode, shape: "circle", color: nextWorkerColor("GTM") });
-        return;
-    }
-    armNextChat({ mode });
+    armNextChat({ mode: getWorkspaceMode() });
+}
+
+export function assignLane(id: string, mode: WorkspaceModeId) {
+    load();
+    if (!id || lanes[id]) return;
+    lanes = { ...lanes, [id]: { mode } };
+    saveLanes();
+    emit();
 }
 
 export function rememberLaneChat(mode: WorkspaceModeId, id: string) {

@@ -67,7 +67,7 @@ If you paste model output into a thread, quote it, say a model wrote it, and add
 
 ## Run the app
 
-Node.js 18+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/):
+Node.js 24.22.1 or later on the 24.x line, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/):
 
 ```bash
 npm install

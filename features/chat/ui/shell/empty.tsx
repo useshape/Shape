@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { FrostMark } from "@/components/ui/frost-mark";
 import { Icon } from "@/components/ui/icon";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import {
@@ -34,8 +33,7 @@ export function ChatEmptyState() {
     const folder = modeId === "Code" && project_path ? getRepoName(project_path) : null;
 
     return (
-        <div className="flex w-full items-center justify-center gap-3 px-2 pb-10">
-            <FrostMark size={40} live label="Shape" />
+        <div className="flex w-full items-center justify-center px-2">
             <h1 className="flex min-w-0 flex-wrap items-baseline justify-center gap-x-2 text-3xl leading-tight text-text-primary">
                 <span>What do you want to</span>
                 <DropdownMenu>
@@ -47,11 +45,13 @@ export function ChatEmptyState() {
                             {mode.verb}
                         </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-44">
+                    <DropdownMenuContent align="start" className="w-72">
                         {WORKSPACE_MODES.map((item) => (
                             <DropdownMenuItem key={item.id} onSelect={() => setWorkspaceMode(item.id)}>
-                                <img src={item.icon} alt="" width={16} height={16} className="size-4 shrink-0" />
-                                <span className="min-w-0 flex-1">{item.id}</span>
+                                <span className="flex min-w-0 flex-1 flex-col">
+                                    <span>{item.id}</span>
+                                    <span className="text-xs text-text-muted">{item.description}</span>
+                                </span>
                                 {item.id === modeId ? (
                                     <Icon icon={Checkmark20Regular} className="text-text-muted" />
                                 ) : null}

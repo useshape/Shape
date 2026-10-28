@@ -131,7 +131,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
                 const { initSettings } = await import("@/lib/settings");
                 await initSettings();
+                if (await currentWindow.isMinimized()) {
+                    await currentWindow.unminimize();
+                }
                 await currentWindow.show();
+                await currentWindow.setFocus();
             } catch (e) {
                 console.error("Failed to manage window flow:", e);
             }
@@ -141,7 +145,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     if (isOnboarding) {
         return (
-            <div className="w-full h-screen flex flex-col font-sans text-text-primary text-sm overflow-hidden">
+            <div className="flex h-screen w-full flex-col overflow-hidden bg-background font-sans text-sm text-text-primary">
                 <main className="flex-1 overflow-hidden min-h-0">
                     {children}
                 </main>
@@ -227,7 +231,7 @@ function Content({ children }: { children: React.ReactNode }) {
     return (
         <div
             id="shape-workbench"
-            className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background select-none"
+            className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden select-none"
         >
             <div
                 className={cn(

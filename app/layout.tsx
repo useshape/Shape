@@ -25,7 +25,7 @@ export default function RootLayout({
       className="dark h-full overflow-hidden text-sm bg-transparent text-text-primary"
       suppressHydrationWarning
     >
-      <body className="h-full flex flex-col overflow-hidden bg-transparent text-text-primary antialiased font-sans">
+      <body className="flex h-full flex-col overflow-hidden bg-transparent text-text-primary antialiased font-sans">
         <ClientLayout>
           {children}
         </ClientLayout>

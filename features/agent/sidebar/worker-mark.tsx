@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { FrostMark } from "@/components/ui/frost-mark";
 import { armNextChat, nextWorkerColor, WORKER_COLORS, WORKER_SHAPES, type WorkerShape } from "@/lib/sidebar/chat-lanes";
 
-export const COWORK_JOB_PRESETS = [
+export const JOB_PRESETS = [
     { name: "Sales Outbound", job: "Find and write outreach to qualified leads." },
     { name: "Talent Scout", job: "Source candidates and draft outreach." },
     { name: "Paid Media", job: "Plan and iterate paid campaigns." },
@@ -33,13 +33,15 @@ export function WorkerMark({
     color,
     size = 32,
     live = false,
+    mood = "idle",
 }: {
     shape: WorkerShape;
     color: string;
     size?: number;
     live?: boolean;
+    mood?: "idle" | "typing" | "working" | "playful";
 }) {
-    return <FrostMark size={size} shape={shape} tint={color} live={live} label="" />;
+    return <FrostMark size={size} shape={shape} tint={color} live={live} mood={mood} label="" />;
 }
 
 export function CreateWorkerDialog({
@@ -59,7 +61,7 @@ export function CreateWorkerDialog({
             setName("");
             setJob("");
             setShape("circle");
-            setColor(nextWorkerColor("Cowork"));
+            setColor(nextWorkerColor("Chat"));
         }
         onOpenChange(next);
     };
@@ -67,7 +69,7 @@ export function CreateWorkerDialog({
     const create = () => {
         const title = name.trim();
         if (!title) return;
-        armNextChat({ mode: "Cowork", shape, color, title, job: job.trim() });
+        armNextChat({ mode: "Chat", shape, color, title, job: job.trim() });
         window.dispatchEvent(new Event("shape-chat-new"));
         window.dispatchEvent(new Event("shape-chat-focus-input"));
         close(false);
@@ -103,7 +105,7 @@ export function CreateWorkerDialog({
                         onChange={(event) => setJob(event.target.value)}
                     />
                     <div className="flex flex-wrap justify-center gap-1.5">
-                        {COWORK_JOB_PRESETS.map((preset) => (
+                        {JOB_PRESETS.map((preset) => (
                             <button
                                 key={preset.name}
                                 type="button"

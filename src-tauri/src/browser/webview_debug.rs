@@ -14,10 +14,6 @@ pub fn port() -> u16 {
     })
 }
 
-pub fn base_url() -> String {
-    format!("http://127.0.0.1:{}", port())
-}
-
 /// Must run before the Tauri webview is created.
 /// Remote-debugging flags stay debug-only — WebView2 docs warn not to ship them.
 pub fn install_env() {

@@ -29,10 +29,10 @@ Settings rows: `features/settings/ui/setting-controls.tsx`. Panel headers: `feat
 ## Tests
 
 ```bash
-npm run test:all
+bun run test:all
 ```
 
-Vitest plus Cargo. `npm run test` alone is not enough.
+Vitest plus Cargo. `bun run test` alone is not enough.
 
 ## Do not
 

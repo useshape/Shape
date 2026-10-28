@@ -59,7 +59,7 @@ Stable is the tested channel. On nightly you get the newest installer, and that 
 
 ## Build from source
 
-Node.js 18+, Rust, and [Tauri 2](https://v2.tauri.app/start/prerequisites/).
+Node.js 24.22.1 or later on the 24.x line, Rust, and [Tauri 2](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 npm install

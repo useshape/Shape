@@ -298,7 +298,7 @@ fn expand_user_path(user_path: &str) -> PathBuf {
     PathBuf::from(trimmed)
 }
 
-/// Absolute local reads (Chat / Cowork / GTM @ mentions) — still block secrets.
+/// Absolute local reads (Chat / Cowork @ mentions) — still block secrets.
 pub fn validate_user_read_path(user_path: &str) -> Result<PathBuf, AppError> {
     let expanded = expand_user_path(user_path);
     if !expanded.is_absolute() {

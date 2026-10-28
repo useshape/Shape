@@ -3,6 +3,7 @@
 mod chats;
 mod common;
 mod computer;
+mod desktop;
 mod discover;
 mod files;
 mod git;
@@ -70,6 +71,9 @@ pub struct ToolCtx<'a> {
     pub pty_state: Option<&'a PtyState>,
     pub turn_id: Option<String>,
     pub conversation_id: Option<String>,
+    /// When set, shell commands that name this directory are refused.
+    /// Chat uses it so the open code project cannot be edited from that mode.
+    pub sealed_project: Option<&'a str>,
 }
 
 impl<'a> ToolCtx<'a> {
@@ -127,7 +131,9 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
     }
 
-    if TRUST_GATED_TOOLS.contains(&name) || name.starts_with("mcp_") {
+    let talk_store = ctx.project_path.is_empty() || ctx.project_path == "__shape_talk__";
+    let chat_scratch = crate::agent::commands::history::is_chat_work_dir(ctx.project_path);
+    if !talk_store && !chat_scratch && (TRUST_GATED_TOOLS.contains(&name) || name.starts_with("mcp_")) {
         let trust = ctx.app_handle.state::<WorkspaceTrustState>();
         if !trust.is_trusted(ctx.project_path) {
             return blocked_outcome(name, WORKSPACE_UNTRUSTED_MSG);
@@ -154,6 +160,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "grep" => discover::tool_grep(&args, ctx).await,
         "search_codebase" => discover::tool_search_codebase(&args, ctx).await,
         "codebase_overview" => discover::tool_codebase_overview(&args, ctx).await,
+        "map_module" => discover::tool_map_module(&args, ctx),
         "list_chats" => chats::tool_list_chats(&args, ctx),
         "read_chat" => chats::tool_read_chat(&args, ctx),
         "web_search" => discover::tool_web_search(&args, ctx).await,
@@ -164,6 +171,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "plugin_search" => discover::tool_plugin_search(&args, ctx).await,
         "plugin_tools" => discover::tool_plugin_tools(&args, ctx).await,
         "plugin_run" => discover::tool_plugin_run(&args, ctx).await,
+        "plugin_connect" => discover::tool_plugin_connect(&args),
         "create_directory" => files::tool_create_directory(&args, ctx),
         "create_file" => files::tool_create_file(&args, ctx).await,
         "save_media" => files::tool_save_media(&args, ctx).await,
@@ -185,6 +193,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "git_switch" => git::tool_git_switch(&args, ctx),
         "git_sync" => git::tool_git_sync(ctx),
         "git_worktree" => git::tool_git_worktree(&args, ctx),
+        "inspect_computer" => desktop::tool_inspect_computer(&args, ctx).await,
         "decide" => computer::tool_decide(&args, ctx).await,
         "check_done" => computer::tool_check_done(&args, ctx).await,
         "list_terminals" => terminal::tool_list_terminals(ctx),
@@ -201,6 +210,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "mcp_call" => meta::tool_mcp_call_named(&args, ctx).await,
         "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
         "ask_user" => meta::tool_ask_user(&args, ctx).await,
+        "schedule_followup" => meta::tool_schedule_followup(&args, ctx),
         "generate_svg" => crate::agent::tools::generate::tool_generate_svg(&args, ctx).await,
         "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,
         "generate_audio" => crate::agent::tools::generate::tool_generate_audio(&args, ctx).await,

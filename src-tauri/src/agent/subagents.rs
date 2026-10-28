@@ -153,6 +153,7 @@ fn emit_card(app: &AppHandle, payload: Value) {
 pub fn spawn(
     app: AppHandle,
     project_path: String,
+    sealed_project: Option<String>,
     api_key: String,
     model: String,
     parent_mode: String,
@@ -191,6 +192,7 @@ pub fn spawn(
         let outcome = run_subagent_inner(
             app.clone(),
             project_path,
+            sealed_project,
             api_key,
             model.clone(),
             parent_mode,
@@ -285,6 +287,7 @@ struct SubagentDone {
 async fn run_subagent_inner(
     app: AppHandle,
     project_path: String,
+    sealed_project: Option<String>,
     api_key: String,
     model: String,
     parent_mode: String,
@@ -368,6 +371,8 @@ async fn run_subagent_inner(
         proxy_model: &proxy_model,
         mode,
         project_path: &checkout.project_path,
+        history_store: &checkout.project_path,
+        sealed_project: sealed_project.as_deref(),
         app_handle: &app,
         agent_state: &*agent_state,
         index_state: Some(&*index_state),
