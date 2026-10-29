@@ -375,7 +375,7 @@ pub fn collapse_duplicate_assistants(hist: &mut Vec<ChatMessage>) {
 
 /// Load disk history before mutating so a cold in-memory cache cannot overwrite
 /// every other chat in the project file.
-fn project_conversation_list<'a>(
+pub(crate) fn project_conversation_list<'a>(
     convs: &'a mut std::collections::HashMap<String, Vec<Conversation>>,
     proj_path: &str,
 ) -> &'a mut Vec<Conversation> {

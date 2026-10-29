@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject, ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject, ReactNode } from "react";
 import { ChatMessageItem } from "./item";
 import type { ChatMessage } from "@/lib/backend";
 import { toTimestampMs } from "@/lib/ui/timestamp";
@@ -55,23 +55,59 @@ export function ChatMessageList({
     talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
     talkName?: string;
 }) {
+    const redoRef = useRef(onRedo);
+    const restoreRef = useRef(onRestore);
+    const forkRef = useRef(onFork);
+    const resolvedRef = useRef(isFileEditResolved);
+    redoRef.current = onRedo;
+    restoreRef.current = onRestore;
+    forkRef.current = onFork;
+    resolvedRef.current = isFileEditResolved;
+    const redo = useCallback((index: number) => redoRef.current(index), []);
+    const restore = useCallback((index: number) => restoreRef.current(index), []);
+    const fork = useCallback((index: number) => forkRef.current?.(index), []);
+    const resolved = useCallback(
+        (file: string, replacement?: string) => resolvedRef.current(file, replacement),
+        [],
+    );
+    const [shown, setShown] = useState(8);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const count = messageGroups.length;
+    useLayoutEffect(() => {
+        if (shown >= count) return;
+        const scroll = rootRef.current?.closest("[data-chat-scroll]");
+        if (!(scroll instanceof HTMLElement)) return;
+        const distance = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+        if (distance < 280) scroll.scrollTop = scroll.scrollHeight;
+    }, [shown, count]);
+    useLayoutEffect(() => {
+        if (shown >= count) return;
+        if (typeof window.requestIdleCallback === "function") {
+            const id = window.requestIdleCallback(() => setShown(count), { timeout: 500 });
+            return () => window.cancelIdleCallback(id);
+        }
+        const id = window.setTimeout(() => setShown(count), 48);
+        return () => window.clearTimeout(id);
+    }, [shown, count]);
+    const visible = count > shown ? messageGroups.slice(count - shown) : messageGroups;
+
     return (
-        <>
+        <div ref={rootRef} className="flex min-h-full w-full min-w-0 flex-col">
             {messages.length === 0 ? (
                 <div className="flex min-h-full w-full flex-1 flex-col items-center justify-center">
                     {emptyState ?? null}
                 </div>
             ) : (
                 <>
-                    {messageGroups.map((group, groupIdx) => {
+                    {visible.map((group, groupIdx) => {
                         const stamp = group[0]?.msg.timestamp ?? 0;
-                        const prevStamp = messageGroups[groupIdx - 1]?.[0]?.msg.timestamp ?? 0;
+                        const prevStamp = visible[groupIdx - 1]?.[0]?.msg.timestamp ?? 0;
                         const showDay = groupIdx === 0 || dayKey(stamp) !== dayKey(prevStamp);
                         return (
                         <div
                             key={`turn-${group[0]?.msg.timestamp ?? groupIdx}`}
                             data-chat-turn={groupIdx}
-                            className="relative mb-3 flex flex-col gap-2 first:mt-2 last:mb-10 scroll-mt-4 overflow-visible"
+                            className="relative mb-3 flex flex-col gap-2 overflow-visible scroll-mt-4 first:mt-2 last:mb-10 [content-visibility:auto] [contain-intrinsic-size:auto_96px] last:[content-visibility:visible]"
                         >
                             {showDay && stamp > 0 ? (
                                 <div className="flex justify-center py-2">
@@ -100,10 +136,10 @@ export function ChatMessageList({
                                             isGenerating={isGen}
                                             activityLabel={isGen ? activityLabel : null}
                                             index={msgIdx}
-                                            onRedo={onRedo}
-                                            onRestore={onRestore}
-                                            onFork={onFork}
-                                            isFileEditResolved={isFileEditResolved}
+                                            onRedo={redo}
+                                            onRestore={restore}
+                                            onFork={onFork ? fork : undefined}
+                                            isFileEditResolved={resolved}
                                             fullWidthBubbles={fullWidthBubbles}
                                             surface={surface}
                                             talkMark={talkMark}
@@ -118,6 +154,6 @@ export function ChatMessageList({
                 </>
             )}
             <div ref={messagesEndRef} className="h-28 shrink-0" aria-hidden />
-        </>
+        </div>
     );
 }

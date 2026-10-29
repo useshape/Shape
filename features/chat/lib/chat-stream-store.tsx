@@ -78,6 +78,8 @@ type ChatStreamContextValue = ChatStreamState & {
     stopLiveTurn: () => void;
     /** Leave a running turn in the background and show an empty draft. */
     startDraftChat: () => void;
+    /** Last messages shown for a conversation, so a tab switch can paint before disk. */
+    peekSnapshot: (id: string) => ChatMessage[] | null;
 };
 
 const defaultState: ChatStreamState = {
@@ -145,6 +147,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
     const [sendError, setSendError] = React.useState<string | null>(null);
     const [contextSummarized, setContextSummarized] = React.useState(false);
     const viewingIdRef = React.useRef<string | null>(null);
+    const snapshotsRef = React.useRef(new Map<string, ChatMessage[]>());
     const liveTurnsRef = React.useRef<Map<string, LiveTurn>>(new Map());
     const messagesRef = React.useRef<ChatMessage[]>(messages);
     const turnIdRef = React.useRef<string | null>(null);
@@ -189,6 +192,16 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         setActivityLabel(null);
         setTurnPhase("idle");
     }, [applyLive]);
+
+    React.useEffect(() => {
+        const id = viewingIdRef.current;
+        if (!id || id.startsWith("__") || messages.length === 0) return;
+        snapshotsRef.current.set(id, messages);
+    }, [messages]);
+
+    const peekSnapshot = React.useCallback((id: string) => {
+        return snapshotsRef.current.get(id) ?? null;
+    }, []);
 
     const resumeLiveConversation = React.useCallback((id: string | null) => {
         if (!id) return false;
@@ -303,6 +316,17 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         const resolveLiveKey = (conversationId?: string | null) =>
             resolveLiveTurnKey(conversationId, liveTurnsRef.current.keys(), viewingIdRef.current, PENDING_KEY);
 
+        let paintFrame = 0;
+        const paintLive = () => {
+            paintFrame = 0;
+            const live = liveForView();
+            if (!live) return;
+            setMessages(live.messages);
+            setIsLoading(true);
+            setActivityLabel(live.activityLabel);
+            setTurnPhase(live.turnPhase);
+            setTurnId(live.turnId);
+        };
         const patchLive = (conversationId: string | null | undefined, update: (live: LiveTurn) => void) => {
             const key = resolveLiveKey(conversationId);
             if (!key || ignoredIdsRef.current.has(key)) return;
@@ -318,13 +342,8 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             if (shown && live.conversationId && isPlaceholderView(viewingIdRef.current)) {
                 viewingIdRef.current = live.conversationId;
             }
-            if (shown) {
-                setMessages(live.messages);
-                setIsLoading(true);
-                setActivityLabel(live.activityLabel);
-                setTurnPhase(live.turnPhase);
-                setTurnId(live.turnId);
-            }
+            if (!shown || paintFrame) return;
+            paintFrame = requestAnimationFrame(paintLive);
         };
 
         register(
@@ -675,6 +694,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
 
         return () => {
             disposed = true;
+            if (paintFrame) cancelAnimationFrame(paintFrame);
             unlisteners.forEach((fn) => fn());
         };
     }, [syncFromBackend]);
@@ -696,6 +716,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         resumeLiveConversation,
         stopLiveTurn,
         startDraftChat,
+        peekSnapshot,
     };
 
     return (

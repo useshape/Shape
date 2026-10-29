@@ -304,6 +304,96 @@ pub fn load_conversation(
     Ok(())
 }
 
+/// Point the agent at a conversation that is already on screen.
+/// Uses the in-memory transcript and does not read or write the history file
+/// when that transcript is cached. A live generation is left untouched.
+#[tauri::command]
+pub fn focus_conversation(
+    id: String,
+    project_path: Option<String>,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    if state.current_conversation_id.lock()?.as_deref() == Some(id.as_str()) {
+        return Ok(());
+    }
+    let generating = state.generation_state();
+    if generating.is_generating {
+        if generating.conversation_id.as_deref() == Some(id.as_str()) {
+            *state.current_conversation_id.lock()? = Some(id);
+        }
+        return Ok(());
+    }
+
+    let preferred = project_path
+        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+        .filter(|p| !p.is_empty());
+
+    if let Some(prev_id) = state.current_conversation_id.lock()?.clone() {
+        if let Some(proj) = state.current_project.lock()?.clone().filter(|p| !p.is_empty()) {
+            let history = state.history.lock()?.clone();
+            let title = state
+                .title
+                .lock()?
+                .clone()
+                .unwrap_or_else(|| "Chat".to_string());
+            let mut convs = state.conversations.lock()?;
+            let list = history::project_conversation_list(&mut convs, &proj);
+            if let Some(existing) = list.iter_mut().find(|c| c.id == prev_id) {
+                existing.history = history;
+                existing.title = title;
+            }
+        }
+    }
+
+    let found = {
+        let convs = state.conversations.lock()?;
+        let preferred_hit = preferred.as_ref().and_then(|proj| {
+            convs.get(proj).and_then(|list| {
+                list.iter()
+                    .find(|c| c.id == id)
+                    .map(|c| (proj.clone(), c.clone()))
+            })
+        });
+        preferred_hit.or_else(|| {
+            convs.iter().find_map(|(proj, list)| {
+                list.iter()
+                    .find(|c| c.id == id)
+                    .map(|c| (proj.clone(), c.clone()))
+            })
+        })
+    };
+
+    let (load_proj, conv) = if let Some(hit) = found {
+        hit
+    } else {
+        history::find_conversation_by_id(&id, preferred.as_deref())
+            .ok_or_else(|| AppError::Message("Conversation not found".to_string()))?
+    };
+
+    {
+        let mut convs = state.conversations.lock()?;
+        if !convs.contains_key(&load_proj) {
+            convs.insert(load_proj.clone(), history::load_conversations(&load_proj));
+        }
+    }
+
+    *state.current_project.lock()? = Some(load_proj);
+    *state.history.lock()? = conv.history;
+    *state.title.lock()? = Some(conv.title);
+    state.set_title_meta(conv.title_locked, conv.title_anchor_turns);
+    *state.current_conversation_id.lock()? = Some(id);
+    *state.conversation_kind.lock()? = Some(
+        if conv.kind.trim().is_empty() {
+            "chat".to_string()
+        } else {
+            conv.kind
+        },
+    );
+    state.set_incognito(false);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn set_chat_incognito(
     enabled: bool,

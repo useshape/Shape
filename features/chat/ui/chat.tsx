@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../lib/use-chat-session";
+import { groupChatMessages } from "../lib/chat-session-utils";
 import { ChatTitlebar, resolveChatCrumbTitle } from "./shell/titlebar";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
@@ -33,6 +34,51 @@ function stickyPromptText(content: string): string {
     if (cleaned.length <= 120) return cleaned;
     return `${cleaned.slice(0, 117)}…`;
 }
+
+import type { ChatMessage } from "@/lib/backend";
+
+const KeptThread = React.memo(function KeptThread({
+    messages,
+    isLoading,
+    activityLabel,
+    messagesEndRef,
+    handlers,
+    surface,
+    talkMark,
+    talkName,
+}: {
+    messages: ChatMessage[];
+    isLoading: boolean;
+    activityLabel: string | null;
+    messagesEndRef: React.RefObject<HTMLDivElement | null>;
+    handlers: React.RefObject<{
+        redo: (index: number) => void;
+        restore: (index: number) => void;
+        fork?: (index: number) => void;
+        resolved: (file: string, replacement?: string) => boolean;
+    }>;
+    surface: "code" | "talk";
+    talkMark: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
+    talkName: string;
+}) {
+    const groups = useMemo(() => groupChatMessages(messages), [messages]);
+    return (
+        <ChatMessageList
+            messageGroups={groups}
+            messages={messages}
+            isLoading={isLoading}
+            activityLabel={activityLabel}
+            messagesEndRef={messagesEndRef}
+            onRedo={(index) => handlers.current.redo(index)}
+            onRestore={(index) => handlers.current.restore(index)}
+            onFork={handlers.current.fork ? (index) => handlers.current.fork?.(index) : undefined}
+            isFileEditResolved={(file, replacement) => handlers.current.resolved(file, replacement)}
+            surface={surface}
+            talkMark={talkMark}
+            talkName={talkName}
+        />
+    );
+}, (prev, next) => prev.messages === next.messages && prev.isLoading === next.isLoading && prev.activityLabel === next.activityLabel);
 
 export default function Chat({
     className,
@@ -196,10 +242,6 @@ export default function Chat({
             onCloseSubagent={() => {
                 closeSubagent();
             }}
-            onSelect={(id) => {
-                closeSubagent();
-                void session.handleSelectChatTab(id);
-            }}
         />
     );
 
@@ -253,6 +295,30 @@ export default function Chat({
             }),
         [session.messageGroups],
     );
+
+    const snaps = React.useRef(new Map<string, typeof session.messages>());
+    const slotOrder = React.useRef<string[]>([]);
+    const dormantEnd = React.useRef<HTMLDivElement>(null);
+    const threadHandlers = React.useRef({
+        redo: session.handleRedo,
+        restore: session.handleRestore,
+        fork: session.handleFork,
+        resolved: session.isEditResolved,
+    });
+    threadHandlers.current = {
+        redo: session.handleRedo,
+        restore: session.handleRestore,
+        fork: session.handleFork,
+        resolved: session.isEditResolved,
+    };
+    const activeKey = session.conversationId;
+    if (activeKey && session.messages.length > 0) {
+        snaps.current.set(activeKey, session.messages);
+        if (!slotOrder.current.includes(activeKey)) {
+            slotOrder.current = [...slotOrder.current, activeKey].slice(-4);
+        }
+    }
+    const slotIds = slotOrder.current.filter((id) => (snaps.current.get(id)?.length ?? 0) > 0);
 
     const composer = (
         <ChatInput
@@ -309,72 +375,53 @@ export default function Chat({
                 <SubagentChatView />
             </div>
         </div>
-    ) : emptyStage ? (
-        <div
-            ref={emptyStageRef}
-            className={cn("relative flex min-h-0 flex-1 flex-col items-center overflow-hidden", insetX)}
-        >
-            <div
-                ref={emptyStackRef}
-                className={cn("relative z-10 flex w-full shrink-0 flex-col items-center gap-5", columnWidth)}
-                style={{
-                    marginTop: emptyTop,
-                    transition: emptyTopMotion.current
-                        ? "margin-top 920ms cubic-bezier(0.22, 1, 0.36, 1)"
-                        : "none",
-                }}
-            >
-                <ChatEmptyState />
-                <div className="w-full">
-                    {composer}
-                </div>
-            </div>
-        </div>
     ) : (
         <>
-            <div className="relative min-h-0 flex-1">
-                <div
-                    ref={session.scrollContainerRef}
-                    onScroll={session.handleScroll}
-                    onKeyDown={(e) => {
-                        if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
-                        const target = e.target as HTMLElement | null;
-                        if (target?.closest("textarea, input, [contenteditable='true']")) return;
-                        e.preventDefault();
-                        const root = e.currentTarget;
-                        const range = document.createRange();
-                        range.selectNodeContents(root);
-                        const sel = window.getSelection();
-                        sel?.removeAllRanges();
-                        sel?.addRange(range);
-                    }}
-                    className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto overflow-x-clip no-scrollbar select-text", insetX)}
-                >
-                    <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-16 pt-5" : "pb-80 pt-12")}>
-                        <ChatMessageList
-                            messageGroups={session.messageGroups}
-                            messages={session.messages}
-                            isLoading={session.isLoading}
-                            activityLabel={session.activityLabel}
-                            messagesEndRef={session.messagesEndRef}
-                            onRedo={session.handleRedo}
-                            onRestore={session.handleRestore}
-                            onFork={session.handleFork}
-                            isFileEditResolved={session.isEditResolved}
-                            activeChatTabId={session.activeChatTabId}
-                            fullWidthBubbles={false}
-                            surface={talk ? "talk" : "code"}
-                            talkMark={talkMark}
-                            talkName={talkName}
-                            emptyState={talk && isEmpty ? <ChatEmptyState /> : undefined}
-                        />
-                    </div>
-                </div>
+            <div className={cn("relative min-h-0 flex-1", emptyStage && "hidden")}>
+                {slotIds.map((id) => {
+                    const live = id === activeKey;
+                    const slotMessages = live ? session.messages : snaps.current.get(id) ?? [];
+                    return (
+                        <div
+                            key={id}
+                            hidden={!live}
+                            ref={live ? session.scrollContainerRef : undefined}
+                            data-chat-scroll={live ? "" : undefined}
+                            onScroll={live ? session.handleScroll : undefined}
+                            onKeyDown={live ? (e) => {
+                                if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
+                                const target = e.target as HTMLElement | null;
+                                if (target?.closest("textarea, input, [contenteditable='true']")) return;
+                                e.preventDefault();
+                                const root = e.currentTarget;
+                                const range = document.createRange();
+                                range.selectNodeContents(root);
+                                const sel = window.getSelection();
+                                sel?.removeAllRanges();
+                                sel?.addRange(range);
+                            } : undefined}
+                            className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto overflow-x-clip no-scrollbar select-text", insetX)}
+                        >
+                            <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-16 pt-5" : "pb-80 pt-12")}>
+                                <KeptThread
+                                    messages={slotMessages}
+                                    isLoading={live && session.isLoading}
+                                    activityLabel={live ? session.activityLabel : null}
+                                    messagesEndRef={live ? session.messagesEndRef : dormantEnd}
+                                    handlers={threadHandlers}
+                                    surface={talk ? "talk" : "code"}
+                                    talkMark={talkMark}
+                                    talkName={talkName}
+                                />
+                            </div>
+                        </div>
+                    );
+                })}
                 <div
                     className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-linear-to-b from-panel to-transparent"
                     aria-hidden
                 />
-                {turnCount >= 2 && !embedded ? (
+                {turnCount >= 2 && !embedded && !emptyStage ? (
                     <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 py-6 md:flex lg:right-3">
                         <div className="pointer-events-auto flex h-full w-full items-stretch justify-end">
                             <ChatHistoryStepper
@@ -389,15 +436,38 @@ export default function Chat({
                 ) : null}
             </div>
 
-            <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
-                <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
+            {emptyStage ? (
+                <div
+                    ref={emptyStageRef}
+                    className={cn("relative flex min-h-0 flex-1 flex-col items-center overflow-hidden", insetX)}
+                >
                     <div
-                        className="pointer-events-none absolute inset-x-0 bottom-full h-20 bg-linear-to-t from-panel to-transparent"
-                        aria-hidden
-                    />
-                    {composer}
+                        ref={emptyStackRef}
+                        className={cn("relative z-10 flex w-full shrink-0 flex-col items-center gap-5", columnWidth)}
+                        style={{
+                            marginTop: emptyTop,
+                            transition: emptyTopMotion.current
+                                ? "margin-top 920ms cubic-bezier(0.22, 1, 0.36, 1)"
+                                : "none",
+                        }}
+                    >
+                        <ChatEmptyState />
+                        <div className="w-full">
+                            {composer}
+                        </div>
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
+                    <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
+                        <div
+                            className="pointer-events-none absolute inset-x-0 bottom-full h-20 bg-linear-to-t from-panel to-transparent"
+                            aria-hidden
+                        />
+                        {composer}
+                    </div>
+                </div>
+            )}
         </>
     );
 

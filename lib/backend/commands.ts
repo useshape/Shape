@@ -670,6 +670,8 @@ export const commands = {
     getChatIncognito: () => invokeCommand<boolean>("get_chat_incognito"),
     loadConversation: (id: string, projectPath?: string | null) =>
         invokeCommand<void>("load_conversation", { id, projectPath: projectPath ?? null }),
+    focusConversation: (id: string, projectPath?: string | null) =>
+        invokeCommand<void>("focus_conversation", { id, projectPath: projectPath ?? null }),
     deleteConversation: (id: string) => invokeCommand<void>("delete_conversation", { id }),
     setConversationArchived: (id: string, archived: boolean) =>
         invokeCommand<void>("set_conversation_archived", { id, archived }),
@@ -790,11 +792,12 @@ export const commands = {
             projectPath: projectPath ?? null,
             accessToken: accessToken ?? null,
         }),
-    searchCodebase: (query: string, topK?: number, projectPath?: string) =>
+    searchCodebase: (query: string, topK?: number, projectPath?: string, localOnly?: boolean) =>
         invokeCommand<CodebaseSearchHit[]>("search_codebase", {
             query,
             topK: topK ?? null,
             projectPath: projectPath ?? null,
+            localOnly: localOnly ?? null,
         }),
     getIndexStatus: (projectPath?: string) =>
         invokeCommand<IndexStatus>("get_index_status", { projectPath: projectPath ?? null }),

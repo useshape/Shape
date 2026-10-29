@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { chromePlatform, subscribeChromePlatform } from "@/lib/ui/chrome-platform";
 
 export function IconMinimize() {
     return (
@@ -91,6 +92,32 @@ export function WindowControlsSpacer() {
     );
 }
 
+function MacTrafficLights({
+    onMinimize,
+    onToggleMaximize,
+    onClose,
+}: {
+    onMinimize: () => void;
+    onToggleMaximize: () => void;
+    onClose: () => void;
+}) {
+    const light = "grid size-3.5 mt-0.5 place-items-center rounded-full shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.28)]";
+    const glyph = "text-[8px] font-semibold leading-none text-black/55 opacity-0 group-hover/lights:opacity-100";
+    return (
+        <div className="group/lights flex h-titlebar items-center gap-2 pl-4" data-no-drag>
+            <button type="button" aria-label="Close" onClick={onClose} className={cn(light, "bg-[#ff5f57]")}>
+                <span className={glyph}>×</span>
+            </button>
+            <button type="button" aria-label="Minimize" onClick={onMinimize} className={cn(light, "bg-[#febc2e]")}>
+                <span className={glyph}>–</span>
+            </button>
+            <button type="button" aria-label="Zoom" onClick={onToggleMaximize} className={cn(light, "bg-[#28c840]")}>
+                <span className={glyph}>+</span>
+            </button>
+        </div>
+    );
+}
+
 export function WindowControls({
     isMaximized,
     onMinimize,
@@ -100,6 +127,7 @@ export function WindowControls({
     spacer = true,
     floating = true,
     bare = false,
+    barClass = "h-titlebar",
 }: {
     isMaximized: boolean;
     onMinimize: () => void;
@@ -111,8 +139,12 @@ export function WindowControls({
     floating?: boolean;
     /** Sit on a painted strip with no solid backing. */
     bare?: boolean;
+    /** Match the tab strip when it is taller than the default titlebar. */
+    barClass?: string;
 }) {
     const [host, setHost] = useState<HTMLElement | null>(null);
+    const platform = useSyncExternalStore(subscribeChromePlatform, chromePlatform, () => "windows" as const);
+    const mac = platform === "macos";
     useEffect(() => {
         setHost(document.body);
     }, []);
@@ -133,12 +165,17 @@ export function WindowControls({
     const floatingEl = floating ? (
         <div
             className={cn(
-                "titlebar-window-controls pointer-events-auto fixed top-0 right-0 isolate z-titlebar-controls flex shrink-0 items-stretch",
-                bare ? "h-titlebar bg-transparent" : cn("h-titlebar", bg),
+                "titlebar-window-controls pointer-events-auto fixed top-0 isolate z-titlebar-controls flex shrink-0 items-stretch",
+                mac ? cn("left-0 bg-transparent", barClass) : "right-0",
+                !mac && (bare ? cn(barClass, "bg-transparent") : cn(barClass, bg)),
             )}
             data-no-drag
         >
-            {buttons}
+            {mac ? (
+                <MacTrafficLights onMinimize={onMinimize} onToggleMaximize={onToggleMaximize} onClose={onClose} />
+            ) : (
+                buttons
+            )}
         </div>
     ) : null;
 

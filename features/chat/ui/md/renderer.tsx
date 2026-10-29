@@ -1022,17 +1022,6 @@ function buildSegments(chunks: Chunk[]): Segment[] {
     return segments;
 }
 
-function isTextSegment(segment: Segment | undefined): boolean {
-    return segment?.kind === "chunk" && segment.chunk.type === "text";
-}
-
-function recvBubbleRadius(prevText: boolean, nextText: boolean): string {
-    if (!prevText && !nextText) return "rounded-[1.15rem]";
-    if (!prevText && nextText) return "rounded-[1.15rem] rounded-bl-[0.35rem]";
-    if (prevText && nextText) return "rounded-[1.15rem] rounded-tl-[0.35rem] rounded-bl-[0.35rem]";
-    return "rounded-[1.15rem] rounded-tl-[0.35rem]";
-}
-
 /** Drop tool dumps that leaked into a text. Keep the short reply at the end. */
 function isSelfTalk(line: string): boolean {
     return /nothing (left|more|else) to do|no further action|answer is up above|there(?:'s| is) nothing left/i.test(line);
@@ -1222,19 +1211,13 @@ export function MessageRenderer({
             if (!shown.trim()) return null;
             const textKey = `text-${textOrdinal}`;
             textOrdinal += 1;
-            const prevText = isTextSegment(segments[index - 1]);
-            const nextText = isTextSegment(segments[index + 1]);
             return (
                 <div
                     key={textKey}
                     className={
                         surface === "talk"
                             ? "mb-0 w-fit max-w-full min-w-0 overflow-visible text-sm font-medium leading-[var(--conversation-line-height)] text-text-primary prose-compact chat-markdown"
-                            : cn(
-                                "w-fit max-w-[min(100%,32rem)] min-w-0 overflow-visible px-3.5 py-2 text-sm font-medium leading-[var(--conversation-line-height)] text-text-primary prose-compact chat-markdown bg-surface-4",
-                                recvBubbleRadius(prevText, nextText),
-                                prevText || nextText ? "mb-0.5" : "mb-2",
-                            )
+                            : "mb-2 w-full min-w-0 overflow-visible text-sm font-medium leading-[var(--conversation-line-height)] text-text-primary prose-compact chat-markdown"
                     }
                 >
                     <ChatMarkdown

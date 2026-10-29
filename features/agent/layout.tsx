@@ -7,10 +7,10 @@ import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { ChatChromeTabs } from "./chat-tabs";
 import { ChatSearch } from "@/features/chat/ui/shell/chat-search";
-import { AgentWorkspace } from "./workspace";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
-import { TerminalDock } from "./terminal-dock";
+import { PaneGrid } from "./panes/grid";
+import { TabLogPanel } from "./tab-log-panel";
 import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
 import { TrustFolderHost } from "@/features/agent/workspace/trust-dialog";
 import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-terminal-notify";
@@ -22,7 +22,7 @@ const MIN_WORKSPACE = 360;
 const MIN_WORKSPACE_SOFT = 280;
 const MIN_CHAT = 380;
 const WORKSPACE_GUTTER = 12;
-const WINDOW_MIN_HEIGHT = 500;
+const WINDOW_MIN_HEIGHT = 800;
 const WINDOW_MIN_WIDTH = 1000;
 const MAX_WORKSPACE_RATIO = 0.72;
 const MAX_WORKSPACE_PX = 1200;
@@ -284,7 +284,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             const next = clampWorkspace(window.innerWidth - e.clientX);
             if (next < MIN_WORKSPACE_SOFT) return;
             widthRef.current = next;
-            setWorkspaceWidth(next);
         };
         const onUp = () => {
             if (!dragging.current) return;
@@ -334,8 +333,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [clampWorkspace, sidebarOpen]);
 
     useEffect(() => {
-        const wantWorkspace = workspaceOpen && Boolean(project_path);
-        const minWidth = layoutMinWidth(sidebarOpen, wantWorkspace);
+        const minWidth = layoutMinWidth(sidebarOpen, false);
         let cancelled = false;
         void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
             const { LogicalSize } = await import("@tauri-apps/api/dpi");
@@ -400,14 +398,11 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [openWorkspaceTerminal]);
 
     const mode = useWorkspaceMode();
-    const overlayOpen = overlay != null;
     const codeWorkspace = mode === "Code";
-    const showWorkspace = codeWorkspace && Boolean(project_path) && !overlayOpen;
-    const rightExpanded = workspaceOpen && showWorkspace && workspaceFits;
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
-        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-transparent">
+        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-transparent text-text-primary">
             <DevRunHost />
             <ProjectQuickPickHost />
             <TrustFolderHost />
@@ -436,8 +431,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             ) : null}
 
             <ChatChromeTabs />
-            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-surface-3">
-                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel">
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden px-1 pb-1">
+                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden squircle-t-3xl rounded-b-lg bg-panel border border-border/50">
                     {chatSearch && codeWorkspace ? (
                         <>
                             <button
@@ -452,61 +447,23 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                         </>
                     ) : null}
                     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                        {overlay ? (
+                        {overlay?.type === "settings" ? (
                             <AgentOverlayView
                                 overlay={overlay}
                                 onClose={() => setOverlay(null)}
                                 navPortalTarget={null}
                                 sidebarExpanded
                             />
+                        ) : codeWorkspace ? (
+                            <PaneGrid />
                         ) : (
                             <Chat className="bg-transparent" />
                         )}
                         <div className="hidden">{children}</div>
-                        {codeWorkspace && project_path ? <TerminalDock /> : null}
                     </div>
                 </div>
-                {showWorkspace && project_path ? (
-                    <>
-                        <div
-                            role="separator"
-                            aria-orientation="vertical"
-                            aria-label="Resize workspace"
-                            className={cn(
-                                "group relative z-30 w-0 shrink-0",
-                                !rightExpanded && "pointer-events-none opacity-0",
-                            )}
-                            onMouseDown={(e) => {
-                                if (!rightExpanded) return;
-                                e.preventDefault();
-                                dragging.current = true;
-                                setIsResizing(true);
-                                document.body.style.cursor = "col-resize";
-                                document.body.style.userSelect = "none";
-                            }}
-                        >
-                            <div className="absolute inset-y-0 -left-1.5 w-3 cursor-col-resize" />
-                        </div>
-                        <div
-                            style={{ width: rightExpanded ? workspaceWidth : 0 }}
-                            className={cn(
-                                "h-full min-h-0 min-w-0 overflow-hidden border-l border-border-subtle bg-sidebar rounded-l-xl",
-                                !rightExpanded && "pointer-events-none border-l-transparent",
-                                !isResizing && "transition-[width] duration-200 ease-[var(--ease-out)]",
-                            )}
-                            aria-hidden={!rightExpanded}
-                        >
-                            {rightExpanded ? (
-                                <AgentWorkspace
-                                    projectPath={project_path}
-                                    expanded
-                                    onExpand={() => persistWorkspace(true)}
-                                />
-                            ) : null}
-                        </div>
-                    </>
-                ) : null}
             </div>
+            <TabLogPanel />
             <WindowControls
                 isMaximized={isMaximized}
                 onMinimize={minimize}
@@ -515,6 +472,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 surface="panel"
                 spacer={false}
                 bare
+                barClass="h-11"
             />
         </div>
     );

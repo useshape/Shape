@@ -518,12 +518,15 @@ function ChatMessageItemInner({
         <ContextMenu>
         <ContextMenuTrigger asChild>
         <div
-            className="group/msg group relative z-10 mb-2 flex w-full min-w-0 select-text items-end gap-1 overflow-visible"
+            className={cn(
+                "group/msg group relative z-10 mb-2 flex min-w-0 select-text flex-col items-start gap-1 overflow-visible",
+                talk ? "w-fit max-w-[min(100%,38rem)]" : "w-full",
+            )}
             tabIndex={0}
             onKeyDown={handleKeyDown}
         >
-            <div className="flex min-w-0 w-fit max-w-[min(100%,36rem)] flex-col items-start gap-1 overflow-visible">
-                <div ref={bodyRef} className="min-w-0 w-fit max-w-full select-text overflow-visible chat-text text-text-primary">
+            <div className="flex min-w-0 w-full flex-col items-start gap-1 overflow-visible">
+                <div ref={bodyRef} className="min-w-0 w-full select-text overflow-visible chat-text text-text-primary">
                     {talk ? (
                         <div className="flex max-w-[min(100%,38rem)] items-end gap-2">
                             <span className="mb-1">
@@ -620,7 +623,7 @@ function ChatMessageItemInner({
                 </div>
             </div>
             {!isGenerating && (
-                <div className="mb-1 flex w-fit shrink-0 items-center gap-0.5 self-end select-none opacity-0 transition-opacity group-hover/msg:opacity-100">
+                <div className="flex w-fit items-center gap-0.5 select-none opacity-0 transition-opacity group-hover/msg:opacity-100">
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
                             <Icon icon={Clipboard20Regular} />

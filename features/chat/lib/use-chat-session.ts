@@ -53,6 +53,7 @@ import {
     type ComposerAttachment,
 } from "@/features/chat/ui/composer/attachments";
 import type { ReasoningEffort } from "../ui/composer/reasoning-effort";
+import { tabLog } from "@/lib/ui/tab-switch-log";
 
 function chatTabsStorageKey(projectPath: string | null | undefined) {
     const norm = (projectPath || "").replace(/\\/g, "/").toLowerCase();
@@ -183,6 +184,7 @@ export function useChatSession() {
         resumeLiveConversation,
         stopLiveTurn,
         startDraftChat,
+        peekSnapshot,
     } = useChatStream();
     const [recentConvs, setRecentConvs] = React.useState<Conversation[]>([]);
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
@@ -1167,9 +1169,16 @@ export function useChatSession() {
             void commands.flushChatHistory().catch(() => {});
         };
         const onSendText = (event: Event) => {
-            const text = (event as CustomEvent<{ text?: string }>).detail?.text;
+            const detail = (event as CustomEvent<{ text?: string; conversationId?: string }>).detail;
+            const text = detail?.text;
             if (!text?.trim()) return;
-            void handleSendMessageRef.current(text);
+            const conversationId = detail?.conversationId;
+            void (async () => {
+                if (conversationId && conversationId !== conversationIdRef.current) {
+                    await loadConversationRef.current(conversationId);
+                }
+                await handleSendMessageRef.current(text);
+            })();
         };
         window.addEventListener("shape-retry-image", onRetry as EventListener);
         window.addEventListener("shape-loop-worker", onLoop as EventListener);
@@ -1602,6 +1611,10 @@ export function useChatSession() {
         handleNewChatRef.current = handleNewChat;
     });
 
+    const loadConversationRef = React.useRef<
+        (id: string, options?: { force?: boolean }) => Promise<void>
+    >(async () => {});
+
     const handleSelectChatTab = async (tabId: string) => {
         if (tabId === activeChatTabId) return;
         setSendError(null);
@@ -1609,24 +1622,7 @@ export function useChatSession() {
             await handleNewChat();
             return;
         }
-        if (resumeLiveConversation(tabId)) {
-            setConversationId(tabId);
-            setCurrentConversationId(tabId);
-            const conv = recentConvs.find((c) => c.id === tabId);
-            syncOpenTabs(tabId, conv?.title || "Chat");
-            return;
-        }
-        try {
-            const conv = recentConvs.find((c) => c.id === tabId);
-            setViewingConversation(tabId);
-            await setIncognitoChat(false);
-            await commands.loadConversation(tabId, conv?.project_path ?? project_path);
-            clearAllDesignPreviewSessions();
-            setContextSummarized(false);
-            await refreshHistory(true);
-        } catch (err) {
-            console.error("Failed to switch chat tab:", err);
-        }
+        await loadConversationRef.current(tabId);
     };
 
     const handleCloseChatTab = async (tabId: string) => {
@@ -1671,10 +1667,14 @@ export function useChatSession() {
         setScrolledFromBottom(!isNearBottomRef.current);
     }, []);
 
+    const scrollInstantRef = React.useRef(false);
+
     React.useEffect(() => {
-        if (isNearBottomRef.current) {
+        const instant = scrollInstantRef.current;
+        scrollInstantRef.current = false;
+        if (isNearBottomRef.current || instant) {
             messagesEndRef.current?.scrollIntoView({
-                behavior: isLoading ? "auto" : "smooth",
+                behavior: instant || isLoading ? "auto" : "smooth",
             });
         }
         // Keep top-fade in sync after programmatic scroll (scroll events can lag).
@@ -1692,43 +1692,79 @@ export function useChatSession() {
             clearNextChat();
             const isSameConversation = id === conversationIdRef.current;
             const hasVisibleMessages = messagesRef.current.length > 0;
+            const started = performance.now();
+            const short = id.slice(0, 8);
             if (resumeLiveConversation(id)) {
+                tabLog(`switch ${short} live turn ${(performance.now() - started).toFixed(1)}ms`);
                 setConversationId(id);
                 setCurrentConversationId(id);
                 const liveConv = recentConvs.find((c) => c.id === id);
                 syncOpenTabs(id, liveConv?.title || "Chat");
                 return;
             }
-            if (!options?.force && isSameConversation && hasVisibleMessages) return;
+            if (!options?.force && isSameConversation && hasVisibleMessages) {
+                tabLog(`switch ${short} already open`);
+                return;
+            }
 
-            const conv =
-                recentConvs.find((c) => c.id === id)
-                ?? (project_path
-                    ? null
-                    : (await commands.getConversations()).find((c) => c.id === id));
+            const known = recentConvs.find((c) => c.id === id) ?? null;
+            const cached = peekSnapshot(id);
+            const hadCache = Boolean(cached && cached.length > 0);
+            conversationIdRef.current = id;
+            setConversationId(id);
+            setCurrentConversationId(id);
+            setViewingConversation(id);
+            syncOpenTabs(id, known?.title?.trim() || "Chat");
+            scrollInstantRef.current = true;
+            isNearBottomRef.current = true;
+            const projectForFocus = known?.project_path ?? project_path;
+            if (hadCache && cached) {
+                if (messagesRef.current !== cached) setMessages(cached);
+                tabLog(`switch ${short} cache n=${cached.length} ${(performance.now() - started).toFixed(1)}ms`);
+                requestAnimationFrame(() => {
+                    tabLog(`switch ${short} paint ${(performance.now() - started).toFixed(1)}ms`);
+                });
+                void commands.focusConversation(id, projectForFocus).catch(() => {});
+                return;
+            }
 
+            setMessages([]);
+            tabLog(`switch ${short} no cache, waiting on disk`);
             try {
-                conversationIdRef.current = id;
-                setConversationId(id);
-                setViewingConversation(id);
-                syncOpenTabs(id, conv?.title?.trim() || "Chat");
-                await commands.loadConversation(id, conv?.project_path ?? project_path);
-                if (conversationIdRef.current !== id) return;
+                const loadT = performance.now();
+                await commands.focusConversation(id, projectForFocus);
+                tabLog(`switch ${short} focus ${(performance.now() - loadT).toFixed(1)}ms`);
+                if (conversationIdRef.current !== id) {
+                    tabLog(`switch ${short} dropped after focus`);
+                    return;
+                }
                 clearAllDesignPreviewSessions();
                 setContextSummarized(false);
+                const histT = performance.now();
                 const history = await commands.getChatHistory(40);
-                if (conversationIdRef.current !== id) return;
+                tabLog(`switch ${short} getChatHistory n=${history.length} ${(performance.now() - histT).toFixed(1)}ms`);
+                if (conversationIdRef.current !== id) {
+                    tabLog(`switch ${short} dropped after history`);
+                    return;
+                }
+                scrollInstantRef.current = true;
                 setMessages(history);
+                requestAnimationFrame(() => {
+                    tabLog(`switch ${short} paint ${(performance.now() - started).toFixed(1)}ms`);
+                });
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 if (!message.includes("Conversation not found")) {
                     console.error("Failed to load conversation:", err);
                 }
+                tabLog(`switch ${short} error ${message}`);
                 await refreshMetadata();
             }
         },
-        [refreshHistory, recentConvs, project_path, refreshMetadata, setMessages, setContextSummarized, resumeLiveConversation, setViewingConversation, syncOpenTabs],
+        [recentConvs, project_path, refreshMetadata, setMessages, setContextSummarized, resumeLiveConversation, setViewingConversation, syncOpenTabs, peekSnapshot],
     );
+
+    loadConversationRef.current = handleLoadConversation;
 
     React.useEffect(() => {
         const onLoad = (e: Event) => {

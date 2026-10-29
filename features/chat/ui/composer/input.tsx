@@ -1621,7 +1621,7 @@ export function ChatInput({
                             }
                         >
                             {isLoading && !inputValue.trim() ? (
-                                <span role="status" aria-label="Generating" className="text-white">
+                                <span role="status" aria-label="Generating" className="text-text-primary">
                                     <Arc size={16} />
                                 </span>
                             ) : (

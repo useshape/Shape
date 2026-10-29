@@ -6,34 +6,79 @@
 html,
 body,
 #shape-workbench {
-  background: #1e1e1e49;
+  /* Fixed shell. Acrylic sits underneath; this color does not follow wallpaper or Windows theme. */
+  background: #2b17237e;
 }
 
 .shape-window-titlebar {
   background: transparent;
 }
 
+.shape-chrome-plate {
+  position: absolute;
+  bottom: -1px;
+  z-index: 1;
+  height: 33px;
+  pointer-events: none;
+  background: var(--panel);
+  border-top-left-radius: 23px;
+  border-top-right-radius: 23px;
+  border-bottom: 0;
+  corner-top-left-shape: squircle;
+  corner-top-right-shape: squircle;
+  transition:
+    left 220ms cubic-bezier(0.34, 1.45, 0.4, 1),
+    width 220ms cubic-bezier(0.34, 1.45, 0.4, 1);
+}
+
+.shape-chrome-plate[data-instant="true"] {
+  transition: none;
+}
+
+/* Inverse squircle fillet (n = 2.6). Larger and rounder; the bottom edge stays straight. */
+.shape-chrome-plate::before,
+.shape-chrome-plate::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  background: var(--panel);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M16 0L16 16L0 16L2.68 15.94L4.55 15.76L6.18 15.47L7.64 15.05L8.97 14.53L10.18 13.88L11.27 13.13L12.26 12.26L13.13 11.27L13.88 10.18L14.53 8.97L15.05 7.64L15.47 6.18L15.76 4.55L15.94 2.68L16 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M16 0L16 16L0 16L2.68 15.94L4.55 15.76L6.18 15.47L7.64 15.05L8.97 14.53L10.18 13.88L11.27 13.13L12.26 12.26L13.13 11.27L13.88 10.18L14.53 8.97L15.05 7.64L15.47 6.18L15.76 4.55L15.94 2.68L16 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+.shape-chrome-plate::before {
+  left: -16px;
+}
+
+.shape-chrome-plate::after {
+  right: -16px;
+  transform: scaleX(-1);
+}
+
 :root {
   color-scheme: dark;
 
   /* ── Surface ladder ────────────────────────────────────── */
-  --surface-0: #181818;
-  --surface-1: #181818;
-  --surface-2: #1b1b1b;
-  --surface-3: #171717;
-  --surface-4: #2F2F2F;
-  --settings-card: #2a2a2a;
+  --surface-0: #16181c;
+  --surface-1: #16181c;
+  --surface-2: #1c2026;
+  --surface-3: #14171c;
+  --surface-4: #2D2D2D;
+  --settings-card: #22262c;
 
-  /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
-  --chrome: #1E1E1E;
-  --sidebar: #0E0E0E;
-  --editor: #191919;
+  /* ── Role surfaces (chrome recessed, canvas elevated) ── */
+  --chrome: #161b20;
+  --sidebar: #12151a;
+  --editor: #1a1d22;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #1E1E1E;
+  --panel: #1e1e1ed5;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.096);
@@ -58,21 +103,21 @@ body,
 
   /* ── Actions ───────────────────────────────────────────── */
   /* Deliberate brand accent (not an accidental indigo default) */
-  --accent: #3946FF;
+  --accent: #3862c4;
   /* Private-window purple. Dark chrome; light theme overrides below. */
   --incognito: #a200ff83;
   --incognito-fg: #fae3ff;
   --incognito-muted: #f6e4ffa6;
   --incognito-send: #e787ff;
-  --accent-hover: #4365FF;
+  --accent-hover: #4570cc;
   --action-label: #ffffff;
   --brand: var(--accent);
   --focus: var(--accent);
   --accent-fg: var(--action-label);
   --border-focus: var(--focus);
   /* Readable on dark surfaces — never use --accent (too deep) as body text */
-  --accent-text: #9eb0ff;
-  --accent-text-hover: #c4ceff;
+  --accent-text: #a4bef3;
+  --accent-text-hover: #b7cbf3;
   --accent-text-bg: color-mix(in srgb, var(--accent-text) 16%, transparent);
 
   /* ── Status ────────────────────────────────────────────── */

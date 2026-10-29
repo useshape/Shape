@@ -97,7 +97,7 @@ function TreeNode({
                 <button
                     type="button"
                     onClick={() => setOpen((v) => !v)}
-                    className="flex h-6 w-full items-center gap-1 rounded-md pr-2 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                    className="flex h-7.5 my-1 w-full items-center gap-1 rounded-md pr-2 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
                     style={{ paddingLeft: pad }}
                 >
                     <Icon
@@ -145,7 +145,7 @@ function TreeNode({
             type="button"
             onClick={() => onOpenFile(entry.path)}
             className={cn(
-                "flex h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left text-sm",
+                "flex h-7.5 my-1 w-full items-center gap-1.5 rounded-md pr-2 text-left text-sm",
                 active
                     ? "bg-panel-active text-text-primary"
                     : "text-text-secondary hover:bg-panel-hover hover:text-text-primary",
@@ -250,7 +250,7 @@ export function FileTree({
         <div className="box-border flex h-full min-h-0 w-full flex-col bg-transparent">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="px-2 pb-1 pt-2">
-                    <div className="flex h-8 items-center gap-2 rounded-lg bg-panel-hover px-2">
+                    <div className="flex h-8 items-center gap-2 bg-white/5 px-2 squircle-2xl">
                         <Icon icon={Search20Regular} className="icon-sm shrink-0 text-text-muted" />
                         <input
                             value={query}

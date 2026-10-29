@@ -332,6 +332,7 @@ pub fn run() {
             agent::commands::conversation::set_chat_incognito,
             agent::commands::conversation::get_chat_incognito,
             agent::commands::conversation::load_conversation,
+            agent::commands::conversation::focus_conversation,
             agent::commands::conversation::fork_conversation,
             agent::commands::conversation::set_message_feedback,
             agent::commands::conversation::flush_chat_history,
