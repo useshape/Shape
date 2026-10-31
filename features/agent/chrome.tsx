@@ -1,12 +1,12 @@
 "use client";
 
-import { PanelBottom20Filled } from "@fluentui/react-icons/headless/svg/panel-bottom";
 import { PanelLeft20Filled } from "@fluentui/react-icons/headless/svg/panel-left";
 import { PanelRight20Filled } from "@fluentui/react-icons/headless/svg/panel-right";
 import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
+import { RiTerminalBoxLine } from "@remixicon/react";
 
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -68,7 +68,7 @@ function Btn({
                 disabled={disabled}
                 onClick={onClick}
                 className={cn(
-                    "flex size-7 items-center justify-center rounded-md press-spring",
+                    "flex size-8 items-center justify-center squircle-xl press-spring",
                     "disabled:pointer-events-none disabled:text-text-disabled",
                     light
                         ? "text-white/80 hover:bg-black/25 hover:text-white"
@@ -112,7 +112,7 @@ export function TerminalToggle({ light }: { light?: boolean }) {
 
     return (
         <Btn label={open ? "Hide terminal" : "Show terminal"} shortcut="Ctrl+`" active={open} light={light} onClick={toggle}>
-            <Icon icon={PanelBottom20Filled} />
+            <RiTerminalBoxLine size={21} />
         </Btn>
     );
 }

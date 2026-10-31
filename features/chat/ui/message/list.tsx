@@ -111,7 +111,7 @@ export function ChatMessageList({
                         >
                             {showDay && stamp > 0 ? (
                                 <div className="flex justify-center py-2">
-                                    <span className="rounded-full bg-surface-3 px-2.5 py-0.5 text-xs text-text-muted">
+                                    <span className="text-xs text-text-muted">
                                         {dayLabel(stamp)}
                                     </span>
                                 </div>
@@ -125,7 +125,7 @@ export function ChatMessageList({
                                     <div
                                         key={`${msg.role}-${msg.timestamp}-${msgIdx}`}
                                         data-chat-message-index={msgIdx}
-                                        className="rounded-lg transition-colors duration-[var(--transition-fast)]"
+                                        className="rounded- transition-colors duration-[var(--transition-fast)]"
                                     >
                                         <ChatMessageItem
                                             role={msg.role}

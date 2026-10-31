@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../lib/use-chat-session";
 import { groupChatMessages } from "../lib/chat-session-utils";
+import { publishChatCrumb } from "../lib/chat-crumb";
 import { ChatTitlebar, resolveChatCrumbTitle } from "./shell/titlebar";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
@@ -83,9 +84,11 @@ const KeptThread = React.memo(function KeptThread({
 export default function Chat({
     className,
     embedded,
+    showTitlebar = true,
 }: {
     className?: string;
     embedded?: boolean;
+    showTitlebar?: boolean;
     /** @deprecated unused in shell */
     onClose?: () => void;
     sidebarSide?: "left" | "right";
@@ -225,6 +228,13 @@ export default function Chat({
         convTitle: conv?.title,
         messages: session.messages,
     });
+
+    React.useEffect(() => {
+        publishChatCrumb({
+            id: session.conversationId ?? session.activeChatTabId,
+            title: crumbTitle,
+        });
+    }, [crumbTitle, session.conversationId, session.activeChatTabId]);
 
     const titlebar = (
         <ChatTitlebar
@@ -443,7 +453,7 @@ export default function Chat({
                 >
                     <div
                         ref={emptyStackRef}
-                        className={cn("relative z-10 flex w-full shrink-0 flex-col items-center gap-5", columnWidth)}
+                        className={cn("relative z-10 flex w-full shrink-0 flex-col items-center gap-4", columnWidth)}
                         style={{
                             marginTop: emptyTop,
                             transition: emptyTopMotion.current
@@ -473,7 +483,7 @@ export default function Chat({
 
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
-            {embedded ? null : titlebar}
+            {embedded || !showTitlebar ? null : titlebar}
 
             <div
                 className={cn(

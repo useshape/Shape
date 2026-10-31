@@ -249,13 +249,6 @@ function githubSlug(remote: string): { owner: string; repo: string } | null {
     return { owner: match[1]!, repo: match[2]! };
 }
 
-function compareUrlFor(remote: string, branch: string): string | null {
-    const slug = githubSlug(remote);
-    if (!slug || !branch) return null;
-    const head = branch.split("/").map(encodeURIComponent).join("/");
-    return `https://github.com/${slug.owner}/${slug.repo}/compare/${head}?expand=1`;
-}
-
 function dotFromCheck(run: { status?: string; conclusion?: string | null }): CheckDot {
     if (run.status !== "completed") return "wait";
     if (run.conclusion === "success" || run.conclusion === "neutral") return "ok";
@@ -280,7 +273,7 @@ function prTone(
 }
 
 const PILL =
-    "h-7 rounded-full px-2.5 font-normal [corner-shape:unset]";
+    "h-7 rounded-md px-2 font-normal";
 
 const DOT_CLASS: Record<CheckDot, string> = {
     ok: "bg-success",
@@ -335,7 +328,6 @@ export function CommitMenu({
     const [menuOpen, setMenuOpen] = useState(false);
     const [setupOpen, setSetupOpen] = useState(false);
     const [branchPr, setBranchPr] = useState<BranchPr | null>(null);
-    const [compareUrl, setCompareUrl] = useState<string | null>(null);
     const github = useGitHubAuth();
 
     const refresh = useCallback(async () => {
@@ -394,7 +386,6 @@ export function CommitMenu({
     useEffect(() => {
         if (!repo || !branch) {
             setBranchPr(null);
-            setCompareUrl(null);
             return;
         }
         let cancelled = false;
@@ -402,9 +393,7 @@ export function CommitMenu({
             try {
                 const remote = await commands.gitRemoteUrl(repo);
                 const slug = githubSlug(remote || "");
-                const nextCompare = compareUrlFor(remote || "", branch);
                 if (cancelled) return;
-                setCompareUrl(nextCompare);
                 if (!slug || !github.loggedIn) {
                     setBranchPr(null);
                     return;
@@ -681,17 +670,6 @@ export function CommitMenu({
                 <span>#{branchPr.number}</span>
                 <span>{branchPr.label}</span>
             </Button>
-        ) : compareUrl ? (
-            <Button
-                variant="outline"
-                size="sm"
-                className={cn(PILL, "text-text-primary h-9 bg-surface-4 p-4 text-md border-none")}
-                onClick={() => {
-                    void commands.openUrlExternal(compareUrl);
-                }}
-            >
-                Create PR
-            </Button>
         ) : null;
 
     const plus = totals.plus > 0 ? totals.plus : branchPr?.additions ?? 0;
@@ -710,7 +688,7 @@ export function CommitMenu({
                 <Button
                     variant="outline"
                     size="sm"
-                    className={cn(PILL, "text-text-primary h-9 bg-surface-4 p-4 text-md border-border-subtle border")}
+                    className={cn(PILL, "border border-border bg-surface-4 text-text-primary")}
                     aria-label="Changes"
                 >
                     {plus > 0 ? <span className="tabular-nums text-success">+{plus}</span> : null}

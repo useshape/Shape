@@ -4,8 +4,10 @@ import { useEffect, useSyncExternalStore } from "react";
 
 const generatingIds = new Set<string>();
 const listeners = new Set<() => void>();
+let snapshot: ReadonlySet<string> = new Set();
 
 function emit() {
+    snapshot = new Set(generatingIds);
     for (const l of listeners) l();
 }
 
@@ -38,7 +40,7 @@ function subscribe(cb: () => void) {
 }
 
 function getSnapshot() {
-    return generatingIds;
+    return snapshot;
 }
 
 /** Reactive set of chat IDs that are currently streaming. */
@@ -46,7 +48,7 @@ export function useGeneratingChatIds(): ReadonlySet<string> {
     return useSyncExternalStore(
         subscribe,
         getSnapshot,
-        () => generatingIds,
+        () => snapshot,
     );
 }
 

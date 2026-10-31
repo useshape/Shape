@@ -1,5 +1,5 @@
 ---
-description: Shape UI — copy nearest component, semantic tokens, Fluent icons
+description: Shape UI — copy nearest component, semantic tokens, 28px controls
 globs: "**/*.{tsx,css}"
 alwaysApply: false
 ---
@@ -20,4 +20,4 @@ Buttons: `<Button>`. Do not style a raw `<button>`. Selects: `DropdownMenu` like
 
 Do not put `rounded-*` / `shadow-*` / `bg-*` / `p-*` on `DropdownMenuContent`.
 
-Heights: `h-chrome` (28px) for controls. File rows `h-[20px]`. Panel header matches chat tabs (`h-[36px]`, `text-sm`).
+Heights: `h-chrome` (28px) for controls, fields, and menu rows. Toolbar is 37px; tabs are 31px. File rows `h-[20px]`. Icon buttons use `squircle-lg` (8px); fields use `squircle-md` (6px).

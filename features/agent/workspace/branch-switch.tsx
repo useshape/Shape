@@ -90,7 +90,7 @@ export function WorkspaceBranchSwitch({
                         variant="outline"
                         size="xs"
                         disabled={!repoPath}
-                        className="h-7 max-w-48 rounded-full px-2.5 font-normal text-text-primary [corner-shape:unset]"
+                        className="h-7 max-w-48 px-2 font-normal text-text-primary"
                     >
                         <Icon icon={Archive24Filled} className="shrink-0 text-text-muted" />
                         <span className="truncate">{branch ?? "Branch"}</span>
@@ -100,7 +100,7 @@ export function WorkspaceBranchSwitch({
                         type="button"
                         disabled={!repoPath}
                         className={cn(
-                            "inline-flex max-w-40 items-center border border-border-subtle font-regular gap-1 rounded-full px-4 bg-surface-4 py-1 text-sm text-text-secondary hover:text-text-primary disabled:text-text-disabled",
+                            "inline-flex h-7 max-w-40 items-center gap-1 rounded-md border border-border bg-surface-4 px-2 text-sm font-normal text-text-secondary hover:text-text-primary disabled:text-text-disabled",
                         )}
                     >
                         <Icon icon={Branch24Filled} className="shrink-0 text-text-muted icon-md" />

@@ -3,6 +3,8 @@ import {
     activateTab,
     clearSplit,
     createStrip,
+    fileTabId,
+    isFileTab,
     reorderTabs,
     showsSplit,
     splitTabs,
@@ -29,6 +31,17 @@ describe("brave split tabs", () => {
         let state = splitTabs(activateTab(activateTab(createStrip(), "a"), "b"), "a", "b");
         state = activateTab(state, "c");
         state = reorderTabs(state, state.order.indexOf("c"), 1);
+        expect(state.split).toBeNull();
+    });
+
+    it("opens a file as its own tab and does not split it", () => {
+        const file = fileTabId("C:/app/readme.md");
+        let state = activateTab(createStrip(), "a");
+        state = activateTab(state, file);
+        expect(isFileTab(file)).toBe(true);
+        expect(state.activeId).toBe(file);
+        expect(state.order).toEqual(["a", file]);
+        state = splitTabs(state, "a", file);
         expect(state.split).toBeNull();
     });
 

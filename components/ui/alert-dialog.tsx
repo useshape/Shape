@@ -63,7 +63,7 @@ function AlertDialogBody({ className, ...props }: React.ComponentProps<"div">) {
 
 function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">) {
     return (
-        <div className={cn("flex items-center justify-end gap-5 px-2 pb-2 pt-10", className)} {...props} />
+        <div className={cn("flex items-center justify-end gap-2 px-2 pb-2 pt-3", className)} {...props} />
     );
 }
 

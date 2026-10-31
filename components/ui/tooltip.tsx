@@ -26,7 +26,7 @@ const TooltipContent = React.forwardRef<
             className={cn(
                 "shape-popover-content z-tooltip squircle-xl bg-sidebar border border-border p-1",
                 "max-w-[min(260px,calc(100vw-20px))] whitespace-normal wrap-break-word text-pretty leading-snug",
-                "text-xs font-normal text-text-primary",
+                "text-xs tracking-wide font-normal text-text-primary",
                 "filter-[drop-shadow(1px_0_0_var(--border-border))_drop-shadow(-1px_0_0_var(--border-border))_drop-shadow(0_1px_0_var(--border-border))_drop-shadow(0_-1px_0_var(--border-border))]",
                 className,
             )}
@@ -84,7 +84,7 @@ function Tooltip({
                     {chord ? (
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                             <span>{content}</span>
-                            <kbd className="rounded-md bg-panel-active px-1 py-px text-[10px] leading-4 text-text-secondary">
+                            <kbd className="squircle-xl bg-panel-active px-1 py-px text-[12px] font-sans leading-4 text-text-secondary">
                                 {chord}
                             </kbd>
                         </span>

@@ -12,9 +12,9 @@ import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import { cn } from "@/lib/utils";
 
 const itemClasses =
-    "group relative flex cursor-default select-none items-center gap-3 rounded-lg px-1.5 py-1 text-sm outline-none focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]";
+    "group relative flex min-h-7 cursor-default select-none items-center gap-2 squircle-md px-2 py-1 text-sm outline-none transition-[background-color,color] duration-[var(--transition-fast)] ease-[var(--ease-out)] focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
 const containerClasses =
-    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border bg-surface-4 p-2 text-text-primary shadow-md";
+    "shape-popover-content z-dropdown overflow-hidden squircle-lg border border-border bg-panel p-1 text-text-primary shadow-md";
 const shortcutClasses = "ml-auto shrink-0 pr-2 text-sm text-text-muted group-focus:text-text-primary";
 
 const ContextMenu = ContextMenuPrimitive.Root;

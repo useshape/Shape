@@ -4,6 +4,7 @@ import {
     closeTab,
     closeTool as closeToolInModel,
     createStrip,
+    fileTabId,
     isToolId,
     reorderTabs,
     replaceSplitSide as replaceSplitSideInModel,
@@ -18,7 +19,7 @@ import {
     type ToolId,
 } from "./panes/strip-model";
 
-export { isToolId, showsSplit, toolTitle } from "./panes/strip-model";
+export { fileTabId, fileTabPath, isFileTab, isToolId, showsSplit, toolTitle } from "./panes/strip-model";
 export type { SplitPair, ToolId };
 
 const listeners = new Set<() => void>();
@@ -47,6 +48,12 @@ function commit(next: StripModel) {
 
 export function showView(view: string) {
     commit(showViewInModel(state, view));
+}
+
+export function openFileTab(path: string) {
+    const trimmed = path.trim();
+    if (!trimmed) return;
+    commit(activateTab(state, fileTabId(trimmed)));
 }
 
 export function showChat() {

@@ -10,7 +10,7 @@ import { ChatSearch } from "@/features/chat/ui/shell/chat-search";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
 import { PaneGrid } from "./panes/grid";
-import { TabLogPanel } from "./tab-log-panel";
+import { openFileTab } from "./strip";
 import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
 import { TrustFolderHost } from "@/features/agent/workspace/trust-dialog";
 import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-terminal-notify";
@@ -145,11 +145,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         }
         prevActiveFile.current = active_file;
         setOverlay(null);
-        persistWorkspace(true);
-        window.dispatchEvent(
-            new CustomEvent("shape-open-workspace-file", { detail: { path: active_file } }),
-        );
-    }, [active_file, persistWorkspace]);
+        openFileTab(active_file);
+    }, [active_file]);
 
     useEffect(() => {
         const onView = (e: Event) => {
@@ -160,15 +157,19 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             }
             if (v === "chat") setOverlay(null);
         };
-        const onFileDiff = () => {
+        const onFile = (event: Event) => {
+            const path = (event as CustomEvent<{ path?: string }>).detail?.path;
+            if (!path || path.startsWith("shape://")) return;
             setOverlay(null);
-            persistWorkspace(true);
+            openFileTab(path);
         };
         window.addEventListener("shape-center-view", onView as EventListener);
-        window.addEventListener("shape-open-file-diff", onFileDiff as EventListener);
+        window.addEventListener("shape-open-file-diff", onFile as EventListener);
+        window.addEventListener("shape-open-workspace-file", onFile as EventListener);
         return () => {
             window.removeEventListener("shape-center-view", onView as EventListener);
-            window.removeEventListener("shape-open-file-diff", onFileDiff as EventListener);
+            window.removeEventListener("shape-open-file-diff", onFile as EventListener);
+            window.removeEventListener("shape-open-workspace-file", onFile as EventListener);
         };
     }, [persistWorkspace]);
 
@@ -306,19 +307,27 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [clampWorkspace]);
 
     useEffect(() => {
+        let frame = 0;
         const apply = () => {
             const next = clampWorkspace(widthRef.current);
-            setWorkspaceFits(next > 0);
+            setWorkspaceFits((prev) => (prev === (next > 0) ? prev : next > 0));
             if (next > 0) {
                 setWorkspaceWidth((prev) => (prev === next ? prev : next));
             }
         };
+        const schedule = () => {
+            if (frame) return;
+            frame = window.requestAnimationFrame(() => {
+                frame = 0;
+                apply();
+            });
+        };
         apply();
-        window.addEventListener("resize", apply);
+        window.addEventListener("resize", schedule);
         let unlisten: (() => void) | undefined;
         let cancelled = false;
         void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
-            const stop = await getCurrentWindow().listen("tauri://resize", apply);
+            const stop = await getCurrentWindow().listen("tauri://resize", schedule);
             if (cancelled) {
                 stop();
                 return;
@@ -327,7 +336,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         });
         return () => {
             cancelled = true;
-            window.removeEventListener("resize", apply);
+            window.removeEventListener("resize", schedule);
+            if (frame) window.cancelAnimationFrame(frame);
             unlisten?.();
         };
     }, [clampWorkspace, sidebarOpen]);
@@ -402,7 +412,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
-        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-transparent text-text-primary">
+        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-chrome text-text-primary">
             <DevRunHost />
             <ProjectQuickPickHost />
             <TrustFolderHost />
@@ -431,39 +441,38 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             ) : null}
 
             <ChatChromeTabs />
-            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden px-1 pb-1">
-                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden squircle-t-3xl rounded-b-lg bg-panel border border-border/50">
-                    {chatSearch && codeWorkspace ? (
-                        <>
-                            <button
-                                type="button"
-                                aria-label="Close chat search"
-                                className="absolute inset-0 z-30 cursor-default"
-                                onClick={() => setChatSearch(false)}
-                            />
-                            <div className="absolute inset-x-3 top-2 z-40">
-                                <ChatSearch onClose={() => setChatSearch(false)} />
-                            </div>
-                        </>
-                    ) : null}
-                    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                        {overlay?.type === "settings" ? (
-                            <AgentOverlayView
-                                overlay={overlay}
-                                onClose={() => setOverlay(null)}
-                                navPortalTarget={null}
-                                sidebarExpanded
-                            />
-                        ) : codeWorkspace ? (
-                            <PaneGrid />
-                        ) : (
-                            <Chat className="bg-transparent" />
-                        )}
-                        <div className="hidden">{children}</div>
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden" data-no-drag>
+                {chatSearch && codeWorkspace ? (
+                    <>
+                        <button
+                            type="button"
+                            aria-label="Close chat search"
+                            className="absolute inset-0 z-30 cursor-default"
+                            onClick={() => setChatSearch(false)}
+                        />
+                        <div className="absolute inset-x-3 top-2 z-40">
+                            <ChatSearch onClose={() => setChatSearch(false)} />
+                        </div>
+                    </>
+                ) : null}
+                {overlay?.type === "settings" ? (
+                    <div className="relative m-0.5 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-t-[15px] border border-white/9 bg-panel squircle-b-[10px]">
+                        <AgentOverlayView
+                            overlay={overlay}
+                            onClose={() => setOverlay(null)}
+                            navPortalTarget={null}
+                            sidebarExpanded
+                        />
                     </div>
-                </div>
+                ) : codeWorkspace ? (
+                    <PaneGrid />
+                ) : (
+                    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel">
+                        <Chat className="bg-transparent" showTitlebar={false} />
+                    </div>
+                )}
+                <div className="hidden">{children}</div>
             </div>
-            <TabLogPanel />
             <WindowControls
                 isMaximized={isMaximized}
                 onMinimize={minimize}
@@ -472,7 +481,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 surface="panel"
                 spacer={false}
                 bare
-                barClass="h-11"
+                barClass="h-9"
             />
         </div>
     );

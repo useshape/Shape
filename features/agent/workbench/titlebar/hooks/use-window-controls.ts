@@ -81,8 +81,12 @@ export function useWindowControls() {
                 document.documentElement.toggleAttribute("data-window-flush", flush);
             };
             await syncChrome();
+            let timer = 0;
             const onChrome = () => {
-                void syncChrome();
+                window.clearTimeout(timer);
+                timer = window.setTimeout(() => {
+                    void syncChrome();
+                }, 150);
             };
             const unlistenResize = await win.listen("tauri://resize", onChrome);
             const unlistenMove = await win.listen("tauri://move", onChrome);

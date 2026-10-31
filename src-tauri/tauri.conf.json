@@ -22,7 +22,7 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "dragDropEnabled": false
       },
       {

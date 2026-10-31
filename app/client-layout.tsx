@@ -231,7 +231,8 @@ function Content({ children }: { children: React.ReactNode }) {
     return (
         <div
             id="shape-workbench"
-            className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden select-none"
+            className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-chrome select-none"
+            data-no-drag
         >
             <div
                 className={cn(

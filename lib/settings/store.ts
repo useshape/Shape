@@ -698,10 +698,10 @@ export function subscribeSettings(listener: () => void) {
     return () => listeners.delete(listener);
 }
 
-function paintDarkTheme() {
+function paintChromeTheme() {
     delete document.documentElement.dataset.theme;
     document.documentElement.style.colorScheme = "dark";
-    document.documentElement.classList.add("dark");
+    document.documentElement.classList.remove("dark");
 }
 
 export function applyAppearanceSettings(settings: ShapeSettings) {
@@ -709,7 +709,7 @@ export function applyAppearanceSettings(settings: ShapeSettings) {
     document.documentElement.style.setProperty("--editor-font-family", settings.editor.fontFamily);
     document.documentElement.style.setProperty("--editor-font-size", `${settings.editor.fontSize}px`);
     document.documentElement.style.setProperty("--font-mono", settings.editor.fontFamily);
-    paintDarkTheme();
+    paintChromeTheme();
 }
 
 export function getEditorOptionsFromSettings(settings: ShapeSettings = getSettings()) {

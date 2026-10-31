@@ -293,7 +293,7 @@ export function AiSettingsPanel({
                             ))}
                             <button
                                 type="button"
-                                className="px-3.5 py-2.5 text-left text-sm text-text-muted hover:bg-white/4 hover:text-text-primary"
+                                className="min-h-7 px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
                                 onClick={() => setShowAllSubagentModels((v) => !v)}
                             >
                                 {showAllSubagentModels ? "Show fewer models" : "View all models"}
@@ -337,7 +337,7 @@ export function AiSettingsPanel({
                 ))}
                 <button
                     type="button"
-                    className="px-3.5 py-2.5 text-left text-sm text-text-muted hover:bg-white/4 hover:text-text-primary"
+                    className="min-h-7 px-2 py-1 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
                     onClick={() => setShowAllModels((v) => !v)}
                 >
                     {showAllModels ? "Show fewer models" : "View all models"}

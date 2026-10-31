@@ -22,10 +22,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="dark h-full overflow-hidden text-sm bg-transparent text-text-primary"
+      className="h-full overflow-hidden bg-chrome text-sm text-text-primary"
       suppressHydrationWarning
     >
-      <body className="flex h-full flex-col overflow-hidden bg-transparent text-text-primary antialiased font-sans">
+      <body className="flex h-full flex-col overflow-hidden bg-chrome font-sans text-text-primary">
         <ClientLayout>
           {children}
         </ClientLayout>

@@ -85,14 +85,14 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { useProjectState } from "@/lib/backend";
+import { commands, useProjectState } from "@/lib/backend";
 import { CommitMenu } from "@/features/agent/workspace/commit-menu";
 import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
-import { useSettings } from "@/lib/settings";
+import { updateSettingSection, useSettings, type AutoRunModeSetting } from "@/lib/settings";
+import { ChatUsageButton } from "./usage";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { SearchInput } from "@/components/ui/search";
-import { effortDisplayLabel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
-import { ThinkingEffortControl } from "./thinking-bar";
+import { effortDisplayLabel, effortsForModel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
 import { ShapeAutoIcon } from "@/lib/ui/provider-icon";
 import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
 import { Add20Filled } from "@fluentui/react-icons";
@@ -997,6 +997,12 @@ export function ChatInput({
         window.dispatchEvent(new Event("shape-open-project-pick"));
     };
 
+    const runMode = settings.ai.autoRunMode;
+    const setRunMode = (next: AutoRunModeSetting) => {
+        updateSettingSection("ai", { autoRunMode: next });
+        void commands.updateTurnPolicy({ autoRunMode: next });
+    };
+
     const sendActive =
         (inputValue.trim() || isLoading || uploadedFiles.length > 0) &&
         !uploadedFiles.some((a) => a.status === "processing");
@@ -1009,15 +1015,6 @@ export function ChatInput({
             )}
         >
             <div className="relative z-10 flex w-full flex-col gap-1.5">
-                {project_path && !talkSurface ? (
-                    <div className={cn(
-                        "flex min-w-0 items-center gap-1.5 px-1",
-                        variant === "empty" && "justify-center",
-                    )}>
-                        <WorkspaceBranchSwitch />
-                        <CommitMenu projectPath={project_path} part="pr" />
-                    </div>
-                ) : null}
                 {hasContextStrip ? (
                     <div className="flex min-w-0 items-center gap-1 px-1">
                         {pendingEdits.length > 0 ? (
@@ -1058,7 +1055,7 @@ export function ChatInput({
                     className={cn(
                         "relative flex w-full flex-col transition-colors p-1.5",
                         "bg-surface-4",
-                        composerTall || uploadedFiles.length > 0 ? "squircle-3xl" : "rounded-full",
+                        talkSurface && !composerTall && uploadedFiles.length === 0 ? "rounded-full" : "squircle-3xl",
                         dragOver && "bg-surface-3/80",
                         (needsSignIn || folderLocked) && "cursor-default",
                         folderLocked && "opacity-70",
@@ -1101,7 +1098,8 @@ export function ChatInput({
                             setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
                         }
                     />
-                    <div className={cn("relative flex gap-1 px-1.5", composerTall ? "items-end" : "h-11 items-center")}>
+                    <div className="relative flex flex-col gap-0.5 px-1.5 pb-0.5">
+                        <div className={cn("flex min-w-0 gap-1", composerTall ? "items-end" : "h-9 items-center")}>
                         <input
                             type="file"
                             id="chat-media-upload"
@@ -1144,11 +1142,37 @@ export function ChatInput({
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-66">
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        Permission
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-52">
+                                        {([
+                                            ["ask", "Read only"],
+                                            ["auto", "Guard"],
+                                            ["always", "Full access"],
+                                        ] as const).map(([id, label]) => (
+                                            <DropdownMenuItem key={id} onClick={() => setRunMode(id)}>
+                                                <span className="min-w-0 flex-1">{label}</span>
+                                                {runMode === id ? <Icon icon={Checkmark20Regular} /> : null}
+                                            </DropdownMenuItem>
+                                        ))}
+                                        <DropdownMenuItem
+                                            onClick={() => {
+                                                void import("@/lib/window/open-settings").then(({ openSettingsWindow }) =>
+                                                    openSettingsWindow({ category: "ai" }),
+                                                );
+                                            }}
+                                        >
+                                            Global setting
+                                        </DropdownMenuItem>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-media-upload")?.click()}
                                 >
                                     <Icon icon={MoviesAndTv24Filled} />
-                                    Upload photos & file
+                                    Upload photos & files
                                 </DropdownMenuItem>
                                 {talkSurface ? null : (
                                 <DropdownMenuItem
@@ -1244,7 +1268,7 @@ export function ChatInput({
                                 </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <div className={cn("relative min-w-0 flex-1", composerTall ? "min-h-6" : "flex h-11 items-center")}>
+                        <div className={cn("relative min-w-0 flex-1", composerTall ? "min-h-6" : "flex h-9 items-center")}>
                         {folderLocked && !inputValue ? (
                             <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-5 text-text-muted">
                                 Open a folder to start coding.
@@ -1418,9 +1442,53 @@ export function ChatInput({
                             </ContextMenuContent>
                         </ContextMenu>
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (inputValue.trim()) rememberPrompt(inputValue);
+                                if (isLoading && inputValue.trim()) {
+                                    onSendMessage();
+                                } else if (isLoading) {
+                                    onStopMessage();
+                                } else {
+                                    onSendMessage();
+                                }
+                            }}
+                            disabled={sendDisabled}
+                            className={cn(
+                                "flex size-8 shrink-0 items-center justify-center rounded-full text-white transition-all disabled:opacity-40",
+                                sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted",
+                            )}
+                            aria-label={
+                                isLoading && inputValue.trim()
+                                    ? "Queue message"
+                                    : isLoading
+                                      ? "Stop"
+                                      : "Send"
+                            }
+                        >
+                            {isLoading && !inputValue.trim() ? (
+                                <span role="status" aria-label="Generating" className="text-text-primary">
+                                    <Arc size={16} />
+                                </span>
+                            ) : (
+                                <Icon icon={ArrowUp20Regular} />
+                            )}
+                        </button>
+                        </div>
+                    </div>
+                </div>
+                {talkSurface ? null : (
+                        <div className="flex min-w-0 items-center justify-between gap-2 px-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                            {project_path ? (
+                                <>
+                                    <WorkspaceBranchSwitch />
+                                    <CommitMenu projectPath={project_path} part="pr" />
+                                </>
+                            ) : null}
+                        </div>
                         <div className="flex shrink-0 items-center">
-                        {talkSurface ? null : (
-                        <>
                         <DropdownMenu
                             onOpenChange={(open) => {
                                 if (!open) setModelQuery("");
@@ -1430,23 +1498,20 @@ export function ChatInput({
                                 <Button
                                     variant="ghost"
                                     size="xs"
-                                    className="h-8 max-w-[220px] px-2 font-normal text-text-muted hover:text-text-primary hover:bg-transparent"
+                                    className="group/model h-8 max-w-[260px] px-2 font-normal text-text-muted hover:text-text-primary hover:bg-transparent"
                                     aria-label={modelName}
                                 >
                                     <div className="flex min-w-0 items-center gap-1.5 text-sm">
-                                        {providerIcon(
-                                            selectedModel === "auto"
-                                            || selectedModel === "openrouter/auto"
-                                            || modelInfo.provider === "Auto"
-                                            || modelInfo.name.toLowerCase() === "auto"
-                                                ? "auto"
-                                                : modelInfo.id,
-                                            18,
-                                        )}
+                                        {selectedModel === "auto"
+                                        || selectedModel === "openrouter/auto"
+                                        || modelInfo.provider === "Auto"
+                                        || modelInfo.name.toLowerCase() === "auto" ? (
+                                            <img src="/logos/temp.svg" alt="" className="size-4 shrink-0" />
+                                        ) : providerIcon(modelInfo.id, 16)}
                                         <span className="min-w-0 truncate">{modelName}</span>
-                                        {isApiModel(modelInfo) ? (
-                                            <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
-                                        ) : null}
+                                        <span className="inline-flex w-0 shrink-0 justify-end overflow-hidden opacity-0 transition-[width,opacity] duration-150 group-hover/model:w-4 group-hover/model:opacity-100 group-data-[state=open]/model:w-4 group-data-[state=open]/model:opacity-100">
+                                            <Icon icon={ChevronDown20Regular} className="size-4" style={{ width: 16, height: 16 }} />
+                                        </span>
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
@@ -1569,67 +1634,40 @@ export function ChatInput({
                                                 </div>
                                             ) : null}
                                         </div>
-                                        <DropdownMenuSub>
-                                            <DropdownMenuSubTrigger>
-                                                Thinking
-                                            </DropdownMenuSubTrigger>
-                                            <DropdownMenuSubContent className="w-66">
-                                                <ThinkingEffortControl
-                                                    embedded
-                                                    effort={reasoningEffort}
-                                                    modelId={selectedModel}
-                                                    onChange={setReasoningEffort}
-                                                    disabled={needsSignIn}
-                                                />
-                                            </DropdownMenuSubContent>
-                                        </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        {hideModeSelect ? null : (
-                            <ModeMenu
-                                selectedMode={selectedMode}
-                                setSelectedMode={setSelectedMode}
-                                disabled={needsSignIn}
-                            />
-                        )}
-                        </>
-                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    disabled={needsSignIn}
+                                    className="group/effort h-8 px-2 font-normal text-text-muted hover:bg-transparent hover:text-text-primary"
+                                    aria-label="Reasoning"
+                                >
+                                    <span className="text-sm">{reasoningEffort === "super" ? "Ultrabrowse" : effortDisplayLabel(reasoningEffort)}</span>
+                                    <span className="inline-flex w-0 shrink-0 justify-end overflow-hidden opacity-0 transition-[width,opacity] duration-150 group-hover/effort:ml-1 group-hover/effort:w-4 group-hover/effort:opacity-100 group-data-[state=open]/effort:ml-1 group-data-[state=open]/effort:w-4 group-data-[state=open]/effort:opacity-100">
+                                        <Icon icon={ChevronDown20Regular} className="size-4" style={{ width: 16, height: 16 }} />
+                                    </span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                                {effortsForModel(selectedModel).map((stop) => (
+                                    <DropdownMenuItem
+                                        key={stop.value}
+                                        disabled={needsSignIn}
+                                        onClick={() => setReasoningEffort(stop.value)}
+                                    >
+                                        <span className="min-w-0 flex-1">{stop.value === "super" ? "Ultrabrowse" : stop.label}</span>
+                                        {reasoningEffort === stop.value ? <Icon icon={Checkmark20Regular} /> : null}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <ChatUsageButton compact />
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (inputValue.trim()) rememberPrompt(inputValue);
-                                if (isLoading && inputValue.trim()) {
-                                    onSendMessage();
-                                } else if (isLoading) {
-                                    onStopMessage();
-                                } else {
-                                    onSendMessage();
-                                }
-                            }}
-                            disabled={sendDisabled}
-                            className={cn(
-                                "flex size-8 shrink-0 items-center justify-center rounded-full text-white transition-all disabled:opacity-40",
-                                sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted",
-                            )}
-                            aria-label={
-                                isLoading && inputValue.trim()
-                                    ? "Queue message"
-                                    : isLoading
-                                      ? "Stop"
-                                      : "Send"
-                            }
-                        >
-                            {isLoading && !inputValue.trim() ? (
-                                <span role="status" aria-label="Generating" className="text-text-primary">
-                                    <Arc size={16} />
-                                </span>
-                            ) : (
-                                <Icon icon={ArrowUp20Regular} />
-                            )}
-                        </button>
-                    </div>
-                </div>
+                        </div>
+                        )}
                 {talkSurface ? (
                     <div className="flex items-center justify-center gap-2 px-2 pb-1 pt-3 text-center text-xs text-text-muted">
                         {talkMark ? (

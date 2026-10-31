@@ -1177,13 +1177,13 @@ export function SettingsView({
         <div
             className={cn(
                 "flex h-full min-h-0 w-full min-w-0 overflow-hidden",
-                navPortalTarget ? "bg-panel" : "bg-background",
+                navPortalTarget ? "bg-panel" : "bg-white",
             )}
         >
             {(() => {
                 const collapsed = Boolean(navPortalTarget) && !sidebarExpanded;
                 const nav = (
-                    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+                    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-panel">
                         {onBack ? (
                             <HostedSidebarBack
                                 label="Chat"
@@ -1249,7 +1249,7 @@ export function SettingsView({
                 );
                 if (navPortalTarget) return createPortal(nav, navPortalTarget);
                 return (
-                    <aside className="flex w-64 shrink-0 flex-col overflow-hidden bg-background">
+                    <aside className="flex w-80 shrink-0 flex-col overflow-hidden bg-background">
                         {nav}
                     </aside>
                 );

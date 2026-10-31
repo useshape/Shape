@@ -48,11 +48,11 @@ const tertiaryOverride: Partial<Record<ButtonVariant, string>> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-    xs: "h-7 min-h-7 px-2.5 text-xs squircle-2xl",
-    sm: "h-7.5 min-h-7.5 px-3 text-sm squircle-2xl",
-    md: "h-9 min-h-8 px-3.5 text-sm squircle-2xl",
-    lg: "h-10 min-h-10 px-4 text-base squircle-3xl",
-    icon: "size-9 min-h-9 min-w-9 shrink-0 overflow-visible p-2 rounded-full",
+    xs: "h-7 min-h-7 px-2 text-sm squircle-lg",
+    sm: "h-7 min-h-7 px-2.5 text-sm squircle-lg",
+    md: "h-7 min-h-7 px-3 text-sm squircle-lg",
+    lg: "h-8 min-h-8 px-3.5 text-sm squircle-lg",
+    icon: "size-7 min-h-7 min-w-7 shrink-0 overflow-visible p-0 squircle-lg",
 };
 
 const selectedClasses =
@@ -155,7 +155,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         }, [inactive, label]);
 
         const classes = cn(
-            "press-spring relative inline-flex items-center justify-center gap-1.5 font-medium outline-none select-none",
+            "press-spring relative inline-flex items-center justify-center gap-1.5 font-normal outline-none select-none",
             "touch-manipulation [-webkit-tap-highlight-color:transparent]",
             "focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
             "[&_svg.shape-icon]:pointer-events-none [&_svg.shape-icon]:shrink-0",

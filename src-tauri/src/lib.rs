@@ -119,7 +119,6 @@ pub fn run() {
             crate::core::webview_recovery::install(app.handle());
             if let Some(window) = app.get_webview_window("main") {
                 present_window(&window);
-                crate::core::window_material::install(&window);
             }
             // Initialize menu
             commands::ipc::shortcuts::setup_menu(app.handle())?;

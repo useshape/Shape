@@ -19,11 +19,11 @@ import {
 
 const InSettingCard = React.createContext(false);
 
-const settingCardClass = "overflow-hidden squircle-[18px] bg-settings-card";
+const settingCardClass = "overflow-hidden squircle-2xl bg-settings-card";
 
 /** Shared chrome for settings action / select triggers. */
 export const SETTING_CONTROL_BTN =
-    "h-9 min-w-0 justify-between gap-1.5 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10";
+    "h-7 min-w-0 justify-between gap-1.5 border border-border bg-surface-4 px-2 font-normal text-text-primary hover:bg-panel-hover";
 
 export function SettingCard({
     children,
@@ -166,7 +166,7 @@ export function SettingActionRow({
         <button
             type="button"
             onClick={onClick}
-            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-normal text-text-primary hover:bg-white/4"
+            className="flex min-h-7 w-full items-center gap-2 px-2 text-left text-sm font-normal text-text-primary hover:bg-panel-hover"
         >
             <Icon icon={icon} className="shrink-0 text-text-muted" />
             <span>{title}</span>
@@ -391,7 +391,7 @@ export function SettingMultiSelect({
                 <Button
                     variant="secondary"
                     size="sm"
-                    className={cn("h-8 min-w-[200px] max-w-[280px] justify-between gap-2 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10", className)}
+                    className={cn("h-7 min-w-[160px] max-w-[280px] justify-between gap-2 border border-border bg-surface-4 px-2 font-normal text-text-primary hover:bg-panel-hover", className)}
                 >
                     <span className="truncate">{summary}</span>
                     <Icon icon={ChevronDown20Regular} className="shrink-0 text-text-muted" />

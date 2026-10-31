@@ -6,6 +6,20 @@ export function isToolId(id: string): id is ToolId {
   return (TOOLS as string[]).includes(id);
 }
 
+const FILE_PREFIX = "file:";
+
+export function isFileTab(id: string): boolean {
+  return id.startsWith(FILE_PREFIX);
+}
+
+export function fileTabId(path: string): string {
+  return `${FILE_PREFIX}${path}`;
+}
+
+export function fileTabPath(id: string): string {
+  return id.slice(FILE_PREFIX.length);
+}
+
 export function toolTitle(id: ToolId): string {
   if (id === "tool:graph") return "Graph";
   if (id === "tool:prs") return "Pull requests";
@@ -68,7 +82,7 @@ export function reorderTabs(state: StripModel, from: number, to: number): StripM
 
 /** Drop `incoming` onto `anchor` so the two share one split, still in the same tab strip. */
 export function splitTabs(state: StripModel, anchor: string, incoming: string): StripModel {
-  if (!anchor || !incoming || anchor === incoming || isToolId(anchor) || isToolId(incoming)) return state;
+  if (!anchor || !incoming || anchor === incoming || isToolId(anchor) || isToolId(incoming) || isFileTab(anchor) || isFileTab(incoming)) return state;
   const order = placeBeside(state.order.includes(anchor) ? state.order : [...state.order, anchor], anchor, incoming);
   return {
     order,

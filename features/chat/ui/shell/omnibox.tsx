@@ -1,18 +1,33 @@
 "use client";
 
-import { ArrowLeft20Filled } from "@fluentui/react-icons/headless/svg/arrow-left";
-import { ArrowRight20Filled } from "@fluentui/react-icons/headless/svg/arrow-right";
-import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
-import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Slide } from "loading-dev";
+import { createPortal } from "react-dom";
+import {
+    RiArrowLeftSLine,
+    RiArrowRightSLine,
+    RiEqualizer2Line,
+    RiRefreshLine,
+    RiSearchLine,
+    RiSettings3Line,
+} from "@remixicon/react";
 import { FileTree } from "@/features/agent/workspace/tree";
 import { TerminalToggle } from "@/features/agent/chrome";
+import { Tooltip } from "@/components/ui/tooltip";
 import { chatNavBack, chatNavForward, ensureChatNav, getChatNav, subscribeChatNav } from "@/features/chat/lib/chat-nav";
+import { openFileTab } from "@/features/agent/strip";
 import { localSearchQuery } from "@/features/agent/panes/strip-model";
 import { commands, useProjectState, type CodebaseSearchHit, type Conversation } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { useSyncExternalStore } from "react";
+
+/** Wider with one tab, tighter as more tabs need the bar, full width when there are none. */
+function omniboxMax(tabCount: number): string {
+    if (tabCount <= 1) return "36rem";
+    if (tabCount === 2) return "30rem";
+    if (tabCount === 3) return "26rem";
+    return "22rem";
+}
 
 function NavButton({
     label,
@@ -31,7 +46,7 @@ function NavButton({
             aria-label={label}
             disabled={disabled}
             onClick={onClick}
-            className="flex size-7 items-center justify-center rounded-full text-text-muted hover:bg-panel-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40"
+            className="flex size-8 items-center justify-center squircle-xl text-text-secondary hover:bg-panel-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40"
         >
             {children}
         </button>
@@ -47,6 +62,12 @@ export function ChatOmnibox({
     canBack,
     canForward,
     onOpenChat,
+    reloadId,
+    reloadPath,
+    tabCount,
+    titleWorking = false,
+    fill = false,
+    children,
 }: {
     title: string;
     projectPath: string | null;
@@ -56,32 +77,79 @@ export function ChatOmnibox({
     canBack?: boolean;
     canForward?: boolean;
     onOpenChat?: (id: string) => void;
+    /** Conversation to reload. Omit to reload the open chat. */
+    reloadId?: string | null;
+    /** File tab to re-read. */
+    reloadPath?: string | null;
+    /** Real tabs beside the field. Zero fills the bar. Omit to keep the fixed width. */
+    tabCount?: number;
+    /** The open chat is generating, so the name shows the working treatment. */
+    titleWorking?: boolean;
+    /** Address field fills the row. Used when tabs live on their own row. */
+    fill?: boolean;
+    children?: ReactNode;
 }) {
     const { project_path } = useProjectState();
     const path = projectPath || project_path;
     const project = path?.split(/[/\\]/).filter(Boolean).pop() || "shape";
     const nav = useSyncExternalStore(subscribeChatNav, getChatNav, getChatNav);
     const [open, setOpen] = useState<null | "tree" | "find">(null);
+    const [panel, setPanel] = useState<null | "tree" | "find">(null);
+    const [panelShown, setPanelShown] = useState(false);
     const [query, setQuery] = useState("");
     const [chats, setChats] = useState<Conversation[]>([]);
     const [code, setCode] = useState<CodebaseSearchHit[]>([]);
     const [searching, setSearching] = useState(false);
     const boxRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
 
     useEffect(() => {
         ensureChatNav();
     }, []);
 
     useEffect(() => {
+        if (open) {
+            setPanel(open);
+            const frame = requestAnimationFrame(() => setPanelShown(true));
+            return () => cancelAnimationFrame(frame);
+        }
+        setPanelShown(false);
+        const timer = window.setTimeout(() => setPanel(null), 200);
+        return () => window.clearTimeout(timer);
+    }, [open]);
+
+    useEffect(() => {
         if (open !== "find") return;
         inputRef.current?.focus();
     }, [open]);
 
+    useLayoutEffect(() => {
+        if (!panel) {
+            setAnchor(null);
+            return;
+        }
+        const place = () => {
+            const rect = boxRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            setAnchor({ top: rect.bottom, left: rect.left, width: rect.width });
+        };
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        return () => {
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
+        };
+    }, [panel]);
+
     useEffect(() => {
         if (!open) return;
         const onPointer = (event: PointerEvent) => {
-            if (!boxRef.current?.contains(event.target as Node)) setOpen(null);
+            const target = event.target as Node;
+            if (boxRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+            setOpen(null);
         };
         const onKey = (event: KeyboardEvent) => {
             if (event.key === "Escape") setOpen(null);
@@ -149,40 +217,67 @@ export function ChatOmnibox({
     };
 
     const openFile = (file: string) => {
-        window.dispatchEvent(new CustomEvent("shape-layout-toggle", { detail: { id: "secondary-sidebar", value: true } }));
-        window.dispatchEvent(new CustomEvent("shape-open-workspace-file", { detail: { path: file } }));
+        openFileTab(file);
         setOpen(null);
         setQuery("");
+    };
+
+    const reload = () => {
+        window.dispatchEvent(new CustomEvent("shape-reload-view", {
+            detail: { id: reloadId ?? null, path: reloadPath ?? null },
+        }));
     };
 
     const backDisabled = canBack != null ? !canBack : !nav.canBack;
     const forwardDisabled = canForward != null ? !canForward : !nav.canForward;
 
     return (
-        <div className="flex h-11 shrink-0 items-center gap-2 bg-transparent px-2" data-tauri-drag-region>
+        <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 pe-1" data-no-drag>
             <div className="flex shrink-0 items-center" data-no-drag>
                 <NavButton label="Back" disabled={backDisabled} onClick={onBack ?? chatNavBack}>
-                    <Icon icon={ArrowLeft20Filled} className="icon-md" />
+                    <RiArrowLeftSLine size={21} />
                 </NavButton>
                 <NavButton label="Forward" disabled={forwardDisabled} onClick={onForward ?? chatNavForward}>
-                    <Icon icon={ArrowRight20Filled} className="icon-md" />
+                    <RiArrowRightSLine size={21} />
+                </NavButton>
+                <NavButton label="Reload" onClick={reload}>
+                    <RiRefreshLine size={19} />
                 </NavButton>
             </div>
-            <div ref={boxRef} className="relative min-w-0 flex-1" data-no-drag>
+            <div
+                ref={boxRef}
+                data-no-drag
+                className={cn(
+                    "relative min-w-[7.5rem]",
+                    fill || tabCount === 0
+                        ? "min-w-0 flex-1"
+                        : tabCount == null
+                            ? "max-w-[22rem] flex-[0_1_22rem]"
+                            : "transition-[max-width,flex-grow] duration-300 ease-[var(--ease-out)]",
+                )}
+                style={fill || tabCount == null || tabCount === 0 ? undefined : {
+                    flexGrow: tabCount === 0 ? 1 : tabCount === 1 ? 1.6 : tabCount === 2 ? 1.25 : 1,
+                    flexShrink: 1,
+                    flexBasis: 0,
+                    maxWidth: tabCount === 0 ? "120rem" : omniboxMax(tabCount),
+                }}
+            >
                 <div
                     className={cn(
-                        "flex h-8 items-center gap-0.5 px-1",
-                        open ? "squircle-t-2xl border-b-transparent bg-white/5" : "squircle-2xl ",
+                        "relative flex h-8 items-center bg-surface-4",
+                        panel ? "squircle-t-xl rounded-b-none" : "squircle-2xl",
                     )}
                 >
-                    <button
-                        type="button"
-                        className="max-w-[34%] shrink-0 truncate rounded-full px-1.5 py-1 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                        onClick={() => setOpen((value) => (value === "tree" ? null : "tree"))}
-                    >
-                        {project}
-                    </button>
-                    <span className="shrink-0 text-text-muted">/</span>
+                    <Tooltip content="Open Folder" side="bottom">
+                        <button
+                            type="button"
+                            aria-label="Open Folder"
+                            className="absolute inset-y-0 start-1 z-10 grid w-6 place-items-center rounded-md text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                            onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
+                        >
+                            <RiEqualizer2Line size={19} />
+                        </button>
+                    </Tooltip>
                     {open === "find" ? (
                         <input
                             ref={inputRef}
@@ -190,21 +285,39 @@ export function ChatOmnibox({
                             aria-label="Search chats and code"
                             placeholder="Search chats and code"
                             onChange={(event) => setQuery(event.target.value)}
-                            className="h-7 min-w-0 flex-1 bg-transparent px-1 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                            className="h-8 min-w-0 flex-1 bg-transparent ps-8 pe-2 text-[14px] font-normal leading-none text-text-primary outline-none placeholder:text-text-primary/50"
                         />
                     ) : (
-                        <button
-                            type="button"
-                            className="h-7 min-w-0 flex-1 truncate px-1 text-left text-sm text-text-primary"
-                            onClick={() => setOpen("find")}
-                        >
-                            {title}
-                        </button>
+                        <div className="flex h-full min-w-0 flex-1 items-center justify-center gap-2 px-8">
+                            <button
+                                type="button"
+                                className="max-w-[45%] shrink truncate text-center text-[14px] font-normal capitalize leading-none text-text-primary"
+                                onClick={() => setOpen((value) => (value === "tree" ? null : "tree"))}
+                            >
+                                {project}
+                            </button>
+                            <button
+                                type="button"
+                                className="flex min-w-0 shrink items-center justify-center gap-1.5 text-center text-[14px] font-normal leading-none text-text-primary/55"
+                                onClick={() => setOpen("find")}
+                            >
+                                {titleWorking ? <Slide size={10} className="shrink-0 text-text-muted" /> : null}
+                                <span className={cn("min-w-0 truncate", titleWorking && "agent-progress-loading-text")}>{title}</span>
+                            </button>
+                        </div>
                     )}
                 </div>
-                {open ? (
-                    <div className="absolute inset-x-0 top-full z-40 max-h-[min(500px,82vh)] overflow-hidden squircle-b-2xl bg-[#2C2B2C] backdrop-blur-md shadow-lg/10">
-                        {open === "tree" && path ? (
+                {panel && anchor && typeof document !== "undefined"
+                    ? createPortal(
+                    <div
+                        ref={panelRef}
+                        className={cn(
+                            "fixed z-dropdown overflow-hidden bg-surface-4 shadow-md squircle-b-2xl transition-[max-height,opacity] duration-150 ease-[var(--ease-out)]",
+                            panelShown ? "max-h-[640px] opacity-100" : "pointer-events-none max-h-0 border-transparent opacity-0",
+                        )}
+                        style={{ top: anchor.top, left: anchor.left, width: anchor.width }}
+                    >
+                        {panel === "tree" && path ? (
                             <div className="h-150">
                                 <FileTree
                                     projectPath={path}
@@ -213,10 +326,10 @@ export function ChatOmnibox({
                                 />
                             </div>
                         ) : null}
-                        {open === "tree" && !path ? (
+                        {panel === "tree" && !path ? (
                             <p className="px-3 py-4 text-sm text-text-muted">Open a folder to browse files.</p>
                         ) : null}
-                        {open === "find" ? (
+                        {panel === "find" ? (
                             <div className="max-h-[min(400px,56vh)] overflow-y-auto py-1">
                                 <p className="px-3 py-1 text-xs text-text-muted">Chats</p>
                                 {chatHits.length === 0 ? (
@@ -256,20 +369,39 @@ export function ChatOmnibox({
                                 })}
                             </div>
                         ) : null}
-                    </div>
+                    </div>,
+                    document.body,
                 ) : null}
             </div>
+            {tabCount == null ? (
+                children ? (
+                    <div className="flex min-w-0 flex-1 items-center">{children}</div>
+                ) : fill ? null : (
+                    <div className="h-full min-w-4 flex-1" data-tauri-drag-region />
+                )
+            ) : (
+                <div
+                    className={cn(
+                        "grid overflow-hidden transition-[grid-template-columns,flex-grow,opacity] duration-300 ease-[var(--ease-out)]",
+                        tabCount === 0 ? "grow-0 opacity-0" : "min-w-0 flex-1 opacity-100",
+                    )}
+                    style={{ gridTemplateColumns: tabCount === 0 ? "minmax(0,0fr)" : "minmax(0,1fr)" }}
+                    aria-hidden={tabCount === 0}
+                >
+                    <div className="flex min-w-0 overflow-hidden">{children}</div>
+                </div>
+            )}
             {showActions ? (
-                <div className="ml-auto flex shrink-0 items-center gap-0.5" data-no-drag>
+                <div className="flex shrink-0 gap-1 items-center" data-no-drag>
                     <TerminalToggle />
-                    <NavButton label="Search" onClick={() => setOpen("find")}>
-                        <Icon icon={Search20Regular} className="icon-md" />
+                    <NavButton label="Search" onClick={() => setOpen((value) => (value === "find" ? null : "find"))}>
+                        <RiSearchLine size={19} />
                     </NavButton>
                     <NavButton
                         label="Settings"
                         onClick={() => window.dispatchEvent(new Event("shape-open-settings"))}
                     >
-                        <Icon icon={Settings20Regular} className="icon-md" />
+                        <RiSettings3Line size={19} />
                     </NavButton>
                 </div>
             ) : null}
@@ -282,13 +414,13 @@ export function ChatWindowActions() {
         <div className="flex shrink-0 items-center gap-0.5" data-no-drag>
             <TerminalToggle />
             <NavButton label="Search" onClick={() => window.dispatchEvent(new Event("shape-open-chat-search"))}>
-                <Icon icon={Search20Regular} className="icon-md" />
+                <RiSearchLine size={16} />
             </NavButton>
             <NavButton
                 label="Settings"
                 onClick={() => window.dispatchEvent(new Event("shape-open-settings"))}
             >
-                <Icon icon={Settings20Regular} className="icon-md" />
+                <RiSettings3Line size={16} />
             </NavButton>
         </div>
     );

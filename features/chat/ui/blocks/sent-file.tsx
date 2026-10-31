@@ -53,21 +53,21 @@ export function SentFileCard({
     const canDownload = Boolean(src.trim());
 
     return (
-        <div className="my-2 flex max-w-md items-center gap-3 rounded-2xl border border-border-subtle bg-surface-3 px-3 py-2.5">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
-                <Icon icon={kind.icon} />
+        <div className="my-2 flex max-w-md items-center gap-3 squircle-2xl border border-border-subtle/9 bg-surface-3 p-2">
+            <span className="flex size-10 shrink-0 items-center pl-2 justify-center rounded-lg text-accent">
+                <Icon icon={kind.icon} style={{ width: "28px", height: "28px" }} />
             </span>
-            <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-text-primary">{heading}</span>
+            <span className="min-w-0 flex-1 pr-3">
+                <span className="block truncate text-md text-text-primary">{heading}</span>
                 <span className="block truncate text-xs text-text-muted">{kind.label}</span>
             </span>
-            <span className="flex shrink-0 items-center">
+            <span className="flex shrink-0 items-center pr-1">
                 <Button
                     type="button"
                     variant="secondary"
-                    size="sm"
+                    size="lg"
                     disabled={!canDownload}
-                    className="rounded-r-none"
+                    className="rounded-r-none! rounded-full bg-white/10"
                     onClick={() => download(name, src)}
                 >
                     Download
@@ -77,9 +77,9 @@ export function SentFileCard({
                         <Button
                             type="button"
                             variant="secondary"
-                            size="sm"
+                            size="lg"
                             disabled={!canDownload}
-                            className="rounded-l-none border-l border-border-subtle px-1.5"
+                            className="rounded-l-none! rounded-full border-l border-border-subtle/9 px-1.5 bg-white/10"
                             aria-label="More"
                         >
                             <Icon icon={ChevronDown20Regular} />

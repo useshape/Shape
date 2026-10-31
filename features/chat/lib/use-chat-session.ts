@@ -53,8 +53,6 @@ import {
     type ComposerAttachment,
 } from "@/features/chat/ui/composer/attachments";
 import type { ReasoningEffort } from "../ui/composer/reasoning-effort";
-import { tabLog } from "@/lib/ui/tab-switch-log";
-
 function chatTabsStorageKey(projectPath: string | null | undefined) {
     const norm = (projectPath || "").replace(/\\/g, "/").toLowerCase();
     return `shape-chat-open-tabs:${norm || "__none__"}`;
@@ -1692,10 +1690,7 @@ export function useChatSession() {
             clearNextChat();
             const isSameConversation = id === conversationIdRef.current;
             const hasVisibleMessages = messagesRef.current.length > 0;
-            const started = performance.now();
-            const short = id.slice(0, 8);
-            if (resumeLiveConversation(id)) {
-                tabLog(`switch ${short} live turn ${(performance.now() - started).toFixed(1)}ms`);
+            if (!options?.force && resumeLiveConversation(id)) {
                 setConversationId(id);
                 setCurrentConversationId(id);
                 const liveConv = recentConvs.find((c) => c.id === id);
@@ -1703,7 +1698,6 @@ export function useChatSession() {
                 return;
             }
             if (!options?.force && isSameConversation && hasVisibleMessages) {
-                tabLog(`switch ${short} already open`);
                 return;
             }
 
@@ -1718,46 +1712,31 @@ export function useChatSession() {
             scrollInstantRef.current = true;
             isNearBottomRef.current = true;
             const projectForFocus = known?.project_path ?? project_path;
-            if (hadCache && cached) {
+            if (!options?.force && hadCache && cached) {
                 if (messagesRef.current !== cached) setMessages(cached);
-                tabLog(`switch ${short} cache n=${cached.length} ${(performance.now() - started).toFixed(1)}ms`);
-                requestAnimationFrame(() => {
-                    tabLog(`switch ${short} paint ${(performance.now() - started).toFixed(1)}ms`);
-                });
                 void commands.focusConversation(id, projectForFocus).catch(() => {});
                 return;
             }
 
             setMessages([]);
-            tabLog(`switch ${short} no cache, waiting on disk`);
             try {
-                const loadT = performance.now();
                 await commands.focusConversation(id, projectForFocus);
-                tabLog(`switch ${short} focus ${(performance.now() - loadT).toFixed(1)}ms`);
                 if (conversationIdRef.current !== id) {
-                    tabLog(`switch ${short} dropped after focus`);
                     return;
                 }
                 clearAllDesignPreviewSessions();
                 setContextSummarized(false);
-                const histT = performance.now();
                 const history = await commands.getChatHistory(40);
-                tabLog(`switch ${short} getChatHistory n=${history.length} ${(performance.now() - histT).toFixed(1)}ms`);
                 if (conversationIdRef.current !== id) {
-                    tabLog(`switch ${short} dropped after history`);
                     return;
                 }
                 scrollInstantRef.current = true;
                 setMessages(history);
-                requestAnimationFrame(() => {
-                    tabLog(`switch ${short} paint ${(performance.now() - started).toFixed(1)}ms`);
-                });
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 if (!message.includes("Conversation not found")) {
                     console.error("Failed to load conversation:", err);
                 }
-                tabLog(`switch ${short} error ${message}`);
                 await refreshMetadata();
             }
         },
@@ -1772,8 +1751,20 @@ export function useChatSession() {
             if (!id || (id === conversationIdRef.current && messagesRef.current.length > 0)) return;
             void handleLoadConversation(id);
         };
+        const onReload = (event: Event) => {
+            const detail = (event as CustomEvent<{ id?: string | null; path?: string | null }>).detail;
+            if (detail?.path) return;
+            const id = detail?.id || conversationIdRef.current;
+            if (!id || id === NEW_CHAT_TAB_ID) return;
+            if (detail?.id && detail.id !== conversationIdRef.current) return;
+            void handleLoadConversation(id, { force: true });
+        };
         window.addEventListener("shape-chat-load", onLoad as EventListener);
-        return () => window.removeEventListener("shape-chat-load", onLoad as EventListener);
+        window.addEventListener("shape-reload-view", onReload as EventListener);
+        return () => {
+            window.removeEventListener("shape-chat-load", onLoad as EventListener);
+            window.removeEventListener("shape-reload-view", onReload as EventListener);
+        };
     }, [handleLoadConversation]);
 
     React.useEffect(() => {

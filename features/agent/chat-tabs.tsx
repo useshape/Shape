@@ -1,10 +1,8 @@
 "use client";
 
-import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Icon } from "@/components/ui/icon";
-import { tabLog } from "@/lib/ui/tab-switch-log";
 import { commands, useProjectState } from "@/lib/backend";
+import { useGeneratingChatIds } from "@/features/chat/lib/generating-chats";
 import type { Conversation } from "@/lib/backend/types";
 import { useGitHubAuth } from "@/lib/github/store";
 import { useShapeAuth } from "@/lib/cloud/store";
@@ -12,6 +10,7 @@ import { conversationStorePath, TALK_CONVERSATION_STORE } from "@/lib/chat/conve
 import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
 import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
+import { ChatOmnibox } from "@/features/chat/ui/shell/omnibox";
 import { BrowserTabStrip } from "./browser-tab-strip";
 import { chromePlatform, subscribeChromePlatform } from "@/lib/ui/chrome-platform";
 import { publishChatTitles } from "./chat-titles";
@@ -22,6 +21,7 @@ import {
     closeChatTab,
     closeTool,
     getStrip,
+    isFileTab,
     isToolId,
     reorderChat,
     setOpenTabs,
@@ -33,20 +33,6 @@ import {
 } from "./strip";
 
 const MAX_TABS = 8;
-
-function chatHasMessages(chat: Conversation | undefined): boolean {
-    return Boolean(chat?.history?.some((message) => (message.content || "").trim().length > 0));
-}
-
-function latestModelId(chat: Conversation | undefined): string | null {
-    const history = chat?.history;
-    if (!history) return null;
-    for (let index = history.length - 1; index >= 0; index--) {
-        const model = history[index]?.model?.trim();
-        if (model) return model;
-    }
-    return null;
-}
 
 function ChromeAvatar() {
     const shapeAuth = useShapeAuth();
@@ -62,18 +48,15 @@ function ChromeAvatar() {
                 type="button"
                 aria-label={name}
                 data-no-drag
-                className="flex h-8 items-center gap-0.5 rounded-full py-0.5 pl-2 hover:bg-panel-hover"
+                className="grid size-7 place-items-center overflow-hidden rounded-full hover:bg-panel-hover"
             >
-                <span className="grid size-[23px] place-items-center overflow-hidden rounded-full bg-surface-4">
-                    <ProfileAvatar
-                        gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
-                        shapeUserId={shapeAuth.userId}
-                        offline={Boolean(shapeAuth.offline)}
-                        name={name}
-                        size={22}
-                    />
-                </span>
-                <Icon icon={ChevronDown20Regular} className="text-text-muted icon-md" />
+                <ProfileAvatar
+                    gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
+                    shapeUserId={shapeAuth.userId}
+                    offline={Boolean(shapeAuth.offline)}
+                    name={name}
+                    size={32}
+                />
             </button>
         </AccountMenu>
     );
@@ -86,6 +69,7 @@ export function ChatChromeTabs() {
     const [order, setOrder] = useState<string[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
     const strip = useSyncExternalStore(subscribeStrip, getStrip, getStrip);
+    const generating = useGeneratingChatIds();
     const platform = useSyncExternalStore(subscribeChromePlatform, chromePlatform, () => "windows" as const);
 
     const loadChats = useCallback(async () => {
@@ -172,17 +156,24 @@ export function ChatChromeTabs() {
         // instead of falling back to whichever chat happens to be first.
         const pending = current.activeId
             && !isToolId(current.activeId)
+            && !isFileTab(current.activeId)
             && current.activeId !== NEW_CHAT_TAB_ID
             && !known.has(current.activeId)
             ? current.activeId
             : null;
-        const kept = current.order.filter((id) => isToolId(id) || known.has(id) || id === NEW_CHAT_TAB_ID || id === pending);
-        const missing = order.filter((id) => !isToolId(id) && !kept.includes(id));
-        const chatsInStrip = current.order.some((id) => !isToolId(id));
+        const kept = current.order.filter((id) => isToolId(id) || isFileTab(id) || known.has(id) || id === NEW_CHAT_TAB_ID || id === pending);
+        const missing = order.filter((id) => !isToolId(id) && !isFileTab(id) && !kept.includes(id));
+        const chatsInStrip = current.order.some((id) => !isToolId(id) && !isFileTab(id));
         if (chatsInStrip && missing.length === 0 && kept.length === current.order.length && !pending) return;
-        const chatIds = kept.filter((id) => !isToolId(id));
-        if (pending && !chatIds.includes(pending)) chatIds.unshift(pending);
-        const next = [...chatIds, ...missing, ...kept.filter((id) => isToolId(id))];
+        const next = [...kept];
+        for (const id of missing) {
+            if (!next.includes(id)) next.push(id);
+        }
+        if (pending) {
+            const at = next.indexOf(NEW_CHAT_TAB_ID);
+            if (at >= 0) next.splice(at, 1, pending);
+            else if (!next.includes(pending)) next.unshift(pending);
+        }
         if (next.length === 0) return;
         const active = current.activeId === NEW_CHAT_TAB_ID || pending
             ? (pending ?? NEW_CHAT_TAB_ID)
@@ -205,39 +196,48 @@ export function ChatChromeTabs() {
             ? strip.order
             : order;
         const items = source.flatMap((id) => {
+            if (isFileTab(id)) {
+                const path = id.slice("file:".length);
+                const name = path.split(/[/\\]/).pop() || path;
+                return [{ id, title: name, active: strip.activeId === id, tool: false, file: true }];
+            }
             if (isToolId(id)) {
-                return [{ id, title: toolTitle(id), active: strip.activeId === id, tool: true, empty: false, modelId: null }];
+                return [{ id, title: toolTitle(id), active: strip.activeId === id, tool: true, file: false }];
             }
             const chat = byId.get(id);
             const pending = !chat && id !== NEW_CHAT_TAB_ID && strip.activeId === id;
             if (!chat && id !== NEW_CHAT_TAB_ID && !pending) return [];
-            const empty = id === NEW_CHAT_TAB_ID || pending || !chatHasMessages(chat);
             return [{
                 id,
                 title: chat?.title?.trim() || "New chat",
-                active: !isToolId(strip.activeId || "") && (strip.activeId === id || (!strip.activeId && id === activeId)),
+                active: !isToolId(strip.activeId || "") && !isFileTab(strip.activeId || "") && (strip.activeId === id || (!strip.activeId && id === activeId)),
                 tool: false,
-                empty,
-                modelId: empty ? null : latestModelId(chat),
+                file: false,
             }];
         });
         if (items.some((tab) => tab.active)) return items;
-        return [{ id: NEW_CHAT_TAB_ID, title: "New chat", active: !strip.activeId || !isToolId(strip.activeId), tool: false, empty: true, modelId: null }, ...items];
+        return [{ id: NEW_CHAT_TAB_ID, title: "New chat", active: !strip.activeId || (!isToolId(strip.activeId) && !isFileTab(strip.activeId)), tool: false, file: false }, ...items];
     }, [order, byId, activeId, strip]);
 
     const shown = useMemo(() => {
-        const tools = tabs.filter((tab) => isToolId(tab.id));
-        const chats = tabs.filter((tab) => !isToolId(tab.id));
-        const head = chats.slice(0, MAX_TABS);
+        const chats = tabs.filter((tab) => !tab.tool && !tab.file);
+        const keep = new Set(chats.slice(0, MAX_TABS).map((tab) => tab.id));
         const active = chats.find((tab) => tab.active);
-        const chatHead = active && !head.some((tab) => tab.id === active.id)
-            ? [...head.slice(0, MAX_TABS - 1), active]
-            : head;
-        return [...chatHead, ...tools];
+        if (active) {
+            keep.add(active.id);
+            if (keep.size > MAX_TABS) {
+                const drop = chats.find((tab) => keep.has(tab.id) && tab.id !== active.id);
+                if (drop) keep.delete(drop.id);
+            }
+        }
+        return tabs.filter((tab) => tab.tool || tab.file || keep.has(tab.id));
     }, [tabs]);
 
     const openChat = (id: string) => {
-        tabLog(`click ${id === NEW_CHAT_TAB_ID ? "new" : id.slice(0, 8)}`);
+        if (isFileTab(id)) {
+            activateChat(id);
+            return;
+        }
         if (isToolId(id)) {
             showView(id);
             return;
@@ -298,8 +298,9 @@ export function ChatChromeTabs() {
     };
 
     const closeChat = (id: string) => {
-        if (isToolId(id)) {
-            closeTool(id);
+        if (isToolId(id) || isFileTab(id)) {
+            if (isToolId(id)) closeTool(id);
+            else closeChatTab(id);
             return;
         }
         if (id === NEW_CHAT_TAB_ID) return;
@@ -316,51 +317,80 @@ export function ChatChromeTabs() {
         else newChat();
     };
 
-    const moveTab = (from: number, to: number) => {
-        setOrder((prev) => {
-            const chatsOnly = prev.filter((id) => !isToolId(id));
-            if (from < 0 || to < 0 || from >= chatsOnly.length || to >= chatsOnly.length) return prev;
-            const nextChats = [...chatsOnly];
-            const [moved] = nextChats.splice(from, 1);
-            nextChats.splice(to, 0, moved);
-            return nextChats;
-        });
+    const moveTab = (fromId: string, toId: string) => {
+        const current = getStrip().order;
+        const from = current.indexOf(fromId);
+        const to = current.indexOf(toId);
+        if (from < 0 || to < 0 || from === to) return;
         reorderChat(from, to);
+        const next = [...current];
+        const [moved] = next.splice(from, 1);
+        if (!moved) return;
+        next.splice(to, 0, moved);
+        setOrder(next.filter((id) => !isToolId(id) && !isFileTab(id) && id !== NEW_CHAT_TAB_ID));
     };
 
     const mac = platform === "macos";
 
+    const stripTabs = shown.filter((tab) => tab.id !== NEW_CHAT_TAB_ID);
+    const activeTab = shown.find((tab) => tab.active);
+    const titleWorking = Boolean(
+        activeTab
+        && !activeTab.file
+        && !activeTab.tool
+        && activeTab.id !== NEW_CHAT_TAB_ID
+        && generating.has(activeTab.id),
+    );
+    const reloadPath = activeTab?.file ? activeTab.id.slice("file:".length) : null;
+
     return (
         <div
-            className={cn(
-                "shape-window-titlebar relative z-30 flex h-11 w-full shrink-0 items-center bg-transparent",
-                mac ? "pl-[78px] pr-2" : "pl-2",
-            )}
-            data-tauri-drag-region
+            className="relative z-30 flex w-full min-w-0 shrink-0 flex-col overflow-visible bg-chrome font-normal tracking-normal text-[13px] text-text-primary"
+            data-no-drag
         >
-            <div className="flex shrink-0 items-center" data-no-drag>
-                <ChromeAvatar />
+            <div className={cn("flex h-9 w-full min-w-0 items-center", mac ? "ps-[78px]" : "ps-1")}>
+                {stripTabs.length > 0 ? (
+                    <BrowserTabStrip
+                        tabs={stripTabs.map((tab) => ({
+                            id: tab.id,
+                            title: tab.title,
+                            active: tab.active,
+                            tool: tab.tool,
+                            file: tab.file,
+                            working: !tab.file && !tab.tool && generating.has(tab.id),
+                        }))}
+                        splitIds={strip.split ? [strip.split.left, strip.split.right] : null}
+                        onActivate={openChat}
+                        onClose={closeChat}
+                        onReorder={moveTab}
+                        onSplitPair={(anchor, incoming) => splitWith(anchor, incoming)}
+                        onUnsplit={unsplit}
+                        onNew={newChat}
+                        onCloseOthers={closeOthers}
+                        onCloseRight={closeToRight}
+                    />
+                ) : (
+                    <div className="h-full min-w-0 flex-1" data-tauri-drag-region />
+                )}
+                <div className="flex shrink-0 items-center pe-1.5" data-no-drag>
+                    <ChromeAvatar />
+                </div>
+                {mac ? null : <WindowControlsSpacer />}
             </div>
-            <BrowserTabStrip
-                tabs={shown.map((tab) => ({
-                    id: tab.id,
-                    title: tab.title,
-                    active: tab.active,
-                    tool: tab.tool,
-                    empty: tab.empty,
-                    modelId: tab.modelId,
-                }))}
-                splitIds={strip.split ? [strip.split.left, strip.split.right] : null}
-                onActivate={openChat}
-                onClose={closeChat}
-                onReorder={moveTab}
-                onSplitPair={(anchor, incoming) => splitWith(anchor, incoming)}
-                onUnsplit={unsplit}
-                onNew={newChat}
-                onCloseOthers={closeOthers}
-                onCloseRight={closeToRight}
-            />
-            {mac ? null : <WindowControlsSpacer />}
+            <div className="flex h-10 w-full min-w-0 items-center pb-1">
+                <ChatOmnibox
+                    title={activeTab?.title || "New chat"}
+                    projectPath={project_path}
+                    fill
+                    titleWorking={titleWorking}
+                    reloadId={
+                        activeTab && !activeTab.file && !activeTab.tool && activeTab.id !== NEW_CHAT_TAB_ID
+                            ? activeTab.id
+                            : null
+                    }
+                    reloadPath={reloadPath}
+                />
+            </div>
         </div>
     );
 }

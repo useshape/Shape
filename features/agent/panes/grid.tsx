@@ -7,16 +7,23 @@ import Graph from "@/features/git/ui/graph/graph";
 import { PullRequestsPanel } from "@/features/chat/ui/prs/view";
 import { ChatMessageList } from "@/features/chat/ui/message/list";
 import { groupChatMessages } from "@/features/chat/lib/chat-session-utils";
-import { useChatStream } from "@/features/chat/lib/chat-stream-store";
-import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
-import { ArrowUp20Regular } from "@fluentui/react-icons/headless/svg/arrow-up";
-import { ChatOmnibox } from "@/features/chat/ui/shell/omnibox";
+import { ChatInput } from "@/features/chat/ui/composer/input";
+import type { ReasoningEffort } from "@/features/chat/ui/composer/reasoning-effort";
+import { ChatEmptyState } from "@/features/chat/ui/shell/empty";
+import {
+    createPendingAttachment,
+    processAttachment,
+    type ComposerAttachment,
+} from "@/features/chat/ui/composer/attachments";
 import { commands, useProjectState, type ChatMessage } from "@/lib/backend";
+import { EditorSplitProvider, EditorViewProvider } from "@/core/providers/editor";
+import { FileEditor } from "@/features/agent/workspace/editor";
 import {
     activateChat,
     closeTool,
+    fileTabPath,
     getStrip,
+    isFileTab,
     setPaneWeights,
     showView,
     showsSplit,
@@ -41,20 +48,53 @@ function toolFromDetail(detail: unknown): ToolId | null {
     return null;
 }
 
-function SplitSide({ conversationId }: { conversationId: string }) {
+function CompanionChat({ conversationId }: { conversationId: string }) {
     const { project_path } = useProjectState();
     const [title, setTitle] = useState("New chat");
+    const [messages, setMessages] = useState<ChatMessage[] | null>(null);
     const [draft, setDraft] = useState("");
+    const [files, setFiles] = useState<ComposerAttachment[]>([]);
+    const [model, setModel] = useState("auto");
+    const [mode, setMode] = useState("Code");
+    const [effort, setEffort] = useState<ReasoningEffort>("low");
+    const endRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         let cancelled = false;
-        void commands.getConversation(conversationId).then((conv) => {
-            if (!cancelled) setTitle(conv.title?.trim() || "New chat");
-        }).catch(() => {});
+        const load = () => {
+            void commands.getConversation(conversationId).then((conv) => {
+                if (cancelled) return;
+                setTitle(conv.title?.trim() || "New chat");
+                setMessages(conv.history ?? []);
+            }).catch(() => {
+                if (!cancelled) setMessages([]);
+            });
+        };
+        load();
+        const onReload = (event: Event) => {
+            const id = (event as CustomEvent<{ id?: string | null }>).detail?.id;
+            if (id === conversationId) load();
+        };
+        const onRefresh = () => load();
+        window.addEventListener("shape-reload-view", onReload as EventListener);
+        window.addEventListener("shape-chat-refresh", onRefresh);
         return () => {
             cancelled = true;
+            window.removeEventListener("shape-reload-view", onReload as EventListener);
+            window.removeEventListener("shape-chat-refresh", onRefresh);
         };
     }, [conversationId]);
+
+    const addFiles = (incoming: File[]) => {
+        if (incoming.length === 0) return;
+        const pending = incoming.map((file) => createPendingAttachment(file));
+        setFiles((prev) => [...prev, ...pending]);
+        for (const att of pending) {
+            void processAttachment(att).then((ready) => {
+                setFiles((prev) => prev.map((item) => (item.id === ready.id ? ready : item)));
+            });
+        }
+    };
 
     const send = () => {
         const text = draft.trim();
@@ -66,69 +106,61 @@ function SplitSide({ conversationId }: { conversationId: string }) {
         }));
     };
 
-    return (
-        <div className="flex h-full min-h-0 flex-col">
-            <ChatOmnibox title={title} projectPath={project_path} showActions={false} />
-            <IdleTranscript conversationId={conversationId} />
-            <form
-                className="shrink-0 px-3 pb-3"
-                onSubmit={(event) => {
+    const composer = (
+        <ChatInput
+            inputValue={draft}
+            isLoading={false}
+            uploadedFiles={files}
+            onInputChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     send();
-                }}
-            >
-                <div className="flex h-11 items-center gap-2 rounded-full bg-surface-4 px-2">
-                    <input
-                        value={draft}
-                        aria-label="Message"
-                        placeholder="Message"
-                        onChange={(event) => setDraft(event.target.value)}
-                        className="h-8 min-w-0 flex-1 bg-transparent px-2 text-sm text-text-primary outline-none placeholder:text-text-muted"
-                    />
-                    <Button type="submit" size="icon" variant="default" aria-label="Send" disabled={!draft.trim()} className="size-8 rounded-full">
-                        <Icon icon={ArrowUp20Regular} />
-                    </Button>
-                </div>
-            </form>
-        </div>
+                }
+            }}
+            onSendMessage={send}
+            onStopMessage={noop}
+            setUploadedFiles={setFiles}
+            addUploadedFiles={addFiles}
+            selectedModel={model}
+            setSelectedModel={setModel}
+            selectedMode={mode}
+            setSelectedMode={setMode}
+            reasoningEffort={effort}
+            setReasoningEffort={setEffort}
+            onNewChat={noop}
+            folderLocked={!project_path}
+        />
     );
-}
 
-function IdleTranscript({ conversationId }: { conversationId: string }) {
-    const { peekSnapshot } = useChatStream();
-    const endRef = useRef<HTMLDivElement>(null);
-    const [messages, setMessages] = useState<ChatMessage[] | null>(null);
-
-    useEffect(() => {
-        const cached = peekSnapshot(conversationId);
-        if (cached && cached.length > 0) {
-            setMessages(cached);
-            return;
-        }
-        let cancelled = false;
-        void commands.getConversation(conversationId).then((conv) => {
-            if (!cancelled) setMessages(conv.history ?? []);
-        }).catch(() => {
-            if (!cancelled) setMessages([]);
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [conversationId, peekSnapshot]);
-
-    if (!messages) return <div className="min-h-0 flex-1 bg-panel" />;
     return (
-        <div data-chat-scroll="" className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <ChatMessageList
-                messageGroups={groupChatMessages(messages)}
-                messages={messages}
-                isLoading={false}
-                activityLabel={null}
-                messagesEndRef={endRef}
-                onRedo={noop}
-                onRestore={noop}
-                isFileEditResolved={unresolved}
-            />
+        <div className="flex h-full min-h-0 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel">
+                {!messages || messages.length === 0 ? (
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5">
+                        <div className="flex w-full max-w-4xl flex-col gap-4">
+                            {messages ? <ChatEmptyState /> : <div className="h-16" />}
+                            {composer}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <div data-chat-scroll="" className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                            <ChatMessageList
+                                messageGroups={groupChatMessages(messages)}
+                                messages={messages}
+                                isLoading={false}
+                                activityLabel={null}
+                                messagesEndRef={endRef}
+                                onRedo={noop}
+                                onRestore={noop}
+                                isFileEditResolved={unresolved}
+                            />
+                        </div>
+                        <div className="shrink-0 px-5 pb-3">{composer}</div>
+                    </>
+                )}
+            </div>
         </div>
     );
 }
@@ -143,7 +175,8 @@ export function PaneGrid() {
     const split = strip.split;
     const focusLeft = splitOpen && strip.activeId === split?.left;
     const tool = strip.activeId === "tool:graph" || strip.activeId === "tool:prs" || strip.activeId === "tool:terminal";
-    const chatTarget = tool ? parkHost : chatHost;
+    const filePath = strip.activeId && isFileTab(strip.activeId) ? fileTabPath(strip.activeId) : null;
+    const chatTarget = tool || filePath ? parkHost : chatHost;
 
     useEffect(() => {
         const onOpen = (event: Event) => {
@@ -219,26 +252,51 @@ export function PaneGrid() {
         };
     }, []);
 
+    const liveColumn = (
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel border border-white/9 rounded-t-[15px] squircle-b-[10px] m-0.5">
+                <div ref={setChatHost} className="min-h-0 flex-1" />
+            </div>
+        </div>
+    );
+
     return (
         <div ref={rowRef} data-pane-grid="" className="relative flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
             <div ref={setParkHost} className="hidden" />
-            {tool && strip.activeId === "tool:graph" ? <Graph hideHeader surface="panel" active /> : null}
-            {tool && strip.activeId === "tool:prs" ? <PullRequestsPanel pane="full" /> : null}
-            {tool && strip.activeId === "tool:terminal" ? (
-                <Suspense fallback={<div className="h-full w-full bg-panel" />}>
-                    <Terminal terminalOnly isOpen onClose={() => closeTool("tool:terminal")} />
-                </Suspense>
+            {tool && strip.activeId ? (
+                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel">
+                        {strip.activeId === "tool:graph" ? <Graph hideHeader surface="panel" active /> : null}
+                        {strip.activeId === "tool:prs" ? <PullRequestsPanel pane="full" /> : null}
+                        {strip.activeId === "tool:terminal" ? (
+                            <Suspense fallback={<div className="h-full w-full bg-panel" />}>
+                                <Terminal terminalOnly isOpen onClose={() => closeTool("tool:terminal")} />
+                            </Suspense>
+                        ) : null}
+                    </div>
+                </div>
             ) : null}
-            {!tool && splitOpen && split ? (
+            {!tool && filePath ? (
+                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                    <div className="min-h-0 flex-1 overflow-hidden bg-panel">
+                        <EditorViewProvider>
+                            <EditorSplitProvider>
+                                <FileEditor path={filePath} />
+                            </EditorSplitProvider>
+                        </EditorViewProvider>
+                    </div>
+                </div>
+            ) : null}
+            {!tool && !filePath && splitOpen && split ? (
                 <>
                     <div data-pane="" className="flex min-h-0 min-w-0 basis-0 flex-col overflow-hidden" style={{ flexGrow: split.weights[0] }}>
-                        {focusLeft ? <div ref={setChatHost} className="min-h-0 flex-1" /> : <SplitSide conversationId={split.left} />}
+                        {focusLeft ? liveColumn : <CompanionChat conversationId={split.left} />}
                     </div>
                     <div
                         role="separator"
                         aria-orientation="vertical"
                         aria-label="Resize split"
-                        className="z-20 w-1.5 shrink-0 cursor-col-resize bg-white/10"
+                        className="z-20 w-1.5 shrink-0 cursor-col-resize bg-border"
                         onMouseDown={(event) => {
                             event.preventDefault();
                             dragRef.current = {
@@ -252,12 +310,12 @@ export function PaneGrid() {
                         }}
                     />
                     <div data-pane="" className="flex min-h-0 min-w-0 basis-0 flex-col overflow-hidden" style={{ flexGrow: split.weights[1] }}>
-                        {focusLeft ? <SplitSide conversationId={split.right} /> : <div ref={setChatHost} className="min-h-0 flex-1" />}
+                        {focusLeft ? <CompanionChat conversationId={split.right} /> : liveColumn}
                     </div>
                 </>
             ) : null}
-            {!tool && !splitOpen ? <div ref={setChatHost} className="min-h-0 min-w-0 flex-1" /> : null}
-            {chatTarget ? createPortal(<Chat className="h-full bg-transparent" />, chatTarget) : null}
+            {!tool && !filePath && !splitOpen ? liveColumn : null}
+            {chatTarget ? createPortal(<Chat className="h-full bg-transparent" showTitlebar={false} />, chatTarget) : null}
         </div>
     );
 }

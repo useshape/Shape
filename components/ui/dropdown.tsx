@@ -19,9 +19,9 @@ import { useOverlayRoot } from "@/lib/ui/overlay-root";
  */
 
 const itemClasses =
-    "group relative flex cursor-default select-none items-center gap-2 squircle-2xl px-4! py-1.5 text-sm outline-none transition-[background-color,color,transform] duration-[var(--transition-fast)] ease-[var(--ease-out)] focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
+    "group relative flex min-h-7 cursor-default select-none items-center gap-2 squircle-md px-2 py-1 text-sm outline-none transition-[background-color,color] duration-[var(--transition-fast)] ease-[var(--ease-out)] focus:bg-panel-hover focus:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-50";
 const containerClasses =
-    "shape-popover-content z-dropdown overflow-hidden squircle-2xl border border-border-secondary bg-sidebar text-text-primary shadow-md";
+    "shape-popover-content z-dropdown overflow-hidden squircle-lg border border-border bg-panel text-text-primary shadow-md";
 const shortcutClasses =
     "ml-auto shrink-0 pr-1 text-sm text-text-muted group-focus:text-text-primary";
 /** Inset so rows and the panel sit off the edges. */

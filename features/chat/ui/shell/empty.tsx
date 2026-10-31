@@ -34,7 +34,7 @@ export function ChatEmptyState() {
 
     return (
         <div className="flex w-full items-center justify-center px-2">
-            <h1 className="flex min-w-0 flex-wrap items-baseline justify-center gap-x-2 text-3xl leading-tight text-text-primary">
+            <h1 className="flex min-w-0 flex-wrap items-baseline justify-center gap-x-2 text-2xl font-normal leading-[1.2] text-text-primary">
                 <span>What do you want to</span>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
