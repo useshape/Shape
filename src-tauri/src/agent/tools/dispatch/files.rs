@@ -29,7 +29,12 @@ pub(super) fn tool_read_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let res = if let (Some(s), Some(e)) = (start, end) {
         files::read_file_range(&path, s, e, ctx.project_path)
     } else {
-        files::read_file(&path, ctx.project_path)
+        let cap = ctx
+            .agent_state
+            .turn_policy_for(ctx.conversation_id.as_deref())
+            .max_context_lines
+            .clamp(40, files::DEFAULT_READ_LINES as u32) as usize;
+        files::read_file_range(&path, 1, cap, ctx.project_path)
     };
 
     match res {

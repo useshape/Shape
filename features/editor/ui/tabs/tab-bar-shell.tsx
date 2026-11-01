@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, type ReactNode, type WheelEvent } from "react";
+import { useTabStripOverflow } from "@/features/agent/use-tab-strip-overflow";
 import {
     DndContext,
     closestCenter,
@@ -21,6 +22,7 @@ import {
     WORKBENCH_TAB_ACTIONS_CLASS,
     WORKBENCH_TAB_BAR_CLASS,
     WORKBENCH_TAB_FADE_CLASS,
+    WORKBENCH_TAB_FADE_LEFT_CLASS,
     WORKBENCH_TAB_LIST_CLASS,
     WORKBENCH_TAB_ROW_CLASS,
     WORKBENCH_TAB_SCROLL_CLASS,
@@ -52,6 +54,9 @@ export function TabBarShell({
     fade,
 }: TabBarShellProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const overflow = useTabStripOverflow(scrollContainerRef, itemIds.length);
+    const showRight = fade ?? overflow.fadeRight;
+    const showLeft = overflow.fadeLeft;
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -91,7 +96,8 @@ export function TabBarShell({
                             </div>
                         </DndContext>
                     </div>
-                    {fade ? <div className={WORKBENCH_TAB_FADE_CLASS} aria-hidden /> : null}
+                    {showLeft ? <div className={WORKBENCH_TAB_FADE_LEFT_CLASS} aria-hidden /> : null}
+                    {showRight ? <div className={WORKBENCH_TAB_FADE_CLASS} aria-hidden /> : null}
                 </div>
             ) : (
                 <div className="min-w-0 flex-1 self-stretch bg-panel" />

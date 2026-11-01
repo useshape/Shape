@@ -49,7 +49,7 @@ pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
     }
 
     let safety = security::commands::apply_auto_run_mode(
-        security::commands::check_command_safety(&command),
+        security::commands::authorize_command(&command, ctx.project_path, policy.network_commands),
         &command,
         policy.auto_run_mode,
         policy.protect_destructive_git,

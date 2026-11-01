@@ -10,6 +10,7 @@ use tauri::{Emitter, Manager};
 
 #[tauri::command]
 pub async fn stop_chat_message(
+    conversation_id: Option<String>,
     app: tauri::AppHandle,
     state: tauri::State<'_, AgentState>,
     pty_state: tauri::State<'_, crate::commands::pty::PtyState>,
@@ -19,17 +20,28 @@ pub async fn stop_chat_message(
         .lock()
         .map_err(|e| AppError::Poison(e.to_string()))?
         .clone();
-    let already_cancelled = current_id
+    let target_id = conversation_id
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| current_id.clone());
+    let target_generating = target_id.as_deref().map(|id| {
+        state
+            .in_flight
+            .lock()
+            .ok()
+            .map(|g| g.contains_key(id))
+            .unwrap_or(false)
+    }).unwrap_or(false);
+    if !target_generating {
+        // Idle / launch remounts used to call stop and still abort captures +
+        // kill PTYs below, which tore down WebView2 frames and reloaded the UI.
+        // A new empty chat must not cancel a background turn.
+        return Ok(());
+    }
+    let already_cancelled = target_id
         .as_deref()
         .and_then(|id| state.conversation_cancel_token(id))
         .map(|token| token.is_cancelled())
         .unwrap_or(false);
-    let generating = state.generation_state().is_generating;
-    if !generating {
-        // Idle / launch remounts used to call stop and still abort captures +
-        // kill PTYs below, which tore down WebView2 frames and reloaded the UI.
-        return Ok(());
-    }
     if already_cancelled {
         logging::debug("chat", "Stop ignored — generation already stopping");
         return Ok(());
@@ -41,8 +53,8 @@ pub async fn stop_chat_message(
     let _ = app.emit("agent-browse", serde_json::json!({"id": "live", "status": "stopped"}));
     // Cancel first so waiters observe Stop instead of a fake Reject (which
     // used to look like accepted edits were undone).
-    if let Ok(map) = state.cancel_tokens.lock() {
-        for token in map.values() {
+    if let Some(id) = target_id.as_deref() {
+        if let Some(token) = state.conversation_cancel_token(id) {
             token.cancel();
         }
     }
@@ -51,10 +63,14 @@ pub async fn stop_chat_message(
     // Unlock the UI immediately — title gen / long HTTP must not leave the
     // sidebar spinning until the upstream request finishes.
     let aborted = {
-        let turn_id = state.in_flight_turn_id();
-        let conv_id = state
-            .in_flight_conversation_id()
-            .or_else(|| state.current_conversation_id.lock().ok().and_then(|g| g.clone()));
+        let conv_id = target_id.clone();
+        let turn_id = conv_id.as_deref().and_then(|id| {
+            state
+                .in_flight
+                .lock()
+                .ok()
+                .and_then(|g| g.get(id).map(|f| f.turn_id.clone()))
+        });
         let project_path = state.current_project.lock().ok().and_then(|p| p.clone());
         if let Some(ref project) = project_path {
             crate::commands::stats::bump_event(project, "chat_stops");
@@ -72,22 +88,45 @@ pub async fn stop_chat_message(
         }
         turn_id.zip(conv_id)
     };
-    // Commit streamed assistant text into history *before* clearing in-flight.
-    // Otherwise Stop + frontend history resync wipes the bubble the user saw.
-    if let Ok(mut merged) = state.history_for_persistence() {
-        if let Some(last) = merged.last_mut() {
-            if last.role == "assistant" && last.content.contains("<browse_session") {
-                last.content = crate::agent::tools::browse::seal_browse_markup(&last.content);
+    let stopping_current = target_id.as_deref() == current_id.as_deref();
+    if stopping_current {
+        // Commit streamed assistant text into history *before* clearing in-flight.
+        // Otherwise Stop + frontend history resync wipes the bubble the user saw.
+        if let Ok(mut merged) = state.history_for_persistence() {
+            if let Some(last) = merged.last_mut() {
+                if last.role == "assistant" && last.content.contains("<browse_session") {
+                    last.content = crate::agent::tools::browse::seal_browse_markup(&last.content);
+                }
+            }
+            if let Ok(mut hist) = state.history.lock() {
+                *hist = merged;
             }
         }
-        if let Ok(mut hist) = state.history.lock() {
-            *hist = merged;
+        if let Some(path) = state.current_project.lock().ok().and_then(|p| p.clone()) {
+            let _ = history::save_current_conversation(&state, &path);
+        }
+    } else if let Some(id) = target_id.as_deref() {
+        if let Some(path) = state.current_project.lock().ok().and_then(|p| p.clone()) {
+            let (title, hist) = {
+                let convs = state.conversations.lock().ok();
+                let stored = convs.as_ref().and_then(|map| {
+                    map.get(&path).and_then(|list| list.iter().find(|c| c.id == id))
+                });
+                let title = stored
+                    .map(|c| c.title.clone())
+                    .unwrap_or_else(|| "Chat".to_string());
+                let hist = stored.map(|c| c.history.clone()).unwrap_or_default();
+                (title, hist)
+            };
+            let hist = state.merge_in_flight_into_history_for(hist, Some(id));
+            let _ = history::upsert_conversation_snapshot(&state, &path, id, &title, hist);
         }
     }
-    if let Some(path) = state.current_project.lock().ok().and_then(|p| p.clone()) {
-        let _ = history::save_current_conversation(&state, &path);
+    if let Some(id) = target_id.as_deref() {
+        state.clear_in_flight_conversation(id);
+    } else {
+        state.clear_in_flight();
     }
-    state.clear_in_flight();
     if let Some((turn_id, conv_id)) = aborted {
         let _ = app.emit(
             "chat_complete",

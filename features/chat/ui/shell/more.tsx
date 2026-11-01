@@ -24,14 +24,15 @@ async function downloadDiagnostics() {
         platform: typeof navigator !== "undefined" ? navigator.platform : "",
         url: typeof window !== "undefined" ? window.location.href : "",
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `shape-diagnostics-${Date.now()}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    notify.success("Diagnostics", "Diagnostic bundle downloaded.");
+    const json = JSON.stringify(payload, null, 2);
+    const src = `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
+    try {
+        const { saveDownload } = await import("@/lib/ui/save-download");
+        const saved = await saveDownload(`shape-diagnostics-${Date.now()}.json`, src, "application/json");
+        if (saved) notify.success("Diagnostics", "Diagnostic bundle saved.");
+    } catch (err) {
+        notify.error("Diagnostics", err instanceof Error ? err.message : String(err));
+    }
 }
 
 export function ChatMoreMenu() {

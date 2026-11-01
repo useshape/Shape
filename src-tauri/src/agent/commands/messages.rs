@@ -128,6 +128,22 @@ fn attached_image_data_urls(tag_or_content: &str) -> Vec<String> {
         .collect()
 }
 
+pub(crate) fn page_shot_lead(tag: &str) -> &'static str {
+    if tag.contains("name=\"window.png\"") {
+        "A window was captured. Look at the image before claiming what is on screen. If it is the wrong window, list windows and capture again with a tighter title."
+    } else if tag.contains("name=\"browse.jpg\"") {
+        "The in-app browser captured this view. Read the image together with the DOM snapshot. Console errors, broken layout, and missing controls are bugs to fix. Do not request another shot unless the page changes."
+    } else {
+        "screenshot_page captured this page. Look at the image(s) below before claiming success. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+    }
+}
+
+pub(crate) fn is_page_shot_text(text: &str) -> bool {
+    text.contains("screenshot_page captured")
+        || text.contains("The in-app browser captured this view")
+        || text.contains("A window was captured")
+}
+
 pub fn push_page_screenshot_followup(api_messages: &mut Vec<Value>, tag: &str, model: &str) {
     let accepts = crate::agent::model_router::model_accepts_images(model);
     let data_urls = attached_image_data_urls(tag);
@@ -142,11 +158,7 @@ pub fn push_page_screenshot_followup(api_messages: &mut Vec<Value>, tag: &str, m
         let is_anthropic = model.starts_with("anthropic/");
         let mut parts: Vec<Value> = vec![json!({
             "type": "text",
-            "text": if tag.contains("name=\"window.png\"") {
-                "A window was captured. Look at the image before claiming what is on screen. If it is the wrong window, list windows and capture again with a tighter title."
-            } else {
-                "screenshot_page captured this page. Look at the image(s) below before claiming success. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
-            }
+            "text": page_shot_lead(tag)
         })];
         for data_url in data_urls {
             if is_anthropic {
@@ -195,11 +207,11 @@ const TRIMMED_TOOL_RESULT_SUFFIX: &str =
 
 /// Soft budget (~30k tokens): trim old tool results only after a long turn.
 /// Lower values rewrote the prompt prefix every loop and busted Gemini/OpenAI cache.
-const TOOL_RESULT_SOFT_BUDGET: usize = 120_000;
-/// Hard budget (~50k tokens): clear old tool results entirely.
-const TOOL_RESULT_CHAR_BUDGET: usize = 200_000;
+const TOOL_RESULT_SOFT_BUDGET: usize = 64_000;
+/// Hard budget: clear old tool results entirely.
+const TOOL_RESULT_CHAR_BUDGET: usize = 96_000;
 /// Never touch results from the most recent tool rounds.
-const TOOL_RESULT_KEEP_ROUNDS: usize = 8;
+const TOOL_RESULT_KEEP_ROUNDS: usize = 4;
 const TOOL_RESULT_TRIM_CHARS: usize = 600;
 
 /// Strip verbose tool XML from prior assistant turns, then trim middle history

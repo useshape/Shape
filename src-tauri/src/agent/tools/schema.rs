@@ -195,67 +195,6 @@ pub struct SteerPacks {
 }
 
 impl SteerPacks {
-    /// Chat with no coding packs: a short system prompt is enough.
-    pub fn is_chat_only(&self) -> bool {
-        !self.workspace && !self.plugins && !self.browse && !self.git && !self.terminal && !self.media
-    }
-
-    /// Local skill pick used when the remote router fails open and sends every tool.
-    pub fn infer(message: &str, mode: &str) -> Self {
-        let text = message.to_lowercase();
-        let mode = mode.to_ascii_lowercase();
-        let has = |words: &[&str]| words.iter().any(|w| text.contains(w));
-        let coding_mode = matches!(mode.as_str(), "code" | "agent" | "review" | "visual" | "design");
-        let asks_code = has(&[
-            "file", "bug", "fix", "implement", "refactor", "function", "component", "error",
-            "compile", "test", "edit", "code", "typescript", "rust", "css", "button", "page",
-        ]);
-        let git = has(&["git", "commit", "branch", "pull request", "merge"]);
-        let terminal = has(&["npm", "cargo", "pnpm", "terminal", "install", "build", "script"]);
-        let web = has(&["search", "look up", "lookup", "http", "docs", "what is", "who ", "cite", "source"]);
-        let visual = has(&["photo", "picture", "image of", "looks like", "look like"]);
-        let visual_hint = "When the user wants pictures, call show_images with the subject they named. Do not show a map. Do not describe photos you did not retrieve.";
-        let browse = has(&["browser", "website", "localhost", "open the page", "screenshot"]);
-        let media = has(&["image", "svg", "draw", "icon", "audio", "picture", "logo"]);
-        let plugins = has(&["slack", "plugin", "linear", "notion", "discord"]);
-        let short = message.trim().chars().count() < 420;
-        let chat = short && !asks_code && !git && !terminal && !media && !plugins && !browse;
-
-        if chat {
-            return Self {
-                workspace: false,
-                plugins: false,
-                browse: false,
-                web: web || visual || text.contains('?'),
-                git: false,
-                terminal: false,
-                media: false,
-                hint: if visual {
-                    visual_hint.to_string()
-                } else {
-                    "This turn is a conversation. Use tools only if the user asked for something outside this chat. When you use web search, cite claims with [1], [2] matching source order. Do not cite when you did not search.".to_string()
-                },
-            };
-        }
-
-        Self {
-            workspace: coding_mode || asks_code,
-            plugins,
-            browse,
-            web: web || visual || text.contains('?'),
-            git,
-            terminal: terminal || coding_mode,
-            media,
-            hint: if visual {
-                visual_hint.to_string()
-            } else if web {
-                "When a claim comes from web search, cite it with [1], [2] in source order. Skip citations when you did not search.".to_string()
-            } else {
-                String::new()
-            },
-        }
-    }
-
     pub fn all_on() -> Self {
         Self {
             workspace: true,
@@ -295,7 +234,8 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
     match name {
         "create_directory" | "create_file" | "apply_patch" | "edit_file" | "delete_file"
         | "rename_file" | "read_lints" | "codebase_overview" | "map_module"
-        | "design_review" | "render_design_previews" | "mcp_search" | "mcp_call" => Some("workspace"),
+        | "design_review" | "adversarial_review" | "render_design_previews" | "mcp_search"
+        | "mcp_call" => Some("workspace"),
         "plugin_search" | "plugin_run" | "plugin_connect" => Some("plugins"),
         "plugin_list" | "plugin_tools" => Some("browse"),
         "web_search" | "visit_url" => Some("web"),
@@ -377,6 +317,7 @@ pub fn apply_talk_tools(tools: Vec<Value>) -> Vec<Value> {
         "browse",
         "screenshot_page",
         "schedule_followup",
+        "adversarial_review",
         "ask_user",
         "finish",
         "decide",
@@ -385,6 +326,111 @@ pub fn apply_talk_tools(tools: Vec<Value>) -> Vec<Value> {
         .into_iter()
         .filter(|tool| KEEP.contains(&tool_fn_name(tool)))
         .collect()
+}
+
+const MUTATING_TOOLS: &[&str] = &[
+    "create_directory",
+    "create_file",
+    "apply_patch",
+    "edit_file",
+    "delete_file",
+    "rename_file",
+    "run_terminal",
+    "write_to_terminal",
+    "git_stage",
+    "git_commit",
+    "git_fetch",
+    "git_create_branch",
+    "git_switch",
+    "git_sync",
+    "git_worktree",
+    "update_todos",
+    "browse",
+    "screenshot_page",
+    "inspect_runtime",
+    "design_review",
+    "render_design_previews",
+    "plugin_run",
+    "generate_svg",
+    "generate_image",
+    "generate_audio",
+    "edit_image",
+    "save_media",
+    "mcp_call",
+];
+
+fn is_mutating_tool(name: &str) -> bool {
+    MUTATING_TOOLS.contains(&name)
+}
+
+/// Tools for one decided turn. Read-only capabilities drop mutating schemas
+/// even when a pack is on. `load_tools` and `load_skill` are always present.
+pub fn assemble_tools(
+    family: ModelFamily,
+    packs: &SteerPacks,
+    capability: &str,
+    chat_memory: bool,
+) -> Vec<Value> {
+    let mut tools = apply_steer_packs(stable_tools(family), packs);
+    let read_only = capability.eq_ignore_ascii_case("ask") || capability.eq_ignore_ascii_case("plan");
+    if read_only {
+        tools.retain(|tool| !is_mutating_tool(tool_fn_name(tool)));
+    }
+    if !chat_memory {
+        tools.retain(|tool| {
+            let name = tool_fn_name(tool);
+            name != "list_chats" && name != "read_chat"
+        });
+    }
+    if capability.eq_ignore_ascii_case("plan") {
+        insert_before_finish(&mut tools, save_plan());
+    }
+    if !tools.iter().any(|tool| tool_fn_name(tool) == "load_tools") {
+        insert_before_finish(&mut tools, load_tools());
+        insert_before_finish(&mut tools, load_skill());
+    }
+    tools
+}
+
+pub fn include_adversarial_review(tools: &mut Vec<Value>) {
+    if tools.iter().any(|tool| tool_fn_name(tool) == "adversarial_review") {
+        return;
+    }
+    insert_before_finish(tools, adversarial_review());
+}
+
+fn load_tools() -> Value {
+    tool(
+        "load_tools",
+        "Load tool packs that are not on this turn yet. Packs: workspace (edit files), terminal, git, browse, web, media, plugins. Already-loaded packs stay loaded. Settings can refuse a pack. Call this before using a tool that was not listed.",
+        json!({
+            "type": "object",
+            "properties": {
+                "packs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Pack names to add: workspace, terminal, git, browse, web, media, plugins."
+                }
+            },
+            "required": ["packs"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn load_skill() -> Value {
+    tool(
+        "load_skill",
+        "Load one short procedure: terminal, git, edits, browse, plan, or review. Use when the turn did not already include it.",
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "terminal, git, edits, browse, plan, or review."}
+            },
+            "required": ["name"],
+            "additionalProperties": false
+        }),
+    )
 }
 
 fn insert_before_finish(tools: &mut Vec<Value>, tool: Value) {
@@ -1321,22 +1367,53 @@ fn save_media() -> Value {
 fn browse() -> Value {
     tool(
         "browse",
-        "Open a page in the in-app browser and drive it. Use this when the user asks you to navigate, click through, or visually test a site, including the local app you just started. \
-Each action shows a screenshot in the chat. A written description is not a substitute. \
+        "Open a page in the in-app browser and drive it. Use this to navigate, click through, test, and debug a site, including the local app you just started. \
+A screenshot is attached when the view changes. Read it with the element list. \
 Start with action open and a full url (http://localhost:PORT/path or https://…). \
-Then action act with the element id from the last result. Also: click, type, scroll, shot, stop. \
-Do not call observe between moves. If an element has an href, open that URL instead of clicking it.",
+Then action act with an element id from the last result. \
+Pass steps to run several actions in one call and get a single snapshot back. \
+action check verifies visible text with expect or absent. \
+action devtools reads console, network, css, js, or performance. \
+Also: click, type, scroll, script, shot, stop. Do not call observe between moves. If an element has an href, open that URL instead of clicking it.",
         json!({
             "type": "object",
             "properties": {
-                "action": {"type": "string", "description": "open, act, click, type, scroll, shot, or stop."},
+                "action": {"type": "string", "description": "open, act, click, type, scroll, script, devtools, check, shot, stop, or batch when steps is set."},
                 "url": {"type": "string", "description": "Full URL for action open."},
-                "target": {"type": "string", "description": "Element id from the last browse result, for action act."},
+                "target": {"type": "string", "description": "Element id from the last browse result, for action act, or for devtools scope css."},
                 "method": {"type": "string", "description": "For action act: click (default) or type."},
-                "text": {"type": "string", "description": "Text to type, for action type."},
+                "text": {"type": "string", "description": "Text to type, for action type or act method type."},
+                "script": {"type": "string", "description": "JavaScript for action script, or for devtools scope js."},
                 "x": {"type": "number", "description": "Horizontal position, 0–100, for click or scroll."},
                 "y": {"type": "number", "description": "Vertical position, 0–100, for click or scroll."},
-                "dy": {"type": "number", "description": "Scroll delta in pixels."}
+                "dy": {"type": "number", "description": "Scroll delta in pixels."},
+                "scope": {"type": "string", "description": "For action devtools: console, network, css, js, performance, or all."},
+                "expect": {"type": "string", "description": "For action check: text that should be visible."},
+                "absent": {"type": "string", "description": "For action check: text that should not be visible."},
+                "steps": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "description": "Run these actions in order. One snapshot and at most one screenshot come back after the batch.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string"},
+                            "url": {"type": "string"},
+                            "target": {"type": "string"},
+                            "method": {"type": "string"},
+                            "text": {"type": "string"},
+                            "script": {"type": "string"},
+                            "x": {"type": "number"},
+                            "y": {"type": "number"},
+                            "dy": {"type": "number"},
+                            "scope": {"type": "string"},
+                            "expect": {"type": "string"},
+                            "absent": {"type": "string"}
+                        },
+                        "required": ["action"],
+                        "additionalProperties": false
+                    }
+                }
             },
             "required": ["action"],
             "additionalProperties": false
@@ -1409,6 +1486,23 @@ fn mcp_call() -> Value {
                 "arguments": {"type": "object", "description": "Arguments for that tool.", "additionalProperties": true}
             },
             "required": ["name"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn adversarial_review() -> Value {
+    tool(
+        "adversarial_review",
+        "Run a second-pass code review of the edits in this turn. Call this only when the user asked for a review, a second pass, a defect check, or to inspect the change for bugs. Do not call it after ordinary edits. The card appears in the chat; summarize findings in your next message and only fix issues if the user asked you to.",
+        json!({
+            "type": "object",
+            "properties": {
+                "focus": {
+                    "type": "string",
+                    "description": "Optional note about what to inspect (a file, a risk, or the user's request)."
+                }
+            },
             "additionalProperties": false
         }),
     )
@@ -1644,6 +1738,62 @@ mod tests {
         let ask_names = tool_names(&ask_on);
         assert!(ask_names.contains(&"list_chats".to_string()));
         assert!(ask_names.contains(&"read_chat".to_string()));
+    }
+
+    #[test]
+    fn assemble_ask_is_smaller_than_the_full_catalog() {
+        use crate::agent::decide::{decide, Locks};
+        let decision = decide("Why is the button disabled?", None, Locks::default(), None);
+        let steer = SteerPacks {
+            workspace: decision.packs.workspace,
+            plugins: decision.packs.plugins,
+            browse: decision.packs.browse,
+            web: decision.packs.web,
+            git: decision.packs.git,
+            terminal: decision.packs.terminal,
+            media: decision.packs.media,
+            hint: String::new(),
+        };
+        let full = serde_json::to_string(&stable_tools(ModelFamily::OpenAi)).unwrap();
+        let lean = serde_json::to_string(&assemble_tools(
+            ModelFamily::OpenAi,
+            &steer,
+            decision.capability.as_str(),
+            false,
+        ))
+        .unwrap();
+        assert!(
+            lean.len() * 2 < full.len(),
+            "ask schema {} bytes, full catalog {} bytes",
+            lean.len(),
+            full.len()
+        );
+        let names = tool_names(&assemble_tools(
+            ModelFamily::OpenAi,
+            &steer,
+            "Ask",
+            false,
+        ));
+        assert!(names.contains(&"load_tools".to_string()));
+        assert!(names.contains(&"read_file".to_string()));
+        assert!(!names.contains(&"apply_patch".to_string()));
+        assert!(!names.contains(&"run_terminal".to_string()));
+        assert!(!names.contains(&"adversarial_review".to_string()));
+    }
+
+    #[test]
+    fn adversarial_review_is_opt_in() {
+        let mut tools = assemble_tools(
+            ModelFamily::OpenAi,
+            &SteerPacks::all_on(),
+            "Code",
+            false,
+        );
+        let names = tool_names(&tools);
+        assert!(!names.contains(&"adversarial_review".to_string()));
+        include_adversarial_review(&mut tools);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"adversarial_review".to_string()));
     }
 
     #[test]

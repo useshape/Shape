@@ -11,7 +11,7 @@ import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more
 import React from "react";
 import { cn } from "@/lib/utils";
 import { toTimestampMs } from "@/lib/ui/timestamp";
-import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
+import { MessageRenderer, parseMessageContent } from "../md/renderer";
 import { Icon } from "@/components/ui/icon";
 
 
@@ -40,14 +40,12 @@ import { mentionRanges, mentionDisplayLabel } from "@/lib/chat/mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
 import { useSettings } from "@/lib/settings";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { WebSourcesMenu } from "../blocks/search";
 import { Button } from "@/components/ui/button";
 import { UserMessageCard } from "./bubble";
 import { ContextChip, MentionChipIcon, WorkflowChipIcon } from "./context-chip";
 import { AgentStatus, GeneratingIndicator } from "../blocks/generating";
 import { ShapeAutoIcon } from "@/lib/ui/provider-icon";
 import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
-import { CitedSources } from "../blocks/citations";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 import { commands } from "@/lib/backend/commands";
 import { parseUserAttachments } from "../../lib/user-attachments";
@@ -394,12 +392,6 @@ function ChatMessageItemInner({
         [isUser, userParts?.text, content],
     );
 
-    const webSources = React.useMemo(
-        () => (!isUser ? extractWebSearchResults(content) : []),
-        [isUser, content],
-    );
-
-
     if (role === "user" && content.trim().startsWith("<scheduled_followup")) {
         return null;
     }
@@ -617,7 +609,6 @@ function ChatMessageItemInner({
                                 isFileEditResolved={isFileEditResolved}
                                 durationMs={stats?.timeMs}
                             />
-                            {!isGenerating && webSources.length > 0 ? <CitedSources results={webSources} /> : null}
                         </div>
                     )}
                 </div>
@@ -629,7 +620,6 @@ function ChatMessageItemInner({
                             <Icon icon={Clipboard20Regular} />
                         </Button>
                     </Tooltip>
-                    {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
                     {role === "assistant" ? (
                     <DropdownMenu
                     open={menuOpen}

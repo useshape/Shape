@@ -20,6 +20,9 @@ export const WORKBENCH_TAB_LIST_CLASS = "flex h-full w-max shrink-0 items-center
 export const WORKBENCH_TAB_FADE_CLASS =
     "pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-linear-to-r from-transparent to-panel-hover";
 
+export const WORKBENCH_TAB_FADE_LEFT_CLASS =
+    "pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-linear-to-l from-transparent to-panel-hover";
+
 export const WORKBENCH_TAB_ACTIONS_CLASS =
     "box-border flex h-full shrink-0 items-center gap-0.5 px-1";
 

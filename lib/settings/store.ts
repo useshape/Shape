@@ -105,6 +105,16 @@ export interface ShapeSettings {
         workflows: AgentWorkflow[];
         /** Terminal command approval mode (Cursor-style run modes). */
         autoRunMode: AutoRunModeSetting;
+        /** Preset for how cautious the agent is. Custom means the detailed rows were edited. */
+        autonomy: "cautious" | "balanced" | "autonomous" | "custom";
+        /** When false, browse tools stay unloaded and blocked. */
+        browseEnabled: boolean;
+        /** Shell programs that open the network. There is no unrestricted allow. */
+        networkCommands: "off" | "ask";
+        /** Kill a one-shot command that is still running after this many seconds. */
+        commandTimeoutSec: number;
+        /** When false, a plan does not become an edit because the next message has a fix verb. */
+        allowCapabilityUpgrade: boolean;
         /** List windows, capture one, and inspect running processes. */
         computerUse: boolean;
         /** Interpreters and installed programs may run. Destructive commands stay blocked. */
@@ -279,6 +289,11 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         reviewAdversarialEnabled: true,
         workflows: [],
         autoRunMode: "auto",
+        autonomy: "balanced",
+        browseEnabled: true,
+        networkCommands: "ask",
+        commandTimeoutSec: 600,
+        allowCapabilityUpgrade: true,
         computerUse: true,
         shellAutomation: true,
         requireEditApproval: false,

@@ -24,6 +24,7 @@ import {
     fileTabPath,
     getStrip,
     isFileTab,
+    isShowcaseTab,
     setPaneWeights,
     showView,
     showsSplit,
@@ -31,6 +32,7 @@ import {
     terminalVisible,
     type ToolId,
 } from "../strip";
+import { ComponentShowcase } from "../showcase/view";
 
 const Terminal = lazy(() => import("@/features/terminal/ui/terminal"));
 const noop = () => {};
@@ -55,7 +57,6 @@ function CompanionChat({ conversationId }: { conversationId: string }) {
     const [draft, setDraft] = useState("");
     const [files, setFiles] = useState<ComposerAttachment[]>([]);
     const [model, setModel] = useState("auto");
-    const [mode, setMode] = useState("Code");
     const [effort, setEffort] = useState<ReasoningEffort>("low");
     const endRef = useRef<HTMLDivElement>(null);
 
@@ -124,8 +125,6 @@ function CompanionChat({ conversationId }: { conversationId: string }) {
             addUploadedFiles={addFiles}
             selectedModel={model}
             setSelectedModel={setModel}
-            selectedMode={mode}
-            setSelectedMode={setMode}
             reasoningEffort={effort}
             setReasoningEffort={setEffort}
             onNewChat={noop}
@@ -175,8 +174,9 @@ export function PaneGrid() {
     const split = strip.split;
     const focusLeft = splitOpen && strip.activeId === split?.left;
     const tool = strip.activeId === "tool:graph" || strip.activeId === "tool:prs" || strip.activeId === "tool:terminal";
+    const showcase = Boolean(strip.activeId && isShowcaseTab(strip.activeId));
     const filePath = strip.activeId && isFileTab(strip.activeId) ? fileTabPath(strip.activeId) : null;
-    const chatTarget = tool || filePath ? parkHost : chatHost;
+    const chatTarget = tool || filePath || showcase ? parkHost : chatHost;
 
     useEffect(() => {
         const onOpen = (event: Event) => {
@@ -276,7 +276,8 @@ export function PaneGrid() {
                     </div>
                 </div>
             ) : null}
-            {!tool && filePath ? (
+            {showcase ? <ComponentShowcase /> : null}
+            {!tool && !showcase && filePath ? (
                 <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                     <div className="min-h-0 flex-1 overflow-hidden bg-panel">
                         <EditorViewProvider>
@@ -287,7 +288,7 @@ export function PaneGrid() {
                     </div>
                 </div>
             ) : null}
-            {!tool && !filePath && splitOpen && split ? (
+            {!tool && !showcase && !filePath && splitOpen && split ? (
                 <>
                     <div data-pane="" className="flex min-h-0 min-w-0 basis-0 flex-col overflow-hidden" style={{ flexGrow: split.weights[0] }}>
                         {focusLeft ? liveColumn : <CompanionChat conversationId={split.left} />}
@@ -314,7 +315,7 @@ export function PaneGrid() {
                     </div>
                 </>
             ) : null}
-            {!tool && !filePath && !splitOpen ? liveColumn : null}
+            {!tool && !showcase && !filePath && !splitOpen ? liveColumn : null}
             {chatTarget ? createPortal(<Chat className="h-full bg-transparent" showTitlebar={false} />, chatTarget) : null}
         </div>
     );

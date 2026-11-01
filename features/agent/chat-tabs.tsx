@@ -20,12 +20,15 @@ import {
     activateChat,
     closeChatTab,
     closeTool,
+    fileTabPath,
     getStrip,
     isFileTab,
+    isShowcaseTab,
     isToolId,
     reorderChat,
     setOpenTabs,
     showView,
+    SHOWCASE_TAB_ID,
     splitWith,
     subscribeStrip,
     toolTitle,
@@ -104,6 +107,18 @@ export function ChatChromeTabs() {
             setActiveId(id && id !== NEW_CHAT_TAB_ID ? id : null);
             if (!id || id === NEW_CHAT_TAB_ID) return;
             const current = getStrip();
+            if (isFileTab(current.activeId || "") || isToolId(current.activeId || "") || isShowcaseTab(current.activeId || "")) {
+                if (!current.order.includes(NEW_CHAT_TAB_ID)) return;
+                const seen = new Set<string>();
+                const next = current.order.flatMap((item) => {
+                    const resolved = item === NEW_CHAT_TAB_ID ? id : item;
+                    if (seen.has(resolved)) return [];
+                    seen.add(resolved);
+                    return [resolved];
+                });
+                setOpenTabs(next, current.activeId);
+                return;
+            }
             if (!current.order.includes(NEW_CHAT_TAB_ID)) {
                 activateChat(id);
                 return;
@@ -161,9 +176,9 @@ export function ChatChromeTabs() {
             && !known.has(current.activeId)
             ? current.activeId
             : null;
-        const kept = current.order.filter((id) => isToolId(id) || isFileTab(id) || known.has(id) || id === NEW_CHAT_TAB_ID || id === pending);
-        const missing = order.filter((id) => !isToolId(id) && !isFileTab(id) && !kept.includes(id));
-        const chatsInStrip = current.order.some((id) => !isToolId(id) && !isFileTab(id));
+        const kept = current.order.filter((id) => isToolId(id) || isFileTab(id) || isShowcaseTab(id) || known.has(id) || id === NEW_CHAT_TAB_ID || id === pending);
+        const missing = order.filter((id) => !isToolId(id) && !isFileTab(id) && !isShowcaseTab(id) && !kept.includes(id));
+        const chatsInStrip = current.order.some((id) => !isToolId(id) && !isFileTab(id) && !isShowcaseTab(id));
         if (chatsInStrip && missing.length === 0 && kept.length === current.order.length && !pending) return;
         const next = [...kept];
         for (const id of missing) {
@@ -174,6 +189,7 @@ export function ChatChromeTabs() {
             if (at >= 0) next.splice(at, 1, pending);
             else if (!next.includes(pending)) next.unshift(pending);
         }
+        if (!next.includes(SHOWCASE_TAB_ID)) next.unshift(SHOWCASE_TAB_ID);
         if (next.length === 0) return;
         const active = current.activeId === NEW_CHAT_TAB_ID || pending
             ? (pending ?? NEW_CHAT_TAB_ID)
@@ -196,6 +212,9 @@ export function ChatChromeTabs() {
             ? strip.order
             : order;
         const items = source.flatMap((id) => {
+            if (isShowcaseTab(id)) {
+                return [{ id, title: "Components", active: strip.activeId === id, tool: true, file: false }];
+            }
             if (isFileTab(id)) {
                 const path = id.slice("file:".length);
                 const name = path.split(/[/\\]/).pop() || path;
@@ -210,17 +229,17 @@ export function ChatChromeTabs() {
             return [{
                 id,
                 title: chat?.title?.trim() || "New chat",
-                active: !isToolId(strip.activeId || "") && !isFileTab(strip.activeId || "") && (strip.activeId === id || (!strip.activeId && id === activeId)),
+                active: !isToolId(strip.activeId || "") && !isFileTab(strip.activeId || "") && !isShowcaseTab(strip.activeId || "") && (strip.activeId === id || (!strip.activeId && id === activeId)),
                 tool: false,
                 file: false,
             }];
         });
         if (items.some((tab) => tab.active)) return items;
-        return [{ id: NEW_CHAT_TAB_ID, title: "New chat", active: !strip.activeId || (!isToolId(strip.activeId) && !isFileTab(strip.activeId)), tool: false, file: false }, ...items];
+        return [{ id: NEW_CHAT_TAB_ID, title: "New chat", active: !strip.activeId || (!isToolId(strip.activeId) && !isFileTab(strip.activeId) && !isShowcaseTab(strip.activeId)), tool: false, file: false }, ...items];
     }, [order, byId, activeId, strip]);
 
     const shown = useMemo(() => {
-        const chats = tabs.filter((tab) => !tab.tool && !tab.file);
+        const chats = tabs.filter((tab) => !tab.tool && !tab.file && !isShowcaseTab(tab.id));
         const keep = new Set(chats.slice(0, MAX_TABS).map((tab) => tab.id));
         const active = chats.find((tab) => tab.active);
         if (active) {
@@ -230,12 +249,19 @@ export function ChatChromeTabs() {
                 if (drop) keep.delete(drop.id);
             }
         }
-        return tabs.filter((tab) => tab.tool || tab.file || keep.has(tab.id));
+        return tabs.filter((tab) => tab.tool || tab.file || isShowcaseTab(tab.id) || keep.has(tab.id));
     }, [tabs]);
 
     const openChat = (id: string) => {
+        if (isShowcaseTab(id)) {
+            showView(id);
+            return;
+        }
         if (isFileTab(id)) {
             activateChat(id);
+            const path = fileTabPath(id);
+            const name = path.split(/[/\\]/).pop() || path;
+            void commands.openFile(path, name).catch(() => {});
             return;
         }
         if (isToolId(id)) {
@@ -298,6 +324,7 @@ export function ChatChromeTabs() {
     };
 
     const closeChat = (id: string) => {
+        if (isShowcaseTab(id)) return;
         if (isToolId(id) || isFileTab(id)) {
             if (isToolId(id)) closeTool(id);
             else closeChatTab(id);
@@ -327,7 +354,7 @@ export function ChatChromeTabs() {
         const [moved] = next.splice(from, 1);
         if (!moved) return;
         next.splice(to, 0, moved);
-        setOrder(next.filter((id) => !isToolId(id) && !isFileTab(id) && id !== NEW_CHAT_TAB_ID));
+        setOrder(next.filter((id) => !isToolId(id) && !isFileTab(id) && !isShowcaseTab(id) && id !== NEW_CHAT_TAB_ID));
     };
 
     const mac = platform === "macos";
@@ -338,6 +365,7 @@ export function ChatChromeTabs() {
         activeTab
         && !activeTab.file
         && !activeTab.tool
+        && !isShowcaseTab(activeTab.id)
         && activeTab.id !== NEW_CHAT_TAB_ID
         && generating.has(activeTab.id),
     );

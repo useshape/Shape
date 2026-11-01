@@ -3,6 +3,7 @@
 import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { BrowseWallpaper } from "@/features/agent/browser/wallpapers";
 import { BrowseStage } from "@/features/chat/ui/blocks/browse-frame";
 import { useBrowseFrame } from "@/features/agent/browser/session";
 import { commands } from "@/lib/backend";
@@ -14,7 +15,7 @@ export function BrowserView() {
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-editor">
-            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-subtle px-2">
+            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-subtle bg-editor px-2">
                 <span className="min-w-0 flex-1 truncate text-xs text-text-secondary">
                     {live ? frame.title || frame.url || "The agent is browsing" : "Agent browser"}
                 </span>
@@ -32,13 +33,18 @@ export function BrowserView() {
                     </Button>
                 ) : null}
             </div>
-            {live && frame.image ? (
-                <BrowseStage frame={frame} className="min-h-0 flex-1" />
-            ) : (
-                <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-text-muted">
-                    {live ? "Opening the page…" : "The agent opens pages from chat. You can watch them there and stop it."}
-                </div>
-            )}
+            <div className="relative min-h-0 flex-1">
+                <BrowseWallpaper />
+                {live && frame.image ? (
+                    <div className="relative z-[1] h-full p-4">
+                        <BrowseStage frame={frame} className="h-full" />
+                    </div>
+                ) : (
+                    <div className="relative z-[1] flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
+                        {live ? "Opening the page…" : "The agent opens pages from chat. You can watch them there and stop it."}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

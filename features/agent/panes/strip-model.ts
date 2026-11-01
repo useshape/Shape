@@ -1,5 +1,11 @@
 export type ToolId = "tool:graph" | "tool:prs" | "tool:terminal";
 
+export const SHOWCASE_TAB_ID = "__showcase__";
+
+export function isShowcaseTab(id: string): boolean {
+  return id === SHOWCASE_TAB_ID;
+}
+
 const TOOLS: ToolId[] = ["tool:graph", "tool:prs", "tool:terminal"];
 
 export function isToolId(id: string): id is ToolId {
@@ -121,10 +127,11 @@ export function closeTab(state: StripModel, id: string): StripModel {
 
 export function showView(state: StripModel, view: string): StripModel {
   if (view === "chat") {
-    const chat = state.order.find((id) => !isToolId(id)) ?? null;
+    const chat = state.order.find((id) => !isToolId(id) && !isFileTab(id) && !isShowcaseTab(id)) ?? null;
     if (!chat || state.activeId === chat) return state.activeId === chat ? state : { ...state, activeId: chat };
     return { ...state, activeId: chat };
   }
+  if (isShowcaseTab(view)) return activateTab(state, view);
   if (!isToolId(view)) return activateTab(state, view);
   const order = state.order.includes(view) ? state.order : [...state.order, view];
   if (state.activeId === view && order === state.order) return state;

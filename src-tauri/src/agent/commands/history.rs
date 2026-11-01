@@ -231,17 +231,14 @@ fn save_current_conversation_inner(
     }
     let history = state.history_for_persistence()?;
     let title = state.title.lock()?.clone();
-    let has_assistant_response = history.iter().any(|m| m.role == "assistant");
     // Persist as soon as we have a title so a new worker/chat is openable
-    // before the first message. Skip untitled empty drafts.
+    // before the first message. Skip untitled empty drafts. A user message
+    // without a title still saves so a new chat cannot drop an in-flight turn.
     if history.is_empty() && title.is_none() {
         return Ok(());
     }
-    if title.is_none() && !has_assistant_response {
-        return Ok(());
-    }
 
-    let title = title.unwrap_or_else(|| "Untitled".to_string());
+    let title = title.unwrap_or_else(|| provisional_title(&history));
 
     let mut conv_id_guard = state.current_conversation_id.lock()?;
     let id = conv_id_guard
@@ -299,6 +296,24 @@ fn save_current_conversation_inner(
     logging::debug("history", "Current conversation saved");
 
     Ok(())
+}
+
+fn provisional_title(history: &[ChatMessage]) -> String {
+    let Some(user) = history.iter().find(|m| m.role == "user") else {
+        return "Untitled".to_string();
+    };
+    let line = user
+        .content
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("Untitled");
+    let clipped: String = line.chars().take(48).collect();
+    if clipped.is_empty() {
+        "Untitled".to_string()
+    } else {
+        clipped
+    }
 }
 
 /// Persist a finished/abandoned turn into a specific conversation without touching the live chat.
@@ -413,6 +428,26 @@ mod tests {
         replace_or_push_assistant(&mut hist, msg("assistant", "Hello world"));
         assert_eq!(hist.len(), 2);
         assert_eq!(hist[1].content, "Hello world");
+    }
+
+    #[test]
+    fn provisional_title_uses_first_user_line() {
+        let history = vec![msg("user", "Fix the login timeout\nmore")];
+        assert_eq!(provisional_title(&history), "Fix the login timeout");
+    }
+
+    #[test]
+    fn saves_user_only_history_without_title() {
+        let state = AgentState::new();
+        *state.history.lock().unwrap() = vec![msg("user", "hello world")];
+        *state.current_conversation_id.lock().unwrap() = Some("conv-user-only".into());
+        let path = format!("shape-hist-{}", uuid::Uuid::new_v4());
+        save_current_conversation(&state, &path).unwrap();
+        let loaded = load_conversations(&path);
+        let _ = std::fs::remove_file(get_chat_history_path(&path));
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].history.len(), 1);
+        assert_eq!(loaded[0].history[0].content, "hello world");
     }
 
     #[test]

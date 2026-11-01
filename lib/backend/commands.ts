@@ -127,6 +127,7 @@ export const commands = {
     openUrlExternal: (url: string) => invokeCommand("open_url_external", { url }),
     pinToTaskbar: () => invokeCommand<void>("pin_to_taskbar"),
     agentBrowseStop: () => invokeCommand<void>("agent_browse_stop"),
+    listBrowseWallpapers: () => invokeCommand<string[]>("list_browse_wallpapers"),
     showDesktopNotification: (title: string, body: string) =>
         invokeCommand<void>("show_desktop_notification", { title, body }),
     newWindow: () => invokeCommand("spawn_new_window"),
@@ -478,6 +479,11 @@ export const commands = {
             pluginAutoAllow?: string[];
             computerUse?: boolean;
             shellAutomation?: boolean;
+            browseEnabled?: boolean;
+            networkCommands?: "off" | "ask";
+            commandTimeoutSec?: number;
+            allowCapabilityUpgrade?: boolean;
+            maxContextLines?: number;
         },
         reasoningEffort?: string,
         serviceTier?: string | null,
@@ -509,6 +515,11 @@ export const commands = {
             pluginAutoAllow: executionPolicy?.pluginAutoAllow ?? null,
             computerUse: executionPolicy?.computerUse ?? null,
             shellAutomation: executionPolicy?.shellAutomation ?? null,
+            browseEnabled: executionPolicy?.browseEnabled ?? null,
+            networkCommands: executionPolicy?.networkCommands ?? null,
+            commandTimeoutSec: executionPolicy?.commandTimeoutSec ?? null,
+            allowCapabilityUpgrade: executionPolicy?.allowCapabilityUpgrade ?? null,
+            maxContextLines: executionPolicy?.maxContextLines ?? null,
             reasoningEffort: reasoningEffort ?? null,
             serviceTier: serviceTier ?? null,
             displayMessage: displayMessage ?? null,
@@ -562,6 +573,11 @@ export const commands = {
         protectDestructiveGit?: boolean;
         computerUse?: boolean;
         shellAutomation?: boolean;
+        browseEnabled?: boolean;
+        networkCommands?: "off" | "ask";
+        commandTimeoutSec?: number;
+        allowCapabilityUpgrade?: boolean;
+        maxContextLines?: number;
     }) =>
         invokeCommand<void>("update_turn_policy", {
             autoRunMode: policy.autoRunMode ?? null,
@@ -569,6 +585,11 @@ export const commands = {
             protectDestructiveGit: policy.protectDestructiveGit ?? null,
             computerUse: policy.computerUse ?? null,
             shellAutomation: policy.shellAutomation ?? null,
+            browseEnabled: policy.browseEnabled ?? null,
+            networkCommands: policy.networkCommands ?? null,
+            commandTimeoutSec: policy.commandTimeoutSec ?? null,
+            allowCapabilityUpgrade: policy.allowCapabilityUpgrade ?? null,
+            maxContextLines: policy.maxContextLines ?? null,
         }),
     cleanupDesignSandbox: (sessionId?: string) =>
         invokeCommand<void>("cleanup_design_sandbox", {
@@ -648,7 +669,8 @@ export const commands = {
         invokeCommand<{ changed: boolean; file: string | null; content: string | null }>(
             "redo_design_source_patch",
         ),
-    stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
+    stopChatMessage: (conversationId?: string | null) =>
+        invokeCommand<void>("stop_chat_message", { conversationId: conversationId ?? null }),
     getChatHistory: (limit?: number) =>
         invokeCommand<ChatMessage[]>("get_chat_history", limit == null ? {} : { limit }),
     getChatGenerationState: () =>

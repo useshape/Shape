@@ -218,9 +218,14 @@ export function useChatSession() {
     }, []);
     const [conversationId, setConversationId] = React.useState<string | null>(null);
 
-    const syncOpenTabs = React.useCallback((convId: string | null, title: string) => {
+    const syncOpenTabs = React.useCallback((
+        convId: string | null,
+        title: string,
+        opts?: { activate?: boolean },
+    ) => {
+        const activate = opts?.activate !== false;
         if (!convId) {
-            setActiveChatTabId(NEW_CHAT_TAB_ID);
+            if (activate) setActiveChatTabId(NEW_CHAT_TAB_ID);
             setOpenChatTabs((prev) => {
                 const hasDraft = prev.some((tab) => tab.id === NEW_CHAT_TAB_ID);
                 if (hasDraft) {
@@ -233,7 +238,7 @@ export function useChatSession() {
             return;
         }
 
-        setActiveChatTabId(convId);
+        if (activate) setActiveChatTabId(convId);
         setOpenChatTabs((prev) => {
             const withoutDraft = prev.filter((tab) => tab.id !== NEW_CHAT_TAB_ID);
             const existing = withoutDraft.find((tab) => tab.id === convId);
@@ -678,7 +683,8 @@ export function useChatSession() {
             setChatTitle(title);
             setConversationId(convId);
             setCurrentConversationId(convId);
-            syncOpenTabs(convId, title);
+            const viewing = conversationIdRef.current;
+            syncOpenTabs(convId, title, { activate: !viewing || viewing === convId });
         } catch (err) {
             console.error("Failed to refresh chat metadata:", err);
         }
@@ -720,7 +726,8 @@ export function useChatSession() {
                 setChatTitle(title);
                 setConversationId(convId);
                 setCurrentConversationId(convId);
-                syncOpenTabs(convId, title);
+                const viewing = conversationIdRef.current;
+                syncOpenTabs(convId, title, { activate: !viewing || viewing === convId });
 
                 await syncFromBackend();
                 const currentHistory = await commands.getChatHistory();
@@ -1068,7 +1075,6 @@ export function useChatSession() {
             const messageWithWorkflows = applyWorkflows(expandedMessage, settings.ai.workflows);
             const pluginAutoAllow = matchWorkflows(userMsg, settings.ai.workflows).flatMap(workflowAllowKeys);
 
-            const modeToSend = selectedModeRef.current;
             const catalogIds = getCatalogModels().map((m) => m.id);
             const subagentSend = subagentModelsForSend(settings.ai.subagentModels, catalogIds, {
                 creditsRemaining: shapeAuth.creditsRemaining,
@@ -1088,7 +1094,7 @@ export function useChatSession() {
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 modelToSend,
-                isTalkWorkspace(workspace) ? "Agent" : modeToSend,
+                isTalkWorkspace(workspace) ? "Agent" : "auto",
                 mergedRules,
                 token,
                 undefined,
@@ -1103,6 +1109,11 @@ export function useChatSession() {
                     pluginAutoAllow,
                     computerUse: settings.ai.computerUse,
                     shellAutomation: settings.ai.shellAutomation,
+                    browseEnabled: settings.ai.browseEnabled,
+                    networkCommands: settings.ai.networkCommands,
+                    commandTimeoutSec: settings.ai.commandTimeoutSec,
+                    allowCapabilityUpgrade: settings.ai.allowCapabilityUpgrade,
+                    maxContextLines: settings.ai.maxContextLines,
                 },
                 talkSend ? "low" : reasoningEffort,
                 priorityTierForCredits(shapeAuth.creditsRemaining, shapeAuth.creditsIncluded),
@@ -1539,9 +1550,9 @@ export function useChatSession() {
                 const title = event.payload?.title?.trim();
                 const convId = event.payload?.conversationId?.trim();
                 if (!title || !convId) return;
-                syncOpenTabs(convId, title);
-                window.dispatchEvent(new CustomEvent("shape-chats-changed"));
                 const current = conversationIdRef.current;
+                syncOpenTabs(convId, title, { activate: !current || current === convId });
+                window.dispatchEvent(new CustomEvent("shape-chats-changed"));
                 // Never steal a background chat's id/title onto an idle New Chat draft.
                 if (current && current !== convId) return;
                 if (!current && !isLoadingRef.current) return;
@@ -1567,6 +1578,7 @@ export function useChatSession() {
             const store = conversationStorePath(mode, project_path);
             await commands.newChat(store);
             const convId = await commands.getCurrentConversationId();
+            if (convId) conversationIdRef.current = convId;
             const seededTitle = convId ? sealNextChat(convId) : null;
             if (convId && seededTitle) {
                 await commands.renameConversation(convId, seededTitle).catch(() => {});
@@ -1803,7 +1815,7 @@ export function useChatSession() {
         stopLiveTurn();
         try {
             const convId = conversationIdRef.current;
-            await commands.stopChatMessage();
+            await commands.stopChatMessage(convId);
             if (convId) {
                 const { setChatGenerating } = await import("@/features/chat/lib/generating-chats");
                 setChatGenerating(convId, false);

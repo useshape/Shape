@@ -224,8 +224,12 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             if (requestedView && requestedView !== "__draft__" && convId !== requestedView) return;
             viewingIdRef.current = convId ?? null;
 
-            if (gen.isGenerating && gen.conversationId && !ignoredIdsRef.current.has(gen.conversationId)) {
-                const liveId = gen.conversationId;
+            const generatingIds = [
+                ...(gen.conversationIds ?? []),
+                ...(gen.conversationId ? [gen.conversationId] : []),
+            ].filter((id, index, all) => all.indexOf(id) === index);
+            for (const liveId of generatingIds) {
+                if (ignoredIdsRef.current.has(liveId)) continue;
                 const existing = liveTurnsRef.current.get(liveId);
                 liveTurnsRef.current.set(liveId, {
                     conversationId: liveId,
@@ -234,6 +238,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     activityLabel: gen.activityLabel ?? existing?.activityLabel ?? "Thinking",
                     turnPhase: existing?.turnPhase ?? "thinking",
                 });
+                setChatGenerating(liveId, true);
             }
 
             const shown = liveForView();

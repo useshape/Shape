@@ -615,6 +615,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         }
     }
     let _ram_sampler_guard = RamSamplerGuard(ram_stop.clone());
+    let mut live_tools = config.tools.to_vec();
+    let mut pack_sig = String::new();
 
     'outer: loop {
         if config.cancel.is_cancelled() {
@@ -664,11 +666,39 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             json!({ "phase": "model" }),
         );
 
+        if !config.mode.eq_ignore_ascii_case("agent") {
+            let conv = conversation_id.clone().unwrap_or_default();
+            let packs = config.agent_state.session_packs(&conv);
+            let sig = packs.signature();
+            if sig != pack_sig {
+                let steer = crate::agent::tools::schema::SteerPacks {
+                    workspace: packs.workspace,
+                    plugins: packs.plugins,
+                    browse: packs.browse,
+                    web: packs.web,
+                    git: packs.git,
+                    terminal: packs.terminal,
+                    media: packs.media,
+                    hint: String::new(),
+                };
+                live_tools = crate::agent::tools::schema::assemble_tools(
+                    model_router::model_family(config.model),
+                    &steer,
+                    config.mode,
+                    config.agent_state.chat_memory_enabled(),
+                );
+                if config.agent_state.review_adversarial_enabled() {
+                    crate::agent::tools::schema::include_adversarial_review(&mut live_tools);
+                }
+                pack_sig = sig;
+            }
+        }
+
         let outcome = match streaming::stream_chat_with_retry(
             config.client,
             config.api_key,
             config.api_messages,
-            config.tools,
+            &live_tools,
             config.app_handle,
             config.cancel.clone(),
             config.proxy_model,
@@ -692,6 +722,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
         };
 
+        if outcome.cached_tokens > 0 {
+            logging::info(
+                "chat",
+                &format!("Prompt cache read {} tokens", outcome.cached_tokens),
+            );
+        }
         record_usage(&config, outcome.input_tokens, outcome.output_tokens);
         total_input_tokens += outcome.input_tokens;
         total_output_tokens += outcome.output_tokens;
@@ -1552,13 +1588,12 @@ fn is_injected_page_shot(msg: &Value) -> bool {
     if msg.get("role").and_then(|role| role.as_str()) != Some("user") {
         return false;
     }
-    const MARKER: &str = "screenshot_page captured";
     match msg.get("content") {
-        Some(Value::String(text)) => text.contains(MARKER),
+        Some(Value::String(text)) => super::messages::is_page_shot_text(text),
         Some(Value::Array(parts)) => parts.iter().any(|part| {
             part.get("text")
                 .and_then(|text| text.as_str())
-                .is_some_and(|text| text.contains(MARKER))
+                .is_some_and(super::messages::is_page_shot_text)
         }),
         _ => false,
     }
@@ -1583,11 +1618,7 @@ async fn inject_page_screenshot(config: &mut AgentTurnConfig<'_>, tag: &str) {
                 "role": "user",
                 "content": format!(
                     "{}\n\n[image description]\n{desc}\n\nUse this description. If the image does not show the goal, keep working.",
-                    if tag.contains("name=\"window.png\"") {
-                        "A window was captured."
-                    } else {
-                        "screenshot_page captured this page. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
-                    }
+                    super::messages::page_shot_lead(tag)
                 ),
             }));
         }

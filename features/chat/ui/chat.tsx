@@ -349,12 +349,9 @@ export default function Chat({
             setSelectedModel={session.setSelectedModel}
             selectedWorkerModels={session.selectedWorkerModels}
             setSelectedWorkerModels={session.setSelectedWorkerModels}
-            hideModeSelect={talk}
             talkSurface={talk}
             talkName={talkName}
             talkMark={talkMark}
-            selectedMode={session.selectedMode}
-            setSelectedMode={session.setSelectedMode}
             reasoningEffort={session.reasoningEffort}
             setReasoningEffort={session.setReasoningEffort}
             pendingEdits={session.pendingEdits}

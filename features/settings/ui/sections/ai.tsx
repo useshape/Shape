@@ -360,6 +360,125 @@ export function AiSettingsPanel({
 
             {page === "access" ? (
                 <>
+            <SettingSection id="settings-ai-style" title="Agent">
+                <SettingCard>
+                <SettingRow
+                    title="Style"
+                    description="How often Shape asks before it edits or runs a command. Safety limits stay on."
+                >
+                    <SettingSelect
+                        value={a.autonomy}
+                        options={[
+                            { value: "cautious", label: "Cautious" },
+                            { value: "balanced", label: "Balanced" },
+                            { value: "autonomous", label: "Autonomous" },
+                            ...(a.autonomy === "custom" ? [{ value: "custom", label: "Custom" }] : []),
+                        ]}
+                        onChange={(v) => {
+                            if (v === "cautious") {
+                                updateSettingSection("ai", {
+                                    autonomy: "cautious",
+                                    autoRunMode: "ask",
+                                    requireEditApproval: true,
+                                    allowCapabilityUpgrade: false,
+                                    commandTimeoutSec: 120,
+                                    networkCommands: "ask",
+                                    browseEnabled: true,
+                                    protectDestructiveGit: true,
+                                });
+                                void commands.updateTurnPolicy({
+                                    autoRunMode: "ask",
+                                    requireEditApproval: true,
+                                    allowCapabilityUpgrade: false,
+                                    commandTimeoutSec: 120,
+                                    networkCommands: "ask",
+                                    browseEnabled: true,
+                                    protectDestructiveGit: true,
+                                });
+                            } else if (v === "autonomous") {
+                                updateSettingSection("ai", {
+                                    autonomy: "autonomous",
+                                    autoRunMode: "always",
+                                    requireEditApproval: false,
+                                    allowCapabilityUpgrade: true,
+                                    commandTimeoutSec: 600,
+                                    networkCommands: "ask",
+                                    browseEnabled: true,
+                                    protectDestructiveGit: true,
+                                    shellAutomation: true,
+                                });
+                                void commands.updateTurnPolicy({
+                                    autoRunMode: "always",
+                                    requireEditApproval: false,
+                                    allowCapabilityUpgrade: true,
+                                    commandTimeoutSec: 600,
+                                    networkCommands: "ask",
+                                    browseEnabled: true,
+                                    protectDestructiveGit: true,
+                                    shellAutomation: true,
+                                });
+                            } else if (v === "balanced") {
+                                updateSettingSection("ai", {
+                                    autonomy: "balanced",
+                                    autoRunMode: "auto",
+                                    requireEditApproval: false,
+                                    allowCapabilityUpgrade: true,
+                                    commandTimeoutSec: 600,
+                                    networkCommands: "ask",
+                                    browseEnabled: true,
+                                    protectDestructiveGit: true,
+                                    shellAutomation: true,
+                                });
+                                void commands.updateTurnPolicy({
+                                    autoRunMode: "auto",
+                                    requireEditApproval: false,
+                                    allowCapabilityUpgrade: true,
+                                    commandTimeoutSec: 600,
+                                    networkCommands: "ask",
+                                    browseEnabled: true,
+                                    protectDestructiveGit: true,
+                                    shellAutomation: true,
+                                });
+                            }
+                        }}
+                    />
+                </SettingRow>
+                <SettingRow title="Browse" description="Open pages and take screenshots when a task needs them.">
+                    <SettingSwitch
+                        checked={a.browseEnabled}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { browseEnabled: on, autonomy: "custom" });
+                            void commands.updateTurnPolicy({ browseEnabled: on });
+                        }}
+                    />
+                </SettingRow>
+                <SettingRow title="Network commands" description="curl and similar tools. Off blocks them. Ask waits for you.">
+                    <SettingSelect
+                        value={a.networkCommands}
+                        options={[
+                            { value: "ask", label: "Ask" },
+                            { value: "off", label: "Off" },
+                        ]}
+                        onChange={(v) => {
+                            const networkCommands = v === "off" ? "off" : "ask";
+                            updateSettingSection("ai", { networkCommands, autonomy: "custom" });
+                            void commands.updateTurnPolicy({ networkCommands });
+                        }}
+                    />
+                </SettingRow>
+                <SettingRow title="Command limit" description="Stop a one-shot command that is still running after this long.">
+                    <SettingNumberSelect
+                        value={a.commandTimeoutSec}
+                        options={[120, 600, 1800]}
+                        formatLabel={(n) => (n === 120 ? "2 min" : n === 1800 ? "30 min" : "10 min")}
+                        onChange={(commandTimeoutSec) => {
+                            updateSettingSection("ai", { commandTimeoutSec, autonomy: "custom" });
+                            void commands.updateTurnPolicy({ commandTimeoutSec });
+                        }}
+                    />
+                </SettingRow>
+                </SettingCard>
+            </SettingSection>
             <SettingSection id="settings-ai-access" title="Computer">
                 <SettingCard>
                 <SettingRow
@@ -399,7 +518,7 @@ export function AiSettingsPanel({
                             { value: "always", label: "Run everything" },
                         ] satisfies Array<{ value: AutoRunModeSetting; label: string }>}
                         onChange={(v) => {
-                            updateSettingSection("ai", { autoRunMode: v as AutoRunModeSetting });
+                            updateSettingSection("ai", { autoRunMode: v as AutoRunModeSetting, autonomy: "custom" });
                             void commands.updateTurnPolicy({ autoRunMode: v });
                         }}
                     />
@@ -408,7 +527,7 @@ export function AiSettingsPanel({
                     <SettingSwitch
                         checked={a.protectDestructiveGit}
                         onChange={(on) => {
-                            updateSettingSection("ai", { protectDestructiveGit: on });
+                            updateSettingSection("ai", { protectDestructiveGit: on, autonomy: "custom" });
                             void commands.updateTurnPolicy({ protectDestructiveGit: on });
                         }}
                     />
@@ -421,7 +540,7 @@ export function AiSettingsPanel({
                     <SettingSwitch
                         checked={a.requireEditApproval}
                         onChange={(on) => {
-                            updateSettingSection("ai", { requireEditApproval: on });
+                            updateSettingSection("ai", { requireEditApproval: on, autonomy: "custom" });
                             void commands.updateTurnPolicy({ requireEditApproval: on });
                         }}
                     />
@@ -442,7 +561,7 @@ export function AiSettingsPanel({
             <SettingSection id="settings-ai-review" title="Review">
                 <SettingRow
                     title="Adversarial review"
-                    description="A second pass after large multi-file edits."
+                    description="Lets the agent run a second-pass review when you ask. Ordinary edits do not start one."
                 >
                     <SettingSwitch
                         checked={a.reviewAdversarialEnabled}
@@ -457,7 +576,10 @@ export function AiSettingsPanel({
                     <SettingNumberSelect
                         value={a.maxContextLines}
                         options={MAX_CONTEXT_PRESETS}
-                        onChange={(v) => updateSettingSection("ai", { maxContextLines: v })}
+                        onChange={(v) => {
+                            updateSettingSection("ai", { maxContextLines: v });
+                            void commands.updateTurnPolicy({ maxContextLines: v });
+                        }}
                     />
                 </SettingRow>
                 <SettingCard>

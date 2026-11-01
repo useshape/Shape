@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import Chat from "@/features/chat/ui/chat";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { ChatChromeTabs } from "./chat-tabs";
@@ -464,12 +463,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                             sidebarExpanded
                         />
                     </div>
-                ) : codeWorkspace ? (
-                    <PaneGrid />
                 ) : (
-                    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel">
-                        <Chat className="bg-transparent" showTitlebar={false} />
-                    </div>
+                    <PaneGrid />
                 )}
                 <div className="hidden">{children}</div>
             </div>

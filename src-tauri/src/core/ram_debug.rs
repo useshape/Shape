@@ -450,6 +450,53 @@ pub fn append_raw(line: &str) {
     write_line(line);
 }
 
+fn logs_dir() -> PathBuf {
+    let dir = dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("shape");
+    let _ = create_dir_all(&dir);
+    dir
+}
+
+/// Directory for ram-debug, panic, and release log files.
+pub fn shape_log_dir() -> PathBuf {
+    logs_dir()
+}
+
+fn write_panic_file(line: &str) {
+    let path = logs_dir().join("panic.log");
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(file, "{line}");
+        let _ = file.flush();
+    }
+}
+
+/// Persist panics to disk so a GUI release build still leaves a stack.
+pub fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let loc = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown".to_string());
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Box<dyn Any>".to_string()
+        };
+        let bt = std::backtrace::Backtrace::force_capture();
+        let line = format!(
+            "[panic] t={:.1}s loc={loc} payload={payload}\n{bt}",
+            elapsed_s()
+        );
+        write_panic_file(&line);
+        append_raw(&line);
+        previous(info);
+    }));
+}
+
 #[allow(dead_code)]
 pub fn reopen_append() {
     let path = log_path();

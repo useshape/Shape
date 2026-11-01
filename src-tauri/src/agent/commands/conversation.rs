@@ -218,6 +218,8 @@ pub fn new_chat(
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppError> {
     // Keep any in-flight turn running in the background — only Stop cancels.
+    // Save the outgoing conversation (including in-flight partial) before
+    // clearing live history so a mid-turn new chat does not drop the user message.
     let active_proj = state.current_project.lock()?.clone();
 
     if let Some(path) = active_proj {

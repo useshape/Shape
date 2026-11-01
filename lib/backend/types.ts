@@ -306,6 +306,7 @@ export interface ChatGenerationState {
     isGenerating: boolean;
     turnId?: string | null;
     conversationId?: string | null;
+    conversationIds?: string[];
     partialContent?: string | null;
     activityLabel?: string | null;
 }

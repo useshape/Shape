@@ -6,6 +6,7 @@ import {
     fileTabId,
     isFileTab,
     reorderTabs,
+    showView,
     showsSplit,
     splitTabs,
 } from "@/features/agent/panes/strip-model";
@@ -43,6 +44,17 @@ describe("brave split tabs", () => {
         expect(state.order).toEqual(["a", file]);
         state = splitTabs(state, "a", file);
         expect(state.split).toBeNull();
+    });
+
+    it("showView(chat) skips file tabs and activates the conversation", () => {
+        const file = fileTabId("a.py");
+        let state = createStrip();
+        state = activateTab(state, file);
+        state = activateTab(state, "conv");
+        state = activateTab(state, file);
+        state = showView(state, "chat");
+        expect(state.activeId).toBe("conv");
+        expect(state.order).toEqual([file, "conv"]);
     });
 
     it("unsplits without removing the tabs", () => {

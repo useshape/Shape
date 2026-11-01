@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::models::AgentState;
 use crate::commands::pty::{self, AgentSessionCallbacks, PtyState};
@@ -351,6 +351,17 @@ pub async fn run_agent_command(
             "terminal",
             &format!("Command moved to background session {}", session_id),
         );
+        if matches!(mode, CommandExecutionMode::OneShot) {
+            let timeout_sec = agent_state.turn_policy().command_timeout_sec.clamp(30, 1800);
+            let app_kill = app.clone();
+            let sid = session_id;
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(timeout_sec)).await;
+                if let Some(pty) = app_kill.try_state::<PtyState>() {
+                    let _ = pty::kill_session(&pty, sid).await;
+                }
+            });
+        }
         AgentCommandResult {
             session_id,
             completed: false,

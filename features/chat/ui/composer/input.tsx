@@ -6,12 +6,8 @@ import { Calendar20Regular } from "@fluentui/react-icons/headless/svg/calendar";
 import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
-import { CodeTextEdit20Filled, CodeTextEdit20Regular } from "@fluentui/react-icons/headless/svg/code-text-edit";
 import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
-import { ChatMultiple20Filled, ChatMultiple20Regular } from "@fluentui/react-icons/headless/svg/chat-multiple";
-import { CalendarMultiple24Filled, CalendarMultiple24Regular } from "@fluentui/react-icons/headless/svg/calendar-multiple";
-import { Incognito24Filled } from "@fluentui/react-icons/headless/svg/incognito";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
@@ -117,8 +113,6 @@ type ChatInputProps = {
     setSelectedWorkerModels?: (models: string[]) => void;
     multiSelectModels?: boolean;
     hideModeSelect?: boolean;
-    selectedMode: string;
-    setSelectedMode: (m: string) => void;
     reasoningEffort: ReasoningEffort;
     setReasoningEffort: (e: ReasoningEffort) => void;
     pendingEdits?: { id: string; file: string; original: string; replacement: string; baseline?: string }[];
@@ -313,13 +307,6 @@ function ComposerContextHighlight({ text }: { text: string }) {
     return <span className="text-accent-text">{text}</span>;
 }
 
-const CHAT_MODES = [
-    { id: "Code", icon: CodeTextEdit20Filled, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
-    { id: "Ask", icon: ChatMultiple20Filled, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
-    { id: "Plan", icon: CalendarMultiple24Filled, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
-    { id: "Review", icon: Incognito24Filled, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
-] as const;
-
 const COMPOSER_HINTS = [
     "Ask a task. @ for files. / for a workflow.",
     "Escape stops the current turn.",
@@ -327,117 +314,6 @@ const COMPOSER_HINTS = [
     "Drop a screenshot to redesign",
     "Paste a stack trace to debug",
 ] as const;
-
-function SwapText({
-    value,
-    className,
-}: {
-    value: string;
-    className?: string;
-}) {
-    const wrapRef = React.useRef<HTMLSpanElement>(null);
-    const measureNewRef = React.useRef<HTMLSpanElement>(null);
-    const measureOldRef = React.useRef<HTMLSpanElement>(null);
-    const [shown, setShown] = React.useState(value);
-    const [leaving, setLeaving] = React.useState<string | null>(null);
-    const [width, setWidth] = React.useState<number | null>(null);
-    const [ready, setReady] = React.useState(false);
-    const [clipping, setClipping] = React.useState(false);
-    const shownRef = React.useRef(value);
-
-    const fitWidth = React.useCallback(() => {
-        const wrap = wrapRef.current;
-        const measureNew = measureNewRef.current;
-        if (!wrap || !measureNew) return;
-        const wNew = measureNew.getBoundingClientRect().width;
-        const natural = wNew;
-
-        let constraint: HTMLElement | null = wrap.parentElement;
-        let maxInner = Number.POSITIVE_INFINITY;
-        while (constraint) {
-            const cs = getComputedStyle(constraint);
-            const maxW = parseFloat(cs.maxWidth);
-            if (!Number.isNaN(maxW) && cs.maxWidth !== "none") {
-                const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-                maxInner = Math.max(0, maxW - pad);
-                break;
-            }
-            constraint = constraint.parentElement;
-        }
-
-        const parent = wrap.parentElement;
-        let used = 0;
-        if (parent && Number.isFinite(maxInner)) {
-            const cs = getComputedStyle(parent);
-            const gap = parseFloat(cs.columnGap || cs.gap) || 0;
-            const others = Array.from(parent.children).filter((el) => el !== wrap);
-            used =
-                others.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0) +
-                gap * others.length;
-        }
-
-        const cap = Number.isFinite(maxInner) ? Math.max(0, maxInner - used) : Number.POSITIVE_INFINITY;
-        setWidth(Math.max(0, Math.min(natural, cap)));
-        requestAnimationFrame(() => {
-            const el = wrapRef.current;
-            if (!el) return;
-            setClipping(el.scrollWidth > el.clientWidth + 1);
-        });
-    }, [leaving]);
-
-    React.useLayoutEffect(() => {
-        fitWidth();
-        if (!ready) {
-            requestAnimationFrame(() => setReady(true));
-        }
-    }, [value, shown, leaving, fitWidth, ready]);
-
-    React.useEffect(() => {
-        const parent = wrapRef.current?.parentElement;
-        if (!parent) return;
-        const ro = new ResizeObserver(() => fitWidth());
-        ro.observe(parent);
-        return () => ro.disconnect();
-    }, [fitWidth]);
-
-    React.useEffect(() => {
-        if (value === shownRef.current) return;
-        const from = shownRef.current;
-        shownRef.current = value;
-        setLeaving(from || null);
-        setShown(value);
-        const t = window.setTimeout(() => setLeaving(null), 400);
-        return () => window.clearTimeout(t);
-    }, [value]);
-
-    return (
-        <span
-            ref={wrapRef}
-            data-ready={ready ? "true" : "false"}
-            data-fade={clipping ? "true" : "false"}
-            className={cn("t-swap", className)}
-            style={width != null ? { width } : undefined}
-            onTransitionEnd={(event) => {
-                if (event.propertyName === "width") setClipping(false);
-            }}
-        >
-            <span ref={measureNewRef} className="t-swap__measure" aria-hidden>
-                {value}
-            </span>
-            <span ref={measureOldRef} className="t-swap__measure" aria-hidden>
-                {leaving ?? ""}
-            </span>
-            {leaving ? (
-                <span className="t-swap__layer t-swap__layer--out" aria-hidden>
-                    {leaving}
-                </span>
-            ) : null}
-            {shown ? (
-                <span className={cn("t-swap__layer", leaving && "t-swap__layer--in")}>{shown}</span>
-            ) : null}
-        </span>
-    );
-}
 
 function RotatingComposerHint({ paused }: { paused: boolean }) {
     const [index, setIndex] = React.useState(0);
@@ -476,59 +352,6 @@ function RotatingComposerHint({ paused }: { paused: boolean }) {
     );
 }
 
-function ModeMenu({
-    selectedMode,
-    setSelectedMode,
-    disabled,
-}: {
-    selectedMode: string;
-    setSelectedMode: (m: string) => void;
-    disabled?: boolean;
-}) {
-    const selected = CHAT_MODES.find((m) => m.id === selectedMode) ?? CHAT_MODES[0];
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild disabled={disabled}>
-                <Button
-                    variant="ghost"
-                    size="xs"
-                    disabled={disabled}
-                    className="h-8 bg-transparent px-2 font-medium hover:bg-transparent"
-                    style={{ color: selected.color }}
-                    aria-label={selected.id}
-                >
-                    <div className="flex items-center gap-1.5 text-sm">
-                        <Icon icon={selected.icon} />
-                        <SwapText value={selected.id} />
-                    </div>
-                </Button>
-            </DropdownMenuTrigger >
-            <DropdownMenuContent align="end" className="w-100">
-                {CHAT_MODES.map((mode) => (
-                    <DropdownMenuItem
-                        key={mode.id}
-                        onClick={() => setSelectedMode(mode.id)}
-                        className="items-start gap-2.5 py-2"
-                    >
-                        <Icon
-                            icon={mode.icon}
-                            className="mt-0.5"
-                            style={{ color: mode.color }}
-                        />
-                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                            <span className="text-sm text-text-primary">{mode.id}</span>
-                            <span className="text-sm leading-snug text-text-muted">
-                                {mode.description}
-                            </span>
-                        </span>
-                    </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-}
-
-
 export function ChatInput({
     inputValue,
     isLoading,
@@ -545,8 +368,6 @@ export function ChatInput({
     setSelectedWorkerModels,
     multiSelectModels = false,
     hideModeSelect = false,
-    selectedMode,
-    setSelectedMode,
     reasoningEffort,
     setReasoningEffort,
     pendingEdits = [],
@@ -1481,6 +1302,11 @@ export function ChatInput({
                 {talkSurface ? null : (
                         <div className="flex min-w-0 items-center justify-between gap-2 px-1">
                         <div className="flex min-w-0 items-center gap-1.5">
+                            {hideModeSelect ? null : (
+                                <span className="px-2 text-sm text-text-muted" title="Shape picks Ask, Plan, or Code for each message.">
+                                    Auto
+                                </span>
+                            )}
                             {project_path ? (
                                 <>
                                     <WorkspaceBranchSwitch />

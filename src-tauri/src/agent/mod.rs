@@ -1,6 +1,7 @@
 pub mod checkout;
 pub mod commands;
 pub mod context;
+pub mod decide;
 pub mod editing;
 pub mod index;
 pub mod media_stash;

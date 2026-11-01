@@ -131,6 +131,11 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
     }
 
+    let policy = ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref());
+    if !policy.browse_enabled && matches!(name, "browse" | "screenshot_page" | "inspect_runtime" | "design_review") {
+        return blocked_outcome(name, "Browsing is turned off in settings.");
+    }
+
     let talk_store = ctx.project_path.is_empty() || ctx.project_path == "__shape_talk__";
     let chat_scratch = crate::agent::commands::history::is_chat_work_dir(ctx.project_path);
     if !talk_store && !chat_scratch && (TRUST_GATED_TOOLS.contains(&name) || name.starts_with("mcp_")) {
@@ -206,6 +211,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "browse" => crate::agent::tools::browse::tool_browse(&args, ctx).await,
         "design_review" => persona::tool_design_review(&args, ctx).await,
+        "adversarial_review" => meta::tool_adversarial_review(&args, ctx).await,
         "mcp_search" => meta::tool_mcp_search(&args, ctx).await,
         "mcp_call" => meta::tool_mcp_call_named(&args, ctx).await,
         "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
@@ -217,6 +223,8 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "edit_image" => crate::agent::tools::generate::tool_edit_image(&args, ctx).await,
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
+        "load_tools" => tool_load_tools(&args, ctx),
+        "load_skill" => tool_load_skill(&args),
         other => {
             if other.starts_with("mcp_") {
                 let mcp_out = meta::tool_mcp_call(other, args_json, ctx).await;
@@ -250,5 +258,88 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         tool_result,
         ui_chunk: outcome.ui_chunk,
         side_effect: outcome.side_effect,
+    }
+}
+
+fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let Some(id) = ctx.conversation_id.clone().filter(|s| !s.is_empty()) else {
+        return error_outcome("load_tools", "No conversation is active.");
+    };
+    let policy = ctx.agent_state.turn_policy_for(Some(&id));
+    let requested = args
+        .get("packs")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if requested.is_empty() {
+        return error_outcome("load_tools", "Pass packs: an array of pack names.");
+    }
+    let mut packs = ctx.agent_state.session_packs(&id);
+    let mut added = Vec::new();
+    let mut refused = Vec::new();
+    for name in requested {
+        let before = packs;
+        match name.as_str() {
+            "workspace" => packs.workspace = true,
+            "terminal" => packs.terminal = true,
+            "git" => packs.git = true,
+            "browse" => {
+                if policy.browse_enabled {
+                    packs.browse = true;
+                } else {
+                    refused.push(name);
+                    continue;
+                }
+            }
+            "web" => packs.web = true,
+            "media" => packs.media = true,
+            "plugins" => packs.plugins = true,
+            _ => {
+                refused.push(name);
+                continue;
+            }
+        }
+        if packs != before {
+            added.push(name);
+        }
+    }
+    packs = packs.clamp(policy.browse_enabled, true);
+    ctx.agent_state.set_session_packs(&id, packs);
+    let mut msg = if added.is_empty() {
+        "No new packs were loaded.".to_string()
+    } else {
+        format!("Loaded packs: {}. They are available on your next step.", added.join(", "))
+    };
+    if !refused.is_empty() {
+        msg.push_str(&format!(" Refused: {}.", refused.join(", ")));
+    }
+    ToolOutcome {
+        tool_result: msg,
+        ui_chunk: String::new(),
+        side_effect: None,
+    }
+}
+
+fn tool_load_skill(args: &Value) -> ToolOutcome {
+    let name = match args.get("name").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => return error_outcome("load_skill", "Pass name."),
+    };
+    match crate::agent::prompts::skill_body(name) {
+        Some(body) => ToolOutcome {
+            tool_result: body.to_string(),
+            ui_chunk: String::new(),
+            side_effect: None,
+        },
+        None => error_outcome(
+            "load_skill",
+            "Unknown skill. Use terminal, git, edits, browse, plan, or review.",
+        ),
     }
 }

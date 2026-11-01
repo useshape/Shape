@@ -313,6 +313,8 @@ pub struct StreamOutcome {
     pub token_count: usize,
     pub input_tokens: usize,
     pub output_tokens: usize,
+    /// Tokens served from the provider prompt cache, when the response reports them.
+    pub cached_tokens: usize,
     /// True when any reasoning/thinking tokens were streamed this completion.
     pub had_reasoning: bool,
     /// Accumulated reasoning text (OpenRouter `reasoning` / `reasoning_content`).
@@ -454,6 +456,7 @@ pub async fn stream_chat(
                 token_count: 0,
                 input_tokens: 0,
                 output_tokens: 0,
+                cached_tokens: 0,
                 had_reasoning: false,
                 reasoning: None,
                 reasoning_details: None,
@@ -511,6 +514,7 @@ pub async fn stream_chat(
     let mut last_emit = Instant::now();
     let mut token_count: usize = 0;
     let mut input_tokens: usize = 0;
+    let mut cached_tokens: usize = 0;
     let mut output_tokens: usize = 0;
     let mut in_thinking = false;
     let mut had_reasoning = false;
@@ -542,6 +546,7 @@ pub async fn stream_chat(
                     token_count,
                     input_tokens,
                     output_tokens,
+                    cached_tokens,
                     had_reasoning,
                     reasoning: nonempty_string(reasoning_acc.clone()),
                     reasoning_details: nonempty_details(&reasoning_details_acc),
@@ -562,6 +567,7 @@ pub async fn stream_chat(
                 token_count,
                 input_tokens,
                 output_tokens,
+                cached_tokens,
                 had_reasoning,
                 reasoning: nonempty_string(reasoning_acc.clone()),
                 reasoning_details: nonempty_details(&reasoning_details_acc),
@@ -605,6 +611,7 @@ pub async fn stream_chat(
                     token_count,
                     input_tokens,
                     output_tokens,
+                    cached_tokens,
                     had_reasoning,
                     reasoning: nonempty_string(reasoning_acc.clone()),
                     reasoning_details: nonempty_details(&reasoning_details_acc),
@@ -650,6 +657,15 @@ pub async fn stream_chat(
                 }
                 if let Some(completion) = usage.get("completion_tokens").and_then(|v| v.as_u64()) {
                     output_tokens = completion as usize;
+                }
+                let cached = usage
+                    .get("prompt_tokens_details")
+                    .and_then(|d| d.get("cached_tokens"))
+                    .and_then(|v| v.as_u64())
+                    .or_else(|| usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()))
+                    .or_else(|| usage.get("cached_tokens").and_then(|v| v.as_u64()));
+                if let Some(cached) = cached {
+                    cached_tokens = cached as usize;
                 }
             }
 
@@ -887,10 +903,11 @@ pub async fn stream_chat(
     logging::info(
         "stream",
         &format!(
-            "Stream complete. {} chunks, {} in / {} out tokens, {} chars, {} tool_calls",
+            "Stream complete. {} chunks, {} in / {} out tokens, {} cached, {} chars, {} tool_calls",
             token_count,
             final_input,
             final_output,
+            cached_tokens,
             content.len(),
             tool_calls.len()
         ),
@@ -920,6 +937,7 @@ pub async fn stream_chat(
         token_count,
         input_tokens: final_input,
         output_tokens: final_output,
+        cached_tokens,
         had_reasoning,
         reasoning: nonempty_string(reasoning_acc),
         reasoning_details: nonempty_details(&reasoning_details_acc),

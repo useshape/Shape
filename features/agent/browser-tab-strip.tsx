@@ -12,6 +12,7 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context";
 import { insertionIndex } from "@/features/agent/panes/strip-model";
+import { useTabStripOverflow } from "@/features/agent/use-tab-strip-overflow";
 import { devChromeOverride, setDevChromePlatform } from "@/lib/ui/chrome-platform";
 import { cn } from "@/lib/utils";
 
@@ -294,8 +295,11 @@ export function BrowserTabStrip({
         slots.push(node);
     });
 
+    const { fadeLeft, fadeRight } = useTabStripOverflow(rowRef, tabs.length);
+
     return (
         <div className="flex h-full min-w-0 flex-1 items-center">
+            <div className="relative min-h-0 min-w-0 flex-1 self-stretch">
             <div
                 ref={rowRef}
                 data-no-drag
@@ -308,6 +312,13 @@ export function BrowserTabStrip({
                 className="tab-strip-scroll flex h-full w-max min-w-0 max-w-full shrink items-center gap-0.5"
             >
                 {slots}
+            </div>
+            {fadeLeft ? (
+                <div className="pointer-events-none absolute inset-y-0 start-0 z-10 w-10 bg-linear-to-l from-transparent to-chrome" aria-hidden />
+            ) : null}
+            {fadeRight ? (
+                <div className="pointer-events-none absolute inset-y-0 end-0 z-10 w-10 bg-linear-to-r from-transparent to-chrome" aria-hidden />
+            ) : null}
             </div>
             <button
                 type="button"

@@ -98,6 +98,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": {
+      "../public/wallpapers/": "wallpapers/"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

@@ -15,6 +15,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import { saveDownloadOrNotify } from "@/lib/ui/save-download";
 
 function kindOf(mime: string, name: string): { label: string; icon: IconGlyph } {
     const ext = (name.split(".").pop() || "").toUpperCase();
@@ -26,14 +27,8 @@ function kindOf(mime: string, name: string): { label: string; icon: IconGlyph } 
     return { label: ext ? `File · ${mark}` : "File", icon: Document20Regular };
 }
 
-function download(name: string, src: string) {
-    const link = document.createElement("a");
-    link.href = src;
-    link.download = name;
-    link.rel = "noopener";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+function download(name: string, src: string, mime: string) {
+    void saveDownloadOrNotify(name, src, mime);
 }
 
 /** A file the agent handed over: icon, title, type, and a download. */
@@ -68,7 +63,7 @@ export function SentFileCard({
                     size="lg"
                     disabled={!canDownload}
                     className="rounded-r-none! rounded-full bg-white/10"
-                    onClick={() => download(name, src)}
+                    onClick={() => download(name, src, mime)}
                 >
                     Download
                 </Button>
@@ -86,7 +81,7 @@ export function SentFileCard({
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => download(name, src)}>Download</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => download(name, src, mime)}>Download</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </span>

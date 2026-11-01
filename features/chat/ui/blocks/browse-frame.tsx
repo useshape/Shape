@@ -37,6 +37,7 @@ export function BrowseStage({
 }) {
     const hostRef = useRef<HTMLDivElement>(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
+    const [shown, setShown] = useState(frame.image);
     const status = frame.status || (frame.image ? "controlling" : "loading");
     const cursor = { x: frame.x, y: frame.y };
 
@@ -50,6 +51,26 @@ export function BrowseStage({
         return () => obs.disconnect();
     }, []);
 
+    useEffect(() => {
+        const next = frame.image;
+        if (!next) {
+            setShown("");
+            return;
+        }
+        let cancel = false;
+        const img = new Image();
+        img.onload = () => {
+            if (!cancel) setShown(next);
+        };
+        img.onerror = () => {
+            if (!cancel) setShown(next);
+        };
+        img.src = next;
+        return () => {
+            cancel = true;
+        };
+    }, [frame.image]);
+
     const fitted = fitPage(box.w, box.h);
     const place = (percentX: number, percentY: number) => ({
         left: fitted.left + (percentX / 100) * fitted.width,
@@ -59,27 +80,28 @@ export function BrowseStage({
     const spot = (fill || natural) && box.w > 0
         ? { left: (cursor.x / 100) * box.w, top: (cursor.y / 100) * box.h }
         : place(cursor.x, cursor.y);
-    if (!frame.image) return null;
+    const src = shown || frame.image;
+    if (!src) return null;
 
     return (
         <div
             ref={hostRef}
             className={cn(
-                natural ? "relative w-full" : "relative overflow-hidden bg-editor",
+                natural ? "relative w-full" : "relative h-full w-full",
                 className,
             )}
         >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-                src={frame.image}
+                src={src}
                 alt=""
                 draggable={false}
                 className={cn(
-                    natural ? "block h-auto w-full" : "absolute inset-0 h-full w-full",
+                    natural ? "block h-auto w-full" : "absolute inset-0 h-full w-full drop-shadow-md",
                     !natural && (fill ? "object-cover" : "object-contain"),
                 )}
             />
-            {status === "controlling" && frame.image ? (
+            {status === "controlling" && src ? (
                 <svg
                     className="pointer-events-none absolute z-10 text-text-primary"
                     style={{

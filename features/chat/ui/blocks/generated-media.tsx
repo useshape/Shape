@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getSelectedTalkMediaId, setSelectedTalkMediaId, subscribeTalkMedia } from "@/lib/chat/talk-media";
+import { saveDownloadOrNotify } from "@/lib/ui/save-download";
 
 export function RefineBar({
     kind,
@@ -131,6 +132,7 @@ export function GeneratedMediaCard({
                             <span className="preview-shimmer-blob" />
                         </div>
                     ) : (
+                        <>
                         <audio
                             controls
                             src={url}
@@ -138,6 +140,17 @@ export function GeneratedMediaCard({
                             preload="metadata"
                             aria-label={prompt || "Generated audio"}
                         />
+                        {url ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => void saveDownloadOrNotify("audio.mp3", url, "audio/mpeg")}
+                            >
+                                Save
+                            </Button>
+                        ) : null}
+                        </>
                     )}
                 </div>
             </div>
@@ -187,7 +200,25 @@ export function GeneratedMediaCard({
                 ) : null}
             </div>
             </button>
-            {alias ? <div className="px-3 py-1.5 text-xs text-text-muted">{alias}</div> : null}
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+                {alias ? <div className="text-xs text-text-muted">{alias}</div> : <span />}
+                {url ? (
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                            void saveDownloadOrNotify(
+                                kind === "svg" ? "image.svg" : "image.png",
+                                url,
+                                kind === "svg" ? "image/svg+xml" : "image/png",
+                            )
+                        }
+                    >
+                        Save
+                    </Button>
+                ) : null}
+            </div>
             {isSelected ? <RefineBar kind={kind} mediaId={mediaId} prompt={prompt} model={model} /> : null}
         </div>
     );

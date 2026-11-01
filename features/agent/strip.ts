@@ -19,7 +19,7 @@ import {
     type ToolId,
 } from "./panes/strip-model";
 
-export { fileTabId, fileTabPath, isFileTab, isToolId, showsSplit, toolTitle } from "./panes/strip-model";
+export { fileTabId, fileTabPath, isFileTab, isShowcaseTab, isToolId, SHOWCASE_TAB_ID, showsSplit, toolTitle } from "./panes/strip-model";
 export type { SplitPair, ToolId };
 
 const listeners = new Set<() => void>();

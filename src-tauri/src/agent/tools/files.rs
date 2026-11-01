@@ -288,8 +288,13 @@ pub fn delete_file(path: &str, project_path: &str) -> Result<String, AppError> {
         ));
     }
 
-    fs::remove_file(&target).map_err(AppError::Io)?;
-    Ok(format!("Deleted {}", path))
+    trash::delete(&target).map_err(|e| {
+        AppError::Message(format!(
+            "Could not move {} to the trash ({e}). The file was not deleted.",
+            path
+        ))
+    })?;
+    Ok(format!("Moved {} to the trash", path))
 }
 
 /// Rename/move a file, validated against the project root.
@@ -383,5 +388,17 @@ mod tests {
             "mock turn file reads should stay small, got {cache_total}"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_moves_a_workspace_file_to_the_trash() {
+        let root = std::env::temp_dir().join(format!("shape-trash-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("note.txt"), "hello").unwrap();
+        let msg = delete_file("note.txt", root.to_str().unwrap()).unwrap();
+        assert!(msg.contains("trash"), "{msg}");
+        assert!(!root.join("note.txt").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

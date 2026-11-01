@@ -16,7 +16,7 @@ const SAFE_COMMANDS: &[&str] = &[
 const BLOCKED_PATTERNS: &[&str] = &[
     "rm -rf /", "rm -rf ~", "rm -rf .", "del /s /q",
     "rmdir /s /q", "rd /s /q",
-    "format", "mkfs",
+    "format", "mkfs", "format-volume", "clear-disk", "diskpart", "bcdedit",
     "shutdown", "reboot", "halt", "poweroff",
     "chmod 777", "chown root",
     "reg delete", "reg add",
@@ -335,6 +335,100 @@ fn has_output_redirect_flag(rest: &str) -> bool {
     flush(&mut token)
 }
 
+/// Final gate before a command is spawned. `Blocked` is never turned into a prompt.
+/// Approval and auto-run cannot relax these checks.
+pub fn authorize_command(
+    command: &str,
+    workspace: &str,
+    network: crate::agent::models::NetworkPolicy,
+) -> CommandSafety {
+    let base = check_command_safety(command);
+    if matches!(base, CommandSafety::Blocked { .. }) {
+        return base;
+    }
+    if let Some(reason) = escapes_workspace(command, workspace) {
+        return CommandSafety::Blocked { reason };
+    }
+    if is_network_command(command) {
+        return match network {
+            crate::agent::models::NetworkPolicy::Off => CommandSafety::Blocked {
+                reason: "Network commands are turned off in settings.".to_string(),
+            },
+            crate::agent::models::NetworkPolicy::Ask => {
+                if matches!(base, CommandSafety::NeedsApproval { .. }) {
+                    base
+                } else {
+                    CommandSafety::NeedsApproval {
+                        reason: "Network commands ask before they run.".to_string(),
+                    }
+                }
+            }
+        };
+    }
+    base
+}
+
+fn is_network_command(command: &str) -> bool {
+    let cmd = command.to_lowercase();
+    const MARKERS: &[&str] = &[
+        "curl", "wget", "invoke-webrequest", "invoke-restmethod", "iwr ", "irm ",
+    ];
+    MARKERS.iter().any(|m| cmd.contains(m))
+}
+
+fn escapes_workspace(command: &str, workspace: &str) -> Option<String> {
+    let lower = command.to_lowercase();
+    const SECRET: &[&str] = &[
+        ".ssh", ".aws", ".gnupg", ".azure", ".kube", "credentials.json",
+        "id_rsa", ".env",
+    ];
+    if SECRET.iter().any(|s| lower.contains(s)) && !lower.contains(".env.example") {
+        return Some("Commands that touch credentials or secret files are blocked.".to_string());
+    }
+    const SYSTEM: &[&str] = &[
+        "c:\\windows", "c:/windows", "/windows/system32", "c:\\program files",
+        "c:/program files", "/etc/", "/usr/", "/bin/", "/system/",
+    ];
+    let mutating = lower.contains("remove-item")
+        || lower.contains("rm ")
+        || lower.contains("del ")
+        || lower.contains("rmdir")
+        || lower.contains("set-content")
+        || lower.contains("out-file")
+        || lower.contains("move-item")
+        || lower.contains("mv ")
+        || lower.contains("ri ");
+    if mutating && SYSTEM.iter().any(|s| lower.contains(s)) {
+        return Some("Commands that change system directories are blocked.".to_string());
+    }
+    if mutating && (lower.contains("rm -rf /") || lower.contains("remove-item") && (lower.contains(" -recurse") || lower.contains(" -r"))) {
+        if lower.contains(":\\") || lower.contains("~/") || lower.contains("$home") || lower.contains("c:\\") {
+            return Some("Recursive deletes outside a single workspace file are blocked.".to_string());
+        }
+    }
+    let workspace_norm = workspace.replace('\\', "/").to_lowercase();
+    if mutating && !workspace_norm.is_empty() {
+        for token in command.split_whitespace() {
+            let token = token.trim_matches(|c| c == '"' || c == '\'' || c == ',');
+            let norm = token.replace('\\', "/");
+            let looks_abs = norm.contains(":\\")
+                || norm.starts_with('/')
+                || norm.starts_with("~/")
+                || token.contains(":\\");
+            if !looks_abs {
+                continue;
+            }
+            let token_lower = norm.to_lowercase();
+            if !token_lower.contains(&workspace_norm) && token_lower.len() > 2 {
+                return Some(format!(
+                    "Command targets {token}, which is outside the workspace. That cannot be approved."
+                ));
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,5 +677,32 @@ mod tests {
         assert!(is_destructive_git("git clean -fd"));
         assert!(!is_destructive_git("git checkout -b feature/x"));
         assert!(!is_destructive_git("git status"));
+    }
+
+    #[test]
+    fn authorize_blocks_escape_even_if_the_user_would_approve() {
+        use crate::agent::models::{AutoRunMode, NetworkPolicy};
+        let dir = std::env::temp_dir().join(format!("shape-auth-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let workspace = dir.to_string_lossy().to_string();
+
+        let drive = authorize_command("Remove-Item -Recurse C:\\Windows\\System32", &workspace, NetworkPolicy::Ask);
+        assert!(matches!(drive, CommandSafety::Blocked { .. }));
+        let always = apply_auto_run_mode(drive, "Remove-Item -Recurse C:\\Windows\\System32", AutoRunMode::Always, false);
+        assert!(matches!(always, CommandSafety::Blocked { .. }));
+
+        let secret = authorize_command("Get-Content .ssh\\id_rsa", &workspace, NetworkPolicy::Ask);
+        assert!(matches!(secret, CommandSafety::Blocked { .. }));
+
+        let outside = authorize_command("del D:\\notes.txt", &workspace, NetworkPolicy::Ask);
+        assert!(matches!(outside, CommandSafety::Blocked { .. }));
+
+        let net = authorize_command("curl https://example.com", &workspace, NetworkPolicy::Off);
+        assert!(matches!(net, CommandSafety::Blocked { .. }));
+
+        let local = authorize_command("cargo test", &workspace, NetworkPolicy::Ask);
+        assert!(!matches!(local, CommandSafety::Blocked { .. }));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

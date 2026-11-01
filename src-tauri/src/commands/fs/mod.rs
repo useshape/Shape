@@ -283,7 +283,10 @@ impl Drop for WatchSession {
 static FILE_WATCHER: OnceLock<Mutex<Option<WatchSession>>> = OnceLock::new();
 
 fn start_watcher(app: AppHandle, path: &str) {
-    let mut watcher_guard = FILE_WATCHER.get_or_init(|| Mutex::new(None)).lock().unwrap();
+    let mut watcher_guard = FILE_WATCHER
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     *watcher_guard = None;
 
     let app_clone = app.clone();

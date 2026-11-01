@@ -650,7 +650,9 @@ pub fn git_commit(repo_path: String, message: String) -> Result<(), AppError> {
 
         let parent_commit = match repo.head() {
             Ok(head) => {
-                let target = head.target().unwrap();
+                let target = head.target().ok_or_else(|| {
+                    AppError::Message("HEAD has no target; cannot create a commit.".to_string())
+                })?;
                 Some(repo.find_commit(target).map_err(|e| AppError::Git(e))?)
             }
             Err(_) => None,
@@ -1809,18 +1811,19 @@ pub fn git_log_stream_start(
         color_index: 0,
     };
 
-    STREAMERS
-        .lock()
-        .unwrap()
-        .insert(
+    streamers_map().insert(
             caller_id,
             std::sync::Arc::new(std::sync::Mutex::new(streamer)),
         );
     Ok(())
 }
 
+fn streamers_map() -> std::sync::MutexGuard<'static, HashMap<String, std::sync::Arc<std::sync::Mutex<GitLogStreamer>>>> {
+    STREAMERS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn git_log_stream_stop(caller_id: String) -> Result<(), AppError> {
-    if let Some(streamer) = STREAMERS.lock().unwrap().remove(&caller_id) {
+    if let Some(streamer) = streamers_map().remove(&caller_id) {
         if let Ok(mut guard) = streamer.lock() {
             let _ = guard._child.kill();
             let _ = guard._child.wait();
@@ -1832,15 +1835,12 @@ pub fn git_log_stream_stop(caller_id: String) -> Result<(), AppError> {
 pub fn git_log_stream_next(caller_id: String, limit: usize) -> Result<Vec<GitLogEntry>, AppError> {
     use std::io::BufRead;
 
-    let streamer_arc = {
-        let guard = STREAMERS.lock().unwrap();
-        guard.get(&caller_id).cloned()
-    };
+    let streamer_arc = streamers_map().get(&caller_id).cloned();
     let Some(streamer_arc) = streamer_arc else {
         return Ok(Vec::new());
     };
 
-    let mut streamer = streamer_arc.lock().unwrap();
+    let mut streamer = streamer_arc.lock().unwrap_or_else(|e| e.into_inner());
 
     let start = std::time::Instant::now();
     let mut logs = Vec::new();

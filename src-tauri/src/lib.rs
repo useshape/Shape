@@ -50,6 +50,7 @@ pub fn run() {
     // or Windows pops a visible console window for every terminal/shell spawn.
     crate::core::process::ensure_hidden_console_for_conpty();
     crate::browser::webview_debug::install_env();
+    crate::core::ram_debug::install_panic_hook();
     crate::core::ram_debug::init();
 
     // Load env from src-tauri/ or shape/ (tauri dev cwd varies)
@@ -145,10 +146,21 @@ pub fn run() {
                 commands::ipc::shortcuts::handle_menu_event(app, event.id().0.as_str());
             });
 
-            if cfg!(debug_assertions) {
+            {
+                let log_dir = crate::core::ram_debug::shape_log_dir();
                 let _ = app.handle().plugin(
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)
+                        .clear_targets()
+                        .targets([
+                            tauri_plugin_log::Target::new(
+                                tauri_plugin_log::TargetKind::Folder {
+                                    path: log_dir,
+                                    file_name: Some("shape".into()),
+                                },
+                            ),
+                            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                        ])
                         .build(),
                 );
             }
@@ -341,6 +353,7 @@ pub fn run() {
             agent::commands::conversation::rename_conversation,
             agent::commands::approvals::stop_chat_message,
             agent::tools::browse::agent_browse_stop,
+            agent::tools::browse::list_browse_wallpapers,
             agent::commands::conversation::set_conversation_archived,
             core::mic::dictation_start,
             core::mic::dictation_stop,

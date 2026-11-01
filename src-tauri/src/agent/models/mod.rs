@@ -50,6 +50,24 @@ impl AutoRunMode {
     }
 }
 
+/// Shell network access. There is no unrestricted allow. Off blocks network
+/// commands. Ask requires approval. Both still sit behind the hard denylist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NetworkPolicy {
+    Off,
+    #[default]
+    Ask,
+}
+
+impl NetworkPolicy {
+    pub fn from_setting(value: Option<&str>) -> Self {
+        match value.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            Some("off") | Some("deny") | Some("block") => Self::Off,
+            _ => Self::Ask,
+        }
+    }
+}
+
 /// Per-turn execution policy, set from user settings when the turn starts.
 #[derive(Debug, Clone)]
 pub struct TurnPolicy {
@@ -72,6 +90,16 @@ pub struct TurnPolicy {
     pub computer_use: bool,
     /// Interpreters and programs may run through the shell. Hard-blocked commands stay blocked.
     pub shell_automation: bool,
+    /// When false, browse tools are omitted and `load_tools` cannot add them.
+    pub browse_enabled: bool,
+    /// Shell programs that open network connections.
+    pub network_commands: NetworkPolicy,
+    /// Hard kill for a one-shot command that is still running, in seconds.
+    pub command_timeout_sec: u64,
+    /// When false, a Plan turn does not become Code because the message has an edit verb.
+    pub allow_capability_upgrade: bool,
+    /// Cap on a file read that does not name a line range.
+    pub max_context_lines: u32,
 }
 
 impl Default for TurnPolicy {
@@ -86,6 +114,11 @@ impl Default for TurnPolicy {
             plugin_auto_allow: HashSet::new(),
             computer_use: true,
             shell_automation: true,
+            browse_enabled: true,
+            network_commands: NetworkPolicy::Ask,
+            command_timeout_sec: 600,
+            allow_capability_upgrade: true,
+            max_context_lines: 200,
         }
     }
 }
@@ -203,6 +236,8 @@ pub struct ChatGenerationState {
     pub is_generating: bool,
     pub turn_id: Option<String>,
     pub conversation_id: Option<String>,
+    #[serde(default)]
+    pub conversation_ids: Vec<String>,
     pub partial_content: Option<String>,
     pub activity_label: Option<String>,
 }
@@ -278,18 +313,37 @@ pub struct AgentState {
     pub file_checkpoints: Mutex<Vec<TurnCheckpoint>>,
     /// When true, `list_chats` / `read_chat` tools are offered to the model.
     pub chat_memory_enabled: AtomicBool,
+    /// When true, the model may call `adversarial_review`.
+    pub review_adversarial_enabled: AtomicBool,
     /// Ephemeral chat: history is not written to disk.
     pub incognito: AtomicBool,
     /// User-allowed model ids for `spawn_subagent` (never inherit the parent chat model).
     pub subagent_models: Mutex<Vec<String>>,
     /// Fallback when spawn omits model or the requested id is not allowed.
     pub subagent_default_model: Mutex<String>,
+    /// Capability settled for each conversation. The kernel only upgrades it.
+    pub capability: Mutex<HashMap<String, String>>,
+    /// Tool packs loaded for each conversation. The set only grows.
+    pub session_packs: Mutex<HashMap<String, crate::agent::decide::Packs>>,
 }
 
 impl Default for AgentState {
     fn default() -> Self {
         Self::new()
     }
+}
+
+const PARTIAL_CONTENT_CAP: usize = 4 * 1024 * 1024;
+
+fn cap_partial_content(content: &mut String) {
+    if content.len() <= PARTIAL_CONTENT_CAP {
+        return;
+    }
+    let keep = PARTIAL_CONTENT_CAP / 2;
+    let start = content.floor_char_boundary(content.len().saturating_sub(keep));
+    let dropped = start;
+    let tail = content[start..].to_string();
+    *content = format!("…[truncated {dropped} bytes]\n{tail}");
 }
 
 /// A later review block replaces the running one instead of stacking a second card.
@@ -346,9 +400,41 @@ impl AgentState {
             design_preview: Mutex::new(DesignPreviewState::default()),
             file_checkpoints: Mutex::new(Vec::new()),
             chat_memory_enabled: AtomicBool::new(false),
+            review_adversarial_enabled: AtomicBool::new(false),
             incognito: AtomicBool::new(false),
             subagent_models: Mutex::new(vec!["auto".to_string()]),
             subagent_default_model: Mutex::new("auto".to_string()),
+            capability: Mutex::new(HashMap::new()),
+            session_packs: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn sticky_capability(&self, conversation_id: &str) -> Option<crate::agent::decide::Capability> {
+        self.capability
+            .lock()
+            .ok()
+            .and_then(|map| map.get(conversation_id).cloned())
+            .as_deref()
+            .and_then(crate::agent::decide::Capability::parse)
+    }
+
+    pub fn set_capability(&self, conversation_id: &str, capability: crate::agent::decide::Capability) {
+        if let Ok(mut map) = self.capability.lock() {
+            map.insert(conversation_id.to_string(), capability.as_str().to_string());
+        }
+    }
+
+    pub fn session_packs(&self, conversation_id: &str) -> crate::agent::decide::Packs {
+        self.session_packs
+            .lock()
+            .ok()
+            .and_then(|map| map.get(conversation_id).copied())
+            .unwrap_or_default()
+    }
+
+    pub fn set_session_packs(&self, conversation_id: &str, packs: crate::agent::decide::Packs) {
+        if let Ok(mut map) = self.session_packs.lock() {
+            map.insert(conversation_id.to_string(), packs);
         }
     }
 
@@ -366,6 +452,14 @@ impl AgentState {
 
     pub fn set_chat_memory_enabled(&self, enabled: bool) {
         self.chat_memory_enabled.store(enabled, Ordering::SeqCst);
+    }
+
+    pub fn review_adversarial_enabled(&self) -> bool {
+        self.review_adversarial_enabled.load(Ordering::SeqCst)
+    }
+
+    pub fn set_review_adversarial_enabled(&self, enabled: bool) {
+        self.review_adversarial_enabled.store(enabled, Ordering::SeqCst);
     }
 
     /// Claim this conversation's in-flight slot. Another chat may already be running.
@@ -478,6 +572,7 @@ impl AgentState {
             } else {
                 in_flight.partial_content.push_str(chunk);
             }
+            cap_partial_content(&mut in_flight.partial_content);
             if let Some(label) = activity_label {
                 in_flight.activity_label = Some(label.to_string());
             }
@@ -661,21 +756,47 @@ impl AgentState {
     }
 
     pub fn generation_state(&self) -> ChatGenerationState {
-        match self.in_flight_snapshot() {
+        let flights = self.in_flight.lock().ok();
+        let ids: Vec<String> = flights
+            .as_ref()
+            .map(|g| g.keys().cloned().collect())
+            .unwrap_or_default();
+        if ids.is_empty() {
+            return ChatGenerationState {
+                is_generating: false,
+                turn_id: None,
+                conversation_id: None,
+                conversation_ids: Vec::new(),
+                partial_content: None,
+                activity_label: None,
+            };
+        }
+        let preferred = self.in_flight_snapshot().or_else(|| {
+            flights.and_then(|g| g.values().next().cloned())
+        });
+        match preferred {
             Some(f) => ChatGenerationState {
                 is_generating: true,
                 turn_id: Some(f.turn_id),
                 conversation_id: f.conversation_id,
+                conversation_ids: ids,
                 partial_content: Some(f.partial_content),
                 activity_label: f.activity_label,
             },
             None => ChatGenerationState {
-                is_generating: false,
+                is_generating: true,
                 turn_id: None,
-                conversation_id: None,
+                conversation_id: ids.first().cloned(),
+                conversation_ids: ids,
                 partial_content: None,
                 activity_label: None,
             },
+        }
+    }
+
+    pub fn clear_in_flight_conversation(&self, conversation_id: &str) {
+        if let Ok(mut guard) = self.in_flight.lock() {
+            guard.remove(conversation_id);
         }
     }
 

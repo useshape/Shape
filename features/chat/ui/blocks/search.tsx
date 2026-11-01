@@ -1,23 +1,14 @@
 "use client";
 
-import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
 
 
-import React from "react";
 import { Icon } from "@/components/ui/icon";
 
 import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
-import { Collapse } from "./collapse";
 import { hostnameOf } from "@/lib/ui/favicon";
 import { splitActionLabel } from "./action-line";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown";
-import { Tooltip } from "@/components/ui/tooltip";
 import type { WebSearchResultItem } from "../md/renderer";
 type WebSearchResult = WebSearchResultItem;
 
@@ -98,97 +89,6 @@ function SiteMark({ url, brand, size = 14 }: { url?: string; brand?: Brand | nul
     }
     if (url) return <Favicon url={url} size={size} />;
     return <Icon icon={Globe20Regular} className="shrink-0 text-text-muted" />;
-}
-
-function SourceRow({ result }: { result: WebSearchResult }) {
-    const host = hostnameOf(result.url);
-    return (
-        <a
-            href={result.url || undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-                "group/line flex min-w-0 items-center gap-2 py-0.5",
-                result.url ? "" : "pointer-events-none",
-            )}
-        >
-            <span className="flex size-4 shrink-0 items-center justify-center">
-                <SiteMark url={result.url} size={14} />
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm text-text-secondary group-hover/line:text-text-primary">
-                {result.title || host || "Source"}
-            </span>
-            {host ? (
-                <span className="max-w-[42%] shrink-0 truncate text-sm text-text-muted">
-                    {host}
-                </span>
-            ) : null}
-        </a>
-    );
-}
-
-const MARK_CAP = 6;
-
-function SourceStack({ sources }: { sources: WebSearchResult[] }) {
-    const shown = sources.slice(0, MARK_CAP);
-    const rest = sources.length - shown.length;
-    return (
-        <span className="inline-flex items-center">
-            {shown.map((source, index) => {
-                const host = hostnameOf(source.url);
-                const mark = (
-                    <span
-                        className="relative flex size-4 items-center justify-center rounded-full bg-surface-2 ring-2 ring-panel transition-transform duration-[var(--transition-fast)] hover:z-20 hover:-translate-y-0.5"
-                        style={{ marginLeft: index === 0 ? 0 : -6, zIndex: shown.length - index }}
-                    >
-                        <SiteMark url={source.url} size={12} />
-                    </span>
-                );
-                return (
-                    <Tooltip key={`${source.url}-${index}`} content={host ? `${source.title} · ${host}` : source.title}>
-                        {source.url ? (
-                            <a href={source.url} target="_blank" rel="noopener noreferrer" className="relative">
-                                {mark}
-                            </a>
-                        ) : (
-                            <span className="relative">{mark}</span>
-                        )}
-                    </Tooltip>
-                );
-            })}
-            {rest > 0 ? <span className="ml-1.5 text-xs text-text-muted">+{rest}</span> : null}
-        </span>
-    );
-}
-
-function SourcesBranch({ sources }: { sources: WebSearchResult[] }) {
-    const [open, setOpen] = React.useState(true);
-    return (
-        <div className="mt-1 w-full min-w-0">
-            <button
-                type="button"
-                onClick={() => setOpen((value) => !value)}
-                className="group/line flex w-fit max-w-full items-center gap-1.5 text-left chat-text text-text-muted"
-            >
-                <span className="text-text-secondary group-hover/line:text-text-primary">Sources</span>
-                {open ? null : <SourceStack sources={sources} />}
-                <Icon
-                    icon={ChevronDown20Regular}
-                    className={cn(
-                        "text-text-muted opacity-50 transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-                        open && "rotate-180",
-                    )}
-                />
-            </button>
-            <Collapse open={open}>
-                <div className="mt-0.5 flex flex-col">
-                    {sources.map((result, index) => (
-                        <SourceRow key={`${result.url}-${index}`} result={result} />
-                    ))}
-                </div>
-            </Collapse>
-        </div>
-    );
 }
 
 export type TrailBlock = {
@@ -283,7 +183,6 @@ function TrailStepRow({ step }: { step: TrailStep }) {
                 </span>
                 {meta ? <span className="shrink-0 text-text-muted">{meta}</span> : null}
             </div>
-            {step.sources.length > 0 ? <SourcesBranch sources={step.sources} /> : null}
         </div>
     );
 }
@@ -347,31 +246,5 @@ export function WebSearchBlock({
                 ...(hits ? [{ type: "web_result", query: query || "", content: hits }] : []),
             ]}
         />
-    );
-}
-
-export function WebSourcesMenu({ results }: { results: WebSearchResult[] }) {
-    if (results.length === 0) return null;
-
-    return (
-        <DropdownMenu>
-            <Tooltip content={`${results.length} sources`} side="bottom">
-                <DropdownMenuTrigger asChild>
-                    <button
-                        type="button"
-                        className="rounded-md p-1 text-text-muted hover:bg-panel-hover hover:text-text-secondary"
-                        aria-label={`${results.length} web sources`}
-                    >
-                        <Icon icon={Globe20Regular} />
-                    </button>
-                </DropdownMenuTrigger>
-            </Tooltip>
-            <DropdownMenuContent align="start" className="w-80 p-1.5">
-                <div className="px-1.5 py-1 text-xs font-medium text-text-muted">Sources</div>
-                {results.map((result, i) => (
-                    <SourceRow key={`${result.url}-${i}`} result={result} />
-                ))}
-            </DropdownMenuContent>
-        </DropdownMenu>
     );
 }

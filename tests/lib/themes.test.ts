@@ -36,6 +36,6 @@ describe("applyAppearanceSettings", () => {
         applyAppearanceSettings(withColorTheme("light"));
         expect(document.documentElement.dataset.theme).toBeUndefined();
         expect(document.documentElement.style.colorScheme).toBe("dark");
-        expect(document.documentElement.classList.contains("dark")).toBe(true);
+        expect(document.documentElement.classList.contains("dark")).toBe(false);
     });
 });

@@ -9,8 +9,9 @@ const REVIEW_CRITIC_MD: &str = include_str!("../prompts/REVIEW_CRITIC.md");
 const REVIEW_SYNTHESIS_MD: &str = include_str!("../prompts/REVIEW_SYNTHESIS.md");
 const CRITIC_MODEL: &str = "auto";
 
-/// Large writes, or any real edit on a high-impact path.
-/// Copy, styling, and docs do not qualify on their own.
+/// Former automatic-review heuristic. Kept for regression tests; the agent
+/// only reviews when it calls the `adversarial_review` tool.
+#[cfg(test)]
 pub fn should_run(response: &str, wrote_files: bool) -> bool {
     if !wrote_files {
         return false;
@@ -40,6 +41,7 @@ pub fn should_run(response: &str, wrote_files: bool) -> bool {
     edit_payload_chars(trimmed) >= 2_500
 }
 
+#[cfg(test)]
 fn edited_paths(hay: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = hay;
@@ -54,6 +56,7 @@ fn edited_paths(hay: &str) -> Vec<String> {
     out
 }
 
+#[cfg(test)]
 fn path_is_sensitive(path: &str) -> bool {
     const NEEDLES: &[&str] = &[
         "auth",
@@ -73,11 +76,11 @@ fn path_is_sensitive(path: &str) -> bool {
         "schema",
         "idempoten",
         "middleware",
-        "/agent/",
     ];
     NEEDLES.iter().any(|needle| path.contains(needle))
 }
 
+#[cfg(test)]
 fn trivial_path(path: &str) -> bool {
     path.ends_with(".css")
         || path.ends_with(".md")
@@ -85,10 +88,12 @@ fn trivial_path(path: &str) -> bool {
         || path.ends_with(".svg")
 }
 
+#[cfg(test)]
 fn count_tag(hay: &str, tag: &str) -> usize {
     hay.match_indices(tag).count()
 }
 
+#[cfg(test)]
 fn edit_payload_chars(hay: &str) -> usize {
     let mut total = 0usize;
     let mut rest = hay;
@@ -221,6 +226,7 @@ fn review_tag(status: &str, body: &str) -> String {
 }
 
 /// Confirmed findings the implementer should fix. "None" is not actionable.
+#[cfg(test)]
 pub fn has_actionable_findings(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     let Some(start) = lower.find("confirmed") else {
@@ -279,6 +285,18 @@ mod tests {
     fn runs_a_single_auth_edit() {
         let one = "<edit file=\"src/auth/session.ts\"><original>a</original><replacement>check()</replacement></edit>";
         assert!(should_run(one, true));
+    }
+
+    #[test]
+    fn ordinary_agent_path_is_not_reviewed() {
+        let one = "<edit file=\"src/agent/commands/send_chat.rs\"><original>a</original><replacement>b</replacement></edit>";
+        assert!(!should_run(one, true));
+    }
+
+    #[test]
+    fn ordinary_ui_edit_is_not_reviewed_without_the_tool() {
+        let one = "<edit file=\"src/ui/button.tsx\"><original>a</original><replacement>b</replacement></edit>";
+        assert!(!should_run(one, true));
     }
 
     #[test]
